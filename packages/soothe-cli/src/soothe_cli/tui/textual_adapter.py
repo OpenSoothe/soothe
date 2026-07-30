@@ -3997,6 +3997,8 @@ async def execute_task_textual(
 
                             if event_type == STREAM_END:
                                 scope = str(data.get("scope", ""))
+                                # Cancel flags come from DaemonSession when STREAM_END is
+                                # observed on the wire; do not re-parse reasons here.
                                 if scope == "turn":
                                     await _finalize_goal_completion_streams_on_turn_end(
                                         adapter,

@@ -138,7 +138,12 @@ def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
 
 
 async def _touch_loop_after_interrupt(config: Any, loop_id: str) -> None:
-    """Bump loop freshness after user cancel so /resume keeps the row discoverable."""
+    """Mark loop idle and bump freshness after cancel so /resume stays accurate.
+
+    Cancel paths often flush the in-memory checkpoint while ``status`` is still
+    ``running``; without an explicit idle write, status reconciliation can leave
+    the loop stuck ``running`` for minutes with no active worker.
+    """
     try:
         from soothe.sloop.checkpoints.manager import (
             StrangeLoopCheckpointPersistenceManager,
@@ -146,6 +151,7 @@ async def _touch_loop_after_interrupt(config: Any, loop_id: str) -> None:
 
         pm = await StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool(config)
         try:
+            await pm.update_loop_metadata(loop_id, status="idle")
             await pm.heartbeat_loop(loop_id)
         finally:
             await pm.close()
@@ -165,7 +171,7 @@ async def _mark_interrupted_goal_ledger(config: Any, loop_id: str) -> None:
             mark_cancelled_goal_interrupted,
         )
 
-        await mark_cancelled_goal_interrupted(config, loop_id, reason="client_disconnect")
+        await mark_cancelled_goal_interrupted(config, loop_id, reason="cancelled")
     except Exception:
         logger.debug("Interrupted-goal ledger marker failed for %s", loop_id, exc_info=True)
 
@@ -894,7 +900,20 @@ class StrangeLoopMixin:
                         exc_info=True,
                     )
         except asyncio.CancelledError:
-            interrupted = True
+            # Only cooperative Task.cancel() (daemon cancel_event / disconnect) should
+            # mark the goal interrupted. Libraries may raise CancelledError without
+            # cancelling this task — leave interrupted=False and re-raise so the
+            # worker can retry without treating it as a user cancel.
+            current = asyncio.current_task()
+            if current is not None and current.cancelling() > 0:
+                interrupted = True
+                raise
+            logger.error(
+                "[Runner] Unexpected CancelledError without task cancellation "
+                "(loop=%s); not marking goal interrupted (worker may retry)",
+                strange_loop_id,
+                exc_info=True,
+            )
             raise
         finally:
             if interrupted:

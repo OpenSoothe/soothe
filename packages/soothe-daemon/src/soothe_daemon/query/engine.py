@@ -1387,7 +1387,13 @@ class QueryEngine:
                         },
                     )
             except asyncio.CancelledError:
-                logger.info("Query cancelled by user")
+                # Worker-pool cancel terminals and client disconnects both land here;
+                # avoid implying Esc/RPC cancel specifically.
+                logger.info(
+                    "Query cancelled (loop=%s checkpoint=%s)",
+                    effective_loop_id or "?",
+                    thread_id[:16] if thread_id else "?",
+                )
                 turn_cancelled = True
                 from soothe.workspace import FrameworkFilesystem
 

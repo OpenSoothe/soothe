@@ -363,6 +363,42 @@ async def test_iter_turn_chunks_records_cancellation_command() -> None:
 
 
 @pytest.mark.asyncio
+async def test_iter_turn_chunks_records_stream_end_cancel_reason() -> None:
+    """``soothe.stream.end`` with cancel reason must flag cancellation for TUI UX."""
+    from soothe_sdk.core.events import STREAM_END
+
+    session = object.__new__(TuiDaemonSession)
+    session._loop_id = "loop-main"
+    session._read_lock = asyncio.Lock()
+    session._streaming = False
+    session._client = _StubEventClient(
+        [
+            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "event",
+                "loop_id": "loop-main",
+                "namespace": [],
+                "mode": "messages",
+                "data": ("progress", {}),
+            },
+            {
+                "type": "event",
+                "loop_id": "loop-main",
+                "namespace": [],
+                "mode": "custom",
+                "data": {"type": STREAM_END, "scope": "turn", "reason": "cancelled"},
+            },
+        ]
+    )
+
+    _ = [chunk async for chunk in session.iter_turn_chunks()]
+
+    assert session.last_turn_cancellation_seen is True
+    assert session.last_turn_end_state == "stream_end"
+    assert session.last_turn_stream_end_reason == "cancelled"
+
+
+@pytest.mark.asyncio
 async def test_iter_turn_chunks_records_stopped_end_state() -> None:
     """Stopped status after payload should end the turn."""
     session = object.__new__(TuiDaemonSession)

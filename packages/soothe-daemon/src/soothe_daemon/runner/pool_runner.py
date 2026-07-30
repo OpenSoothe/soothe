@@ -37,6 +37,10 @@ from soothe.protocols.runner import LoopRunRequest
 from soothe.runner._worker_utils import spawn_safe_config
 
 from soothe_daemon.config import SootheDaemonConfig
+from soothe_daemon.runner.stream_cancel import (
+    await_cancellable_stream,
+    emit_terminal_for_cancelled_error,
+)
 
 if TYPE_CHECKING:
     from soothe.runner._runner_shared import StreamChunk
@@ -565,34 +569,16 @@ def _pool_worker_body(
                         heartbeat_interval_seconds=float(heartbeat_interval_seconds),
                         start_time=heartbeat_start,
                     )
-                    stream_task = _asyncio.create_task(_stream())
-
-                    async def _poll_cancel_event() -> None:
-                        """Cancel the stream task when the main process sets cancel_event.
-
-                        Without this, cooperative cancel is only observed between
-                        ``runner.astream`` chunks; long tool/subagent awaits never
-                        re-enter the outer loop to check ``cancel_event``.
-                        """
-                        try:
-                            while True:
-                                await _asyncio.sleep(0.25)
-                                if cancel_event.is_set():
-                                    stream_task.cancel()
-                                    return
-                        except _asyncio.CancelledError:
-                            raise
-
-                    poll_task = _asyncio.create_task(_poll_cancel_event())
                     try:
-                        await stream_task
+                        await await_cancellable_stream(
+                            _stream,
+                            cancel_event=cancel_event,
+                            worker_id=worker_id,
+                            loop_id=req.loop_id,
+                            request_id=request_id,
+                        )
                     finally:
                         heartbeat_stop.set()
-                        poll_task.cancel()
-                        try:
-                            await poll_task
-                        except _asyncio.CancelledError:
-                            pass
                         if heartbeat_thread is not None:
                             heartbeat_thread.join(timeout=2.0)
 
@@ -605,13 +591,15 @@ def _pool_worker_body(
             except _asyncio.CancelledError:
                 # Since Python 3.8 CancelledError does not inherit Exception; uncaught it
                 # would abort this worker process and strand the parent on a dead worker.
-                logger.warning(
-                    "Worker %s: asyncio.CancelledError during request loop=%s request_id=%s",
-                    worker_id,
-                    req.loop_id,
-                    request_id,
+                emit_terminal_for_cancelled_error(
+                    cancel_event=cancel_event,
+                    emit_cancelled=lambda: response_queue.put(("cancelled", request_id, None)),
+                    emit_error=lambda exc: response_queue.put(("error", request_id, exc)),
+                    worker_id=worker_id,
+                    loop_id=req.loop_id,
+                    request_id=request_id,
+                    where="_execute",
                 )
-                response_queue.put(("cancelled", request_id, None))
             except TimeoutError:
                 logger.warning(
                     "Worker %s: request timeout (%ds) for loop=%s request_id=%s",

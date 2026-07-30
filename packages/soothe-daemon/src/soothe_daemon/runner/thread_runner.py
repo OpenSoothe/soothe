@@ -28,6 +28,10 @@ from soothe.protocols.runner import LoopRunRequest
 
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.runner.response_bridge import ResponsePusher
+from soothe_daemon.runner.stream_cancel import (
+    await_cancellable_stream,
+    emit_terminal_for_cancelled_error,
+)
 
 if TYPE_CHECKING:
     from soothe.identity.runtime import IdentityRuntime
@@ -259,44 +263,34 @@ def _thread_worker_body(
 
                     _emit("done")
 
-                async def _stream_with_cancel_poll() -> None:
-                    stream_task = asyncio.create_task(_stream())
-
-                    async def _poll_cancel_event() -> None:
-                        """Cancel stream when cancel_event is set."""
-                        try:
-                            while True:
-                                await asyncio.sleep(0.25)
-                                if cancel_event.is_set():
-                                    stream_task.cancel()
-                                    return
-                        except asyncio.CancelledError:
-                            raise
-
-                    poll_task = asyncio.create_task(_poll_cancel_event())
-                    try:
-                        await stream_task
-                    finally:
-                        poll_task.cancel()
-                        try:
-                            await poll_task
-                        except asyncio.CancelledError:
-                            pass
-
                 if timeout_ctx:
                     async with timeout_ctx:
-                        await _stream_with_cancel_poll()
+                        await await_cancellable_stream(
+                            _stream,
+                            cancel_event=cancel_event,
+                            worker_id=worker_id,
+                            loop_id=req.loop_id,
+                            request_id=request_id,
+                        )
                 else:
-                    await _stream_with_cancel_poll()
+                    await await_cancellable_stream(
+                        _stream,
+                        cancel_event=cancel_event,
+                        worker_id=worker_id,
+                        loop_id=req.loop_id,
+                        request_id=request_id,
+                    )
 
             except asyncio.CancelledError:
-                logger.warning(
-                    "Thread worker %s: asyncio.CancelledError loop=%s request_id=%s",
-                    worker_id,
-                    req.loop_id,
-                    request_id,
+                emit_terminal_for_cancelled_error(
+                    cancel_event=cancel_event,
+                    emit_cancelled=lambda: _emit("cancelled"),
+                    emit_error=lambda exc: _emit("error", exc),
+                    worker_id=worker_id,
+                    loop_id=req.loop_id,
+                    request_id=request_id,
+                    where="_execute",
                 )
-                _emit("cancelled")
             except TimeoutError:
                 logger.warning(
                     "Thread worker %s: request timeout (%ds) loop=%s request_id=%s",
@@ -338,17 +332,19 @@ def _thread_worker_body(
         try:
             loop.run_until_complete(_execute())
         except asyncio.CancelledError:
-            logger.warning(
-                "Thread worker %s: run_until_complete CancelledError loop=%s request_id=%s",
-                worker_id,
-                req.loop_id,
-                request_id,
-            )
             try:
-                _emit("cancelled")
+                emit_terminal_for_cancelled_error(
+                    cancel_event=cancel_event,
+                    emit_cancelled=lambda: _emit("cancelled"),
+                    emit_error=lambda exc: _emit("error", exc),
+                    worker_id=worker_id,
+                    loop_id=req.loop_id,
+                    request_id=request_id,
+                    where="run_until_complete",
+                )
             except Exception:
                 logger.exception(
-                    "Thread worker %s: failed to enqueue cancelled request_id=%s",
+                    "Thread worker %s: failed to enqueue cancel/error terminal request_id=%s",
                     worker_id,
                     request_id,
                 )
@@ -369,8 +365,22 @@ def _thread_worker_body(
                     request_id,
                 )
         finally:
-            cancel_orphan_loop_tasks(loop)
-            _emit("ready")
+            try:
+                cancel_orphan_loop_tasks(loop)
+            except Exception:
+                logger.exception(
+                    "Thread worker %s: orphan task cleanup failed request_id=%s",
+                    worker_id,
+                    request_id,
+                )
+            try:
+                _emit("ready")
+            except Exception:
+                logger.exception(
+                    "Thread worker %s: failed to enqueue ready request_id=%s",
+                    worker_id,
+                    request_id,
+                )
 
     try:
         while not stop_event.is_set() and requests_completed < max_requests:
@@ -414,7 +424,25 @@ def _thread_worker_body(
                 req.loop_id,
                 request_id,
             )
-            _run_single(req, request_id, pusher)
+            try:
+                _run_single(req, request_id, pusher)
+            except Exception:
+                # One bad request must not kill a baseline worker thread
+                # (otherwise the pool respawns and in-flight UX looks like a hang).
+                logger.exception(
+                    "Thread worker %s: request raised loop=%s request_id=%s",
+                    worker_id,
+                    req.loop_id,
+                    request_id,
+                )
+            except asyncio.CancelledError:
+                # CancelledError is BaseException — still must not kill the thread.
+                logger.exception(
+                    "Thread worker %s: CancelledError escaped request loop=%s request_id=%s",
+                    worker_id,
+                    req.loop_id,
+                    request_id,
+                )
             requests_completed += 1
             logger.debug(
                 "Thread worker %s completed request %d/%d loop=%s request_id=%s",
@@ -1177,10 +1205,23 @@ class ThreadPool:
                             if isinstance(payload, BaseException)
                             else RuntimeError(str(payload))
                         )
-                    elif msg_type in ("timeout", "cancelled") and isinstance(
-                        payload, BaseException
-                    ):
-                        error_payload = payload
+                    elif msg_type == "timeout":
+                        error_payload = (
+                            payload
+                            if isinstance(payload, BaseException)
+                            else TimeoutError(
+                                f"Request exceeded timeout for loop={request.loop_id}"
+                            )
+                        )
+                    elif msg_type == "cancelled":
+                        # Worker cancel terminals often carry payload=None; still must
+                        # surface CancelledError so QueryEngine sets turn_cancelled and
+                        # emits stream.end reason=cancelled (TUI "Stream cancelled").
+                        error_payload = (
+                            payload
+                            if isinstance(payload, BaseException)
+                            else asyncio.CancelledError()
+                        )
                     break
 
                 yield payload
