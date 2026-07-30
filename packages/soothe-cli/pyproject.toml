@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "soothe-sdk>=1.0.7,<2.0.0",    # events/display/wire contracts
-    "soothe-client-python>=1.0.5,<2.0.0",  # WebSocket transport client
+    "soothe-client-python>=1.0.7,<2.0.0",  # WebSocket transport client; matched to latest release v1.0.7
     "typer>=0.9.0,<2.0.0",          # CLI framework
     "textual>=8.0.0,<10.0.0",       # TUI framework
     "rich>=13.0.0,<15.0.0",         # Console output
