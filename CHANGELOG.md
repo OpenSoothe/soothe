@@ -5,6 +5,27 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.9] - 2026-07-30
+
+### Fixed
+- SQLite loop flush coordinator no longer binds its `asyncio.Event` to the first
+  worker loop in `__init__`; the durable Event is created lazily on the bound
+  main loop, fixing "bound to a different event loop" hangs when a later worker
+  awaited it (loop b648)
+- Coordinator now marshals caller work onto the bound main loop via
+  `run_coroutine_threadsafe` (`submit_enqueue` / `submit_flush_loop` /
+  `submit_release_loop`), mirroring `LoopPersistenceWriter`
+- Daemon pins the SQLite flush coordinator to the main loop at startup before
+  any worker thread starts
+- `get_shared_instance` self-gates on `default_backend=sqlite` so a
+  Postgres-configured process never constructs the SQLite singleton
+- Stale (closed) bound loop is handled in `_run_on_main` for test/restart safety
+
+### Changed
+- Raise daemon `soothe` floor pin to `>=0.9.9`
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.8...v0.9.9
+
 ## [v0.9.8] - 2026-07-30
 
 ### Fixed
