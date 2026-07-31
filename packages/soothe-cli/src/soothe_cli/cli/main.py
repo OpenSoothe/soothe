@@ -162,8 +162,8 @@ def main(
         typer.Option(
             "--plan-panel/--no-plan-panel",
             help=(
-                "Show the in-flow plan panel on TUI launch. Ctrl+t toggles it "
-                "thereafter. Default: shown."
+                "Auto-show the in-flow plan panel when a goal plan is active. "
+                "Ctrl+t toggles thereafter. Default: enabled."
             ),
         ),
     ] = True,

@@ -169,16 +169,22 @@ async def test_iter_turn_chunks_filters_non_active_loop_events() -> None:
                 "mode": "messages",
                 "data": ("other", {}),
             },
-            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "status",
+                "state": "running",
+                "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
+            },
             {
                 "type": "event",
                 "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
                 "namespace": [],
                 "mode": "messages",
                 "data": ("main", {}),
             },
             {"type": "status", "state": "idle", "loop_id": "loop-other"},
-            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+            {"type": "status", "state": "idle", "loop_id": "loop-main", "turn_id": "loop-main:1"},
         ]
     )
 
@@ -199,22 +205,28 @@ async def test_iter_turn_chunks_peels_stale_daemon_ready_before_stream() -> None
     session._client = _StubEventClient(
         [
             {"type": "daemon_ready", "state": "ready"},
-            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "status",
+                "state": "running",
+                "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
+            },
             {
                 "type": "event",
                 "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
                 "namespace": [],
-                "mode": "custom",
-                "data": {"type": "soothe.cognition.strange_loop.started"},
+                "mode": "messages",
+                "data": ("progress", {}),
             },
-            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+            {"type": "status", "state": "idle", "loop_id": "loop-main", "turn_id": "loop-main:1"},
         ]
     )
 
     chunks = [chunk async for chunk in session.iter_turn_chunks()]
 
     assert len(chunks) == 1
-    assert chunks[0][1] == "custom"
+    assert chunks[0][1] == "messages"
 
 
 @pytest.mark.asyncio
@@ -226,23 +238,30 @@ async def test_iter_turn_chunks_drains_events_after_idle() -> None:
     session._streaming = False
     session._client = _StubEventClient(
         [
-            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "status",
+                "state": "running",
+                "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
+            },
             {
                 "type": "event",
                 "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
                 "namespace": [],
                 "mode": "messages",
                 "data": ("first", {}),
             },
-            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+            {"type": "status", "state": "idle", "loop_id": "loop-main", "turn_id": "loop-main:1"},
             {
                 "type": "event",
                 "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
                 "namespace": [],
                 "mode": "messages",
                 "data": ("late", {}),
             },
-            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+            {"type": "status", "state": "idle", "loop_id": "loop-main", "turn_id": "loop-main:1"},
         ]
     )
 
@@ -263,16 +282,23 @@ async def test_iter_turn_chunks_ignores_stale_idle_before_stream_payload() -> No
     session._streaming = False
     session._client = _StubEventClient(
         [
-            {"type": "status", "state": "running", "loop_id": "loop-main"},
-            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+            {
+                "type": "status",
+                "state": "running",
+                "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
+            },
+            # Idle before progress must not end (even with matching turn_id).
+            {"type": "status", "state": "idle", "loop_id": "loop-main", "turn_id": "loop-main:1"},
             {
                 "type": "event",
                 "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
                 "namespace": [],
                 "mode": "messages",
                 "data": ("successor", {}),
             },
-            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+            {"type": "status", "state": "idle", "loop_id": "loop-main", "turn_id": "loop-main:1"},
         ]
     )
 
@@ -346,13 +372,18 @@ async def test_iter_turn_chunks_records_cancellation_command() -> None:
     session._streaming = False
     session._client = _StubEventClient(
         [
-            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "status",
+                "state": "running",
+                "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
+            },
             {
                 "type": "command_response",
                 "loop_id": "loop-main",
                 "content": "[yellow]Cancellation requested.[/yellow]",
             },
-            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+            {"type": "status", "state": "idle", "loop_id": "loop-main", "turn_id": "loop-main:1"},
         ]
     )
 
@@ -373,10 +404,16 @@ async def test_iter_turn_chunks_records_stream_end_cancel_reason() -> None:
     session._streaming = False
     session._client = _StubEventClient(
         [
-            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "status",
+                "state": "running",
+                "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
+            },
             {
                 "type": "event",
                 "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
                 "namespace": [],
                 "mode": "messages",
                 "data": ("progress", {}),
@@ -384,9 +421,15 @@ async def test_iter_turn_chunks_records_stream_end_cancel_reason() -> None:
             {
                 "type": "event",
                 "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
                 "namespace": [],
                 "mode": "custom",
-                "data": {"type": STREAM_END, "scope": "turn", "reason": "cancelled"},
+                "data": {
+                    "type": STREAM_END,
+                    "scope": "turn",
+                    "reason": "cancelled",
+                    "turn_id": "loop-main:1",
+                },
             },
         ]
     )
@@ -407,15 +450,26 @@ async def test_iter_turn_chunks_records_stopped_end_state() -> None:
     session._streaming = False
     session._client = _StubEventClient(
         [
-            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "status",
+                "state": "running",
+                "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
+            },
             {
                 "type": "event",
                 "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
                 "namespace": [],
                 "mode": "custom",
                 "data": {"type": "soothe.test.payload"},
             },
-            {"type": "status", "state": "stopped", "loop_id": "loop-main"},
+            {
+                "type": "status",
+                "state": "stopped",
+                "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
+            },
         ]
     )
 
@@ -434,10 +488,16 @@ async def test_iter_turn_chunks_ends_on_terminal_custom_without_idle_status() ->
     session._streaming = False
     session._client = _StubEventClient(
         [
-            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "status",
+                "state": "running",
+                "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
+            },
             {
                 "type": "event",
                 "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
                 "namespace": [],
                 "mode": "messages",
                 "data": ("early", {}),
@@ -445,13 +505,18 @@ async def test_iter_turn_chunks_ends_on_terminal_custom_without_idle_status() ->
             {
                 "type": "event",
                 "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
                 "namespace": [],
                 "mode": "custom",
-                "data": {"type": "soothe.cognition.strange_loop.completed"},
+                "data": {
+                    "type": "soothe.cognition.strange_loop.completed",
+                    "turn_id": "loop-main:1",
+                },
             },
             {
                 "type": "event",
                 "loop_id": "loop-main",
+                "turn_id": "loop-main:1",
                 "namespace": [],
                 "mode": "messages",
                 "data": ("late", {}),
@@ -464,7 +529,11 @@ async def test_iter_turn_chunks_ends_on_terminal_custom_without_idle_status() ->
 
     assert chunks == [
         ((), "messages", ("early", {})),
-        ((), "custom", {"type": "soothe.cognition.strange_loop.completed"}),
+        (
+            (),
+            "custom",
+            {"type": "soothe.cognition.strange_loop.completed", "turn_id": "loop-main:1"},
+        ),
         ((), "messages", ("late", {})),
     ]
     assert session.last_turn_end_state == "completed"

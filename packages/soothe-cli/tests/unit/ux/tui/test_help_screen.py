@@ -29,7 +29,10 @@ def test_build_keyboard_shortcut_rows_cover_core_bindings() -> None:
     assert rows["Enter"] == "Submit message"
     assert rows["Ctrl+D"] == "Type exit, quit, or /quit to exit the TUI"
     assert rows["Ctrl+C"] == "Clear input or interrupt running agent/shell"
-    assert rows["Ctrl+T"] == "Toggle plan panel (shown on launch; --no-plan-panel hides it)"
+    assert (
+        rows["Ctrl+T"]
+        == "Toggle plan panel (auto-shown when a plan is active; --no-plan-panel disables)"
+    )
     assert rows["Shift+Tab"] == "Toggle clarification relay mode (Auto/Manual)"
 
 

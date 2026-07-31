@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from time import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 from soothe_cli.tui.widgets.messages.cognition_goal_tree import CognitionGoalTreeMessage
 from soothe_cli.tui.widgets.plan_quick_view_overlay import (
@@ -256,6 +256,12 @@ def test_goal_tree_done_footer_includes_total_duration() -> None:
 
 def test_overlay_toggle_expands_and_collapses() -> None:
     """Ctrl+t target toggles expanded state and refresh timer."""
+    tree = CognitionGoalTreeMessage(goal="Ship it", id="gt-toggle")
+    adapter = MagicMock()
+    adapter._goal_tree_message = tree
+    app = MagicMock()
+    app._ui_adapter = adapter
+
     overlay = PlanQuickViewOverlay()
     overlay.display = True
     overlay._content = MagicMock()
@@ -268,18 +274,86 @@ def test_overlay_toggle_expands_and_collapses() -> None:
     overlay.refresh_content.assert_called_once()
 
     timer = overlay.set_interval.return_value
-    overlay.collapse()
+    overlay.collapse(forget_preference=True)
     assert not overlay.is_expanded
+    assert overlay._preferred_visible is False
     timer.stop.assert_called_once()
 
-    overlay.toggle()
-    assert overlay.is_expanded
-    overlay.toggle()
+    with patch.object(PlanQuickViewOverlay, "app", new_callable=PropertyMock) as mock_app:
+        mock_app.return_value = app
+        overlay.toggle()
+        assert overlay.is_expanded
+        assert overlay._preferred_visible is True
+        overlay.toggle()
+        assert not overlay.is_expanded
+        assert overlay._preferred_visible is False
+
+
+def test_overlay_toggle_without_plan_keeps_preference_collapsed() -> None:
+    """Ctrl+t with no active plan stays collapsed but remembers preference."""
+    app = MagicMock()
+    app._ui_adapter = MagicMock(_goal_tree_message=None)
+
+    overlay = PlanQuickViewOverlay(default_visible=False)
+    overlay._content = MagicMock()
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+
+    with patch.object(PlanQuickViewOverlay, "app", new_callable=PropertyMock) as mock_app:
+        mock_app.return_value = app
+        overlay.toggle()
+
+    assert overlay._preferred_visible is True
     assert not overlay.is_expanded
+    overlay.set_interval.assert_called_once()
 
 
-def test_overlay_shown_expanded_by_default_on_mount() -> None:
-    """Plan panel is visible (expanded) on launch, not collapsed."""
+def test_overlay_hides_when_no_active_plan() -> None:
+    """Expanded panel collapses instead of showing an empty placeholder."""
+    app = MagicMock()
+    app._ui_adapter = MagicMock(_goal_tree_message=None)
+
+    overlay = PlanQuickViewOverlay()
+    overlay._content = MagicMock()
+    overlay._header = MagicMock()
+    overlay.add_class("-expanded")
+    overlay.display = True
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+
+    with patch.object(PlanQuickViewOverlay, "app", new_callable=PropertyMock) as mock_app:
+        mock_app.return_value = app
+        overlay.refresh_content()
+
+    assert not overlay.is_expanded
+    assert overlay.display is False
+    overlay._content.update.assert_not_called()
+
+
+def test_overlay_auto_expands_when_plan_appears() -> None:
+    """Preferred-visible panel expands as soon as a live goal tree exists."""
+    tree = CognitionGoalTreeMessage(goal="Ship it", id="gt-auto")
+    adapter = MagicMock()
+    adapter._goal_tree_message = tree
+    adapter._current_step_messages = {}
+    app = MagicMock()
+    app._ui_adapter = adapter
+    app._lc_loop_id = None
+
+    overlay = PlanQuickViewOverlay()
+    overlay._content = MagicMock()
+    overlay._header = MagicMock()
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+
+    with patch.object(PlanQuickViewOverlay, "app", new_callable=PropertyMock) as mock_app:
+        mock_app.return_value = app
+        overlay.refresh_content()
+
+    assert overlay.is_expanded
+    assert overlay.display is True
+    overlay._content.update.assert_called()
+
+
+def test_overlay_collapsed_on_mount_until_plan() -> None:
+    """Plan panel starts collapsed on launch; watches for an active plan."""
     overlay = PlanQuickViewOverlay()
     overlay._content = MagicMock()
     overlay._header = MagicMock()
@@ -289,8 +363,8 @@ def test_overlay_shown_expanded_by_default_on_mount() -> None:
 
     overlay.on_mount()
 
-    assert overlay.display is True
-    assert overlay.is_expanded
+    assert overlay.display is False
+    assert not overlay.is_expanded
     overlay.refresh_content.assert_called_once()
     overlay.set_interval.assert_called_once()
 
@@ -311,6 +385,20 @@ def test_overlay_hidden_by_default_when_config_disabled() -> None:
     overlay.set_interval.assert_not_called()
 
 
+def test_overlay_collapse_without_forget_keeps_preference() -> None:
+    """Auto-hide when no plan keeps preferred visibility for the next plan."""
+    overlay = PlanQuickViewOverlay()
+    overlay.add_class("-expanded")
+    overlay.display = True
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+
+    overlay.collapse()
+
+    assert not overlay.is_expanded
+    assert overlay._preferred_visible is True
+    overlay.set_interval.assert_called_once()
+
+
 def test_plan_panel_css_is_in_flow_not_layered() -> None:
     """Ctrl+t panel must take layout space above thinking/input, not float on a layer."""
     css = PlanQuickViewOverlay.DEFAULT_CSS
@@ -324,23 +412,6 @@ def test_plan_panel_css_is_in_flow_not_layered() -> None:
     expanded = css.split("PlanQuickViewOverlay.-expanded")[1].split("}")[0]
     assert "margin: 0 1;" in expanded or "margin: 0 1" in expanded
     assert "margin: 0 1 1" not in expanded
-
-
-def test_on_mount_source_expands_by_default() -> None:
-    """on_mount calls expand() when default_visible is True."""
-    import inspect
-
-    source = inspect.getsource(PlanQuickViewOverlay.on_mount)
-    assert "self.expand()" in source
-    assert "self._default_visible" in source
-
-
-def test_on_mount_source_respects_config_disabled() -> None:
-    """on_mount guards expand() behind _default_visible flag."""
-    import inspect
-
-    source = inspect.getsource(PlanQuickViewOverlay.on_mount)
-    assert "if self._default_visible:" in source
 
 
 def test_soothe_app_compose_places_plan_panel_above_bottom_chrome() -> None:
@@ -359,14 +430,5 @@ def test_soothe_app_compose_places_plan_panel_above_bottom_chrome() -> None:
     bottom_block = source[bottom_open : source.index("yield StatusBar", bottom_open)]
     assert "PlanQuickViewOverlay" not in bottom_block
     assert "thinking-status" in bottom_block
-
-
-def test_soothe_app_compose_passes_config_default_visible() -> None:
-    """compose() passes plan_panel_default_visible from daemon config to overlay."""
-    from pathlib import Path
-
-    source = (Path(__file__).resolve().parents[4] / "src/soothe_cli/tui/app/_app.py").read_text(
-        encoding="utf-8"
-    )
     assert "plan_panel_default_visible" in source
     assert "default_visible=plan_visible" in source

@@ -790,6 +790,18 @@ class _MessagesMixin:
             self._chat_input.clear_input()
         self.notify("Type exit, quit, or /quit to exit the TUI", timeout=2, markup=False)
 
+    def _get_plan_quick_view_overlay(self) -> Any:
+        """Return the cached plan panel, querying the widget tree on first use."""
+        overlay = getattr(self, "_plan_quick_view_overlay", None)
+        if overlay is not None:
+            return overlay
+        with suppress(Exception):
+            from soothe_cli.tui.widgets.plan_quick_view_overlay import PlanQuickViewOverlay
+
+            overlay = self.query_one("#plan-quick-view-overlay", PlanQuickViewOverlay)
+            self._plan_quick_view_overlay = overlay
+        return overlay
+
     def action_dismiss_ui(self) -> None:
         """Handle Escape — dismiss overlays and optionally cancel queued goals.
 
@@ -800,8 +812,6 @@ class _MessagesMixin:
         4. If completion popup is open, dismiss it
         5. If input is in command/shell mode, exit to normal mode
         """
-        from contextlib import suppress
-
         # If a modal screen is active, let it cancel itself (so it can
         # restore state, e.g. the theme selector reverts the previewed theme).
         # Fall back to a plain dismiss for modals without action_cancel.
@@ -813,15 +823,9 @@ class _MessagesMixin:
                 self.screen.dismiss(None)
             return
 
-        overlay = getattr(self, "_plan_quick_view_overlay", None)
-        if overlay is None:
-            with suppress(Exception):
-                from soothe_cli.tui.widgets.plan_quick_view_overlay import PlanQuickViewOverlay
-
-                overlay = self.query_one("#plan-quick-view-overlay", PlanQuickViewOverlay)
-                self._plan_quick_view_overlay = overlay
+        overlay = self._get_plan_quick_view_overlay()
         if overlay is not None and overlay.is_expanded:
-            overlay.collapse()
+            overlay.collapse(forget_preference=True)
             return
 
         # Close completion popup or exit slash/shell command mode

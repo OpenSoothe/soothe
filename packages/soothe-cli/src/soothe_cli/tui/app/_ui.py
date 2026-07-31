@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -506,13 +505,7 @@ class _UIMixin:
         """Expand or collapse the in-flow plan panel above the thinking row."""
         if self.screen.is_modal:
             return
-        overlay = getattr(self, "_plan_quick_view_overlay", None)
-        if overlay is None:
-            with suppress(Exception):
-                from soothe_cli.tui.widgets.plan_quick_view_overlay import PlanQuickViewOverlay
-
-                overlay = self.query_one("#plan-quick-view-overlay", PlanQuickViewOverlay)
-                self._plan_quick_view_overlay = overlay
+        overlay = self._get_plan_quick_view_overlay()
         if overlay is None:
             return
         overlay.toggle()

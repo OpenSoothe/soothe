@@ -73,4 +73,4 @@ def test_esc_collapses_plan_quick_view_overlay() -> None:
     app = _AppStub()
     app.action_dismiss_ui()
 
-    app._plan_quick_view_overlay.collapse.assert_called_once()
+    app._plan_quick_view_overlay.collapse.assert_called_once_with(forget_preference=True)

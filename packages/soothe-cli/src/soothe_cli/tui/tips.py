@@ -27,7 +27,6 @@ SESSION_TIPS: list[str] = [
     "Use /auto-update to toggle automatic CLI updates",
     "Press ctrl+t to peek at the live plan while the agent is working",
     "Use /plan to draft a goal without executing it right away",
-    "Press ctrl+t to review the plan tree and queued steps at any time",
 ]
 
 

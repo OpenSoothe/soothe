@@ -78,12 +78,13 @@ def _goal_tree_running_live_stats(adapter: Any) -> dict[str, tuple[int, float | 
 class PlanQuickViewOverlay(Vertical):
     """In-flow plan panel above the thinking row and chat input.
 
-    Visibility on launch is controlled by ``default_visible`` (from
-    ``CLIConfig.plan_panel_default_visible``, default True). Toggle with
-    ``Ctrl+t``. Mounted as a Screen sibling between ``#chat`` and
-    ``#bottom-app-container`` so expanding it shrinks the transcript instead
-    of floating over the sticky bottom chrome. Snapshots in-memory goal
-    tree state on the UI adapter (not mounted in the main message list).
+    Auto-shows when a goal plan is active and preferred visibility is on
+    (``CLIConfig.plan_panel_default_visible``, default True). Auto-hides when
+    there is no active plan. Toggle with ``Ctrl+t``. Mounted as a Screen
+    sibling between ``#chat`` and ``#bottom-app-container`` so expanding it
+    shrinks the transcript instead of floating over the sticky bottom chrome.
+    Snapshots in-memory goal tree state on the UI adapter (not mounted in the
+    main message list).
     """
 
     DEFAULT_CSS = """
@@ -135,7 +136,7 @@ class PlanQuickViewOverlay(Vertical):
 
     def __init__(self, *, default_visible: bool = True, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._default_visible: bool = default_visible
+        self._preferred_visible: bool = default_visible
         self._refresh_timer: Timer | None = None
         self._header: Static | None = None
         self._content: Static | None = None
@@ -153,11 +154,10 @@ class PlanQuickViewOverlay(Vertical):
         self._header = self.query_one("#plan-quick-view-header", Static)
         self._content = self.query_one("#plan-quick-view-content", Static)
         self.query_one("#plan-quick-view-body", VerticalScroll).can_focus = False
-        # Show the plan panel on launch so the user sees the goal tree
-        # immediately. Ctrl+t collapses/expands it thereafter. The default
-        # visibility is controlled by the CLI config (plan_panel_default_visible).
-        if self._default_visible:
-            self.expand()
+        self.display = False
+        if self._preferred_visible:
+            self._start_refresh_timer()
+            self.refresh_content()
 
     @property
     def is_expanded(self) -> bool:
@@ -165,24 +165,39 @@ class PlanQuickViewOverlay(Vertical):
         return self.has_class("-expanded")
 
     def toggle(self) -> None:
-        """Expand or collapse the overlay."""
+        """Expand or collapse the overlay, updating the preferred visibility."""
         if self.is_expanded:
-            self.collapse()
-        else:
+            self.collapse(forget_preference=True)
+            return
+        self._preferred_visible = True
+        if get_live_goal_tree(self.app) is not None:
             self.expand()
+        else:
+            self._start_refresh_timer()
 
     def expand(self) -> None:
         """Show the overlay and start live refresh."""
         self.display = True
         self.add_class("-expanded")
-        self.refresh_content()
         self._start_refresh_timer()
+        self.refresh_content()
 
-    def collapse(self) -> None:
-        """Hide the overlay and stop live refresh."""
+    def collapse(self, *, forget_preference: bool = False) -> None:
+        """Hide the overlay.
+
+        Args:
+            forget_preference: When True (Ctrl+t / Esc), stay hidden until the
+                user opts in again. When False (no active plan), keep watching
+                so a new plan can auto-show.
+        """
+        if forget_preference:
+            self._preferred_visible = False
         self.remove_class("-expanded")
         self.display = False
-        self._stop_refresh_timer()
+        if self._preferred_visible:
+            self._start_refresh_timer()
+        else:
+            self._stop_refresh_timer()
 
     def _start_refresh_timer(self) -> None:
         self._stop_refresh_timer()
@@ -197,10 +212,17 @@ class PlanQuickViewOverlay(Vertical):
             self._refresh_timer = None
 
     def refresh_content(self) -> None:
-        """Repaint the plan snapshot from the live goal tree."""
+        """Sync visibility from the live goal tree and repaint when expanded."""
+        tree = get_live_goal_tree(self.app)
+        if tree is None:
+            if self.is_expanded:
+                self.collapse()
+            return
+        if self._preferred_visible and not self.is_expanded:
+            self.expand()
+            return
         if not self.is_expanded or self._content is None:
             return
-        tree = get_live_goal_tree(self.app)
         if self._header is not None:
             show_enter_hint = False
             can_run_queued = getattr(self.app, "_can_run_queued_goal_now_from_enter", None)
@@ -208,9 +230,8 @@ class PlanQuickViewOverlay(Vertical):
                 with suppress(Exception):
                     show_enter_hint = bool(can_run_queued())
             elapsed: str | None = None
-            if tree is not None:
-                with suppress(Exception):
-                    elapsed = tree.loop_elapsed_label()
+            with suppress(Exception):
+                elapsed = tree.loop_elapsed_label()
             self._header.update(
                 _plan_quick_view_header(
                     getattr(self.app, "_lc_loop_id", None),
@@ -218,9 +239,6 @@ class PlanQuickViewOverlay(Vertical):
                     elapsed=elapsed,
                 )
             )
-        if tree is None:
-            self._content.update(Content.styled("No active plan.", "dim"))
-            return
         try:
             adapter = getattr(self.app, "_ui_adapter", None)
             if adapter is not None:
