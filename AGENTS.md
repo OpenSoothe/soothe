@@ -210,7 +210,7 @@ langchain provides: web search (Tavily, DuckDuckGo), ArXiv, Wikipedia, GitHub, G
 1. **Plan**: Explore codebase → ask when alternatives exist → ExitPlanMode for approval
 2. **Implement**: Place code per §7b Package Boundaries → check ecosystem → follow patterns → run `make lint`
 3. **Cleanse → Verify → Fix** (Critical Rule 6 — MUST after every code impl): remove related legacy/dead code **without changing existing functionality**, then `./scripts/verify_finally.sh`, then fix until green
-4. **GitHub Actions**: Use `GITHUB_PAT` env var; `export GH_TOKEN="$GITHUB_PAT"` for `gh` CLI
+4. **GitHub Actions / `gh` CLI**: Use the `GH_TOKEN` env var
 
 ---
 
