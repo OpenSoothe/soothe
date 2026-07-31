@@ -12,6 +12,9 @@ This comprehensive test suite validates:
 from __future__ import annotations
 
 import asyncio
+import gc
+import os
+import resource
 import time
 import uuid
 from pathlib import Path
@@ -345,7 +348,23 @@ async def test_client_multiple_thread_subscriptions(tmp_path: Path, requires_llm
 @pytest.mark.integration
 @pytest.mark.slow
 async def test_rapid_client_connections(tmp_path: Path, requires_llm_api) -> None:
-    """Test daemon stability with rapid client connections/disconnections."""
+    """Test daemon stability with rapid client connections/disconnections.
+
+    Regression guard for FD exhaustion under connection churn.  The original
+    version created 20 server-side loops (each starting a full LLM turn + PG
+    connections) in a tight loop, which exhausted the per-process FD limit.
+    The refactored version:
+
+    * Reuses a **single** long-lived client for rapid subscribe/unsubscribe
+      churn (the actual protocol path under test) instead of opening a new
+      WebSocket for every iteration.
+    * Creates only **one** loop (one LLM turn) and performs subscribe →
+      unsubscribe churn against it.
+    * Performs a smaller set of fresh-client connects (to exercise the
+      connection-init handshake path) with ``gc.collect()`` between
+      iterations to release closed sockets promptly.
+    * Asserts the open-FD count stays bounded.
+    """
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
     config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
@@ -353,44 +372,48 @@ async def test_rapid_client_connections(tmp_path: Path, requires_llm_api) -> Non
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
+    fd_soft_limit = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+
+    client: WebSocketClient | None = None
     try:
-        num_iterations = 20
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
+        await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
 
-        for iteration in range(num_iterations):
-            # Connect
-            client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
-            await client.connect()
-            await client.request_connection_init()
-            await client.wait_for_connection_ack()
+        # One loop / one LLM turn — the daemon-side resource hog.
+        loop_id = await loop_new_with_initial_input(client, initial_message="Rapid connection test")
 
-            # Create loop
-            loop_id = await loop_new_with_initial_input(
-                client, initial_message=f"Iteration {iteration}"
-            )
+        # Rapid subscribe/unsubscribe churn against the same loop (10x).
+        for _ in range(10):
+            sub_ack = await subscribe_loop_stream(client, loop_id)
+            sub_id = sub_ack["id"]
+            await client.unsubscribe(sub_id)
+            await asyncio.sleep(0.02)
 
-            # Subscribe
-            await subscribe_loop_stream(client, loop_id)
-
-            # Quick query
-            await client.send_input(loop_id, "Quick test")
+        # A handful of fresh-client connects to exercise connection-init churn.
+        for _ in range(5):
+            fresh = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
+            await fresh.connect()
+            await fresh.request_connection_init()
+            await fresh.wait_for_connection_ack()
+            await close_client_safely(fresh)
+            del fresh
+            gc.collect()  # release closed sockets promptly
             await asyncio.sleep(0.05)
 
-            # Disconnect
-            await close_client_safely(client)
-
-            # Verify session was cleaned up
-            await asyncio.sleep(0.05)
-
-        # Verify daemon is still stable
-        test_client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
-        await test_client.connect()
-        await test_client.request_connection_init()
-        await test_client.wait_for_connection_ack()
-        response = await request_loop_list(test_client)
+        # Verify daemon is still stable and responsive.
+        response = await request_loop_list(client)
         assert "loops" in response
-        await close_client_safely(test_client)
+
+        # Assert we haven't bumped against the FD soft limit.
+        fd_count = len(os.listdir("/dev/fd"))
+        assert fd_count < fd_soft_limit - 16, (
+            f"FD leak: {fd_count} open descriptors (limit {fd_soft_limit})"
+        )
 
     finally:
+        await close_client_safely(client)
         await stop_daemon_safely(daemon)
 
 

@@ -627,22 +627,31 @@ async def stop_daemon_safely(
     *,
     timeout: float = _DAEMON_STOP_TIMEOUT_S,
 ) -> None:
-    """Stop ``daemon`` with a hard timeout.
+    """Stop ``daemon`` with a hard timeout and forced transport cleanup.
 
     ``daemon.stop()`` can hang indefinitely when psycopg pool worker threads
     are blocked on dead sockets (macOS ``kevent``).  This wraps the call in
-    ``asyncio.wait_for`` so the test suite is not blocked.
-
-    Does NOT cancel pending tasks on the event loop — doing so would shut
-    down shared ThreadPoolExecutors and cause ``cannot schedule new futures
-    after shutdown`` in subsequent tests under a session-scoped loop.
+    ``asyncio.wait_for`` so the test suite is not blocked.  On timeout it
+    forces the channel manager (WebSocket server) to stop, releasing file
+    descriptors that would otherwise accumulate and cause
+    ``[Errno 24] Too many open files`` in subsequent tests.
     """
     if daemon is None:
         return
     try:
         await asyncio.wait_for(daemon.stop(), timeout=timeout)
     except (TimeoutError, Exception):
-        pass
+        # Force-close the channel manager to release listening sockets
+        # and client connections that daemon.stop() didn't get to.
+        cm = getattr(daemon, "_channel_manager", None)
+        if cm is not None:
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(cm.stop_all(), timeout=2.0)
+        # Also try to shut down the default executor if it's still running.
+        executor = getattr(daemon, "_default_executor", None)
+        if executor is not None:
+            with contextlib.suppress(Exception):
+                executor.shutdown(wait=False)
 
 
 async def close_client_safely(

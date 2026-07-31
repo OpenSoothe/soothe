@@ -27,7 +27,6 @@ from tests.integration.daemon_fixtures import (
     await_event_type,
     await_status_state,
     build_daemon_config,
-    close_client_safely,
     force_isolated_home,
     integration_llm_idle_timeout,
     stop_daemon_safely,
@@ -144,8 +143,8 @@ class TestLoopIsolation:
             assert loop_ids_in_client1 == {loop1}, "Client1 should only see loop1-specific events"
             assert loop_ids_in_client2 == {loop2}, "Client2 should only see loop2-specific events"
 
-            await close_client_safely(client1)
-            await close_client_safely(client2)
+            await client1.close()
+            await client2.close()
         finally:
             await stop_daemon_safely(daemon)
 
@@ -208,8 +207,8 @@ class TestLoopIsolation:
                     break
             assert leaked is None, f"client2 received loop1 event: {leaked}"
 
-            await close_client_safely(client1)
-            await close_client_safely(client2)
+            await client1.close()
+            await client2.close()
         finally:
             await stop_daemon_safely(daemon)
 
@@ -255,8 +254,8 @@ class TestLoopIsolation:
                     client2.read_event, "idle", timeout=integration_llm_idle_timeout()
                 )
 
-            await close_client_safely(client1)
-            await close_client_safely(client2)
+            await client1.close()
+            await client2.close()
         finally:
             await stop_daemon_safely(daemon)
 
@@ -324,8 +323,8 @@ class TestLoopIsolation:
             assert metadata1.get("loop_id") == loop1
             assert metadata2.get("loop_id") == loop2
 
-            await close_client_safely(client1)
-            await close_client_safely(client2)
+            await client1.close()
+            await client2.close()
         finally:
             await stop_daemon_safely(daemon)
 
@@ -384,8 +383,8 @@ class TestLoopIsolation:
                 if event.get("loop_id"):
                     assert event.get("loop_id") == loop_id
 
-            await close_client_safely(client1)
-            await close_client_safely(client2)
+            await client1.close()
+            await client2.close()
             await client3.close()
         finally:
             await stop_daemon_safely(daemon)
@@ -436,8 +435,8 @@ class TestLoopIsolation:
             if event.get("loop_id"):
                 assert event.get("loop_id") == loop_id
 
-            await close_client_safely(client1)
-            await close_client_safely(client2)
+            await client1.close()
+            await client2.close()
         finally:
             await stop_daemon_safely(daemon)
 
@@ -510,8 +509,8 @@ class TestLoopIsolation:
             # Verify client2 never receives loop1 replay events
             assert not await _received_loop_event(client2, loop1, window_s=1.0)
 
-            await close_client_safely(client1)
-            await close_client_safely(client2)
+            await client1.close()
+            await client2.close()
         finally:
             await stop_daemon_safely(daemon)
 
@@ -564,7 +563,7 @@ class TestLoopIsolation:
             assert metadata1.get("thread_ids", []) == []
             assert metadata2.get("thread_ids", []) == []
 
-            await close_client_safely(client)
+            await client.close()
         finally:
             await stop_daemon_safely(daemon)
 
@@ -617,8 +616,8 @@ class TestLoopIsolation:
             assert all_loops <= loops2, "Client2 should include all loops created in this test"
             assert loops1 == loops2, "Both clients should see the same loop_list snapshot"
 
-            await close_client_safely(client1)
-            await close_client_safely(client2)
+            await client1.close()
+            await client2.close()
         finally:
             await stop_daemon_safely(daemon)
 
@@ -665,7 +664,7 @@ class TestLoopIsolation:
             assert metadata2_after is not None, "Loop2 metadata should still be in DB"
             assert metadata2_after.get("loop_id") == loop2, "Loop2 metadata should be intact"
 
-            await close_client_safely(client1)
-            await close_client_safely(client2)
+            await client1.close()
+            await client2.close()
         finally:
             await stop_daemon_safely(daemon)

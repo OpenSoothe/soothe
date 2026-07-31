@@ -133,22 +133,22 @@ def _cancel_loop_tasks(loop: asyncio.AbstractEventLoop) -> None:
 
 
 def _thread_worker_init_checkpointer(config: SootheConfig) -> object:
-    """Same pattern as ``thread_runner._pool_worker`` (dedicated event loop per thread)."""
+    """Same pattern as ``thread_runner._pool_worker`` (dedicated event loop per thread).
+
+    Does NOT call ``runner.cleanup()`` — that shuts down the shared
+    ThreadPoolExecutor, causing ``cannot schedule new futures after shutdown``
+    in subsequent workers and tests.
+    """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     async def _run() -> object:
         runner = SootheRunner(config)
         await runner._ensure_checkpointer_initialized()
-        chk = runner._checkpointer_pool
-        try:
-            await asyncio.wait_for(runner.cleanup(), timeout=30.0)
-        except TimeoutError:
-            pass
-        return chk
+        return runner._checkpointer_pool
 
     try:
-        return loop.run_until_complete(_run())
+        return loop.run_until_complete(asyncio.wait_for(_run(), timeout=30.0))
     except Exception:
         _cancel_loop_tasks(loop)
         raise
