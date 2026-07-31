@@ -39,10 +39,10 @@ def _plan_quick_view_header(
     Live loop elapsed (``12s``) sits in the title row while the goal is open.
     """
     dim_style = theme.SECONDARY_TEXT_STYLE
-    title = "Plan"
+    title = "Orchestrate"
     abbreviated = abbreviate_compact_id(loop_id or "")
     if abbreviated:
-        title = f"Plan ({abbreviated})"
+        title = f"Orchestrate ({abbreviated})"
     hints: list[str] = []
     if elapsed:
         hints.append(elapsed)

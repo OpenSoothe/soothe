@@ -2,8 +2,9 @@
 
 Langfuse (IG-367, IG-396): outer ``ainvoke`` receives the LangChain callback handler so the
 Loop Graph run nests planner / CoreAgent spans under one trace; ``langfuse_session_id`` is the
-conversation ``thread_id``; Runnable ``configurable.thread_id`` stays ``loop_id`` for checkpoint
-routing. Metadata adds ``soothe_component`` and dashboard tags for StrangeLoop.
+conversation ``thread_id``; Runnable ``configurable.thread_id`` is
+``{loop_id}__strange_loop`` for checkpoint isolation from CoreAgent. Metadata adds
+``soothe_component`` tags.
 """
 
 from __future__ import annotations
@@ -13,6 +14,11 @@ import traceback
 from typing import Any
 
 from soothe.sloop.orchestrator.builder import build_strange_loop_graph
+from soothe.sloop.orchestrator.checkpoint_keys import (
+    snapshot_has_resumable_interrupt,
+    snapshot_has_unanswered_pending,
+    strange_loop_configurable,
+)
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.utils.observability.langfuse import (
@@ -51,8 +57,9 @@ def _langfuse_goal_output_text(ctx: LoopRuntimeContext) -> str:
 def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     """Build RunnableConfig for ``CompiledGraph.ainvoke`` with Langfuse + loop metadata.
 
-    Configurable ``thread_id`` is ``loop_id`` (RFC-220). Langfuse session correlation uses
-    ``loop_state.thread_id`` so traces align with planner LLM and CoreAgent execute streams.
+    Configurable ``thread_id`` is ``{loop_id}__strange_loop`` so CoreAgent /
+    intake-only graphs (``thread_id=loop_id``) cannot orphan ``await_user``
+    interrupts. Langfuse session correlation uses ``loop_state.thread_id``.
 
     Args:
         ctx: Runtime context for the current goal run.
@@ -61,11 +68,12 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
         RunnableConfig dict safe to pass to ``ainvoke``.
     """
     loop_id = ctx.state_manager.loop_id
-    configurable: dict[str, Any] = {"thread_id": loop_id}
+    extra: dict[str, Any] = {}
     if ctx.loop_state.workspace:
-        configurable["workspace"] = ctx.loop_state.workspace
+        extra["workspace"] = ctx.loop_state.workspace
     if ctx.proposal_queue is not None:
-        configurable["proposal_queue"] = ctx.proposal_queue
+        extra["proposal_queue"] = ctx.proposal_queue
+    configurable = strange_loop_configurable(loop_id, **extra)
 
     cfg = ctx.strange_loop.config
     if ctx.goal_trace is not None:
@@ -92,6 +100,48 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     meta["langfuse_tags"] = tags
     out["metadata"] = meta
     return out
+
+
+def _clarification_resume_command(
+    *,
+    snapshot: Any,
+    resume_answers: list[str],
+    loop_id: str,
+) -> Any:
+    """Build ``Command(resume=…)`` or orphaned-interrupt ``goto`` recovery."""
+    from langgraph.types import Command
+
+    from soothe.sloop.clarification.origins import resume_node_for_clarification_origin
+    from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
+    from soothe.sloop.orchestrator.stations import DELEGATE
+
+    if snapshot_has_resumable_interrupt(snapshot):
+        logger.info(
+            "[runner] Resuming pending clarification for loop=%s with %d answer(s)",
+            loop_id,
+            len(resume_answers),
+        )
+        return Command(resume={"answers": resume_answers})
+
+    values = getattr(snapshot, "values", {}) or {}
+    origin = values.get("last_clarification_origin")
+    goto = resume_node_for_clarification_origin(str(origin) if origin is not None else None)
+    if goto is None:
+        goto = DELEGATE
+    answer_state = answer_to_state(
+        ClarificationAnswer(answers=tuple(resume_answers), source="human")
+    )
+    logger.warning(
+        "[runner] pending clarification without live interrupt (loop=%s origin=%s); "
+        "applying answer via goto=%s",
+        loop_id,
+        origin,
+        goto,
+    )
+    return Command(
+        update={"pending_clarification_answer": answer_state},
+        goto=goto,
+    )
 
 
 async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
@@ -124,20 +174,15 @@ async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
     if answer_text or answer_list:
         try:
             snapshot = await compiled.aget_state(config)
-            values = getattr(snapshot, "values", {}) or {}
-            pending = values.get("pending_clarification")
-            answered = values.get("pending_clarification_answer")
-            if pending and not answered:
+            if snapshot_has_unanswered_pending(snapshot):
                 # Prefer the per-question list when provided so the policy
                 # returns answers paired 1:1 with questions instead of
-                # broadcasting a single concatenated string. Falls back to
-                # the single-string form for legacy single-question turns.
+                # broadcasting a single concatenated string.
                 resume_answers = [str(a) for a in answer_list] if answer_list else [answer_text]
-                graph_input = Command(resume={"answers": resume_answers})
-                logger.info(
-                    "[runner] Resuming pending clarification for loop=%s with %d answer(s)",
-                    loop_id,
-                    len(resume_answers),
+                graph_input = _clarification_resume_command(
+                    snapshot=snapshot,
+                    resume_answers=resume_answers,
+                    loop_id=loop_id,
                 )
             else:
                 logger.warning(

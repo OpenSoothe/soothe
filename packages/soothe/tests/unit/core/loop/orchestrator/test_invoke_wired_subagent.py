@@ -511,7 +511,7 @@ async def test_invoke_wired_intake_only_forwards_via_bridge_during_astream() -> 
         task_complexity=TaskComplexity.SIMPLE,
     )
 
-    async def _astream(_input, stream_mode=None):  # type: ignore[no-untyped-def]
+    async def _astream(_input, stream_mode=None, config=None, **_kwargs):  # type: ignore[no-untyped-def]
         from soothe_nano.utils.progress import emit_progress
 
         emit_progress(
@@ -577,7 +577,7 @@ async def test_invoke_wired_intake_only_astream_two_tuple_prefers_answer_field()
     )
     synthesized = "Weather summary: clear sky, 26C."
 
-    async def _astream(_input, stream_mode=None):  # type: ignore[no-untyped-def]
+    async def _astream(_input, stream_mode=None, config=None, **_kwargs):  # type: ignore[no-untyped-def]
         yield (
             "values",
             {
@@ -639,7 +639,7 @@ async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
         task_complexity=TaskComplexity.SIMPLE,
     )
 
-    async def _ainvoke(_input):  # type: ignore[no-untyped-def]
+    async def _ainvoke(_input, config=None, **_kwargs):  # type: ignore[no-untyped-def]
         from soothe_nano.utils.progress import emit_progress
 
         emit_progress(
@@ -705,7 +705,7 @@ async def test_invoke_wired_intake_only_forwards_wire_when_context_lost() -> Non
         task_complexity=TaskComplexity.SIMPLE,
     )
 
-    async def _ainvoke(_input):  # type: ignore[no-untyped-def]
+    async def _ainvoke(_input, config=None, **_kwargs):  # type: ignore[no-untyped-def]
         from soothe_nano.utils.progress import emit_progress
 
         fresh_context = contextvars.Context()

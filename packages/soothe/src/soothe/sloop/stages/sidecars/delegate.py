@@ -208,9 +208,24 @@ async def _run_intake_only_runnable(
     goal_text: str,
     invocation_id: str,
     step_id: str,
+    wire: str,
 ) -> Any:
     """Run specialist while bridging wire customs live onto the query stream."""
     from soothe_nano.utils.progress import reset_wire_bridge, set_wire_bridge
+
+    from soothe.sloop.orchestrator.checkpoint_keys import intake_only_invoke_config
+
+    state_manager = getattr(ctx, "state_manager", None)
+    loop_id = str(getattr(state_manager, "loop_id", "") or "")
+    if not loop_id:
+        loop_state = getattr(ctx, "loop_state", None)
+        loop_id = str(getattr(loop_state, "thread_id", "") or "") or "loop"
+    workspace = getattr(getattr(ctx, "loop_state", None), "workspace", None)
+    run_config = intake_only_invoke_config(
+        loop_id,
+        wire,
+        workspace=str(workspace) if workspace else None,
+    )
 
     input_state = {"messages": [HumanMessage(content=goal_text)]}
     queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
@@ -247,7 +262,7 @@ async def _run_intake_only_runnable(
         if callable(astream):
             last_values: Any = None
             try:
-                stream = astream(input_state, stream_mode=["values"])
+                stream = astream(input_state, config=run_config, stream_mode=["values"])
                 async for item in stream:
                     mode, data = _unpack_astream_item(item)
                     if mode == "values" or mode is None:
@@ -260,7 +275,7 @@ async def _run_intake_only_runnable(
                     "falling back to ainvoke",
                     exc_info=True,
                 )
-        return await runnable.ainvoke(input_state)
+        return await runnable.ainvoke(input_state, config=run_config)
     finally:
         await queue.put(None)
         try:
@@ -526,6 +541,7 @@ async def _invoke_intake_only_direct(
             goal_text=goal_text,
             invocation_id=invocation_id,
             step_id=step_id,
+            wire=wire,
         )
     except asyncio.CancelledError:
         duration_ms = int((time.monotonic() - started_at) * 1000)

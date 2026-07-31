@@ -27,24 +27,25 @@ def test_get_live_goal_tree_reads_adapter() -> None:
 
 def test_plan_quick_view_header_includes_loop_id_when_available() -> None:
     bare = _plan_quick_view_header(None)
-    assert bare.plain == "Plan  ·  Ctrl+t to close"
+    assert bare.plain == "Orchestrate  ·  Ctrl+t to close"
 
     with_loop = _plan_quick_view_header("019f17e6-1234-5678-9abc-def012346543")
-    assert with_loop.plain == "Plan (019f17e6...6543)  ·  Ctrl+t to close"
+    assert with_loop.plain == "Orchestrate (019f17e6...6543)  ·  Ctrl+t to close"
 
     with_hint = _plan_quick_view_header(
         "019f17e6-1234-5678-9abc-def012346543",
         show_enter_hint=True,
     )
     assert (
-        with_hint.plain == "Plan (019f17e6...6543)  ·  Enter runs queued goal  ·  Ctrl+t to close"
+        with_hint.plain
+        == "Orchestrate (019f17e6...6543)  ·  Enter runs queued goal  ·  Ctrl+t to close"
     )
 
     with_elapsed = _plan_quick_view_header(
         "019f17e6-1234-5678-9abc-def012346543",
         elapsed="12s",
     )
-    assert with_elapsed.plain == "Plan (019f17e6...6543)  ·  12s  ·  Ctrl+t to close"
+    assert with_elapsed.plain == "Orchestrate (019f17e6...6543)  ·  12s  ·  Ctrl+t to close"
 
     with_both = _plan_quick_view_header(
         "019f17e6-1234-5678-9abc-def012346543",
@@ -53,7 +54,7 @@ def test_plan_quick_view_header_includes_loop_id_when_available() -> None:
     )
     assert (
         with_both.plain
-        == "Plan (019f17e6...6543)  ·  12s  ·  Enter runs queued goal  ·  Ctrl+t to close"
+        == "Orchestrate (019f17e6...6543)  ·  12s  ·  Enter runs queued goal  ·  Ctrl+t to close"
     )
 
 
@@ -145,7 +146,7 @@ def test_plan_panel_title_ticks_elapsed_while_loop_open() -> None:
     tree._loop_started_at = time() - 13
     assert tree.loop_elapsed_label() == "13s"
     header = _plan_quick_view_header("019f17e6-1234-5678-9abc-def012346543", elapsed="13s")
-    assert header.plain == "Plan (019f17e6...6543)  ·  13s  ·  Ctrl+t to close"
+    assert header.plain == "Orchestrate (019f17e6...6543)  ·  13s  ·  Ctrl+t to close"
 
 
 def test_plan_panel_elapsed_ticks_between_steps_then_clears_on_done() -> None:

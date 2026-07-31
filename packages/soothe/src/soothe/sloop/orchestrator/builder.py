@@ -1,7 +1,8 @@
 """Compile the Strange Loop LangGraph (RFC-220, IG-663 stem stations).
 
-The graph checkpoint namespace uses ``loop_id`` via ``configurable.thread_id`` when a
-checkpointer is attached. Persistence for goals remains ``StrangeLoopStateManager``.
+The graph checkpoint key uses ``{loop_id}__strange_loop`` via
+``configurable.thread_id`` (see ``checkpoint_keys``) when a checkpointer is
+attached. Persistence for goals remains ``StrangeLoopStateManager``.
 """
 
 from __future__ import annotations

@@ -13,8 +13,8 @@ from soothe.utils.observability.langfuse import (
 )
 
 
-def test_build_loop_graph_invoke_config_keeps_loop_id_as_graph_thread() -> None:
-    """LangGraph configurable.thread_id stays loop_id; metadata carries loop_id for dashboards."""
+def test_build_loop_graph_invoke_config_keeps_isolated_strange_loop_thread() -> None:
+    """LangGraph configurable.thread_id is isolated; metadata carries loop_id for dashboards."""
     cfg = SootheConfig()
     cfg.observability.langfuse.enabled = False
 
@@ -36,7 +36,10 @@ def test_build_loop_graph_invoke_config_keeps_loop_id_as_graph_thread() -> None:
 
     out = build_loop_graph_invoke_config(ctx)
 
-    assert out["configurable"]["thread_id"] == "loop-abc"
+    from soothe.sloop.orchestrator.checkpoint_keys import strange_loop_thread_id
+
+    assert out["configurable"]["thread_id"] == strange_loop_thread_id("loop-abc")
+    assert "checkpoint_ns" not in out["configurable"]
     meta = out["metadata"]
     assert meta["loop_id"] == "loop-abc"
     assert meta["soothe_component"] == "strange_loop_graph"
@@ -117,8 +120,10 @@ def test_build_loop_graph_invoke_config_uses_goal_trace_pinned_id() -> None:
 
     out = build_loop_graph_invoke_config(ctx)
 
+    from soothe.sloop.orchestrator.checkpoint_keys import strange_loop_thread_id
+
     assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
-    assert out["configurable"]["thread_id"] == "loop-1"
+    assert out["configurable"]["thread_id"] == strange_loop_thread_id("loop-1")
     assert out["configurable"]["workspace"] == "/tmp/ws"
     assert out["run_name"] == "soothe-dev:strange-loop-graph"
     assert "callbacks" in out
