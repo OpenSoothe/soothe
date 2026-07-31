@@ -32,6 +32,10 @@ class CLIConfig:
     markdown_theme: str = "match-app"
     """Markdown appearance preset (``match-app``, ``langchain``, ``standard``, …)."""
 
+    # Plan panel visibility on launch
+    plan_panel_default_visible: bool = True
+    """Show the in-flow plan panel on TUI launch. Ctrl+t toggles thereafter."""
+
     # Output streaming overrides (RFC-614)
     output_streaming_enabled: bool | None = None
     """Override daemon streaming enabled setting."""

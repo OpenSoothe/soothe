@@ -157,6 +157,16 @@ def main(
             ),
         ),
     ] = False,
+    plan_panel: Annotated[
+        bool,
+        typer.Option(
+            "--plan-panel/--no-plan-panel",
+            help=(
+                "Show the in-flow plan panel on TUI launch. Ctrl+t toggles it "
+                "thereafter. Default: shown."
+            ),
+        ),
+    ] = True,
     show_help: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--help", "-h", is_flag=True, help="Show this message and exit."),
@@ -214,6 +224,7 @@ def main(
         output_streaming_mode=streaming_mode,
         clarification_mode=mode,
         auto_resume=auto_resume,
+        plan_panel_default_visible=plan_panel,
         soothe_home=home_path,
     )
     set_runtime_config(cli_cfg)

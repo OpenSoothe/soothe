@@ -78,10 +78,12 @@ def _goal_tree_running_live_stats(adapter: Any) -> dict[str, tuple[int, float | 
 class PlanQuickViewOverlay(Vertical):
     """In-flow plan panel above the thinking row and chat input.
 
-    Toggle with ``Ctrl+t``. Mounted as a Screen sibling between ``#chat`` and
-    ``#bottom-app-container`` so expanding it shrinks the transcript instead of
-    floating over the sticky bottom chrome. Snapshots in-memory goal tree state
-    on the UI adapter (not mounted in the main message list).
+    Visibility on launch is controlled by ``default_visible`` (from
+    ``CLIConfig.plan_panel_default_visible``, default True). Toggle with
+    ``Ctrl+t``. Mounted as a Screen sibling between ``#chat`` and
+    ``#bottom-app-container`` so expanding it shrinks the transcript instead
+    of floating over the sticky bottom chrome. Snapshots in-memory goal
+    tree state on the UI adapter (not mounted in the main message list).
     """
 
     DEFAULT_CSS = """
@@ -131,8 +133,9 @@ class PlanQuickViewOverlay(Vertical):
     }
     """
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, *, default_visible: bool = True, **kwargs: Any) -> None:
         super().__init__(**kwargs)
+        self._default_visible: bool = default_visible
         self._refresh_timer: Timer | None = None
         self._header: Static | None = None
         self._content: Static | None = None
@@ -150,7 +153,11 @@ class PlanQuickViewOverlay(Vertical):
         self._header = self.query_one("#plan-quick-view-header", Static)
         self._content = self.query_one("#plan-quick-view-content", Static)
         self.query_one("#plan-quick-view-body", VerticalScroll).can_focus = False
-        self.display = False
+        # Show the plan panel on launch so the user sees the goal tree
+        # immediately. Ctrl+t collapses/expands it thereafter. The default
+        # visibility is controlled by the CLI config (plan_panel_default_visible).
+        if self._default_visible:
+            self.expand()
 
     @property
     def is_expanded(self) -> bool:

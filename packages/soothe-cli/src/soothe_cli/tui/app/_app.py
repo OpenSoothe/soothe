@@ -474,8 +474,13 @@ class SootheApp(
                 )
                 yield Container(id="messages")
         # In-flow plan panel: sits above the sticky bottom chrome so Ctrl+t
-        # never covers the thinking row or chat input.
-        yield PlanQuickViewOverlay(id="plan-quick-view-overlay")
+        # never covers the thinking row or chat input. Default visibility is
+        # controlled by CLIConfig.plan_panel_default_visible.
+        plan_visible = getattr(self._daemon_config, "plan_panel_default_visible", True)
+        yield PlanQuickViewOverlay(
+            id="plan-quick-view-overlay",
+            default_visible=plan_visible,
+        )
         with Container(id="bottom-app-container"):
             yield Container(id="thinking-status")
             yield ChatInput(

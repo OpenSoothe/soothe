@@ -278,6 +278,39 @@ def test_overlay_toggle_expands_and_collapses() -> None:
     assert not overlay.is_expanded
 
 
+def test_overlay_shown_expanded_by_default_on_mount() -> None:
+    """Plan panel is visible (expanded) on launch, not collapsed."""
+    overlay = PlanQuickViewOverlay()
+    overlay._content = MagicMock()
+    overlay._header = MagicMock()
+    overlay.query_one = MagicMock(return_value=MagicMock())
+    overlay.refresh_content = MagicMock()
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+
+    overlay.on_mount()
+
+    assert overlay.display is True
+    assert overlay.is_expanded
+    overlay.refresh_content.assert_called_once()
+    overlay.set_interval.assert_called_once()
+
+
+def test_overlay_hidden_by_default_when_config_disabled() -> None:
+    """Plan panel starts collapsed when config sets default_visible=False."""
+    overlay = PlanQuickViewOverlay(default_visible=False)
+    overlay._content = MagicMock()
+    overlay._header = MagicMock()
+    overlay.query_one = MagicMock(return_value=MagicMock())
+    overlay.refresh_content = MagicMock()
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+
+    overlay.on_mount()
+
+    assert not overlay.is_expanded
+    overlay.refresh_content.assert_not_called()
+    overlay.set_interval.assert_not_called()
+
+
 def test_plan_panel_css_is_in_flow_not_layered() -> None:
     """Ctrl+t panel must take layout space above thinking/input, not float on a layer."""
     css = PlanQuickViewOverlay.DEFAULT_CSS
@@ -293,6 +326,23 @@ def test_plan_panel_css_is_in_flow_not_layered() -> None:
     assert "margin: 0 1 1" not in expanded
 
 
+def test_on_mount_source_expands_by_default() -> None:
+    """on_mount calls expand() when default_visible is True."""
+    import inspect
+
+    source = inspect.getsource(PlanQuickViewOverlay.on_mount)
+    assert "self.expand()" in source
+    assert "self._default_visible" in source
+
+
+def test_on_mount_source_respects_config_disabled() -> None:
+    """on_mount guards expand() behind _default_visible flag."""
+    import inspect
+
+    source = inspect.getsource(PlanQuickViewOverlay.on_mount)
+    assert "if self._default_visible:" in source
+
+
 def test_soothe_app_compose_places_plan_panel_above_bottom_chrome() -> None:
     """Plan panel is a Screen sibling above #bottom-app-container, not nested in it."""
     from pathlib import Path
@@ -300,7 +350,7 @@ def test_soothe_app_compose_places_plan_panel_above_bottom_chrome() -> None:
     source = (Path(__file__).resolve().parents[4] / "src/soothe_cli/tui/app/_app.py").read_text(
         encoding="utf-8"
     )
-    plan_yield = source.index('PlanQuickViewOverlay(id="plan-quick-view-overlay")')
+    plan_yield = source.index("PlanQuickViewOverlay(")
     bottom_open = source.index('Container(id="bottom-app-container")')
     thinking = source.index('Container(id="thinking-status")')
     assert plan_yield < bottom_open < thinking
@@ -309,3 +359,14 @@ def test_soothe_app_compose_places_plan_panel_above_bottom_chrome() -> None:
     bottom_block = source[bottom_open : source.index("yield StatusBar", bottom_open)]
     assert "PlanQuickViewOverlay" not in bottom_block
     assert "thinking-status" in bottom_block
+
+
+def test_soothe_app_compose_passes_config_default_visible() -> None:
+    """compose() passes plan_panel_default_visible from daemon config to overlay."""
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[4] / "src/soothe_cli/tui/app/_app.py").read_text(
+        encoding="utf-8"
+    )
+    assert "plan_panel_default_visible" in source
+    assert "default_visible=plan_visible" in source

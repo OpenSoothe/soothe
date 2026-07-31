@@ -16,6 +16,7 @@ def test_load_config_returns_defaults_when_no_runtime_config() -> None:
     assert cfg.logging_level is None
     assert cfg.render_markdown is True
     assert cfg.markdown_theme == "match-app"
+    assert cfg.plan_panel_default_visible is True
 
 
 def test_load_config_returns_runtime_config() -> None:
@@ -71,4 +72,33 @@ def test_global_cli_markdown_theme_flag() -> None:
     result = runner.invoke(app, ["--markdown-theme", "minimal", "help"])
     assert result.exit_code == 0
     assert load_config().markdown_theme == "minimal"
+    reset_runtime_config()
+
+
+def test_global_cli_plan_panel_flag() -> None:
+    """--plan-panel / --no-plan-panel controls plan_panel_default_visible."""
+    from typer.testing import CliRunner
+
+    from soothe_cli.cli.main import app
+    from soothe_cli.config.loader import load_config, reset_runtime_config
+
+    reset_runtime_config()
+    runner = CliRunner()
+
+    # Default is True
+    result = runner.invoke(app, ["help"])
+    assert result.exit_code == 0
+    assert load_config().plan_panel_default_visible is True
+    reset_runtime_config()
+
+    # --no-plan-panel disables it
+    result = runner.invoke(app, ["--no-plan-panel", "help"])
+    assert result.exit_code == 0
+    assert load_config().plan_panel_default_visible is False
+    reset_runtime_config()
+
+    # --plan-panel explicitly enables it
+    result = runner.invoke(app, ["--plan-panel", "help"])
+    assert result.exit_code == 0
+    assert load_config().plan_panel_default_visible is True
     reset_runtime_config()
