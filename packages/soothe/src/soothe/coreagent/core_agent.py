@@ -39,7 +39,4 @@ class SootheNanoAgent(nano_core_agent.SootheNanoAgent):
         return create_soothe_agent(config, **kwargs)
 
 
-# Compatibility alias — prefer SootheNanoAgent for new code.
-CodingCoreAgent = SootheNanoAgent
-
-__all__ = ["CodingCoreAgent", "SootheNanoAgent", "_normalize_layer1_input"]
+__all__ = ["SootheNanoAgent", "_normalize_layer1_input"]
