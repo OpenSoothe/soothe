@@ -20,6 +20,7 @@ from soothe.sloop.goal_text import resolve_planning_goal
 from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
+from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 from soothe.sloop.state.schemas import StatusAssessment
 from soothe.sloop.utils.loop_reason_display import is_displayable_plan_reasoning
 
@@ -68,13 +69,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     context = strange_loop._build_plan_context(state)
     exclude_goal_id = ctx.goal_record.goal_id if ctx.goal_record else None
 
-    await ctx.emit(
-        "plan_phase_status",
-        {
-            "label": _PLAN_GENERATE_STATUS_LABEL,
-            "total_tokens_used": state.total_tokens_used,
-        },
-    )
+    await emit_plan_phase_status(ctx, label=_PLAN_GENERATE_STATUS_LABEL)
 
     # RFC-630: the ``simple`` intake branch skips plan_assess and reaches
     # plan_generate directly with a synthetic assessment. Use the cheaper
@@ -106,13 +101,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             plan_gap=ctx.scratch.plan_gap,
         )
 
-    await ctx.emit(
-        "plan_phase_status",
-        {
-            "label": _PLAN_GENERATE_STATUS_LABEL,
-            "total_tokens_used": state.total_tokens_used,
-        },
-    )
+    await emit_plan_phase_status(ctx, label=_PLAN_GENERATE_STATUS_LABEL)
 
     ctx.scratch.plan_result = plan_result
 

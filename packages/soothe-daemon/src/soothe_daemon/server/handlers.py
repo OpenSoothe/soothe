@@ -205,13 +205,6 @@ class DaemonHandlersMixin:
                     return
                 prompt_text = raw_text
 
-            card_manager = getattr(self, "_card_manager", None)
-            if card_manager is not None:
-                try:
-                    await card_manager.record_user_prompt(loop_id, prompt_text)
-                except Exception:
-                    logger.debug("Failed to record user prompt card for %s", loop_id, exc_info=True)
-
             if self._query_engine is not None:
                 qo = _queue_options_from_daemon_message(msg)
                 model_params = qo["model_params"]
@@ -244,6 +237,11 @@ class DaemonHandlersMixin:
             lid = str(loop_id or "").strip()
             if lid and self._query_engine is not None:
                 qe = self._query_engine
+                # Prefer the in-flight broadcast generation; fall back to the
+                # lasting admit counter. Pre-admit failures omit turn_id (gen=0).
+                active = qe._broadcast_turn_generation.get(lid)
+                admitted = qe._loop_turn_generation.get(lid)
+                turn_generation = int(active or admitted or 0)
                 await self._broadcast(
                     qe._loop_scoped_client_message(
                         lid,
@@ -253,8 +251,13 @@ class DaemonHandlersMixin:
                             "mode": "custom",
                             "data": {"type": ERROR, "error": "Daemon failed to process input"},
                         },
+                        turn_generation=turn_generation,
                     )
                 )
                 await self._broadcast(
-                    qe._loop_scoped_client_message(lid, {"type": "status", "state": "idle"})
+                    qe._loop_scoped_client_message(
+                        lid,
+                        {"type": "status", "state": "idle"},
+                        turn_generation=turn_generation,
+                    )
                 )

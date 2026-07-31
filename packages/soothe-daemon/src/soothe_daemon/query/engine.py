@@ -436,6 +436,20 @@ class QueryEngine:
             return ctx
         return int(self._loop_turn_generation.get(loop_id, 0) or 0)
 
+    async def _record_user_prompt_card(self, loop_id: str, text: str) -> None:
+        """Persist the user prompt card after admit (so card frames carry turn_id)."""
+        card_manager = getattr(self._daemon, "_card_manager", None)
+        if card_manager is None:
+            return
+        try:
+            await card_manager.record_user_prompt(loop_id, text)
+        except Exception:
+            logger.debug(
+                "Failed to record user prompt card for %s",
+                loop_id[:16],
+                exc_info=True,
+            )
+
     def _loop_scoped_client_message(
         self,
         loop_id: str,
@@ -1095,6 +1109,8 @@ class QueryEngine:
             if effective_loop_id:
                 d._active_stream_loop_ids.add(effective_loop_id)  # Bug 4.3: set-based tracking
                 self._broadcast_turn_generation[effective_loop_id] = turn_generation
+                # Prompt card after admit so live soothe.card.* frames inherit turn_id.
+                await self._record_user_prompt_card(effective_loop_id, effective_text)
             # Stream model / router-profile overlays are attached inside the loop
             # worker from ``LoopRunRequest`` (``stream_turn_overrides``). Parent
             # process ContextVars do not cross pool/thread/ray workers.
@@ -1702,6 +1718,8 @@ class QueryEngine:
                     client_id[:8] if client_id else "?",
                     effective_loop_id[:8],
                 )
+
+        await self._record_user_prompt_card(effective_loop_id, text)
 
         await self._broadcast_loop_message(
             effective_loop_id,

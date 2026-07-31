@@ -19,6 +19,7 @@ from soothe.sloop.intention.models import (
     normalize_response_language,
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 
 logger = logging.getLogger(__name__)
 
@@ -146,13 +147,7 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         logger.debug("[Intent] No classifier configured; graph will use complex fallback routing")
         return {}
 
-    await ctx.emit(
-        "plan_phase_status",
-        {
-            "label": INTENT_CLASSIFY_STATUS_LABEL,
-            "total_tokens_used": ctx.loop_state.total_tokens_used,
-        },
-    )
+    await emit_plan_phase_status(ctx, label=INTENT_CLASSIFY_STATUS_LABEL)
 
     query = ctx.loop_state.goal_user_submission or ctx.loop_state.goal
     thread_id = ctx.loop_state.thread_id
@@ -171,13 +166,7 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         observability_component="strange_loop.intent_classification",
     )
 
-    await ctx.emit(
-        "plan_phase_status",
-        {
-            "label": INTENT_CLASSIFY_STATUS_LABEL,
-            "total_tokens_used": ctx.loop_state.total_tokens_used,
-        },
-    )
+    await emit_plan_phase_status(ctx, label=INTENT_CLASSIFY_STATUS_LABEL)
 
     logger.info(
         "[Intent] Two-pass: intake=%s - %s",

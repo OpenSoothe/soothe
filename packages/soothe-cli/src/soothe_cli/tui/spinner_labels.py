@@ -22,8 +22,9 @@ SPINNER_LABEL_DELEGATING = "Delegating"
 # Backend plan_phase_status labels (orchestrator nodes) → display word.
 _PLAN_PHASE_TO_SPINNER: dict[str, str] = {
     "Interpreting goal": SPINNER_LABEL_INTERPRETING,
-    "Assessing goal progress": SPINNER_LABEL_ASSESSING,
-    "Assessing continuation context": SPINNER_LABEL_ASSESSING,
+    "Analyzing coverage": SPINNER_LABEL_ASSESSING,
+    "Assessing progress": SPINNER_LABEL_ASSESSING,
+    "Assessing continuation": SPINNER_LABEL_ASSESSING,
     "Generating plan": SPINNER_LABEL_PLANNING,
     "Finalizing goal": SPINNER_LABEL_FINALIZING,
     # Canonical words (if backend adopts them later).

@@ -297,6 +297,18 @@ class LLMPlanner:
             return self._config.agent.loop.llm_rate_limit
         return LLMRateLimitConfig()
 
+    def _gap_llm_rate_limit_config(self) -> LLMRateLimitConfig:
+        """Tight timeout policy for read-only gap analysis (must not stall assess)."""
+        base = self._llm_rate_limit_config()
+        return base.model_copy(
+            update={
+                "call_timeout_seconds": min(int(base.call_timeout_seconds), 60),
+                "call_timeout_max_seconds": min(int(base.call_timeout_max_seconds), 90),
+                "retry_on_timeout": False,
+                "max_timeout_retries": 0,
+            }
+        )
+
     async def _invoke_structured(
         self,
         model: Any,
@@ -306,6 +318,8 @@ class LLMPlanner:
         config: dict[str, Any] | None = None,
         thread_id: str | None = None,
         normalize: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+        methods: tuple[str | None, ...] | None = None,
+        rate_limit_config: LLMRateLimitConfig | None = None,
     ) -> Any:
         """Structured planner output with bounded timeout and retry."""
 
@@ -316,11 +330,12 @@ class LLMPlanner:
                 schema,
                 config=config,
                 normalize=normalize,
+                methods=methods,
             )
 
         return await await_with_llm_call_policy(
             _call,
-            config=self._llm_rate_limit_config(),
+            config=rate_limit_config or self._llm_rate_limit_config(),
             thread_id=thread_id,
         )
 
@@ -1168,6 +1183,8 @@ class LLMPlanner:
             phase="analyze-gaps",
         )
         t0 = time.perf_counter()
+        # Gap is advisory for assess: prefer fast JSON methods only and a tight
+        # call policy so schema thrash cannot stall the TUI for minutes.
         gap = await self._invoke_structured(
             model,
             gap_messages,
@@ -1175,6 +1192,8 @@ class LLMPlanner:
             config=lf_cfg,
             thread_id=state.thread_id,
             normalize=coerce_plan_gap_analysis_wire_dict,
+            methods=("json_schema", "json_mode"),
+            rate_limit_config=self._gap_llm_rate_limit_config(),
         )
         _log_plan_phase_timing(
             phase="gap",

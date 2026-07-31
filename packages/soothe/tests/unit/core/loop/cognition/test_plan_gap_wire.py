@@ -78,3 +78,51 @@ def test_e217_style_payload_validates_after_coerce(alias_key: str) -> None:
     coerced = coerce_plan_gap_analysis_wire_dict(raw)
     jsonschema.validate(instance=coerced, schema=PlanGapAnalysis.model_json_schema())
     PlanGapAnalysis(**coerced)
+
+
+def test_missing_component_synthesized_from_evidence() -> None:
+    """Loop 0d7a: components[] often omit ``component`` and only send status+evidence."""
+    raw = {
+        "components": [
+            {
+                "status": "satisfied",
+                "evidence": "Ledger confirms patch versions bumped and tagged for all clients.",
+            }
+        ],
+        "evidence_summary": "All client patch releases committed and tagged.",
+        "remaining_gaps": [],
+        "distance_from_goal": "near",
+        "gap_reasoning": "Version bumps complete; optional push remains.",
+    }
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(instance=raw, schema=PlanGapAnalysis.model_json_schema())
+
+    coerced = coerce_plan_gap_analysis_wire_dict(raw)
+    jsonschema.validate(instance=coerced, schema=PlanGapAnalysis.model_json_schema())
+    gap = PlanGapAnalysis(**coerced)
+    assert gap.components[0].component.startswith("Ledger confirms")
+    assert gap.components[0].status == "satisfied"
+
+
+def test_overlong_fields_and_status_aliases_are_clipped() -> None:
+    raw = {
+        "components": [
+            {
+                "status": "done",
+                "evidence": "e" * 3000,
+                "gap": "g" * 3000,
+            }
+        ],
+        "evidence_summary": "s" * 3000,
+        "remaining_gaps": ["r" * 3000, "keep", "x", "y", "z", "a", "drop-me"],
+        "distance_from_goal": "close",
+        "gap_reasoning": "r" * 3000,
+    }
+    coerced = coerce_plan_gap_analysis_wire_dict(raw)
+    jsonschema.validate(instance=coerced, schema=PlanGapAnalysis.model_json_schema())
+    gap = PlanGapAnalysis(**coerced)
+    assert gap.components[0].status == "satisfied"
+    assert gap.distance_from_goal == "near"
+    assert len(gap.components[0].evidence) <= 2048
+    assert len(gap.evidence_summary) <= 2048
+    assert len(gap.remaining_gaps) <= 6

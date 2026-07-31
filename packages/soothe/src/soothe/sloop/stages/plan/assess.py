@@ -34,6 +34,7 @@ from soothe.sloop.orchestrator.continuation_routing import (
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.state import PLAN_ROUTE_GOAL_DONE
+from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -49,21 +50,6 @@ logger = logging.getLogger(__name__)
 _PLAN_ASSESS_STATUS_LABEL = "Assessing progress"
 _PLAN_CONTINUATION_STATUS_LABEL = "Assessing continuation"
 _DEFAULT_NO_TOOL_EVIDENCE_RETRY_LIMIT = 2
-
-
-async def _emit_plan_phase_status(
-    ctx: LoopRuntimeContext,
-    *,
-    label: str,
-) -> None:
-    """Update TUI spinner/status while plan assess or generate LLM calls run."""
-    await ctx.emit(
-        "plan_phase_status",
-        {
-            "label": label,
-            "total_tokens_used": ctx.loop_state.total_tokens_used,
-        },
-    )
 
 
 # Ordered progress buckets shared by the digest hint and StatusAssessment.goal_progress.
@@ -288,7 +274,7 @@ async def _handle_continuation_first_plan(
         await _emit_continuation_bootstrap_plan(ctx, plan_result=plan_result)
         return {"assess_route": "skip_generate"}
 
-    await _emit_plan_phase_status(ctx, label=_PLAN_CONTINUATION_STATUS_LABEL)
+    await emit_plan_phase_status(ctx, label=_PLAN_CONTINUATION_STATUS_LABEL)
     context_bundle = None
     if ctx.ce is not None:
         try:
@@ -514,7 +500,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     if continuation_result is not None:
         return continuation_result
 
-    await _emit_plan_phase_status(ctx, label=_PLAN_ASSESS_STATUS_LABEL)
+    await emit_plan_phase_status(ctx, label=_PLAN_ASSESS_STATUS_LABEL)
     assessment = await strange_loop.plan_phase.assess_status(
         goal=resolve_planning_goal(state),
         state=state,
@@ -522,7 +508,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         context_engine=ctx.ce,
         plan_gap=ctx.scratch.plan_gap,
     )
-    await _emit_plan_phase_status(ctx, label=_PLAN_ASSESS_STATUS_LABEL)
+    await emit_plan_phase_status(ctx, label=_PLAN_ASSESS_STATUS_LABEL)
     ctx.scratch.plan_assessment = assessment
 
     _log_prior_progress_disagreement(state, assessment)

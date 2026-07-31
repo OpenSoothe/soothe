@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from soothe_nano.utils.llm.structured import StructuredOutputError
@@ -202,6 +203,37 @@ async def test_node_soft_fails_structured_output_error() -> None:
     assert result == {}
     assert ctx.scratch.plan_gap is None
     plan_phase.analyze_plan_gap.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_node_soft_fails_on_timeout() -> None:
+    async def _hang(*_a: object, **_k: object) -> None:
+        await asyncio.sleep(3600)
+
+    plan_phase = MagicMock()
+    plan_phase.analyze_plan_gap = AsyncMock(side_effect=_hang)
+    ctx = _gap_node_ctx(plan_phase=plan_phase)
+
+    with patch(
+        "soothe.sloop.stages.plan.analyze_gaps._GAP_WALL_CLOCK_SECONDS",
+        0.05,
+    ):
+        result = await node_plan_gap_analysis(ctx, {})
+
+    assert result == {}
+    assert ctx.scratch.plan_gap is None
+
+
+@pytest.mark.asyncio
+async def test_node_soft_fails_on_value_error() -> None:
+    plan_phase = MagicMock()
+    plan_phase.analyze_plan_gap = AsyncMock(side_effect=ValueError("PlanGapAnalysis returned None"))
+    ctx = _gap_node_ctx(plan_phase=plan_phase)
+
+    result = await node_plan_gap_analysis(ctx, {})
+
+    assert result == {}
+    assert ctx.scratch.plan_gap is None
 
 
 @pytest.mark.asyncio

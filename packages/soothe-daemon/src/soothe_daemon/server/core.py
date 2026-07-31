@@ -1770,6 +1770,32 @@ class SootheDaemon(DaemonHandlersMixin):
 
     # -- broadcast ----------------------------------------------------------
 
+    def _stamp_active_turn_on_broadcast(self, msg: dict[str, Any]) -> dict[str, Any]:
+        """Attach ``turn_id``/``seq`` when a query turn is actively broadcasting.
+
+        Card mutations and other paths call ``_broadcast`` directly and historically
+        omitted ``turn_id``. Bound clients drop those frames (turn-id filter).
+        Only stamp from ``_broadcast_turn_generation`` (active stream), never from
+        the lasting ``_loop_turn_generation`` counter — pre-admit early ``running``
+        must keep an empty ``turn_id``.
+        """
+        lid = str(msg.get("loop_id") or "").strip()
+        if not lid or str(msg.get("turn_id") or "").strip():
+            return msg
+        qe = getattr(self, "_query_engine", None)
+        if qe is None:
+            return msg
+        active = getattr(qe, "_broadcast_turn_generation", None)
+        if not isinstance(active, dict):
+            return msg
+        gen = active.get(lid)
+        if gen is None or int(gen) <= 0:
+            return msg
+        stamp = getattr(qe, "_loop_scoped_client_message", None)
+        if not callable(stamp):
+            return msg
+        return stamp(lid, msg, turn_generation=int(gen))
+
     async def _broadcast(self, msg: dict[str, Any]) -> None:
         """Route events to loop subscribers (and global only for explicit daemon-wide messages).
 
@@ -1781,6 +1807,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
         self._last_broadcast_monotonic = monotonic()
 
+        msg = self._stamp_active_turn_on_broadcast(msg)
         msg_type = msg.get("type", "")
         lid = str(msg.get("loop_id") or "").strip()
 

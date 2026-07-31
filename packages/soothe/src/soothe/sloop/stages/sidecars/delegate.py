@@ -42,6 +42,7 @@ from soothe.sloop.plans.artifact import (
     update_plan_artifact_status,
     write_plan_artifact,
 )
+from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
 
@@ -632,11 +633,5 @@ async def node_invoke_wired_subagent(
         return {"last_outcome": "fatal"}
 
     label = WIRED_SUBAGENT_STATUS_LABEL.format(subagent=wire)
-    await ctx.emit(
-        "plan_phase_status",
-        {
-            "label": label,
-            "total_tokens_used": ctx.loop_state.total_tokens_used,
-        },
-    )
+    await emit_plan_phase_status(ctx, label=label)
     return await _invoke_intake_only_direct(ctx, wire=wire, goal_text=goal_text)

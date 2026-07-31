@@ -18,6 +18,7 @@ from soothe.sloop.engine.synthesis import (
     generate_user_fallback_summary,
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 from soothe.sloop.state.schemas import LoopState
 from soothe.sloop.utils.messages import (
     LoopAIMessage,
@@ -310,13 +311,7 @@ async def node_goal_completion(
         )
         return {"last_outcome": "fatal"}
 
-    await ctx.emit(
-        "plan_phase_status",
-        {
-            "label": _GOAL_FINALIZE_STATUS_LABEL,
-            "total_tokens_used": ctx.loop_state.total_tokens_used,
-        },
-    )
+    await emit_plan_phase_status(ctx, label=_GOAL_FINALIZE_STATUS_LABEL)
 
     perf_start = ctx.scratch.iteration_perf_start or time.perf_counter()
 

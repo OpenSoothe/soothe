@@ -25,7 +25,9 @@ from soothe_cli.tui.widgets.loading import LoadingWidget
 
 def test_map_plan_phase_spinner_label_known() -> None:
     assert map_plan_phase_spinner_label("Generating plan") == "Planning"
-    assert map_plan_phase_spinner_label("Assessing continuation context") == "Assessing"
+    assert map_plan_phase_spinner_label("Assessing continuation") == "Assessing"
+    assert map_plan_phase_spinner_label("Assessing progress") == "Assessing"
+    assert map_plan_phase_spinner_label("Analyzing coverage") == "Assessing"
 
 
 def test_map_plan_phase_spinner_label_delegating() -> None:
