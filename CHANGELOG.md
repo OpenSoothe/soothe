@@ -5,6 +5,25 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.11] - 2026-07-31
+
+### Fixed
+- Intake Pass 2 structured output now resolves in one shot via
+  `soothe-nano>=1.0.13`; intake classifiers prefer `json_schema`, clip the
+  Pass 2 prior projection, and the redundant outer structured retries were
+  dropped. Previously the outer retry wrapper could re-trigger a second
+  structured call after Pass 1, producing flaky classification and extra
+  latency.
+- Goal-completion reports now focus on the current goal rather than echoing
+  the whole goal stack, so terminal summaries stay scoped to what actually
+  finished.
+
+### Changed
+- Raise daemon `soothe` floor pin to `>=0.9.11`
+- Require `soothe-nano>=1.0.13` (Pass 2 json_schema support)
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.10...v0.9.11
+
 ## [v0.9.10] - 2026-07-30
 
 ### Fixed
