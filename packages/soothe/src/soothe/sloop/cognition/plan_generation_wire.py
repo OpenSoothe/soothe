@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from soothe.sloop.cognition.wire_envelope import unwrap_schema_envelope
 from soothe.sloop.state.schemas import (
     DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
     PlanGenerateStep,
@@ -121,6 +122,7 @@ def coerce_plan_generation_wire_dict(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(data, dict):
         return data
 
+    data = unwrap_schema_envelope(data, marker_key="steps")
     reasoning = str(data.get("reasoning") or "").strip()
     clarify_raw = data.get("clarify")
     if isinstance(clarify_raw, dict) and clarify_raw.get("questions"):

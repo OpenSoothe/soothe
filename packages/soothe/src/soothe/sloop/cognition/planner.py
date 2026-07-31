@@ -33,6 +33,10 @@ from soothe.sloop.cognition.plan_step_safety import (
     simple_intake_should_force_done,
     terminal_assess_may_complete,
 )
+from soothe.sloop.cognition.status_assessment_wire import (
+    coerce_status_assessment_wire_dict,
+    parse_status_assessment_payload,
+)
 from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.state.schemas import (
     DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
@@ -78,6 +82,13 @@ _STUCK_ERROR_STEP_THRESHOLD = 3  # N consecutive error steps = stuck
 # IG-503: Network resilience retry configuration
 _NETWORK_RETRY_MAX_ATTEMPTS = 3
 
+# IG-668: the assess raw-text fallback is a ~250-token salvage call. Left on the
+# execute-sized budget (600s x 11 attempts) a runaway thinking model can stall the
+# loop for hours, so bound it hard and cap its generation.
+_ASSESS_FALLBACK_TIMEOUT_S = 90
+_ASSESS_FALLBACK_TIMEOUT_MAX_S = 120
+_ASSESS_FALLBACK_MAX_TOKENS = 4096
+
 logger = logging.getLogger(__name__)
 
 
@@ -89,6 +100,18 @@ def _plan_phase_chat_model(model: Any) -> Any:
     """
     try:
         return model.bind(temperature=0)  # type: ignore[union-attr]
+    except Exception:
+        return model
+
+
+def _assess_fallback_chat_model(model: Any) -> Any:
+    """Return the assess model with a bounded output budget for raw fallback (IG-668).
+
+    The fallback drops ``response_format``, so nothing else stops a thinking model
+    from generating until the provider's own cap.
+    """
+    try:
+        return model.bind(max_tokens=_ASSESS_FALLBACK_MAX_TOKENS)
     except Exception:
         return model
 
@@ -137,15 +160,15 @@ def _parse_status_assessment_from_raw_message(response: Any) -> Any:
 
     Thinking models (e.g. qwen via coding-plan) often emit valid assessment JSON
     in ``content`` or ``additional_kwargs["reasoning_content"]`` while LangChain's
-    function-calling parser surfaces ``json: null`` in traces.
+    function-calling parser surfaces ``json: null`` in traces. IG-668: they also
+    emit tag-wrapped YAML and section envelopes, so parse both shapes.
     """
     from soothe_nano.utils.llm.wrappers import _extract_json_str_from_response
 
     from soothe.sloop.state.schemas import StatusAssessment
-    from soothe.sloop.utils.json_parsing import _load_llm_json_dict
 
-    parsed = _load_llm_json_dict(_extract_json_str_from_response(response))
-    return StatusAssessment(**parsed)
+    parsed = parse_status_assessment_payload(_extract_json_str_from_response(response))
+    return StatusAssessment(**coerce_status_assessment_wire_dict(parsed))
 
 
 def _detect_stuck_loop(state: LoopState) -> str | None:
@@ -314,6 +337,26 @@ class LLMPlanner:
             }
         )
 
+    def _assess_fallback_rate_limit_config(self) -> LLMRateLimitConfig:
+        """Tight timeout policy for the assess raw-text fallback (IG-668).
+
+        A failed fallback costs one default assessment; an unbounded one costs the
+        whole loop, so never let it inherit the execute-sized retry ladder.
+        """
+        base = self._llm_rate_limit_config()
+        return base.model_copy(
+            update={
+                "call_timeout_seconds": min(
+                    int(base.call_timeout_seconds), _ASSESS_FALLBACK_TIMEOUT_S
+                ),
+                "call_timeout_max_seconds": min(
+                    int(base.call_timeout_max_seconds), _ASSESS_FALLBACK_TIMEOUT_MAX_S
+                ),
+                "retry_on_timeout": False,
+                "max_timeout_retries": 0,
+            }
+        )
+
     async def _invoke_structured(
         self,
         model: Any,
@@ -351,6 +394,7 @@ class LLMPlanner:
         *,
         config: dict[str, Any] | None = None,
         thread_id: str | None = None,
+        rate_limit_config: LLMRateLimitConfig | None = None,
     ) -> Any:
         """Raw ``ainvoke`` with bounded timeout and retry."""
 
@@ -361,7 +405,7 @@ class LLMPlanner:
 
         return await await_with_llm_call_policy(
             _call,
-            config=self._llm_rate_limit_config(),
+            config=rate_limit_config or self._llm_rate_limit_config(),
             thread_id=thread_id,
         )
 
@@ -474,6 +518,7 @@ class LLMPlanner:
                     StatusAssessment,
                     config=lf_cfg,
                     thread_id=thread_id,
+                    normalize=coerce_status_assessment_wire_dict,
                     methods=_PLANNER_JSON_METHODS,
                 )
 
@@ -523,7 +568,13 @@ class LLMPlanner:
 
         # Fallback: try raw message parsing
         try:
-            raw = await self._ainvoke_bounded(model, messages, config=lf_cfg, thread_id=thread_id)
+            raw = await self._ainvoke_bounded(
+                _assess_fallback_chat_model(model),
+                messages,
+                config=lf_cfg,
+                thread_id=thread_id,
+                rate_limit_config=self._assess_fallback_rate_limit_config(),
+            )
             # Debug: log raw response content structure
             content_preview = ""
             if hasattr(raw, "content"):

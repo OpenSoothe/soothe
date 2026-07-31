@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from soothe.sloop.cognition.wire_envelope import unwrap_schema_envelope
+
 # Alias keys models use for GoalComponentStatus.component (first wins).
 _COMPONENT_ALIASES: tuple[str, ...] = ("name", "title", "label", "facet", "aspect")
 
@@ -138,7 +140,7 @@ def coerce_plan_gap_analysis_wire_dict(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(data, dict):
         return data
 
-    out = dict(data)
+    out = dict(unwrap_schema_envelope(data, marker_key="components"))
     components = out.get("components")
     if not isinstance(components, list) or not components:
         # Minimal salvage so schema min_length=1 can still pass after coerce.
