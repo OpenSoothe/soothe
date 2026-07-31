@@ -305,12 +305,17 @@ class ContextProjectionConfig(BaseModel):
         context_retention_hours: After a root goal reaches a terminal state,
             its DAG's contributions become evictable from the store this many
             hours later. Default 168 (1 week). LRU-evict if quota exceeded.
+        max_context_entries: Hard cap on the number of goal contributions
+            held by the in-memory fallback store. When exceeded, the oldest
+            entries (by write time) are evicted. Default 1000. Set to 0 for
+            unbounded (not recommended for production).
     """
 
     max_findings: int = Field(default=20, ge=1, le=200)
     max_files: int = Field(default=50, ge=1, le=500)
     max_plan_steps: int = Field(default=30, ge=1, le=300)
     context_retention_hours: int = Field(default=168, ge=1)
+    max_context_entries: int = Field(default=1000, ge=0)
 
 
 class WorkspaceReservationConfig(BaseModel):

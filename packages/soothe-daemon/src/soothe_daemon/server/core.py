@@ -729,7 +729,11 @@ class SootheDaemon(DaemonHandlersMixin):
                 else:
                     from soothe.autopilot.context_store import InMemoryGoalDispatchContextStore
 
-                    self._autopilot_service._context_store = InMemoryGoalDispatchContextStore()
+                    cp = self._config.agent.autopilot.context_projection
+                    self._autopilot_service._context_store = InMemoryGoalDispatchContextStore(
+                        max_entries=cp.max_context_entries,
+                        retention_hours=cp.context_retention_hours,
+                    )
                 self._autopilot_service._context_projector = ContextProjector(
                     self._autopilot_service._context_store,
                     self._config.agent.autopilot.context_projection,

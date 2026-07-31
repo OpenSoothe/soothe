@@ -53,6 +53,7 @@ agent:
       max_files: 50
       max_plan_steps: 30
       context_retention_hours: 168
+      max_context_entries: 1000
     workspace_reservation:
       enabled: true
       strict_overlap: true
