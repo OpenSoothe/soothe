@@ -408,6 +408,7 @@ class StrangeLoopMixin:
         clarification_mode: str | None = None,
         clarification_answer: bool = False,
         clarification_answers: list[str] | None = None,
+        resume_interrupted: bool = False,
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: StrangeLoop goal execution (RFC-0008).
 
@@ -422,6 +423,8 @@ class StrangeLoopMixin:
             clarification_mode: RFC-622 mode for this goal (``"auto"`` /
                 ``"manual"``). ``None`` falls back to
                 ``config.agent.clarification.default_mode``.
+            resume_interrupted: When True, recover an interrupted running goal
+                without Pass 1 social routing or continue-keyword cancel.
 
         Yields:
             StreamChunk events during execution
@@ -447,6 +450,8 @@ class StrangeLoopMixin:
             logger.info(
                 "[StrangeLoop] clarification_answer=True - graph will skip intent classification"
             )
+        if resume_interrupted:
+            logger.info("[StrangeLoop] resume_interrupted=True - recovering running checkpoint")
 
         # Emit loop started event (Level 1)
         display_goal = preview_first(user_input, 100)
@@ -522,6 +527,7 @@ class StrangeLoopMixin:
                 clarification_policy=clarification_policy,
                 clarification_answer=clarification_answer,
                 clarification_answers=clarification_answers,
+                resume_interrupted=resume_interrupted,
             ):
                 if event_type == "intent_classified_reasoning":
                     payload = event_data if isinstance(event_data, dict) else {}

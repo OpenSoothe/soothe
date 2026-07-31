@@ -87,6 +87,9 @@ class TestSootheConfig:
         cfg = SootheConfig()
         assert cfg.agent.loop.checkpoint.progressive is True
         assert cfg.agent.loop.checkpoint.auto_resume_on_start is False
+        assert cfg.agent.loop.checkpoint.auto_resume_max_loops == 4
+        assert cfg.agent.loop.checkpoint.auto_resume_max_age_hours == 24.0
+        assert cfg.agent.loop.checkpoint.auto_resume_clarifications == "skip"
 
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()

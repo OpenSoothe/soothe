@@ -22,7 +22,7 @@ from soothe.workspace import (
     resolve_daemon_workspace,
 )
 
-from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
+from soothe_daemon.bootstrap.logging import set_client_id
 from soothe_daemon.bootstrap.paths import pid_path
 from soothe_daemon.bootstrap.singleton import (
     acquire_pid_lock,
@@ -175,6 +175,9 @@ class SootheDaemon(DaemonHandlersMixin):
         self._active_stream_loop_ids: set[str] = set()
         #: Loop ids with an admitted query (exclusive per loop; IG-534 Phase 2.2).
         self._loops_with_active_query: set[str] = set()
+        #: Loops queued/enqueued for IG-670 auto-resume (reconciliation exemption).
+        self._auto_resume_protected_loop_ids: set[str] = set()
+        self._auto_resume_release_task: asyncio.Task[None] | None = None
         # Lock protecting query state transitions (_active_threads, _current_query_task)
         self._query_state_lock = asyncio.Lock()
         from soothe_daemon.runtime.loop_broadcast_budget import LoopBroadcastBudget
@@ -904,7 +907,7 @@ class SootheDaemon(DaemonHandlersMixin):
             if self._event_size_stats is not None:
                 self._event_size_stats_task = asyncio.create_task(self._periodic_event_size_stats())
 
-            # Detect incomplete threads from previous daemon run (RFC-0010)
+            # Detect / optionally auto-resume incomplete loops from previous daemon run
             await self._detect_incomplete_threads()
 
             await self._broadcast(
@@ -1091,97 +1094,17 @@ class SootheDaemon(DaemonHandlersMixin):
             loop.call_soon_threadsafe(self._stop_event.set)
 
     async def _detect_incomplete_threads(self) -> None:
-        """Detect threads left in_progress from a previous daemon run (RFC-0010, IG-138).
+        """Classify incomplete loops; optionally auto-resume (IG-670).
 
-        If auto_cancel_on_startup is enabled, threads older than thread_max_age_hours
-        are automatically cancelled.
+        Replaces log-only detection. Cancel-by-age still runs via the classifier;
+        resume requires ``agent.loop.checkpoint.auto_resume_on_start``.
         """
-        import re
-        from datetime import datetime, timedelta
+        from soothe_daemon.runtime.auto_resume import recover_incomplete_loops
 
         try:
-            auto_cancel = self._daemon_config.auto_cancel_on_startup
-            max_age_hours = self._daemon_config.thread_max_age_hours
-            max_age_threshold = (
-                datetime.now(tz=None) - timedelta(hours=max_age_hours) if auto_cancel else None
-            )
-
-            rows = await self._persistence_manager.list_loops(status_filter="running")
-
-            incomplete = []
-            for row in rows:
-                loop_info = {
-                    "loop_id": row["loop_id"],
-                    "thread_ids": row.get("thread_ids", []),
-                    "current_thread_id": row.get("current_thread_id", ""),
-                    "status": row.get("status", ""),
-                    "total_goals_completed": row.get("total_goals_completed", 0),
-                    "updated_at": row.get("updated_at"),
-                }
-                incomplete.append(loop_info)
-
-                # Auto-cancel very old loops (IG-138)
-                if auto_cancel and max_age_threshold and loop_info["updated_at"]:
-                    try:
-                        updated_str = loop_info["updated_at"]
-                        if isinstance(updated_str, str):
-                            normalized = re.sub(r"Z$", "+00:00", updated_str)
-                            try:
-                                updated_at = datetime.fromisoformat(normalized)
-                            except ValueError:
-                                logger.debug(
-                                    "Failed to parse timestamp: %s for loop %s",
-                                    updated_str,
-                                    loop_info["loop_id"],
-                                )
-                                continue
-                            if updated_at.tzinfo is not None:
-                                updated_at = updated_at.replace(tzinfo=None)
-                        else:
-                            continue
-
-                        if updated_at < max_age_threshold:
-                            loop_id = loop_info["loop_id"]
-                            age_hours = (datetime.now(tz=None) - updated_at).total_seconds() / 3600
-                            logger.warning(
-                                "Auto-cancelling very old loop %s (age: %.1f hours > max: %d)",
-                                loop_id,
-                                age_hours,
-                                max_age_hours,
-                            )
-                            logger.info(
-                                "Loop %s marked for cancellation (age exceeds threshold)",
-                                loop_id,
-                            )
-                    except (ValueError, TypeError):
-                        logger.debug("Failed to parse timestamp for loop %s", loop_info["loop_id"])
-                        continue
-
-            if incomplete:
-                remaining = [
-                    t
-                    for t in incomplete
-                    if t["loop_id"] not in getattr(self, "_cancelled_threads", set())
-                ]
-                if remaining:
-                    logger.info(
-                        "Found %d incomplete loops from previous run (%d auto-cancelled)",
-                        len(remaining),
-                        len(incomplete) - len(remaining),
-                    )
-                    for t in remaining:
-                        # Set loop_id context for full ID in daemon.log
-                        set_loop_id(t["loop_id"])
-                        logger.info(
-                            "Loop %s: %d goals completed, %d threads",
-                            t["loop_id"],
-                            t["total_goals_completed"],
-                            len(t["thread_ids"]),
-                        )
-            else:
-                logger.debug("No incomplete loops found from previous runs")
+            await recover_incomplete_loops(self)
         except Exception:
-            logger.debug("Incomplete thread detection failed", exc_info=True)
+            logger.debug("Incomplete loop recovery failed", exc_info=True)
 
     async def serve_forever(self) -> None:
         """Block until the daemon is stopped.
@@ -1371,6 +1294,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     continue
 
                 active_set: set[str] = set(self._active_stream_loop_ids)
+                active_set.update(getattr(self, "_auto_resume_protected_loop_ids", set()) or set())
                 demoted = 0
                 for row in rows:
                     loop_id = str(row.get("loop_id") or "").strip()
@@ -1650,6 +1574,13 @@ class SootheDaemon(DaemonHandlersMixin):
             self._loop_status_reconciliation_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._loop_status_reconciliation_task
+
+        release_task = getattr(self, "_auto_resume_release_task", None)
+        if release_task is not None and not release_task.done():
+            release_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await release_task
+            self._auto_resume_release_task = None
 
         if self._stale_worker_reap_task and not self._stale_worker_reap_task.done():
             self._stale_worker_reap_task.cancel()

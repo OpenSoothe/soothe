@@ -153,6 +153,7 @@ class StrangeLoop:
         clarification_policy: Any | None = None,  # RFC-622: ClarificationPolicy injection
         clarification_answer: bool = False,  # RFC-622: hint that goal is a resume answer
         clarification_answers: list[str] | None = None,  # RFC-622: per-question answer list
+        resume_interrupted: bool = False,  # IG-670: daemon crash recovery admission
         proposal_queue: ProposalQueue | None = None,  # RFC-204 Group C: Layer 2 proposals
         goal_trace: Any | None = None,  # GoalLoopTrace when Langfuse enabled
     ) -> AsyncGenerator[tuple[str, Any], None]:
@@ -176,6 +177,8 @@ class StrangeLoop:
             clarification_policy: Optional ``ClarificationPolicy`` (RFC-622) used by
                 the loop graph's ``await_clarification`` node. When ``None``, clarification
                 requests are deferred via the legacy no-policy path.
+            resume_interrupted: When True, skip Pass 1 social fast-path and recover
+                the in-flight ``status=running`` goal without continue-keyword cancel.
             proposal_queue: Optional ``ProposalQueue`` (RFC-204 Group C) for Layer 2
                 tools to enqueue goal suggestions and findings during execution.
             goal_trace: Optional pre-allocated ``GoalLoopTrace``; when omitted and Langfuse
@@ -306,6 +309,7 @@ class StrangeLoop:
                 preclassified_intent is None
                 and intent_classifier is not None
                 and not clarification_answer
+                and not resume_interrupted
             ):
                 from soothe.sloop.stages.preprocess.intake import (
                     INTENT_CLASSIFY_STATUS_LABEL,
@@ -536,7 +540,9 @@ class StrangeLoop:
                 await state_manager.save(checkpoint, include_goal_history=True)
 
             user_submission_line = (goal_user_submission or goal or "").strip()
-            force_continue_loop = is_continue_keyword(user_submission_line)
+            force_continue_loop = (not resume_interrupted) and is_continue_keyword(
+                user_submission_line
+            )
             if (
                 force_continue_loop
                 and recovery_valid_resume

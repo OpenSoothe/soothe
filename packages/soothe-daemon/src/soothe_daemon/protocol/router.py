@@ -188,6 +188,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         "clarification_mode": clarification_mode_norm,
         "clarification_answer": bool(msg.get("clarification_answer", False)),
         "clarification_answers": clarification_answers,
+        "resume_interrupted": bool(msg.get("resume_interrupted", False)),
     }
 
 

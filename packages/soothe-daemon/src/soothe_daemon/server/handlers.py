@@ -231,6 +231,7 @@ class DaemonHandlersMixin:
                     clarification_mode=qo.get("clarification_mode"),
                     clarification_answer=bool(qo.get("clarification_answer", False)),
                     clarification_answers=qo.get("clarification_answers"),
+                    resume_interrupted=bool(qo.get("resume_interrupted", False)),
                 )
         except Exception:
             logger.exception("Daemon loop input handler error")

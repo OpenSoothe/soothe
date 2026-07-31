@@ -102,7 +102,7 @@ CoreAgent internal tuning. Notable sub-sections:
 | `tool_retry` | Retry policy for tool failures |
 | `output_streaming` | `batch` / `adaptive` / `streaming` delivery modes |
 | `working_memory` | Inline context char caps |
-| `checkpoint` | `progressive`, `auto_resume_on_start` |
+| `checkpoint` | `progressive`, `auto_resume_on_start`, `auto_resume_max_loops`, `auto_resume_max_age_hours`, `auto_resume_clarifications` |
 
 ### Protocols (`agent.protocols`)
 

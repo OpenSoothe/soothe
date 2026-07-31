@@ -70,6 +70,7 @@ class TestLoopRunRequestAutopilotJob:
             user_input="hello",
         )
         assert request.autopilot_job is None
+        assert request.resume_interrupted is False
 
     def test_round_trip_pickle_when_none(self) -> None:
         """Existing IPC path (subprocess workers) pickles LoopRunRequest;
@@ -78,10 +79,12 @@ class TestLoopRunRequestAutopilotJob:
             loop_id="L1",
             thread_id="T1",
             user_input="hello",
+            resume_interrupted=True,
         )
         decoded = pickle.loads(pickle.dumps(original))
         assert decoded.autopilot_job is None
         assert decoded.user_input == "hello"
+        assert decoded.resume_interrupted is True
 
     def test_round_trip_pickle_with_autopilot_job(self) -> None:
         """When set, the GoalDispatchEnvelope (incl. nested bundle) survives pickling."""

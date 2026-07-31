@@ -151,6 +151,9 @@ agent:
     checkpoint:
       progressive: true
       auto_resume_on_start: false
+      auto_resume_max_loops: 4
+      auto_resume_max_age_hours: 24
+      auto_resume_clarifications: skip
     concurrency:
       max_parallel_goals: 4
       max_parallel_steps: 4

@@ -52,6 +52,7 @@ class LoopRunnerActor:
                     clarification_mode=request.clarification_mode,
                     clarification_answer=request.clarification_answer,
                     clarification_answers=request.clarification_answers,
+                    resume_interrupted=request.resume_interrupted,
                 ):
                     if self._cancelled:
                         break

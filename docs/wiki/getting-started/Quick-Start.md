@@ -268,13 +268,23 @@ agent:
   loop:
     checkpoint:
       progressive: true        # Incremental checkpoint writes
-      auto_resume_on_start: false  # Manual resume required
+      auto_resume_on_start: false  # true = resume incomplete solo loops on daemon start
+      auto_resume_max_loops: 4
+      auto_resume_max_age_hours: 24
+      auto_resume_clarifications: skip  # skip | reannounce
   protocols:
     durability:
       backend: default          # Uses persistence.default_backend
       checkpointer: default     # Uses persistence backend
       thread_inactivity_timeout_hours: 72  # Cleanup threshold
 ```
+
+When `auto_resume_on_start` is false (default), incomplete `running` loops are
+detected and logged; use `soothe loop continue <id>` to resume manually. When
+true, the daemon re-enters StrangeLoop on the same `loop_id` (reusing CE state
+and CoreAgent thread checkpoints). Completing work before
+`loop_status_reconciliation.stale_running_seconds` (default 180s) avoids demotion
+to `idle` when auto-resume is off.
 
 ### Vector Store Configuration
 

@@ -910,6 +910,7 @@ class QueryEngine:
         clarification_mode: str | None = None,
         clarification_answer: bool = False,
         clarification_answers: list[str] | None = None,
+        resume_interrupted: bool = False,
     ) -> None:
         """Stream a query through subprocess workers and broadcast events."""
         d = self._daemon
@@ -1213,6 +1214,7 @@ class QueryEngine:
                     clarification_mode=stream_kwargs.get("clarification_mode"),
                     clarification_answer=clarification_answer,
                     clarification_answers=clarification_answers,
+                    resume_interrupted=resume_interrupted,
                 )
                 run_workspace = run_request.resolve_workspace_path()
                 loop_runner = d._runner_factory.create_runner(_runner_key)

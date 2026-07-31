@@ -458,15 +458,23 @@ class ExecutePromptLedgerConfig(BaseModel):
 
 
 class LoopCheckpointConfig(BaseModel):
-    """Loop checkpoint and recovery configuration (RFC-203).
+    """Loop checkpoint and recovery configuration (RFC-203, IG-670).
 
     Args:
         progressive: Save checkpoint after each step/goal completion.
-        auto_resume_on_start: Auto-resume incomplete threads on daemon start.
+        auto_resume_on_start: Auto-resume incomplete solo loops on daemon start.
+        auto_resume_max_loops: Max loops to auto-resume concurrently at startup.
+        auto_resume_max_age_hours: Skip incomplete loops older than this many hours.
+        auto_resume_clarifications: How to treat clarification-parked loops
+            (``skip`` = leave parked for a human; ``reannounce`` = resume graph
+            so clarification is re-emitted without auto-answering).
     """
 
     progressive: bool = True
     auto_resume_on_start: bool = False
+    auto_resume_max_loops: int = Field(default=4, ge=1, le=64)
+    auto_resume_max_age_hours: float = Field(default=24.0, ge=0.0, le=720.0)
+    auto_resume_clarifications: Literal["skip", "reannounce"] = "skip"
 
 
 class LoopCheckpointAsyncConfig(BaseModel):
