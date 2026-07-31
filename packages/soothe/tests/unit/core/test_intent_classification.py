@@ -90,9 +90,8 @@ class TestTwoPassPrompts:
         assert "first-person" in prompt
         assert "I'll / Let me" in prompt
         assert "multi_phase" in prompt
-        assert "wire_subagent" in prompt
+        assert "wire_subagent" not in prompt
         assert "first scan the repo and then run tests" in prompt
-        assert "use browser_use for weather" in prompt
 
 
 @pytest.mark.asyncio

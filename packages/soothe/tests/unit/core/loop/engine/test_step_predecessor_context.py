@@ -128,8 +128,6 @@ def test_build_dependent_execution_hints_includes_no_rediscovery_instruction() -
     hints = build_dependent_execution_hints(
         StepAction(id="02", description="Fix failures", dependencies=["01"]),
         has_predecessor_evidence=True,
-        wire_subagent=None,
-        workspace=None,
         expected_output="All checks pass",
     )
     assert (

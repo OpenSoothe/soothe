@@ -34,46 +34,21 @@ def _wire_subagent_from_routing(routing_classification: Any | None) -> str | Non
     return str(preferred) if preferred is not None else None
 
 
-def resolve_wire_subagent_for_step(
-    step: Any,
-    routing_classification: Any | None,
-) -> str | None:
-    """Resolve catalog subagent wiring for execute: step hint wins over wire routing.
-
-    Intake-only specialists never become ``soothe_step_subagent`` (IG-601): they
-    run via ``invoke_wired_subagent`` streamed direct invoke, not CoreAgent ``task``.
-    """
-    from soothe.sloop.state.schemas import is_intake_only_wire_subagent
-
-    wire = getattr(step, "wire_subagent", None)
-    if isinstance(wire, str) and wire.strip():
-        name = wire.strip()
-        if is_intake_only_wire_subagent(name):
-            return None
-        return name
-    from_routing = _wire_subagent_from_routing(routing_classification)
-    if is_intake_only_wire_subagent(from_routing):
-        return None
-    return from_routing
-
-
 def resolve_user_requested_wire_subagent(
     *,
     routing_classification: Any | None = None,
-    intent: Any | None = None,
     preferred_subagent: str | None = None,
 ) -> str | None:
-    """Return a wired subagent requested via slash, routing, or Pass 2.
+    """Return a wired subagent the user requested explicitly via slash routing.
 
-    Precedence: ``preferred_subagent`` (slash/daemon) → routing classification →
-    Pass 2 ``intent.wire_subagent``. All names are allowlist-filtered.
+    Precedence: ``preferred_subagent`` (slash/daemon) → routing classification.
+    Both names are allowlist-filtered; intake never infers a specialist.
     """
     from soothe.sloop.state.schemas import resolve_wire_subagent
 
     for candidate in (
         preferred_subagent,
         _wire_subagent_from_routing(routing_classification),
-        getattr(intent, "wire_subagent", None) if intent is not None else None,
     ):
         resolved = resolve_wire_subagent(wire_subagent=candidate)
         if resolved:
@@ -113,5 +88,4 @@ __all__ = [
     "_select_thread_for_step",
     "_wire_subagent_from_routing",
     "resolve_user_requested_wire_subagent",
-    "resolve_wire_subagent_for_step",
 ]

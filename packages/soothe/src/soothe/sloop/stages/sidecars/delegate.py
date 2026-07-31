@@ -634,10 +634,8 @@ async def node_invoke_wired_subagent(
             ctx, state, wire=PLANNER_WIRE_SUBAGENT, goal_text=goal_text
         )
 
-    intent = ctx.loop_state.intent
     wire = resolve_user_requested_wire_subagent(
         routing_classification=ctx.loop_state.routing_classification,
-        intent=intent,
         preferred_subagent=getattr(ctx, "preferred_subagent", None),
     )
     if not wire:

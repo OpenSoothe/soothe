@@ -1,4 +1,4 @@
-"""IG-599 / IG-601: Pass 2 / slash wired-subagent direct route."""
+"""IG-599 / IG-601: slash wired-subagent direct route."""
 
 from __future__ import annotations
 
@@ -40,38 +40,41 @@ def test_allowlist_includes_academic_research_and_planner() -> None:
     assert resolve_wire_subagent(wire_subagent="not_a_subagent") is None
 
 
-def test_build_loop_routing_classification_merges_pass2_wire() -> None:
+def test_build_loop_routing_classification_uses_slash_preferred() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="deep_research",
         task_complexity=TaskComplexity.SIMPLE,
     )
-    routing = build_loop_routing_classification(intent, preferred_subagent=None)
+    routing = build_loop_routing_classification(intent, preferred_subagent="deep_research")
     assert routing is not None
     assert routing.preferred_subagent == "deep_research"
     assert routing.routing_hint == "subagent"
 
 
-def test_build_loop_routing_classification_slash_wins_over_pass2() -> None:
+def test_build_loop_routing_classification_ignores_non_allowlisted_preferred() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="browser_use",
         task_complexity=TaskComplexity.SIMPLE,
     )
-    routing = build_loop_routing_classification(intent, preferred_subagent="planner")
+    routing = build_loop_routing_classification(intent, preferred_subagent="plugin_agent")
     assert routing is not None
-    assert routing.preferred_subagent == "planner"
+    assert routing.preferred_subagent is None
+    assert routing.routing_hint == "intent_based"
 
 
-def test_resolve_preferred_subagent_kwarg_wins() -> None:
+def test_intake_never_infers_a_specialist() -> None:
+    """Intake carries no specialist field; only slash routing can request one."""
+    assert "wire_subagent" not in IntentClassification.model_fields
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="browser_use",
         task_complexity=TaskComplexity.SIMPLE,
     )
+    routing = build_loop_routing_classification(intent, preferred_subagent=None)
+    assert routing is not None
+    assert routing.preferred_subagent is None
     assert (
         resolve_user_requested_wire_subagent(
-            intent=intent,
+            routing_classification=routing,
             preferred_subagent="academic_research",
         )
         == "academic_research"
@@ -100,19 +103,18 @@ def test_route_by_intent_chitchat_still_wins_over_wired() -> None:
 async def test_init_or_resume_sets_wired_subagent_route() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="browser_use",
         requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )
     loop_state = SimpleNamespace(
         intent=intent,
-        routing_classification=build_loop_routing_classification(intent, None),
+        routing_classification=build_loop_routing_classification(intent, "browser_use"),
         goal="use browser_use for weather",
         goal_user_submission="use browser_use for weather",
     )
     ctx = SimpleNamespace(
         loop_state=loop_state,
-        preferred_subagent=None,
+        preferred_subagent="browser_use",
         continue_loop_mode=False,
         recovery_valid_resume=False,
         checkpoint=None,
@@ -128,22 +130,21 @@ async def test_init_or_resume_sets_wired_subagent_route() -> None:
 
 
 @pytest.mark.asyncio
-async def test_init_or_resume_wire_subagent_wins_even_with_continue_keyword_goal() -> None:
+async def test_init_or_resume_slash_specialist_wins_over_continue_keyword_goal() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="deep_research",
         requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )
     loop_state = SimpleNamespace(
         intent=intent,
-        routing_classification=build_loop_routing_classification(intent, None),
+        routing_classification=build_loop_routing_classification(intent, "deep_research"),
         goal="continue",
         goal_user_submission="continue",
     )
     ctx = SimpleNamespace(
         loop_state=loop_state,
-        preferred_subagent=None,
+        preferred_subagent="deep_research",
         continue_loop_mode=True,
         recovery_valid_resume=False,
         checkpoint=None,
@@ -161,7 +162,6 @@ async def test_init_or_resume_wire_subagent_wins_even_with_continue_keyword_goal
 async def test_invoke_wired_planner_direct_ainvoke(tmp_path) -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="planner",
         requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )
@@ -181,7 +181,7 @@ async def test_invoke_wired_planner_direct_ainvoke(tmp_path) -> None:
     ctx = SimpleNamespace(
         loop_state=SimpleNamespace(
             intent=intent,
-            routing_classification=build_loop_routing_classification(intent, None),
+            routing_classification=build_loop_routing_classification(intent, "planner"),
             goal="plan the migration",
             goal_user_submission="plan the migration",
             total_tokens_used=0,
@@ -193,7 +193,7 @@ async def test_invoke_wired_planner_direct_ainvoke(tmp_path) -> None:
             activated_skill_names=[],
             active_mcp_servers=[],
         ),
-        preferred_subagent=None,
+        preferred_subagent="planner",
         scratch=SimpleNamespace(
             plan_result=None,
             plan_artifact_path=None,
@@ -231,7 +231,6 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
 
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="planner",
         requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )
@@ -247,7 +246,7 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     ctx = SimpleNamespace(
         loop_state=SimpleNamespace(
             intent=intent,
-            routing_classification=build_loop_routing_classification(intent, None),
+            routing_classification=build_loop_routing_classification(intent, "planner"),
             goal="plan the migration",
             goal_user_submission="plan the migration",
             total_tokens_used=0,
@@ -306,7 +305,7 @@ def test_route_after_wired_subagent_handoff_to_plan_generate() -> None:
 
 @pytest.mark.asyncio
 async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
-    """Reject after clarification resume must not require Pass2 wire_subagent."""
+    """Reject after clarification resume must not require a live specialist route."""
     from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
     from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
     from soothe.sloop.stages.sidecars.delegate import _planner_subagent_review_pending_payload
@@ -399,7 +398,6 @@ def test_extract_subagent_report_prefers_answer_field() -> None:
 async def test_invoke_wired_intake_only_direct_ainvoke() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="deep_research",
         requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )
@@ -408,7 +406,7 @@ async def test_invoke_wired_intake_only_direct_ainvoke() -> None:
     )
     loop_state = SimpleNamespace(
         intent=intent,
-        routing_classification=build_loop_routing_classification(intent, None),
+        routing_classification=build_loop_routing_classification(intent, "deep_research"),
         goal="research AI agents",
         goal_user_submission="research AI agents",
         total_tokens_used=0,
@@ -424,7 +422,7 @@ async def test_invoke_wired_intake_only_direct_ainvoke() -> None:
 
     ctx = SimpleNamespace(
         loop_state=loop_state,
-        preferred_subagent=None,
+        preferred_subagent="deep_research",
         scratch=SimpleNamespace(plan_result=None),
         emit=_emit,
         ce=None,
@@ -439,7 +437,7 @@ async def test_invoke_wired_intake_only_direct_ainvoke() -> None:
     assert route_after_wired_subagent(out) == "finalize"
     runnable.ainvoke.assert_awaited_once()
     assert ctx.scratch.plan_result is not None
-    assert ctx.scratch.plan_result.decision.steps[0].wire_subagent == "deep_research"
+    assert ctx.scratch.plan_result.decision.steps[0].subagent == "deep_research"
     assert any(
         getattr(m, "content", None) == "research report body"
         for m in loop_state._loop_messages_cache
@@ -458,7 +456,6 @@ async def test_invoke_wired_intake_only_direct_ainvoke() -> None:
 async def test_invoke_wired_intake_only_ledgers_answer_field() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="deep_research",
         requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )
@@ -466,7 +463,7 @@ async def test_invoke_wired_intake_only_ledgers_answer_field() -> None:
     runnable = SimpleNamespace(ainvoke=AsyncMock(return_value={"answer": body, "messages": []}))
     loop_state = SimpleNamespace(
         intent=intent,
-        routing_classification=build_loop_routing_classification(intent, None),
+        routing_classification=build_loop_routing_classification(intent, "deep_research"),
         goal="research US economy",
         goal_user_submission="research US economy",
         total_tokens_used=0,
@@ -482,7 +479,7 @@ async def test_invoke_wired_intake_only_ledgers_answer_field() -> None:
 
     ctx = SimpleNamespace(
         loop_state=loop_state,
-        preferred_subagent=None,
+        preferred_subagent="deep_research",
         scratch=SimpleNamespace(plan_result=None),
         emit=_emit,
         ce=None,
@@ -506,7 +503,6 @@ async def test_invoke_wired_intake_only_forwards_via_bridge_during_astream() -> 
     """astream values + bridge: wire customs come from emit_progress, not custom mode."""
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="deep_research",
         requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )
@@ -533,7 +529,7 @@ async def test_invoke_wired_intake_only_forwards_via_bridge_during_astream() -> 
 
     loop_state = SimpleNamespace(
         intent=intent,
-        routing_classification=build_loop_routing_classification(intent, None),
+        routing_classification=build_loop_routing_classification(intent, "deep_research"),
         goal="research",
         goal_user_submission="research",
         total_tokens_used=0,
@@ -544,7 +540,7 @@ async def test_invoke_wired_intake_only_forwards_via_bridge_during_astream() -> 
     )
     ctx = SimpleNamespace(
         loop_state=loop_state,
-        preferred_subagent=None,
+        preferred_subagent="deep_research",
         scratch=SimpleNamespace(plan_result=None),
         emit=_emit,
         ce=None,
@@ -571,7 +567,6 @@ async def test_invoke_wired_intake_only_astream_two_tuple_prefers_answer_field()
     """Two-item ``(mode, data)`` astream chunks should unwrap to dict state."""
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="browser_use",
         requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )
@@ -595,7 +590,7 @@ async def test_invoke_wired_intake_only_astream_two_tuple_prefers_answer_field()
 
     loop_state = SimpleNamespace(
         intent=intent,
-        routing_classification=build_loop_routing_classification(intent, None),
+        routing_classification=build_loop_routing_classification(intent, "browser_use"),
         goal="west coast weather",
         goal_user_submission="west coast weather",
         total_tokens_used=0,
@@ -606,7 +601,7 @@ async def test_invoke_wired_intake_only_astream_two_tuple_prefers_answer_field()
     )
     ctx = SimpleNamespace(
         loop_state=loop_state,
-        preferred_subagent=None,
+        preferred_subagent="browser_use",
         scratch=SimpleNamespace(plan_result=None),
         emit=_emit,
         ce=None,
@@ -634,7 +629,6 @@ async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
     """Bridge captures emit_progress during ainvoke when stream writer is absent."""
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="deep_research",
         requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )
@@ -662,7 +656,7 @@ async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
 
     loop_state = SimpleNamespace(
         intent=intent,
-        routing_classification=build_loop_routing_classification(intent, None),
+        routing_classification=build_loop_routing_classification(intent, "deep_research"),
         goal="research",
         goal_user_submission="research",
         total_tokens_used=0,
@@ -673,7 +667,7 @@ async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
     )
     ctx = SimpleNamespace(
         loop_state=loop_state,
-        preferred_subagent=None,
+        preferred_subagent="deep_research",
         scratch=SimpleNamespace(plan_result=None),
         emit=_emit,
         ce=None,
@@ -700,7 +694,6 @@ async def test_invoke_wired_intake_only_forwards_wire_when_context_lost() -> Non
     """Loop-level bridge fallback still forwards events without ContextVar propagation."""
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="deep_research",
         requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )
@@ -732,7 +725,7 @@ async def test_invoke_wired_intake_only_forwards_wire_when_context_lost() -> Non
 
     loop_state = SimpleNamespace(
         intent=intent,
-        routing_classification=build_loop_routing_classification(intent, None),
+        routing_classification=build_loop_routing_classification(intent, "deep_research"),
         goal="research",
         goal_user_submission="research",
         total_tokens_used=0,
@@ -743,7 +736,7 @@ async def test_invoke_wired_intake_only_forwards_wire_when_context_lost() -> Non
     )
     ctx = SimpleNamespace(
         loop_state=loop_state,
-        preferred_subagent=None,
+        preferred_subagent="deep_research",
         scratch=SimpleNamespace(plan_result=None),
         emit=_emit,
         ce=None,
@@ -775,7 +768,6 @@ async def test_invoke_wired_subagent_fatal_without_wire() -> None:
         loop_state=SimpleNamespace(
             intent=IntentClassification(
                 intake_label=IntakeLabel.SIMPLE,
-                wire_subagent=None,
                 task_complexity=TaskComplexity.SIMPLE,
             ),
             routing_classification=None,

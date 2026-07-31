@@ -237,6 +237,16 @@ class StrangeLoop:
                 log_preview(goal, 120),
             )
 
+        # A ``/skill:`` submission owns execution: the skill body drives CoreAgent, so drop any
+        # specialist routing hint before it reaches loop state, routing, or the runtime context.
+        if parsed_skill is not None and (preferred_subagent or routing_classification):
+            logger.info(
+                "[Intent] Slash skill submitted; ignoring specialist routing hint (%s)",
+                preferred_subagent,
+            )
+            preferred_subagent = None
+            routing_classification = None
+
         # Initialize StrangeLoop state manager (RFC-205, IG-246: loop_id parameter, IG-055: config)
         # IG-406: Pass shared_pool for high-concurrency support
         state_manager = StrangeLoopStateManager(

@@ -196,13 +196,11 @@ def _append_parallel_stream_event(
 
 def max_tool_calls_for_step(
     step: StepAction,
-    wire_subagent: str | None,
     *,
     default: int = _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
 ) -> int:
     """Return per-step tool budget."""
     _ = step
-    _ = wire_subagent
     return default
 
 

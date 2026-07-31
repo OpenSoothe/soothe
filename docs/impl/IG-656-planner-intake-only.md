@@ -39,3 +39,12 @@ Move `planner` into `INTAKE_ONLY_WIRE_SUBAGENTS` so it is reachable only via Pas
 - [x] Plan-wave `delegate=planner` ignored
 - [x] Related dual-expose / catalog-wire dead paths cleansed
 - [x] `soothe` / `soothe-daemon` verify green (CLI card-ledger WIP failures are out of scope)
+
+---
+
+## Follow-up
+
+[IG-669](IG-669-remove-inferred-wire-subagent.md) removed the always-`None`
+step-level plumbing this IG left behind (`resolve_step_wire_subagent`,
+`apply_step_wire_subagents`, `StepAction.wire_subagent`) and dropped Pass 2
+specialist inference, so wired specialists are reachable by slash command only.

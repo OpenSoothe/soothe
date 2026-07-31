@@ -37,13 +37,11 @@ from soothe.sloop.cognition.status_assessment_wire import (
     coerce_status_assessment_wire_dict,
     parse_status_assessment_payload,
 )
-from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.state.schemas import (
     DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
     AgentDecision,
     LoopState,
     PlanGeneration,
-    StepAction,
     plan_generate_steps_to_step_actions,
     renumber_decision_local_step_ids_for_goal_continuation,
     step_actions_to_plan_generate_steps,
@@ -428,56 +426,6 @@ class LLMPlanner:
         except Exception as e:
             logger.warning("LLMPlanner._invoke failed: %s", e)
             return ""
-
-    @staticmethod
-    def _preferred_subagent_step_description(description: str, subagent_name: str) -> str:
-        """User-facing step text when wiring an explicit subagent (IG-349, shared with Plan path)."""
-        desc = (description or "").strip()
-        if not desc:
-            return f"Using the {subagent_name} subagent."
-        lowered = f"{desc[0].lower()}{desc[1:]}"
-        return f"Using the {subagent_name} subagent, {lowered}"
-
-    @staticmethod
-    def _apply_preferred_subagent_to_decision(
-        decision: AgentDecision,
-        subagent_name: str,
-    ) -> AgentDecision:
-        """Apply wire ``preferred_subagent`` to ``AgentDecision`` step descriptions (IG-349).
-
-        Intake-only specialists are skipped here (IG-600); they never reach plan-generate
-        under the wired-subagent route (IG-599).
-        """
-        from soothe.sloop.state.schemas import is_intake_only_wire_subagent
-
-        if not decision.steps or is_intake_only_wire_subagent(subagent_name):
-            return decision
-        n = len(decision.steps)
-        start = 1 if n > 1 else 0
-        new_steps: list[StepAction] = []
-        for i, step in enumerate(decision.steps):
-            if i < start:
-                new_steps.append(step)
-                continue
-            new_steps.append(
-                step.model_copy(
-                    update={
-                        "description": LLMPlanner._preferred_subagent_step_description(
-                            step.description, subagent_name
-                        ),
-                        "execution_hint": "subagent",
-                        "subagent": subagent_name,
-                        "wire_subagent": subagent_name,
-                    }
-                )
-            )
-        out = decision.model_copy(update={"steps": new_steps})
-        logger.info(
-            "Applied preferred_subagent=%s to AgentDecision (%d action step(s))",
-            subagent_name,
-            n - start,
-        )
-        return out
 
     async def _assess_status_with_response(
         self,
@@ -1081,40 +1029,11 @@ class LLMPlanner:
             )
 
         if result is not None and result.decision is not None:
-            user_wire = resolve_user_requested_wire_subagent(
-                routing_classification=context.routing_classification,
-                intent=getattr(state, "intent", None),
-            )
-            stripped_steps = strip_unrequested_step_delegates(
-                result.decision.steps,
-                user_wire_subagent=user_wire,
-            )
+            stripped_steps = strip_unrequested_step_delegates(result.decision.steps)
             if stripped_steps is not result.decision.steps:
                 result = result.model_copy(
                     update={
                         "decision": result.decision.model_copy(update={"steps": stripped_steps}),
-                    }
-                )
-
-            from soothe.sloop.state.schemas import apply_step_wire_subagents
-
-            wired_steps = apply_step_wire_subagents(result.decision.steps)
-            result = result.model_copy(
-                update={
-                    "decision": result.decision.model_copy(update={"steps": wired_steps}),
-                }
-            )
-            preferred = (
-                getattr(context.routing_classification, "preferred_subagent", None)
-                if context.routing_classification
-                else None
-            )
-            if preferred:
-                result = result.model_copy(
-                    update={
-                        "decision": self._apply_preferred_subagent_to_decision(
-                            result.decision, preferred
-                        )
                     }
                 )
 

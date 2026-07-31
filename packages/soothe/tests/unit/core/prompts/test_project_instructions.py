@@ -144,15 +144,7 @@ async def test_executor_envelope_without_project_instructions(tmp_path: Path) ->
         StepAction(id="02", description="b", expected_output="o"),
     ]
 
-    envelopes = [
-        executor._compose_execute_step_envelope(
-            step,
-            loop_state=state,
-            wire_subagent=None,
-            workspace=state.workspace,
-        )
-        for step in steps
-    ]
+    envelopes = [executor._compose_execute_step_envelope(step, loop_state=state) for step in steps]
     assert len(envelopes) == 2
     # No project_instructions in envelope - it's in system prompt
     assert "<AGENT_INSTRUCTIONS>" not in envelopes[0]

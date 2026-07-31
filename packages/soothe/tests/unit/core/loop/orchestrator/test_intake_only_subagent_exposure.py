@@ -11,11 +11,12 @@ from langchain_core.messages import ToolMessage
 from soothe.sloop.intake_task_guard import IntakeOnlyTaskGuardMiddleware
 from soothe.sloop.state.schemas import (
     INTAKE_ONLY_WIRE_SUBAGENTS,
+    StepAction,
     filter_task_catalog_subagent_names,
     is_intake_only_wire_subagent,
     partition_subagent_specs,
-    resolve_step_wire_subagent,
     resolve_wire_subagent,
+    strip_unrequested_step_delegates,
 )
 
 
@@ -60,8 +61,11 @@ def test_wired_intake_still_resolves_all_supported_specialists() -> None:
 
 
 def test_plan_delegate_rejects_intake_only() -> None:
-    assert resolve_step_wire_subagent(execution_hint="subagent", subagent="deep_research") is None
-    assert resolve_step_wire_subagent(execution_hint="subagent", subagent="planner") is None
+    for name in ("deep_research", "planner"):
+        steps = [StepAction(id="01", description="work", execution_hint="subagent", subagent=name)]
+        out = strip_unrequested_step_delegates(steps)
+        assert out[0].execution_hint == "auto"
+        assert out[0].subagent is None
 
 
 @pytest.mark.asyncio

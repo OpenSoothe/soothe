@@ -50,8 +50,8 @@ class TestExecutorHints:
         assert configurable["soothe_step_expected_output"] == "Config file list"
 
     @pytest.mark.asyncio
-    async def test_executor_passes_wire_subagent_hint(self):
-        """Test Executor passes wire preferred_subagent via config when routing_hint=subagent."""
+    async def test_executor_omits_step_subagent_config_key(self):
+        """Execute never wires a step subagent: CoreAgent chooses its own tools."""
         mock_agent = MagicMock()
         # execution_astream is sync and returns an async iterator — not awaitable.
         mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
@@ -64,6 +64,8 @@ class TestExecutorHints:
             id="step-1",
             description="Map repository layout",
             expected_output="Matching paths",
+            execution_hint="subagent",
+            subagent="plugin_agent",
         )
         routing = {"routing_hint": "subagent", "preferred_subagent": "plugin_agent"}
 
@@ -74,54 +76,8 @@ class TestExecutorHints:
         call_args = mock_agent.execution_astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
 
-        assert configurable["soothe_step_subagent"] == "plugin_agent"
+        assert "soothe_step_subagent" not in configurable
         assert "soothe_step_tools" not in configurable
-
-    @pytest.mark.asyncio
-    async def test_executor_passes_step_wire_subagent_from_planner(self):
-        """Catalog step wire flows to soothe_step_subagent."""
-        mock_agent = MagicMock()
-        mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
-        mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
-        mock_agent.aget_state = AsyncMock(return_value=MagicMock())
-
-        executor = Executor(mock_agent)
-
-        step = StepAction(
-            id="step-1",
-            description="Map repository layout",
-            expected_output="Matching paths",
-            execution_hint="subagent",
-            subagent="plugin_agent",
-            wire_subagent="plugin_agent",
-        )
-
-        await executor._execute_step_collecting_events(step, "thread-456")
-
-        configurable = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
-        assert configurable["soothe_step_subagent"] == "plugin_agent"
-
-    @pytest.mark.asyncio
-    async def test_executor_ignores_intake_only_step_wire(self):
-        """IG-601/IG-656: intake-only wire on a step never becomes soothe_step_subagent."""
-        mock_agent = MagicMock()
-        mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
-        mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
-        mock_agent.aget_state = AsyncMock(return_value=MagicMock())
-
-        executor = Executor(mock_agent)
-        for name in ("deep_research", "planner"):
-            step = StepAction(
-                id="step-1",
-                description="Research topic",
-                expected_output="Report",
-                execution_hint="subagent",
-                subagent=name,
-                wire_subagent=name,
-            )
-            await executor._execute_step_collecting_events(step, "thread-456")
-            configurable = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
-            assert configurable["soothe_step_subagent"] is None
 
     @pytest.mark.asyncio
     async def test_executor_passes_expected_output(self):
@@ -170,7 +126,7 @@ class TestExecutorHints:
         configurable = call_args.kwargs["config"]["configurable"]
 
         assert "soothe_step_tools" not in configurable
-        assert configurable["soothe_step_subagent"] is None
+        assert "soothe_step_subagent" not in configurable
         assert configurable["soothe_step_expected_output"] == "File contents"
 
     @pytest.mark.asyncio
@@ -198,7 +154,8 @@ class TestExecutorHints:
             step, "thread-123", routing_classification=routing
         )
 
-        assert "wire_subagent=plugin_agent" in caplog.text
+        assert "execute step: id=step-1" in caplog.text
+        assert "wire_subagent" not in caplog.text
 
     @pytest.mark.asyncio
     async def test_executor_thread_creates_isolated_thread(self) -> None:

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from soothe_nano.middleware import SystemPromptMiddleware
 from soothe_nano.middleware.progressive_listing import ProgressiveListingMiddleware
 from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
@@ -356,134 +356,6 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
     modified = middleware.modify_request(enforced)
     assert len(enforced.tools) == 2
     assert "SUBAGENT_ROUTING_DIRECTIVE" not in modified.system_message.content
-
-
-def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
-    """Host ``soothe_step_subagent`` narrows root tools to ``task`` on first hop."""
-    from soothe.sloop.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
-    from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
-
-    config = SootheConfig()
-    guard = GoalStepGuardMiddleware()
-    middleware = SystemPromptMiddleware(config=config)
-    classification = RoutingClassification(
-        task_complexity="medium",
-        reasoning="test",
-    )
-    model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
-    tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="task")]
-    request = ModelRequest(
-        model=model,
-        messages=[HumanMessage(content="Execute: map src/")],
-        system_message=SystemMessage(content="orig"),
-        tools=tools,
-        state={"routing_classification": classification},
-    )
-    lg_config = {
-        "configurable": {"thread_id": "t1", SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "plugin_agent"}
-    }
-    with patch("langgraph.config.get_config", return_value=lg_config):
-        enforced = guard.modify_request(request)
-        modified = middleware.modify_request(enforced)
-    assert len(enforced.tools) == 1
-    assert getattr(enforced.tools[0], "name", None) == "task"
-    assert "SUBAGENT_ROUTING_DIRECTIVE" in modified.system_message.content
-    assert "plugin_agent" in modified.system_message.content
-
-
-def test_step_subagent_configurable_after_assistant_message_still_task_only() -> None:
-    """Wired catalog step subagents stay task-only after the first model hop."""
-    from soothe.sloop.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
-    from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
-
-    config = SootheConfig()
-    guard = GoalStepGuardMiddleware()
-    middleware = SystemPromptMiddleware(config=config)
-    classification = RoutingClassification(
-        task_complexity="medium",
-        reasoning="test",
-    )
-    model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
-    tools = [SimpleNamespace(name="run_command"), SimpleNamespace(name="task")]
-    request = ModelRequest(
-        model=model,
-        messages=[
-            HumanMessage(content="Execute: use plugin_agent"),
-            AIMessage(content="delegating"),
-            ToolMessage(content="plan draft", tool_call_id="t1"),
-        ],
-        system_message=SystemMessage(content="orig"),
-        tools=tools,
-        state={"routing_classification": classification},
-    )
-    lg_config = {
-        "configurable": {"thread_id": "t1", SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "plugin_agent"}
-    }
-    with patch("langgraph.config.get_config", return_value=lg_config):
-        enforced = guard.modify_request(request)
-        modified = middleware.modify_request(enforced)
-    assert len(enforced.tools) == 1
-    assert getattr(enforced.tools[0], "name", None) == "task"
-    assert "plugin_agent" in modified.system_message.content
-
-
-def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
-    """Host step wire wins over preferred_subagent when GoalStep runs after ToolEnforcement."""
-    from soothe.sloop.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
-    from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
-
-    config = SootheConfig()
-    enforcement = ToolEnforcementMiddleware()
-    guard = GoalStepGuardMiddleware()
-    middleware = SystemPromptMiddleware(config=config)
-    classification = RoutingClassification(
-        task_complexity="medium",
-        preferred_subagent="general_purpose",
-        routing_hint="subagent",
-    )
-    model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
-    tools = [SimpleNamespace(name="search_web"), SimpleNamespace(name="task")]
-    request = ModelRequest(
-        model=model,
-        messages=[HumanMessage(content="step")],
-        system_message=SystemMessage(content="orig"),
-        tools=tools,
-        state={"routing_classification": classification},
-    )
-    lg_config = {"configurable": {SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "plugin_agent"}}
-    with patch("langgraph.config.get_config", return_value=lg_config):
-        after_te = enforcement.modify_request(request)
-        enforced = guard.modify_request(after_te)
-        modified = middleware.modify_request(enforced)
-    content = modified.system_message.content
-    assert "subagent_type='plugin_agent'" in content
-
-
-def test_intake_only_step_subagent_hint_is_rejected_by_host_resolver() -> None:
-    """Host step resolver drops intake-only names before CoreAgent runs."""
-    from soothe.sloop.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
-    from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
-    from soothe.sloop.state.schemas import resolve_step_wire_subagent
-
-    assert resolve_step_wire_subagent(execution_hint="subagent", subagent="deep_research") is None
-    assert resolve_step_wire_subagent(execution_hint="subagent", subagent="planner") is None
-
-    # Host incorrectly setting step wire still narrows via GoalStepGuard (not nano).
-    guard = GoalStepGuardMiddleware()
-    model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
-    tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="task")]
-    request = ModelRequest(
-        model=model,
-        messages=[HumanMessage(content="Execute: research")],
-        system_message=SystemMessage(content="orig"),
-        tools=tools,
-        state={},
-    )
-    lg_config = {"configurable": {SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "deep_research"}}
-    with patch("langgraph.config.get_config", return_value=lg_config):
-        enforced = guard.modify_request(request)
-    assert len(enforced.tools) == 1
-    assert getattr(enforced.tools[0], "name", None) == "task"
 
 
 def test_goal_synthesis_disables_all_tools() -> None:

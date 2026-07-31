@@ -6,7 +6,7 @@ from soothe.sloop.cognition.trivial_plan import build_trivial_plan
 from soothe.sloop.state.schemas import resolve_wire_subagent
 
 
-def test_resolve_wire_subagent_accepts_pass2_hint() -> None:
+def test_resolve_wire_subagent_accepts_slash_hint() -> None:
     assert resolve_wire_subagent(wire_subagent="browser_use") == "browser_use"
     assert resolve_wire_subagent(wire_subagent="academic_research") == "academic_research"
     assert resolve_wire_subagent(wire_subagent="unknown") is None
@@ -18,7 +18,6 @@ def test_build_trivial_plan_wires_browser_use() -> None:
         wire_subagent="browser_use",
     )
     step = plan.decision.steps[0]
-    assert step.wire_subagent == "browser_use"
     assert step.execution_hint == "subagent"
     assert step.subagent == "browser_use"
 
@@ -28,7 +27,8 @@ def test_build_trivial_plan_propagates_requires_tool_use() -> None:
     assert plan.decision.steps[0].requires_tool_use is True
 
 
-def test_build_trivial_plan_leaves_wire_subagent_none_for_generic_goal() -> None:
+def test_build_trivial_plan_leaves_delegate_none_for_generic_goal() -> None:
     plan = build_trivial_plan("list files in this directory")
     step = plan.decision.steps[0]
-    assert step.wire_subagent is None
+    assert step.execution_hint == "auto"
+    assert step.subagent is None

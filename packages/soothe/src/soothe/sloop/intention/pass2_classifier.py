@@ -184,13 +184,6 @@ class IntakePass2Classifier:
         if result_dict.get("requires_tool_use") not in (True, False):
             result_dict["requires_tool_use"] = False
 
-        wire = result_dict.get("wire_subagent")
-        if wire is not None:
-            from soothe.sloop.state.schemas import resolve_wire_subagent
-
-            resolved = resolve_wire_subagent(wire_subagent=str(wire).strip() or None)
-            result_dict["wire_subagent"] = resolved
-
         result_dict["reasoning"] = clip_pass2_reasoning(
             result_dict.get("reasoning") if isinstance(result_dict.get("reasoning"), str) else None
         )
@@ -210,7 +203,6 @@ class IntakePass2Classifier:
             scope=IntakeScope.SIMPLE,
             reasoning="Let me handle this as a focused single-execute task.",
             multi_phase=False,
-            wire_subagent=None,
             requires_tool_use=False,
         )
 

@@ -236,7 +236,7 @@ if loop_state.new_goal_created and intake_label == "chitchat":
 
 ### 6.3.1 Wired-subagent direct route (IG-599 / IG-601)
 
-When Pass 2 `wire_subagent` or slash/daemon `preferred_subagent` resolves to an allowlisted specialist (`planner`, `browser_use`, `deep_research`, `academic_research`):
+When slash/daemon `preferred_subagent` resolves to an allowlisted specialist (`planner`, `browser_use`, `deep_research`, `academic_research`):
 
 1. `init_or_resume` sets `intent_route=wired_subagent` when a specialist resolves (no plan inject here).
 2. `route_by_intent` returns `invoke_wired_subagent` (after chitchat, before continuation).
@@ -258,7 +258,7 @@ Built-in wire specialists are **intake-only**:
 
 - Intake-only specialists live on a **parallel registry** (`SootheNanoAgent.intake_only_subagents`) and are **not** passed to `create_deep_agent` (IG-601). Wired intake streams their runnable (custom events forwarded) then completes.
 - Open-hop `task` to intake-only names fails naturally (not registered); ToolEnforcement still rejects them as belt-and-suspenders.
-- Plan-wave `delegate` / `resolve_step_wire_subagent` never wires intake-only names; those are intake/slash only.
+- Plan-wave `delegate` is always stripped from generated steps; specialists are slash-only.
 - Plugin / other open-catalog subagents may still appear on CoreAgent `task` when registered outside this set (not via plan-wave built-in `delegate`).
 
 ### 6.3.3 Intake-only wire: stream bridge and orphan SubAgent card
@@ -288,7 +288,7 @@ Intake-only specialists do **not** enter CoreAgent execute, so they never emit a
 - Derives `intake_label` from Pass 1 + Pass 2 results.
 - Derives `has_deliverable` at routing.
 - For wired specialist: sets `intent_route=wired_subagent` (plan built in `invoke_wired_subagent`).
-- For `trivial`: builds minimal 1-step plan into `ctx.scratch` (no allowlisted `wire_subagent`).
+- For `trivial`: builds minimal 1-step plan into `ctx.scratch` (no allowlisted specialist).
 
 ### 6.5 `plan_phase.generate_lightweight`
 
@@ -376,8 +376,6 @@ IntakePass2Result {
   goal_description: string         // imperative summary
   reasoning: string                // ≤15 words
   multi_phase: bool
-  wire_subagent: "planner" | "browser_use" | "deep_research"
-                 | "academic_research" | null
   requires_tool_use: bool          // IG-569: external/live data needs tools
 }
 ```
@@ -387,11 +385,11 @@ external/live data (weather, web lookup, file contents). Pure reasoning/math
 sets `false`. The field propagates to trivial `StepAction.requires_tool_use`
 for the execute deliverable gate.
 
-`wire_subagent` is set when the GOAL's **primary intent** is to run one wired
-specialist end-to-end (explicit name, slash such as `/plan` → `planner`, or a
-clear single-purpose specialist ask). Unknown names coerce to `null`. When
-resolved (Pass 2 or slash `preferred_subagent`), IG-599 routes through
-`invoke_wired_subagent` instead of the plan spine.
+Pass 2 does **not** choose a specialist (IG-669). A wired specialist is
+requested only by slash/daemon `preferred_subagent`; when that resolves to an
+allowlisted name, IG-599 routes through `invoke_wired_subagent` instead of the
+plan spine. A `/skill:` submission suppresses the hint entirely so the skill
+body owns execution.
 
 ### 8.3 Derived fields at routing
 

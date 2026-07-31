@@ -280,8 +280,6 @@ def build_dependent_execution_hints(
     step: StepAction,
     *,
     has_predecessor_evidence: bool,
-    wire_subagent: str | None,
-    workspace: str | None,
     expected_output: str | None,
 ) -> ExecuteStepEnvelopeBody:
     """Build EXPECTED OUTPUT and INSTRUCTIONS bodies for an execute-step envelope."""
@@ -303,16 +301,6 @@ def build_dependent_execution_hints(
             1,
             "- Apply fixes or follow-up actions using concrete details from prior step outcomes",
         )
-    if wire_subagent:
-        instruction_lines.insert(0, f"- Suggested subagent: {wire_subagent}")
-    if wire_subagent and workspace:
-        instruction_lines.insert(
-            1,
-            "- " + f"Workspace root: {workspace}. "
-            "Use paths relative to this workspace (e.g. packages/..., docs/...). "
-            "Do not use absolute paths like /packages/.",
-        )
-
     expected_body = f"- {expected_output.strip()}" if (expected_output or "").strip() else None
     return ExecuteStepEnvelopeBody(
         expected_output=expected_body,

@@ -301,7 +301,6 @@ async def test_stream_injects_step_description_on_empty_task_args() -> None:
             budget=None,
             step_id="JPV-01",
             step_description="Map goal engine to sloop boundaries",
-            step_subagent="deep_research",
         )
     ]
     event = rows[0].event
@@ -311,7 +310,7 @@ async def test_stream_injects_step_description_on_empty_task_args() -> None:
     tc = msg.tool_calls[0]
     assert tc["id"] == "JPV_01:s:task:0"
     assert "sloop" in str(tc["args"].get("description", ""))
-    assert tc["args"].get("subagent_type") == "deep_research"
+    assert "subagent_type" not in tc["args"]
 
 
 @pytest.mark.asyncio
@@ -352,7 +351,6 @@ async def test_stream_preserves_model_task_description_over_step_brief() -> None
             budget=None,
             step_id="JPV-02",
             step_description="Step plan text only",
-            step_subagent="deep_research",
         )
     ]
     event = rows[0].event
@@ -403,7 +401,6 @@ async def test_stream_emits_string_tool_call_chunk_args_after_enrich() -> None:
             budget=None,
             step_id="WAA-04",
             step_description="Step fallback brief",
-            step_subagent="deep_research",
         )
     ]
     event = rows[0].event

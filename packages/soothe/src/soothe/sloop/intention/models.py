@@ -102,13 +102,6 @@ class IntentClassification(BaseModel):
         default=False,
         description="Pass 2: goal implies multiple ordered execution phases",
     )
-    wire_subagent: str | None = Field(
-        default=None,
-        description=(
-            "Pass 2: wired specialist when primary intent is to call one "
-            "(planner, browser_use, deep_research, academic_research)"
-        ),
-    )
     requires_tool_use: bool = Field(
         default=False,
         description=(
@@ -131,15 +124,12 @@ def build_loop_routing_classification(
 ) -> RoutingClassification | None:
     """Build routing classification consumed by StrangeLoop Plan/Execute.
 
-    Prefers slash/daemon ``preferred_subagent``, then Pass 2 ``wire_subagent``.
+    Wired specialists are requested explicitly via slash/daemon ``preferred_subagent``;
+    intake never infers one.
     """
     from soothe.sloop.state.schemas import resolve_wire_subagent
 
-    slash_wire = resolve_wire_subagent(wire_subagent=preferred_subagent)
-    pass2_wire = None
-    if intent is not None:
-        pass2_wire = resolve_wire_subagent(wire_subagent=getattr(intent, "wire_subagent", None))
-    resolved_wire = slash_wire or pass2_wire
+    resolved_wire = resolve_wire_subagent(wire_subagent=preferred_subagent)
 
     if intent is None:
         if resolved_wire:
@@ -294,13 +284,6 @@ class IntakePass2LLMResult(BaseModel):
     multi_phase: bool = Field(
         default=False,
         description="True when the goal implies multiple ordered execution phases",
-    )
-    wire_subagent: str | None = Field(
-        default=None,
-        description=(
-            "Wired specialist when primary intent is to call one: planner, "
-            "browser_use, deep_research, academic_research, or null"
-        ),
     )
     requires_tool_use: bool = Field(
         default=False,

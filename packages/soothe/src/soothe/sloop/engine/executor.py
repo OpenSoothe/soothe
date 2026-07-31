@@ -109,10 +109,7 @@ from soothe.sloop.engine.step_wave_types import (
     wave_gather_failed,
     wave_gather_slot,
 )
-from soothe.sloop.engine.thread_selection import (
-    _select_thread_for_step,
-    resolve_wire_subagent_for_step,
-)
+from soothe.sloop.engine.thread_selection import _select_thread_for_step
 from soothe.sloop.engine.tool_call_args import (
     ToolCallArgsCollector,
     enrich_wire_updates_with_collector,
@@ -518,8 +515,6 @@ class Executor:
         step: StepAction,
         *,
         loop_state: LoopState | None,
-        wire_subagent: str | None,
-        workspace: str | None,
         cross_goal_projected: bool = False,
         predecessor_projected: bool = False,
     ) -> str:
@@ -579,8 +574,6 @@ class Executor:
             envelope_body = build_dependent_execution_hints(
                 step,
                 has_predecessor_evidence=has_predecessor_ledger,
-                wire_subagent=wire_subagent,
-                workspace=workspace,
                 expected_output=step.expected_output,
             )
         return UserMessageBuilder().build_execute_step_message(
@@ -1230,12 +1223,7 @@ class Executor:
 
         for i, step in enumerate(steps):
             raw = wave_gather_slot(gather_results, i)
-            envelope = self._compose_execute_step_envelope(
-                step,
-                loop_state=state,
-                wire_subagent=step.wire_subagent,
-                workspace=state.workspace,
-            )
+            envelope = self._compose_execute_step_envelope(step, loop_state=state)
             from soothe.sloop.cognition.ledger_compaction import (
                 compact_execute_human_content,
             )
@@ -1361,15 +1349,7 @@ class Executor:
         state: LoopState,
     ) -> tuple[str, str]:
         """Return compact execute-step human/ai pair for completion reporting."""
-        wire_subagent = resolve_wire_subagent_for_step(
-            step, getattr(state, "routing_classification", None)
-        )
-        envelope = self._compose_execute_step_envelope(
-            step,
-            loop_state=state,
-            wire_subagent=wire_subagent,
-            workspace=state.workspace,
-        )
+        envelope = self._compose_execute_step_envelope(step, loop_state=state)
         from soothe.sloop.cognition.ledger_compaction import (
             compact_execute_human_content,
         )
@@ -1852,12 +1832,10 @@ class Executor:
         start = time.perf_counter()
         events: list[StreamEvent] = []
         output = ""  # Still collect for Layer 1 final report
-        wire_subagent = resolve_wire_subagent_for_step(step, routing_classification)
         budget = _ActStreamBudget(
             max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave(),
             max_tool_calls_per_step=max_tool_calls_for_step(
                 step,
-                wire_subagent,
                 default=self._max_tool_calls_per_step(),
             ),
         )
@@ -1866,10 +1844,9 @@ class Executor:
 
         try:
             logger.debug(
-                "execute step: id=%s desc=%s hints: wire_subagent=%s tool_budget=%d",
+                "execute step: id=%s desc=%s tool_budget=%d",
                 step.id,
                 preview_first(step.description, 100),
-                wire_subagent,
                 budget.max_tool_calls_per_step,
             )
 
@@ -1887,7 +1864,6 @@ class Executor:
 
             configurable: dict[str, Any] = {
                 "thread_id": fork_thread_id,
-                "soothe_step_subagent": wire_subagent,
                 "soothe_step_expected_output": step.expected_output,
             }
             if workspace:
@@ -1940,8 +1916,6 @@ class Executor:
             envelope = self._compose_execute_step_envelope(
                 step,
                 loop_state=loop_state,
-                wire_subagent=wire_subagent,
-                workspace=workspace,
                 cross_goal_projected=cross_goal_projected,
                 predecessor_projected=predecessor_projected,
             )
@@ -2015,7 +1989,6 @@ class Executor:
                     budget=budget,
                     step_id=step.id,
                     step_description=step.description,
-                    step_subagent=wire_subagent,
                 ):
                     if chunk.event is not None:
                         _append_parallel_stream_event(events, chunk.event, live_event_queue)
@@ -2230,10 +2203,9 @@ class Executor:
         except asyncio.CancelledError:
             duration_ms = int((time.perf_counter() - start) * 1000)
             logger.info(
-                "Step %s cancelled after %dms [wire_subagent=%s]",
+                "Step %s cancelled after %dms",
                 step.id,
                 duration_ms,
-                wire_subagent,
             )
             raise
         except Exception as e:
@@ -2241,11 +2213,10 @@ class Executor:
             if isinstance(e, GraphRecursionError):
                 warning_text = _graph_recursion_warning_text(e)
                 logger.warning(
-                    "Step %s hit recursion limit after %dms [wire_subagent=%s]; "
+                    "Step %s hit recursion limit after %dms; "
                     "recording warning and continuing execution: %s",
                     step.id,
                     duration_ms,
-                    wire_subagent,
                     warning_text,
                 )
                 return _ExecuteStepResult(
@@ -2271,18 +2242,16 @@ class Executor:
                 )
             if _is_recoverable_tool_network_error(e):
                 logger.warning(
-                    "Step %s failed after %dms [wire_subagent=%s]: %s",
+                    "Step %s failed after %dms: %s",
                     step.id,
                     duration_ms,
-                    wire_subagent,
                     _format_tool_network_error(e),
                 )
             else:
                 logger.exception(
-                    "Step %s failed after %dms [wire_subagent=%s]",
+                    "Step %s failed after %dms",
                     step.id,
                     duration_ms,
-                    wire_subagent,
                 )
 
             error_msg = self._extract_error_message(e, "Step execution failed")
@@ -2313,7 +2282,6 @@ class Executor:
         budget: _ActStreamBudget | None = None,
         step_id: str | None = None,
         step_description: str = "",
-        step_subagent: str | None = None,
     ) -> AsyncGenerator[_StreamCollectChunk, None]:
         """Stream events immediately while accumulating output and counting tool calls.
 
@@ -2336,7 +2304,6 @@ class Executor:
                 ``{step_id}:s:{tool_fragment}`` for consistent TUI rendering.
             step_description: Execute-step brief copied onto ``task`` kwargs when the
                 model streams empty delegation args (parallel execute).
-            step_subagent: Optional planner subagent hint for ``subagent_type``.
 
         Yields:
             :class:`_StreamCollectChunk` — wire events during streaming, then one
@@ -2564,7 +2531,6 @@ class Executor:
                         enriched_msg = _enrich_execute_step_task_kwargs_on_message(
                             rewritten_msg,
                             step_description=step_description,
-                            step_subagent=step_subagent,
                             task_idx=task_idx,
                         )
                         wire_msg = _stringify_tool_call_chunk_args_on_message(enriched_msg)

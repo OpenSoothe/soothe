@@ -123,29 +123,18 @@ def _patch_task_tool_call_dict(
     tc: dict[str, Any],
     *,
     step_description: str,
-    step_subagent: str | None,
 ) -> tuple[dict[str, Any], bool]:
     """Fill missing ``task`` kwargs from execute-step metadata (main graph only)."""
     if str(tc.get("name") or "").strip() != "task":
         return tc, False
     args = _coerce_tool_call_args_mapping(tc.get("args"))
     desc = (step_description or "").strip()
-    sub = (step_subagent or "").strip() if step_subagent else ""
     if _task_kwargs_have_description(args):
-        if sub and not str(args.get("subagent_type") or "").strip():
-            merged = dict(args)
-            merged["subagent_type"] = sub
-            patched = dict(tc)
-            patched["args"] = merged
-            return patched, True
         return tc, False
-    if not desc and not sub:
+    if not desc:
         return tc, False
     merged = dict(args)
-    if desc:
-        merged.setdefault("description", desc)
-    if sub:
-        merged.setdefault("subagent_type", sub)
+    merged.setdefault("description", desc)
     patched = dict(tc)
     patched["args"] = merged
     return patched, True
@@ -155,23 +144,21 @@ def _enrich_execute_step_task_kwargs_on_message(
     msg: BaseMessage,
     *,
     step_description: str,
-    step_subagent: str | None,
     task_idx: int | None,
 ) -> BaseMessage:
     """Ensure main-graph ``task`` tool calls carry a description for TUI delegation cards.
 
     Parallel execute often streams ``tool_calls`` with empty ``args`` and no
     ``tool_call_chunks`` on the terminal chunk. The model still has the step brief in the
-    HumanMessage envelope; copy wire ``preferred_subagent`` onto ``task`` kwargs when set
-    at emit time so clients always receive a real delegation description.
+    HumanMessage envelope, so copy it onto ``task`` kwargs at emit time and clients always
+    receive a real delegation description.
     """
     if task_idx is not None:
         return msg
     if not isinstance(msg, (AIMessage, AIMessageChunk)):
         return msg
     desc = (step_description or "").strip()
-    sub = (step_subagent or "").strip() if step_subagent else ""
-    if not desc and not sub:
+    if not desc:
         return msg
 
     changed = False
@@ -180,9 +167,7 @@ def _enrich_execute_step_task_kwargs_on_message(
     new_calls: list[Any] = []
     for tc in getattr(modified, "tool_calls", None) or []:
         if isinstance(tc, dict):
-            patched, did = _patch_task_tool_call_dict(
-                tc, step_description=desc, step_subagent=sub or None
-            )
+            patched, did = _patch_task_tool_call_dict(tc, step_description=desc)
             new_calls.append(patched)
             changed = changed or did
         else:
@@ -199,10 +184,7 @@ def _enrich_execute_step_task_kwargs_on_message(
                 inner_args = _chunk_args_dict(chunk_tc)
                 if not _task_kwargs_have_description(inner_args):
                     merged = dict(inner_args)
-                    if desc:
-                        merged.setdefault("description", desc)
-                    if sub:
-                        merged.setdefault("subagent_type", sub)
+                    merged.setdefault("description", desc)
                     chunk_tc["args"] = json.dumps(merged, separators=(",", ":"))
                     chunk_changed = True
             new_chunks.append(chunk_tc)

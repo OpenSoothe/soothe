@@ -258,7 +258,6 @@ class IntentClassifier:
             reasoning=pass2_result.reasoning,
             chitchat_response=None,
             multi_phase=pass2_result.multi_phase,
-            wire_subagent=pass2_result.wire_subagent,
             requires_tool_use=pass2_result.requires_tool_use,
             response_language=pass1_response_language,
             task_complexity=derive_task_complexity_from_intake(intake_label),

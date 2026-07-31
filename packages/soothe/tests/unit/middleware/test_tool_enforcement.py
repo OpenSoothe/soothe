@@ -11,10 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
 from soothe_sdk.intention.models import RoutingClassification
 
-from soothe.sloop.config_keys import (
-    SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY,
-    SOOTHE_STEP_SUBAGENT_CONFIG_KEY,
-)
+from soothe.sloop.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
 from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
 from soothe.sloop.intake_task_guard import IntakeOnlyTaskGuardMiddleware
 
@@ -84,7 +81,8 @@ def test_intake_only_preferred_subagent_does_not_narrow_tools() -> None:
         assert preferred is None
 
 
-def test_step_subagent_enforces_task_only_on_all_hops() -> None:
+def test_goal_step_guard_keeps_tools_without_synthesis() -> None:
+    """Only goal synthesis narrows tools; execute steps keep the full tool set."""
     middleware = GoalStepGuardMiddleware()
     request = ModelRequest(
         model=GenericFakeChatModel(messages=iter([AIMessage(content="ok")])),
@@ -93,15 +91,11 @@ def test_step_subagent_enforces_task_only_on_all_hops() -> None:
         tools=[SimpleNamespace(name="run_command"), SimpleNamespace(name="task")],
         state={"routing_classification": RoutingClassification(task_complexity="medium")},
     )
-    with patch(
-        "langgraph.config.get_config",
-        return_value={"configurable": {SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "plugin_agent"}},
-    ):
+    with patch("langgraph.config.get_config", return_value={"configurable": {"thread_id": "t1"}}):
         modified = middleware.modify_request(request)
 
-    assert len(modified.tools) == 1
-    assert getattr(modified.tools[0], "name", None) == "task"
-    assert modified.state["_subagent_routing_directive"] == "plugin_agent"
+    assert len(modified.tools) == 2
+    assert "_subagent_routing_directive" not in modified.state
 
 
 def test_goal_synthesis_disables_tools() -> None:

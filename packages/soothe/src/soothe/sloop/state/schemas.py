@@ -103,66 +103,22 @@ class PlanGenerateStep(BaseModel):
         return self
 
 
-def resolve_step_wire_subagent(
-    *,
-    execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto",
-    subagent: str | None = None,
-) -> str | None:
-    """Plan-wave delegate resolution — always ``None`` after IG-656.
-
-    Built-in wire specialists are intake-only; they cannot be plan-wave
-    ``delegate`` targets. Non-allowlisted names are also ignored.
-    """
-    if execution_hint != "subagent":
-        return None
-    name = (subagent or "").strip()
-    if not name:
-        logger.debug("subagent execution_hint without subagent name; using direct tools")
-        return None
-    logger.debug(
-        "Ignoring plan-wave subagent %r; built-in wires are intake-only",
-        name,
-    )
-    return None
-
-
-def apply_step_wire_subagents(steps: list[StepAction]) -> list[StepAction]:
-    """Attach ``wire_subagent`` on steps that delegate via the planner."""
-    out: list[StepAction] = []
-    for step in steps:
-        wire = resolve_step_wire_subagent(
-            execution_hint=step.execution_hint,
-            subagent=step.subagent,
-        )
-        if wire == step.wire_subagent:
-            out.append(step)
-        else:
-            out.append(step.model_copy(update={"wire_subagent": wire}))
-    return out
-
-
-def strip_unrequested_step_delegates(
-    steps: list[StepAction],
-    *,
-    user_wire_subagent: str | None = None,
-) -> list[StepAction]:
+def strip_unrequested_step_delegates(steps: list[StepAction]) -> list[StepAction]:
     """Clear all plan-wave subagent wiring from generated steps (IG-656).
 
-    Built-in wire specialists are intake-only and never reach plan-generate;
-    ``user_wire_subagent`` is ignored (kept for call-site compatibility).
+    Built-in wire specialists are intake-only and never reach plan-generate, so
+    any planner-emitted delegate hint is dropped and execute picks its own tools.
     """
-    del user_wire_subagent  # no catalog keep-path after IG-656
     out: list[StepAction] = []
     stripped = 0
     for step in steps:
-        if step.execution_hint == "subagent" or step.subagent or step.wire_subagent:
+        if step.execution_hint == "subagent" or step.subagent:
             stripped += 1
             out.append(
                 step.model_copy(
                     update={
                         "execution_hint": "auto",
                         "subagent": None,
-                        "wire_subagent": None,
                     }
                 )
             )
@@ -191,26 +147,20 @@ def _merged_step_dependencies(step: PlanGenerateStep) -> list[str] | None:
 
 def plan_generate_steps_to_step_actions(steps: list[PlanGenerateStep]) -> list[StepAction]:
     """Convert plan-generate steps into runtime ``StepAction`` rows."""
-    return apply_step_wire_subagents(
-        [
-            StepAction(
-                id=s.id,
-                description=s.description,
-                full_description=s.full_description,
-                expected_output=s.expected_output,
-                dependencies=_merged_step_dependencies(s),
-                kind=s.kind,
-                questions=list(s.questions) if s.questions else None,
-                execution_hint=s.execution_hint,
-                subagent=s.subagent,
-                wire_subagent=resolve_step_wire_subagent(
-                    execution_hint=s.execution_hint,
-                    subagent=s.subagent,
-                ),
-            )
-            for s in steps
-        ]
-    )
+    return [
+        StepAction(
+            id=s.id,
+            description=s.description,
+            full_description=s.full_description,
+            expected_output=s.expected_output,
+            dependencies=_merged_step_dependencies(s),
+            kind=s.kind,
+            questions=list(s.questions) if s.questions else None,
+            execution_hint=s.execution_hint,
+            subagent=s.subagent,
+        )
+        for s in steps
+    ]
 
 
 def step_actions_to_plan_generate_steps(steps: list[StepAction]) -> list[PlanGenerateStep]:
@@ -253,7 +203,6 @@ class StepAction(BaseModel):
             the user (TUI manual mode) or veritas (auto mode).
         execution_hint: Planner routing hint (``subagent`` → delegate via ``task``).
         subagent: Named subagent when ``execution_hint='subagent'``.
-        wire_subagent: Resolved executor hint (from planner or wire routing).
         requires_tool_use: When set, execute deliverable gate requires successful tool use
             (from Pass 2 intake for trivial steps).
     """
@@ -273,7 +222,6 @@ class StepAction(BaseModel):
     questions: list[str] | None = None
     execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto"
     subagent: str | None = None
-    wire_subagent: str | None = None
     requires_tool_use: bool | None = None
 
     @model_validator(mode="after")

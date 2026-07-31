@@ -15,13 +15,11 @@ from soothe.sloop.prompts.user_message import UserMessageBuilder
 from soothe.sloop.state.schemas import StepAction
 
 
-def _envelope_body(*, subagent: str | None, expected_output: str | None) -> ExecuteStepEnvelopeBody:
+def _envelope_body(*, expected_output: str | None) -> ExecuteStepEnvelopeBody:
     """Build the same guidance as ``executor.py`` for a root step without dependencies."""
     return build_dependent_execution_hints(
         StepAction(id="01", description="Step"),
         has_predecessor_evidence=False,
-        wire_subagent=subagent,
-        workspace=None,
         expected_output=expected_output,
     )
 
@@ -29,9 +27,9 @@ def _envelope_body(*, subagent: str | None, expected_output: str | None) -> Exec
 class TestExecutionGuidanceEnvelopeIntegration:
     """RFC-214: guidance in user envelope via UserMessageBuilder."""
 
-    def test_envelope_includes_subagent_and_expected_output(self) -> None:
+    def test_envelope_includes_expected_output_and_instructions(self) -> None:
         """Executor-format guidance appears in EXPECTED OUTPUT and INSTRUCTIONS sections."""
-        body = _envelope_body(subagent="deep_research", expected_output="Page summary")
+        body = _envelope_body(expected_output="Page summary")
         builder = UserMessageBuilder()
         envelope = builder.build_execute_step_message(
             "Open the page",
@@ -43,7 +41,7 @@ class TestExecutionGuidanceEnvelopeIntegration:
         assert "EXECUTION HINTS:" not in envelope
         assert "EXPECTED OUTPUT:" in envelope
         assert "INSTRUCTIONS:" in envelope
-        assert "Suggested subagent: deep_research" in envelope
+        assert "Suggested subagent:" not in envelope
         assert "Page summary" in envelope
         assert "EXECUTION METADATA:" in envelope
         assert "step_id: 01" in envelope
@@ -54,8 +52,8 @@ class TestExecutionGuidanceEnvelopeIntegration:
         assert task_idx < expected_idx < instructions_idx < metadata_idx
 
     def test_envelope_expected_output_only(self) -> None:
-        """Guidance may omit subagent when only expected_output is set."""
-        body = _envelope_body(subagent=None, expected_output="File contents")
+        """Guidance renders expected_output without any delegation hint."""
+        body = _envelope_body(expected_output="File contents")
         builder = UserMessageBuilder()
         envelope = builder.build_execute_step_message(
             "Read file",
