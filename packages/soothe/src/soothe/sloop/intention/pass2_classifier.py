@@ -30,6 +30,8 @@ logger = logging.getLogger(__name__)
 # Mid-loop prior goal_completion dumps can be multi-k tokens; Pass 2 only needs
 # enough context for reference resolution ("apply it"), not the full report.
 _PASS2_PRIOR_MAX_CHARS = 2400
+# Schema asks ≤15 words; clip runaway model dumps before TUI / IntentClassification.
+_PASS2_REASONING_MAX_CHARS = 120
 
 
 def clip_pass2_prior_projection(prior_projection: str | None) -> str | None:
@@ -42,6 +44,14 @@ def clip_pass2_prior_projection(prior_projection: str | None) -> str | None:
     if len(text) <= _PASS2_PRIOR_MAX_CHARS:
         return text
     return "…\n" + text[-_PASS2_PRIOR_MAX_CHARS:]
+
+
+def clip_pass2_reasoning(reasoning: str | None) -> str:
+    """Bound Pass 2 reasoning to a short first-person TUI line."""
+    text = (reasoning or "").strip()
+    if len(text) <= _PASS2_REASONING_MAX_CHARS:
+        return text
+    return text[: _PASS2_REASONING_MAX_CHARS - 1].rstrip() + "…"
 
 
 class IntakePass2Classifier:
@@ -181,6 +191,10 @@ class IntakePass2Classifier:
             resolved = resolve_wire_subagent(wire_subagent=str(wire).strip() or None)
             result_dict["wire_subagent"] = resolved
 
+        result_dict["reasoning"] = clip_pass2_reasoning(
+            result_dict.get("reasoning") if isinstance(result_dict.get("reasoning"), str) else None
+        )
+
         return IntakePass2LLMResult(**result_dict)
 
     def _fallback(
@@ -248,4 +262,8 @@ def preview_goal(goal: str, max_len: int = 50) -> str:
     return goal[: max_len - 3] + "..."
 
 
-__all__ = ["IntakePass2Classifier", "clip_pass2_prior_projection"]
+__all__ = [
+    "IntakePass2Classifier",
+    "clip_pass2_prior_projection",
+    "clip_pass2_reasoning",
+]

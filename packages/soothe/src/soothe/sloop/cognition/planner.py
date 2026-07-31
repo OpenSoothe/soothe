@@ -66,6 +66,11 @@ from soothe.utils.text_preview import create_output_summary, preview_first
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
+# Prefer response_format JSON methods for planner structured calls. Fresh workers
+# have an empty method cache; default function_calling → thrash burns 30–60s+
+# per plan-generate (loop 7ea9) before json_schema succeeds.
+_PLANNER_JSON_METHODS: tuple[str | None, ...] = ("json_schema", "json_mode")
+
 # IG-454: Stuck detection thresholds
 _STUCK_ACTION_REPEAT_THRESHOLD = 3  # Same action repeated N times = stuck
 _STUCK_ERROR_STEP_THRESHOLD = 3  # N consecutive error steps = stuck
@@ -469,6 +474,7 @@ class LLMPlanner:
                     StatusAssessment,
                     config=lf_cfg,
                     thread_id=thread_id,
+                    methods=_PLANNER_JSON_METHODS,
                 )
 
                 if assessment is None:
@@ -615,6 +621,7 @@ class LLMPlanner:
                 ContinuationAssessment,
                 config=lf_cfg,
                 thread_id=state.thread_id,
+                methods=_PLANNER_JSON_METHODS,
             )
         except asyncio.CancelledError:
             raise
@@ -737,6 +744,7 @@ class LLMPlanner:
                     config=lf_cfg,
                     thread_id=thread_id,
                     normalize=coerce_plan_generation_wire_dict,
+                    methods=_PLANNER_JSON_METHODS,
                 )
                 plan_result = plan_generation_wire_to_model(plan_wire)
                 if plan_result.type == "final" and assessment.status != "done":
@@ -847,6 +855,7 @@ class LLMPlanner:
                                 config=lf_cfg_retry,
                                 thread_id=thread_id,
                                 normalize=coerce_plan_generation_wire_dict,
+                                methods=_PLANNER_JSON_METHODS,
                             )
                             if plan_wire is not None:
                                 plan_result = plan_generation_wire_to_model(plan_wire)
@@ -1192,7 +1201,7 @@ class LLMPlanner:
             config=lf_cfg,
             thread_id=state.thread_id,
             normalize=coerce_plan_gap_analysis_wire_dict,
-            methods=("json_schema", "json_mode"),
+            methods=_PLANNER_JSON_METHODS,
             rate_limit_config=self._gap_llm_rate_limit_config(),
         )
         _log_plan_phase_timing(

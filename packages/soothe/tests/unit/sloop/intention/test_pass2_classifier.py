@@ -178,6 +178,48 @@ async def test_pass2_prefers_json_schema_structured_methods() -> None:
     assert mock_invoke.await_args.kwargs["methods"] == INTAKE_JSON_FIRST_METHODS
 
 
+async def test_pass2_clips_runaway_reasoning() -> None:
+    """Long Pass 2 reasoning is clipped before IntentClassification / TUI."""
+    from unittest.mock import patch
+
+    from soothe.sloop.intention.pass2_classifier import _PASS2_REASONING_MAX_CHARS
+
+    long_reason = "I'll " + ("run tests and fix failures " * 20)
+    mock_model = MagicMock()
+    classifier = IntakePass2Classifier(model=mock_model)
+    with patch(
+        "soothe.sloop.intention.pass2_classifier.invoke_structured_chat",
+        new=AsyncMock(
+            return_value={
+                "scope": "complex",
+                "reasoning": long_reason,
+                "multi_phase": True,
+                "requires_tool_use": True,
+            }
+        ),
+    ):
+        result = await classifier.classify(
+            "run and fix unit+integration tests for soothe, daemon, cli and all clients in parallel"
+        )
+    assert result.scope == IntakeScope.COMPLEX
+    assert len(result.reasoning) <= _PASS2_REASONING_MAX_CHARS
+    assert result.reasoning.endswith("…")
+
+
+def test_clip_pass2_reasoning_short_unchanged() -> None:
+    from soothe.sloop.intention.pass2_classifier import clip_pass2_reasoning
+
+    assert clip_pass2_reasoning("I'll run the tests.") == "I'll run the tests."
+
+
+def test_pass2_prompt_marks_parallel_multi_package_as_complex() -> None:
+    from soothe.sloop.intention.prompts import INTAKE_PASS2_SYSTEM_PROMPT
+
+    assert "in parallel" in INTAKE_PASS2_SYSTEM_PROMPT
+    assert "multi-package" in INTAKE_PASS2_SYSTEM_PROMPT
+    assert "soothe, daemon, cli and all clients" in INTAKE_PASS2_SYSTEM_PROMPT
+
+
 def test_clip_pass2_prior_projection_keeps_tail() -> None:
     from soothe.sloop.intention.pass2_classifier import (
         _PASS2_PRIOR_MAX_CHARS,

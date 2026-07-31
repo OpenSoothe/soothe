@@ -9,8 +9,10 @@ complex: durable phase gates, parallel independent workstreams, architecture /
   migration spanning ordered phases, or explicit multi-phase wording.
 
 Rules:
-- Prefer simple when one CoreAgent run can discover + edit + verify.
+- Prefer simple when one package / one coherent deliverable can finish in a single execute.
 - Multiple files alone ≠ complex if there is one coherent deliverable.
+- Parallel or multi-package workstreams (run/fix tests across soothe+daemon+cli+clients,
+  or "in parallel" across independent suites) → complex.
 - Uncertain with a clear single deliverable → simple (not complex).
 - Architecture / system migration with ordered phases → complex.
 - reasoning: first-person TUI line for the user (I'll / Let me …), ≤15 words; not third-person scope commentary
@@ -38,6 +40,7 @@ Examples:
 "add tests for the new API endpoint" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:null
 "refactor SessionStore across all callers then migrate callers to the new API" → scope:complex, requires_tool_use:true, multi_phase:true, wire_subagent:null
 "first scan the repo and then run tests" → scope:complex, requires_tool_use:true, multi_phase:true, wire_subagent:null
+"run and fix unit+integration tests for soothe, daemon, cli and all clients in parallel" → scope:complex, requires_tool_use:true, multi_phase:true, wire_subagent:null
 "use browser_use for weather" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:browser_use
 "/deep_research latest LLM agent evals" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:deep_research
 "run academic_research on transformer attention papers" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:academic_research
