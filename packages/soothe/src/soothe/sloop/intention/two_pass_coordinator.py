@@ -20,7 +20,7 @@ from .models import (
     ResponseLanguage,
     derive_task_complexity_from_intake,
 )
-from .pass1_classifier import IntakePass1Classifier
+from .pass1_classifier import IntakePass1Classifier, build_pass1_task_fallback
 from .pass2_classifier import IntakePass2Classifier
 
 if TYPE_CHECKING:
@@ -286,13 +286,7 @@ def _apply_low_confidence_fail_safe(pass1_result: IntakePass1LLMResult) -> Intak
     """Low-confidence social verdicts fail-safe to task (Pass 2 runs)."""
     if not pass1_result.is_task and pass1_result.confidence == IntakePass1Confidence.LOW:
         logger.info("Pass1 low-confidence social verdict overridden to task (fail-safe)")
-        return pass1_result.model_copy(
-            update={
-                "is_task": True,
-                "social_response": None,
-                "reasoning": "Low confidence fail-safe to task",
-            }
-        )
+        return build_pass1_task_fallback(response_language=pass1_result.response_language)
     return pass1_result
 
 

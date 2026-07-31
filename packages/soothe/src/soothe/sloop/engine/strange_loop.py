@@ -23,6 +23,7 @@ from soothe.sloop.intention.models import (
     build_loop_routing_classification,
     normalize_response_language,
 )
+from soothe.sloop.intention.pass1_classifier import build_pass1_task_fallback
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.state.schemas import (
     AgentDecision,
@@ -354,11 +355,8 @@ class StrangeLoop:
                         "Pass1 pre-graph classification failed (%s); continuing as task",
                         type(exc).__name__,
                     )
-                    pass1_result = IntakePass1LLMResult(
-                        is_task=True,
-                        confidence=IntakePass1Confidence.LOW,
-                        social_response=None,
-                        reasoning="Pre-graph Pass1 error fail-safe",
+                    pass1_result = build_pass1_task_fallback(
+                        response_language=prior_language,
                     )
                     logger.info(
                         "Pass1 reasoning (is_task=True confidence=%s): %s",
@@ -642,10 +640,15 @@ class StrangeLoop:
             from soothe.sloop.state.resume_topic import schedule_resume_topic_persistence
 
             if not clarification_answer:
+                # Fail-safe prose describes the fallback, not the goal — let the
+                # resume topic fall back to the user's own words instead.
+                resume_reasoning = (
+                    None if pass1_result is None or pass1_result.fallback else pass1_reasoning_text
+                )
                 schedule_resume_topic_persistence(
                     config=self.config,
                     loop_id=state_manager.loop_id,
-                    pass1_reasoning=pass1_reasoning_text or None,
+                    pass1_reasoning=resume_reasoning or None,
                     goal_text=resolve_user_request(state),
                     is_first_loop_goal=checkpoint.total_goals_completed == 0,
                 )

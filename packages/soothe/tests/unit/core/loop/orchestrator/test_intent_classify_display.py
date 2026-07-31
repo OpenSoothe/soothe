@@ -7,6 +7,7 @@ from soothe.sloop.intention.models import (
     IntentClassification,
     TaskComplexity,
 )
+from soothe.sloop.intention.pass1_classifier import PASS1_FALLBACK_REASONING
 from soothe.sloop.stages.preprocess.intake import (
     INTENT_CLASSIFY_STATUS_LABEL,
     intake_reasoning_event,
@@ -70,11 +71,18 @@ def test_intent_pass_reasoning_events_skips_empty_reasoning() -> None:
     assert intent_pass_reasoning_events(intent, pass1_reasoning="") == []
 
 
-def test_intake_reasoning_event_skips_fail_safe_placeholders() -> None:
-    assert not is_displayable_intake_reasoning("Pre-graph Pass1 error fail-safe")
-    assert intake_reasoning_event("Pre-graph Pass1 error fail-safe") is None
+def test_intake_reasoning_event_skips_structural_bypass_markers() -> None:
+    assert not is_displayable_intake_reasoning("Loop-control phrase; resume via checkpoint")
     assert intake_reasoning_event("Loop-control phrase; resume via checkpoint") is None
     assert intake_reasoning_event("Work request detected.") is not None
+
+
+def test_intake_reasoning_event_displays_fail_safe_prose() -> None:
+    """Fail-safe verdicts are non-blocking, so their prose reaches the TUI card."""
+    assert is_displayable_intake_reasoning(PASS1_FALLBACK_REASONING)
+    event = intake_reasoning_event(PASS1_FALLBACK_REASONING)
+    assert event is not None
+    assert event[1]["reasoning"] == PASS1_FALLBACK_REASONING
 
 
 def test_intent_classify_status_label_is_stable() -> None:

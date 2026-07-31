@@ -25,11 +25,9 @@ logger = logging.getLogger(__name__)
 
 INTENT_CLASSIFY_STATUS_LABEL = "Interpreting goal"
 
-# Structural fail-safe / bypass strings — not LLM prose for CognitionReasonMessage.
-_NON_DISPLAYABLE_INTAKE_REASONING_PREFIXES: tuple[str, ...] = (
-    "Pre-graph Pass1 error fail-safe",
-    "Loop-control phrase;",
-)
+# Structural bypass markers — not LLM prose for CognitionReasonMessage. Fail-safe
+# verdicts are not listed here: they carry user-facing prose and do display.
+_NON_DISPLAYABLE_INTAKE_REASONING_PREFIXES: tuple[str, ...] = ("Loop-control phrase;",)
 
 
 def _apply_intent_to_loop_state(

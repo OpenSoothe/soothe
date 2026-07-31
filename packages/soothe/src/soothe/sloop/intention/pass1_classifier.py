@@ -45,6 +45,36 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Shown on the TUI cognition card when Pass 1 fails, so it must read as plain
+# first-person prose — never an exception name or other internal detail.
+PASS1_FALLBACK_REASONING = "Let me treat this as a work request and plan it out."
+
+
+def build_pass1_task_fallback(
+    *,
+    response_language: ResponseLanguage | None = None,
+) -> IntakePass1LLMResult:
+    """Fail-safe Pass 1 verdict: treat the input as a task so Pass 2 still runs.
+
+    ``reasoning`` is user-facing prose because it reaches the TUI cognition card.
+    The underlying error stays in the logs.
+
+    Args:
+        response_language: Language carried over from the prior turn, when known.
+
+    Returns:
+        Low-confidence task result flagged as a fallback.
+    """
+    return IntakePass1LLMResult(
+        is_task=True,
+        confidence=IntakePass1Confidence.LOW,
+        social_response=None,
+        social_kind=IntakePass1SocialKind.OTHER,
+        response_language=response_language or ResponseLanguage.OTHER,
+        reasoning=PASS1_FALLBACK_REASONING,
+        fallback=True,
+    )
+
 
 def _log_pass1_result(result: IntakePass1LLMResult) -> None:
     """Log Pass 1 reasoning at info for log-file visibility (IG-554)."""
@@ -278,13 +308,7 @@ class IntakePass1Classifier:
         """Fail-safe: treat as task so Pass 2 runs."""
         reason = type(error_context).__name__ if error_context else "no_model"
         logger.debug("Pass1 fallback to task (%s)", reason)
-        return IntakePass1LLMResult(
-            is_task=True,
-            confidence=IntakePass1Confidence.LOW,
-            social_response=None,
-            social_kind=IntakePass1SocialKind.OTHER,
-            reasoning=f"Fail-safe: {reason}",
-        )
+        return build_pass1_task_fallback()
 
     def _build_invoke_config(
         self,
@@ -327,4 +351,8 @@ class IntakePass1Classifier:
         return {"metadata": metadata}
 
 
-__all__ = ["IntakePass1Classifier"]
+__all__ = [
+    "PASS1_FALLBACK_REASONING",
+    "IntakePass1Classifier",
+    "build_pass1_task_fallback",
+]

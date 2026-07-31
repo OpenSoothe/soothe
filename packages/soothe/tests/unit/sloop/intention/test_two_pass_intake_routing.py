@@ -21,6 +21,7 @@ from soothe.sloop.intention import (
     TaskComplexity,
     TwoPassIntakeCoordinator,
 )
+from soothe.sloop.intention.pass1_classifier import PASS1_FALLBACK_REASONING
 from soothe.sloop.orchestrator.routing import route_by_intent
 
 # -- Test fixtures ----------------------------------------------------------
@@ -294,6 +295,9 @@ async def test_low_confidence_social_overridden_to_task() -> None:
 
     assert result.is_task is True
     assert result.intake_label == IntakeLabel.SIMPLE
+    assert result._pass1_result.fallback is True
+    assert result.intent_classification is not None
+    assert result.intent_classification.pass1_reasoning == PASS1_FALLBACK_REASONING
     coordinator._pass2_classifier.classify.assert_awaited_once()
 
 

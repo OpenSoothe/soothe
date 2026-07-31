@@ -16,8 +16,10 @@ CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Annotated
 
 from pydantic import BaseModel, Field
+from pydantic.json_schema import SkipJsonSchema
 from soothe_sdk.intention.models import RoutingClassification, TaskComplexity
 
 
@@ -198,6 +200,8 @@ class IntakePass1LLMResult(BaseModel):
         confidence: High/medium/low confidence in the classification.
         social_response: Direct reply when is_task=False (required for chitchat path).
         reasoning: Brief reasoning (≤15 words).
+        fallback: True when the result came from a fail-safe, not the LLM. Set
+            internally only; never part of the wire schema sent to the model.
     """
 
     is_task: bool = Field(
@@ -229,6 +233,12 @@ class IntakePass1LLMResult(BaseModel):
     )
     reasoning: str = Field(
         description="Brief reasoning for the classification (≤15 words)",
+    )
+    # Internal only: omitted from wire schema and model_dump so the LLM never sees it.
+    fallback: Annotated[bool, SkipJsonSchema()] = Field(
+        default=False,
+        exclude=True,
+        description="Internal: result came from a fail-safe rather than the LLM",
     )
 
 

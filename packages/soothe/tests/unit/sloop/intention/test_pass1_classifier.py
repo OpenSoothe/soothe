@@ -9,9 +9,11 @@ import pytest
 
 from soothe.sloop.intention.models import IntakePass1Confidence, IntakePass1LLMResult
 from soothe.sloop.intention.pass1_classifier import (
+    PASS1_FALLBACK_REASONING,
     IntakePass1Classifier,
     _log_pass1_result,
 )
+from soothe.sloop.intention.pass1_social_response import pass1_json_schema
 
 # -- Helpers ---------------------------------------------------------------
 
@@ -149,6 +151,39 @@ async def test_no_model_returns_task() -> None:
     result = await classifier.classify("any query")
     assert result.is_task is True
     assert result.confidence == IntakePass1Confidence.LOW
+
+
+async def test_fallback_reasoning_is_user_facing_prose() -> None:
+    """Fail-safe reasoning reaches the TUI, so it must not name the exception."""
+    mock_model = MagicMock()
+    mock_model.ainvoke = AsyncMock(side_effect=RuntimeError("boom"))
+    classifier = IntakePass1Classifier(model=mock_model)
+    result = await classifier.classify("any query")
+    assert result.reasoning == PASS1_FALLBACK_REASONING
+    assert "Error" not in result.reasoning
+    assert "RuntimeError" not in result.reasoning
+
+
+async def test_fallback_is_flagged_but_llm_result_is_not() -> None:
+    """The ``fallback`` flag distinguishes fail-safe verdicts from real ones."""
+    mock_model = MagicMock()
+    mock_model.ainvoke = AsyncMock(side_effect=RuntimeError("boom"))
+    assert (await IntakePass1Classifier(model=mock_model).classify("q")).fallback is True
+
+    classifier = create_pass1_classifier_with_result(
+        is_task=True,
+        confidence=IntakePass1Confidence.HIGH,
+        reasoning="Work request detected.",
+    )
+    assert (await classifier.classify("fix the bug")).fallback is False
+
+
+def test_fallback_flag_is_not_exposed_to_the_model() -> None:
+    """``fallback`` is internal state; the LLM must never be asked to produce it."""
+    schema = pass1_json_schema()
+    assert "fallback" not in schema.get("properties", {})
+    assert "fallback" not in schema.get("required", [])
+    assert "fallback" not in IntakePass1LLMResult.model_json_schema().get("properties", {})
 
 
 async def test_llm_error_fails_safe_to_task() -> None:
