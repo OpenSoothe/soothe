@@ -231,7 +231,12 @@ class CognitionGoalTreeMessage(Vertical):
         )
 
     def _goal_footer_styled_content(self) -> Content:
-        """Footer content for loop finished / interrupted (parity with step/tool status lines)."""
+        """Footer content for loop finished / interrupted (parity with step/tool status lines).
+
+        The ``done`` (success) footer shares the title line's de-emphasized
+        ``SECONDARY_TEXT_STYLE`` so the completion status blends with the
+        "Orchestrate ..." header instead of using the cognition accent.
+        """
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
@@ -240,11 +245,11 @@ class CognitionGoalTreeMessage(Vertical):
         plain = self._footer_plain
         if self._footer_tone == "success":
             mark = get_glyphs().checkmark
-            return Content.styled(f"{gutter}{mark} {plain}", colors.cognition)
+            return Content.styled(f"{gutter}{mark} {plain}", theme.SECONDARY_TEXT_STYLE)
         if self._footer_tone == "error":
             mark = get_glyphs().error
             return Content.styled(f"{gutter}{mark} {plain}", colors.error)
-        return Content.styled(f"{gutter}{plain}", "dim")
+        return Content.styled(f"{gutter}{plain}", theme.SECONDARY_TEXT_STYLE)
 
     def loop_elapsed_label(self) -> str | None:
         """Wall-clock elapsed while the goal loop is open, for the plan panel title."""
