@@ -2,8 +2,7 @@
 
 IG-476: Also handles fresh-loop bypass where bounded_evidence_gather sets synthetic assessment.
 RFC-630: Also handles the ``simple`` intake branch (lightweight plan, synthetic assessment).
-IG-555: Guardrail rejects undersized plans for multi_phase complex at iter=0.
-IG-654: Non-phased complex may use a single CoreAgent execute step.
+IG-654: Complex goals may use a single CoreAgent execute step.
 """
 
 from __future__ import annotations
@@ -11,17 +10,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.sloop.cognition.plan_step_safety import (
-    MAX_UNDERSIZED_PLAN_REPLANS,
-    multi_phase_from_state,
-    plan_has_minimum_steps_for_intake,
-)
 from soothe.sloop.goal_text import resolve_planning_goal
 from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
-from soothe.sloop.state.schemas import StatusAssessment
 from soothe.sloop.utils.loop_reason_display import is_displayable_plan_reasoning
 
 logger = logging.getLogger(__name__)
@@ -104,49 +97,6 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     await emit_plan_phase_status(ctx, label=_PLAN_GENERATE_STATUS_LABEL)
 
     ctx.scratch.plan_result = plan_result
-
-    # IG-555 / IG-654: Undersized only when multi_phase complex at iter=0
-    if intake_label == IntakeLabel.COMPLEX and state.iteration == 0:
-        if not plan_has_minimum_steps_for_intake(
-            plan_result.decision,
-            intake_label,
-            state.iteration,
-            treat_missing_as_undersized=False,
-            multi_phase=multi_phase_from_state(state),
-        ):
-            step_count = len(plan_result.decision.steps) if plan_result.decision else 0
-            if ctx.scratch.undersized_plan_replan_attempts >= MAX_UNDERSIZED_PLAN_REPLANS:
-                logger.error(
-                    "[PlanGenerate] Undersized plan (%d step) persists after %d replans; aborting",
-                    step_count,
-                    ctx.scratch.undersized_plan_replan_attempts,
-                )
-                await ctx.emit(
-                    "fatal_error",
-                    {
-                        "error": "Plan remained undersized for multi-phase complex goal after replan attempts",
-                        "step_id": "",
-                    },
-                )
-                return _PLAN_GENERATE_FATAL
-
-            logger.warning(
-                "[PlanGenerate] Undersized plan (%d step) for multi_phase complex at iter=0; "
-                "forcing replan with expanded scope",
-                step_count,
-            )
-            ctx.scratch.undersized_plan_replan_attempts += 1
-            ctx.scratch.plan_assessment = StatusAssessment(
-                status="continue",
-                goal_progress="low",
-                assessment_reasoning="Plan undersized for multi-phase complex goal; expanding scope.",
-                require_goal_completion=False,
-            )
-            ctx.scratch.plan_result = None
-            # Keep approved-plan grounding for the forced replan.
-            return {"assess_route": "continue_generate"}
-
-    ctx.scratch.undersized_plan_replan_attempts = 0
 
     plan_reasoning = (plan_result.plan_reasoning or "").strip()
     if is_displayable_plan_reasoning(plan_reasoning):

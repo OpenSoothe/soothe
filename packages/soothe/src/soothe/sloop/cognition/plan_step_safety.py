@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 from soothe.config.models import PlanSafetyRulesConfig
 from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.state.schemas import (
-    AgentDecision,
     GoalComponentStatus,
     PlanGapAnalysis,
     StatusAssessment,
@@ -18,10 +17,6 @@ from soothe.sloop.state.schemas import (
 
 if TYPE_CHECKING:
     from soothe.sloop.state.schemas import LoopState
-
-# IG-555 / IG-654: max plan_generate retries when multi_phase complex iter=0
-# plans stay undersized (non-phased complex may use a single CoreAgent step).
-MAX_UNDERSIZED_PLAN_REPLANS = 2
 
 _DEFAULT_PLAN_SAFETY_RULES = PlanSafetyRulesConfig()
 _PROGRESS_BUCKETS: tuple[str, ...] = ("none", "low", "medium", "high", "complete")
@@ -56,41 +51,6 @@ def intake_label_from_state(state: LoopState) -> IntakeLabel | None:
         except ValueError:
             return None
     return None
-
-
-def plan_has_minimum_steps_for_intake(
-    decision: AgentDecision | None,
-    intake_label: IntakeLabel | None,
-    iteration: int,
-    *,
-    treat_missing_as_undersized: bool = True,
-    multi_phase: bool | None = False,
-) -> bool:
-    """Return True when a plan satisfies the multi_phase complex minimum step count.
-
-    For ``multi_phase`` complex goals at iter=0, require ≥2 steps. Non-phased
-    complex work may finish in a single CoreAgent execute (IG-654).
-    """
-    if intake_label != IntakeLabel.COMPLEX:
-        return True
-    if iteration > 0:
-        return True
-    if not multi_phase:
-        return True
-    if decision is None:
-        return not treat_missing_as_undersized
-    steps = getattr(decision, "steps", None)
-    if not steps:
-        return not treat_missing_as_undersized
-    return len(steps) >= 2
-
-
-def multi_phase_from_state(state: LoopState) -> bool:
-    """Return Pass 2 ``multi_phase`` from loop intent, defaulting to False."""
-    intent = state.intent
-    if intent is None:
-        return False
-    return bool(getattr(intent, "multi_phase", False))
 
 
 def simple_intake_should_force_done(

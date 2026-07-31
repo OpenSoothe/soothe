@@ -25,7 +25,6 @@ class LoopPhaseScratch:
     plan_assessment: StatusAssessment | None = None
     plan_gap: PlanGapAnalysis | None = None
     decision: AgentDecision | None = None
-    undersized_plan_replan_attempts: int = 0
     iteration_perf_start: float | None = None
     step_results: list[Any] = field(default_factory=list)
     # RFC-633 / IG-658: intake planner *subagent* review gate (not StrangeLoop plan_*)

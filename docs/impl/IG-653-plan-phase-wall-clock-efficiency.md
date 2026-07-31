@@ -30,8 +30,8 @@ Gap+assess often dominate or match generate. Fresh iter=0 already skips both
    `plan_generate_model_role=think` (unchanged for plan quality).
 3. Wire a dedicated gap model through `resolve_planner` → `LLMPlanner`.
 
-Existing assess/generate guardrails (fresh-loop skip, terminal gates, undersized
-replan, stuck detection) still protect continue/done decisions.
+Existing assess/generate guardrails (fresh-loop skip, terminal gates, stuck
+detection) still protect continue/done decisions.
 
 ## Files
 

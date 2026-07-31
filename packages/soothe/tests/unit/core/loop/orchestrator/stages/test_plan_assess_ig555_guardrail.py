@@ -125,7 +125,8 @@ def _two_step_decision() -> AgentDecision:
 
 
 @pytest.mark.asyncio
-async def test_complex_iter0_rejects_complete_with_undersized_plan() -> None:
+async def test_complex_iter0_rejects_complete_with_one_step_plan() -> None:
+    """Blanket anti-anchoring: complex iter=0 with no step_results rejects terminal done."""
     ctx = _make_ctx(current_decision=_one_step_decision())
     result = await node_plan_assess(ctx, {})
     assert result.get("assess_route") == "continue_generate"

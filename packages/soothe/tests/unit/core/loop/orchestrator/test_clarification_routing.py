@@ -30,11 +30,11 @@ def test_route_after_plan_short_circuits_on_pending_clarification() -> None:
     assert route_after_plan({"pending_clarification": {"questions": ["q"]}}) == "await_user"
 
 
-def test_route_after_plan_loops_on_undersized_replan() -> None:
+def test_route_after_plan_loops_on_continue_generate() -> None:
     assert route_after_plan({"assess_route": "continue_generate"}) == "generate_plan"
 
 
-def test_route_after_plan_fatal_exits_before_undersized_replan() -> None:
+def test_route_after_plan_fatal_exits_before_continue_generate() -> None:
     assert (
         route_after_plan({"last_outcome": "fatal", "assess_route": "continue_generate"})
         == "commit_plan"

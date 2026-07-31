@@ -4,8 +4,8 @@ RFC-226: iter=0 continuation goals coordinate intake complexity with optional
 ``assess_continuation`` for trivial follow-ups. Simple/complex intake skips the
 discriminator and routes to ``plan_generate`` (or the evidence-gather spine).
 
-IG-555: Structural guardrail rejects undersized plans for multi_phase complex at iter=0.
-IG-654: Non-phased complex may use a single CoreAgent execute step.
+IG-555: Reject terminal done at complex iter=0 before any step results (anti-anchoring).
+IG-654: Complex goals may use a single CoreAgent execute step.
 """
 
 from __future__ import annotations
@@ -16,9 +16,7 @@ from typing import Any, Literal
 
 from soothe.sloop.cognition.plan_step_safety import (
     intake_label_from_state,
-    multi_phase_from_state,
     no_new_tool_evidence_recently,
-    plan_has_minimum_steps_for_intake,
     terminal_assess_may_complete,
 )
 from soothe.sloop.engine.continuation_context import (
@@ -341,27 +339,13 @@ def _downgrade_rejected_terminal_assessment(assessment: StatusAssessment) -> Sta
 
 def _reject_ig555_premature_complete(
     state: LoopState,
-    assessment: StatusAssessment,
     intake_label: IntakeLabel | None,
 ) -> bool:
-    """IG-555 / IG-654 iter=0 complex guards. Returns True when routing must continue_generate."""
+    """IG-555 iter=0 complex anti-anchoring. Returns True when routing must continue_generate."""
     if state.iteration == 0 and intake_label == IntakeLabel.COMPLEX and not state.step_results:
         logger.warning(
             "[Plan] Reject terminal assess for complex intake at iter=0 "
             "(prior completion anchoring); forcing replan"
-        )
-        return True
-
-    if not plan_has_minimum_steps_for_intake(
-        state.current_decision,
-        intake_label,
-        state.iteration,
-        multi_phase=multi_phase_from_state(state),
-    ):
-        logger.warning(
-            "[Plan] Reject terminal assess: undersized plan (%d step) "
-            "for multi_phase complex at iter=0, forcing replan",
-            len(state.current_decision.steps) if state.current_decision else 0,
         )
         return True
     return False
@@ -383,7 +367,7 @@ async def _route_goal_completion_if_terminal(
     intake_label = intake_label_from_state(state)
     force_goal_completion = False
 
-    if _reject_ig555_premature_complete(state, assessment, intake_label):
+    if _reject_ig555_premature_complete(state, intake_label):
         ctx.scratch.plan_assessment = _downgrade_rejected_terminal_assessment(assessment)
         return {"assess_route": "continue_generate"}
 

@@ -137,7 +137,7 @@ def route_after_plan(state: dict[str, Any]) -> str:
     if state.get("plan_route") == PLAN_ROUTE_GOAL_DONE:
         return FINALIZE
     if state.get("assess_route") == "continue_generate":
-        logger.info("[routing] route_after_plan → generate_plan (undersized replan)")
+        logger.info("[routing] route_after_plan → generate_plan (continue_generate)")
         return GENERATE_PLAN
     return COMMIT_PLAN
 

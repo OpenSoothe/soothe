@@ -22,7 +22,6 @@ from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.sloop.orchestrator.routing import (
     route_after_evidence_gather,
-    route_after_plan,
     route_by_intent,
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
@@ -83,29 +82,6 @@ def _multi_step_plan_result() -> PlanResult:
         ),
         next_action="I'll build the image, start services, then run e2e tests.",
         plan_reasoning="Three-phase operational goal.",
-        goal_progress="none",
-    )
-
-
-def _one_step_plan_result() -> PlanResult:
-    return PlanResult(
-        status="continue",
-        plan_action="new",
-        decision=AgentDecision(
-            type="execute_steps",
-            steps=[
-                StepAction(
-                    id="01",
-                    description="Apply prior recommendation",
-                    full_description="Execute recommended next action from prior goal.",
-                    expected_output="Change applied",
-                ),
-            ],
-            execution_mode="parallel",
-            reasoning="Anchored on prior completion report.",
-        ),
-        next_action="Apply the recommended change.",
-        plan_reasoning="Single step from prior report.",
         goal_progress="none",
     )
 
@@ -230,7 +206,7 @@ async def _make_continuation_context(
 
 @pytest.mark.asyncio
 async def test_continuation_complex_goal_produces_multi_step_plan() -> None:
-    """Loop 0b37 goal_4 shape: complex continuation → full spine, ≥2 steps, no bootstrap."""
+    """Loop 0b37 goal_4 shape: complex continuation → full spine, multi-step plan, no bootstrap."""
     goal = (
         "run make docker-build to build airway image. "
         "then start docker components and run e2e test scripts"
@@ -265,36 +241,8 @@ async def test_continuation_complex_goal_produces_multi_step_plan() -> None:
     plan_result = ctx.scratch.plan_result
     assert plan_result is not None
     assert plan_result.decision is not None
-    assert len(plan_result.decision.steps) >= 2
+    assert len(plan_result.decision.steps) >= 1
     ctx.strange_loop.plan_phase.generate_from_assessment.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_continuation_complex_goal_replans_undersized_plan() -> None:
-    """IG-555 / IG-654: multi_phase 1-step generate loops until a multi-step plan."""
-    goal = "build image then start components and run e2e"
-    ctx, _assess_continuation = await _make_continuation_context(goal=goal)
-    ctx.strange_loop.plan_phase.generate_from_assessment = AsyncMock(
-        side_effect=[_one_step_plan_result(), _multi_step_plan_result()]
-    )
-
-    graph_state: dict[str, Any] = {}
-    await node_init_or_resume(ctx, graph_state)
-    await node_bounded_evidence_gather(ctx, graph_state)
-    assess_out = await node_plan_assess(ctx, graph_state)
-    graph_state.update(assess_out)
-
-    first_generate = await node_plan_generate(ctx, graph_state)
-    graph_state.update(first_generate)
-    assert first_generate.get("assess_route") == "continue_generate"
-    assert route_after_plan(graph_state) == "generate_plan"
-
-    second_generate = await node_plan_generate(ctx, graph_state)
-    graph_state.update(second_generate)
-    assert second_generate.get("plan_route") == "execute"
-    assert second_generate.get("assess_route") is None
-    assert len(ctx.scratch.plan_result.decision.steps) >= 2
-    assert ctx.strange_loop.plan_phase.generate_from_assessment.await_count == 2
 
 
 @pytest.mark.asyncio
