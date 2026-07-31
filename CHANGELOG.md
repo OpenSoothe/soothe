@@ -5,6 +5,39 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.12] - 2026-07-31
+
+### Fixed
+- Plan approve / clarification resume no longer silently no-ops when CoreAgent
+  or intake specialists advance the shared checkpointer past a parked
+  `await_user` interrupt. StrangeLoop checkpoints use an isolated
+  `thread_id={loop_id}__strange_loop`, intake-only invokes get their own
+  thread, and orphaned pending clarifications recover via `Command(goto=…)`
+  instead of a no-op `Command(resume=…)`.
+- StrangeLoop graph compile now materializes CoreAgent and attaches a durable
+  checkpointer before parking on planner review / `ask_user` / `await_user`,
+  so `Command(resume=…)` can resume instead of being a no-op.
+- Card broadcasts stamp `turn_id` from the active turn generation so the CLI
+  no longer drops mid-turn frames; plan gap analysis hardens wire salvage,
+  prefers `json_schema`, and soft-fails on timeout instead of thrashing for
+  minutes.
+- Planner structured output prefers `json_schema` methods and clips Pass 2
+  prior/reasoning projection to reduce function-call thrash.
+
+### Added
+- CLI `--plan-panel` / `--no-plan-panel` flag to control whether the in-flow
+  plan panel is expanded on TUI launch (Ctrl+t still toggles afterward).
+
+### Changed
+- TUI plan panel header label is now `Orchestrate`
+- Orphan wired SubAgent cards reuse the cognition step widget (header meta /
+  activity tree / footers) instead of a separate card surface
+- Bump client submodule pins (python 1.0.9, typescript 0.5.6, rust 0.3.6,
+  go 0.4.12)
+- Raise daemon `soothe` floor pin to `>=0.9.12`
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.11...v0.9.12
+
 ## [v0.9.11] - 2026-07-31
 
 ### Fixed
