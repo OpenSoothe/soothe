@@ -9,12 +9,13 @@ Requires PostgreSQL at ``127.0.0.1:6432`` (docker-compose soothe-pgvector) or
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import uuid
 
 import pytest
 import pytest_asyncio
-from support_config import config_with_router_profile
+from support_config import config_with_router_profile, reset_pool_singletons
 
 from soothe.config import SootheConfig
 from soothe.runner import SootheRunner
@@ -23,6 +24,8 @@ from soothe.sloop.checkpoints.shared_pool import SharedPostgreSQLPool
 from soothe.sloop.state.sloop_manager import StrangeLoopStateManager
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_postgresql]
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_BASE_DSN = "postgresql://postgres:postgres@127.0.0.1:6432"
 
@@ -121,23 +124,20 @@ async def pg_config() -> SootheConfig:
 
 @pytest_asyncio.fixture(autouse=True)
 async def _reset_pool_singletons() -> None:
-    """Isolate singleton state between integration tests."""
-    import soothe.runner.resolver.shared_checkpointer_pool as cp_mod
-    import soothe.sloop.checkpoints.shared_pool as agent_mod
+    """Isolate singleton state between integration tests.
 
-    await SharedPostgreSQLPool.close_shared_instance()
-    await SharedCheckpointerPool.close_shared_instance()
-    agent_mod._shared_pool = None
-    cp_mod._shared_checkpointer_pool = None
-    cp_mod._checkpointer_setup_done = False
-    cp_mod._setup_waiter = None
+    Resets the ``PostgresPoolRegistry`` singleton and nullifies all shared pool
+    references so each test creates fresh pools. Pools are NOT closed —
+    ``AsyncConnectionPool.close()`` can hang indefinitely on dead sockets
+    (psycopg C extension ignores asyncio cancellation). Orphaned pools are
+    abandoned; their connections are reaped by Postgres or GC'd on process exit.
+    """
+    import soothe.sloop.checkpoints.shared_pool as agent_mod
+    from soothe.persistence.postgres_pool_registry import PostgresPoolRegistry
+
+    reset_pool_singletons(agent_mod, PostgresPoolRegistry)
     yield
-    await SharedPostgreSQLPool.close_shared_instance()
-    await SharedCheckpointerPool.close_shared_instance()
-    agent_mod._shared_pool = None
-    cp_mod._shared_checkpointer_pool = None
-    cp_mod._checkpointer_setup_done = False
-    cp_mod._setup_waiter = None
+    reset_pool_singletons(agent_mod, PostgresPoolRegistry)
 
 
 @pytest.mark.asyncio

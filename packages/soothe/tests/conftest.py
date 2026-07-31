@@ -58,6 +58,42 @@ def pytest_collection_modifyitems(config, items) -> None:
             item.add_marker(skip)
 
 
+# Track the session exit status so the force-exit timer can propagate it.
+_soothe_exit_status = 0
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Record the session exit status for the force-exit timer."""
+    global _soothe_exit_status
+    _soothe_exit_status = exitstatus
+
+
+def pytest_runtest_teardown(item, nextitem):
+    """Start a force-exit timer after the last test's function-scoped teardown.
+
+    The session-scoped asyncio event loop teardown (which runs after the last
+    test's function-scoped fixtures) can hang on orphaned psycopg pool worker
+    threads. Starting the timer here ensures it runs BEFORE the session-scoped
+    event loop teardown. The 5s delay gives pytest time to flush buffered test
+    output; the timer then force-exits to break the hang.
+    """
+    if nextitem is None:
+        import os
+        import sys
+        import threading
+        import time
+
+        def _delayed_exit() -> None:
+            time.sleep(5.0)
+            # Flush any buffered output so test results are visible.
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os._exit(_soothe_exit_status if _soothe_exit_status else 0)
+
+        t = threading.Thread(target=_delayed_exit, daemon=True)
+        t.start()
+
+
 @pytest.fixture(autouse=True)
 def _close_sqlite_runtime_registry():
     """Session backstop: release every ``SqliteStoreRuntime`` after each test.

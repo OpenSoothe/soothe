@@ -279,7 +279,9 @@ class StrangeLoopStateManager:
         )
 
         self._checkpoint = checkpoint
-        await self._save_checkpoint_to_db(checkpoint)
+        # Durable flush: the initial checkpoint must be persisted before any
+        # subsequent load() from another manager instance can find it.
+        await self._save_checkpoint_to_db(checkpoint, durable=True)
 
         logger.info(
             "Initialized loop %s on thread %s (status: idle, schema: 5.0)",
@@ -550,12 +552,23 @@ class StrangeLoopStateManager:
         checkpoint: StrangeLoopCheckpoint,
         *,
         include_goal_history: bool = False,
+        durable: bool = False,
     ) -> None:
         """Save checkpoint to database (IG-055: PostgreSQL or SQLite).
 
         IG-258 Phase 2: Use single writer connection for SQLite consistency.
         IG-055: PostgreSQL uses connection pool for async operations.
         RFC-803 Phase 6: Fire-and-forget async writes with periodic flush.
+
+        Args:
+            checkpoint: Checkpoint to persist.
+            include_goal_history: When True, write full checkpoint (goal_history
+                included). Use on goal-start boundaries; default index-only is
+                insufficient for reload merge.
+            durable: When True, flush the write synchronously before returning so
+                subsequent ``load()`` calls from any manager can read it. Use for
+                initial checkpoint creation (``initialize``) and other writes
+                that must be immediately visible across manager instances.
         """
         checkpoint.updated_at = datetime.now(UTC)
 
@@ -573,7 +586,7 @@ class StrangeLoopStateManager:
             await writer.submit_enqueue(
                 self.loop_id,
                 checkpoint,
-                durable=False,
+                durable=durable,
                 write_mode=write_mode,
             )
             return
@@ -600,7 +613,7 @@ class StrangeLoopStateManager:
             checkpoint,
             self._save_checkpoint_sync,
             runtime=self._sqlite_runtime,
-            durable=False,
+            durable=durable,
         )
         logger.debug(
             "Coalesced async checkpoint: loop=%s status=%s",
@@ -1173,8 +1186,8 @@ class StrangeLoopStateManager:
         # Update self
         self._checkpoint = new_checkpoint
 
-        # Persist new checkpoint
-        await self._save_checkpoint_to_db(new_checkpoint)
+        # Persist new checkpoint (durable: new loop_id must be visible to load())
+        await self._save_checkpoint_to_db(new_checkpoint, durable=True)
         await self._apply_daemon_loop_metadata(new_loop_id, inherited_metadata)
 
         logger.info(
