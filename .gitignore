@@ -200,7 +200,7 @@ cython_debug/
 # Soothe local runtime data
 .soothe/
 
-# Tool backup files (created by file editing tools)
+# Tool backup files (legacy path; current default is .soothe/backups/)
 .backups/
 
 # Large tool result cache

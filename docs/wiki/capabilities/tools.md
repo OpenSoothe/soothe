@@ -103,7 +103,7 @@ Tools are resolved at agent-build time via `resolve_tools()`, which takes tool g
 ## Gotchas and Non-Obvious Behavior
 
 - **Pagination**: `read_file` caps at ~50 lines by default — use `offset`/`limit` for large files. The agent must paginate explicitly; the tool won't auto-load entire files.
-- **Backup before deletion**: `delete_file` creates timestamped backups in a `.backups` directory before deletion — this is a safety net, not optional.
+- **Backup before deletion**: `delete_file` creates timestamped backups under workspace `.soothe/backups` before deletion — this is a safety net, not optional.
 - **Background processes**: `run_background` returns a PID immediately; the process runs as a daemon. Use `kill_process(pid)` to terminate. Long-running commands should always use background mode to avoid timeout.
 - **`requests_post` signature**: takes a JSON string with `url` and `data` keys (not separate parameters), which is non-obvious — the agent must serialize the request body as a JSON string.
 - **Deepxiv token cost**: `deepxiv_get_full_paper` can consume enormous token budgets — prefer `deepxiv_read_section` for token-efficient access to specific sections.

@@ -326,6 +326,7 @@ security:
 
 filesystem_middleware:
   backup_enabled: true
+  # null → workspace .soothe/backups (product default; overrides deepagents .backups)
   backup_dir: null
   workspace_root: null
   max_file_size_mb: 10
