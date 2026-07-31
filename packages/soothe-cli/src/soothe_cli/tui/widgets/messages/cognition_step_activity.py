@@ -692,7 +692,7 @@ class StepActivityTree:
         first_block = True
         if todo_items:
             first_block = False
-            parts.append(Content.styled(f"{section_gutter}To-do", theme.SECONDARY_TEXT_STYLE))
+            parts.append(Content.styled(f"{section_gutter}📝 To-do", theme.SECONDARY_TEXT_STYLE))
             for item in todo_items:
                 content = str(item.get("content") or "").strip()
                 if not content:
@@ -714,7 +714,7 @@ class StepActivityTree:
             if not first_block:
                 parts.append("\n")
             first_block = False
-            parts.append(Content.styled(f"{section_gutter}Tool-use", theme.SECONDARY_TEXT_STYLE))
+            parts.append(Content.styled(f"{section_gutter}🛠️ Tool-use", theme.SECONDARY_TEXT_STYLE))
 
             for task_row in index.task_delegations:
                 parts.append("\n")

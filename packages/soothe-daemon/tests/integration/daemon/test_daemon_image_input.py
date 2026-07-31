@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import contextlib
 from pathlib import Path
 from typing import Any
 
@@ -20,8 +19,10 @@ from tests.integration.daemon_fixtures import (
     await_event_type,
     await_status_state,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
     integration_llm_idle_timeout,
+    stop_daemon_safely,
 )
 from tests.integration.ws_loop_client import loop_new, subscribe_loop_stream
 
@@ -93,8 +94,7 @@ async def websocket_daemon_patched(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     try:
         yield daemon, port, vision_calls
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -128,8 +128,7 @@ async def test_websocket_input_with_image_runs_turn(
         assert vision_calls[0]["text"] == "ack"
         assert vision_calls[0]["n"] == 1
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -163,10 +162,8 @@ async def test_websocket_input_invalid_attachment_returns_error(
         # structural INVALID_REQUEST (-32600) used for malformed envelopes.
         assert err.get("code") == -32602  # INVALID_PARAMS
     finally:
-        if client.is_connected:
-            await client.close()
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await close_client_safely(client)
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -206,8 +203,7 @@ async def test_websocket_input_with_real_image_attachment(
         )
         assert vision_calls[0]["n"] == 1
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -247,5 +243,4 @@ async def test_websocket_input_with_multi_image_attachments(
         assert len(vision_calls) == 1
         assert vision_calls[0]["n"] == 2
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)

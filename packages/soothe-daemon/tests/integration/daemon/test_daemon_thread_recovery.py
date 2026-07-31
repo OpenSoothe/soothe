@@ -7,7 +7,6 @@ and basic isolation using ``loop_*`` WebSocket RPC—no legacy thread_* wire typ
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from pathlib import Path
 
 import pytest
@@ -21,8 +20,10 @@ from tests.integration.daemon_fixtures import (
     await_event_type,
     await_status_state,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
     integration_llm_idle_timeout,
+    stop_daemon_safely,
 )
 from tests.integration.ws_loop_client import (
     loop_new,
@@ -55,8 +56,7 @@ async def daemon_fixture(tmp_path: Path):
     try:
         yield daemon, ws_port, config
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -93,10 +93,10 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
                 )
 
         finally:
-            await client1.close()
+            await close_client_safely(client1)
 
     finally:
-        await daemon1.stop()
+        await stop_daemon_safely(daemon1)
 
     await asyncio.sleep(0.2)
 
@@ -135,10 +135,10 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
                 )
 
         finally:
-            await client2.close()
+            await close_client_safely(client2)
 
     finally:
-        await daemon2.stop()
+        await stop_daemon_safely(daemon2)
 
 
 @pytest.mark.asyncio
@@ -173,7 +173,7 @@ async def test_thread_recovery_missing_metadata(
         assert get_response["loop"]["loop_id"] == loop_id
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -218,7 +218,7 @@ async def test_concurrent_thread_execution(
             )
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -275,7 +275,7 @@ async def test_thread_cancellation(
             pass
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -304,4 +304,4 @@ async def test_loop_isolation_distinct_ids(
         assert gb["loop"]["loop_id"] == loop_b
 
     finally:
-        await client.close()
+        await close_client_safely(client)

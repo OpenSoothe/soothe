@@ -11,6 +11,7 @@ from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
     force_isolated_home,
+    stop_daemon_safely,
 )
 
 
@@ -40,4 +41,4 @@ async def test_enabled_config_starts_scheduling_and_monitor(tmp_path: Path) -> N
         assert monitor._verify_task is not None
         assert not monitor._verify_task.done()
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)

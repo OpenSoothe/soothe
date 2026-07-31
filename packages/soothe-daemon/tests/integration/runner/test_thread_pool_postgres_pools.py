@@ -117,6 +117,21 @@ async def _reset_singletons() -> None:
     cp_mod._setup_waiter = None
 
 
+def _cancel_loop_tasks(loop: asyncio.AbstractEventLoop) -> None:
+    """Cancel all pending tasks on ``loop`` before closing it."""
+    try:
+        pending = asyncio.all_tasks(loop)
+    except RuntimeError:
+        pending = set()
+    for task in pending:
+        task.cancel()
+    if pending:
+        try:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        except Exception:
+            pass
+
+
 def _thread_worker_init_checkpointer(config: SootheConfig) -> object:
     """Same pattern as ``thread_runner._pool_worker`` (dedicated event loop per thread)."""
     loop = asyncio.new_event_loop()
@@ -126,12 +141,19 @@ def _thread_worker_init_checkpointer(config: SootheConfig) -> object:
         runner = SootheRunner(config)
         await runner._ensure_checkpointer_initialized()
         chk = runner._checkpointer_pool
-        await runner.cleanup()
+        try:
+            await asyncio.wait_for(runner.cleanup(), timeout=30.0)
+        except TimeoutError:
+            pass
         return chk
 
     try:
         return loop.run_until_complete(_run())
+    except Exception:
+        _cancel_loop_tasks(loop)
+        raise
     finally:
+        _cancel_loop_tasks(loop)
         loop.close()
 
 
@@ -199,8 +221,12 @@ def _thread_worker_enqueue_checkpoint(config: SootheConfig) -> None:
         )
 
     try:
-        loop.run_until_complete(_run())
+        loop.run_until_complete(asyncio.wait_for(_run(), timeout=30.0))
+    except Exception:
+        _cancel_loop_tasks(loop)
+        raise
     finally:
+        _cancel_loop_tasks(loop)
         loop.close()
 
 

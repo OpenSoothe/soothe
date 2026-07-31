@@ -10,7 +10,6 @@ WebSocket is now the primary transport for bidirectional streaming.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from pathlib import Path
 
 import pytest
@@ -20,7 +19,9 @@ from soothe_daemon import SootheDaemon
 from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
+    stop_daemon_safely,
 )
 from tests.integration.ws_loop_client import loop_new, request_loop_list, subscribe_loop_stream
 
@@ -43,8 +44,7 @@ async def websocket_daemon_fixture(tmp_path: Path):
     try:
         yield daemon, ws_port, ws_port
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 # Note: test_unix_socket_permissions removed - Unix socket transport was removed
@@ -74,7 +74,7 @@ async def test_websocket_cors_validation(
         assert "loops" in response
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -101,10 +101,9 @@ async def test_message_size_limit(tmp_path: Path) -> None:
             assert loop_id
 
         finally:
-            await client.close()
+            await close_client_safely(client)
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -132,11 +131,10 @@ async def test_rate_limiting(tmp_path: Path) -> None:
                 assert "loops" in response
 
         finally:
-            await client.close()
+            await close_client_safely(client)
 
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -162,7 +160,7 @@ async def test_pid_lock_enforcement(tmp_path: Path) -> None:
             response = await request_loop_list(client1)
             assert "loops" in response
         finally:
-            await client1.close()
+            await close_client_safely(client1)
 
         daemon2 = SootheDaemon(config, daemon_config=daemon_cfg)
         try:
@@ -179,7 +177,7 @@ async def test_pid_lock_enforcement(tmp_path: Path) -> None:
                 assert "loops" in response2
 
             finally:
-                await client2.close()
+                await close_client_safely(client2)
 
         except (OSError, RuntimeError, Exception) as e:
             assert (
@@ -189,9 +187,7 @@ async def test_pid_lock_enforcement(tmp_path: Path) -> None:
             )
 
         finally:
-            with contextlib.suppress(Exception):
-                await daemon2.stop()
+            await stop_daemon_safely(daemon2)
 
     finally:
-        with contextlib.suppress(Exception):
-            await daemon1.stop()
+        await stop_daemon_safely(daemon1)

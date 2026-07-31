@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 from pathlib import Path
 
@@ -23,7 +22,9 @@ from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     await_status_state,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
+    stop_daemon_safely,
 )
 from tests.integration.ws_loop_client import loop_new, subscribe_loop_stream
 
@@ -40,8 +41,7 @@ async def websocket_daemon_llm(tmp_path: Path):
     try:
         yield daemon, port, agent_cfg
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -86,8 +86,7 @@ async def test_loop_input_rejects_response_schema_without_structured_hint(
                 return
         raise AssertionError("expected INVALID_REQUEST for response_schema with intent_hint=embed")
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -141,8 +140,7 @@ async def test_websocket_text_completion_structured_json_reply(
         # Ensure response is JSON object string, not plain prose
         json.loads(raw)
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -172,5 +170,4 @@ async def test_websocket_text_completion_plain_text_without_schema(
         with pytest.raises(json.JSONDecodeError):
             json.loads(raw)
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)

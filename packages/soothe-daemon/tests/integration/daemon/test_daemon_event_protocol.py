@@ -23,7 +23,9 @@ from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     await_event_type,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
+    stop_daemon_safely,
     unwrap_next,
 )
 from tests.integration.ws_loop_client import (
@@ -104,8 +106,7 @@ async def daemon_fixture(tmp_path: Path):
     try:
         yield daemon, ws_port
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -135,7 +136,7 @@ async def test_lifecycle_events(daemon_fixture: tuple[SootheDaemon, int]) -> Non
         assert archive_resp.get("success") is True
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -166,7 +167,7 @@ async def test_protocol_events(daemon_fixture: tuple[SootheDaemon, int]) -> None
         assert "status" in event_types
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -195,7 +196,7 @@ async def test_tool_events(daemon_fixture: tuple[SootheDaemon, int]) -> None:
         assert len(events) > 0, "Should receive events during tool execution"
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -224,7 +225,7 @@ async def test_subagent_events(daemon_fixture: tuple[SootheDaemon, int]) -> None
         assert len(events) > 0, "Should receive events during query"
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -254,7 +255,7 @@ async def test_error_events(daemon_fixture: tuple[SootheDaemon, int]) -> None:
         assert "loops" in list_response
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -289,4 +290,4 @@ async def test_event_registry_dispatch(
             assert "type" in event, "Event should have 'type' field"
 
     finally:
-        await client.close()
+        await close_client_safely(client)

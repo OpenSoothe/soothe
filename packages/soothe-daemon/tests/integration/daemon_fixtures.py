@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
+import signal
 import socket
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -608,3 +611,88 @@ def web_enabled_config(test_config: SootheConfig) -> SootheConfig:
         web_search={"enabled": True},
     )
     return test_config
+
+
+# ---------------------------------------------------------------------------
+# Safe Daemon / Client Lifecycle Helpers
+# ---------------------------------------------------------------------------
+
+_DAEMON_STOP_TIMEOUT_S = 8.0
+_CLIENT_CLOSE_TIMEOUT_S = 3.0
+_SUBPROCESS_KILL_TIMEOUT_S = 5.0
+
+
+async def stop_daemon_safely(
+    daemon: Any,
+    *,
+    timeout: float = _DAEMON_STOP_TIMEOUT_S,
+) -> None:
+    """Stop ``daemon`` with a hard timeout.
+
+    ``daemon.stop()`` can hang indefinitely when psycopg pool worker threads
+    are blocked on dead sockets (macOS ``kevent``).  This wraps the call in
+    ``asyncio.wait_for`` so the test suite is not blocked.
+
+    Does NOT cancel pending tasks on the event loop — doing so would shut
+    down shared ThreadPoolExecutors and cause ``cannot schedule new futures
+    after shutdown`` in subsequent tests under a session-scoped loop.
+    """
+    if daemon is None:
+        return
+    try:
+        await asyncio.wait_for(daemon.stop(), timeout=timeout)
+    except (TimeoutError, Exception):
+        pass
+
+
+async def close_client_safely(
+    client: Any,
+    *,
+    timeout: float = _CLIENT_CLOSE_TIMEOUT_S,
+) -> None:
+    """Close ``WebSocketClient`` with a timeout, suppressing errors.
+
+    If the daemon has already been stopped the underlying socket may be dead;
+    ``client.close()`` would hang or raise.  This bounds the close and
+    suppresses so ``finally`` blocks never mask the real test failure.
+    """
+    if client is None:
+        return
+    try:
+        await asyncio.wait_for(client.close(), timeout=timeout)
+    except (TimeoutError, Exception):
+        pass
+
+
+def stop_subprocess_daemon(
+    proc: subprocess.Popen | None,
+    *,
+    timeout: float = _SUBPROCESS_KILL_TIMEOUT_S,
+) -> None:
+    """Terminate a subprocess daemon: ``terminate → wait → kill → wait``.
+
+    Also closes ``stdout`` / ``stderr`` pipes and kills the whole process
+    group (``os.killpg``) when the subprocess was started with
+    ``start_new_session=True``.
+    """
+    if proc is None:
+        return
+    try:
+        proc.terminate()
+        proc.wait(timeout=timeout)
+    except Exception:
+        try:
+            # Process-group kill (only if started with start_new_session=True)
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+        try:
+            proc.kill()
+            proc.wait(timeout=2.0)
+        except Exception:
+            pass
+    finally:
+        for stream in (proc.stdout, proc.stderr):
+            if stream is not None:
+                with contextlib.suppress(Exception):
+                    stream.close()

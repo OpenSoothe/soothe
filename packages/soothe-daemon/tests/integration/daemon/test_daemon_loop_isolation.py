@@ -27,8 +27,10 @@ from tests.integration.daemon_fixtures import (
     await_event_type,
     await_status_state,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
     integration_llm_idle_timeout,
+    stop_daemon_safely,
     websocket_bootstrap_loop_session,
     websocket_create_loop_only,
 )
@@ -142,10 +144,10 @@ class TestLoopIsolation:
             assert loop_ids_in_client1 == {loop1}, "Client1 should only see loop1-specific events"
             assert loop_ids_in_client2 == {loop2}, "Client2 should only see loop2-specific events"
 
-            await client1.close()
-            await client2.close()
+            await close_client_safely(client1)
+            await close_client_safely(client2)
         finally:
-            await daemon.stop()
+            await stop_daemon_safely(daemon)
 
     # -------------------------------------------------------------------------
     # Test 2: Concurrent Loops - No Message Leakage
@@ -206,10 +208,10 @@ class TestLoopIsolation:
                     break
             assert leaked is None, f"client2 received loop1 event: {leaked}"
 
-            await client1.close()
-            await client2.close()
+            await close_client_safely(client1)
+            await close_client_safely(client2)
         finally:
-            await daemon.stop()
+            await stop_daemon_safely(daemon)
 
     # -------------------------------------------------------------------------
     # Test 3: Loop-Scoped Cancellation Isolation
@@ -253,10 +255,10 @@ class TestLoopIsolation:
                     client2.read_event, "idle", timeout=integration_llm_idle_timeout()
                 )
 
-            await client1.close()
-            await client2.close()
+            await close_client_safely(client1)
+            await close_client_safely(client2)
         finally:
-            await daemon.stop()
+            await stop_daemon_safely(daemon)
 
     # -------------------------------------------------------------------------
     # Test 4: Thread Checkpoint Isolation Per Loop
@@ -322,10 +324,10 @@ class TestLoopIsolation:
             assert metadata1.get("loop_id") == loop1
             assert metadata2.get("loop_id") == loop2
 
-            await client1.close()
-            await client2.close()
+            await close_client_safely(client1)
+            await close_client_safely(client2)
         finally:
-            await daemon.stop()
+            await stop_daemon_safely(daemon)
 
     # -------------------------------------------------------------------------
     # Test 5: Multiple Clients Same Loop Share Events
@@ -382,11 +384,11 @@ class TestLoopIsolation:
                 if event.get("loop_id"):
                     assert event.get("loop_id") == loop_id
 
-            await client1.close()
-            await client2.close()
+            await close_client_safely(client1)
+            await close_client_safely(client2)
             await client3.close()
         finally:
-            await daemon.stop()
+            await stop_daemon_safely(daemon)
 
     # -------------------------------------------------------------------------
     # Test 6: Loop Detach Removes Subscription
@@ -434,10 +436,10 @@ class TestLoopIsolation:
             if event.get("loop_id"):
                 assert event.get("loop_id") == loop_id
 
-            await client1.close()
-            await client2.close()
+            await close_client_safely(client1)
+            await close_client_safely(client2)
         finally:
-            await daemon.stop()
+            await stop_daemon_safely(daemon)
 
     # -------------------------------------------------------------------------
     # Test 7: Loop Reattach Replay Isolation
@@ -508,10 +510,10 @@ class TestLoopIsolation:
             # Verify client2 never receives loop1 replay events
             assert not await _received_loop_event(client2, loop1, window_s=1.0)
 
-            await client1.close()
-            await client2.close()
+            await close_client_safely(client1)
+            await close_client_safely(client2)
         finally:
-            await daemon.stop()
+            await stop_daemon_safely(daemon)
 
     # -------------------------------------------------------------------------
     # Test 8: Loop New Creates Isolated Workspace
@@ -562,9 +564,9 @@ class TestLoopIsolation:
             assert metadata1.get("thread_ids", []) == []
             assert metadata2.get("thread_ids", []) == []
 
-            await client.close()
+            await close_client_safely(client)
         finally:
-            await daemon.stop()
+            await stop_daemon_safely(daemon)
 
     # -------------------------------------------------------------------------
     # Test 9: Loop List Returns Only Owned Loops
@@ -615,10 +617,10 @@ class TestLoopIsolation:
             assert all_loops <= loops2, "Client2 should include all loops created in this test"
             assert loops1 == loops2, "Both clients should see the same loop_list snapshot"
 
-            await client1.close()
-            await client2.close()
+            await close_client_safely(client1)
+            await close_client_safely(client2)
         finally:
-            await daemon.stop()
+            await stop_daemon_safely(daemon)
 
     # -------------------------------------------------------------------------
     # Test 10: Loop Delete Isolation
@@ -663,7 +665,7 @@ class TestLoopIsolation:
             assert metadata2_after is not None, "Loop2 metadata should still be in DB"
             assert metadata2_after.get("loop_id") == loop2, "Loop2 metadata should be intact"
 
-            await client1.close()
-            await client2.close()
+            await close_client_safely(client1)
+            await close_client_safely(client2)
         finally:
-            await daemon.stop()
+            await stop_daemon_safely(daemon)

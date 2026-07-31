@@ -21,7 +21,9 @@ from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     await_event_type,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
+    stop_daemon_safely,
     unwrap_next,
 )
 
@@ -43,8 +45,7 @@ async def websocket_daemon(tmp_path: Path):
     try:
         yield daemon, port
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -76,8 +77,7 @@ async def test_websocket_transport_lifecycle_and_broadcast() -> None:
         event = await await_event_type(client.read_event, "event")
         assert event["type"] == "event"
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
         await channel.stop()
 
 
@@ -107,8 +107,7 @@ async def test_websocket_protocol_message_validation_returns_error() -> None:
         assert err.get("code") == -32600
         assert "Handshake" in err.get("message", "")
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
         await channel.stop()
 
 
@@ -137,8 +136,7 @@ async def test_websocket_daemon_rpc_endpoints(
         assert "providers" in providers
         assert isinstance(providers["providers"], (dict, list))
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -166,10 +164,8 @@ async def test_websocket_daemon_shutdown_rpc_stops_server(tmp_path: Path) -> Non
             await asyncio.sleep(0.1)
         assert daemon._running is False
     finally:
-        if client.is_connected:
-            await client.close()
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await close_client_safely(client)
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -283,8 +279,7 @@ async def test_websocket_internal_heartbeat_not_broadcast_while_query_running(
             with contextlib.suppress(asyncio.CancelledError):
                 await hold_task
         daemon._active_threads.clear()
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -316,6 +311,5 @@ async def test_websocket_auth_message_should_return_auth_response() -> None:
         event = await await_event_type(client.read_event, "auth_response")
         assert event["success"] is True
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
         await channel.stop()

@@ -30,8 +30,11 @@ from soothe_daemon import SootheDaemon
 from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
     get_base_config,
+    stop_daemon_safely,
+    stop_subprocess_daemon,
 )
 from tests.integration.test_timeouts import timeout_config_reload
 
@@ -166,7 +169,7 @@ async def daemon_with_reload(
     finally:
         with contextlib.suppress(Exception):
             daemon.disable_config_reload()
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.fixture
@@ -182,8 +185,7 @@ async def ws_client(daemon_with_reload: dict[str, Any]) -> WebSocketClient:
     try:
         yield client
     finally:
-        with contextlib.suppress(Exception):
-            await client.close()
+        await close_client_safely(client)
 
 
 # ============================================================================
@@ -373,10 +375,8 @@ async def test_cli_reload_when_disabled_returns_error(
         if "error" in response:
             assert "not_enabled" in response["error"] or "disabled" in response["error"].lower()
     finally:
-        with contextlib.suppress(Exception):
-            await client.close()
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await close_client_safely(client)
+        await stop_daemon_safely(daemon)
 
 
 # ============================================================================
@@ -691,6 +691,7 @@ async def test_real_daemon_process_reload(
         env={**os.environ, "SOOTHE_HOME": str(tmp_path / "soothe-home")},
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        start_new_session=True,
     )
 
     try:
@@ -719,12 +720,6 @@ async def test_real_daemon_process_reload(
         assert daemon_proc.poll() is None, "Daemon process crashed after SIGHUP"
 
         # Clean up
-        await client.close()
+        await close_client_safely(client)
     finally:
-        # Terminate daemon
-        daemon_proc.terminate()
-        try:
-            daemon_proc.wait(timeout=5.0)
-        except subprocess.TimeoutExpired:
-            daemon_proc.kill()
-            daemon_proc.wait()
+        stop_subprocess_daemon(daemon_proc)

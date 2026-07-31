@@ -23,7 +23,9 @@ from soothe_daemon.display.loop_card_manager import LoopCardManager
 from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
+    stop_daemon_safely,
     unwrap_next,
 )
 from tests.integration.ws_loop_client import loop_new, subscribe_loop_stream
@@ -174,7 +176,7 @@ async def test_detached_attach_loop_history_shows_structural_catalogue(
         # Detach original session (loop continues; no client attached).
         detach = await client1.request("loop_detach", {"loop_id": loop_id}, timeout=5.0)
         assert detach.get("success", True)
-        await client1.close()
+        await close_client_safely(client1)
 
         # New client: ``loop continue`` / attach hydrate path.
         client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
@@ -237,10 +239,9 @@ async def test_detached_attach_loop_history_shows_structural_catalogue(
             for f in step_frames
         )
 
-        await client2.close()
+        await close_client_safely(client2)
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -291,8 +292,7 @@ async def test_two_subscribers_same_card_ids_and_ordered_seq(tmp_path: Path) -> 
         assert seqs1 == sorted(seqs1)
         assert len(seqs1) == len(set(seqs1))
 
-        await client1.close()
-        await client2.close()
+        await close_client_safely(client1)
+        await close_client_safely(client2)
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)

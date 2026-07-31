@@ -19,6 +19,7 @@ from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
     force_isolated_home,
+    stop_daemon_safely,
 )
 
 
@@ -123,7 +124,7 @@ async def ws_daemon(tmp_path: Path):
     try:
         yield {"daemon": daemon, "port": port}
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 # ──────────────────────────────────────────────────────────
@@ -606,7 +607,7 @@ async def ws_daemon_no_autopilot(tmp_path: Path):
     try:
         yield {"daemon": daemon, "port": port}
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio

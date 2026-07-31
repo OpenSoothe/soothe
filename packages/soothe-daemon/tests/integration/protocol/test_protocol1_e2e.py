@@ -1026,8 +1026,7 @@ async def test_full_connection_lifecycle(mock_server: _MockDaemonServer) -> None
         det = await _read_type(client, "status", timeout=5.0)
         assert det["state"] == "detached"
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1053,8 +1052,7 @@ async def test_pre_handshake_message_rejected(mock_server: _MockDaemonServer) ->
         assert err["error"]["code"] == ErrorCode.INVALID_REQUEST.value
         assert "handshake" in err["error"]["message"].lower()
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1077,8 +1075,7 @@ async def test_unknown_method_rejected(mock_server: _MockDaemonServer) -> None:
             ErrorCode.INVALID_PARAMS.value,
         )
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1095,8 +1092,7 @@ async def test_invalid_params_rejected(mock_server: _MockDaemonServer) -> None:
         assert exc_info.value.code == -32602
         assert "errors" in exc_info.value.data
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1115,8 +1111,7 @@ async def test_proto_mismatch_rejected() -> None:
         assert ack["result"]["readiness_state"] == "incompatible"
         assert ack["result"]["capabilities"] == []
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
         await server.stop()
 
 
@@ -1138,8 +1133,7 @@ async def test_ping_pong_round_trip(mock_server: _MockDaemonServer) -> None:
         assert len(pongs) > 0
         assert pongs[-1]["proto"] == "1"
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1161,8 +1155,7 @@ async def test_heartbeat_timeout_closes_connection() -> None:
         assert len(pings) > 0
         assert pings[-1]["proto"] == "1"
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
         await server.stop()
 
 
@@ -1181,8 +1174,7 @@ async def test_rpc_loop_list(mock_server: _MockDaemonServer) -> None:
         assert "total" in result
         assert isinstance(result["loops"], list)
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1198,8 +1190,7 @@ async def test_rpc_loop_get(mock_server: _MockDaemonServer) -> None:
         assert result["loop_id"] == loop_id
         assert "status" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1213,8 +1204,7 @@ async def test_rpc_loop_get_not_found(mock_server: _MockDaemonServer) -> None:
             await client.request("loop_get", {"loop_id": "nonexistent"}, timeout=5.0)
         assert exc_info.value.code == ErrorCode.LOOP_NOT_FOUND.value
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1227,8 +1217,7 @@ async def test_rpc_loop_tree(mock_server: _MockDaemonServer) -> None:
         assert "checkpoints" in result
         assert "branches" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1242,8 +1231,7 @@ async def test_rpc_loop_prune(mock_server: _MockDaemonServer) -> None:
         assert result["loop_id"] == "test"
         assert result["kept"] == 2
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1256,8 +1244,7 @@ async def test_rpc_loop_delete(mock_server: _MockDaemonServer) -> None:
         result = await client.request("loop_delete", {"loop_id": loop_id}, timeout=5.0)
         assert result["deleted"] is True
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1268,8 +1255,7 @@ async def test_rpc_loop_reattach(mock_server: _MockDaemonServer) -> None:
         result = await client.request("loop_reattach", {"loop_id": "test"}, timeout=5.0)
         assert result["reattached"] is True
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1284,8 +1270,7 @@ async def test_rpc_loop_messages(mock_server: _MockDaemonServer) -> None:
         assert "messages" in result
         assert "total" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1297,8 +1282,7 @@ async def test_rpc_loop_state_get(mock_server: _MockDaemonServer) -> None:
         assert result["loop_id"] == "test"
         assert "state" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1316,8 +1300,7 @@ async def test_rpc_loop_state_update(mock_server: _MockDaemonServer) -> None:
         state_result = await client.request("loop_state_get", {"loop_id": "test"}, timeout=5.0)
         assert state_result["state"].get("key") == "value"
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1331,8 +1314,7 @@ async def test_rpc_loop_history_fetch(mock_server: _MockDaemonServer) -> None:
         assert "goals" in result
         assert "live_cards" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1343,8 +1325,7 @@ async def test_rpc_skills_list(mock_server: _MockDaemonServer) -> None:
         result = await client.request("skills_list", {}, timeout=5.0)
         assert "skills" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1358,8 +1339,7 @@ async def test_rpc_invoke_skill(mock_server: _MockDaemonServer) -> None:
         assert result["skill"] == "test-skill"
         assert result["accepted"] is True
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1371,8 +1351,7 @@ async def test_rpc_models_list(mock_server: _MockDaemonServer) -> None:
         assert "models" in result
         assert "default_model" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1383,8 +1362,7 @@ async def test_rpc_mcp_status(mock_server: _MockDaemonServer) -> None:
         result = await client.request("mcp_status", {}, timeout=5.0)
         assert "servers" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1398,8 +1376,7 @@ async def test_rpc_daemon_status(mock_server: _MockDaemonServer) -> None:
         assert "daemon_version" in result
         assert "core_version" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1411,8 +1388,7 @@ async def test_rpc_config_get(mock_server: _MockDaemonServer) -> None:
         assert result["section"] == "providers"
         assert "config" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1424,8 +1400,7 @@ async def test_rpc_job_create(mock_server: _MockDaemonServer) -> None:
         assert "job_id" in result
         assert result["status"] == "active"
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1439,8 +1414,7 @@ async def test_rpc_job_status(mock_server: _MockDaemonServer) -> None:
         assert result["job_id"] == job_id
         assert "status" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1454,8 +1428,7 @@ async def test_rpc_job_status_not_found(mock_server: _MockDaemonServer) -> None:
             await client.request("job_status", {"job_id": "nonexistent"}, timeout=5.0)
         assert exc_info.value.code == ErrorCode.JOB_NOT_FOUND.value
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1468,8 +1441,7 @@ async def test_rpc_job_pause(mock_server: _MockDaemonServer) -> None:
         result = await client.request("job_pause", {"job_id": job_id}, timeout=5.0)
         assert result["status"] == "paused"
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1483,8 +1455,7 @@ async def test_rpc_job_resume(mock_server: _MockDaemonServer) -> None:
         result = await client.request("job_resume", {"job_id": job_id}, timeout=5.0)
         assert result["status"] == "active"
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1497,8 +1468,7 @@ async def test_rpc_job_cancel(mock_server: _MockDaemonServer) -> None:
         result = await client.request("job_cancel", {"job_id": job_id}, timeout=5.0)
         assert result["status"] == "cancelled"
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1511,8 +1481,7 @@ async def test_rpc_job_dag(mock_server: _MockDaemonServer) -> None:
         assert "nodes" in result
         assert "edges" in result
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1525,8 +1494,7 @@ async def test_rpc_job_guidance(mock_server: _MockDaemonServer) -> None:
         )
         assert result["accepted"] is True
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1590,8 +1558,7 @@ async def test_batch_request_response(mock_server: _MockDaemonServer) -> None:
             elif r["id"] == "batch-2":
                 assert "loops" in r["result"]
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -1625,5 +1592,4 @@ async def test_batch_all_notifications_no_response(mock_server: _MockDaemonServe
         # No responses with the notification batch IDs.
         assert all(r.get("id") not in ("n1", "n2") for r in responses)
     finally:
-        if client.is_connected:
-            await client.close()
+        await client.close()

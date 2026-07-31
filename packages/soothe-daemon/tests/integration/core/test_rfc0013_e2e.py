@@ -12,7 +12,6 @@ This comprehensive test suite validates:
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import time
 import uuid
 from pathlib import Path
@@ -29,8 +28,10 @@ from tests.integration.daemon_fixtures import (
     await_status_state,
     await_subscribe_ack,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
     integration_llm_idle_timeout,
+    stop_daemon_safely,
 )
 from tests.integration.ws_loop_client import (
     loop_new_with_initial_input,
@@ -97,8 +98,7 @@ async def isolated_daemon(tmp_path: Path):
             "config": config,
         }
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 # ============================================================================
@@ -253,11 +253,11 @@ async def test_three_clients_complete_isolation(tmp_path: Path, requires_llm_api
         await _assert_client_receives_no_events_for_loop(clients[2], thread_ids[0])
 
         # Cleanup
-        for client in clients:
-            await client.close()
+        for c in clients:
+            await close_client_safely(c)
 
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -292,10 +292,10 @@ async def test_client_subscription_after_thread_creation(tmp_path: Path, require
         event = await asyncio.wait_for(client.read_event(), timeout=3.0)
         assert event is not None
 
-        await client.close()
+        await close_client_safely(client)
 
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -330,10 +330,10 @@ async def test_client_multiple_thread_subscriptions(tmp_path: Path, requires_llm
         # The client successfully subscribed to all 3 threads and received confirmation
         assert len(thread_ids) == 3
 
-        await client.close()
+        await close_client_safely(client)
 
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 # ============================================================================
@@ -376,7 +376,7 @@ async def test_rapid_client_connections(tmp_path: Path, requires_llm_api) -> Non
             await asyncio.sleep(0.05)
 
             # Disconnect
-            await client.close()
+            await close_client_safely(client)
 
             # Verify session was cleaned up
             await asyncio.sleep(0.05)
@@ -388,10 +388,10 @@ async def test_rapid_client_connections(tmp_path: Path, requires_llm_api) -> Non
         await test_client.wait_for_connection_ack()
         response = await request_loop_list(test_client)
         assert "loops" in response
-        await test_client.close()
+        await close_client_safely(test_client)
 
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -410,6 +410,7 @@ async def test_event_throughput_stress(tmp_path: Path, requires_llm_api) -> None
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
+    client: WebSocketClient | None = None
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
@@ -430,10 +431,9 @@ async def test_event_throughput_stress(tmp_path: Path, requires_llm_api) -> None
             if status.get("state") == "running":
                 await await_status_state(client.read_event, "idle", timeout=idle_timeout)
 
-        await client.close()
-
     finally:
-        await daemon.stop()
+        await close_client_safely(client)
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -447,6 +447,7 @@ async def test_large_message_handling(tmp_path: Path, requires_llm_api) -> None:
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
+    client: WebSocketClient | None = None
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
@@ -458,10 +459,9 @@ async def test_large_message_handling(tmp_path: Path, requires_llm_api) -> None:
         loop_id = await loop_new_with_initial_input(client, initial_message=large_message)
         assert loop_id
 
-        await client.close()
-
     finally:
-        await daemon.stop()
+        await close_client_safely(client)
+        await stop_daemon_safely(daemon)
 
 
 # ============================================================================
@@ -496,7 +496,7 @@ async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path, requires
 
         # Abrupt disconnect (no graceful close)
         # Simulate by canceling all reader tasks
-        await client.close()
+        await close_client_safely(client)
 
         # Wait for cleanup
         await asyncio.sleep(0.3)
@@ -505,7 +505,7 @@ async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path, requires
         assert daemon._session_manager.session_count == initial_count
 
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -529,7 +529,7 @@ async def test_client_reconnect_after_disconnect(tmp_path: Path, requires_llm_ap
         await subscribe_loop_stream(client, loop_id1)
 
         # Disconnect
-        await client.close()
+        await close_client_safely(client)
         await asyncio.sleep(0.2)
 
         # Reconnect
@@ -543,10 +543,10 @@ async def test_client_reconnect_after_disconnect(tmp_path: Path, requires_llm_ap
         # Verify different loops
         assert loop_id1 != loop_id2
 
-        await client2.close()
+        await close_client_safely(client2)
 
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 # ============================================================================
@@ -565,6 +565,7 @@ async def test_protocol_message_thread_id_in_events(tmp_path: Path, requires_llm
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
+    client: WebSocketClient | None = None
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
@@ -607,10 +608,9 @@ async def test_protocol_message_thread_id_in_events(tmp_path: Path, requires_llm
 
         assert events_received > 0, "Should have received at least one event"
 
-        await client.close()
-
     finally:
-        await daemon.stop()
+        await close_client_safely(client)
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -624,6 +624,8 @@ async def test_protocol_client_id_in_status(tmp_path: Path, requires_llm_api) ->
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
+    client1: WebSocketClient | None = None
+    client2: WebSocketClient | None = None
     try:
         # Connect first client
         client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
@@ -654,11 +656,10 @@ async def test_protocol_client_id_in_status(tmp_path: Path, requires_llm_api) ->
         # Verify different client IDs
         assert client_id1 != client_id2
 
-        await client1.close()
-        await client2.close()
-
     finally:
-        await daemon.stop()
+        await close_client_safely(client1)
+        await close_client_safely(client2)
+        await stop_daemon_safely(daemon)
 
 
 # ============================================================================
@@ -677,35 +678,43 @@ async def test_cross_transport_client_count(isolated_daemon: dict) -> None:
     await asyncio.sleep(0.2)
     initial_count = daemon._channel_manager.client_count
 
-    # Connect Unix socket client
-    client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
-    await client1.connect()
-    await asyncio.sleep(0.1)
+    client1: WebSocketClient | None = None
+    client2: WebSocketClient | None = None
+    try:
+        # Connect Unix socket client
+        client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
+        await client1.connect()
+        await asyncio.sleep(0.1)
 
-    count_after_1 = daemon._channel_manager.client_count
-    assert count_after_1 >= initial_count + 1
+        count_after_1 = daemon._channel_manager.client_count
+        assert count_after_1 >= initial_count + 1
 
-    # Connect second Unix socket client
-    client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
-    await client2.connect()
-    await asyncio.sleep(0.1)
+        # Connect second Unix socket client
+        client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
+        await client2.connect()
+        await asyncio.sleep(0.1)
 
-    count_after_2 = daemon._channel_manager.client_count
-    assert count_after_2 >= count_after_1 + 1
+        count_after_2 = daemon._channel_manager.client_count
+        assert count_after_2 >= count_after_1 + 1
 
-    # Disconnect first client
-    await client1.close()
-    await asyncio.sleep(0.1)
+        # Disconnect first client
+        await close_client_safely(client1)
+        client1 = None
+        await asyncio.sleep(0.1)
 
-    count_after_disconnect = daemon._channel_manager.client_count
-    assert count_after_disconnect < count_after_2
+        count_after_disconnect = daemon._channel_manager.client_count
+        assert count_after_disconnect < count_after_2
 
-    # Disconnect second client
-    await client2.close()
-    await asyncio.sleep(0.1)
+        # Disconnect second client
+        await close_client_safely(client2)
+        client2 = None
+        await asyncio.sleep(0.1)
 
-    final_count = daemon._channel_manager.client_count
-    assert final_count >= initial_count
+        final_count = daemon._channel_manager.client_count
+        assert final_count >= initial_count
+    finally:
+        await close_client_safely(client1)
+        await close_client_safely(client2)
 
 
 # ============================================================================
@@ -725,6 +734,7 @@ async def test_event_delivery_latency(tmp_path: Path, requires_llm_api) -> None:
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
+    client: WebSocketClient | None = None
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
@@ -754,10 +764,9 @@ async def test_event_delivery_latency(tmp_path: Path, requires_llm_api) -> None:
         if status.get("state") == "running":
             await await_status_state(client.read_event, "idle", timeout=idle_timeout)
 
-        await client.close()
-
     finally:
-        await daemon.stop()
+        await close_client_safely(client)
+        await stop_daemon_safely(daemon)
 
 
 # ============================================================================
@@ -776,6 +785,7 @@ async def test_daemon_remains_stable_after_client_errors(tmp_path: Path, require
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
+    client: WebSocketClient | None = None
     try:
         # Connect client and send problematic messages
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
@@ -808,10 +818,9 @@ async def test_daemon_remains_stable_after_client_errors(tmp_path: Path, require
         if status.get("state") == "running":
             await await_status_state(client.read_event, "idle", timeout=idle_timeout)
 
-        await client.close()
-
     finally:
-        await daemon.stop()
+        await close_client_safely(client)
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -843,10 +852,10 @@ async def test_graceful_handling_of_invalid_subscriptions(tmp_path: Path) -> Non
         list_response = await request_loop_list(client)
         assert "loops" in list_response
 
-        await client.close()
+        await close_client_safely(client)
 
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 # ============================================================================
@@ -869,6 +878,8 @@ async def test_concurrent_queries_different_threads(tmp_path: Path, requires_llm
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
+    client1: WebSocketClient | None = None
+    client2: WebSocketClient | None = None
     try:
         # Create two clients with different threads
         client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
@@ -908,11 +919,10 @@ async def test_concurrent_queries_different_threads(tmp_path: Path, requires_llm
             _drain_to_idle(client2, status2, idle_timeout),
         )
 
-        await client1.close()
-        await client2.close()
-
     finally:
-        await daemon.stop()
+        await close_client_safely(client1)
+        await close_client_safely(client2)
+        await stop_daemon_safely(daemon)
 
 
 # ============================================================================

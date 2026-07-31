@@ -9,7 +9,6 @@ daemon shutdown during active operations.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import uuid
 from pathlib import Path
 
@@ -22,7 +21,9 @@ from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     await_status_state,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
+    stop_daemon_safely,
 )
 from tests.integration.ws_loop_client import (
     loop_new_with_initial_input,
@@ -43,8 +44,7 @@ async def daemon_fixture(tmp_path: Path):
     try:
         yield daemon, ws_port
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -65,7 +65,7 @@ async def test_malformed_json_handling(
         assert "loops" in response
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -86,7 +86,7 @@ async def test_missing_required_fields(
         assert "loops" in response
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -105,7 +105,7 @@ async def test_invalid_message_type(daemon_fixture: tuple[SootheDaemon, int]) ->
         assert "loops" in response
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -137,7 +137,7 @@ async def test_thread_not_found_error(daemon_fixture: tuple[SootheDaemon, int]) 
         assert "loops" in list_response
 
     finally:
-        await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -160,7 +160,7 @@ async def test_client_disconnection_during_stream(
         await client.send_input(loop_id, "Start a long-running operation")
         await await_status_state(client.read_event, "running", timeout=5.0)
 
-        await client.close()
+        await close_client_safely(client)
 
         await asyncio.sleep(0.5)
 
@@ -178,11 +178,10 @@ async def test_client_disconnection_during_stream(
             assert loop_id in loop_ids
 
         finally:
-            await client2.close()
+            await close_client_safely(client2)
 
     except Exception:
-        with contextlib.suppress(Exception):
-            await client.close()
+        await close_client_safely(client)
         raise
 
 
@@ -230,8 +229,7 @@ async def test_concurrent_client_connections(
 
     finally:
         for client in clients:
-            with contextlib.suppress(Exception):
-                await client.close()
+            await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -255,4 +253,4 @@ async def test_daemon_shutdown_during_operation(
         await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
 
     finally:
-        await client.close()
+        await close_client_safely(client)

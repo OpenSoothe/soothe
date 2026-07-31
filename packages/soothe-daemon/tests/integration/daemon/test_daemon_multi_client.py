@@ -12,7 +12,9 @@ from soothe_daemon import SootheDaemon
 from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
+    stop_daemon_safely,
     unwrap_next,
     websocket_bootstrap_loop_session,
     websocket_create_loop_only,
@@ -119,10 +121,10 @@ async def test_two_clients_isolated(tmp_path: Path):
                 break
         assert leaked is None, f"client2 received loop1 event: {leaked}"
 
-        await client1.close()
-        await client2.close()
+        await close_client_safely(client1)
+        await close_client_safely(client2)
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -155,10 +157,10 @@ async def test_unsubscribed_client_receives_nothing(tmp_path: Path):
         with pytest.raises((asyncio.TimeoutError, asyncio.CancelledError)):
             await asyncio.wait_for(client.read_event(), timeout=1.0)
 
-        await client.close()
-        await client2.close()
+        await close_client_safely(client)
+        await close_client_safely(client2)
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -179,9 +181,9 @@ async def test_loop_subscribe_handshake_succeeds(tmp_path: Path):
         loop_id = await websocket_bootstrap_loop_session(client)
         assert loop_id
 
-        await client.close()
+        await close_client_safely(client)
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -213,9 +215,9 @@ async def test_client_id_in_status(tmp_path: Path):
         client_id = frame.get("client_id")
         assert isinstance(client_id, str) and client_id
 
-        await client.close()
+        await close_client_safely(client)
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -248,9 +250,9 @@ async def test_event_message_includes_thread_and_loop_id(tmp_path: Path):
         else:
             pytest.fail("expected at least one streamed event")
 
-        await client.close()
+        await close_client_safely(client)
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -279,9 +281,9 @@ async def test_switching_loop_subscription_replaces_prior(tmp_path: Path):
         sub2 = await client.subscribe("loop_events", {"loop_id": loop2}, timeout=5.0)
         assert sub2
 
-        await client.close()
+        await close_client_safely(client)
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -305,9 +307,9 @@ async def test_session_cleanup_on_disconnect(tmp_path: Path):
 
         assert daemon._session_manager.session_count == initial_session_count + 1
 
-        await client.close()
+        await close_client_safely(client)
         await asyncio.sleep(0.2)
 
         assert daemon._session_manager.session_count == initial_session_count
     finally:
-        await daemon.stop()
+        await stop_daemon_safely(daemon)

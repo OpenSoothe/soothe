@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -20,7 +19,9 @@ from soothe_daemon.runtime.loop_gc import purge_loop_execution_data
 from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
+    stop_daemon_safely,
 )
 from tests.integration.ws_loop_client import loop_new, request_loop_get
 
@@ -81,8 +82,7 @@ async def websocket_daemon_ephemeral_gc(tmp_path: Path):
     try:
         yield daemon, port
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -130,8 +130,7 @@ async def test_ephemeral_loop_gc_purges_idle_loop_keeps_workspace(
             await request_loop_get(client, loop_id)
         assert exc_info.value.code == -32200
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -166,8 +165,7 @@ async def test_loop_with_human_message_survives_empty_gc(
         get_resp = await request_loop_get(client, loop_id)
         assert get_resp.get("loop", {}).get("loop_id") == loop_id
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -198,5 +196,4 @@ async def test_empty_persistent_loop_purged_by_empty_pass(
         assert await daemon._persistence_manager.get_loop_metadata(loop_id) is None
         assert not loop_dir.exists()
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)

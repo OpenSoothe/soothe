@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -15,7 +14,9 @@ from soothe_daemon import SootheDaemon
 from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
+    close_client_safely,
     force_isolated_home,
+    stop_daemon_safely,
 )
 from tests.integration.ws_loop_client import loop_new
 
@@ -70,8 +71,7 @@ async def websocket_daemon_status_reconciliation(tmp_path: Path):
     try:
         yield daemon, port
     finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
+        await stop_daemon_safely(daemon)
 
 
 @pytest.mark.asyncio
@@ -99,8 +99,7 @@ async def test_stale_running_loop_demoted_to_idle(
         assert meta is not None
         assert meta["status"] == "idle"
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -130,8 +129,7 @@ async def test_active_running_loop_not_demoted(
         finally:
             daemon._active_stream_loop_ids.discard(loop_id)
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
 
 
 @pytest.mark.asyncio
@@ -155,5 +153,4 @@ async def test_fresh_running_loop_not_demoted(
         assert meta is not None
         assert meta["status"] == "running"
     finally:
-        if client.is_connected:
-            await client.close()
+        await close_client_safely(client)
