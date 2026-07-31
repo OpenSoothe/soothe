@@ -497,7 +497,11 @@ class TestLoopIsolation:
                 "soothe.card.replay.begin",
                 timeout=integration_llm_idle_timeout(),
             )
-            await await_event_type(client1.read_event, "soothe.card.replay.end", timeout=15.0)
+            await await_event_type(
+                client1.read_event,
+                "soothe.card.replay.end",
+                timeout=integration_llm_idle_timeout(),
+            )
 
             # Verify replay events go only to client1 (already consumed above)
 

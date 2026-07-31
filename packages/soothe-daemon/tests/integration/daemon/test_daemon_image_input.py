@@ -21,6 +21,7 @@ from tests.integration.daemon_fixtures import (
     await_status_state,
     build_daemon_config,
     force_isolated_home,
+    integration_llm_idle_timeout,
 )
 from tests.integration.ws_loop_client import loop_new, subscribe_loop_stream
 
@@ -117,9 +118,11 @@ async def test_websocket_input_with_image_runs_turn(
             "ack",
             attachments=[{"mime_type": "image/png", "data": TINY_PNG_B64}],
         )
-        running = await await_status_state(client.read_event, "running", timeout=8.0)
+        running = await await_status_state(
+            client.read_event, "running", timeout=integration_llm_idle_timeout()
+        )
         assert running.get("state") == "running"
-        await await_status_state(client.read_event, "idle", timeout=120.0)
+        await await_status_state(client.read_event, "idle", timeout=integration_llm_idle_timeout())
 
         assert len(vision_calls) == 1
         assert vision_calls[0]["text"] == "ack"
@@ -190,9 +193,11 @@ async def test_websocket_input_with_real_image_attachment(
             "Describe what you see in this image",
             attachments=[{"mime_type": "image/png", "data": soothe_logo_b64}],
         )
-        running = await await_status_state(client.read_event, "running", timeout=8.0)
+        running = await await_status_state(
+            client.read_event, "running", timeout=integration_llm_idle_timeout()
+        )
         assert running.get("state") == "running"
-        await await_status_state(client.read_event, "idle", timeout=120.0)
+        await await_status_state(client.read_event, "idle", timeout=integration_llm_idle_timeout())
 
         assert len(vision_calls) == 1
         assert (
@@ -233,9 +238,11 @@ async def test_websocket_input_with_multi_image_attachments(
                 {"mime_type": "image/jpeg", "data": logical_arch_b64},
             ],
         )
-        running = await await_status_state(client.read_event, "running", timeout=8.0)
+        running = await await_status_state(
+            client.read_event, "running", timeout=integration_llm_idle_timeout()
+        )
         assert running.get("state") == "running"
-        await await_status_state(client.read_event, "idle", timeout=120.0)
+        await await_status_state(client.read_event, "idle", timeout=integration_llm_idle_timeout())
 
         assert len(vision_calls) == 1
         assert vision_calls[0]["n"] == 2

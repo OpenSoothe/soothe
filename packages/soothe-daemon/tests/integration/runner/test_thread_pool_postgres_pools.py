@@ -23,8 +23,28 @@ _DEFAULT_BASE_DSN = "postgresql://postgres:postgres@127.0.0.1:6432"
 async def _probe_config() -> SootheConfig:
     pytest.importorskip("psycopg_pool")
     base = os.getenv("SOOTHE_TEST_POSTGRES_BASE_DSN", _DEFAULT_BASE_DSN).rstrip("/")
-    # Configure router based on available credentials (Anthropic, then OpenAI default)
-    if os.getenv("ANTHROPIC_API_KEY"):
+    # Configure router based on available credentials (DashScope, Anthropic, then OpenAI)
+    providers: list[dict] = []
+    if os.getenv("DASHSCOPE_API_KEY") or (
+        os.getenv("DASHSCOPE_CP_API_KEY") and os.getenv("DASHSCOPE_CP_BASE_URL")
+    ):
+        router_config = {
+            "default": "dashscope:glm-5.2",
+            "fast": "dashscope:qwen3.6-flash",
+        }
+        memory_config = {"enabled": False}
+        # Explicit DashScope provider so the LLMFactory registry resolves
+        # ``dashscope:`` specs to the correct OpenAI-compatible endpoint.
+        providers = [
+            {
+                "name": "dashscope",
+                "provider_type": "openai",
+                "api_base_url": os.getenv("DASHSCOPE_BASE_URL", ""),
+                "api_key": os.getenv("DASHSCOPE_API_KEY", ""),
+                "models": ["glm-5.2", "qwen3.6-flash"],
+            }
+        ]
+    elif os.getenv("ANTHROPIC_API_KEY"):
         router_config = {
             "default": "anthropic:claude-sonnet-4-5",
             "fast": "anthropic:claude-haiku-3-5",
@@ -48,6 +68,7 @@ async def _probe_config() -> SootheConfig:
             },
         },
         agent={"protocols": {"memory": memory_config}},
+        providers=providers,
     )
     dsn = cfg.resolve_postgres_dsn_for_database("checkpoints")
     if "connect_timeout" not in dsn:

@@ -89,13 +89,27 @@ async def websocket_bootstrap_loop_session(
     client: Any,
     *,
     resume_loop_id: str | None = None,
+    subscribe_timeout_s: float | None = None,
 ) -> str:
-    """Create or attach to a loop and subscribe for streaming; returns ``loop_id``."""
+    """Create or attach to a loop and subscribe for streaming; returns ``loop_id``.
+
+    Args:
+        client: Connected ``WebSocketClient``.
+        resume_loop_id: If set, reattach to this loop instead of creating new.
+        subscribe_timeout_s: Override for ``loop_new`` / ``loop_reattach`` /
+            ``loop_events`` RPC timeouts. Defaults to
+            :func:`integration_llm_idle_timeout` so the daemon has adequate time
+            to respond even when it is processing an LLM turn concurrently.
+    """
     from soothe_client.session import bootstrap_loop_session
+
+    if subscribe_timeout_s is None:
+        subscribe_timeout_s = integration_llm_idle_timeout()
 
     ev = await bootstrap_loop_session(
         client,
         resume_loop_id=resume_loop_id,
+        subscribe_timeout_s=subscribe_timeout_s,
     )
     if ev.get("type") == "error" or not ev.get("success", True):
         raise RuntimeError(str(ev.get("message", "loop bootstrap failed")))

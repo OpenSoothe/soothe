@@ -747,9 +747,12 @@ async def test_event_delivery_latency(tmp_path: Path, requires_llm_api) -> None:
         assert latency < 2.0, f"Event delivery took {latency}s (> 2s threshold)"
 
         # Wait for completion
-        status = await await_status_state(client.read_event, {"running", "idle"}, timeout=8.0)
+        idle_timeout = integration_llm_idle_timeout()
+        status = await await_status_state(
+            client.read_event, {"running", "idle"}, timeout=idle_timeout
+        )
         if status.get("state") == "running":
-            await await_status_state(client.read_event, "idle", timeout=8.0)
+            await await_status_state(client.read_event, "idle", timeout=idle_timeout)
 
         await client.close()
 
@@ -859,6 +862,9 @@ async def test_concurrent_queries_different_threads(tmp_path: Path, requires_llm
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
     config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
+    # Reduce LLM call budget for this concurrency test — we only need to
+    # verify that two loops can run concurrently, not complete a full turn.
+    config.agent.loop.concurrency.global_max_llm_calls = 2
 
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
@@ -884,20 +890,23 @@ async def test_concurrent_queries_different_threads(tmp_path: Path, requires_llm
         await client2.send_input(loop2, "Query on thread 2")
 
         idle_timeout = integration_llm_idle_timeout()
-        # Both should be able to process
-        status1 = await await_status_state(
-            client1.read_event, {"running", "idle"}, timeout=idle_timeout
-        )
-        status2 = await await_status_state(
-            client2.read_event, {"running", "idle"}, timeout=idle_timeout
+        # Both should be able to process — wait concurrently so the second
+        # loop's timeout clock does not start after the first finishes.
+        status1, status2 = await asyncio.gather(
+            await_status_state(client1.read_event, {"running", "idle"}, timeout=idle_timeout),
+            await_status_state(client2.read_event, {"running", "idle"}, timeout=idle_timeout),
         )
 
-        # Wait for completion
-        if status1.get("state") == "running":
-            await await_status_state(client1.read_event, "idle", timeout=idle_timeout)
+        # Wait for completion — also concurrent to avoid timeout accumulation
+        async def _drain_to_idle(client, st, timeout):
+            if st.get("state") == "running":
+                await await_status_state(client.read_event, "idle", timeout=timeout)
+            return st
 
-        if status2.get("state") == "running":
-            await await_status_state(client2.read_event, "idle", timeout=idle_timeout)
+        await asyncio.gather(
+            _drain_to_idle(client1, status1, idle_timeout),
+            _drain_to_idle(client2, status2, idle_timeout),
+        )
 
         await client1.close()
         await client2.close()
