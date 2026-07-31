@@ -447,6 +447,38 @@ class StepRowClassifier:
         )
 
     @staticmethod
+    def build_orphan(rows: list[StepToolRow], *, task_idx: int = 0) -> StepRowIndex:
+        """Classify rows for an intake-only orphan SubAgent card.
+
+        Host stamps wired-subagent tools as ``{step}:s:{id}`` (type ``s``).
+        Nested task subgraphs use type ``t`` filtered by ``task_idx``. Both
+        belong on the orphan card as primary activity (no task-delegation branch).
+        """
+        filtered_rows: list[StepToolRow] = []
+        for row in rows:
+            tcid = str(row.tool_call_id).strip()
+            if not tcid:
+                continue
+            if is_task_metadata_only_tool_row(row):
+                continue
+            _, type_code, idx, _ = parse_unified_tool_call_id(tcid)
+            if type_code == "t":
+                if idx == task_idx:
+                    filtered_rows.append(row)
+                continue
+            # Type ``s`` (intake wire stamp) or opaque ids → show on orphan card.
+            filtered_rows.append(row)
+
+        return StepRowIndex(
+            task_delegations=[],
+            main_tools=filtered_rows,
+            children_by_task={},
+            total_tool_count=count_distinct_tool_call_ids(filtered_rows),
+            main_tool_count=len(filtered_rows),
+            task_delegation_count=0,
+        )
+
+    @staticmethod
     def _iter_task_delegation_rows(step_id: str, rows: list[StepToolRow]) -> list[StepToolRow]:
         """Task delegation rows on this step (unified ``{step}:s:task:…`` ids)."""
         by_key: dict[str, StepToolRow] = {}
@@ -619,9 +651,9 @@ class StepCardStatusLine:
 
 
 class StepActivityTree:
-    """Pure render: Todo + Tools sections under the step title (IG-664).
+    """Pure render: To-do + Tool-use sections under the step title (IG-664).
 
-    Task rows are flat markers under Tools. While a task is running, the marker
+    Task rows are flat markers under Tool-use. While a task is running, the marker
     line shows that task's subgraph tool count. Nested child tool lines are not
     rendered.
     """
@@ -640,7 +672,7 @@ class StepActivityTree:
         preview_limit: int = STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
         todos: list[dict[str, str]] | None = None,
     ) -> Content:
-        """Todo section then Tools section (task markers + main tool preview)."""
+        """To-do section then Tool-use section (task markers + main tool preview)."""
         section_gutter = f"{g.output_prefix}  "
         item_gutter = f"{g.output_prefix}    "
         parts: list[object] = []
@@ -660,7 +692,7 @@ class StepActivityTree:
         first_block = True
         if todo_items:
             first_block = False
-            parts.append(Content.styled(f"{section_gutter}TODO", theme.SECONDARY_TEXT_STYLE))
+            parts.append(Content.styled(f"{section_gutter}To-do", theme.SECONDARY_TEXT_STYLE))
             for item in todo_items:
                 content = str(item.get("content") or "").strip()
                 if not content:
@@ -682,7 +714,7 @@ class StepActivityTree:
             if not first_block:
                 parts.append("\n")
             first_block = False
-            parts.append(Content.styled(f"{section_gutter}TOOLS", theme.SECONDARY_TEXT_STYLE))
+            parts.append(Content.styled(f"{section_gutter}Tool-use", theme.SECONDARY_TEXT_STYLE))
 
             for task_row in index.task_delegations:
                 parts.append("\n")

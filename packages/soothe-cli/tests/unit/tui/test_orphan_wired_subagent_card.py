@@ -49,7 +49,7 @@ async def test_mount_orphan_subagent_card_registers_keys() -> None:
 
 def test_orphan_subagent_card_header_is_single_line_length_preview() -> None:
     from soothe_cli.tui.preview_limits import TASK_DELEGATION_DESC_MAX_CHARS
-    from soothe_cli.tui.widgets.messages.cognition_subagent import create_subagent_card
+    from soothe_cli.tui.widgets.messages.cognition_step import create_subagent_card
 
     long_multiline = "Investigate deps\n" + ("across packages " * 20)
     card = create_subagent_card(
@@ -64,6 +64,34 @@ def test_orphan_subagent_card_header_is_single_line_length_preview() -> None:
     inner = header.split("Deep Research(", 1)[-1].rsplit(")", 1)[0]
     assert len(inner) <= TASK_DELEGATION_DESC_MAX_CHARS
     assert inner.endswith("...")
+
+
+def test_orphan_subagent_card_header_includes_compact_title_meta() -> None:
+    """Orphan cards share step-card compact title meta (elapsed · counts · tokens)."""
+    from soothe_cli.tui.config import get_glyphs
+    from soothe_cli.tui.widgets.messages.cognition_step import create_subagent_card
+
+    card = create_subagent_card(
+        "ORP-02",
+        "scan the repository",
+        "deep_research",
+        id="orphan-header-meta",
+    )
+    card.add_tool_call("ORP_02:s:grep:0", "grep", {"pattern": "foo"})
+    card.add_tool_call("ORP_02:s:glob:0", "glob", {"pattern": "**/*.py"})
+    card._input_tokens = 1200
+    card._output_tokens = 340
+
+    header = str(card._step_header_content())
+    assert "Deep Research(scan the repository)" in header
+    assert get_glyphs().subagent_prefix in header
+    assert "2/0" in header
+    assert "↑1.2K" in header
+    assert "↓340" in header
+
+    activity = str(card._step_task_activity_content())
+    assert "Tool-use" in activity
+    assert "Grep" in activity or "grep" in activity.lower()
 
 
 @pytest.mark.asyncio

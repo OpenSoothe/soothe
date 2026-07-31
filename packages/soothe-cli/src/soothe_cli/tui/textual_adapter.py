@@ -688,7 +688,10 @@ def _log_step_completion_stats(
 
 def _is_orphan_subagent_card(card: Any) -> bool:
     """True when ``card`` is an intake-only orphan SubAgent widget."""
-    return bool(str(getattr(card, "_invocation_id", "") or "").strip())
+    check = getattr(card, "_is_orphan_subagent_card", None)
+    if callable(check):
+        return bool(check())
+    return bool(str(getattr(card, "_subagent_type", "") or "").strip())
 
 
 def _finalize_orphan_subagent_cards(
@@ -733,7 +736,7 @@ async def _mount_orphan_subagent_card(
         task_idx=0,
         id=f"orphan-{uuid.uuid4().hex[:8]}",
     )
-    card._invocation_id = inv  # type: ignore[attr-defined]
+    card._invocation_id = inv
     adapter._orphan_cards_by_invocation[inv] = card
     await _mount_subagent_card_if_needed(adapter, card)
     # Tools may have been buffered on root ns before this card was mounted.
@@ -1009,15 +1012,6 @@ async def _mount_subagent_card_if_needed(
         await mount_result
 
 
-def _subagent_card_tool_count(card: Any) -> int:
-    """Return tracked tool count for an orphan SubAgent card."""
-    build_index = getattr(card, "_build_row_index", None)
-    if callable(build_index):
-        return int(build_index().total_tool_count)
-    rows = getattr(card, "_rows", None)
-    return len(rows) if isinstance(rows, list) else 0
-
-
 def _complete_subagent_card(
     subagent_card: Any,
     *,
@@ -1032,7 +1026,8 @@ def _complete_subagent_card(
     dur = duration_ms
     if dur <= 0 and start is not None:
         dur = int((time.time() - start) * 1000)
-    tool_count = _subagent_card_tool_count(subagent_card)
+    build_index = getattr(subagent_card, "_build_row_index", None)
+    tool_count = int(build_index().total_tool_count) if callable(build_index) else 0
     subagent_card.set_complete(success, dur, tool_count, summary)
 
 

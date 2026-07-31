@@ -1,4 +1,4 @@
-"""IG-664: step card Todo/Tools sections and compact title meta."""
+"""IG-664: step card To-do/Tool-use sections and compact title meta."""
 
 from __future__ import annotations
 
@@ -83,12 +83,12 @@ def test_activity_tree_todo_above_tools() -> None:
         {"path": "~/Workspace/Longan"},
     )
     text = _plain(card._step_task_activity_content())
-    assert "TODO" in text
-    assert "TOOLS" in text
+    assert "To-do" in text
+    assert "Tool-use" in text
     assert "Survey frontend tree" in text
     assert "ListFiles" in text
-    todo_idx = text.index("TODO")
-    tools_idx = text.index("TOOLS")
+    todo_idx = text.index("To-do")
+    tools_idx = text.index("Tool-use")
     assert todo_idx < tools_idx
     assert tools_idx < text.index("ListFiles")
 
@@ -108,7 +108,7 @@ def test_write_todos_json_string_args_populate_todo_section() -> None:
         {"todos": json.dumps(payload)},
     )
     text = _plain(card._step_task_activity_content())
-    assert any(ln.strip().endswith("TODO") and "Write" not in ln for ln in text.split("\n"))
+    assert any(ln.strip().endswith("To-do") and "Write" not in ln for ln in text.split("\n"))
     assert "A" in text and "B" in text
 
 
@@ -127,10 +127,10 @@ def test_write_todos_tool_args_populate_todo_section() -> None:
     )
     card.add_tool_call("TD_04:s:grep:0", "grep", {"pattern": "x"})
     text = _plain(card._step_task_activity_content())
-    assert "TODO" in text
+    assert "To-do" in text
     assert "Survey frontend tree" in text
     assert "Survey backend tree" in text
-    assert "TOOLS" in text
+    assert "Tool-use" in text
     assert "Grep" in text
     assert "write_todos" not in text.lower()
 
@@ -144,7 +144,7 @@ def test_write_todos_arg_updates_refresh_todo_section() -> None:
         {"todos": [{"content": "Ship it", "status": "completed"}]},
     )
     text = _plain(card._step_task_activity_content())
-    assert any(ln.strip().endswith("TODO") and "Write" not in ln for ln in text.split("\n"))
+    assert any(ln.strip().endswith("To-do") and "Write" not in ln for ln in text.split("\n"))
     assert "Ship it" in text
     assert "writetodos" not in text.lower().replace(" ", "")
 
@@ -159,7 +159,7 @@ def test_write_todos_hidden_from_tools_when_todo_section_live() -> None:
     )
     card.add_tool_call("TD_02:s:grep:0", "grep", {"pattern": "x"})
     text = _plain(card._step_task_activity_content())
-    assert "TODO" in text
+    assert "To-do" in text
     assert "Do work" in text
     assert "write_todos" not in text.lower()
     assert "Grep" in text

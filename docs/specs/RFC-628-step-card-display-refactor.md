@@ -415,11 +415,10 @@ SubAgent has no pending/queued states — created when task call arrives (alread
 
 | Module | Changes |
 |--------|---------|
-| `cognition_step.py` | Remove `children_by_task` classification, simplify activity |
-| `cognition_step_activity.py` | Remove `_child_rows_for_task`, `children_by_task`, orphan logic |
-| `cognition_subagent.py` | NEW — `SubAgentMessage` subclass |
-| `messages/__init__.py` | Export `SubAgentMessage` |
-| Message list container | Add `_subagent_cards_by_key` registry, routing logic |
+| `cognition_step.py` | Step card + `create_subagent_card` orphan factory (shared style path) |
+| `cognition_step_activity.py` | Row classification, activity tree, orphan `build_orphan` |
+| `messages/__init__.py` | Export `CognitionStepMessage`, `create_subagent_card` |
+| Message list container | `_orphan_cards_by_invocation` registry, routing logic |
 
 ---
 

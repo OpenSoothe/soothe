@@ -2,7 +2,7 @@
 
 Step cards show flat task delegation markers. Subgraph tools stay on the step
 card for running task-line tool counts (not nested preview lines). Intake-only
-orphan SubAgent cards are a separate widget path.
+orphans reuse ``CognitionStepMessage`` with orphan mode (shared style path).
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def test_no_blank_line_between_task_branch_and_main_step_tools() -> None:
         {"path": "~/Workspace/Longan"},
     )
     text = _plain(card._step_task_activity_content())
-    assert "TOOLS" in text
+    assert "Tool-use" in text
     assert "Deep Research(scan both trees)" in text
     assert "ListFiles" in text
     assert "\n\n" not in text
@@ -95,7 +95,7 @@ def test_task_activity_tree_shows_running_tool_count() -> None:
 
 
 def test_task_activity_links_children_by_unified_task_index() -> None:
-    """IG-513: Task marker shown, child tools route to SubAgent card."""
+    """Task marker shown; subgraph child tools are not nested under the marker."""
     card = CognitionStepMessage("YKF-01", "Delegate", id="stp-task-idx")
     card.add_tool_call(
         "YKF_01:s:task:0",
@@ -103,7 +103,6 @@ def test_task_activity_links_children_by_unified_task_index() -> None:
         {"subagent_type": "deep_research", "description": "find docs"},
         is_task_row=True,
     )
-    # IG-513: read_file tool would route to SubAgent card, not nested here
 
     text = _plain(card._step_task_activity_content())
     assert "Deep Research(find docs)" in text
@@ -134,7 +133,7 @@ def test_step_compose_places_status_after_task_activity() -> None:
 
 
 def test_task_branch_child_line_shows_flat_marker_only() -> None:
-    """IG-513: Task delegation shown as flat marker, no nested child tools."""
+    """Task delegation shown as flat marker, no nested child tools."""
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-phase")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -142,7 +141,6 @@ def test_task_branch_child_line_shows_flat_marker_only() -> None:
         {"subagent_type": "deep_research", "description": "scan"},
         is_task_row=True,
     )
-    # IG-513: Subgraph tools route to SubAgent card, not nested here
     text = _plain(card._step_task_activity_content())
     assert "Deep Research(scan)" in text
 

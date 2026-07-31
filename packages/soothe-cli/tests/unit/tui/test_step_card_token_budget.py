@@ -93,7 +93,7 @@ def test_record_token_usage_refreshes_running_title_meta() -> None:
 
 def test_subagent_completion_status_includes_token_suffix() -> None:
     """Task (SubAgent) cards show token usage on the completion footer."""
-    from soothe_cli.tui.widgets.messages.cognition_subagent import create_subagent_card
+    from soothe_cli.tui.widgets.messages.cognition_step import create_subagent_card
 
     card = create_subagent_card(
         step_id="ZCH-01",

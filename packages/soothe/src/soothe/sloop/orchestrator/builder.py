@@ -6,6 +6,7 @@ checkpointer is attached. Persistence for goals remains ``StrangeLoopStateManage
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
@@ -60,6 +61,8 @@ from .stations import (
     RECORD_PROGRESS,
     VALIDATE_PLAN,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _is_real_checkpointer(obj: Any) -> bool:
@@ -260,4 +263,10 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     checkpointer = core_agent_checkpointer(ctx.strange_loop)
     if _is_real_checkpointer(checkpointer):
         return graph.compile(checkpointer=checkpointer)
+    # Without a checkpointer LangGraph ``interrupt()`` ends the invoke but is
+    # not durable — Approve / clarification resume cannot ``Command(resume=...)``.
+    logger.warning(
+        "[orchestrator] Compiling StrangeLoop graph without checkpointer; "
+        "clarification interrupts will not resume across turns"
+    )
     return graph.compile()

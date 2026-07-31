@@ -836,6 +836,19 @@ class StrangeLoop:
                 )
                 await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
 
+            # Persist CE before the graph can park on ``await_user`` (planner
+            # review / ask_user). Without this, clarification resume loads an
+            # empty DAG and fabricates a blank CE goal.
+            try:
+                await ce_instance.save()
+            except Exception:
+                logger.warning(
+                    "[CE] save after goal activate failed (loop=%s goal=%s)",
+                    state_manager.loop_id,
+                    getattr(ce_goal, "id", None),
+                    exc_info=True,
+                )
+
             # RFC-624 Phase 4 Step 3: bind CE to LoopState
             state.bind_ce(ce_instance, ce_goal.id)
 

@@ -54,6 +54,7 @@ async def test_postgresql_backend_selects_pgsql_persistence() -> None:
         ce_instance.get_all_goals = lambda: []
         ce_instance.create_goal = AsyncMock(return_value=MagicMock(id="g1"))
         ce_instance.activate_goal = AsyncMock()
+        ce_instance.save = AsyncMock()
         ce_instance.planning.step = MagicMock()
         ce_cls.return_value = ce_instance
 

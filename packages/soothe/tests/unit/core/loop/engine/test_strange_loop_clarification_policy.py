@@ -159,6 +159,7 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
         ]
 
     assert captured["clarification_policy"] is sentinel_policy
+    mock_ce.save.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -218,3 +219,4 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
         ]
 
     assert captured["clarification_policy"] is None
+    mock_ce.save.assert_awaited()

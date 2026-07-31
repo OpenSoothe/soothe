@@ -580,7 +580,7 @@ async def test_subagent_wire_completed_syncs_task_row_on_step_card() -> None:
 
 def test_subagent_footer_ignores_server_step_tool_count() -> None:
     """SubAgent footer must use scope-local rows, not step-wide server totals."""
-    from soothe_cli.tui.widgets.messages.cognition_subagent import create_subagent_card
+    from soothe_cli.tui.widgets.messages.cognition_step import create_subagent_card
 
     card = create_subagent_card(
         step_id="ZCH-01",
@@ -602,7 +602,7 @@ def test_subagent_footer_ignores_server_step_tool_count() -> None:
 
 def test_subagent_card_shows_latest_two_tool_activities() -> None:
     """SubAgent cards preview the latest 2 tool rows, same cap as step cards."""
-    from soothe_cli.tui.widgets.messages.cognition_subagent import create_subagent_card
+    from soothe_cli.tui.widgets.messages.cognition_step import create_subagent_card
 
     card = create_subagent_card(
         step_id="ZCH-01",

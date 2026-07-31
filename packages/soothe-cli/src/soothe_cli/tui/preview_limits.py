@@ -20,7 +20,7 @@ STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT: Final[int] = 2
 # Optional manual full tool-list folding threshold (not auto-collapse).
 STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD: Final[int] = 3
 
-# Single-line task-description preview on task markers and SubAgent card headers.
+# Single-line task-description preview on task markers and orphan SubAgent headers.
 TASK_DELEGATION_DESC_MAX_CHARS: Final[int] = 80
 
 # --- Skill invocation cards (`SkillMessage` collapsed SKILL.md body) ---

@@ -57,7 +57,7 @@ class _BareMixin(AutopilotWorkerMixin):
         self._agent = MagicMock()
         self._planner = MagicMock()
         self._config = MagicMock()
-        self._ensure_checkpointer_initialized = AsyncMock()
+        self._materialize_core_agent = AsyncMock(return_value=self._agent)
         self.get_sloop_shared_pool = AsyncMock(return_value=None)
 
 
@@ -203,7 +203,7 @@ async def test_stream_initializes_checkpointer_before_strange_loop(
         )
     ]
 
-    mixin._ensure_checkpointer_initialized.assert_awaited_once()
+    mixin._materialize_core_agent.assert_awaited_once()
 
 
 @pytest.mark.asyncio

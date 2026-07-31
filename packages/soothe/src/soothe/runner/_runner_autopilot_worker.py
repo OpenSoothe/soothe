@@ -95,9 +95,9 @@ class AutopilotWorkerMixin:
         # RFC-204 Group C: Create per-goal proposal queue for Layer 2 tools
         proposal_queue = ProposalQueue()
 
-        # Lazy async checkpointer (PostgreSQL pool) must be wired before StrangeLoop
-        # touches CoreAgent checkpoints for anchor capture / thread forks.
-        await self._ensure_checkpointer_initialized()  # type: ignore[attr-defined]
+        # Materialize CoreAgent + attach durable checkpointer before StrangeLoop
+        # compiles (anchor capture, thread forks, and any await_user interrupt).
+        await self._materialize_core_agent()  # type: ignore[attr-defined]
         shared_pool = await self.get_sloop_shared_pool()  # type: ignore[attr-defined]
 
         # Build a fresh StrangeLoop for this dispatch. The CoreAgent / planner

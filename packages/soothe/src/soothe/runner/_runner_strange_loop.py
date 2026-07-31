@@ -431,7 +431,11 @@ class StrangeLoopMixin:
 
         # RFC-214: Prior conversation is now in loop_messages ledger, not separate excerpts
         # One load for unified classification (tail) - IG-128, IG-133
-        # IG-506: defer CoreAgent/checkpointer init until execute materializes.
+        #
+        # Materialize CoreAgent + durable LangGraph checkpointer before the
+        # StrangeLoop graph compiles. ``await_user`` (planner-subagent review,
+        # ask_user) uses ``interrupt()``; without a checkpointer that pause is
+        # not resumable and Approve / ``Command(resume=...)`` is a no-op.
 
         # RFC-630 IG-554: Pass 1 runs pre-graph in StrangeLoop (parallel with checkpoint).
         # Pass 2 runs after CE load; social queries END before the graph.
@@ -459,6 +463,8 @@ class StrangeLoopMixin:
                 "[Runner] StrangeLoop requires a planner that implements LoopPlannerProtocol.plan"
             )
             return
+
+        await self._materialize_core_agent()  # type: ignore[attr-defined]
 
         from soothe.sloop.engine.strange_loop import StrangeLoop
 

@@ -50,6 +50,7 @@ from soothe_cli.tui.widgets.messages.cognition_step_activity import (
     normalized_task_note_key,
     phase_icon,
     stats_title_suffix,
+    subagent_task_label,
     task_delegation_dedupe_key,
     task_tool_row_tone,
 )
@@ -75,10 +76,14 @@ class CognitionStepMessage(Vertical):
     """Agent-loop act step card (RFC-628 / IG-664).
 
     Header is the full step description plus compact live meta while running
-    (`` · 45s · 12/1 · ↑8.1K ↓2.0K``). Activity nests under Todo then Tools.
+    (`` · 45s · 12/1 · ↑8.1K ↓2.0K``). Activity nests under To-do then Tool-use.
     The Running footer line is omitted; Completed/Failed/Pending footers remain.
     Optional full tool lists use ``STEP_CARD_SHOW_TOOL_ROW_DETAILS``. Click toggles
     manual whole-card collapse; cards do not auto-collapse.
+
+    Intake-only orphan SubAgent cards reuse this widget with ``_subagent_type``
+    set: same header meta / activity tree / footers, with a subagent glyph and
+    ``DisplayName(preview)`` title.
 
     Pure rendering and classification live in ``cognition_step_activity.py``.
     Card headers use a stateful card-prefix glyph (see ``_assemble_card_header``); body
@@ -188,9 +193,22 @@ class CognitionStepMessage(Vertical):
         """If True, skip auto-folding the tool-row preview (user expanded the list)."""
         self._has_clarification_details: bool = False
         """Whether detail panel currently holds clarification Q/A content."""
+        # Intake-only orphan SubAgent card (IG-602); empty on normal step cards.
+        self._subagent_type: str = ""
+        self._subagent_task_idx: int = 0
+        self._invocation_id: str = ""
+
+    def _is_orphan_subagent_card(self) -> bool:
+        """True when this widget is an intake-only orphan SubAgent card."""
+        return bool(str(self._subagent_type or "").strip())
 
     def _build_row_index(self) -> StepRowIndex:
         """Classify tool rows once for stats, previews, and activity rendering."""
+        if self._is_orphan_subagent_card():
+            return StepRowClassifier.build_orphan(
+                self._rows,
+                task_idx=self._subagent_task_idx,
+            )
         return StepRowClassifier.build(self._step_id, self._rows)
 
     def _maybe_auto_fold_step_tool_list(self) -> None:
@@ -260,10 +278,17 @@ class CognitionStepMessage(Vertical):
         )
 
     def _step_header_content(self) -> Content:
+        orphan = self._is_orphan_subagent_card()
+        body = (
+            subagent_task_label(self._subagent_type, self._description)
+            if orphan
+            else self._description
+        )
         header = _assemble_card_header(
             self,
-            self._description,
+            body,
             status=self._status,
+            glyph_override=get_glyphs().subagent_prefix if orphan else None,
             spinner_position=self._spinner_position,
             animate_running=self._status == "running",
         )
@@ -496,7 +521,7 @@ class CognitionStepMessage(Vertical):
         return self._apply_todos_payload(todos)
 
     def _step_task_activity_content(self) -> Content:
-        """Todo then Tools (task markers, tool preview, notes) under the step title."""
+        """To-do then Tool-use (task markers, tool preview, notes) under the step title."""
         g = get_glyphs()
         try:
             colors = theme.get_theme_colors(self)
@@ -1437,3 +1462,39 @@ class CognitionStepMessage(Vertical):
                 row.started_at = None
                 self._sync_step_card_surface()
                 return
+
+
+def create_subagent_card(
+    step_id: str,
+    description: str,
+    subagent_type: str,
+    *,
+    task_idx: int = 0,
+    **kwargs: Any,
+) -> CognitionStepMessage:
+    """Create an intake-only orphan SubAgent card (shared step-card style path).
+
+    In-step ``task`` delegations stay on the parent step card. This factory only
+    sets orphan fields (``_subagent_type``, etc.); header meta, To-do / Tool-use
+    activity, and footers use the same ``CognitionStepMessage`` methods.
+
+    Args:
+        step_id: Display step id (synthetic for orphans).
+        description: Task description from tool args.
+        subagent_type: Subagent type name (e.g., "deep_research", "browser_use").
+        task_idx: Task index for filtering subgraph rows (type ``t``).
+        **kwargs: Additional arguments for CognitionStepMessage.
+
+    Returns:
+        CognitionStepMessage configured as an orphan SubAgent card.
+    """
+    card = CognitionStepMessage(
+        step_id=step_id,
+        description=description,
+        **kwargs,
+    )
+    card._subagent_type = str(subagent_type or "?").strip() or "?"
+    card._subagent_task_idx = task_idx
+    card._status = "running"
+    card._start_time = time()
+    return card

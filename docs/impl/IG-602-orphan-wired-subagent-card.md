@@ -86,7 +86,7 @@ Helper suggestions (keep thin):
 | `packages/soothe/.../orchestrator/nodes/invoke_wired_subagent.py` | Lifecycle emits; replace bare `ainvoke` with stream+forward; stamp customs |
 | Possibly small helper under `foundation/sloop/utils/` or next to node | Emit-bridge / stream_event normalize (optional) |
 | `packages/soothe-cli/.../tui/textual_adapter.py` | Handlers for started/completed + orphan wire route |
-| `packages/soothe-cli/.../tui/widgets/messages/cognition_subagent.py` | Allow empty parents (if any assert blocks today) |
+| `packages/soothe-cli/.../tui/widgets/messages/cognition_step.py` | `create_subagent_card` factory (orphan fields on shared step card) |
 | Event constants / SDK (if typed names required) | Register `wired_subagent_*` or map via existing custom catalog |
 | `packages/soothe/tests/unit/.../orchestrator/test_invoke_wired_subagent.py` | Extend: started → custom → completed; ledger + route |
 | `packages/soothe-cli/tests/unit/...` | Orphan mount / wire attach / cancel finalize / parented regression |

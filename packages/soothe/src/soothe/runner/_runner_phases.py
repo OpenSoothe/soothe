@@ -237,17 +237,23 @@ class PhasesMixin:
     # -- LangGraph stream with interrupt auto-resume -------------------------
 
     async def _ensure_checkpointer_initialized(self) -> None:
-        """Lazily initialize the async checkpointer (AsyncSqliteSaver / AsyncPostgresSaver).
+        """Attach the async checkpointer (AsyncSqliteSaver / AsyncPostgresSaver).
 
-        The checkpointer is created from ``self._checkpointer_pool`` and replaces
-        the placeholder on ``self._core_agent.graph``.  Must be called before
-        any ``core_agent.astream()`` that needs persistent thread state.
+        Created from ``self._checkpointer_pool`` and wired onto
+        ``self._core_agent.graph``. Prefer ``_materialize_core_agent()`` from
+        StrangeLoop / autopilot entry points so LazyCoreAgent is compiled first;
+        this method is also the LazyCoreAgent ``materialize_hook``.
 
-        Raises ConfigurationError if checkpointer initialization fails.
+        Raises:
+            ConfigurationError: Checkpointer initialization failed.
         """
         from soothe.coreagent.lazy import LazyCoreAgent
 
         if isinstance(self._core_agent, LazyCoreAgent) and not self._core_agent.is_materialized:
+            # Materialize so the async hook can attach the checkpointer. A silent
+            # return here previously left interactive StrangeLoop graphs without
+            # durable ``interrupt()`` state.
+            await self._core_agent.amaterialize()
             return
 
         if self._checkpointer_initialized or self._checkpointer_pool is None:
