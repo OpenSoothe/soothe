@@ -51,7 +51,11 @@ def _plan_quick_view_step_summary(
     *,
     tool_call_count: int = 0,
 ) -> str:
-    """Return a Ctrl+T-safe step summary tail (hide recoverable tool errors)."""
+    """Return a Ctrl+T-safe step summary tail.
+
+    Hides redundant ``Done [N tools]`` text (stats already show tool count) and
+    legacy success payloads that still carry error-shaped summary strings.
+    """
     tail = (summary or "").strip()
     if not tail or tail in ("Done", "Failed"):
         return ""
@@ -700,8 +704,14 @@ class CognitionGoalTreeMessage(Vertical):
         self._sync_goal_tree_widgets()
 
     def set_interrupted(self, message: str) -> None:
-        """Mark running steps as failed and show a footer (stream cancel/error)."""
+        """Mark running steps as failed and show a footer (stream cancel/error).
+
+        When the loop already finished successfully and no step is still
+        open, preserve the success footer (late stream-end safety net must
+        not overwrite a completed goal).
+        """
         msg = (message or "Interrupted").strip()
+        marked = False
         for sid in list(self._step_order):
             st = self._steps.get(sid)
             if st is not None and st.phase in ("pending", "queued", "running"):
@@ -710,6 +720,9 @@ class CognitionGoalTreeMessage(Vertical):
                 st.duration_ms = 0
                 st.summary = msg
                 st.started_at = None
+                marked = True
+        if not marked and self._footer_visible and self._footer_tone == "success":
+            return
         self._footer_plain = self._clip(msg, 120)
         self._footer_visible = True
         self._footer_tone = "error"

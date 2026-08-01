@@ -311,6 +311,14 @@ class _MessagesMixin:
                         int(patch.get("step_tool_call_count") or 0),
                         str(patch.get("step_summary") or ""),
                     )
+                    # Drop from live routing registry once the card is terminal.
+                    adapter = getattr(self, "_ui_adapter", None)
+                    if adapter is not None:
+                        step_id = str(
+                            patch.get("step_progress_id") or getattr(widget, "_step_id", "") or ""
+                        ).strip()
+                        if step_id:
+                            adapter._current_step_messages.pop(step_id, None)
                 desc = patch.get("step_progress_description")
                 if isinstance(desc, str) and desc.strip():
                     widget.set_description(desc)
@@ -401,13 +409,21 @@ class _MessagesMixin:
         return False
 
     def _register_card_widget_with_adapter(self, widget: Any, card: Any) -> None:
-        """Wire card-mounted step widgets into the live tool-routing registry."""
+        """Wire card-mounted step widgets into the live tool-routing registry.
+
+        Completed step cards are not re-registered: late display-card mounts
+        would otherwise leave stale entries that the stream-end safety net
+        mistakes for in-flight work.
+        """
         from soothe_sdk.display.transcript_types import MessageType
 
         from soothe_cli.tui.widgets.messages import CognitionStepMessage
 
         adapter = getattr(self, "_ui_adapter", None)
         if adapter is None or not isinstance(widget, CognitionStepMessage):
+            return
+        status = str(getattr(widget, "_status", "") or "")
+        if status in ("success", "error"):
             return
         step_id = ""
         if getattr(card, "type", None) == MessageType.STEP_PROGRESS:

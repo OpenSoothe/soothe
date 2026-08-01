@@ -375,7 +375,12 @@ class TextualUIAdapter:
         self._goal_tree_message: CognitionGoalTreeMessage | None = None
         """In-memory goal→steps state for the Ctrl+t plan quick view (not mounted in #messages)."""
 
-    def finalize_pending_tools_with_error(self, error: str) -> None:
+    def finalize_pending_tools_with_error(
+        self,
+        error: str,
+        *,
+        interrupt_goal_tree: bool = True,
+    ) -> None:
         """Mark all pending/running tool widgets as error and clear tracking.
 
         This is used as a safety net when an unexpected exception aborts
@@ -383,14 +388,13 @@ class TextualUIAdapter:
 
         Args:
             error: Error text to display in each pending tool widget.
+            interrupt_goal_tree: When False, clear tool tracking without
+                overwriting a terminal plan-panel footer (stream-end after a
+                successful goal completion).
         """
-        self._tool_display_by_call_id.clear()
-
         for tcid, step_w in list(self._tool_to_step.items()):
             step_w.set_tool_error(tcid, error, duration_ms=0)
-        self._tool_to_step.clear()
-        self._step_by_namespace.clear()
-        self._step_router.reset_turn()
+        _clear_adapter_step_tool_registry(self, clear_step_messages=False)
         _finalize_orphan_subagent_cards(self, success=False, summary=error)
         self._orphan_cards_by_invocation.clear()
         self._last_completed_main_step_execute_prose = ""
@@ -398,34 +402,69 @@ class TextualUIAdapter:
         self._file_change_previews_shown.clear()
         self._file_change_widgets.clear()
         self._file_preview_assistant_id = None
-        if self._goal_tree_message is not None:
+        if interrupt_goal_tree and self._goal_tree_message is not None:
             self._goal_tree_message.set_interrupted(error)
 
         # Clear active streaming message to avoid stale "active" state in the store.
         if self._set_active_message:
             self._set_active_message(None)
 
-    def finalize_pending_steps_with_error(self, message: str) -> None:
-        """Mark in-flight step cards as interrupted and clear tracking."""
-        for step_id in list(self._current_step_messages.keys()):
+    def finalize_pending_steps_with_error(
+        self,
+        message: str,
+        *,
+        only_in_flight: bool = False,
+        interrupt_goal_tree: bool = True,
+    ) -> None:
+        """Mark in-flight step cards as interrupted and clear tracking.
+
+        Args:
+            message: Error text shown on interrupted step cards / plan footer.
+            only_in_flight: When True, only interrupt cards still ``running``;
+                completed cards are dropped from the registry without UX change.
+            interrupt_goal_tree: When False, skip plan-panel ``set_interrupted``
+                (preserves a success footer after goal completion).
+        """
+        targets = {
+            sid: step_msg
+            for sid, step_msg in self._current_step_messages.items()
+            if (not only_in_flight) or _step_card_is_in_flight(step_msg)
+        }
+        for step_id in targets:
             _finalize_task_rows_for_step(
                 self,
                 step_id,
                 success=False,
             )
-        _finalize_orphan_subagent_cards(self, success=False, summary=message)
-        for step_msg in list(self._current_step_messages.values()):
+        if targets or not only_in_flight:
+            _finalize_orphan_subagent_cards(self, success=False, summary=message)
+        for step_msg in targets.values():
             step_msg.set_interrupted(message)
-        self._current_step_messages.clear()
-        self._tool_to_step.clear()
-        self._step_by_namespace.clear()
-        self._tool_display_by_call_id.clear()
-        self._step_router.reset_turn()
+        _clear_adapter_step_tool_registry(self)
         self._orphan_cards_by_invocation.clear()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
-        if self._goal_tree_message is not None:
+        if interrupt_goal_tree and self._goal_tree_message is not None:
             self._goal_tree_message.set_interrupted(message)
+
+
+def _step_card_is_in_flight(widget: Any) -> bool:  # noqa: ANN401
+    """True when a step card is still executing (not success/error/awaiting)."""
+    return getattr(widget, "_status", "") == "running"
+
+
+def _clear_adapter_step_tool_registry(
+    adapter: TextualUIAdapter,
+    *,
+    clear_step_messages: bool = True,
+) -> None:
+    """Drop live step/tool routing maps (stream-end and finalize cleanup)."""
+    if clear_step_messages:
+        adapter._current_step_messages.clear()
+    adapter._tool_to_step.clear()
+    adapter._step_by_namespace.clear()
+    adapter._tool_display_by_call_id.clear()
+    adapter._step_router.reset_turn()
 
 
 def _stream_end_pending_error_message(
@@ -449,8 +488,7 @@ def _stream_end_pending_error_message(
     if is_daemon_worker_thread_lost(err_msg) or is_daemon_worker_subprocess_lost(err_msg):
         return "Worker stopped during stream"
     if end_state == "idle" and any(
-        getattr(widget, "_status", "") == "running"
-        for widget in adapter._current_step_messages.values()
+        _step_card_is_in_flight(widget) for widget in adapter._current_step_messages.values()
     ):
         return "Stream ended before steps completed"
     return "Stream ended unexpectedly"
@@ -2521,14 +2559,10 @@ async def _handle_interrupt_cleanup(
 
     # Mark tools as rejected AFTER saving state
     _reject_step_tool_rows(adapter)
-    adapter._tool_display_by_call_id.clear()
 
     for step_msg in list(adapter._current_step_messages.values()):
         step_msg.set_interrupted("")
-    adapter._current_step_messages.clear()
-    adapter._tool_to_step.clear()
-    adapter._step_by_namespace.clear()
-    adapter._step_router.reset_turn()
+    _clear_adapter_step_tool_registry(adapter)
     if adapter._goal_tree_message is not None:
         adapter._goal_tree_message.set_interrupted("Stream cancelled")
 
@@ -4574,15 +4608,37 @@ async def execute_task_textual(
             or awaiting_step
         )
         if not skip_safety_net:
-            stream_end_error = _stream_end_pending_error_message(adapter, daemon_session)
-            if adapter._current_step_messages or adapter._tool_to_step:
-                adapter.finalize_pending_tools_with_error(stream_end_error)
-                adapter.finalize_pending_steps_with_error(stream_end_error)
-            elif (
+            # Only treat truly running cards / unbound tools as unexpected
+            # stream-end failures. Completed cards often linger in
+            # ``_current_step_messages`` after late display-card registration;
+            # finalizing those would overwrite a success plan-panel footer.
+            in_flight_steps = any(
+                _step_card_is_in_flight(w) for w in adapter._current_step_messages.values()
+            )
+            has_pending_tools = bool(adapter._tool_to_step)
+            goal_still_open = (
                 adapter._goal_tree_message is not None
                 and adapter._goal_tree_message._loop_executing()
-            ):
+            )
+            if in_flight_steps or has_pending_tools:
+                stream_end_error = _stream_end_pending_error_message(adapter, daemon_session)
+                # Tools first (mark errors); steps own the single goal-footer interrupt.
+                if has_pending_tools:
+                    adapter.finalize_pending_tools_with_error(
+                        stream_end_error,
+                        interrupt_goal_tree=False,
+                    )
+                adapter.finalize_pending_steps_with_error(
+                    stream_end_error,
+                    only_in_flight=True,
+                    interrupt_goal_tree=goal_still_open,
+                )
+            elif goal_still_open:
+                stream_end_error = _stream_end_pending_error_message(adapter, daemon_session)
                 adapter._goal_tree_message.set_interrupted(stream_end_error)
+            else:
+                # Goal already terminal: drop stale completed registry quietly.
+                _clear_adapter_step_tool_registry(adapter)
             if adapter._set_spinner and not clarification_pending:
                 await adapter._set_spinner(None)
 

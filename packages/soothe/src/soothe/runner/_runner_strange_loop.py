@@ -377,6 +377,21 @@ def _forward_messages_chunk(
     return _is_tool_stream_chunk(chunk) or _is_ai_messages_stream_chunk(chunk)
 
 
+def _step_completed_ui_summary(event_data: dict[str, Any]) -> str:
+    """Build the TUI step-card summary for a ``step_completed`` progress event.
+
+    Successful steps keep ``output_preview`` (e.g. ``Done [N tools]``) even when
+    ``error`` carries a recoverable tool failure. Failed steps prefer the error
+    text when present.
+    """
+    success = bool(event_data.get("success"))
+    summary = str(event_data.get("output_preview") or ("Failed" if not success else "Done"))
+    err = event_data.get("error")
+    if not success and err:
+        summary = f"Error: {str(err)[:50]}"
+    return summary[:100]
+
+
 def _clip_sloop_step_description(
     description: str, *, max_len: int = _AGENTIC_STEP_DESC_UI_MAX
 ) -> str:
@@ -637,12 +652,8 @@ class StrangeLoopMixin:
 
                 elif event_type == "step_completed":
                     # Level 3: Step result
-                    success = event_data["success"]
-                    summary = event_data.get("output_preview") or (
-                        "Failed" if not success else "Done"
-                    )
-                    if event_data.get("error"):
-                        summary = f"Error: {event_data['error'][:50]}"
+                    success = bool(event_data["success"])
+                    summary = _step_completed_ui_summary(event_data)
 
                     clarification = event_data.get("clarification")
                     from soothe.sloop.utils.token_usage import coerce_total_tokens_used
@@ -654,7 +665,7 @@ class StrangeLoopMixin:
                         StrangeLoopStepCompletedEvent(
                             step_id=str(event_data.get("step_id", "")),
                             success=success,
-                            summary=summary[:100],
+                            summary=summary,
                             duration_ms=event_data["duration_ms"],
                             tool_call_count=event_data.get("tool_call_count", 0),
                             clarification=clarification
