@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/soothe-logo.png" alt="Soothe Logo" width="280" />
+  <img src="assets/soothe-logo.png" alt="Soothe Logo" width="200" />
 
   #
 
