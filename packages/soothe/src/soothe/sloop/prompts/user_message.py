@@ -704,8 +704,9 @@ class UserMessageBuilder:
         sections.append(
             (
                 "TASK",
-                "Generate the execution plan: steps (with full_description for actions), "
-                "execution_mode, and first-person reasoning (about 10~20 words).",
+                "Generate the execution plan as wire JSON: steps "
+                "(description, dependencies, expected_output) or optional clarify. "
+                "Do not emit reasoning.",
             )
         )
 

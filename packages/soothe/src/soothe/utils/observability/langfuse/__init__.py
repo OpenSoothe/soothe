@@ -13,8 +13,19 @@ from soothe_sdk.observability.langfuse._trace_io import (
     patch_langfuse_trace_goal_io,
 )
 
+from soothe.utils.observability.langfuse._evaluate_span import (
+    bind_planner_langfuse_trace,
+    evaluate_langfuse_span,
+    evaluate_langfuse_span_async,
+    restore_planner_langfuse_trace,
+)
 from soothe.utils.observability.langfuse._goal_loop import GoalLoopTrace
 from soothe.utils.observability.langfuse._names import (
+    evaluate_assess_continuation_langfuse_run_display_name,
+    evaluate_assess_langfuse_run_display_name,
+    evaluate_gap_langfuse_run_display_name,
+    evaluate_gap_leg_langfuse_run_display_name,
+    evaluate_langfuse_run_display_name,
     execute_step_langfuse_run_display_name,
     intake_langfuse_run_display_name,
     loop_graph_langfuse_run_display_name,
@@ -43,10 +54,19 @@ class SootheLangfuse(_SdkSootheLangfuse):
 __all__ = [
     "GoalLoopTrace",
     "SootheLangfuse",
+    "bind_planner_langfuse_trace",
+    "evaluate_assess_continuation_langfuse_run_display_name",
+    "evaluate_assess_langfuse_run_display_name",
+    "evaluate_gap_langfuse_run_display_name",
+    "evaluate_gap_leg_langfuse_run_display_name",
+    "evaluate_langfuse_run_display_name",
+    "evaluate_langfuse_span",
+    "evaluate_langfuse_span_async",
     "execute_step_langfuse_run_display_name",
     "intake_langfuse_run_display_name",
     "loop_graph_langfuse_run_display_name",
     "merge_langfuse_runnable_config",
     "patch_langfuse_trace_goal_io",
     "resolve_langfuse_config_str",
+    "restore_planner_langfuse_trace",
 ]

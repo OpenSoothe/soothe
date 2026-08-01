@@ -2,14 +2,6 @@
 
 from __future__ import annotations
 
-_BOOTSTRAP_PLAN_REASONING: frozenset[str] = frozenset(
-    {
-        "Single execute wave from prior loop context and current goal.",
-        "Single execute wave grounded on prior goal completion report.",
-        "Loop-continuation bootstrap: initial planner call skipped.",
-    }
-)
-
 
 def is_displayable_assessment_reasoning(text: str) -> bool:
     """True when assess text is real LLM output (not fresh-loop routing placeholders)."""
@@ -25,22 +17,10 @@ def is_displayable_assessment_reasoning(text: str) -> bool:
     return True
 
 
-def is_displayable_plan_reasoning(text: str) -> bool:
-    """True when plan_reasoning is user-facing LLM output (not bootstrap placeholders)."""
-    stripped = (text or "").strip()
-    return bool(stripped) and stripped not in _BOOTSTRAP_PLAN_REASONING
-
-
-def should_emit_loop_reason_event(
-    *,
-    assessment_reasoning: str,
-    plan_reasoning: str,
-) -> bool:
+def should_emit_loop_reason_event(*, assessment_reasoning: str) -> bool:
     """Whether to forward a loop reason event to clients.
 
-    Assess cards use ``assessment_reasoning``; plan-generate cards use ``plan_reasoning``.
+    Plan-generate no longer emits user-facing plan reasoning; assess cards use
+    ``assessment_reasoning`` only.
     """
-    return bool(
-        is_displayable_assessment_reasoning(assessment_reasoning)
-        or is_displayable_plan_reasoning(plan_reasoning)
-    )
+    return is_displayable_assessment_reasoning(assessment_reasoning)

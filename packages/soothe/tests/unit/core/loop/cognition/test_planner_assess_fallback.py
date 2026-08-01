@@ -18,9 +18,9 @@ def _make_planner() -> LLMPlanner:
     model = MagicMock()
     planner = LLMPlanner.__new__(LLMPlanner)
     planner._model = model
-    planner._plan_assess_model = model
+    planner._plan_evaluate_assess_model = model
     planner._plan_generate_model = model
-    planner._plan_gap_model = model
+    planner._plan_evaluate_gap_model = model
     planner._config = None
     planner._loop_id = "loop-test"
     planner._prompt_builder = PromptBuilder(None)

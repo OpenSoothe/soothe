@@ -199,7 +199,7 @@ class IntakePass1LLMResult(BaseModel):
         is_task: True if work request, False if social interaction.
         confidence: High/medium/low confidence in the classification.
         social_response: Direct reply when is_task=False (required for chitchat path).
-        reasoning: Brief reasoning (≤15 words).
+        reasoning: Friendly TUI line (≤25 words), e.g. "This is a request to…".
         fallback: True when the result came from a fail-safe, not the LLM. Set
             internally only; never part of the wire schema sent to the model.
     """
@@ -232,7 +232,10 @@ class IntakePass1LLMResult(BaseModel):
         ),
     )
     reasoning: str = Field(
-        description="Brief reasoning for the classification (≤15 words)",
+        description=(
+            "Friendly TUI cognition line (This is a request to… / Here is a goal to…), "
+            "≤25 words; not classification jargon"
+        ),
     )
     # Internal only: omitted from wire schema and model_dump so the LLM never sees it.
     fallback: Annotated[bool, SkipJsonSchema()] = Field(
@@ -278,7 +281,7 @@ class IntakePass2LLMResult(BaseModel):
 
     Args:
         scope: Work scope: trivial (single action), simple (focused step), complex (multi-step).
-        reasoning: First-person TUI line (I'll / Let me …), ≤15 words.
+        reasoning: First-person TUI line (I'll / Let me …), ≤25 words.
     """
 
     scope: IntakeScope = Field(
@@ -288,7 +291,7 @@ class IntakePass2LLMResult(BaseModel):
     reasoning: str = Field(
         description=(
             "First-person agent line for the TUI cognition card (I'll / Let me …), "
-            "≤15 words; not third-person scope commentary"
+            "≤25 words; not third-person scope commentary"
         ),
     )
     multi_phase: bool = Field(

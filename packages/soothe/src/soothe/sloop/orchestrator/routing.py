@@ -1,4 +1,4 @@
-"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630, IG-663)."""
+"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630, IG-663, IG-672)."""
 
 from __future__ import annotations
 
@@ -11,13 +11,12 @@ from soothe.sloop.intention.models import IntakeLabel
 
 from .state import PLAN_ROUTE_GOAL_DONE
 from .stations import (
-    ANALYZE_GAPS,
-    ASSESS,
     AWAIT_USER,
     BEGIN_ITERATION,
     CHECK_LIMITS,
     COMMIT_PLAN,
     DELEGATE,
+    EVALUATE,
     EXECUTE,
     FINALIZE,
     GATHER_EVIDENCE,
@@ -35,20 +34,12 @@ def route_after_evidence_gather(state: dict[str, Any]) -> str:
     if route == "keep_plan":
         logger.info("[routing] route_after_evidence_gather → commit_plan (structural keep)")
         return COMMIT_PLAN
-    if route == "plan_generate_skip_assess":
+    if route == "plan_generate_skip_evaluate":
         logger.info("[routing] route_after_evidence_gather → generate_plan (fresh-loop skip)")
         return GENERATE_PLAN
-    if route in ("plan_gap_analysis", ANALYZE_GAPS, "analyze_gaps"):
-        logger.info("[routing] route_after_evidence_gather → analyze_gaps")
-        return ANALYZE_GAPS
-    logger.info("[routing] route_after_evidence_gather → assess")
-    return ASSESS
-
-
-def route_after_gap_analysis(state: dict[str, Any]) -> str:
-    """Gap analysis always feeds assess."""
-    _ = state
-    return ASSESS
+    # IG-672: mid-goal path is always evaluate.
+    logger.info("[routing] route_after_evidence_gather → evaluate")
+    return EVALUATE
 
 
 def _pending_clarification(state: dict[str, Any]) -> bool:
@@ -102,13 +93,13 @@ def route_after_preprocess(state: dict[str, Any]) -> str:
 
     if state.get("is_continuation"):
         if label == IntakeLabel.SIMPLE:
-            logger.info("[routing] route_after_preprocess → assess (continuation+simple)")
-            return ASSESS
+            logger.info("[routing] route_after_preprocess → evaluate (continuation+simple)")
+            return EVALUATE
         if label == IntakeLabel.COMPLEX or label is None:
             logger.info("[routing] route_after_preprocess → gather_evidence (continuation+complex)")
             return GATHER_EVIDENCE
-        logger.info("[routing] route_after_preprocess → assess (continuation+trivial)")
-        return ASSESS
+        logger.info("[routing] route_after_preprocess → evaluate (continuation+trivial)")
+        return EVALUATE
 
     if label == IntakeLabel.TRIVIAL:
         logger.info("[routing] route_after_preprocess → commit_plan (trivial pseudo-plan)")
@@ -145,8 +136,8 @@ def route_after_plan(state: dict[str, Any]) -> str:
     return COMMIT_PLAN
 
 
-def route_after_assess(state: dict[str, Any]) -> str:
-    """Branch from assess: done / skip-generate / continue-generate."""
+def route_after_evaluate(state: dict[str, Any]) -> str:
+    """Branch from evaluate: done / skip-generate / continue-generate."""
     if _pending_clarification(state):
         return AWAIT_USER
     if state.get("plan_route") == PLAN_ROUTE_GOAL_DONE:

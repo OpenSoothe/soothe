@@ -11,7 +11,6 @@ def resolve_plan_action_text(plan: Any) -> str:
     Preference order:
     1. ``PlanResult.next_action`` when already derived by the planner
     2. First step ``description`` from plan-generate output
-    3. ``plan_reasoning`` / ``reasoning`` (last resort)
 
     Args:
         plan: ``PlanGeneration``, ``PlanResult``, or any object with those attributes.
@@ -32,9 +31,4 @@ def resolve_plan_action_text(plan: Any) -> str:
         first_desc = str(getattr(steps[0], "description", "") or "").strip()
         if first_desc:
             return first_desc
-
-    for attr in ("plan_reasoning", "reasoning"):
-        text = str(getattr(plan, attr, "") or "").strip()
-        if text:
-            return text
     return ""

@@ -25,8 +25,8 @@ Gap+assess often dominate or match generate. Fresh iter=0 already skips both
 ## Design
 
 1. **Instrument** split-path methods with stable INFO lines:
-   `[Plan] phase=gap|assess|generate elapsed_ms=N prompt_chars=N iter=N`
-2. **Defaults**: `plan_gap_model_role=fast`, `plan_assess_model_role=fast`,
+   `[Plan] phase=evaluate-gap|evaluate-assess|generate elapsed_ms=N prompt_chars=N iter=N`
+2. **Defaults**: `plan_evaluate_gap_model_role=fast`, `plan_evaluate_assess_model_role=fast`,
    `plan_generate_model_role=think` (unchanged for plan quality).
 3. Wire a dedicated gap model through `resolve_planner` → `LLMPlanner`.
 
@@ -35,7 +35,7 @@ detection) still protect continue/done decisions.
 
 ## Files
 
-- `sloop/cognition/planner.py` — timings + `_plan_gap_model`
+- `sloop/cognition/planner.py` — timings + `_plan_evaluate_gap_model`
 - `config/models.py`, `soothe.template.yml`, packaged `soothe.yml`
 - `runner/resolver/__init__.py`
 - Unit tests: config defaults, resolver roles, timing log format
@@ -43,7 +43,7 @@ detection) still protect continue/done decisions.
 ## Cleanse (related dead code)
 
 - Removed legacy one-shot `[LLMPlanner] timings assess_ms=… plan_gen_ms=…`
-  log; `plan()` now emits the same `[Plan] phase=assess|generate` lines as the
+  log; `plan()` now emits the same `[Plan] phase=evaluate-assess|generate` lines as the
   split graph path.
 - Dropped unused `llm_calls` counter that only fed the old combined timing line.
 - Diagnose skill: grep `[Plan] phase=` instead of stale `[LLMPlanner]`.

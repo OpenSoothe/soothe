@@ -7,7 +7,7 @@ import pytest
 from soothe.sloop.clarification.auto import AutoClarificationPolicy
 from soothe.sloop.clarification.origins import (
     ORIGIN_EXECUTE,
-    ORIGIN_PLAN_ASSESS,
+    ORIGIN_PLAN_EVALUATE,
     ORIGIN_PLAN_GENERATE,
     ORIGIN_PLANNER_SUBAGENT_REVIEW,
 )
@@ -293,6 +293,6 @@ async def test_force_manual_does_not_apply_to_strange_loop_plan_origins() -> Non
         ),
         force_manual_origins=(ORIGIN_PLANNER_SUBAGENT_REVIEW,),
     )
-    for origin in (ORIGIN_PLAN_GENERATE, ORIGIN_PLAN_ASSESS):
+    for origin in (ORIGIN_PLAN_GENERATE, ORIGIN_PLAN_EVALUATE):
         ans = await policy.answer(_request(origin_node=origin))
         assert ans.source == "veritas"

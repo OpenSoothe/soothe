@@ -20,12 +20,12 @@ def test_intent_pass_reasoning_events_emits_pass1_then_pass2() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         reasoning="I'll read the readme first.",
-        pass1_reasoning="Work request detected.",
+        pass1_reasoning="This is a request to read the readme.",
         task_complexity=TaskComplexity.SIMPLE,
     )
     events = intent_pass_reasoning_events(intent)
     assert [e[1]["reasoning"] for e in events] == [
-        "Work request detected.",
+        "This is a request to read the readme.",
         "I'll read the readme first.",
     ]
 
@@ -58,8 +58,10 @@ def test_intent_pass_reasoning_events_pass1_only_when_pass2_empty() -> None:
         reasoning="",
         task_complexity=TaskComplexity.SIMPLE,
     )
-    events = intent_pass_reasoning_events(intent, pass1_reasoning="Work request detected.")
-    assert [e[1]["reasoning"] for e in events] == ["Work request detected."]
+    events = intent_pass_reasoning_events(
+        intent, pass1_reasoning="This is a request to read the readme."
+    )
+    assert [e[1]["reasoning"] for e in events] == ["This is a request to read the readme."]
 
 
 def test_intent_pass_reasoning_events_skips_empty_reasoning() -> None:
@@ -74,7 +76,7 @@ def test_intent_pass_reasoning_events_skips_empty_reasoning() -> None:
 def test_intake_reasoning_event_skips_structural_bypass_markers() -> None:
     assert not is_displayable_intake_reasoning("Loop-control phrase; resume via checkpoint")
     assert intake_reasoning_event("Loop-control phrase; resume via checkpoint") is None
-    assert intake_reasoning_event("Work request detected.") is not None
+    assert intake_reasoning_event("This is a request to read the readme.") is not None
 
 
 def test_intake_reasoning_event_displays_fail_safe_prose() -> None:

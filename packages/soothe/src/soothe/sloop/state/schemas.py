@@ -638,7 +638,6 @@ class PlanResult(BaseModel):
         status: Whether to finish, continue current plan, or replan.
         goal_progress: Descriptive progress level (none | low | medium | high | complete).
         assessment_reasoning: Phase-1 status justification (reserved; StatusAssessment has no LLM text field).
-        plan_reasoning: Plan-generate ``reasoning`` for user-facing cognition cards.
         next_action: Internal orchestration hint (not shown in TUI).
         full_action: Complete concatenated action from both phases (max 500 chars).
         plan_action: Reuse the in-flight AgentDecision or supply a new one.
@@ -656,9 +655,6 @@ class PlanResult(BaseModel):
 
     assessment_reasoning: str = Field(default="", max_length=500)
     """Reserved; assess-phase schema has no separate justification string (IG-329)."""
-
-    plan_reasoning: str = Field(default="", max_length=500)
-    """Plan-generate reasoning surfaced in cognition cards."""
 
     next_action: str = Field(default="", max_length=500)
     """Internal next-step hint for loop orchestration (not forwarded to TUI)."""
@@ -854,8 +850,6 @@ class PlanGeneration(BaseModel):
             May be empty when ``type='final'`` (same as ``AgentDecision``).
         execution_mode: Execution mode for ``steps``. When ``type`` is set but the model
             omits this field, it defaults to ``parallel``.
-        reasoning: First-person plan rationale shown in the TUI cognition card
-            (e.g. "I'll …", "Let me …").
     """
 
     type: Literal["execute_steps", "final"] | None = None
@@ -866,11 +860,6 @@ class PlanGeneration(BaseModel):
             "Only 'parallel' (default when omitted) or 'dependency' if steps declare dependencies. "
             "Never 'sequential'."
         ),
-    )
-    reasoning: str = Field(
-        default="",
-        max_length=500,
-        description=("First-person plan rationale for the cognition card (e.g. I'll …, Let me …)."),
     )
 
     @model_validator(mode="before")

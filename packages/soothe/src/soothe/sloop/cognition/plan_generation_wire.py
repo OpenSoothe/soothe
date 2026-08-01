@@ -52,13 +52,8 @@ class PlanClarifyWire(BaseModel):
 
 
 class PlanGenerationWire(BaseModel):
-    """LLM-facing plan-generate structured output."""
+    """LLM-facing plan-generate structured output (steps list + optional clarify)."""
 
-    reasoning: str = Field(
-        default="",
-        max_length=500,
-        description="First-person plan rationale for the cognition card.",
-    )
     steps: list[PlanGenerateStepWire] = Field(default_factory=list)
     clarify: PlanClarifyWire | None = None
 
@@ -123,17 +118,16 @@ def coerce_plan_generation_wire_dict(data: dict[str, Any]) -> dict[str, Any]:
         return data
 
     data = unwrap_schema_envelope(data, marker_key="steps")
-    reasoning = str(data.get("reasoning") or "").strip()
     clarify_raw = data.get("clarify")
     if isinstance(clarify_raw, dict) and clarify_raw.get("questions"):
         questions = [str(q).strip() for q in clarify_raw.get("questions", []) if str(q).strip()]
         if questions:
-            return {"reasoning": reasoning, "steps": [], "clarify": {"questions": questions}}
+            return {"steps": [], "clarify": {"questions": questions}}
 
     steps_salvaged = _salvage_steps_array(data.get("steps"))
     legacy_clarify = _legacy_ask_user_to_clarify(steps_salvaged)
     if legacy_clarify is not None:
-        return {"reasoning": reasoning, "steps": [], "clarify": legacy_clarify}
+        return {"steps": [], "clarify": legacy_clarify}
 
     wire_steps: list[dict[str, Any]] = []
     for index, item in enumerate(steps_salvaged):
@@ -162,7 +156,7 @@ def coerce_plan_generation_wire_dict(data: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
-    return {"reasoning": reasoning, "steps": wire_steps}
+    return {"steps": wire_steps}
 
 
 def _execution_mode_from_wire_steps(
@@ -180,7 +174,6 @@ def plan_generation_wire_to_model(wire: PlanGenerationWire) -> PlanGeneration:
         return PlanGeneration(
             type="execute_steps",
             execution_mode="parallel",
-            reasoning=wire.reasoning or "",
             steps=[
                 PlanGenerateStep(
                     id="01",
@@ -196,7 +189,6 @@ def plan_generation_wire_to_model(wire: PlanGenerationWire) -> PlanGeneration:
         return PlanGeneration(
             type="final",
             execution_mode="parallel",
-            reasoning=wire.reasoning or "",
             steps=[],
         )
 
@@ -219,7 +211,6 @@ def plan_generation_wire_to_model(wire: PlanGenerationWire) -> PlanGeneration:
     return PlanGeneration(
         type="execute_steps",
         execution_mode=_execution_mode_from_wire_steps(wire.steps),
-        reasoning=wire.reasoning or "",
         steps=plan_steps,
     )
 

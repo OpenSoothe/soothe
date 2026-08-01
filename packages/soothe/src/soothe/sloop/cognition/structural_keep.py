@@ -105,7 +105,6 @@ def build_keep_plan_result(
         status=status,
         goal_progress=goal_progress if goal_progress is not None else _progress_from_state(state),
         assessment_reasoning="",
-        plan_reasoning="",
         plan_action="keep",
         decision=None,
         next_action=KEEP_NEXT_ACTION,

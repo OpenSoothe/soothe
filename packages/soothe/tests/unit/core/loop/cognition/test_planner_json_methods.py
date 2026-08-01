@@ -27,9 +27,9 @@ def _make_planner() -> LLMPlanner:
     model.with_structured_output = MagicMock(return_value=structured)
     planner = LLMPlanner.__new__(LLMPlanner)
     planner._model = model
-    planner._plan_assess_model = model
+    planner._plan_evaluate_assess_model = model
     planner._plan_generate_model = model
-    planner._plan_gap_model = model
+    planner._plan_evaluate_gap_model = model
     planner._config = None
     planner._loop_id = "loop-test"
     planner._prompt_builder = PromptBuilder(None)
@@ -45,7 +45,6 @@ async def test_generate_plan_uses_json_schema_methods() -> None:
     async def _capture(*_args, **kwargs):
         captured.update(kwargs)
         return PlanGenerationWire(
-            reasoning="I'll start with discovery.",
             steps=[PlanGenerateStepWire(description="Discover test runners")],
         )
 

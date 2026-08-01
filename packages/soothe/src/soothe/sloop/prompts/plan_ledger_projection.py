@@ -490,15 +490,15 @@ def _collect_assess_execute_ai(
 
 
 def _assess_prompt_ledger_config(soothe_config: Any | None) -> Any | None:
-    from soothe.config.models import PlanAssessPromptConfig
+    from soothe.config.models import PlanEvaluatePromptConfig
 
     if soothe_config is None:
-        return PlanAssessPromptConfig()
+        return PlanEvaluatePromptConfig()
     loop_cfg = getattr(soothe_config, "agent", None)
     loop_cfg = getattr(loop_cfg, "loop", None) if loop_cfg is not None else None
-    assess_cfg = getattr(loop_cfg, "plan_assess_prompt", None) if loop_cfg is not None else None
+    assess_cfg = getattr(loop_cfg, "plan_evaluate_prompt", None) if loop_cfg is not None else None
     if assess_cfg is None:
-        return PlanAssessPromptConfig()
+        return PlanEvaluatePromptConfig()
     return assess_cfg
 
 

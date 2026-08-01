@@ -149,6 +149,27 @@ class PlanPhase:
             context_engine=context_engine,
         )
 
+    async def analyze_plan_gap_component(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+        *,
+        component: str,
+        context_engine: Any | None = None,
+        leg_index: int = 0,
+    ) -> Any:
+        """Run a single-facet inventory leg (parallel evaluate; IG-672)."""
+        self._prepare_state_evidence(state)
+        return await self._loop_planner.analyze_plan_gap_component(
+            goal=goal,
+            state=state,
+            context=context,
+            component=component,
+            context_engine=context_engine,
+            leg_index=leg_index,
+        )
+
     async def generate_from_assessment(
         self,
         goal: str,

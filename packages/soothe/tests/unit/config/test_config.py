@@ -222,14 +222,18 @@ class TestSootheConfig:
 
     def test_loop_plan_model_roles_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.agent.loop.plan_assess_model_role == "fast"
-        assert cfg.agent.loop.plan_gap_model_role == "fast"
+        assert cfg.agent.loop.plan_evaluate_assess_model_role == "fast"
+        assert cfg.agent.loop.plan_evaluate_gap_model_role == "fast"
         assert cfg.agent.loop.plan_generate_model_role == "think"
         assert cfg.agent.loop.plan_generate_model_role_simple == "fast"
         assert cfg.agent.loop.plan_generate_model_role_near_gap == "fast"
         assert cfg.agent.loop.plan_structural_keep_enabled is True
         assert cfg.agent.loop.plan_structural_keep_max_streak == 3
-        assert cfg.agent.loop.plan_gap_skip_simple_mid_loop is True
+        assert cfg.agent.loop.plan_evaluate_gap_mode == "sequential"
+        assert cfg.agent.loop.plan_evaluate_gap_max_concurrency == 4
+        assert cfg.agent.loop.plan_evaluate_gap_min_facets == 2
+        assert cfg.agent.loop.plan_evaluate_gap_wall_clock_seconds == 90.0
+        assert cfg.agent.loop.plan_evaluate_gap_leg_timeout_seconds == 45.0
         assert cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_total_chars == 24000
         assert cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_message_chars == 3000
         assert cfg.agent.loop.goal_synthesis_model_role == "default"
@@ -238,8 +242,8 @@ class TestSootheConfig:
         cfg = SootheConfig(
             agent={
                 "loop": {
-                    "plan_assess_model_role": "think",
-                    "plan_gap_model_role": "default",
+                    "plan_evaluate_assess_model_role": "think",
+                    "plan_evaluate_gap_model_role": "default",
                     "plan_generate_model_role": "think",
                     "plan_generate_model_role_simple": "default",
                     "plan_generate_model_role_near_gap": "default",
@@ -248,8 +252,8 @@ class TestSootheConfig:
                 }
             }
         )
-        assert cfg.agent.loop.plan_assess_model_role == "think"
-        assert cfg.agent.loop.plan_gap_model_role == "default"
+        assert cfg.agent.loop.plan_evaluate_assess_model_role == "think"
+        assert cfg.agent.loop.plan_evaluate_gap_model_role == "default"
         assert cfg.agent.loop.plan_generate_model_role == "think"
         assert cfg.agent.loop.plan_generate_model_role_simple == "default"
         assert cfg.agent.loop.plan_generate_model_role_near_gap == "default"

@@ -1,4 +1,4 @@
-"""Compile the Strange Loop LangGraph (RFC-220, IG-663 stem stations).
+"""Compile the Strange Loop LangGraph (RFC-220, IG-663 stem stations, IG-672 evaluate).
 
 The graph checkpoint key uses ``{loop_id}__strange_loop`` via
 ``configurable.thread_id`` (see ``checkpoint_keys``) when a checkpointer is
@@ -19,8 +19,7 @@ from soothe.sloop.stages.execute.commit_plan import node_resolve_decision
 from soothe.sloop.stages.execute.execute import node_execute
 from soothe.sloop.stages.execute.record_progress import node_record_iteration
 from soothe.sloop.stages.execute.validate_plan import node_validate_evidence_bindings
-from soothe.sloop.stages.plan.analyze_gaps import node_plan_gap_analysis
-from soothe.sloop.stages.plan.assess import node_plan_assess
+from soothe.sloop.stages.plan.evaluate import node_plan_evaluate
 from soothe.sloop.stages.plan.gather_evidence import node_bounded_evidence_gather
 from soothe.sloop.stages.plan.generate_plan import node_plan_generate
 from soothe.sloop.stages.preprocess.enter_loop import node_init_or_resume
@@ -30,11 +29,10 @@ from soothe.sloop.stages.sidecars.delegate import node_invoke_wired_subagent
 
 from .checkpointer import core_agent_checkpointer
 from .routing import (
-    route_after_assess,
     route_after_clarification,
+    route_after_evaluate,
     route_after_evidence_gather,
     route_after_execute,
-    route_after_gap_analysis,
     route_after_iteration_gate,
     route_after_plan,
     route_after_preprocess,
@@ -46,14 +44,13 @@ from .routing import (
 from .runtime_context import LoopRuntimeContext
 from .state import LoopGraphState
 from .stations import (
-    ANALYZE_GAPS,
-    ASSESS,
     AWAIT_USER,
     BEGIN_ITERATION,
     CHECK_LIMITS,
     COMMIT_PLAN,
     DELEGATE,
     ENTER_LOOP,
+    EVALUATE,
     EXECUTE,
     FINALIZE,
     GATHER_EVIDENCE,
@@ -81,7 +78,7 @@ def _is_real_checkpointer(obj: Any) -> bool:
 
 
 def build_strange_loop_graph(ctx: LoopRuntimeContext):
-    """Build and compile the Loop orchestrator graph (RFC-220 / IG-663 topology).
+    """Build and compile the Loop orchestrator graph (RFC-220 / IG-663 / IG-672).
 
     The compiled graph is given the same checkpointer the CoreAgent uses.
     Without a checkpointer LangGraph's ``interrupt(...)`` cannot persist
@@ -112,11 +109,8 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     async def generate_plan(state: dict[str, Any]) -> dict[str, Any]:
         return await node_plan_generate(ctx, state)
 
-    async def assess(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_plan_assess(ctx, state)
-
-    async def analyze_gaps(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_plan_gap_analysis(ctx, state)
+    async def evaluate(state: dict[str, Any]) -> dict[str, Any]:
+        return await node_plan_evaluate(ctx, state)
 
     async def finalize(state: dict[str, Any]) -> dict[str, Any]:
         return await node_goal_completion(ctx, state)
@@ -143,8 +137,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_node(CHECK_LIMITS, check_limits)
     graph.add_node(BEGIN_ITERATION, begin_iteration)
     graph.add_node(GATHER_EVIDENCE, gather_evidence)
-    graph.add_node(ANALYZE_GAPS, analyze_gaps)
-    graph.add_node(ASSESS, assess)
+    graph.add_node(EVALUATE, evaluate)
     graph.add_node(GENERATE_PLAN, generate_plan)
     graph.add_node(FINALIZE, finalize)
     graph.add_node(COMMIT_PLAN, commit_plan)
@@ -162,7 +155,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             CHECK_LIMITS: CHECK_LIMITS,
             GATHER_EVIDENCE: GATHER_EVIDENCE,
             GENERATE_PLAN: GENERATE_PLAN,
-            ASSESS: ASSESS,
+            EVALUATE: EVALUATE,
             COMMIT_PLAN: COMMIT_PLAN,
             DELEGATE: DELEGATE,
             END: END,
@@ -188,20 +181,14 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         GATHER_EVIDENCE,
         route_after_evidence_gather,
         {
-            ASSESS: ASSESS,
-            ANALYZE_GAPS: ANALYZE_GAPS,
+            EVALUATE: EVALUATE,
             GENERATE_PLAN: GENERATE_PLAN,
             COMMIT_PLAN: COMMIT_PLAN,
         },
     )
     graph.add_conditional_edges(
-        ANALYZE_GAPS,
-        route_after_gap_analysis,
-        {ASSESS: ASSESS},
-    )
-    graph.add_conditional_edges(
-        ASSESS,
-        route_after_assess,
+        EVALUATE,
+        route_after_evaluate,
         {
             FINALIZE: FINALIZE,
             COMMIT_PLAN: COMMIT_PLAN,
@@ -255,8 +242,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         {
             EXECUTE: EXECUTE,
             GENERATE_PLAN: GENERATE_PLAN,
-            ASSESS: ASSESS,
-            ANALYZE_GAPS: ANALYZE_GAPS,
+            EVALUATE: EVALUATE,
             DELEGATE: DELEGATE,
             END: END,
         },

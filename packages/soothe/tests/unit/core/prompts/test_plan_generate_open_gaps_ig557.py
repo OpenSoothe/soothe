@@ -88,7 +88,6 @@ async def test_generate_from_assessment_passes_plan_gap_to_message_builder() -> 
     plan = PlanGeneration(
         type="execute_steps",
         execution_mode="parallel",
-        reasoning="I'll cover the open gaps.",
         steps=[
             PlanGenerateStep(
                 id="02",

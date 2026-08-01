@@ -28,7 +28,6 @@ async def test_generate_from_assessment_passes_inline_assessment_when_assess_ski
     plan = PlanGeneration(
         type="execute_steps",
         execution_mode="parallel",
-        reasoning="I'll start with discovery.",
         steps=[
             PlanGenerateStep(
                 id="01",
@@ -86,7 +85,6 @@ async def test_generate_from_assessment_passes_inline_assessment_when_assess_in_
     plan = PlanGeneration(
         type="execute_steps",
         execution_mode="parallel",
-        reasoning="I'll continue planning.",
         steps=[
             PlanGenerateStep(
                 id="01",

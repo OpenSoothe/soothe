@@ -15,11 +15,11 @@ Rules:
   or "in parallel" across independent suites) → complex.
 - Uncertain with a clear single deliverable → simple (not complex).
 - Architecture / system migration with ordered phases → complex.
-- reasoning: first-person TUI line for the user (I'll / Let me …), ≤15 words; not third-person scope commentary
+- reasoning: first-person TUI line for the user (I'll / Let me …), ≤25 words; not third-person scope commentary
 - requires_tool_use: true for live/external data (weather, web lookup, file contents); false for pure reasoning/math
 
 JSON only:
-{"scope":"trivial"|"simple"|"complex","reasoning":"≤15 words, first person","multi_phase":bool,"requires_tool_use":bool}
+{"scope":"trivial"|"simple"|"complex","reasoning":"≤25 words, first person","multi_phase":bool,"requires_tool_use":bool}
 
 multi_phase: true when the goal text implies multiple ordered phases (e.g. "first X then Y", numbered steps, "and then run tests").
 requires_tool_use: true when answering needs tools or external data; false for greetings, math, or static knowledge.

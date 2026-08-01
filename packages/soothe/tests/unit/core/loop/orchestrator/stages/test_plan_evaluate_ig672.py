@@ -1,4 +1,4 @@
-"""IG-557 / IG-593: plan-gap-analysis routing, soft-fail, and assess feed-forward."""
+"""IG-672: evaluate inventory soft-fail, routing helpers, and assess feed-forward."""
 
 from __future__ import annotations
 
@@ -14,11 +14,11 @@ from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.prompts import PromptBuilder
 from soothe.sloop.prompts.user_message import UserMessageBuilder
-from soothe.sloop.stages.plan.analyze_gaps import (
-    node_plan_gap_analysis,
-)
-from soothe.sloop.stages.plan.gather_evidence import (
-    _should_run_gap_analysis,
+from soothe.sloop.stages.plan.evaluate import (
+    node_plan_evaluate,
+    reduce_component_legs,
+    run_inventory,
+    should_run_inventory,
 )
 from soothe.sloop.state.schemas import (
     GoalComponentStatus,
@@ -29,12 +29,10 @@ from soothe.sloop.state.schemas import (
 )
 
 
-def test_should_skip_gap_at_iter0_without_execution() -> None:
+def test_should_skip_inventory_at_iter0_without_execution() -> None:
     state = LoopState(goal="g", thread_id="t", iteration=0)
     ctx = LoopRuntimeContext(
-        strange_loop=MagicMock(
-            config=MagicMock(agent=MagicMock(loop=MagicMock(plan_gap_analysis_enabled=True)))
-        ),
+        strange_loop=MagicMock(config=None),
         state_manager=MagicMock(),
         anchor_manager=MagicMock(),
         goal_context_manager=MagicMock(),
@@ -49,18 +47,16 @@ def test_should_skip_gap_at_iter0_without_execution() -> None:
         ce=None,
         ce_goal_id=None,
     )
-    assert _should_run_gap_analysis(ctx) is False
+    assert should_run_inventory(ctx) is False
 
 
-def test_should_run_gap_on_mid_goal() -> None:
+def test_should_run_inventory_on_mid_goal() -> None:
     state = LoopState(goal="g", thread_id="t", iteration=1)
     state.add_step_result(
         StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
     )
     ctx = LoopRuntimeContext(
-        strange_loop=MagicMock(
-            config=MagicMock(agent=MagicMock(loop=MagicMock(plan_gap_analysis_enabled=True)))
-        ),
+        strange_loop=MagicMock(config=None),
         state_manager=MagicMock(),
         anchor_manager=MagicMock(),
         goal_context_manager=MagicMock(),
@@ -75,7 +71,7 @@ def test_should_run_gap_on_mid_goal() -> None:
         ce=None,
         ce_goal_id=None,
     )
-    assert _should_run_gap_analysis(ctx) is True
+    assert should_run_inventory(ctx) is True
 
 
 def test_assess_envelope_includes_gap_analysis_block() -> None:
@@ -120,24 +116,6 @@ def test_plan_gap_allows_long_component_evidence() -> None:
     assert gap.components[0].gap == long_gap
 
 
-def test_plan_gap_allows_long_gap_reasoning() -> None:
-    gap_reasoning = (
-        "The technical capability (script logic) is confirmed 'satisfied' via the patch in step 1. "
-        "The failure is purely environmental: the feature flag (cert file) required by the template "
-        "engine is missing. Once a placeholder cert file is placed and the script is re-run, the "
-        "verification should succeed immediately."
-    )
-    assert len(gap_reasoning) == 309
-    gap = PlanGapAnalysis(
-        components=[GoalComponentStatus(component="verification", status="partial")],
-        evidence_summary="Script logic patched.",
-        remaining_gaps=["add cert placeholder"],
-        distance_from_goal="near",
-        gap_reasoning=gap_reasoning,
-    )
-    assert gap.gap_reasoning == gap_reasoning
-
-
 def test_assess_respects_gap_rejects_complete() -> None:
     gap = PlanGapAnalysis(
         components=[GoalComponentStatus(component="tests", status="not_started")],
@@ -166,10 +144,47 @@ def test_build_plan_messages_gap_kind_uses_gap_instructions() -> None:
     assert "remaining_gaps" in msgs[-1].content
 
 
-def _gap_node_ctx(*, plan_phase: MagicMock) -> LoopRuntimeContext:
+def test_reduce_missing_legs_blocks_at_goal() -> None:
+    gap = reduce_component_legs(
+        ["a", "b"],
+        [
+            GoalComponentStatus(component="a", status="satisfied", evidence="ok"),
+            None,
+        ],
+    )
+    assert gap is not None
+    assert gap.distance_from_goal != "at_goal"
+    assert gap.components[1].status == "not_started"
+
+
+def test_reduce_all_satisfied_is_at_goal() -> None:
+    gap = reduce_component_legs(
+        ["a", "b"],
+        [
+            GoalComponentStatus(component="a", status="satisfied"),
+            GoalComponentStatus(component="b", status="satisfied"),
+        ],
+    )
+    assert gap is not None
+    assert gap.distance_from_goal == "at_goal"
+
+
+def _eval_ctx(*, plan_phase: MagicMock) -> LoopRuntimeContext:
     strange_loop = MagicMock()
     strange_loop.plan_phase = plan_phase
     strange_loop._build_plan_context = MagicMock(return_value=MagicMock())
+    strange_loop.config = MagicMock()
+    loop = MagicMock()
+    loop.plan_evaluate_gap_mode = "sequential"
+    loop.plan_evaluate_gap_wall_clock_seconds = 90.0
+    loop.plan_evaluate_gap_leg_timeout_seconds = 45.0
+    loop.plan_evaluate_gap_max_concurrency = 4
+    loop.plan_evaluate_gap_min_facets = 2
+    strange_loop.config.agent.loop = loop
+    state = LoopState(goal="verify readiness", thread_id="t-e217", iteration=2)
+    state.add_step_result(
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
+    )
     return LoopRuntimeContext(
         strange_loop=strange_loop,
         state_manager=MagicMock(),
@@ -180,7 +195,7 @@ def _gap_node_ctx(*, plan_phase: MagicMock) -> LoopRuntimeContext:
         goal_record=None,
         continue_loop_mode=False,
         recovery_valid_resume=False,
-        loop_state=LoopState(goal="verify readiness", thread_id="t-e217", iteration=2),
+        loop_state=state,
         emit=AsyncMock(),
         scratch=LoopPhaseScratch(),
         ce=None,
@@ -189,55 +204,38 @@ def _gap_node_ctx(*, plan_phase: MagicMock) -> LoopRuntimeContext:
 
 
 @pytest.mark.asyncio
-async def test_node_soft_fails_structured_output_error() -> None:
+async def test_inventory_soft_fails_structured_output_error() -> None:
     plan_phase = MagicMock()
     plan_phase.analyze_plan_gap = AsyncMock(
         side_effect=StructuredOutputError(
             "structured_output_validation_failed: 'component' is a required property"
         )
     )
-    ctx = _gap_node_ctx(plan_phase=plan_phase)
+    ctx = _eval_ctx(plan_phase=plan_phase)
 
-    result = await node_plan_gap_analysis(ctx, {})
+    gap = await run_inventory(ctx)
 
-    assert result == {}
-    assert ctx.scratch.plan_gap is None
+    assert gap is None
     plan_phase.analyze_plan_gap.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_node_soft_fails_on_timeout() -> None:
+async def test_inventory_soft_fails_on_timeout() -> None:
     async def _hang(*_a: object, **_k: object) -> None:
         await asyncio.sleep(3600)
 
     plan_phase = MagicMock()
     plan_phase.analyze_plan_gap = AsyncMock(side_effect=_hang)
-    ctx = _gap_node_ctx(plan_phase=plan_phase)
+    ctx = _eval_ctx(plan_phase=plan_phase)
+    ctx.strange_loop.config.agent.loop.plan_evaluate_gap_wall_clock_seconds = 0.05
 
-    with patch(
-        "soothe.sloop.stages.plan.analyze_gaps._GAP_WALL_CLOCK_SECONDS",
-        0.05,
-    ):
-        result = await node_plan_gap_analysis(ctx, {})
+    gap = await run_inventory(ctx)
 
-    assert result == {}
-    assert ctx.scratch.plan_gap is None
+    assert gap is None
 
 
 @pytest.mark.asyncio
-async def test_node_soft_fails_on_value_error() -> None:
-    plan_phase = MagicMock()
-    plan_phase.analyze_plan_gap = AsyncMock(side_effect=ValueError("PlanGapAnalysis returned None"))
-    ctx = _gap_node_ctx(plan_phase=plan_phase)
-
-    result = await node_plan_gap_analysis(ctx, {})
-
-    assert result == {}
-    assert ctx.scratch.plan_gap is None
-
-
-@pytest.mark.asyncio
-async def test_node_stashes_gap_on_success() -> None:
+async def test_inventory_stashes_via_evaluate_node() -> None:
     gap = PlanGapAnalysis(
         components=[GoalComponentStatus(component="api", status="satisfied")],
         evidence_summary="ok",
@@ -247,9 +245,17 @@ async def test_node_stashes_gap_on_success() -> None:
     )
     plan_phase = MagicMock()
     plan_phase.analyze_plan_gap = AsyncMock(return_value=gap)
-    ctx = _gap_node_ctx(plan_phase=plan_phase)
+    plan_phase.assess_status = AsyncMock(
+        return_value=StatusAssessment(status="continue", goal_progress="medium")
+    )
+    ctx = _eval_ctx(plan_phase=plan_phase)
 
-    result = await node_plan_gap_analysis(ctx, {})
+    with patch(
+        "soothe.sloop.stages.plan.evaluate.node_plan_assess",
+        new=AsyncMock(return_value={"assess_route": "continue_generate"}),
+    ) as assess:
+        result = await node_plan_evaluate(ctx, {})
 
-    assert result == {}
+    assert result.get("assess_route") == "continue_generate"
     assert ctx.scratch.plan_gap is gap
+    assess.assert_awaited_once()

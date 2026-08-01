@@ -16,7 +16,6 @@ from soothe.sloop.state.schemas import DEFAULT_MAX_PLAN_STEPS_PER_WAVE, PlanGene
 
 def test_wire_schema_requires_dependencies_on_steps() -> None:
     wire = PlanGenerationWire(
-        reasoning="I'll fetch weather.",
         steps=[
             {
                 "description": "Fetch Shanghai weather",
@@ -34,7 +33,6 @@ def test_wire_schema_requires_dependencies_on_steps() -> None:
 
 def test_wire_dependencies_set_execution_mode_dependency() -> None:
     wire = PlanGenerationWire(
-        reasoning="Two-step chain.",
         steps=[
             {
                 "id": "01",
@@ -57,7 +55,6 @@ def test_wire_dependencies_set_execution_mode_dependency() -> None:
 
 def test_wire_clarify_maps_to_ask_user_step() -> None:
     wire = PlanGenerationWire(
-        reasoning="Need format preference.",
         steps=[],
         clarify={"questions": ["Which format should I use?"]},
     )
@@ -69,7 +66,6 @@ def test_wire_clarify_maps_to_ask_user_step() -> None:
 
 def test_wire_empty_steps_maps_to_final_plan() -> None:
     wire = PlanGenerationWire(
-        reasoning="Goal is complete; no additional execution needed.",
         steps=[],
     )
     plan = plan_generation_wire_to_model(wire)
@@ -92,6 +88,7 @@ def test_coerce_salvages_pseudo_fields_in_steps_array() -> None:
         ],
     }
     coerced = coerce_plan_generation_wire_dict(raw)
+    assert "reasoning" not in coerced
     wire = PlanGenerationWire.model_validate(coerced)
     plan = plan_generation_wire_to_model(wire)
     assert len(plan.steps) == 1
@@ -112,6 +109,7 @@ def test_coerce_legacy_ask_user_step_to_clarify() -> None:
         ],
     }
     coerced = coerce_plan_generation_wire_dict(raw)
+    assert "reasoning" not in coerced
     wire = PlanGenerationWire.model_validate(coerced)
     assert wire.clarify is not None
     assert wire.steps == []
@@ -120,7 +118,6 @@ def test_coerce_legacy_ask_user_step_to_clarify() -> None:
 def test_wire_rejects_clarify_and_steps_together() -> None:
     with pytest.raises(ValidationError):
         PlanGenerationWire(
-            reasoning="bad",
             steps=[
                 {
                     "description": "Do work",
@@ -165,13 +162,12 @@ def test_capped_wire_schema_rejects_over_max_steps() -> None:
         for i in range(DEFAULT_MAX_PLAN_STEPS_PER_WAVE + 1)
     ]
     with pytest.raises(ValidationError):
-        schema(reasoning="Plan wave.", steps=steps)
+        schema(steps=steps)
 
 
 def test_capped_wire_schema_accepts_ten_steps() -> None:
     schema = capped_plan_generation_wire_model()
     wire = schema(
-        reasoning="Ten-step wave.",
         steps=[
             {
                 "id": f"{i:02d}",
@@ -190,3 +186,4 @@ def test_wire_schema_excludes_runtime_only_fields() -> None:
     assert "type" not in props
     assert "execution_mode" not in props
     assert "plan_action" not in props
+    assert "reasoning" not in props

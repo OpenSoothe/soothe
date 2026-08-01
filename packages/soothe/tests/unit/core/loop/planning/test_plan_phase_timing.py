@@ -21,7 +21,7 @@ def test_prompt_chars_for_messages_sums_content() -> None:
 def test_log_plan_phase_timing_format(caplog) -> None:
     with caplog.at_level(logging.INFO, logger="soothe.sloop.cognition.planner"):
         _log_plan_phase_timing(
-            phase="gap",
+            phase="evaluate-gap",
             elapsed_ms=3120.4,
             prompt_chars=8400,
             iteration=2,
@@ -36,7 +36,8 @@ def test_log_plan_phase_timing_format(caplog) -> None:
 
     messages = [r.getMessage() for r in caplog.records]
     assert any(
-        m.startswith("[Plan] phase=gap elapsed_ms=3120 prompt_chars=8400 iter=2") for m in messages
+        m.startswith("[Plan] phase=evaluate-gap elapsed_ms=3120 prompt_chars=8400 iter=2")
+        for m in messages
     )
     assert any(
         m.startswith(

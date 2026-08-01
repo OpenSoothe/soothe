@@ -60,7 +60,7 @@ Tighten `plan_prompt_ledger` defaults:
 - `plan_ledger_max_message_chars: 3000`
 
 Message-count cap (`40`) unchanged. Assess/gap keep their tighter
-`plan_assess_prompt` knobs.
+`plan_evaluate_prompt` knobs.
 
 ## Config
 

@@ -81,7 +81,6 @@ def _multi_step_plan_result() -> PlanResult:
             reasoning="Decomposed docker build, startup, and verification.",
         ),
         next_action="I'll build the image, start services, then run e2e tests.",
-        plan_reasoning="Three-phase operational goal.",
         goal_progress="none",
     )
 
@@ -226,7 +225,7 @@ async def test_continuation_complex_goal_produces_multi_step_plan() -> None:
 
     evidence_out = await node_bounded_evidence_gather(ctx, graph_state)
     graph_state.update(evidence_out)
-    assert route_after_evidence_gather(graph_state) == "assess"
+    assert route_after_evidence_gather(graph_state) == "evaluate"
 
     assess_out = await node_plan_assess(ctx, graph_state)
     graph_state.update(assess_out)
@@ -348,7 +347,7 @@ async def test_continuation_trivial_git_commit_still_bootstraps() -> None:
         "is_continuation": True,
         "intake_label": IntakeLabel.TRIVIAL,
     }
-    assert route_by_intent(graph_state) == "assess"
+    assert route_by_intent(graph_state) == "evaluate"
 
     assess_out = await node_plan_assess(ctx, graph_state)
     assert assess_out.get("assess_route") == "skip_generate"
@@ -435,7 +434,7 @@ async def test_continuation_simple_routes_to_assess_and_bootstraps() -> None:
         "is_continuation": True,
         "intake_label": IntakeLabel.SIMPLE,
     }
-    assert route_by_intent(graph_state) == "assess"
+    assert route_by_intent(graph_state) == "evaluate"
 
     assess_out = await node_plan_assess(ctx, graph_state)
     assert assess_out.get("assess_route") == "skip_generate"

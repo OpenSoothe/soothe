@@ -13,13 +13,9 @@ PlanRoute = Literal["goal_done", "execute"]
 IntentRoute = Literal["continue_loop", "fast_path", "wired_subagent"]
 AssessRoute = Literal["continue_generate", "skip_generate"]
 EvidenceGatherRoute = Literal[
-    "assess",
-    "analyze_gaps",
-    "plan_generate_skip_assess",
+    "evaluate",
+    "plan_generate_skip_evaluate",
     "keep_plan",
-    # legacy
-    "plan_assess",
-    "plan_gap_analysis",
 ]
 
 PLAN_ROUTE_GOAL_DONE: PlanRoute = "goal_done"
@@ -39,7 +35,7 @@ class LoopGraphState(TypedDict, total=False):
     intake_label: IntakeLabel | None
     # RFC-630: structural continuation overlay set by enter_loop from
     # checkpoint state (continue_loop_mode + prior completed goals). When True,
-    # route_after_preprocess dispatches via assess / gather_evidence overlays.
+    # route_after_preprocess dispatches via evaluate / gather_evidence overlays.
     is_continuation: bool | None
     # IG-554: True when daemon created a new goal record (fresh loop or new goal
     # on idle loop). Used by route_after_preprocess routing guard to block chitchat

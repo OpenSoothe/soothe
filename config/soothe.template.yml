@@ -79,10 +79,13 @@ agent:
     context_overflow_threshold_pct: 0.8
     context_compaction_target_pct: 0.6
     step_context_check_enabled: false
-    plan_assess_model_role: fast
-    plan_gap_analysis_enabled: true
-    plan_gap_model_role: fast
-    plan_gap_skip_simple_mid_loop: true
+    plan_evaluate_assess_model_role: fast
+    plan_evaluate_gap_model_role: fast
+    plan_evaluate_gap_mode: sequential
+    plan_evaluate_gap_max_concurrency: 4
+    plan_evaluate_gap_min_facets: 2
+    plan_evaluate_gap_wall_clock_seconds: 90
+    plan_evaluate_gap_leg_timeout_seconds: 45
     plan_generate_model_role: think
     plan_generate_model_role_simple: fast
     plan_generate_model_role_near_gap: fast
@@ -140,7 +143,7 @@ agent:
       plan_ledger_max_messages: 40
       plan_ledger_max_total_chars: 24000
       plan_ledger_max_message_chars: 3000
-    plan_assess_prompt:
+    plan_evaluate_prompt:
       ledger_max_messages: 24
       execute_ai_max_chars: 2048
       keep_head_tail_execute_ai: true

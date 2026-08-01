@@ -410,22 +410,23 @@ class PlanPromptLedgerConfig(BaseModel):
     )
 
 
-class PlanAssessPromptConfig(BaseModel):
-    """Assess-specific prompt assembly knobs (mid-goal accuracy, IG-557)."""
+class PlanEvaluatePromptConfig(BaseModel):
+    """Evaluate-station prompt assembly knobs (inventory + assess; IG-557 / IG-672)."""
 
     ledger_max_messages: int = Field(
         default=24,
         ge=0,
         le=500,
-        description="Max execute AI ledger rows for assess projection (0 = unlimited)",
+        description="Max execute AI ledger rows for evaluate projection (0 = unlimited)",
     )
     execute_ai_max_chars: int = Field(
         default=2048,
         ge=0,
         le=50_000,
         description=(
-            "Per execute AI row char cap in assess/gap projection (0 = unlimited). "
-            "Oversized rows keep head+tail so deliverable tables and closing notes survive."
+            "Per execute AI row char cap in evaluate inventory/assess projection "
+            "(0 = unlimited). Oversized rows keep head+tail so deliverable tables "
+            "and closing notes survive."
         ),
     )
     keep_head_tail_execute_ai: bool = Field(
@@ -434,7 +435,7 @@ class PlanAssessPromptConfig(BaseModel):
     )
     omit_prior_progress_hint: bool = Field(
         default=True,
-        description="Omit derived_progress_hint from assess PRIOR PROGRESS block",
+        description="Omit derived_progress_hint from evaluate PRIOR PROGRESS block",
     )
     include_plan_coverage: bool = Field(
         default=True,
@@ -891,14 +892,19 @@ class StrangeLoopConfig(BaseModel):
         tool_retry: Tool failure retry policy.
         llm_rate_limit: LLM rate limiting, per-call timeouts, and retry escalation.
         tool_timeout: Tool timeout middleware configuration (IG-511).
-        plan_assess_model_role: Router role for plan-assess LLM calls (default ``fast``).
-        plan_gap_model_role: Router role for plan-gap-analysis LLM calls (default ``fast``).
+        plan_evaluate_assess_model_role: Router role for evaluate assess LLM calls (default ``fast``).
+        plan_evaluate_gap_model_role: Router role for evaluate inventory LLM calls (default ``fast``).
         plan_generate_model_role: Router role for plan-generate LLM calls (default ``think``).
         plan_generate_model_role_simple: Role for simple/lightweight generate (default ``fast``).
         plan_generate_model_role_near_gap: Role for near-gap generate (default ``fast``).
-        plan_structural_keep_enabled: Skip gap/assess/generate when in-flight plan is healthy.
-        plan_structural_keep_max_streak: Force full assess after N consecutive structural keeps.
-        plan_gap_skip_simple_mid_loop: Skip gap analysis for mid-loop simple intake.
+        plan_structural_keep_enabled: Skip evaluate/generate when in-flight plan is healthy.
+        plan_structural_keep_max_streak: Force full evaluate after N consecutive structural keeps.
+        plan_evaluate_gap_mode: Inventory strategy inside evaluate (``sequential`` | ``parallel``).
+        plan_evaluate_gap_max_concurrency: Max parallel inventory legs.
+        plan_evaluate_gap_min_facets: Parallel only when seeded facets >= this.
+        plan_evaluate_gap_wall_clock_seconds: Soft wall budget for inventory phase.
+        plan_evaluate_gap_leg_timeout_seconds: Soft timeout per parallel inventory leg.
+        plan_evaluate_prompt: Evaluate projection/envelope knobs (inventory + assess).
         goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default ``default``).
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
@@ -1106,9 +1112,9 @@ class StrangeLoopConfig(BaseModel):
         description="Plan-phase ledger projection limits; zeros = full ledger passthrough",
     )
 
-    plan_assess_prompt: PlanAssessPromptConfig = Field(
-        default_factory=PlanAssessPromptConfig,
-        description="Assess-only projection and envelope settings (IG-557)",
+    plan_evaluate_prompt: PlanEvaluatePromptConfig = Field(
+        default_factory=PlanEvaluatePromptConfig,
+        description="Evaluate inventory/assess projection and envelope settings (IG-672).",
     )
 
     execute_prompt_ledger: ExecutePromptLedgerConfig = Field(
@@ -1152,24 +1158,19 @@ class StrangeLoopConfig(BaseModel):
     )
     """Wrap tool calls with configurable timeout to prevent indefinite hangs."""
 
-    plan_assess_model_role: ModelRole = Field(
+    plan_evaluate_assess_model_role: ModelRole = Field(
         default="fast",
         description=(
-            "Router model role for plan-assess structured LLM calls "
-            "(status assessment and continuation routing)."
+            "Router model role for evaluate assess structured LLM calls "
+            "(status assessment and continuation routing; IG-672)."
         ),
     )
 
-    plan_gap_analysis_enabled: bool = Field(
-        default=True,
-        description="Run plan-gap-analysis before plan-assess on mid-goal paths (IG-557).",
-    )
-
-    plan_gap_model_role: ModelRole = Field(
+    plan_evaluate_gap_model_role: ModelRole = Field(
         default="fast",
         description=(
-            "Router model role for plan-gap-analysis structured LLM calls "
-            "(coverage map before assess; IG-653)."
+            "Router model role for evaluate inventory (gap) structured LLM calls "
+            "(coverage map before assess; IG-672)."
         ),
     )
 
@@ -1198,7 +1199,7 @@ class StrangeLoopConfig(BaseModel):
         default=True,
         description=(
             "When true, mid-loop iterations with a healthy in-flight plan skip "
-            "gap/assess/generate and reuse remaining steps (IG-671)."
+            "evaluate/generate and reuse remaining steps (IG-671)."
         ),
     )
 
@@ -1207,14 +1208,48 @@ class StrangeLoopConfig(BaseModel):
         ge=0,
         le=50,
         description=(
-            "Force a full gap/assess path after this many consecutive structural "
+            "Force a full evaluate path after this many consecutive structural "
             "keeps (0 = no streak cap; IG-671)."
         ),
     )
 
-    plan_gap_skip_simple_mid_loop: bool = Field(
-        default=True,
-        description=("Skip plan-gap-analysis for mid-loop simple intake (assess-only; IG-671)."),
+    plan_evaluate_gap_mode: Literal["sequential", "parallel"] = Field(
+        default="sequential",
+        description=(
+            "Inventory strategy inside the evaluate station: one PlanGapAnalysis "
+            "call (sequential) or per-facet fan-out (parallel; IG-672)."
+        ),
+    )
+
+    plan_evaluate_gap_max_concurrency: int = Field(
+        default=4,
+        ge=1,
+        le=8,
+        description="Max concurrent inventory legs when plan_evaluate_gap_mode=parallel.",
+    )
+
+    plan_evaluate_gap_min_facets: int = Field(
+        default=2,
+        ge=2,
+        le=8,
+        description=(
+            "Use parallel inventory only when seeded facet count is at least this; "
+            "otherwise fall back to sequential (IG-672)."
+        ),
+    )
+
+    plan_evaluate_gap_wall_clock_seconds: float = Field(
+        default=90.0,
+        ge=5.0,
+        le=300.0,
+        description="Soft wall-clock budget for the evaluate inventory phase (IG-672).",
+    )
+
+    plan_evaluate_gap_leg_timeout_seconds: float = Field(
+        default=45.0,
+        ge=5.0,
+        le=180.0,
+        description="Soft timeout per parallel inventory leg (IG-672).",
     )
 
     goal_synthesis_model_role: ModelRole = Field(
@@ -1261,10 +1296,15 @@ class ClarificationConfig(BaseModel):
     force_manual_origins: list[
         Literal[
             "execute",
+            "generate_plan",
+            "evaluate",
+            "planner_subagent_review",
+            # dual-read persisted / pre-IG-672 origin strings
             "plan_generate",
             "plan_assess",
             "plan_gap_analysis",
-            "planner_subagent_review",
+            "assess",
+            "analyze_gaps",
         ]
     ] = Field(
         default_factory=lambda: list(DEFAULT_FORCE_MANUAL_ORIGINS),

@@ -46,8 +46,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Shown on the TUI cognition card when Pass 1 fails, so it must read as plain
-# first-person prose — never an exception name or other internal detail.
-PASS1_FALLBACK_REASONING = "Let me treat this as a work request and plan it out."
+# friendly prose — never an exception name or other internal detail.
+PASS1_FALLBACK_REASONING = "This looks like a work request — I'll plan next steps."
 
 
 def build_pass1_task_fallback(

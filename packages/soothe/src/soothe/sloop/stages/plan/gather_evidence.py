@@ -3,10 +3,12 @@
 Placeholder: ledger-driven bounded tool rounds land in IG-394 / future work. Topology edge is
 wired so validation and repair loops can attach without reshaping the outer graph.
 
-IG-476: Detects fresh-loop conditions and shortcuts plan_assess by setting a synthetic
+IG-476: Detects fresh-loop conditions and shortcuts evaluate by setting a synthetic
 StatusAssessment and routing directly to plan_generate.
 
-IG-671: Structural keep reuses a healthy in-flight plan without gap/assess/generate.
+IG-671: Structural keep reuses a healthy in-flight plan without evaluate/generate.
+
+IG-672: Non-shortcut paths route to the ``evaluate`` station (inventory + assess).
 """
 
 from __future__ import annotations
@@ -20,19 +22,14 @@ from soothe.sloop.cognition.structural_keep import (
     reset_structural_keep_streak,
     structural_keep_block_reason,
 )
-from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.prompts.plan_ledger_projection import (
-    _current_goal_has_execute_ledger,
-    resolve_planner_projection_mode,
-)
 from soothe.sloop.state.schemas import StatusAssessment
 
 logger = logging.getLogger(__name__)
 
 
 def _is_fresh_loop(ctx: LoopRuntimeContext) -> bool:
-    """Detect fresh-loop conditions where plan_assess can be skipped (IG-476).
+    """Detect fresh-loop conditions where evaluate can be skipped (IG-476).
 
     RFC-624 Phase 4 Stage 2: Uses CE query instead of checkpoint.goal_history.
 
@@ -74,13 +71,6 @@ def _create_fresh_loop_assessment() -> StatusAssessment:
     )
 
 
-def _gap_analysis_enabled(ctx: LoopRuntimeContext) -> bool:
-    strange_loop = ctx.strange_loop
-    if strange_loop.config is None:
-        return True
-    return bool(strange_loop.config.agent.loop.plan_gap_analysis_enabled)
-
-
 def _structural_keep_config(ctx: LoopRuntimeContext) -> tuple[bool, int]:
     cfg = getattr(ctx.strange_loop, "config", None)
     if cfg is None:
@@ -113,37 +103,13 @@ def _try_structural_keep(ctx: LoopRuntimeContext) -> dict[str, Any] | None:
     return {"evidence_gather_route": "keep_plan", "plan_route": "execute"}
 
 
-def _should_run_gap_analysis(ctx: LoopRuntimeContext) -> bool:
-    state = ctx.loop_state
-    if not _gap_analysis_enabled(ctx):
-        return False
-    intake = getattr(state.intent, "intake_label", None) if state.intent is not None else None
-    if intake == IntakeLabel.TRIVIAL:
-        return False
-    mode = resolve_planner_projection_mode(state)
-    if (
-        mode == "new_goal"
-        and not state.step_results
-        and not _current_goal_has_execute_ledger(state)
-    ):
-        logger.info("[Plan] gap analysis skipped (reason=iter0_no_execution)")
-        return False
-    # IG-671: mid-loop simple intake is assess-only (gap adds little vs cost).
-    cfg = getattr(ctx.strange_loop, "config", None)
-    skip_simple = True if cfg is None else bool(cfg.agent.loop.plan_gap_skip_simple_mid_loop)
-    if skip_simple and intake == IntakeLabel.SIMPLE and mode == "mid_goal":
-        logger.info("[Plan] gap analysis skipped (reason=simple_mid_loop)")
-        return False
-    return True
-
-
 async def node_bounded_evidence_gather(
     ctx: LoopRuntimeContext, _state: dict[str, Any]
 ) -> dict[str, Any]:
-    """Detect fresh-loop / structural-keep shortcuts before gap/assess (IG-476, IG-671).
+    """Detect fresh-loop / structural-keep shortcuts before evaluate (IG-476, IG-671).
 
     For fresh loops (no prior execution, iter=0, not continuation), sets a synthetic
-    StatusAssessment and routes directly to plan_generate, saving assess latency.
+    StatusAssessment and routes directly to plan_generate, saving evaluate latency.
     """
     keep_route = _try_structural_keep(ctx)
     if keep_route is not None:
@@ -165,9 +131,7 @@ async def node_bounded_evidence_gather(
     reset_structural_keep_streak(ctx.loop_state)
 
     if _is_fresh_loop(ctx):
-        logger.info("[EvidenceGather] Fresh-loop detected, skipping plan_assess")
+        logger.info("[EvidenceGather] Fresh-loop detected, skipping evaluate")
         ctx.scratch.plan_assessment = _create_fresh_loop_assessment()
-        return {"evidence_gather_route": "plan_generate_skip_assess"}
-    if _should_run_gap_analysis(ctx):
-        return {"evidence_gather_route": "analyze_gaps"}
-    return {"evidence_gather_route": "assess"}
+        return {"evidence_gather_route": "plan_generate_skip_evaluate"}
+    return {"evidence_gather_route": "evaluate"}

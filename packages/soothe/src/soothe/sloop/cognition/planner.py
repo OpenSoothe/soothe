@@ -18,6 +18,7 @@ from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.config.models import LLMRateLimitConfig
 from soothe.sloop.cognition.plan_gap_wire import (
+    coerce_goal_component_status_dict,
     coerce_plan_gap_analysis_wire_dict,
 )
 from soothe.sloop.cognition.plan_generation_wire import (
@@ -130,7 +131,7 @@ def _log_plan_phase_timing(
 ) -> None:
     """Emit stable INFO timing for split-path plan phases (IG-653).
 
-    Grep: ``[Plan] phase=gap|assess|generate``.
+    Grep: ``[Plan] phase=evaluate-gap|evaluate-assess|generate``.
     """
     if lightweight is None:
         logger.info(
@@ -232,11 +233,11 @@ class LLMPlanner:
         model: Any,
         config: SootheConfig | None = None,
         *,
-        plan_assess_model: Any | None = None,
+        plan_evaluate_assess_model: Any | None = None,
         plan_generate_model: Any | None = None,
         plan_generate_model_simple: Any | None = None,
         plan_generate_model_near_gap: Any | None = None,
-        plan_gap_model: Any | None = None,
+        plan_evaluate_gap_model: Any | None = None,
         loop_id: str | None = None,
     ) -> None:
         """Initialize LLMPlanner.
@@ -244,25 +245,27 @@ class LLMPlanner:
         Args:
             model: Langchain BaseChatModel supporting structured output.
             config: Optional configuration for shared context XML in prompts.
-            plan_assess_model: Model for plan-assess and continuation-assess calls.
+            plan_evaluate_assess_model: Model for evaluate assess / continuation calls.
             plan_generate_model: Default model for plan-generate calls (complex/think).
             plan_generate_model_simple: Model for simple/lightweight generate (IG-671).
             plan_generate_model_near_gap: Model for near-gap generate (IG-671).
-            plan_gap_model: Model for plan-gap-analysis calls (defaults to assess model).
+            plan_evaluate_gap_model: Model for evaluate inventory (gap) calls.
             loop_id: Optional loop identifier for Langfuse trace correlation.
         """
         from soothe.sloop.prompts import PromptBuilder
 
         self._model = model
-        self._plan_assess_model = plan_assess_model or model
+        self._plan_evaluate_assess_model = plan_evaluate_assess_model or model
         self._plan_generate_model = plan_generate_model or model
         self._plan_generate_model_simple = plan_generate_model_simple or self._plan_generate_model
         self._plan_generate_model_near_gap = (
             plan_generate_model_near_gap or self._plan_generate_model_simple
         )
-        self._plan_gap_model = plan_gap_model or self._plan_assess_model
+        self._plan_evaluate_gap_model = plan_evaluate_gap_model or self._plan_evaluate_assess_model
         self._config = config
         self._loop_id = loop_id
+        # Set by evaluate station to nest LLM runs under the goal-loop trace (IG-672).
+        self._pinned_trace_id: str | None = None
         self._prompt_builder = PromptBuilder(config)
 
     def _select_plan_generate_model(
@@ -299,22 +302,56 @@ class LLMPlanner:
         thread_id: str | None,
         phase: str,
     ) -> dict[str, Any] | None:
-        """RunnableConfig for planner LLM calls when Langfuse is enabled (IG-369)."""
+        """RunnableConfig for planner LLM calls when Langfuse is enabled (IG-369).
+
+        When ``_pinned_trace_id`` is set (evaluate station), generations share the
+        goal-loop trace and nest under the active ``evaluate`` observation (IG-672).
+        """
         if self._config is None:
             return None
         base: dict[str, Any] = {}
         tn = (self._config.observability.langfuse.trace_name or "").strip()
-        run_name = f"{tn}:{phase}" if tn else phase
+        # Prefer host display helpers for evaluate child phases when available.
+        run_name = self._evaluate_langfuse_phase_name(tn, phase) or (
+            f"{tn}:{phase}" if tn else phase
+        )
         merged = merge_langfuse_runnable_config(
             base,
             self._config,
             session_id=thread_id,
             run_name=run_name,
             loop_id=self._loop_id,
+            pinned_trace_id=self._pinned_trace_id,
         )
         if merged is base:
             return None
         return merged
+
+    @staticmethod
+    def _evaluate_langfuse_phase_name(trace_name: str, phase: str) -> str | None:
+        """Map evaluate subgraph phases to IG-672 Langfuse display names."""
+        from soothe.utils.observability.langfuse._names import (
+            evaluate_assess_continuation_langfuse_run_display_name,
+            evaluate_assess_langfuse_run_display_name,
+            evaluate_gap_langfuse_run_display_name,
+            evaluate_gap_leg_langfuse_run_display_name,
+        )
+
+        tn = trace_name or None
+        if phase == "evaluate-assess":
+            return evaluate_assess_langfuse_run_display_name(tn)
+        if phase == "evaluate-assess-continuation":
+            return evaluate_assess_continuation_langfuse_run_display_name(tn)
+        if phase == "evaluate-gap":
+            return evaluate_gap_langfuse_run_display_name(tn)
+        if phase.startswith("evaluate-gap-leg-"):
+            tail = phase.rsplit("-", 1)[-1]
+            try:
+                idx = int(tail)
+            except ValueError:
+                idx = 0
+            return evaluate_gap_leg_langfuse_run_display_name(tn, leg_index=idx)
+        return None
 
     def _llm_rate_limit_config(self) -> LLMRateLimitConfig:
         """Timeout/retry policy for direct planner LLM calls (bypasses middleware stack)."""
@@ -450,8 +487,8 @@ class LLMPlanner:
         """
         from soothe.sloop.state.schemas import StatusAssessment
 
-        model = _plan_phase_chat_model(self._plan_assess_model)
-        lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="assess")
+        model = _plan_phase_chat_model(self._plan_evaluate_assess_model)
+        lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="evaluate-assess")
 
         # IG-503: Retry loop for transient network errors
         network_attempts = 0
@@ -608,10 +645,10 @@ class LLMPlanner:
             checkpoint=checkpoint,
             exclude_goal_id=exclude_goal_id,
         )
-        model = _plan_phase_chat_model(self._plan_assess_model)
+        model = _plan_phase_chat_model(self._plan_evaluate_assess_model)
         try:
             lf_cfg = self._planner_langfuse_run_config(
-                thread_id=state.thread_id, phase="assess-continuation"
+                thread_id=state.thread_id, phase="evaluate-assess-continuation"
             )
             result = await self._invoke_structured(
                 model,
@@ -680,7 +717,7 @@ class LLMPlanner:
             thread_id: Thread id for Langfuse session correlation.
 
         Returns:
-            PlanGeneration with top-level decision fields and first-person reasoning.
+            PlanGeneration with top-level decision fields and planned steps.
         """
         plan_result, _ = await self._generate_plan_with_response(
             messages,
@@ -788,7 +825,7 @@ class LLMPlanner:
                                 content=(
                                     "steps[] must contain only step objects with description and "
                                     "dependencies (use [] when none). Do not put field names like "
-                                    "reasoning or execution_mode inside steps[]."
+                                    "execution_mode or type inside steps[]."
                                 )
                             ),
                         ]
@@ -821,7 +858,7 @@ class LLMPlanner:
                             HumanMessage(
                                 content=(
                                     "steps[] must contain only step objects (description, "
-                                    "dependencies). Top-level fields are reasoning, steps, and "
+                                    "dependencies). Top-level fields are steps and "
                                     "optional clarify only."
                                 )
                             ),
@@ -905,7 +942,6 @@ class LLMPlanner:
         return PlanGeneration(
             type="execute_steps",
             execution_mode="parallel",
-            reasoning="I'll proceed with a default plan after plan generation failed.",
             steps=step_actions_to_plan_generate_steps(
                 _default_agent_decision(goal, iteration).steps
             ),
@@ -926,7 +962,7 @@ class LLMPlanner:
             type=plan_result.type,
             steps=plan_generate_steps_to_step_actions(plan_result.steps),
             execution_mode=plan_result.execution_mode,
-            reasoning=plan_result.reasoning or "",
+            reasoning="",
         )
 
     def _combine_results(
@@ -936,21 +972,19 @@ class LLMPlanner:
     ) -> Any:
         """Combine StatusAssessment and PlanGeneration results (RFC-604, IG-152).
 
-        Keeps derived ``next_action`` on ``PlanResult`` for internal orchestration;
-        ``plan_reasoning`` carries plan-generate ``reasoning`` for user-facing cognition cards.
+        Keeps derived ``next_action`` on ``PlanResult`` for internal orchestration.
 
         Args:
             assessment: StatusAssessment result
             plan_result: PlanGeneration result
 
         Returns:
-            PlanResult with combined reasoning and action fields
+            PlanResult with combined action fields
         """
         from soothe.sloop.state.schemas import PlanResult
         from soothe.utils.text_preview import preview_first
 
         action_text = resolve_plan_action_text(plan_result)
-        plan_reasoning = (plan_result.reasoning or "").strip()
 
         logger.debug("[PlanAction] %s", preview_first(action_text, chars=80))
         decision = self._plan_generation_to_decision(plan_result)
@@ -960,7 +994,6 @@ class LLMPlanner:
             status=assessment.status,
             goal_progress=assessment.goal_progress,
             assessment_reasoning="",
-            plan_reasoning=plan_reasoning,
             plan_action="new",
             decision=decision,
             next_action=action_text,
@@ -1078,7 +1111,7 @@ class LLMPlanner:
             thread_id=state.thread_id,
         )
         _log_plan_phase_timing(
-            phase="assess",
+            phase="evaluate-assess",
             elapsed_ms=(time.perf_counter() - t0) * 1000,
             prompt_chars=_prompt_chars_for_messages(assess_messages),
             iteration=state.iteration,
@@ -1157,10 +1190,10 @@ class LLMPlanner:
             call_kind="gap",
             context_bundle=context_bundle,
         )
-        model = _plan_phase_chat_model(self._plan_gap_model)
+        model = _plan_phase_chat_model(self._plan_evaluate_gap_model)
         lf_cfg = self._planner_langfuse_run_config(
             thread_id=state.thread_id,
-            phase="analyze-gaps",
+            phase="evaluate-gap",
         )
         t0 = time.perf_counter()
         # Gap is advisory for assess: prefer fast JSON methods only and a tight
@@ -1176,7 +1209,7 @@ class LLMPlanner:
             rate_limit_config=self._gap_llm_rate_limit_config(),
         )
         _log_plan_phase_timing(
-            phase="gap",
+            phase="evaluate-gap",
             elapsed_ms=(time.perf_counter() - t0) * 1000,
             prompt_chars=_prompt_chars_for_messages(gap_messages),
             iteration=state.iteration,
@@ -1197,6 +1230,93 @@ class LLMPlanner:
                     ),
                 )
         return gap
+
+    async def analyze_plan_gap_component(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+        *,
+        component: str,
+        context_engine: Any | None = None,
+        leg_index: int = 0,
+    ) -> Any:
+        """Read-only single-facet inventory leg for parallel evaluate (IG-672)."""
+        from soothe.sloop.state.schemas import GoalComponentStatus
+
+        context_bundle = None
+        if context_engine is not None:
+            try:
+                goal_id = getattr(state, "_ce_goal_id", None)
+                context_bundle = await context_engine.project(goal_id=goal_id)
+            except Exception:
+                logger.debug(
+                    "[Plan] analyze_plan_gap_component: ContextEngine.project() failed",
+                    exc_info=True,
+                )
+        gap_messages = self._prompt_builder.build_plan_messages(
+            goal,
+            state,
+            context,
+            plan_phase="assess",
+            call_kind="gap",
+            context_bundle=context_bundle,
+        )
+        facet = (component or "").strip() or "goal"
+        # Focus the last human envelope on one seeded facet without a new call_kind.
+        if gap_messages:
+            last = gap_messages[-1]
+            content = getattr(last, "content", None)
+            if isinstance(content, str):
+                focused = (
+                    f"{content.rstrip()}\n\n"
+                    f"FACET (analyze only this component): {facet}\n"
+                    "Output a single GoalComponentStatus for this FACET "
+                    "(component, status, evidence, gap)."
+                )
+                try:
+                    from langchain_core.messages import HumanMessage
+
+                    gap_messages = list(gap_messages[:-1]) + [HumanMessage(content=focused)]
+                except Exception:
+                    gap_messages = list(gap_messages[:-1]) + [type(last)(content=focused)]
+        model = _plan_phase_chat_model(self._plan_evaluate_gap_model)
+        leg_idx = max(0, int(leg_index))
+        lf_cfg = self._planner_langfuse_run_config(
+            thread_id=state.thread_id,
+            phase=f"evaluate-gap-leg-{leg_idx}",
+        )
+        t0 = time.perf_counter()
+
+        def _normalize_component(data: dict[str, Any]) -> dict[str, Any]:
+            coerced = coerce_goal_component_status_dict(data, index=0)
+            if isinstance(coerced, dict) and not (
+                isinstance(coerced.get("component"), str) and coerced["component"].strip()
+            ):
+                coerced["component"] = facet
+            return (
+                coerced if isinstance(coerced, dict) else {"component": facet, "status": "partial"}
+            )
+
+        result = await self._invoke_structured(
+            model,
+            gap_messages,
+            GoalComponentStatus,
+            config=lf_cfg,
+            thread_id=state.thread_id,
+            normalize=_normalize_component,
+            methods=_PLANNER_JSON_METHODS,
+            rate_limit_config=self._gap_llm_rate_limit_config(),
+        )
+        _log_plan_phase_timing(
+            phase=f"evaluate-gap-leg-{leg_idx}",
+            elapsed_ms=(time.perf_counter() - t0) * 1000,
+            prompt_chars=_prompt_chars_for_messages(gap_messages),
+            iteration=state.iteration,
+        )
+        if result is None:
+            raise ValueError("GoalComponentStatus returned None")
+        return result
 
     async def generate_from_assessment(
         self,
@@ -1243,7 +1363,6 @@ class LLMPlanner:
                 status=assessment.status,
                 goal_progress=assessment.goal_progress,
                 assessment_reasoning="",
-                plan_reasoning="",
                 plan_action="keep",
                 decision=None,
                 next_action="Goal achieved successfully",
@@ -1546,7 +1665,6 @@ class LLMPlanner:
                         status=assessment.status,
                         goal_progress=assessment.goal_progress,
                         assessment_reasoning="",
-                        plan_reasoning="",
                         plan_action="keep",
                         decision=None,
                         next_action="Goal achieved successfully",
@@ -1601,7 +1719,7 @@ class LLMPlanner:
                     decision_info,
                 )
                 _log_plan_phase_timing(
-                    phase="assess",
+                    phase="evaluate-assess",
                     elapsed_ms=assess_ms,
                     prompt_chars=_prompt_chars_for_messages(assess_messages),
                     iteration=state.iteration,
@@ -1686,7 +1804,6 @@ class LLMPlanner:
                                             status=assessment.status,
                                             goal_progress=assessment.goal_progress,
                                             assessment_reasoning="",
-                                            plan_reasoning="",
                                             plan_action="new",
                                             decision=_default_agent_decision(goal, state.iteration),
                                             next_action="Proceeding with default plan",
@@ -1709,7 +1826,6 @@ class LLMPlanner:
                         plan_action="new",
                         decision=_default_agent_decision(goal, state.iteration),
                         assessment_reasoning="",
-                        plan_reasoning="",
                         next_action="Retrying with simpler approach",
                     )
 

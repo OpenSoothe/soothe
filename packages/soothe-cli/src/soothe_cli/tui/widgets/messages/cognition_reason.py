@@ -54,7 +54,7 @@ class CognitionReasonMessage(Vertical):
             iteration: Agent-loop iteration index.
             plan_action: ``keep`` or ``new`` (internal execution strategy, not displayed).
             assessment_reasoning: Phase-1 status justification from plan-assess.
-            plan_reasoning: Plan-generate ``reasoning`` shown in the cognition card.
+            plan_reasoning: Optional strategy/summary line (e.g. step completion).
             **kwargs: Passed to ``Vertical``.
         """
         super().__init__(**kwargs)

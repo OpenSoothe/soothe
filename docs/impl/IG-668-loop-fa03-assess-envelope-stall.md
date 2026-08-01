@@ -57,6 +57,6 @@ were, the worst case drops from ~2h36m to 90s.
   the graph stream reader; the plan nodes have no equivalent, so long plan phases are
   invisible to the TUI. Bounding the fallback caps the visible silence, but a real
   heartbeat needs a separate change to the plan-node streaming path.
-- Changing `plan_assess_model_role` away from `fast`. Model choice stays an operator call.
+- Changing `plan_evaluate_assess_model_role` away from `fast`. Model choice stays an operator call.
 - Reusing the response the structured path already parsed. `StructuredOutputError` does not
   carry the offending payload, and attaching it means editing `soothe-nano` (submodule).

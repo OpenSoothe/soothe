@@ -205,7 +205,7 @@ async def test_continue_keyword_plan_event_omits_duplicate_reason_display() -> N
     plan_events = [d for t, d in emitted if t == "plan"]
     assert len(plan_events) == 1
     assert plan_events[0]["assessment_reasoning"] == ""
-    assert plan_events[0]["plan_reasoning"] == ""
+    assert "plan_reasoning" not in plan_events[0]
     assert plan_events[0]["next_action"] == ""
     assert ctx.scratch.plan_result is not None
     assert ctx.scratch.plan_result.assessment_reasoning == ""
@@ -282,7 +282,7 @@ async def test_continuation_bootstrap_emits_single_combined_reason_card() -> Non
     plan_events = [d for t, d in emitted if t == "plan"]
     assert len(plan_events) == 1
     assert plan_events[0]["assessment_reasoning"] == "Pure translation; no new tools needed."
-    assert plan_events[0]["plan_reasoning"]
+    assert "plan_reasoning" not in plan_events[0]
 
 
 @pytest.mark.asyncio

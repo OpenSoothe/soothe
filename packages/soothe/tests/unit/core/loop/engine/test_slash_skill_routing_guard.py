@@ -49,7 +49,7 @@ async def _drive_intake(
     pass1_result = MagicMock()
     pass1_result.is_task = True
     pass1_result.confidence = "high"
-    pass1_result.reasoning = "Work request detected."
+    pass1_result.reasoning = "This is a request to use the skill."
 
     intent_classifier = MagicMock()
     intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)

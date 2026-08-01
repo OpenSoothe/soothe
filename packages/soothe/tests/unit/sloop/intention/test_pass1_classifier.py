@@ -173,7 +173,7 @@ async def test_fallback_is_flagged_but_llm_result_is_not() -> None:
     classifier = create_pass1_classifier_with_result(
         is_task=True,
         confidence=IntakePass1Confidence.HIGH,
-        reasoning="Work request detected.",
+        reasoning="This is a request to fix the bug.",
     )
     assert (await classifier.classify("fix the bug")).fallback is False
 

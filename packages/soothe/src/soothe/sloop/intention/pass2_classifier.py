@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 # Mid-loop prior goal_completion dumps can be multi-k tokens; Pass 2 only needs
 # enough context for reference resolution ("apply it"), not the full report.
 _PASS2_PRIOR_MAX_CHARS = 2400
-# Schema asks ≤15 words; clip runaway model dumps before TUI / IntentClassification.
-_PASS2_REASONING_MAX_CHARS = 120
+# Schema asks ≤25 words; clip runaway model dumps before TUI / IntentClassification.
+_PASS2_REASONING_MAX_CHARS = 200
 
 
 def clip_pass2_prior_projection(prior_projection: str | None) -> str | None:

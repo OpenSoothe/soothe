@@ -15,7 +15,6 @@ from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
-from soothe.sloop.utils.loop_reason_display import is_displayable_plan_reasoning
 
 logger = logging.getLogger(__name__)
 
@@ -97,16 +96,6 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     await emit_plan_phase_status(ctx, label=_PLAN_GENERATE_STATUS_LABEL)
 
     ctx.scratch.plan_result = plan_result
-
-    plan_reasoning = (plan_result.plan_reasoning or "").strip()
-    if is_displayable_plan_reasoning(plan_reasoning):
-        await ctx.emit(
-            "generate",
-            {
-                "plan_reasoning": plan_reasoning,
-                "iteration": state.iteration,
-            },
-        )
 
     await ctx.emit(
         "plan",

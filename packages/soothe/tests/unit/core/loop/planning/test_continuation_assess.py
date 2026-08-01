@@ -19,7 +19,7 @@ def _make_planner() -> LLMPlanner:
     model.with_structured_output = MagicMock(return_value=structured)
     planner = LLMPlanner.__new__(LLMPlanner)
     planner._model = model
-    planner._plan_assess_model = model
+    planner._plan_evaluate_assess_model = model
     planner._plan_generate_model = model
     planner._config = None
     planner._loop_id = "loop-test"

@@ -126,7 +126,7 @@ class PromptBuilder:
         projection_mode = resolve_planner_projection_mode(state)
         ledger_cfg = self.config.agent.loop.plan_prompt_ledger if self.config is not None else None
         assess_prompt_cfg = (
-            self.config.agent.loop.plan_assess_prompt if self.config is not None else None
+            self.config.agent.loop.plan_evaluate_prompt if self.config is not None else None
         )
         if kind == "continuation":
             projected = project_continuation_assess_ledger(state.loop_messages, ledger_cfg)

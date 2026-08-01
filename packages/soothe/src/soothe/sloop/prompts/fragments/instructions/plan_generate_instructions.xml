@@ -1,5 +1,5 @@
 <PLAN_GENERATE>
-Output wire JSON only: ``reasoning``, ``steps``, optional ``clarify``.
+Output wire JSON only: ``steps``, optional ``clarify``.
 
 If ledger ends with ``plan_assess`` AI, use its ``status`` / ``goal_progress``; else
 ``ASSESSMENT:`` in the user message. Goal is in GOAL:. When ``Status: continue`` and DAG
@@ -15,7 +15,6 @@ STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh
 - Do not split overlapping discovery (enumerate / search / confirm) across multiple steps when the goal or prior evidence already scopes the work — merge into one execute step.
 
 **Top-level fields** (only these — never put field names inside ``steps[]``):
-- ``reasoning`` (≤500 chars): First-person cognition for the TUI (I'll / Let me …).
 - ``steps``: Non-empty array of step objects when executing work.
 - ``clarify``: Optional ``{ "questions": ["...?"] }`` when user input is required — mutually
   exclusive with non-empty ``steps`` (at most one clarify wave; no action steps alongside).
@@ -37,7 +36,7 @@ STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh
 - Never set ``delegate`` on every step in a wave; leave null so execute CoreAgent chooses.
 
 Runtime derives ``execution_mode`` from ``dependencies`` (``dependency`` when any step lists deps,
-else ``parallel``). Do not emit ``type``, ``execution_mode``, ``full_description``, or ``kind``.
+else ``parallel``). Do not emit ``reasoning``, ``type``, ``execution_mode``, ``full_description``, or ``kind``.
 
 **clarify** (PRIMARY clarification — executor will NOT ask the user for you):
 - REQUIRED when: goal ambiguous; essential context missing; user preference needed; iteration 0

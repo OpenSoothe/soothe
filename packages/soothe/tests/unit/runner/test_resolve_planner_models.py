@@ -12,8 +12,8 @@ def test_resolve_planner_uses_loop_plan_model_roles() -> None:
     cfg = SootheConfig(
         agent={
             "loop": {
-                "plan_assess_model_role": "fast",
-                "plan_gap_model_role": "default",
+                "plan_evaluate_assess_model_role": "fast",
+                "plan_evaluate_gap_model_role": "default",
                 "plan_generate_model_role": "think",
                 "plan_generate_model_role_simple": "fast",
                 "plan_generate_model_role_near_gap": "default",
@@ -40,8 +40,8 @@ def test_resolve_planner_uses_loop_plan_model_roles() -> None:
     assert "fast" in roles
     assert "default" in roles
     assert "think" in roles
-    assert planner._plan_assess_model is assess_model
-    assert planner._plan_gap_model is gap_model
+    assert planner._plan_evaluate_assess_model is assess_model
+    assert planner._plan_evaluate_gap_model is gap_model
     assert planner._plan_generate_model is generate_model
     assert planner._plan_generate_model_simple is assess_model
     assert planner._plan_generate_model_near_gap is gap_model
@@ -50,8 +50,8 @@ def test_resolve_planner_uses_loop_plan_model_roles() -> None:
 
 def test_resolve_planner_defaults_gap_and_assess_to_fast() -> None:
     cfg = SootheConfig()
-    assert cfg.agent.loop.plan_assess_model_role == "fast"
-    assert cfg.agent.loop.plan_gap_model_role == "fast"
+    assert cfg.agent.loop.plan_evaluate_assess_model_role == "fast"
+    assert cfg.agent.loop.plan_evaluate_gap_model_role == "fast"
     assert cfg.agent.loop.plan_generate_model_role == "think"
     assert cfg.agent.loop.plan_generate_model_role_simple == "fast"
     assert cfg.agent.loop.plan_generate_model_role_near_gap == "fast"
@@ -70,8 +70,8 @@ def test_resolve_planner_defaults_gap_and_assess_to_fast() -> None:
     ):
         planner = resolve_planner(cfg, base_model)
 
-    assert planner._plan_assess_model is fast_model
-    assert planner._plan_gap_model is fast_model
+    assert planner._plan_evaluate_assess_model is fast_model
+    assert planner._plan_evaluate_gap_model is fast_model
     assert planner._plan_generate_model is think_model
     assert planner._plan_generate_model_simple is fast_model
     assert planner._plan_generate_model_near_gap is fast_model

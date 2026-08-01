@@ -71,15 +71,15 @@ def test_intent_only_card_round_trip() -> None:
     assert restored._plan_action == ""
 
 
-def test_plan_generate_reasoning_card_round_trip() -> None:
-    """Plan-generate reasoning is stored on plan_reasoning and restored for replay."""
+def test_cognition_strategy_card_round_trip() -> None:
+    """Strategy/summary line is stored on plan_reasoning and restored for replay."""
     w = CognitionReasonMessage(
         status="continue",
         iteration=0,
         plan_action="new",
         assessment_reasoning="",
         plan_reasoning="I will first read the log file to extract loop entries.",
-        id="msg-plan-gen-01",
+        id="msg-plan-strategy-01",
     )
     md = message_from_widget(w)
     assert md.type == MessageType.COGNITION_REASON

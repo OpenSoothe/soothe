@@ -17,7 +17,7 @@ def test_strange_loop_graph_exposes_rfc220_named_nodes() -> None:
         "check_limits",
         "begin_iteration",
         "gather_evidence",
-        "assess",
+        "evaluate",
         "generate_plan",
         "finalize",
         "commit_plan",
@@ -26,3 +26,5 @@ def test_strange_loop_graph_exposes_rfc220_named_nodes() -> None:
         "record_progress",
     ):
         assert required in names, f"missing node {required}: {sorted(names)}"
+    assert "assess" not in names
+    assert "analyze_gaps" not in names

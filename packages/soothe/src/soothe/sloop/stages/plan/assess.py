@@ -171,7 +171,6 @@ def build_continue_loop_bootstrap_plan(
         status="continue",
         goal_progress=goal_progress,
         assessment_reasoning=reasoning or default_reasoning,
-        plan_reasoning="Single execute wave grounded on prior goal completion report.",
         next_action=next_action,
         plan_action="new",
         decision=decision,
@@ -196,7 +195,6 @@ async def _emit_continuation_bootstrap_plan(
                 "progress": plan_result.goal_progress,
                 "next_action": "",
                 "assessment_reasoning": "",
-                "plan_reasoning": "",
                 "plan_action": plan_result.plan_action,
             },
         )
@@ -209,7 +207,6 @@ async def _emit_continuation_bootstrap_plan(
                 "progress": plan_result.goal_progress,
                 "next_action": plan_result.next_action,
                 "assessment_reasoning": plan_result.assessment_reasoning,
-                "plan_reasoning": plan_result.plan_reasoning,
                 "plan_action": plan_result.plan_action,
             },
         )
@@ -442,7 +439,6 @@ async def _route_goal_completion_if_terminal(
         status=assessment.status,
         goal_progress=assessment.goal_progress,
         assessment_reasoning="",
-        plan_reasoning="",
         plan_action="keep",
         decision=None,
         next_action=next_action,
@@ -468,7 +464,6 @@ async def _route_goal_completion_if_terminal(
             "status": plan_result.status,
             "progress": plan_result.goal_progress,
             "next_action": plan_result.next_action,
-            "plan_reasoning": plan_result.plan_reasoning,
             "plan_action": plan_result.plan_action,
         },
     )

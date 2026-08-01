@@ -49,8 +49,7 @@ def _make_ctx(
     loop_cfg = MagicMock()
     loop_cfg.plan_structural_keep_enabled = True
     loop_cfg.plan_structural_keep_max_streak = 3
-    loop_cfg.plan_gap_analysis_enabled = True
-    loop_cfg.plan_gap_skip_simple_mid_loop = True
+    loop_cfg.plan_evaluate_gap_mode = "sequential"
 
     strange_loop = MagicMock()
     strange_loop._build_plan_context.return_value = PlanContext()
@@ -91,13 +90,13 @@ async def test_failed_last_step_skips_structural_keep() -> None:
     ctx = _make_ctx()
     ctx.loop_state.step_results[-1].success = False
     out = await node_bounded_evidence_gather(ctx, {})
-    assert out.get("evidence_gather_route") == "analyze_gaps"
+    assert out.get("evidence_gather_route") == "evaluate"
     assert ctx.loop_state.structural_keep_streak == 0
 
 
 @pytest.mark.asyncio
-async def test_simple_mid_loop_skips_gap_when_keep_disabled() -> None:
+async def test_simple_mid_loop_routes_evaluate_when_keep_disabled() -> None:
     ctx = _make_ctx(intake=IntakeLabel.SIMPLE)
     ctx.strange_loop.config.agent.loop.plan_structural_keep_enabled = False
     out = await node_bounded_evidence_gather(ctx, {})
-    assert out.get("evidence_gather_route") == "assess"
+    assert out.get("evidence_gather_route") == "evaluate"

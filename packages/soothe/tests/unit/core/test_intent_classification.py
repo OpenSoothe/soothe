@@ -69,6 +69,15 @@ class TestTwoPassPrompts:
         assert "response_language" in INTAKE_PASS1_SYSTEM_PROMPT
         assert "PRIOR_RESPONSE_LANGUAGE" in INTAKE_PASS1_SYSTEM_PROMPT
 
+    def test_pass1_prompt_requires_friendly_reasoning(self) -> None:
+        prompt = INTAKE_PASS1_SYSTEM_PROMPT
+        assert "This is a request" in prompt
+        assert "Here is a goal" in prompt
+        assert "classification notes" not in prompt
+        assert "friendly TUI line" in prompt
+        assert "≤25 words" in prompt
+        assert "≤15 words" not in prompt
+
     def test_pass2_prompt_has_scope_labels(self) -> None:
         for label in ("trivial", "simple", "complex"):
             assert label in INTAKE_PASS2_SYSTEM_PROMPT
@@ -89,6 +98,8 @@ class TestTwoPassPrompts:
         prompt = INTAKE_PASS2_SYSTEM_PROMPT
         assert "first-person" in prompt
         assert "I'll / Let me" in prompt
+        assert "≤25 words" in prompt
+        assert "≤15 words" not in prompt
         assert "multi_phase" in prompt
         assert "wire_subagent" not in prompt
         assert "first scan the repo and then run tests" in prompt

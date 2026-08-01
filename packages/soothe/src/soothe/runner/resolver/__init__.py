@@ -76,17 +76,17 @@ def resolve_planner(
             logger.warning("Failed to create model for planner")
 
     loop_cfg = config.agent.loop
-    plan_assess_model = _create_loop_phase_model(
+    plan_evaluate_assess_model = _create_loop_phase_model(
         config,
-        loop_cfg.plan_assess_model_role,
+        loop_cfg.plan_evaluate_assess_model_role,
         fallback=planner_model,
-        phase="assess",
+        phase="evaluate-assess",
     )
-    plan_gap_model = _create_loop_phase_model(
+    plan_evaluate_gap_model = _create_loop_phase_model(
         config,
-        loop_cfg.plan_gap_model_role,
-        fallback=plan_assess_model,
-        phase="analyze-gaps",
+        loop_cfg.plan_evaluate_gap_model_role,
+        fallback=plan_evaluate_assess_model,
+        phase="evaluate-gap",
     )
     plan_generate_model = _create_loop_phase_model(
         config,
@@ -112,9 +112,9 @@ def resolve_planner(
     return LLMPlanner(
         model=planner_model,
         config=config,
-        plan_assess_model=plan_assess_model,
+        plan_evaluate_assess_model=plan_evaluate_assess_model,
         plan_generate_model=plan_generate_model,
         plan_generate_model_simple=plan_generate_model_simple,
         plan_generate_model_near_gap=plan_generate_model_near_gap,
-        plan_gap_model=plan_gap_model,
+        plan_evaluate_gap_model=plan_evaluate_gap_model,
     )

@@ -43,7 +43,7 @@ def test_capped_wire_schema_rejects_over_max_steps() -> None:
         for i in range(DEFAULT_MAX_PLAN_STEPS_PER_WAVE + 1)
     ]
     with pytest.raises(ValidationError):
-        schema(reasoning="Plan wave.", steps=steps)
+        schema(steps=steps)
 
 
 def test_filter_filler_plan_steps_removes_tail_noise() -> None:

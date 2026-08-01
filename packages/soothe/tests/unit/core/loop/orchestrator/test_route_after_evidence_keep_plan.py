@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from soothe.sloop.orchestrator.routing import route_after_evidence_gather
-from soothe.sloop.orchestrator.stations import COMMIT_PLAN, GENERATE_PLAN
+from soothe.sloop.orchestrator.stations import COMMIT_PLAN, EVALUATE, GENERATE_PLAN
 
 
 def test_route_keep_plan_to_commit() -> None:
@@ -12,6 +12,11 @@ def test_route_keep_plan_to_commit() -> None:
 
 def test_route_fresh_loop_still_generate() -> None:
     assert (
-        route_after_evidence_gather({"evidence_gather_route": "plan_generate_skip_assess"})
+        route_after_evidence_gather({"evidence_gather_route": "plan_generate_skip_evaluate"})
         == GENERATE_PLAN
     )
+
+
+def test_route_default_and_evaluate_to_evaluate() -> None:
+    assert route_after_evidence_gather({"evidence_gather_route": "evaluate"}) == EVALUATE
+    assert route_after_evidence_gather({}) == EVALUATE

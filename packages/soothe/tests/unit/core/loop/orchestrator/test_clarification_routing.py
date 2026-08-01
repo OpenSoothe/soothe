@@ -8,8 +8,8 @@ from langgraph.graph import END
 
 from soothe.sloop.orchestrator.builder import build_strange_loop_graph
 from soothe.sloop.orchestrator.routing import (
-    route_after_assess,
     route_after_clarification,
+    route_after_evaluate,
     route_after_execute,
     route_after_plan,
 )
@@ -20,6 +20,9 @@ def test_await_clarification_node_present_in_graph() -> None:
     compiled = build_strange_loop_graph(ctx)
     names = set(compiled.get_graph().nodes)
     assert "await_user" in names
+    assert "evaluate" in names
+    assert "analyze_gaps" not in names
+    assert "assess" not in names
 
 
 def test_route_after_execute_short_circuits_on_pending_clarification() -> None:
@@ -50,8 +53,8 @@ def test_route_after_plan_prefers_goal_done_over_replan() -> None:
     )
 
 
-def test_route_after_assess_short_circuits_on_pending_clarification() -> None:
-    assert route_after_assess({"pending_clarification": {"questions": ["q"]}}) == "await_user"
+def test_route_after_evaluate_short_circuits_on_pending_clarification() -> None:
+    assert route_after_evaluate({"pending_clarification": {"questions": ["q"]}}) == "await_user"
 
 
 def test_route_after_execute_preserved_when_no_pending() -> None:
@@ -62,7 +65,7 @@ def test_route_after_execute_preserved_when_no_pending() -> None:
 def test_route_after_clarification_returns_to_origin_node() -> None:
     from soothe.sloop.clarification.origins import (
         ORIGIN_EXECUTE,
-        ORIGIN_PLAN_ASSESS,
+        ORIGIN_PLAN_EVALUATE,
         ORIGIN_PLAN_GENERATE,
         ORIGIN_PLANNER_SUBAGENT_REVIEW,
     )
@@ -75,8 +78,11 @@ def test_route_after_clarification_returns_to_origin_node() -> None:
         == ORIGIN_PLAN_GENERATE
     )
     assert (
-        route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_ASSESS})
-        == ORIGIN_PLAN_ASSESS
+        route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_EVALUATE})
+        == ORIGIN_PLAN_EVALUATE
+    )
+    assert (
+        route_after_clarification({"last_clarification_origin": "assess"}) == ORIGIN_PLAN_EVALUATE
     )
     assert (
         route_after_clarification({"last_clarification_origin": ORIGIN_PLANNER_SUBAGENT_REVIEW})

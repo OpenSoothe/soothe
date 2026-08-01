@@ -24,7 +24,7 @@ from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 def test_assess_execute_ai_compaction_keeps_head_and_tail() -> None:
     """Oversized execute AI must keep deliverable head + closing tail (not tail-only)."""
-    from soothe.config.models import PlanAssessPromptConfig
+    from soothe.config.models import PlanEvaluatePromptConfig
     from soothe.sloop.prompts.plan_ledger_projection import (
         _compact_execute_ai_for_assess,
     )
@@ -52,7 +52,7 @@ def test_assess_execute_ai_compaction_keeps_head_and_tail() -> None:
     cfg = SimpleNamespace(
         agent=SimpleNamespace(
             loop=SimpleNamespace(
-                plan_assess_prompt=PlanAssessPromptConfig(execute_ai_max_chars=400),
+                plan_evaluate_prompt=PlanEvaluatePromptConfig(execute_ai_max_chars=400),
             )
         )
     )

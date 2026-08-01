@@ -1,5 +1,5 @@
 ---
-title: StrangeLoop main stem (IG-663)
+title: StrangeLoop main stem (IG-663 / IG-672)
 config:
   flowchart:
     curve: basis
@@ -15,12 +15,13 @@ flowchart TD
   routePre -->|trivial| commit_plan
   routePre -->|simple| generate_plan
   routePre -->|complex_or_cont| gather_evidence
+  routePre -->|continuation_trivial_simple| evaluate
 
   subgraph stem [Main stem Plan Execute]
     direction TB
-    gather_evidence[gather_evidence] --> assess[assess]
-    assess -->|need_plan| generate_plan[generate_plan]
-    assess -->|ready| commit_plan[commit_plan]
+    gather_evidence[gather_evidence] --> evaluate[evaluate]
+    evaluate -->|need_plan| generate_plan[generate_plan]
+    evaluate -->|ready| commit_plan[commit_plan]
     generate_plan --> commit_plan
     commit_plan --> validate_plan[validate_plan]
     validate_plan --> execute[execute]
@@ -29,7 +30,7 @@ flowchart TD
     check_limits --> begin_iteration[begin_iteration]
     begin_iteration --> gather_evidence
     record_progress -->|terminal| finalize[finalize]
-    assess -->|done| finalize
+    evaluate -->|done| finalize
   end
 
   finalize --> END2([END])
@@ -37,5 +38,5 @@ flowchart TD
   execute -.-> await_user[await_user]
   await_user -.-> execute
   await_user -.-> generate_plan
-  await_user -.-> assess
+  await_user -.-> evaluate
   await_user -.-> delegate

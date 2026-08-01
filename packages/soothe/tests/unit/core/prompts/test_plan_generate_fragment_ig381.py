@@ -5,9 +5,12 @@ from soothe.sloop.prompts.fragments import PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
 
 def test_plan_generate_uses_wire_schema_fields() -> None:
     text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
-    assert "reasoning``, ``steps``, optional ``clarify``" in text
+    assert "``steps``, optional ``clarify``" in text
     assert "dependencies``: REQUIRED on every step" in text
-    assert "Do not emit ``type``, ``execution_mode``, ``full_description``, or ``kind``" in text
+    assert (
+        "Do not emit ``reasoning``, ``type``, ``execution_mode``, ``full_description``, or ``kind``"
+        in text
+    )
     assert "Runtime derives ``execution_mode``" in text
     assert "plan_action" not in text
     assert "``subagent``" not in text  # wire uses ``delegate``, not step subagent field

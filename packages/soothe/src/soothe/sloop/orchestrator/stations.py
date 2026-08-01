@@ -1,4 +1,4 @@
-"""StrangeLoop stem station IDs (IG-663).
+"""StrangeLoop stem station IDs (IG-663, IG-672).
 
 Canonical LangGraph node names for the flat Loop Graph. Legacy IDs remain
 accepted via ``normalize_station`` for persisted clarification origins and
@@ -20,8 +20,7 @@ ENTER_LOOP: Final = "enter_loop"
 
 # --- Plan ---
 GATHER_EVIDENCE: Final = "gather_evidence"
-ANALYZE_GAPS: Final = "analyze_gaps"
-ASSESS: Final = "assess"
+EVALUATE: Final = "evaluate"
 GENERATE_PLAN: Final = "generate_plan"
 
 # --- Execute ---
@@ -54,14 +53,15 @@ PHASE_LEDGER_GAP: Final = "plan_gap_analysis"
 # ledger strings remain the writer contract for client-visible checkpoints.
 PLANNING_LEDGER_PHASES: frozenset[str] = frozenset(
     {
-        ASSESS,
+        EVALUATE,
         GENERATE_PLAN,
-        ANALYZE_GAPS,
         INTAKE,
         PHASE_LEDGER_ASSESS,
         PHASE_LEDGER_GENERATE,
         PHASE_LEDGER_GAP,
         PHASE_LEDGER_INTAKE,
+        "assess",
+        "analyze_gaps",
         "continuation",
     }
 )
@@ -73,8 +73,10 @@ LEGACY_TO_STATION: dict[str, str] = {
     "intent_classify": INTAKE,
     "init_or_resume": ENTER_LOOP,
     "bounded_evidence_gather": GATHER_EVIDENCE,
-    "plan_gap_analysis": ANALYZE_GAPS,
-    "plan_assess": ASSESS,
+    "plan_gap_analysis": EVALUATE,
+    "plan_assess": EVALUATE,
+    "analyze_gaps": EVALUATE,
+    "assess": EVALUATE,
     "plan_generate": GENERATE_PLAN,
     "resolve_decision": COMMIT_PLAN,
     "validate_evidence_bindings": VALIDATE_PLAN,
@@ -87,8 +89,7 @@ LEGACY_TO_STATION: dict[str, str] = {
     INTAKE: INTAKE,
     ENTER_LOOP: ENTER_LOOP,
     GATHER_EVIDENCE: GATHER_EVIDENCE,
-    ANALYZE_GAPS: ANALYZE_GAPS,
-    ASSESS: ASSESS,
+    EVALUATE: EVALUATE,
     GENERATE_PLAN: GENERATE_PLAN,
     COMMIT_PLAN: COMMIT_PLAN,
     VALIDATE_PLAN: VALIDATE_PLAN,
@@ -117,14 +118,13 @@ def normalize_station(station_or_legacy: str | None) -> str | None:
 
 
 __all__ = [
-    "ANALYZE_GAPS",
-    "ASSESS",
     "AWAIT_USER",
     "BEGIN_ITERATION",
     "CHECK_LIMITS",
     "COMMIT_PLAN",
     "DELEGATE",
     "ENTER_LOOP",
+    "EVALUATE",
     "EXECUTE",
     "FINALIZE",
     "GATHER_EVIDENCE",

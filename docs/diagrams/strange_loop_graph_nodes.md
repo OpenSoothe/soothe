@@ -21,10 +21,10 @@ Evaluated in order; first match wins:
 |----------|-----------|--------|-------|
 | 1 | ``intent_route == fast_path`` | ``__end__`` | Chitchat fast-path |
 | 2 | ``intent_route == wired_subagent`` | ``delegate`` | Intake-only direct invoke → finalize |
-| 3 | ``is_continuation`` + ``trivial``/``simple`` | ``assess`` | Continuation discriminator |
+| 3 | ``is_continuation`` + ``trivial``/``simple`` | ``evaluate`` | Continuation discriminator (IG-672) |
 | 3c | ``is_continuation`` + ``complex`` / missing | ``gather_evidence`` | Full spine |
 | 4 | ``intake_label == trivial`` (fresh) | ``commit_plan`` | Pseudo 1-step plan |
-| 5 | ``intake_label == simple`` (fresh) | ``generate_plan`` | Skips gather + assess |
+| 5 | ``intake_label == simple`` (fresh) | ``generate_plan`` | Skips gather + evaluate |
 | 6 | default / ``complex`` (fresh) | ``gather_evidence`` | Full spine |
 
 ```mermaid
@@ -33,15 +33,14 @@ flowchart TD
     IOR --> R{{route_after_preprocess}}
     R -->|fast_path| END1[END / chitchat]
     R -->|wired_subagent| IWS[delegate → finalize]
-    R -->|continuation+trivial_simple| PA[assess]
+    R -->|continuation+trivial_simple| EV[evaluate]
     R -->|continuation+complex| BEG[gather_evidence]
     R -->|trivial| RD[commit_plan → execute]
     R -->|simple| PG2[generate_plan → execute]
     R -->|complex| BEG2[gather_evidence]
     BEG --> PGA{{route_after_evidence_gather}}
     BEG2 --> PGA
-    PGA -->|assess| PA3[assess]
-    PGA -->|analyze_gaps| PGA2[analyze_gaps → assess]
+    PGA -->|evaluate| EV2[evaluate]
     PGA -->|generate_plan| PG3[generate_plan → execute]
 ```
 
@@ -52,8 +51,7 @@ flowchart TD
 | `intake` | preprocess | `intent_classify` |
 | `enter_loop` | preprocess | `init_or_resume` |
 | `gather_evidence` | plan | `bounded_evidence_gather` |
-| `analyze_gaps` | plan | `plan_gap_analysis` |
-| `assess` | plan | `plan_assess` |
+| `evaluate` | plan | `plan_gap_analysis` + `plan_assess` (IG-672) |
 | `generate_plan` | plan | `plan_generate` |
 | `commit_plan` | execute | `resolve_decision` |
 | `validate_plan` | execute | `validate_evidence_bindings` |

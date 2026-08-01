@@ -47,9 +47,7 @@ def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
             recent.append(str(getattr(sr, "output", "")))
     plan_summary: str | None = None
     if plan_result is not None:
-        plan_summary = getattr(plan_result, "plan_reasoning", None) or getattr(
-            plan_result, "next_action", None
-        )
+        plan_summary = getattr(plan_result, "next_action", None)
     # goal_user_submission holds the original user line (set by strange_loop.continue_goal).
     # Fall back to goal when goal_user_submission is None (e.g. autopilot or legacy paths).
     from soothe.sloop.goal_text import resolve_user_request

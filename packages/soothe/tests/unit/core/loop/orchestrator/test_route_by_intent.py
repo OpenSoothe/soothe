@@ -29,14 +29,14 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_route_by_intent_continuation_trivial() -> None:
-    """Continuation trivial goals use plan_assess (continuation discriminator)."""
+    """Continuation trivial goals use evaluate (continuation discriminator)."""
     state = {"is_continuation": True, "intake_label": IntakeLabel.TRIVIAL}
-    assert route_by_intent(state) == "assess"
+    assert route_by_intent(state) == "evaluate"
 
 
 def test_route_by_intent_continuation_simple() -> None:
     state = {"is_continuation": True, "intake_label": IntakeLabel.SIMPLE}
-    assert route_by_intent(state) == "assess"
+    assert route_by_intent(state) == "evaluate"
 
 
 def test_route_by_intent_continuation_complex() -> None:
@@ -309,7 +309,6 @@ def test_trivial_plan_has_no_synthetic_reasoning_prefix() -> None:
     """RFC-630 §11: the trivial plan emits the goal as the step, no verbose prefix."""
     plan = build_trivial_plan("list files in this directory")
     assert plan.next_action == "list files in this directory"
-    assert plan.plan_reasoning == ""
     assert plan.decision is not None
     assert plan.decision.reasoning == ""
     assert plan.terminal_after_execute is True

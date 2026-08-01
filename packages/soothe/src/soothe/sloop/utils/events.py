@@ -10,7 +10,7 @@ from soothe.events import VerbosityTier, register_event
 
 
 class LoopAgentReasonEvent(ProtocolEvent):
-    """User-visible progress after the Plan phase (Plan-Execute loop)."""
+    """User-visible cognition progress (assess cards, step completion summaries)."""
 
     type: Literal["soothe.cognition.strange_loop.reasoned"] = (
         "soothe.cognition.strange_loop.reasoned"
@@ -18,7 +18,7 @@ class LoopAgentReasonEvent(ProtocolEvent):
     status: str
     progress: str
     assessment_reasoning: str = ""
-    plan_reasoning: str = ""
+    plan_reasoning: str = ""  # step-completion / strategy line; not plan-generate
     plan_action: Literal["keep", "new", ""] = "new"
     iteration: int
 

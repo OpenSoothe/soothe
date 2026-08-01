@@ -33,7 +33,6 @@ def _make_done_plan_result() -> PlanResult:
         next_action="Goal achieved successfully",
         require_goal_completion=False,
         assessment_reasoning="",
-        plan_reasoning="",
     )
 
 

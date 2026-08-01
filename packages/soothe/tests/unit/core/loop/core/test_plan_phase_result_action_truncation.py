@@ -39,7 +39,6 @@ def sample_plan_result() -> PlanGeneration:
             ),
         ],
         execution_mode="parallel",
-        reasoning="I'll check implementation details before proposing changes.",
     )
 
 
@@ -53,20 +52,16 @@ def test_next_action_derives_from_first_step_description(
     result = planner._combine_results(sample_assessment, sample_plan_result)
 
     assert result.assessment_reasoning == ""
-    assert result.plan_reasoning == sample_plan_result.reasoning
     assert result.next_action == sample_plan_result.steps[0].description
     assert "Read key implementation files" in result.next_action
 
 
-def test_next_action_falls_back_to_reasoning_when_no_steps(
-    sample_plan_result: PlanGeneration,
-) -> None:
-    """PlanResult.next_action falls back to reasoning for final-type plans."""
+def test_next_action_empty_when_final_has_no_steps() -> None:
+    """Final-type plans with no steps leave next_action empty."""
     plan_result = PlanGeneration(
         type="final",
         steps=[],
         execution_mode="parallel",
-        reasoning="I'll wrap up after reviewing the evidence.",
     )
 
     assessment = StatusAssessment(status="continue", goal_progress="medium")
@@ -74,7 +69,7 @@ def test_next_action_falls_back_to_reasoning_when_no_steps(
     planner = LLMPlanner.__new__(LLMPlanner)
     result = planner._combine_results(assessment, plan_result)
 
-    assert result.next_action == "I'll wrap up after reviewing the evidence."
+    assert result.next_action == ""
 
 
 def test_schema_max_length_updated() -> None:
@@ -116,7 +111,6 @@ def test_early_completion_preserves_action() -> None:
         status="done",
         goal_progress="complete",
         assessment_reasoning="",
-        plan_reasoning="",
         plan_action="keep",
         decision=None,
         next_action="Task completed successfully",

@@ -105,6 +105,7 @@ def last_ledger_ai_content(state: LoopState) -> str:
     """
     # Dual-read: client-visible ledger phases + IG-663 station ids if present.
     planning_phases = {
+        "evaluate",
         "assess",
         "plan_assess",
         "generate_plan",
@@ -181,12 +182,13 @@ class LoopHumanMessage(HumanMessage):
         Literal[
             "intake",  # IG-663: Preprocess intake
             "intent_classify",  # legacy alias
-            "assess",  # IG-663: Plan assess
-            "plan_assess",  # legacy
+            "evaluate",  # IG-672: Plan evaluate (inventory + assess)
+            "assess",  # legacy stem alias → evaluate
+            "plan_assess",  # legacy ledger
             "generate_plan",  # IG-663: Plan generate
             "plan_generate",  # legacy
-            "analyze_gaps",  # IG-663
-            "plan_gap_analysis",  # legacy
+            "analyze_gaps",  # legacy stem alias → evaluate
+            "plan_gap_analysis",  # legacy ledger
             "execute_wave",  # Parallel execution wave
             "execute_step",  # Single step execution
             "goal_completion",  # Goal completion phase (wire-stable)

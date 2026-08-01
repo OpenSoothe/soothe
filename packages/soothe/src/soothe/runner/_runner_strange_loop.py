@@ -42,9 +42,6 @@ from soothe.sloop.utils.loop_reason_display import (
     is_displayable_assessment_reasoning as _is_displayable_assessment_reasoning,
 )
 from soothe.sloop.utils.loop_reason_display import (
-    is_displayable_plan_reasoning as _is_displayable_plan_reasoning,
-)
-from soothe.sloop.utils.loop_reason_display import (
     should_emit_loop_reason_event as _should_emit_loop_reason_event,
 )
 from soothe.sloop.utils.messages import (
@@ -793,33 +790,16 @@ class StrangeLoopMixin:
                             ).to_dict()
                         )
 
-                elif event_type == "generate":
-                    plan_reasoning = str(event_data.get("plan_reasoning", "")).strip()
-                    if _is_displayable_plan_reasoning(plan_reasoning):
-                        yield _custom(
-                            LoopAgentReasonEvent(
-                                status="",
-                                progress="",
-                                assessment_reasoning="",
-                                plan_reasoning=plan_reasoning,
-                                iteration=int(event_data.get("iteration", 0)),
-                                plan_action="",
-                            ).to_dict()
-                        )
-
                 elif event_type == "plan":
                     assessment_reasoning = str(event_data.get("assessment_reasoning", "")).strip()
-                    plan_reasoning = str(event_data.get("plan_reasoning", "")).strip()
                     if _should_emit_loop_reason_event(
                         assessment_reasoning=assessment_reasoning,
-                        plan_reasoning=plan_reasoning,
                     ):
                         yield _custom(
                             LoopAgentReasonEvent(
                                 status=str(event_data.get("status", "")),
                                 progress=event_data["progress"],
                                 assessment_reasoning=assessment_reasoning,
-                                plan_reasoning=plan_reasoning,
                                 plan_action=event_data.get("plan_action", "new"),
                                 iteration=event_data["iteration"],
                             ).to_dict()

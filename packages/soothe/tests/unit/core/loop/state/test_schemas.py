@@ -410,10 +410,8 @@ class TestPlanResult:
                 status="continue",
                 plan_action="new",
                 decision=None,
-                reasoning="bad",
-                assessment_reasoning="",  # IG-264: Added
-                plan_reasoning="",  # IG-264: Added
-                next_action="test",  # IG-264: Added
+                assessment_reasoning="",
+                next_action="test",
             )
 
     def test_progress_validation(self) -> None:
@@ -496,7 +494,7 @@ class TestPlanGeneration:
     def test_new_requires_type(self) -> None:
         """Plan generation requires top-level type."""
         with pytest.raises(ValidationError):
-            PlanGeneration(reasoning="test")
+            PlanGeneration(steps=[])
 
     def test_new_final_allows_empty_steps(self) -> None:
         """type=final matches AgentDecision: no execute steps required."""
@@ -504,7 +502,6 @@ class TestPlanGeneration:
             type="final",
             execution_mode="parallel",
             steps=[],
-            reasoning="Wrapping up.",
         )
         assert out.type == "final"
         assert out.steps == []
@@ -523,7 +520,6 @@ class TestPlanGeneration:
         out = PlanGeneration(
             type="final",
             steps=[],
-            reasoning="Done.",
         )
         assert out.execution_mode == "parallel"
 
@@ -556,6 +552,7 @@ class TestPlanGeneration:
         props = PlanGeneration.model_json_schema()["properties"]
         assert "plan_action" not in props
         assert "next_action" not in props
+        assert "reasoning" not in props
 
     def test_derive_plan_action(self) -> None:
         from soothe.sloop.state.schemas import derive_plan_action

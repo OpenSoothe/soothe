@@ -1,1 +1,1 @@
-"""Plan stage: gather_evidence, assess, generate_plan, analyze_gaps."""
+"""Plan stage: gather_evidence, evaluate, generate_plan."""

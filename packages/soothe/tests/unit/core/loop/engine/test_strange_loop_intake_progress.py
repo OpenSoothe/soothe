@@ -37,7 +37,7 @@ async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() 
     pass1_result = MagicMock()
     pass1_result.is_task = True
     pass1_result.confidence = "high"
-    pass1_result.reasoning = "Work request detected."
+    pass1_result.reasoning = "This is a request to summarize the readme."
 
     preclassified = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
@@ -135,6 +135,6 @@ async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() 
         if event_type == "intent_classified_reasoning" and isinstance(payload, dict)
     ]
     assert [e["reasoning"] for e in reasoning_events] == [
-        "Work request detected.",
+        "This is a request to summarize the readme.",
         "I'll read the readme first.",
     ]

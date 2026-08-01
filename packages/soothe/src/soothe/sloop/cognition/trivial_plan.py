@@ -54,7 +54,6 @@ def build_trivial_plan(
         status="continue",
         goal_progress="none",
         assessment_reasoning="",
-        plan_reasoning="",
         plan_action="new",
         require_goal_completion=False,
         terminal_after_execute=True,
