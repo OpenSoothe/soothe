@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.sloop.cognition.planner import _detect_stuck_loop
+from soothe.sloop.cognition.structural_keep import detect_stuck_loop
 from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 
 
@@ -10,7 +10,7 @@ def test_detect_stuck_loop_repeated_actions() -> None:
     state = LoopState(goal="g", thread_id="t")
     state.action_history = ["read README.md"] * 3
 
-    reason = _detect_stuck_loop(state)
+    reason = detect_stuck_loop(state)
 
     assert reason is not None
     assert "Repeated identical action" in reason
@@ -42,7 +42,7 @@ def test_detect_stuck_loop_consecutive_failures() -> None:
         ),
     ]
 
-    reason = _detect_stuck_loop(state)
+    reason = detect_stuck_loop(state)
 
     assert reason is not None
     assert reason.startswith("Consecutive step failures:")

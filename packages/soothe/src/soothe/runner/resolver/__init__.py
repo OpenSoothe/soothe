@@ -94,6 +94,18 @@ def resolve_planner(
         fallback=planner_model,
         phase="generate-plan",
     )
+    plan_generate_model_simple = _create_loop_phase_model(
+        config,
+        loop_cfg.plan_generate_model_role_simple,
+        fallback=plan_generate_model,
+        phase="generate-plan-simple",
+    )
+    plan_generate_model_near_gap = _create_loop_phase_model(
+        config,
+        loop_cfg.plan_generate_model_role_near_gap,
+        fallback=plan_generate_model_simple,
+        phase="generate-plan-near-gap",
+    )
 
     from soothe.sloop.cognition.planner import LLMPlanner
 
@@ -102,5 +114,7 @@ def resolve_planner(
         config=config,
         plan_assess_model=plan_assess_model,
         plan_generate_model=plan_generate_model,
+        plan_generate_model_simple=plan_generate_model_simple,
+        plan_generate_model_near_gap=plan_generate_model_near_gap,
         plan_gap_model=plan_gap_model,
     )

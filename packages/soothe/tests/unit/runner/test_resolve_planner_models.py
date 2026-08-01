@@ -15,6 +15,8 @@ def test_resolve_planner_uses_loop_plan_model_roles() -> None:
                 "plan_assess_model_role": "fast",
                 "plan_gap_model_role": "default",
                 "plan_generate_model_role": "think",
+                "plan_generate_model_role_simple": "fast",
+                "plan_generate_model_role_near_gap": "default",
             }
         }
     )
@@ -41,6 +43,8 @@ def test_resolve_planner_uses_loop_plan_model_roles() -> None:
     assert planner._plan_assess_model is assess_model
     assert planner._plan_gap_model is gap_model
     assert planner._plan_generate_model is generate_model
+    assert planner._plan_generate_model_simple is assess_model
+    assert planner._plan_generate_model_near_gap is gap_model
     assert planner._model is base_model
 
 
@@ -49,6 +53,8 @@ def test_resolve_planner_defaults_gap_and_assess_to_fast() -> None:
     assert cfg.agent.loop.plan_assess_model_role == "fast"
     assert cfg.agent.loop.plan_gap_model_role == "fast"
     assert cfg.agent.loop.plan_generate_model_role == "think"
+    assert cfg.agent.loop.plan_generate_model_role_simple == "fast"
+    assert cfg.agent.loop.plan_generate_model_role_near_gap == "fast"
 
     fast_model = MagicMock(name="fast")
     think_model = MagicMock(name="think")
@@ -67,3 +73,5 @@ def test_resolve_planner_defaults_gap_and_assess_to_fast() -> None:
     assert planner._plan_assess_model is fast_model
     assert planner._plan_gap_model is fast_model
     assert planner._plan_generate_model is think_model
+    assert planner._plan_generate_model_simple is fast_model
+    assert planner._plan_generate_model_near_gap is fast_model

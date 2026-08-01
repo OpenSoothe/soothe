@@ -30,8 +30,11 @@ logger = logging.getLogger(__name__)
 
 
 def route_after_evidence_gather(state: dict[str, Any]) -> str:
-    """Route from gather_evidence based on fresh-loop detection (IG-476)."""
+    """Route from gather_evidence based on fresh-loop / structural keep (IG-476, IG-671)."""
     route = state.get("evidence_gather_route")
+    if route == "keep_plan":
+        logger.info("[routing] route_after_evidence_gather → commit_plan (structural keep)")
+        return COMMIT_PLAN
     if route == "plan_generate_skip_assess":
         logger.info("[routing] route_after_evidence_gather → generate_plan (fresh-loop skip)")
         return GENERATE_PLAN

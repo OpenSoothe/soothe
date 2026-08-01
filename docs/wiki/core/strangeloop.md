@@ -62,14 +62,15 @@ Key fields and their design rationale:
 
 ---
 
-## The Two-Phase Plan (RFC-604)
+## The Two-Phase Plan (RFC-604 / IG-671)
 
-Planning is split into two phases with different token budgets:
+Mid-loop planning is a split spine with adaptive cost:
 
-1. **StatusAssessment** (~50-80 tokens) — minimal fields: just `status` and `progress`. This is a cheap "are we done?" check. 60% token reduction vs. the old monolithic plan (IG-264).
-2. **PlanGeneration** (full schema) — only runs when assessment says `replan`. Generates `PlanGenerateStep` entries with description, full_description, expected_output, and dependencies.
+1. **Structural keep** — when the in-flight DAG still has remaining steps and the last wave was healthy, reuse the plan with no gap/assess/generate LLM calls.
+2. **Gap + StatusAssessment** (`fast` by default) — otherwise map coverage and decide `continue` / `replan` / `done`.
+3. **PlanGeneration** (`think` by default; `fast` for simple/near-gap) — only when a new plan is needed (`replan`, or `continue` with no remaining steps). Assess `continue` + remaining steps routes `skip_generate`.
 
-This split means most iterations only pay the cost of the assessment phase. Full planning only happens when the plan needs to change.
+Fresh loops skip gap/assess and go straight to generate (or trivial/simple intake shortcuts).
 
 ---
 

@@ -225,6 +225,13 @@ class TestSootheConfig:
         assert cfg.agent.loop.plan_assess_model_role == "fast"
         assert cfg.agent.loop.plan_gap_model_role == "fast"
         assert cfg.agent.loop.plan_generate_model_role == "think"
+        assert cfg.agent.loop.plan_generate_model_role_simple == "fast"
+        assert cfg.agent.loop.plan_generate_model_role_near_gap == "fast"
+        assert cfg.agent.loop.plan_structural_keep_enabled is True
+        assert cfg.agent.loop.plan_structural_keep_max_streak == 3
+        assert cfg.agent.loop.plan_gap_skip_simple_mid_loop is True
+        assert cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_total_chars == 24000
+        assert cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_message_chars == 3000
         assert cfg.agent.loop.goal_synthesis_model_role == "default"
 
     def test_loop_plan_model_roles_yaml(self) -> None:
@@ -234,6 +241,9 @@ class TestSootheConfig:
                     "plan_assess_model_role": "think",
                     "plan_gap_model_role": "default",
                     "plan_generate_model_role": "think",
+                    "plan_generate_model_role_simple": "default",
+                    "plan_generate_model_role_near_gap": "default",
+                    "plan_structural_keep_enabled": False,
                     "goal_synthesis_model_role": "fast",
                 }
             }
@@ -241,6 +251,9 @@ class TestSootheConfig:
         assert cfg.agent.loop.plan_assess_model_role == "think"
         assert cfg.agent.loop.plan_gap_model_role == "default"
         assert cfg.agent.loop.plan_generate_model_role == "think"
+        assert cfg.agent.loop.plan_generate_model_role_simple == "default"
+        assert cfg.agent.loop.plan_generate_model_role_near_gap == "default"
+        assert cfg.agent.loop.plan_structural_keep_enabled is False
         assert cfg.agent.loop.goal_synthesis_model_role == "fast"
 
     def test_verbosity_default(self) -> None:

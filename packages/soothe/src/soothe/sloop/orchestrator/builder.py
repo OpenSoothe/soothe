@@ -191,6 +191,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             ASSESS: ASSESS,
             ANALYZE_GAPS: ANALYZE_GAPS,
             GENERATE_PLAN: GENERATE_PLAN,
+            COMMIT_PLAN: COMMIT_PLAN,
         },
     )
     graph.add_conditional_edges(

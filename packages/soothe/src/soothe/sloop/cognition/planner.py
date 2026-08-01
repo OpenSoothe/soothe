@@ -37,6 +37,11 @@ from soothe.sloop.cognition.status_assessment_wire import (
     coerce_status_assessment_wire_dict,
     parse_status_assessment_payload,
 )
+from soothe.sloop.cognition.structural_keep import (
+    build_keep_plan_result,
+    detect_stuck_loop,
+    remaining_plan_step_count,
+)
 from soothe.sloop.state.schemas import (
     DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
     AgentDecision,
@@ -72,10 +77,6 @@ if TYPE_CHECKING:
 # have an empty method cache; default function_calling → thrash burns 30–60s+
 # per plan-generate (loop 7ea9) before json_schema succeeds.
 _PLANNER_JSON_METHODS: tuple[str | None, ...] = ("json_schema", "json_mode")
-
-# IG-454: Stuck detection thresholds
-_STUCK_ACTION_REPEAT_THRESHOLD = 3  # Same action repeated N times = stuck
-_STUCK_ERROR_STEP_THRESHOLD = 3  # N consecutive error steps = stuck
 
 # IG-503: Network resilience retry configuration
 _NETWORK_RETRY_MAX_ATTEMPTS = 3
@@ -169,38 +170,6 @@ def _parse_status_assessment_from_raw_message(response: Any) -> Any:
     return StatusAssessment(**coerce_status_assessment_wire_dict(parsed))
 
 
-def _detect_stuck_loop(state: LoopState) -> str | None:
-    """IG-454: Detect if the loop is stuck and should be terminated or replanned.
-
-    Checks for:
-    1. Repeated identical actions (same internal action line N times consecutively)
-    2. Consecutive execution failures (``success=False`` from crashes/timeouts)
-
-    Args:
-        state: Current loop state with action_history and step_results.
-
-    Returns:
-        Reason string if stuck, None if not stuck.
-    """
-    # Check for repeated identical actions
-    if len(state.action_history) >= _STUCK_ACTION_REPEAT_THRESHOLD:
-        recent_actions = state.get_recent_actions(_STUCK_ACTION_REPEAT_THRESHOLD)
-        if len(recent_actions) == _STUCK_ACTION_REPEAT_THRESHOLD:
-            # All recent actions are identical
-            first_action = recent_actions[0]
-            if all(action == first_action for action in recent_actions):
-                return f"Repeated identical action {first_action[:50]} {_STUCK_ACTION_REPEAT_THRESHOLD} times"
-
-    # Check for consecutive failed steps
-    if len(state.step_results) >= _STUCK_ERROR_STEP_THRESHOLD:
-        recent_results = state.step_results[-_STUCK_ERROR_STEP_THRESHOLD:]
-        if all(not r.success for r in recent_results):
-            previews = [(r.error or "unknown")[:50] for r in recent_results[:2]]
-            return f"Consecutive step failures: {', '.join(previews)}"
-
-    return None
-
-
 def _apply_continuation_intake_guardrails(result: Any, state: LoopState) -> Any:
     """Override bootstrap when intake complexity or empty reasoning forbids it."""
     from soothe.sloop.intention.models import IntakeLabel
@@ -265,6 +234,8 @@ class LLMPlanner:
         *,
         plan_assess_model: Any | None = None,
         plan_generate_model: Any | None = None,
+        plan_generate_model_simple: Any | None = None,
+        plan_generate_model_near_gap: Any | None = None,
         plan_gap_model: Any | None = None,
         loop_id: str | None = None,
     ) -> None:
@@ -274,7 +245,9 @@ class LLMPlanner:
             model: Langchain BaseChatModel supporting structured output.
             config: Optional configuration for shared context XML in prompts.
             plan_assess_model: Model for plan-assess and continuation-assess calls.
-            plan_generate_model: Model for plan-generate calls.
+            plan_generate_model: Default model for plan-generate calls (complex/think).
+            plan_generate_model_simple: Model for simple/lightweight generate (IG-671).
+            plan_generate_model_near_gap: Model for near-gap generate (IG-671).
             plan_gap_model: Model for plan-gap-analysis calls (defaults to assess model).
             loop_id: Optional loop identifier for Langfuse trace correlation.
         """
@@ -283,10 +256,36 @@ class LLMPlanner:
         self._model = model
         self._plan_assess_model = plan_assess_model or model
         self._plan_generate_model = plan_generate_model or model
+        self._plan_generate_model_simple = plan_generate_model_simple or self._plan_generate_model
+        self._plan_generate_model_near_gap = (
+            plan_generate_model_near_gap or self._plan_generate_model_simple
+        )
         self._plan_gap_model = plan_gap_model or self._plan_assess_model
         self._config = config
         self._loop_id = loop_id
         self._prompt_builder = PromptBuilder(config)
+
+    def _select_plan_generate_model(
+        self,
+        state: LoopState,
+        *,
+        plan_gap: Any | None,
+        lightweight: bool,
+        approved_plan: bool = False,
+    ) -> Any:
+        """Pick generate model by intake / gap distance (IG-671)."""
+        from soothe.sloop.intention.models import IntakeLabel
+
+        if lightweight or approved_plan:
+            return self._plan_generate_model_simple
+        intake = intake_label_from_state(state)
+        if intake == IntakeLabel.SIMPLE:
+            return self._plan_generate_model_simple
+        distance = getattr(plan_gap, "distance_from_goal", None) if plan_gap is not None else None
+        last_ok = bool(state.step_results) and bool(state.step_results[-1].success)
+        if distance in ("near", "at_goal") and last_ok and detect_stuck_loop(state) is None:
+            return self._plan_generate_model_near_gap
+        return self._plan_generate_model
 
     def _max_plan_steps_per_wave(self) -> int:
         """Configured cap on plan-generate steps per wave."""
@@ -704,6 +703,7 @@ class LLMPlanner:
         iteration: int,
         *,
         thread_id: str | None,
+        generate_model: Any | None = None,
     ) -> tuple[Any, Any]:
         """PlanGeneration call with raw response for ledger recording (RFC-214).
 
@@ -716,6 +716,7 @@ class LLMPlanner:
             goal: Goal description for fallback decision
             iteration: Current iteration for varied fallback
             thread_id: Thread id for Langfuse session correlation.
+            generate_model: Optional override for the generate chat model (IG-671).
 
         Returns:
             Tuple of (PlanGeneration, raw_response) or (PlanGeneration, None) on fallback.
@@ -724,7 +725,7 @@ class LLMPlanner:
             max_steps=self._max_plan_steps_per_wave()
         )
 
-        model = _plan_phase_chat_model(self._plan_generate_model)
+        model = _plan_phase_chat_model(generate_model or self._plan_generate_model)
 
         # Retry structured output up to 2 times when None returned (IG-xxx)
         max_retries = 2
@@ -1101,7 +1102,7 @@ class LLMPlanner:
                 )
 
         # IG-454: Check for stuck loop patterns
-        stuck_reason = _detect_stuck_loop(state)
+        stuck_reason = detect_stuck_loop(state)
         if stuck_reason:
             logger.warning("[Plan] Stuck detected: %s, forcing replan", stuck_reason)
             assessment.status = "replan"
@@ -1259,18 +1260,12 @@ class LLMPlanner:
         ):
             logger.info(
                 "[PlanGen] Reusing in-flight plan (%d step(s) remain)",
-                len(state.current_decision.steps) - len(state.dependency_completion_ids())
-                if state.current_decision
-                else 0,
+                remaining_plan_step_count(state),
             )
-            return PlanResult(
+            return build_keep_plan_result(
+                state,
                 status=assessment.status,
                 goal_progress=assessment.goal_progress,
-                assessment_reasoning="",
-                plan_reasoning="",
-                plan_action="keep",
-                decision=None,
-                next_action="I'll continue with the remaining steps in the current plan.",
                 require_goal_completion=assessment.require_goal_completion,
             )
 
@@ -1303,6 +1298,13 @@ class LLMPlanner:
             inline_assessment=assessment,
             plan_gap=plan_gap,
         )
+        approved_plan = bool((getattr(state, "approved_plan_markdown", None) or "").strip())
+        generate_model = self._select_plan_generate_model(
+            state,
+            plan_gap=plan_gap,
+            lightweight=lightweight,
+            approved_plan=approved_plan,
+        )
         t0 = time.perf_counter()
         plan_result, ai_response = await self._generate_plan_with_response(
             generate_messages,
@@ -1310,6 +1312,7 @@ class LLMPlanner:
             goal,
             state.iteration,
             thread_id=state.thread_id,
+            generate_model=generate_model,
         )
         _log_plan_phase_timing(
             phase="generate",

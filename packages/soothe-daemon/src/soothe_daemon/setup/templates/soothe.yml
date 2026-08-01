@@ -82,7 +82,12 @@ agent:
     plan_assess_model_role: fast
     plan_gap_analysis_enabled: true
     plan_gap_model_role: fast
+    plan_gap_skip_simple_mid_loop: true
     plan_generate_model_role: think
+    plan_generate_model_role_simple: fast
+    plan_generate_model_role_near_gap: fast
+    plan_structural_keep_enabled: true
+    plan_structural_keep_max_streak: 3
     goal_synthesis_model_role: default
     rules:
       completion:
@@ -133,8 +138,8 @@ agent:
       projection_max_project_instructions_chars: 8000
     plan_prompt_ledger:
       plan_ledger_max_messages: 40
-      plan_ledger_max_total_chars: 0
-      plan_ledger_max_message_chars: 0
+      plan_ledger_max_total_chars: 24000
+      plan_ledger_max_message_chars: 3000
     plan_assess_prompt:
       ledger_max_messages: 24
       execute_ai_max_chars: 2048

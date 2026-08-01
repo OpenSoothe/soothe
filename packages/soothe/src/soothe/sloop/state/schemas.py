@@ -1225,6 +1225,13 @@ class LoopState(BaseModel):
         description="Most-recent execute wave snapshot for plan-phase grounding.",
     )
 
+    # IG-671: consecutive structural keeps before forcing a full gap/assess path.
+    structural_keep_streak: int = Field(
+        default=0,
+        ge=0,
+        description="Count of consecutive structural plan keeps in this goal.",
+    )
+
     # RFC-105: Progressive skill loading durability snapshot
     sent_skill_names: set[str] = Field(default_factory=set)
     activated_skill_names: set[str] = Field(default_factory=set)
@@ -1590,6 +1597,7 @@ class LoopState(BaseModel):
 
         # Clear prior progress digest
         self.prior_progress = None
+        self.structural_keep_streak = 0
 
         # Trim but don't fully clear loop_messages - keep recent context
         self.trim_loop_messages()

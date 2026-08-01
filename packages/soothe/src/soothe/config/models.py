@@ -391,16 +391,22 @@ class PlanPromptLedgerConfig(BaseModel):
         description="Max ledger messages tail for plan prompts (0 = unlimited)",
     )
     plan_ledger_max_total_chars: int = Field(
-        default=0,
+        default=24000,
         ge=0,
         le=2_000_000,
-        description="Max total extracted characters for plan ledger projection (0 = unlimited)",
+        description=(
+            "Max total extracted characters for plan ledger projection "
+            "(0 = unlimited; IG-671 default 24000)"
+        ),
     )
     plan_ledger_max_message_chars: int = Field(
-        default=0,
+        default=3000,
         ge=0,
         le=500_000,
-        description="Max extracted characters per ledger message in plan projection (0 = unlimited)",
+        description=(
+            "Max extracted characters per ledger message in plan projection "
+            "(0 = unlimited; IG-671 default 3000)"
+        ),
     )
 
 
@@ -888,6 +894,11 @@ class StrangeLoopConfig(BaseModel):
         plan_assess_model_role: Router role for plan-assess LLM calls (default ``fast``).
         plan_gap_model_role: Router role for plan-gap-analysis LLM calls (default ``fast``).
         plan_generate_model_role: Router role for plan-generate LLM calls (default ``think``).
+        plan_generate_model_role_simple: Role for simple/lightweight generate (default ``fast``).
+        plan_generate_model_role_near_gap: Role for near-gap generate (default ``fast``).
+        plan_structural_keep_enabled: Skip gap/assess/generate when in-flight plan is healthy.
+        plan_structural_keep_max_streak: Force full assess after N consecutive structural keeps.
+        plan_gap_skip_simple_mid_loop: Skip gap analysis for mid-loop simple intake.
         goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default ``default``).
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
@@ -1165,6 +1176,45 @@ class StrangeLoopConfig(BaseModel):
     plan_generate_model_role: ModelRole = Field(
         default="think",
         description="Router model role for plan-generate structured LLM calls.",
+    )
+
+    plan_generate_model_role_simple: ModelRole = Field(
+        default="fast",
+        description=(
+            "Router model role for simple/lightweight plan-generate and approved-plan "
+            "implement handoff (IG-671)."
+        ),
+    )
+
+    plan_generate_model_role_near_gap: ModelRole = Field(
+        default="fast",
+        description=(
+            "Router model role for plan-generate when gap distance is near/at_goal "
+            "and the last execute wave succeeded (IG-671)."
+        ),
+    )
+
+    plan_structural_keep_enabled: bool = Field(
+        default=True,
+        description=(
+            "When true, mid-loop iterations with a healthy in-flight plan skip "
+            "gap/assess/generate and reuse remaining steps (IG-671)."
+        ),
+    )
+
+    plan_structural_keep_max_streak: int = Field(
+        default=3,
+        ge=0,
+        le=50,
+        description=(
+            "Force a full gap/assess path after this many consecutive structural "
+            "keeps (0 = no streak cap; IG-671)."
+        ),
+    )
+
+    plan_gap_skip_simple_mid_loop: bool = Field(
+        default=True,
+        description=("Skip plan-gap-analysis for mid-loop simple intake (assess-only; IG-671)."),
     )
 
     goal_synthesis_model_role: ModelRole = Field(

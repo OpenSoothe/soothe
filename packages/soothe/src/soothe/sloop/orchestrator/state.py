@@ -11,13 +11,12 @@ IterationOutcome = Literal["continue", "completed", "fatal", "max_iterations", "
 
 PlanRoute = Literal["goal_done", "execute"]
 IntentRoute = Literal["continue_loop", "fast_path", "wired_subagent"]
-AssessRoute = Literal[
-    "continue_generate", "skip_generate", "continue_assess", "fresh_loop_skip_assess"
-]
+AssessRoute = Literal["continue_generate", "skip_generate"]
 EvidenceGatherRoute = Literal[
     "assess",
     "analyze_gaps",
     "plan_generate_skip_assess",
+    "keep_plan",
     # legacy
     "plan_assess",
     "plan_gap_analysis",

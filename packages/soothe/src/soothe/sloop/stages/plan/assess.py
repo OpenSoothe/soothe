@@ -19,6 +19,10 @@ from soothe.sloop.cognition.plan_step_safety import (
     no_new_tool_evidence_recently,
     terminal_assess_may_complete,
 )
+from soothe.sloop.cognition.structural_keep import (
+    build_keep_plan_result,
+    remaining_plan_step_count,
+)
 from soothe.sloop.engine.continuation_context import (
     build_continue_bootstrap_step_briefs,
     build_prior_goal_summaries,
@@ -39,6 +43,7 @@ from soothe.sloop.state.schemas import (
     PlanResult,
     StatusAssessment,
     StepAction,
+    derive_plan_action,
 )
 from soothe.sloop.utils.continue_keyword import is_continue_keyword
 from soothe.sloop.utils.messages import last_ledger_ai_content
@@ -513,5 +518,48 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     )
     if terminal_route is not None:
         return terminal_route
+
+    # IG-671: reuse in-flight plan without entering generate_plan.
+    if (
+        derive_plan_action(
+            assessment_status=assessment.status,
+            has_remaining_steps=state.has_remaining_steps(),
+        )
+        == "keep"
+    ):
+        plan_result = build_keep_plan_result(
+            state,
+            status=assessment.status,
+            goal_progress=assessment.goal_progress,
+            require_goal_completion=assessment.require_goal_completion,
+        )
+        plan_result = strange_loop.plan_phase.finalize_plan_result(
+            state=state,
+            context=context,
+            result=plan_result,
+        )
+        ctx.scratch.plan_result = plan_result
+        plan_manager = ctx.plan_manager
+        plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
+        if ctx.ce is not None:
+            try:
+                ctx.ce.defer_save()
+            except Exception:
+                logger.warning("[plan_assess] CE save failed on keep", exc_info=True)
+        await ctx.emit(
+            "plan",
+            {
+                "iteration": state.iteration,
+                "status": plan_result.status,
+                "progress": plan_result.goal_progress,
+                "next_action": plan_result.next_action,
+                "plan_action": plan_result.plan_action,
+            },
+        )
+        logger.info(
+            "[Plan] assess keep → skip_generate (%d step(s) remain)",
+            remaining_plan_step_count(state),
+        )
+        return {"assess_route": "skip_generate"}
 
     return {"assess_route": "continue_generate"}
