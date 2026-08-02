@@ -16,6 +16,7 @@ from soothe_cli.runtime.presentation.duration_format import (
     format_duration_ms,
     format_running_elapsed,
 )
+from soothe_cli.runtime.presentation.step_id_format import numeric_step_prefix
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
@@ -39,10 +40,11 @@ def _dependency_suffix(deps: tuple[str, ...]) -> str:
     if not deps:
         return ""
     shown = deps[:_MAX_DEPENDENCY_IDS]
-    text = ", ".join(shown)
+    parts = [numeric_step_prefix(dep) for dep in shown]
+    text = ", ".join(p for p in parts if p)
     if len(deps) > _MAX_DEPENDENCY_IDS:
         text += ", …"
-    return f" (→ {text})"
+    return f" (→ {text})" if text else ""
 
 
 def _plan_quick_view_step_summary(
@@ -320,7 +322,8 @@ class CognitionGoalTreeMessage(Vertical):
         max_line_width: int | None,
     ) -> str:
         """Build a single-line step row, clipping description to fit ``max_line_width``."""
-        step_prefix = f"{st.step_id}: " if st.step_id else ""
+        numeric = numeric_step_prefix(st.step_id)
+        step_prefix = f"{numeric}: " if numeric else ""
         dep_suffix = _dependency_suffix(st.dependencies)
         queued_suffix = " · queued" if st.phase == "queued" else ""
         stats_suffix = self._step_stats_suffix(st)

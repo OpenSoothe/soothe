@@ -163,10 +163,10 @@ def main(
             "--plan-panel/--no-plan-panel",
             help=(
                 "Auto-show the in-flow plan panel when a goal plan is active. "
-                "Ctrl+t toggles thereafter. Default: enabled."
+                "Ctrl+t toggles thereafter. Default: disabled."
             ),
         ),
-    ] = True,
+    ] = False,
     show_help: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--help", "-h", is_flag=True, help="Show this message and exit."),

@@ -33,7 +33,7 @@ class CLIConfig:
     """Markdown appearance preset (``match-app``, ``langchain``, ``standard``, …)."""
 
     # Plan panel visibility preference
-    plan_panel_default_visible: bool = True
+    plan_panel_default_visible: bool = False
     """Auto-show the in-flow plan panel when a goal plan is active. Ctrl+t toggles."""
 
     # Output streaming overrides (RFC-614)

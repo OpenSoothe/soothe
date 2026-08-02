@@ -21,7 +21,7 @@ def test_cognition_goal_tree_pending_and_queued_phases() -> None:
     assert w._steps["S1"].phase == "running"
 
     content = w._assemble_steps_content()
-    assert "S1" in content.plain
+    assert "1:" in content.plain
 
 
 def test_cognition_goal_tree_message_store_round_trip() -> None:

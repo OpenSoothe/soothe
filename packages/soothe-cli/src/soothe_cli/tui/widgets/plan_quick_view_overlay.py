@@ -79,7 +79,7 @@ class PlanQuickViewOverlay(Vertical):
     """In-flow plan panel above the thinking row and chat input.
 
     Auto-shows when a goal plan is active and preferred visibility is on
-    (``CLIConfig.plan_panel_default_visible``, default True). Auto-hides when
+    (``CLIConfig.plan_panel_default_visible``, default False). Auto-hides when
     there is no active plan. Toggle with ``Ctrl+t``. Mounted as a Screen
     sibling between ``#chat`` and ``#bottom-app-container`` so expanding it
     shrinks the transcript instead of floating over the sticky bottom chrome.
@@ -134,7 +134,7 @@ class PlanQuickViewOverlay(Vertical):
     }
     """
 
-    def __init__(self, *, default_visible: bool = True, **kwargs: Any) -> None:
+    def __init__(self, *, default_visible: bool = False, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._preferred_visible: bool = default_visible
         self._refresh_timer: Timer | None = None

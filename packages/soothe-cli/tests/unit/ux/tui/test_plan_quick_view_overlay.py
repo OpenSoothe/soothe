@@ -82,8 +82,8 @@ def test_plan_quick_view_content_shows_pending_and_running() -> None:
 
     assert "Refactor module" in content.plain
     assert "dependency" in content.plain
-    assert "STEP-1" in content.plain
-    assert "STEP-2" in content.plain
+    assert "1:" in content.plain
+    assert "2:" in content.plain
 
 
 def test_plan_quick_view_hides_tool_error_summary_on_successful_step() -> None:
@@ -98,7 +98,7 @@ def test_plan_quick_view_hides_tool_error_summary_on_successful_step() -> None:
 
     content = tree.plan_quick_view_content()
 
-    assert "ELR-01" in content.plain
+    assert "1:" in content.plain
     assert "61 tools" in content.plain
     assert "timed out" not in content.plain
 
@@ -114,8 +114,8 @@ def test_plan_quick_view_shows_step_dependencies() -> None:
 
     content = tree.plan_quick_view_content()
 
-    assert "(→ STEP-1)" in content.plain
-    assert "STEP-2" in content.plain
+    assert "(→ 1)" in content.plain
+    assert "2:" in content.plain
 
 
 def test_plan_quick_view_running_shows_duration_and_tools() -> None:
@@ -221,7 +221,7 @@ def test_plan_quick_view_clips_long_description_to_line_width() -> None:
     max_width = 60
     content = tree.plan_quick_view_content(max_line_width=max_width)
     gutter = f"{get_glyphs().output_prefix} "
-    step_line = next(line for line in content.plain.split("\n") if "STEP-1:" in line)
+    step_line = next(line for line in content.plain.split("\n") if "1:" in line)
     body = step_line[len(gutter) :] if step_line.startswith(gutter) else step_line
 
     assert len(body) <= max_width
@@ -339,7 +339,7 @@ def test_overlay_auto_expands_when_plan_appears() -> None:
     app._ui_adapter = adapter
     app._lc_loop_id = None
 
-    overlay = PlanQuickViewOverlay()
+    overlay = PlanQuickViewOverlay(default_visible=True)
     overlay._content = MagicMock()
     overlay._header = MagicMock()
     overlay.set_interval = MagicMock(return_value=MagicMock())
@@ -355,7 +355,7 @@ def test_overlay_auto_expands_when_plan_appears() -> None:
 
 def test_overlay_collapsed_on_mount_until_plan() -> None:
     """Plan panel starts collapsed on launch; watches for an active plan."""
-    overlay = PlanQuickViewOverlay()
+    overlay = PlanQuickViewOverlay(default_visible=True)
     overlay._content = MagicMock()
     overlay._header = MagicMock()
     overlay.query_one = MagicMock(return_value=MagicMock())
@@ -388,7 +388,7 @@ def test_overlay_hidden_by_default_when_config_disabled() -> None:
 
 def test_overlay_collapse_without_forget_keeps_preference() -> None:
     """Auto-hide when no plan keeps preferred visibility for the next plan."""
-    overlay = PlanQuickViewOverlay()
+    overlay = PlanQuickViewOverlay(default_visible=True)
     overlay.add_class("-expanded")
     overlay.display = True
     overlay.set_interval = MagicMock(return_value=MagicMock())
