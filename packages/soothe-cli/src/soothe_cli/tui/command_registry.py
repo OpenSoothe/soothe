@@ -185,6 +185,12 @@ COMMANDS: tuple[SlashCommand, ...] = (
         bypass_tier=BypassTier.SIDE_EFFECT_FREE,
     ),
     SlashCommand(
+        name="/paste",
+        description="Attach image from the OS clipboard as [image N]",
+        bypass_tier=BypassTier.SIDE_EFFECT_FREE,
+        hidden_keywords="image clipboard screenshot attach vision",
+    ),
+    SlashCommand(
         name="/help",
         description="Show commands and keyboard shortcuts",
         bypass_tier=BypassTier.IMMEDIATE_UI,

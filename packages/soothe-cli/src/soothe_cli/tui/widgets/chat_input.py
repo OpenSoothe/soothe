@@ -331,6 +331,13 @@ class ChatTextArea(TextArea):
             show=False,
             priority=True,
         ),
+        Binding(
+            "ctrl+v",
+            "clipboard_image_paste",
+            "Paste clipboard image",
+            show=False,
+            priority=True,
+        ),
     ]
     """Key bindings for the chat text area.
 
@@ -396,12 +403,28 @@ class ChatTextArea(TextArea):
             self.full_text = full_text
             super().__init__()
 
+    class ClipboardImagePaste(Message):
+        """Request attaching an image from the OS clipboard into the input."""
+
+        def __init__(self, *, notify_if_empty: bool = True) -> None:
+            """Initialize clipboard-image paste request.
+
+            Args:
+                notify_if_empty: Whether to toast when no image is available.
+            """
+            self.notify_if_empty = notify_if_empty
+            super().__init__()
+
     class Typing(Message):
         """Posted when the user presses a printable key or backspace.
 
         Relayed by `ChatInput` as `ChatInput.Typing` for the app to track
         typing activity.
         """
+
+    def action_clipboard_image_paste(self) -> None:
+        """Handle Ctrl+V by requesting an OS clipboard image attach."""
+        self.post_message(self.ClipboardImagePaste(notify_if_empty=True))
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the chat text area."""
@@ -784,6 +807,14 @@ class ChatTextArea(TextArea):
         self._backslash_pending_time = None
         if self._paste_burst_buffer:
             await self._flush_paste_burst()
+
+        # Image-only clipboards often yield an empty bracketed-paste payload.
+        # Try the OS clipboard image path before falling through to text insert.
+        if not event.text.strip():
+            event.prevent_default()
+            event.stop()
+            self.post_message(self.ClipboardImagePaste(notify_if_empty=False))
+            return
 
         from soothe_cli.tui.input import parse_pasted_path_payload
 
@@ -1538,6 +1569,55 @@ class ChatInput(Vertical):
         """Handle large paste payloads with abbreviated on-screen preview."""
         self._apply_abbreviated_paste_display(event.full_text)
 
+    async def on_chat_text_area_clipboard_image_paste(
+        self, event: ChatTextArea.ClipboardImagePaste
+    ) -> None:
+        """Handle Ctrl+V / empty-paste requests for OS clipboard images."""
+        await self.attach_clipboard_image(notify_if_empty=event.notify_if_empty)
+
+    async def attach_clipboard_image(self, *, notify_if_empty: bool = True) -> bool:
+        """Attach an image from the OS clipboard as an `[image N]` placeholder.
+
+        Args:
+            notify_if_empty: Whether to show a toast when no image is found.
+
+        Returns:
+            `True` when a placeholder was inserted, else `False`.
+        """
+        if not self._text_area:
+            return False
+        if not self._image_tracker:
+            if notify_if_empty:
+                self.app.notify(
+                    "Image attachments are unavailable",
+                    severity="warning",
+                    timeout=4,
+                    markup=False,
+                )
+            return False
+
+        from soothe_cli.tui.media_utils import get_image_from_clipboard
+
+        try:
+            media = await asyncio.to_thread(get_image_from_clipboard)
+        except Exception:  # noqa: BLE001  # Clipboard failures must not crash the TUI
+            logger.debug("Clipboard image attach failed", exc_info=True)
+            media = None
+
+        if media is None:
+            if notify_if_empty:
+                self.app.notify(
+                    "No image in clipboard",
+                    severity="warning",
+                    timeout=4,
+                    markup=False,
+                )
+            return False
+
+        placeholder = self._image_tracker.add_media(media, "image")
+        self._text_area.insert(f"{placeholder} ")
+        return True
+
     def handle_external_paste(self, pasted: str) -> bool:
         """Handle paste text from app-level routing when input is not focused.
 
@@ -1553,6 +1633,11 @@ class ChatInput(Vertical):
         """
         if not self._text_area:
             return False
+
+        if not pasted.strip():
+            self._text_area.post_message(ChatTextArea.ClipboardImagePaste(notify_if_empty=False))
+            self._text_area.focus()
+            return True
 
         parsed = self._parse_dropped_path_payload(pasted)
         if parsed is None:

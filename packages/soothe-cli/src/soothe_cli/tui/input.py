@@ -143,19 +143,6 @@ class MediaTracker:
             self.next_video_id += 1
         return placeholder
 
-    def get_media(self, kind: MediaKind) -> list[ImageData] | list[VideoData]:
-        """Get all tracked media of a given type.
-
-        Args:
-            kind: Media type key.
-
-        Returns:
-            Copy of the list of tracked media items.
-        """
-        if kind == "image":
-            return list(self.images)
-        return list(self.videos)
-
     def get_images(self) -> list[ImageData]:
         """Get all tracked images.
 
@@ -163,14 +150,6 @@ class MediaTracker:
             Copy of the list of tracked images.
         """
         return list(self.images)
-
-    def get_videos(self) -> list[VideoData]:
-        """Get all tracked videos.
-
-        Returns:
-            Copy of the list of tracked videos.
-        """
-        return list(self.videos)
 
     def clear(self) -> None:
         """Clear all tracked media and reset counters."""

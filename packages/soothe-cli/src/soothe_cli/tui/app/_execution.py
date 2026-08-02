@@ -539,6 +539,14 @@ class _ExecutionMixin:
         elif cmd == "/help":
             await self._show_help_screen()
 
+        elif cmd == "/paste":
+            if self._chat_input is None:
+                await self._mount_message(AppMessage("Chat input is not ready."))
+            else:
+                attached = await self._chat_input.attach_clipboard_image(notify_if_empty=True)
+                if attached:
+                    self._chat_input.focus_input()
+
         elif cmd == "/goals":
             await self._mount_message(UserMessage(command))
             await self._show_goal_history()

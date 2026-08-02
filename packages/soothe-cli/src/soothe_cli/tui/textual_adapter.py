@@ -153,7 +153,6 @@ from soothe_cli.tui.file_change_notify import (
 )
 from soothe_cli.tui.hooks import dispatch_hook
 from soothe_cli.tui.input import MediaTracker, parse_file_mentions
-from soothe_cli.tui.media_utils import create_multimodal_content
 from soothe_cli.tui.spinner_labels import (
     SPINNER_LABEL_EXECUTING,
     SPINNER_LABEL_INPUT,
@@ -3028,16 +3027,9 @@ async def execute_task_textual(
     else:
         final_input = prompt_text
 
-    # Include images and videos in the message content
-    images_to_send = []
-    videos_to_send = []
-    if image_tracker:
-        images_to_send = image_tracker.get_images()
-        videos_to_send = image_tracker.get_videos()
-    if images_to_send or videos_to_send:
-        message_content = create_multimodal_content(final_input, images_to_send, videos_to_send)
-    else:
-        message_content = final_input
+    # Snapshot image attachments for the wire turn. (Videos keep input
+    # placeholders for UX; the daemon attachment channel is image-only today.)
+    images_to_send = image_tracker.get_images() if image_tracker else []
 
     loop_id = session_state.loop_id
     config = build_stream_config(
@@ -3111,7 +3103,7 @@ async def execute_task_textual(
     goal_loop_start_monotonic: float | None = None
     task_loop_assistant_by_tcid: dict[str, str] = {}
 
-    # Clear media from tracker after creating the message
+    # Drop tracker state after snapshotting attachments for this turn.
     if image_tracker:
         image_tracker.clear()
 
@@ -3141,10 +3133,7 @@ async def execute_task_textual(
         if skip_daemon_send_turn:
             chunk_source = daemon_session.iter_turn_chunks()
         else:
-            daemon_text = message_content if isinstance(message_content, str) else final_input
-            subagent_name, routed_text = parse_subagent_from_input(
-                daemon_text if isinstance(daemon_text, str) else final_input
-            )
+            subagent_name, routed_text = parse_subagent_from_input(final_input)
             ctx_model = context.get("model") if context else None
             raw_mp = context.get("model_params") if context else None
             mp = raw_mp if isinstance(raw_mp, dict) else None
