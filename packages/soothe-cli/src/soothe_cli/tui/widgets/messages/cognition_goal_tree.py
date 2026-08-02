@@ -231,7 +231,7 @@ class CognitionGoalTreeMessage(Vertical):
             self,
             body,
             status=status,
-            glyph_override="🎯",
+            glyph_override=get_glyphs().subagent_prefix,
             spinner_position=self._spinner_position,
             animate_running=self._loop_executing(),
         )

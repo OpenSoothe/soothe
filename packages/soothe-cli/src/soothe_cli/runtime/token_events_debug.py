@@ -17,30 +17,24 @@ class TokenEventTrace:
     """Per-turn counters for token-related daemon/TUI events."""
 
     stream_chunks: int = 0
-    stream_input_tokens: int = 0
-    stream_output_tokens: int = 0
     plan_phase_events: int = 0
     plan_phase_with_total_field: int = 0
     plan_phase_missing_total_field: int = 0
     step_completed_events: int = 0
     step_completed_with_total_field: int = 0
     authoritative_applied: int = 0
-    authoritative_unchanged: int = 0
     display_refreshes: int = 0
     anomalies: list[str] = field(default_factory=list)
 
     def reset(self) -> None:
         """Clear counters for a new turn."""
         self.stream_chunks = 0
-        self.stream_input_tokens = 0
-        self.stream_output_tokens = 0
         self.plan_phase_events = 0
         self.plan_phase_with_total_field = 0
         self.plan_phase_missing_total_field = 0
         self.step_completed_events = 0
         self.step_completed_with_total_field = 0
         self.authoritative_applied = 0
-        self.authoritative_unchanged = 0
         self.display_refreshes = 0
         self.anomalies.clear()
 
@@ -49,8 +43,6 @@ class TokenEventTrace:
     ) -> None:
         """Record a messages-stream chunk carrying provider usage."""
         self.stream_chunks += 1
-        self.stream_input_tokens += max(0, input_tokens)
-        self.stream_output_tokens += max(0, output_tokens)
         logger.debug(
             "[token-events] stream usage chunk #%d in=%d out=%d total=%d",
             self.stream_chunks,
@@ -102,8 +94,6 @@ class TokenEventTrace:
         """Record backend total merged into the TUI loop counter."""
         if applied:
             self.authoritative_applied += 1
-        else:
-            self.authoritative_unchanged += 1
         logger.debug(
             "[token-events] authoritative source=%s goal_run=%d prev_goal_run=%d applied=%s display=%d",
             source,

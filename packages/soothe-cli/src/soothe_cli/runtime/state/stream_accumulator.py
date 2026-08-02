@@ -11,16 +11,12 @@ class StreamingAccumState:
 
     Attributes:
         accumulated_text: Accumulated content from all chunks.
-        chunk_count: Number of chunks received.
         is_active: Stream is still active (expecting more chunks).
         namespace: Namespace for this stream (avoid interleaving).
     """
 
     accumulated_text: str = ""
     """Accumulated content from all chunks."""
-
-    chunk_count: int = 0
-    """Number of chunks received."""
 
     is_active: bool = True
     """Stream is still active (expecting more chunks)."""
@@ -86,7 +82,6 @@ class StreamingTextAccumulator:
             # Accumulate final content
             if content:
                 state.accumulated_text += content
-                state.chunk_count += 1
             # Return full accumulated text
             return state.accumulated_text.strip() if state.accumulated_text else None
 
@@ -97,7 +92,6 @@ class StreamingTextAccumulator:
         # Accumulate chunk content
         if content:
             state.accumulated_text += content
-            state.chunk_count += 1
 
             # Return chunk with boundary preservation
             if self.boundary_preserve_enabled:

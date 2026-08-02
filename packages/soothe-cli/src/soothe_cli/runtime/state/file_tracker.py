@@ -46,17 +46,6 @@ def read_physical_file_text(path: Path | None) -> str | None:
     return _safe_read(path)
 
 
-def _count_lines(text: str) -> int:
-    """Count lines in text, treating empty strings as zero lines.
-
-    Returns:
-        Number of lines in the text.
-    """
-    if not text:
-        return 0
-    return len(text.splitlines())
-
-
 def compute_unified_diff(
     before: str,
     after: str,
@@ -99,19 +88,6 @@ def compute_unified_diff(
 
 
 @dataclass
-class FileOpMetrics:
-    """Line and byte level metrics for a file operation."""
-
-    lines_read: int = 0
-    start_line: int | None = None
-    end_line: int | None = None
-    lines_written: int = 0
-    lines_added: int = 0
-    lines_removed: int = 0
-    bytes_written: int = 0
-
-
-@dataclass
 class FileOperationRecord:
     """Track a single filesystem tool call."""
 
@@ -122,11 +98,9 @@ class FileOperationRecord:
     args: dict[str, Any] = field(default_factory=dict)
     status: FileOpStatus = "pending"
     error: str | None = None
-    metrics: FileOpMetrics = field(default_factory=FileOpMetrics)
     diff: str | None = None
     before_content: str | None = None
     after_content: str | None = None
-    read_output: str | None = None
 
 
 def resolve_physical_path(path_str: str | None, assistant_id: str | None) -> Path | None:
@@ -527,37 +501,17 @@ class FileOpTracker:
 
         record.status = "success"
 
-        if record.tool_name == "read_file":
-            record.read_output = content_text
-            lines = _count_lines(content_text)
-            record.metrics.lines_read = lines
-            offset = record.args.get("offset")
-            limit = record.args.get("limit")
-            if isinstance(offset, int):
-                if offset > lines:
-                    offset = 0
-                record.metrics.start_line = offset + 1
-                if lines:
-                    record.metrics.end_line = offset + lines
-            elif lines:
-                record.metrics.start_line = 1
-                record.metrics.end_line = lines
-            if isinstance(limit, int) and lines > limit:
-                record.metrics.end_line = (record.metrics.start_line or 1) + limit - 1
-        elif record.tool_name == "delete_file":
+        if record.tool_name == "delete_file":
             record.after_content = ""
-            record.metrics.lines_removed = _count_lines(record.before_content or "")
-        else:
+        elif record.tool_name != "read_file":
             self._populate_after_content(record)
             if record.after_content is None:
                 record.status = "error"
                 record.error = "Could not read updated file content."
                 self._finalize(record, active_key=active_key)
                 return record
-            record.metrics.lines_written = _count_lines(record.after_content)
 
         if record.tool_name in FILE_CHANGE_TOOLS:
-            before_lines = _count_lines(record.before_content or "")
             after_text = record.after_content or ""
             record.diff = compute_unified_diff(
                 record.before_content or "",
@@ -565,21 +519,6 @@ class FileOpTracker:
                 record.display_path,
                 max_lines=APPROVAL_DIFF_MAX_LINES,
             )
-            if record.diff:
-                record.metrics.lines_added = sum(
-                    1
-                    for line in record.diff.splitlines()
-                    if line.startswith("+") and not line.startswith("+++")
-                )
-                record.metrics.lines_removed = sum(
-                    1
-                    for line in record.diff.splitlines()
-                    if line.startswith("-") and not line.startswith("---")
-                )
-            elif record.tool_name == "write_file" and not (record.before_content or ""):
-                record.metrics.lines_added = record.metrics.lines_written
-            if record.tool_name != "delete_file":
-                record.metrics.bytes_written = len(after_text.encode("utf-8"))
             if record.diff is None and (record.before_content or "") != after_text:
                 record.diff = compute_unified_diff(
                     record.before_content or "",
@@ -587,12 +526,6 @@ class FileOpTracker:
                     record.display_path,
                     max_lines=APPROVAL_DIFF_MAX_LINES,
                 )
-            if (
-                record.diff is None
-                and record.tool_name == "write_file"
-                and before_lines != record.metrics.lines_written
-            ):
-                record.metrics.lines_added = max(record.metrics.lines_written - before_lines, 0)
 
         self._finalize(record, active_key=active_key)
         return record
@@ -655,8 +588,6 @@ class FileOpTracker:
                 after = _safe_read(record.physical_path)
                 if after is not None:
                     record.after_content = after
-                    record.metrics.lines_written = _count_lines(after)
-                    record.metrics.bytes_written = len(after.encode("utf-8"))
         self.recently_completed[tcid] = record
         return record
 

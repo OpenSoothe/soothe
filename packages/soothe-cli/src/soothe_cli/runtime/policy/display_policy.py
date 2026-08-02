@@ -25,7 +25,7 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from soothe_sdk.core.verbosity import VerbosityTier, should_show
@@ -39,8 +39,6 @@ from soothe_sdk.ux import classify_event_to_tier
 INTERNAL_EVENT_TYPES: frozenset[str] = frozenset()
 
 # Event types to skip in progress display (handled by plan update mechanism or not rendered).
-# `soothe.cognition.plan.batch.started` was moved to `soothe.internal.plan.batch.started`
-# and is now filtered automatically by `is_internal_event`.
 SKIP_EVENT_TYPES: frozenset[str] = frozenset()
 
 # =============================================================================
@@ -57,10 +55,6 @@ class DisplayPolicy:
 
     Event visibility uses a single fixed ceiling equivalent to the former **normal** mode (IG-343).
     """
-
-    # Track internal context state
-    internal_context_active: bool = field(default=False, repr=False)
-    internal_context_types: set[str] = field(default_factory=set, repr=False)
 
     # ==========================================================================
     # Event Filtering
@@ -104,43 +98,6 @@ class DisplayPolicy:
     def _should_show_tier(self, tier: VerbosityTier) -> bool:
         """Check if a tier should be shown (fixed normal-equivalent gating)."""
         return should_show(tier, "normal")
-
-    # ==========================================================================
-    # Internal Context Tracking
-    # ==========================================================================
-
-    def enter_internal_context(self, context_type: str) -> None:
-        """Mark entry into an internal processing context.
-
-        Call this when starting internal LLM calls (e.g., research analysis).
-        """
-        self.internal_context_active = True
-        self.internal_context_types.add(context_type)
-
-    def exit_internal_context(self) -> None:
-        """Mark exit from internal processing context."""
-        self.internal_context_active = False
-        self.internal_context_types.clear()
-
-    def is_in_internal_context(self) -> bool:
-        """Check if currently in an internal processing context."""
-        return self.internal_context_active
-
-    # ==========================================================================
-    # Event Type Helpers
-    # ==========================================================================
-
-    def is_plan_event(self, event_type: str) -> bool:
-        """Check if this is a plan-related event."""
-        return event_type.startswith("soothe.cognition.plan.")
-
-    def is_subagent_wire_event(self, event_type: str) -> bool:
-        """Check if this is a curated subagent wire event."""
-        return event_type.startswith("soothe.subagent.")
-
-    def is_internal_event(self, event_type: str) -> bool:
-        """Check if this is an internal (never-shown) event."""
-        return event_type in INTERNAL_EVENT_TYPES or event_type.startswith("soothe.internal.")
 
 
 __all__ = [

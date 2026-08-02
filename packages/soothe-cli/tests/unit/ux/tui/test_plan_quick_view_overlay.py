@@ -59,10 +59,10 @@ def test_plan_quick_view_header_includes_loop_id_when_available() -> None:
 
 
 def test_plan_quick_view_goal_header_uses_target_glyph() -> None:
-    """Goal header in plan quick-view renders the 🎯 prefix instead of the dot."""
+    """Goal header in plan quick-view renders the subagent glyph instead of the dot."""
     tree = CognitionGoalTreeMessage(goal="Ship feature", id="gt-glyph")
     content = tree.plan_quick_view_content()
-    assert content.plain.startswith("🎯")
+    assert content.plain.startswith("◆")
     assert "Ship feature" in content.plain
 
 

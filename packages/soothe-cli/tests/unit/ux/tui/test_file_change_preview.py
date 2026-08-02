@@ -14,7 +14,6 @@ from soothe_sdk.tools.metadata import get_file_write_tool_names
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
     FileOperationRecord,
-    FileOpMetrics,
     apply_edit_lines_to_content,
     apply_insert_lines_to_content,
     extract_line_range_text,
@@ -166,7 +165,6 @@ async def test_finalize_collapses_preview_after_completion() -> None:
         tool_call_id="tc-1",
         before_content="",
         after_content="final",
-        metrics=FileOpMetrics(lines_written=1),
     )
     await widget.finalize_from_record(record)
     assert widget._finalized is True
@@ -428,7 +426,6 @@ async def test_finalize_file_change_preview_upgrades_mounted_widget() -> None:
         tool_call_id="tc-1",
         before_content="",
         after_content="hello",
-        metrics=FileOpMetrics(lines_written=1),
     )
     handled = await finalize_file_change_preview(adapter, record=record)
 

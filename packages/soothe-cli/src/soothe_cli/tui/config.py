@@ -290,8 +290,8 @@ UNICODE_GLYPHS = Glyphs(
     arrow_down="↓",
     bullet="•",
     cursor="›",  # noqa: RUF001  # Intentional Unicode glyph
-    user="👤",  # User/human icon
-    assistant="🤖",  # AI/assistant icon
+    user="»",  # User/human icon
+    assistant="«",  # AI/assistant icon
     # Expand/collapse icons
     expand="▶",
     collapse="▼",

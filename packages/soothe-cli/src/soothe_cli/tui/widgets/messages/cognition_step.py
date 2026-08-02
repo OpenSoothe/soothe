@@ -1078,10 +1078,6 @@ class CognitionStepMessage(Vertical):
         row.started_at = None
         self._sync_step_card_surface()
 
-    def mark_unfinished_tools_skipped(self) -> None:
-        """Mark pending/running rows skipped when the step ends without results."""
-        self.mark_unfinished_tools_on_step_complete(success=False)
-
     def mark_unfinished_tools_on_step_complete(self, *, success: bool) -> None:
         """Finalize open tool rows when the step card completes.
 

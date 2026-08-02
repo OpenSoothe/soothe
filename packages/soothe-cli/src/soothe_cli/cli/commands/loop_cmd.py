@@ -570,7 +570,7 @@ def render_ascii_tree(tree: dict[str, Any]) -> None:
                 for checkpoint in branch["execution_path"][1:-1]:
                     console.print(f"    ├─ [dim]{checkpoint}[/dim]")
 
-            console.print(f"    └─ [dim]{branch['failure_checkpoint']}[/dim] [failure] ❌")
+            console.print(f"    └─ [dim]{branch['failure_checkpoint']}[/dim] [failure]FAILED")
 
 
 def render_dot_tree(tree: dict[str, Any]) -> None:
@@ -609,7 +609,7 @@ def render_dot_tree(tree: dict[str, Any]) -> None:
                 f'    {branch_node}_root [label="{branch["branch_id"]}\\nroot" shape=diamond style=filled fillcolor=red];'
             )
             dot_content.append(
-                f'    {branch_node}_failure [label="FAILURE\\n{branch["failure_reason"]} ❌" shape=diamond style=filled fillcolor=red];'
+                f'    {branch_node}_failure [label="FAILURE\\n{branch["failure_reason"]}" shape=diamond style=filled fillcolor=red];'
             )
             dot_content.append(f"    {branch_node}_root -> {branch_node}_failure;")
 
