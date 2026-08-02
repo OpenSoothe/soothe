@@ -5,6 +5,36 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.14] - 2026-08-03
+
+### Fixed
+- TUI plan panel now hides by default (Orchestrate view) and adds a step-id
+  formatter so step rows render stable identifiers instead of raw node names.
+- `/clear` wipes the live plan/turn panel so the Orchestrate view does not
+  stale out after clearing a turn.
+- Success footer on stream-end is preserved after goal completion, instead of
+  being overwritten by the closing frame (loop 2973).
+- Autopilot in-memory goal context store is now bounded with an LRU and
+  retention policy, preventing unbounded growth across long-running sessions.
+
+### Added
+- StrangeLoop execute-step prompts now carry vision context, so image-bearing
+  turns keep their visual attachments through to the execution subgraph.
+- TUI paste: clipboard images are pasted as `[image N]` attachments, turning a
+  pasted screenshot into a first-class turn attachment without a file path.
+- StrangeLoop unifies plan gap analysis and assess into a single `evaluate`
+  subgraph, reducing redundant graph hops between plan review and assessment.
+- Plan-phase adaptive cost: the planner scales token/cost budgets per phase
+  based on goal complexity instead of a flat budget for every plan.
+
+### Changed
+- Bump `soothe-nano` floor to `>=1.1.1` (drops the `CodingCoreAgent` alias).
+- Raise daemon `soothe` floor pin to `>=0.9.14`.
+- Remove card emojis and cleanse legacy/dead code across the CLI (config,
+  input, media_utils, prepare).
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.13...v0.9.14
+
 ## [v0.9.12] - 2026-07-31
 
 ### Fixed
