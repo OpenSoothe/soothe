@@ -46,7 +46,7 @@ async def test_generate_from_assessment_passes_inline_assessment_when_assess_ski
 
     with patch(
         "soothe.sloop.cognition.plan_step_briefs.populate_plan_generate_full_descriptions",
-        side_effect=lambda p: p,
+        side_effect=lambda p, **_: p,
     ):
         await planner.generate_from_assessment(
             "count files",
@@ -103,7 +103,7 @@ async def test_generate_from_assessment_passes_inline_assessment_when_assess_in_
 
     with patch(
         "soothe.sloop.cognition.plan_step_briefs.populate_plan_generate_full_descriptions",
-        side_effect=lambda p: p,
+        side_effect=lambda p, **_: p,
     ):
         await planner.generate_from_assessment(
             "count files",

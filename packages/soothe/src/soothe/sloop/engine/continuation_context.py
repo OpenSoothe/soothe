@@ -52,7 +52,8 @@ def build_continue_bootstrap_step_briefs(
     """Build description + full_description for loop-continuation bootstrap steps.
 
     Mirrors plan-generate: ``description`` is a short TUI/logging label;
-    ``full_description`` is the standalone execution brief the executor sends as GOAL.
+    ``full_description`` is the standalone execution brief the executor sends as
+    ``EXECUTION TASK``.
     """
     goal = (user_goal or "").strip()
     if is_continue_keyword(goal):

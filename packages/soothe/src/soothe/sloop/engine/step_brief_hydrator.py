@@ -61,6 +61,8 @@ class StepBriefHydrator:
             "- Reference concrete failures, paths, and identifiers from prior evidence\n"
             "- Do NOT instruct re-running discovery/diagnostic commands already in prior evidence\n"
             "- For diagnose→fix chains: fix listed items first; verify only after edits\n"
+            "- If Overall goal includes a Vision summary block, copy concrete image facts "
+            "needed for this step; do not restate the entire user request as the step task\n"
         )
         try:
             result = await invoke_structured_chat_typed(

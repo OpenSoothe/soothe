@@ -30,6 +30,33 @@ def test_execute_message_uses_execution_task_label() -> None:
     assert "SKILL CONTEXT:" not in msg
 
 
+def test_execute_message_vision_context_is_subordinate() -> None:
+    """IG-674: vision facts as VISION CONTEXT; never peer GOAL; scope instructions."""
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message(
+        "Extract labels from the screenshot",
+        instructions="- Complete only this step's deliverable; do not execute work assigned to other plan steps",
+        vision_context="Login form with email field and Submit button.",
+    )
+    assert msg.startswith("EXECUTION TASK:")
+    assert "VISION CONTEXT:" in msg
+    assert "Login form with email field" in msg
+    assert "GOAL:" not in msg
+    assert "EXECUTION TASK is authoritative scope" in msg
+    assert "Do not expand work to cover the entire original user request" in msg
+    task_idx = msg.index("EXECUTION TASK:")
+    vision_idx = msg.index("VISION CONTEXT:")
+    instr_idx = msg.index("INSTRUCTIONS:")
+    assert task_idx < vision_idx < instr_idx
+
+
+def test_execute_message_omits_vision_context_when_absent() -> None:
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message("Solo step")
+    assert "VISION CONTEXT:" not in msg
+    assert "EXECUTION TASK is authoritative scope" not in msg
+
+
 def test_execute_message_skill_context_after_execution_task() -> None:
     """Skill reference appears in SKILL CONTEXT section after EXECUTION TASK."""
     skill_ref = (

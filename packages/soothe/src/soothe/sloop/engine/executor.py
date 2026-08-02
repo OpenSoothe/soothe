@@ -128,7 +128,7 @@ from soothe.sloop.engine.tool_call_id import (
     _rewrite_tool_message_tool_call_id,
     _SubgraphNamespaceTaskBinder,
 )
-from soothe.sloop.goal_text import resolve_planning_goal
+from soothe.sloop.goal_text import resolve_planning_goal, resolve_user_request
 from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -149,6 +149,7 @@ from soothe.sloop.utils.network_errors import (
 from soothe.sloop.utils.network_errors import (
     is_recoverable_tool_network_error as _is_recoverable_tool_network_error,
 )
+from soothe.sloop.vision_context import extract_vision_summary
 
 if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
@@ -576,6 +577,11 @@ class Executor:
                 has_predecessor_evidence=has_predecessor_ledger,
                 expected_output=step.expected_output,
             )
+        vision_context = (
+            extract_vision_summary(resolve_user_request(loop_state))
+            if loop_state is not None
+            else None
+        )
         return UserMessageBuilder().build_execute_step_message(
             step_goal_text,
             step_id=step.id,
@@ -584,6 +590,7 @@ class Executor:
             instructions=envelope_body.instructions,
             prior_steps=prior_steps or None,
             prior_goals=prior_goals or None,
+            vision_context=vision_context,
             skill_context=loop_state.skill_context if loop_state else None,
         )
 

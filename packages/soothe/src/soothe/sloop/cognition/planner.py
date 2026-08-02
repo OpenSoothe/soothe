@@ -730,7 +730,7 @@ class LLMPlanner:
             populate_plan_generate_full_descriptions,
         )
 
-        return populate_plan_generate_full_descriptions(plan_result)
+        return populate_plan_generate_full_descriptions(plan_result, goal=goal)
 
     async def _generate_plan_with_response(
         self,
@@ -1445,7 +1445,7 @@ class LLMPlanner:
             populate_plan_generate_full_descriptions,
         )
 
-        plan_result = populate_plan_generate_full_descriptions(plan_result)
+        plan_result = populate_plan_generate_full_descriptions(plan_result, goal=goal)
         if ai_response is not None:
             ai_response = plan_result
 

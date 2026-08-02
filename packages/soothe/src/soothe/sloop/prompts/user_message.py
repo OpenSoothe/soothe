@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.context.projection import PriorGoalSummary
 from soothe.sloop.state.schemas import PlanGapAnalysis
+from soothe.sloop.vision_context import merge_vision_instructions
 
 if TYPE_CHECKING:
     from soothe.context.projection import ContextBundle
@@ -751,6 +752,7 @@ class UserMessageBuilder:
         instructions: str | None = None,
         prior_steps: str | None = None,
         prior_goals: str | None = None,
+        vision_context: str | None = None,
         workspace_state: str | None = None,
         skill_context: str | None = None,
         mcp_resource_blocks: list[str] | None = None,
@@ -765,6 +767,8 @@ class UserMessageBuilder:
             instructions: Bullet-list execution instructions (INSTRUCTIONS section).
             prior_steps: Transitive predecessor step descriptions and statuses.
             prior_goals: Prior goals tree at goal boundary (metadata only).
+            vision_context: Daemon vision-preflight summary body (IG-674); subordinate
+                to EXECUTION TASK — never a peer GOAL section.
             workspace_state: Optional lightweight workspace diff summary.
             skill_context: Skill reference only (SKILL.md).
             mcp_resource_blocks: Optional pre-resolved MCP resource blocks.
@@ -772,9 +776,17 @@ class UserMessageBuilder:
         Returns:
             Structured text message for the execute-step LoopHumanMessage.
         """
+        vision = (vision_context or "").strip()
+        instr = (instructions or "").strip()
+        if vision:
+            instr = merge_vision_instructions(instr or None)
+
         sections: list[tuple[str, str]] = [
             (EXECUTION_TASK_LABEL, _goal_text(step_description)),
         ]
+
+        if vision:
+            sections.append(("VISION CONTEXT", vision))
 
         if (prior_steps or "").strip():
             sections.append(("PRIOR STEPS", prior_steps.strip()))
@@ -785,8 +797,8 @@ class UserMessageBuilder:
         if (expected_output or "").strip():
             sections.append(("EXPECTED OUTPUT", expected_output.strip()))
 
-        if (instructions or "").strip():
-            sections.append(("INSTRUCTIONS", instructions.strip()))
+        if instr:
+            sections.append(("INSTRUCTIONS", instr))
 
         metadata = _render_execution_metadata(step_id, short_description)
         if metadata:

@@ -64,3 +64,41 @@ def test_populate_skips_ask_user_steps() -> None:
     )
     out = populate_plan_generate_full_descriptions(plan)
     assert out.steps[0].full_description is None
+
+
+def test_synthesize_includes_image_facts_when_vision_present() -> None:
+    step = PlanGenerateStep(
+        id="01",
+        description="Extract UI labels from screenshot",
+        expected_output="Label list",
+    )
+    brief = synthesize_full_description(
+        step,
+        vision_summary="Login form with email field and blue Submit button.",
+    )
+    assert "Image facts:" in brief
+    assert "Submit button" in brief
+    assert "Context: this step advances the goal" not in brief
+
+
+def test_populate_with_goal_vision_block_adds_image_facts() -> None:
+    goal = (
+        "What does this screen show?\n\n"
+        "--- Vision summary ---\n"
+        "Settings page with Dark Mode toggle enabled.\n"
+        "---\n"
+    )
+    plan = PlanGeneration(
+        type="execute_steps",
+        execution_mode="parallel",
+        steps=[
+            PlanGenerateStep(
+                id="01",
+                description="Describe the screenshot",
+                expected_output="Short description",
+            ),
+        ],
+    )
+    out = populate_plan_generate_full_descriptions(plan, goal=goal)
+    assert "Image facts:" in (out.steps[0].full_description or "")
+    assert "Dark Mode" in (out.steps[0].full_description or "")
