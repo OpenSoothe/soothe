@@ -447,6 +447,35 @@ class TextualUIAdapter:
         if interrupt_goal_tree and self._goal_tree_message is not None:
             self._goal_tree_message.set_interrupted(message)
 
+    def clear_live_session_ui(self) -> None:
+        """Drop in-memory plan/step/clarification state for /clear or loop switch.
+
+        The Ctrl+t plan panel reads ``_goal_tree_message`` (not mounted in
+        ``#messages``), so transcript clears must also null this handle or the
+        panel keeps showing the previous loop's plan. Clarification flags are
+        cleared so the next turn on a new loop is not treated as an answer.
+        """
+        self._goal_tree_message = None
+        _clear_adapter_step_tool_registry(self)
+        self._orphan_cards_by_invocation.clear()
+        self._file_change_previews_shown.clear()
+        self._file_change_widgets.clear()
+        self._file_preview_assistant_id = None
+        self._last_completed_main_step_execute_prose = ""
+        self._last_main_flushed_assistant_prose = ""
+        self._goal_completion_mounted_this_turn = False
+        self._clarification_pending = False
+        self._clarification_answers_pending = None
+        self._clarification_input_by_step.clear()
+        self._execute_wave_total = 0
+        self._execute_wave_completed = 0
+        self._last_plan_execution_mode = None
+        self._plan_step_order.clear()
+        self._plan_step_ids.clear()
+        self._plan_step_dependencies.clear()
+        if self._set_active_message:
+            self._set_active_message(None)
+
 
 def _step_card_is_in_flight(widget: Any) -> bool:  # noqa: ANN401
     """True when a step card is still executing (not success/error/awaiting)."""

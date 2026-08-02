@@ -589,7 +589,12 @@ class _MessagesMixin:
         )
 
     async def _clear_messages(self) -> None:
-        """Clear the messages area and message store."""
+        """Clear the messages area, message store, and live plan/turn UI.
+
+        The plan panel is backed by adapter state outside ``#messages``, so a
+        transcript wipe must also drop the live goal tree or /clear leaves a
+        stale Orchestrate panel.
+        """
         self._loop_history_loaded_for = None
         # Clear the message store first
         self._message_store.clear()
@@ -602,6 +607,16 @@ class _MessagesMixin:
             logger.warning(
                 "Messages container (#messages) not found during clear; UI may be out of sync with message store"
             )
+
+        adapter = getattr(self, "_ui_adapter", None)
+        if adapter is not None:
+            adapter.clear_live_session_ui()
+
+        overlay = self._get_plan_quick_view_overlay()
+        if overlay is not None:
+            overlay.refresh_content()
+
+        await self._set_spinner(None)
 
     def _pop_last_queued_entry(self) -> Any | None:
         """Pop the latest queued message and paired widget, if available."""
