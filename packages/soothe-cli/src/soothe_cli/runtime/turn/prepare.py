@@ -64,7 +64,6 @@ class PreparedTurnChunk:
     skip: bool = False
     normalized_message: Any | None = None
     message_metadata: Any | None = None
-    skip_custom_progress: bool = False
     is_summarization: bool = False
     tool_stream_touched: bool = False
 
@@ -166,12 +165,10 @@ def _prepare_custom_chunk(
         STRANGE_LOOP_PLAN_DECISION,
     ):
         prepared.priority = PRIORITY_CRITICAL
-        prepared.skip_custom_progress = True
         return prepared
 
     if event_type in _MAIN_LOOP_CUSTOM_TYPES or event_type == TOOL_CALL_UPDATES_BATCH:
         prepared.priority = PRIORITY_HIGH
-        prepared.skip_custom_progress = True
         return prepared
 
     category = classify_event_to_tier(event_type, ns_key)
@@ -184,7 +181,6 @@ def _prepare_custom_chunk(
         prepared.skip = True
         return prepared
 
-    prepared.skip_custom_progress = True
     return prepared
 
 

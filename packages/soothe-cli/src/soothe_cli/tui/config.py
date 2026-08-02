@@ -378,12 +378,6 @@ def get_glyphs() -> Glyphs:
     return _glyphs_cache
 
 
-def reset_glyphs_cache() -> None:
-    """Reset the glyphs cache (for testing)."""
-    global _glyphs_cache  # noqa: PLW0603  # Module-level cache requires global statement
-    _glyphs_cache = None
-
-
 def is_ascii_mode() -> bool:
     """Check whether the terminal is in ASCII charset mode.
 
@@ -753,9 +747,6 @@ class Settings:
     model_context_limit: int | None = None
     """Maximum input token count from the model profile."""
 
-    model_unsupported_modalities: frozenset[str] = frozenset()
-    """Input modalities not indicated as supported by the model profile."""
-
     project_root: Path | None = None
     """Current project root directory, or `None` if not in a git project."""
 
@@ -973,55 +964,6 @@ class Settings:
         """
         return self.google_cloud_project is not None and self.google_api_key is None
 
-    @property
-    def has_tavily(self) -> bool:
-        """Check if Tavily API key is configured."""
-        return self.tavily_api_key is not None
-
-    @property
-    def user_soothe_dir(self) -> Path:
-        """Get the base user-level Soothe directory (SOOTHE_HOME).
-
-        Returns:
-            Path to SOOTHE_HOME
-        """
-        return Path(SOOTHE_HOME)
-
-    @staticmethod
-    def get_user_agent_md_path(agent_name: str) -> Path:
-        """Get user-level AGENTS.md path for a specific agent.
-
-        Returns path regardless of whether the file exists.
-
-        Args:
-            agent_name: Name of the agent
-
-        Returns:
-            Path to ~/SOOTHE_HOME/{agent_name}/AGENTS.md
-        """
-        return Path(SOOTHE_HOME) / agent_name / "AGENTS.md"
-
-    def get_project_agent_md_path(self) -> list[Path]:
-        """Get project-level AGENTS.md paths.
-
-        Checks both `{project_root}/.soothe/AGENTS.md` and
-        `{project_root}/AGENTS.md`, returning all that exist. If both are
-        present, both are loaded and their instructions are combined, with
-        `.soothe/AGENTS.md` first.
-
-        Returns:
-            Existing AGENTS.md paths.
-
-                Empty if neither file exists or not in a project, one entry if
-                only one is present, or two entries if both locations have the
-                file.
-        """
-        if not self.project_root:
-            return []
-        from soothe_cli.tui.project_utils import find_project_agent_md
-
-        return find_project_agent_md(self.project_root)
-
     @staticmethod
     def _is_valid_agent_name(agent_name: str) -> bool:
         """Validate to prevent invalid filesystem paths and security issues.
@@ -1054,168 +996,6 @@ class Settings:
             raise ValueError(msg)
         return Path(SOOTHE_HOME) / agent_name
 
-    def ensure_agent_dir(self, agent_name: str) -> Path:
-        """Ensure the global agent directory exists and return its path.
-
-        Args:
-            agent_name: Name of the agent
-
-        Returns:
-            Path to ~/SOOTHE_HOME/{agent_name}
-
-        Raises:
-            ValueError: If the agent name contains invalid characters.
-        """
-        if not self._is_valid_agent_name(agent_name):
-            msg = (
-                f"Invalid agent name: {agent_name!r}. Agent names can only "
-                "contain letters, numbers, hyphens, underscores, and spaces."
-            )
-            raise ValueError(msg)
-        agent_dir = self.get_agent_dir(agent_name)
-        agent_dir.mkdir(parents=True, exist_ok=True)
-        return agent_dir
-
-    def get_user_skills_dir(self, agent_name: str) -> Path:
-        """Get user-level skills directory path for a specific agent.
-
-        Args:
-            agent_name: Name of the agent
-
-        Returns:
-            Path to ~/SOOTHE_HOME/{agent_name}/skills/
-        """
-        return self.get_agent_dir(agent_name) / "skills"
-
-    def ensure_user_skills_dir(self, agent_name: str) -> Path:
-        """Ensure user-level skills directory exists and return its path.
-
-        Args:
-            agent_name: Name of the agent
-
-        Returns:
-            Path to ~/SOOTHE_HOME/{agent_name}/skills/
-        """
-        skills_dir = self.get_user_skills_dir(agent_name)
-        skills_dir.mkdir(parents=True, exist_ok=True)
-        return skills_dir
-
-    def get_project_skills_dir(self) -> Path | None:
-        """Get project-level skills directory path.
-
-        Returns:
-            Path to {project_root}/.soothe/skills/, or None if not in a project
-        """
-        if not self.project_root:
-            return None
-        return self.project_root / ".soothe" / "skills"
-
-    def ensure_project_skills_dir(self) -> Path | None:
-        """Ensure project-level skills directory exists and return its path.
-
-        Returns:
-            Path to {project_root}/.soothe/skills/, or None if not in a project
-        """
-        if not self.project_root:
-            return None
-        skills_dir = self.get_project_skills_dir()
-        if skills_dir is None:
-            return None
-        skills_dir.mkdir(parents=True, exist_ok=True)
-        return skills_dir
-
-    def get_user_agents_dir(self, agent_name: str) -> Path:
-        """Get user-level agents directory path for custom subagent definitions.
-
-        Args:
-            agent_name: Name of the CLI agent (e.g., "Soothe")
-
-        Returns:
-            Path to ~/SOOTHE_HOME/{agent_name}/agents/
-        """
-        return self.get_agent_dir(agent_name) / "agents"
-
-    def get_project_agents_dir(self) -> Path | None:
-        """Get project-level agents directory path for custom subagent definitions.
-
-        Returns:
-            Path to {project_root}/.soothe/agents/, or None if not in a project
-        """
-        if not self.project_root:
-            return None
-        return self.project_root / ".soothe" / "agents"
-
-    @property
-    def user_agents_dir(self) -> Path:
-        """Get the base user-level `.agents` directory (`~/.agents`).
-
-        Returns:
-            Path to `~/.agents`
-        """
-        return Path.home() / ".agents"
-
-    def get_user_agent_skills_dir(self) -> Path:
-        """Get user-level `~/.agents/skills/` directory.
-
-        This is a generic alias path for skills that is tool-agnostic.
-
-        Returns:
-            Path to `~/.agents/skills/`
-        """
-        return self.user_agents_dir / "skills"
-
-    def get_project_agent_skills_dir(self) -> Path | None:
-        """Get project-level `.agents/skills/` directory.
-
-        This is a generic alias path for skills that is tool-agnostic.
-
-        Returns:
-            Path to `{project_root}/.agents/skills/`, or `None` if not in a project
-        """
-        if not self.project_root:
-            return None
-        return self.project_root / ".agents" / "skills"
-
-
-class SessionState:
-    """Mutable session state shared across the app, adapter, and agent."""
-
-    def __init__(self, no_splash: bool = False) -> None:
-        """Initialize session state with optional flags.
-
-        Args:
-            no_splash: Whether to skip displaying the splash screen on startup.
-        """
-        self.no_splash = no_splash
-        self.exit_hint_until: float | None = None
-        self.exit_hint_handle = None
-        from soothe_cli.tui.sessions import generate_loop_id
-
-        self.loop_id = generate_loop_id()
-
-
-DANGEROUS_SHELL_PATTERNS = (
-    "$(",  # Command substitution
-    "`",  # Backtick command substitution
-    "$'",  # ANSI-C quoting (can encode dangerous chars via escape sequences)
-    "\n",  # Newline (command injection)
-    "\r",  # Carriage return (command injection)
-    "\t",  # Tab (can be used for injection in some shells)
-    "<(",  # Process substitution (input)
-    ">(",  # Process substitution (output)
-    "<<<",  # Here-string
-    "<<",  # Here-doc (can embed commands)
-    ">>",  # Append redirect
-    ">",  # Output redirect
-    "<",  # Input redirect
-    "${",  # Variable expansion with braces (can run commands via ${var:-$(cmd)})
-)
-"""Literal substrings that indicate shell injection risk.
-
-Used by `contains_dangerous_patterns` to reject commands that embed arbitrary
-execution via redirects, substitution operators, or control characters — even
-when the base command is on the allow-list.
-"""
 
 RECOMMENDED_SAFE_SHELL_COMMANDS = (
     # Directory listing
@@ -1255,37 +1035,8 @@ RECOMMENDED_SAFE_SHELL_COMMANDS = (
 
 Only includes readers and formatters — shells, editors, interpreters, package
 managers, network tools, archivers, and anything on GTFOBins/LOOBins is
-intentionally excluded. File-write and injection vectors are blocked separately
-by `DANGEROUS_SHELL_PATTERNS`.
+intentionally excluded.
 """
-
-
-def contains_dangerous_patterns(command: str) -> bool:
-    """Check if a command contains dangerous shell patterns.
-
-    These patterns can be used to bypass allow-list validation by embedding
-    arbitrary commands within seemingly safe commands. The check includes
-    both literal substring patterns (redirects, substitution operators, etc.)
-    and regex patterns for bare variable expansion (`$VAR`) and the background
-    operator (`&`).
-
-    Args:
-        command: The shell command to check.
-
-    Returns:
-        True if dangerous patterns are found, False otherwise.
-    """
-    if any(pattern in command for pattern in DANGEROUS_SHELL_PATTERNS):
-        return True
-
-    # Bare variable expansion ($VAR without braces) can leak sensitive paths.
-    # We already block ${ and $( above; this catches plain $HOME, $IFS, etc.
-    if re.search(r"\$[A-Za-z_]", command):
-        return True
-
-    # Standalone & (background execution) changes the execution model and
-    # should not be allowed.  We check for & that is NOT part of &&.
-    return bool(re.search(r"(?<![&])&(?![&])", command))
 
 
 def detect_provider(model_name: str) -> str | None:
@@ -1598,14 +1349,6 @@ class ModelResult:
     provider: str
     context_limit: int | None = None
     unsupported_modalities: frozenset[str] = frozenset()
-
-    def apply_to_settings(self) -> None:
-        """Commit this result's metadata to global `settings`."""
-        s = _get_settings()
-        s.model_name = self.model_name
-        s.model_provider = self.provider
-        s.model_context_limit = self.context_limit
-        s.model_unsupported_modalities = self.unsupported_modalities
 
 
 def _apply_profile_overrides(

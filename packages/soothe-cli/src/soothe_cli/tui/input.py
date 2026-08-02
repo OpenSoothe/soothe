@@ -143,28 +143,6 @@ class MediaTracker:
             self.next_video_id += 1
         return placeholder
 
-    def add_image(self, image_data: ImageData) -> str:
-        """Add an image and return its placeholder text.
-
-        Args:
-            image_data: The image data to track.
-
-        Returns:
-            Placeholder string like "[image 1]".
-        """
-        return self.add_media(image_data, "image")
-
-    def add_video(self, video_data: VideoData) -> str:
-        """Add a video and return its placeholder text.
-
-        Args:
-            video_data: The video data to track.
-
-        Returns:
-            Placeholder string like "[video 1]".
-        """
-        return self.add_media(video_data, "video")
-
     def get_media(self, kind: MediaKind) -> list[ImageData] | list[VideoData]:
         """Get all tracked media of a given type.
 
