@@ -97,6 +97,9 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
     # total_steps: all steps that have completed (success or fail) + pending new steps
     total_count = len(state.step_results) + len(decision.steps)
 
+    intake_raw = getattr(getattr(state, "intent", None), "intake_label", None)
+    intake_label = str(getattr(intake_raw, "value", intake_raw) or "")
+
     await ctx.emit(
         "plan_decision",
         {
@@ -110,6 +113,7 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
                 for s in decision.steps
             ],
             "execution_mode": decision.execution_mode,
+            "intake_label": intake_label,
             "total_steps": total_count,
             "done_steps": done_count,
         },

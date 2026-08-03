@@ -55,11 +55,16 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
     intent = ctx.loop_state.intent
 
     if intent is not None:
+        intake_raw = getattr(intent, "intake_label", None)
+        intake_value = getattr(intake_raw, "value", intake_raw) or ""
+        complexity_raw = getattr(intent, "task_complexity", "")
+        complexity_value = getattr(complexity_raw, "value", complexity_raw) or ""
         await ctx.emit(
             "intent_classified",
             {
                 "intent_type": "agentic",
-                "task_complexity": getattr(intent, "task_complexity", ""),
+                "intake_label": str(intake_value),
+                "task_complexity": str(complexity_value),
             },
         )
 

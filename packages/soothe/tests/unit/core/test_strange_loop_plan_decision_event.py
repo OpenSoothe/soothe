@@ -17,11 +17,13 @@ def test_strange_loop_plan_decision_event_to_dict() -> None:
             },
         ],
         execution_mode="dependency",
+        intake_label="complex",
     )
     d = ev.to_dict()
     assert d["type"] == "soothe.cognition.strange_loop.plan.decision"
     assert d["iteration"] == 2
     assert d["execution_mode"] == "dependency"
+    assert d["intake_label"] == "complex"
     assert len(d["steps"]) == 2
     assert d["steps"][0]["id"] == "WAA-01"
     assert d["steps"][1]["dependencies"] == ["WAA-01"]

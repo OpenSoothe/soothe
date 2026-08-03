@@ -552,12 +552,21 @@ class StrangeLoopMixin:
                         )
 
                 elif event_type == "intent_classified":
+                    payload = event_data if isinstance(event_data, dict) else {}
+                    intake_raw = payload.get("intake_label", "")
+                    intake_label = str(getattr(intake_raw, "value", intake_raw) or "").strip()
                     logger.info(
-                        "[Intent] Classified in graph as %s",
-                        event_data.get("intent_type")
-                        if isinstance(event_data, dict)
-                        else "unknown",
+                        "[Intent] Classified in graph as %s (intake=%s)",
+                        payload.get("intent_type") or "unknown",
+                        intake_label or "unknown",
                     )
+                    if intake_label:
+                        yield _custom(
+                            IntentClassifiedEvent(
+                                intent_type=str(payload.get("intent_type") or "agentic"),
+                                intake_label=intake_label,
+                            ).to_dict()
+                        )
 
                 elif event_type == "intent_fast_path":
                     classification = (
@@ -615,6 +624,7 @@ class StrangeLoopMixin:
                             iteration=int(event_data.get("iteration", 0)),
                             steps=list(event_data.get("steps") or []),
                             execution_mode=str(event_data.get("execution_mode", "")),
+                            intake_label=str(event_data.get("intake_label", "") or ""),
                             total_steps=int(event_data.get("total_steps", 0)),
                             done_steps=int(event_data.get("done_steps", 0)),
                         ).to_dict()

@@ -67,7 +67,7 @@ def test_plan_quick_view_goal_header_uses_target_glyph() -> None:
 
 
 def test_plan_quick_view_content_shows_pending_and_running() -> None:
-    """Goal tree snapshot includes planned steps and execution mode."""
+    """Goal tree snapshot includes planned steps and intake label."""
     tree = CognitionGoalTreeMessage(goal="Refactor module", max_iterations=3, id="gt-2")
     tree.sync_plan_steps(
         [
@@ -75,15 +75,29 @@ def test_plan_quick_view_content_shows_pending_and_running() -> None:
             {"id": "STEP-2", "description": "Apply edits"},
         ]
     )
-    tree.set_execution_mode("dependency")
+    tree.set_intake_label("complex")
     tree.set_step_phase("STEP-1", "running", description="Read files")
 
     content = tree.plan_quick_view_content()
 
     assert "Refactor module" in content.plain
-    assert "dependency" in content.plain
+    assert "complex" in content.plain
+    assert "dependency" not in content.plain
+    assert "parallel" not in content.plain
     assert "1:" in content.plain
     assert "2:" in content.plain
+
+
+def test_plan_quick_view_ignores_invalid_intake_label() -> None:
+    """Only trivial/simple/complex appear in the goal header."""
+    tree = CognitionGoalTreeMessage(goal="Ship feature", id="gt-intake")
+    tree.set_intake_label("chitchat")
+    tree.set_intake_label("dependency")
+    assert "chitchat" not in tree.plan_quick_view_content().plain
+    assert "dependency" not in tree.plan_quick_view_content().plain
+
+    tree.set_intake_label("simple")
+    assert "simple" in tree.plan_quick_view_content().plain
 
 
 def test_plan_quick_view_hides_tool_error_summary_on_successful_step() -> None:

@@ -321,6 +321,7 @@ class StrangeLoopPlanDecisionEvent(LifecycleEvent):
     iteration: int = 0
     steps: list[dict[str, Any]] = []  # noqa: RUF012
     execution_mode: str = ""
+    intake_label: str = ""
     total_steps: int = 0  # Cumulative total steps across all iterations
     done_steps: int = 0  # Cumulative completed steps across all iterations
 
@@ -489,6 +490,7 @@ class IntentClassifiedEvent(ProtocolEvent):
     type: Literal["soothe.cognition.intent.classified"] = "soothe.cognition.intent.classified"
     intent_type: str = "agentic"
     reasoning: str | None = None
+    intake_label: str = ""
 
 
 class GoalCreatedEvent(ProtocolEvent):

@@ -178,7 +178,7 @@ class CognitionGoalTreeMessage(Vertical):
         self._footer_plain: str = ""
         self._footer_visible: bool = False
         self._footer_tone: str = "muted"  # success | error | muted (step/tool completion parity)
-        self._execution_mode: str = ""
+        self._intake_label: str = ""
         self._spinner_position: int = 0
         self._loop_started_at: float | None = None
         self._steps_static: Static | None = None
@@ -223,9 +223,9 @@ class CognitionGoalTreeMessage(Vertical):
         body = g
         if self._max_iterations > 1:
             body = f"{body} · iter<={self._max_iterations}"
-        mode = self._execution_mode.strip().lower()
-        if mode:
-            body = f"{body} · {mode}"
+        intake = self._intake_label.strip().lower()
+        if intake in ("trivial", "simple", "complex"):
+            body = f"{body} · {intake}"
         status = self._goal_tree_status()
         return _assemble_card_header(
             self,
@@ -506,7 +506,7 @@ class CognitionGoalTreeMessage(Vertical):
         return {
             "goal": self._goal_text,
             "max_iterations": self._max_iterations,
-            "execution_mode": self._execution_mode,
+            "intake_label": self._intake_label,
             "steps": steps_out,
             "footer_visible": self._footer_visible,
             "footer_text": self._footer_plain,
@@ -518,7 +518,9 @@ class CognitionGoalTreeMessage(Vertical):
         """Restore in-memory goal tree state from :meth:`snapshot_dict` output."""
         self._goal_text = str(snap.get("goal", self._goal_text))
         self._max_iterations = int(snap.get("max_iterations", self._max_iterations))
-        self._execution_mode = str(snap.get("execution_mode", self._execution_mode))
+        raw_intake = str(snap.get("intake_label", "") or "").strip().lower()
+        if raw_intake in ("trivial", "simple", "complex"):
+            self._intake_label = raw_intake
         self._footer_plain = str(snap.get("footer_text", ""))
         self._footer_visible = bool(snap.get("footer_visible", False))
         tone = str(snap.get("footer_tone", "muted") or "muted")
@@ -547,9 +549,12 @@ class CognitionGoalTreeMessage(Vertical):
             self._step_order.append(sid)
             self._steps[sid] = st
 
-    def set_execution_mode(self, mode: str) -> None:
-        """Show dependency/parallel mode in the goal header."""
-        self._execution_mode = (mode or "").strip()
+    def set_intake_label(self, label: str) -> None:
+        """Show intake complexity (trivial/simple/complex) in the goal header."""
+        normalized = (label or "").strip().lower()
+        if normalized not in ("trivial", "simple", "complex"):
+            return
+        self._intake_label = normalized
         self._sync_goal_tree_widgets()
 
     def sync_plan_steps(self, steps: list[dict[str, Any]]) -> None:

@@ -360,7 +360,11 @@ class TextualUIAdapter:
         """
 
         self._last_plan_execution_mode: str | None = None
-        """Execution mode from the latest ``plan_decision`` (``dependency`` / ``parallel``)."""
+        """Execution mode from the latest ``plan_decision`` (``dependency`` / ``parallel``).
+
+        Used for step-card lifecycle (stuck predecessor finalization); the plan
+        panel header shows ``intake_label`` instead.
+        """
 
         self._plan_step_order: list[str] = []
         """Step ids from the latest plan wave in planner list order."""
@@ -4137,6 +4141,7 @@ async def execute_task_textual(
                                 if isinstance(raw_steps, list):
                                     execution_mode = str(data.get("execution_mode", "")).strip()
                                     adapter._last_plan_execution_mode = execution_mode or None
+                                    intake_label = str(data.get("intake_label", "")).strip()
                                     _record_plan_step_dag(adapter, raw_steps)
                                     adapter._execute_wave_total = len(raw_steps)
                                     done_steps = int(data.get("done_steps", 0) or 0)
@@ -4153,8 +4158,8 @@ async def execute_task_textual(
                                     tree = adapter._goal_tree_message
                                     if tree is not None:
                                         tree.sync_plan_steps(raw_steps)
-                                        if execution_mode:
-                                            tree.set_execution_mode(execution_mode)
+                                        if intake_label:
+                                            tree.set_intake_label(intake_label)
                                     if execution_mode == "parallel":
                                         ui_coalesce.execute_wave_active = True
                                 continue
@@ -4458,6 +4463,13 @@ async def execute_task_textual(
                                 continue
 
                             if event_type == INTENT_CLASSIFIED:
+                                intake_label = str(data.get("intake_label", "")).strip()
+                                if intake_label:
+                                    if adapter._goal_tree_message is None:
+                                        await _ensure_goal_tree_message(adapter)
+                                    tree = adapter._goal_tree_message
+                                    if tree is not None:
+                                        tree.set_intake_label(intake_label)
                                 reasoning = str(data.get("reasoning", "")).strip()
                                 if not reasoning:
                                     continue
