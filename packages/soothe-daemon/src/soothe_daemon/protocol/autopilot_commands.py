@@ -140,4 +140,7 @@ async def run_autopilot_action(
             "source": "autopilot_service",
         }
 
+    if action == "top":
+        return await service.top_snapshot()
+
     raise RuntimeError(f"Unknown autopilot action: {action}")

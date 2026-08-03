@@ -33,6 +33,15 @@ class _FakeService:
         assert description
         return _FakeGoal("new-goal")
 
+    async def top_snapshot(self) -> dict[str, Any]:
+        return {
+            "running": True,
+            "dreaming": False,
+            "loop_pool": {"active": 0, "idle": 0, "total": 0, "max": 4},
+            "generated_at": "2026-08-04T00:00:00+00:00",
+            "jobs": [],
+        }
+
 
 @pytest.mark.asyncio
 async def test_run_autopilot_status() -> None:
@@ -54,8 +63,19 @@ async def test_run_autopilot_submit_requires_description() -> None:
         await run_autopilot_action(_FakeService(), "submit", {})
 
 
+@pytest.mark.asyncio
+async def test_run_autopilot_top() -> None:
+    result = await run_autopilot_action(_FakeService(), "top", {})
+    assert result["running"] is True
+    assert result["jobs"] == []
+    assert "generated_at" in result
+
+
 def test_autopilot_status_registered_in_params_registry() -> None:
     assert ("request", "autopilot_status") in PARAMS_REGISTRY
     assert ("request", "autopilot_submit") in PARAMS_REGISTRY
+    assert ("request", "autopilot_top") in PARAMS_REGISTRY
     model = PARAMS_REGISTRY[("request", "autopilot_status")]
     assert model.model_validate({}) is not None
+    top_model = PARAMS_REGISTRY[("request", "autopilot_top")]
+    assert top_model.model_validate({}) is not None

@@ -414,3 +414,180 @@ def dream() -> None:
     client = _require_daemon_ws()
     client.autopilot_dream()
     typer.echo("Dream signal sent.")
+
+
+def _short_loop_id(loop_id: str, *, keep: int = 8) -> str:
+    """Shorten assignment loop ids for display."""
+    if len(loop_id) <= keep + 12:
+        return loop_id
+    # Prefer suffix after last __ for uuid distinction
+    if "__" in loop_id:
+        prefix, _, suffix = loop_id.rpartition("__")
+        short_suffix = suffix[:keep] if len(suffix) > keep else suffix
+        return f"{prefix}__{short_suffix}…"
+    return loop_id[:keep] + "…"
+
+
+def _format_top_header(snapshot: dict, *, interval: float) -> list[str]:
+    """Build header lines for autopilot top."""
+    from datetime import datetime
+
+    del interval  # reserved for footer; header shows live clock instead
+    running = "running" if snapshot.get("running") else "stopped"
+    dreaming = " · dreaming" if snapshot.get("dreaming") else ""
+    pool = snapshot.get("loop_pool") if isinstance(snapshot.get("loop_pool"), dict) else {}
+    active = pool.get("active", 0)
+    idle = pool.get("idle", 0)
+    max_loops = pool.get("max", "?")
+    jobs = snapshot.get("jobs") or []
+    clock = datetime.now().strftime("%H:%M:%S")
+    return [
+        (
+            f"Autopilot top · {running}{dreaming} · "
+            f"pool {active}/{idle}/{max_loops} (active/idle/max) · "
+            f"{len(jobs)} job(s) · {clock}"
+        ),
+        "─" * 72,
+    ]
+
+
+def _format_top_forest(snapshot: dict) -> list[str]:
+    """Render active jobs → goals → loops as ASCII tree lines."""
+    jobs = snapshot.get("jobs") or []
+    if not jobs:
+        return ["No active jobs."]
+
+    lines: list[str] = []
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        jid = str(job.get("id", "?"))
+        jstat = str(job.get("status", "pending"))
+        jpri = job.get("priority", 50)
+        jdesc = preview_first(job.get("description", ""), 50)
+        lines.append(f'[{jid[:8]}] {jstat:10s} pri={jpri}  "{jdesc}"')
+
+        dag = job.get("dag") if isinstance(job.get("dag"), dict) else {}
+        nodes = {
+            str(n["id"]): n for n in (dag.get("nodes") or []) if isinstance(n, dict) and n.get("id")
+        }
+        edges = dag.get("edges") or []
+        children: dict[str, list[str]] = {}
+        for edge in edges:
+            if not isinstance(edge, dict):
+                continue
+            src, tgt = edge.get("source"), edge.get("target")
+            if src and tgt:
+                children.setdefault(str(src), []).append(str(tgt))
+
+        loops = [L for L in (job.get("loops") or []) if isinstance(L, dict)]
+        loops_by_goal: dict[str, list[dict]] = {}
+        for entry in loops:
+            gid = str(entry.get("goal_id") or "")
+            loops_by_goal.setdefault(gid, []).append(entry)
+
+        root_id = str(dag.get("root_id") or jid)
+        rendered_goals: set[str] = set()
+
+        def render_goal(goal_id: str, indent: str, is_last: bool) -> None:
+            node = nodes.get(goal_id)
+            if not node:
+                return
+            rendered_goals.add(goal_id)
+            branch = "└─ " if is_last else "├─ "
+            child_indent = indent + ("    " if is_last else "│   ")
+            status = str(node.get("status", "pending"))
+            desc = preview_first(node.get("description", ""), 50)
+            steps_c = node.get("steps_completed", 0) or 0
+            steps_t = node.get("steps_total", 0) or 0
+            steps = f"  steps {steps_c}/{steps_t}" if steps_t else ""
+            lines.append(f'{indent}{branch}[{goal_id[:8]}] {status:10s} "{desc}"{steps}')
+
+            goal_loops = loops_by_goal.get(goal_id, [])
+            child_ids = children.get(goal_id, [])
+            for i, entry in enumerate(goal_loops):
+                last_sub = (i == len(goal_loops) - 1) and not child_ids
+                lb = "└─ " if last_sub else "├─ "
+                lid = _short_loop_id(str(entry.get("loop_id", "?")))
+                seq = entry.get("seq", "?")
+                lstat = entry.get("status", "active")
+                lines.append(f"{child_indent}{lb}loop {lid}  {lstat}  #{seq}")
+            for i, child_id in enumerate(child_ids):
+                render_goal(child_id, child_indent, i == len(child_ids) - 1)
+
+        if root_id in nodes:
+            tops = [root_id]
+        else:
+            targets = {str(e.get("target")) for e in edges if isinstance(e, dict)}
+            tops = [nid for nid in nodes if nid not in targets] or list(nodes.keys())
+
+        for i, nid in enumerate(tops):
+            render_goal(nid, "", i == len(tops) - 1)
+
+        orphans = [
+            entry for entry in loops if str(entry.get("goal_id") or "") not in rendered_goals
+        ]
+        for i, entry in enumerate(orphans):
+            branch = "└─ " if i == len(orphans) - 1 else "├─ "
+            lid = _short_loop_id(str(entry.get("loop_id", "?")))
+            seq = entry.get("seq", "?")
+            gid = str(entry.get("goal_id") or "?")[:8]
+            lines.append(
+                f"{branch}loop {lid}  {entry.get('status', 'active')}  #{seq}  ?goal={gid}"
+            )
+
+        lines.append("")
+
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
+def render_top_snapshot(snapshot: dict, *, interval: float) -> str:
+    """Render a full autopilot top screen as plain text."""
+    parts = _format_top_header(snapshot, interval=interval)
+    parts.extend(_format_top_forest(snapshot))
+    parts.append("─" * 72)
+    parts.append(f"Ctrl+C quit · refresh {interval:g}s")
+    return "\n".join(parts)
+
+
+@app.command("top")
+def top(
+    interval: float = typer.Option(
+        1.0,
+        "--interval",
+        "-n",
+        help="Refresh interval in seconds (must be > 0).",
+    ),
+) -> None:
+    """Live dashboard of active autopilot jobs, goals, and loops.
+
+    Requires the daemon (``soothed start``). Redraws until Ctrl+C.
+    """
+    if interval <= 0:
+        typer.echo("Error: --interval must be > 0.", err=True)
+        raise typer.Exit(1)
+
+    from rich.console import Console
+    from rich.live import Live
+
+    client = _require_daemon_ws()
+    console = Console()
+
+    def _fetch() -> str:
+        data = client.autopilot_top()
+        return render_top_snapshot(data if isinstance(data, dict) else {}, interval=interval)
+
+    try:
+        with Live(
+            console=console, refresh_per_second=max(1, int(1 / interval)), screen=False
+        ) as live:
+            while True:
+                live.update(_fetch())
+                time.sleep(interval)
+    except KeyboardInterrupt:
+        typer.echo("\nStopped.")
+    except RuntimeError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from exc

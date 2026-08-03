@@ -1415,6 +1415,44 @@ class AutopilotService:
         entries = await self._job_loop_index.list_loops(job_id)
         return [e.model_dump(mode="json") for e in entries]
 
+    async def top_snapshot(self) -> dict[str, Any]:
+        """Build active-only jobs → goals → loops snapshot for CLI top (IG-679).
+
+        Filters use CE ``TERMINAL_STATES`` for goals and ``status == "active"``
+        for JobLoopIndex entries. See RFC-228 §autopilot_top.
+
+        Returns:
+            Dict with ``running``, ``dreaming``, ``loop_pool``, ``generated_at``,
+            and ``jobs`` (each with filtered ``dag`` and active ``loops``).
+        """
+        from soothe.autopilot.top_snapshot import build_top_job_entry
+
+        status = self.status()
+        goals = await self.list_goals()
+        roots = [g for g in goals if g.parent_id is None]
+        jobs: list[dict[str, Any]] = []
+        for root in roots:
+            dag = await self.dag_snapshot(root.id)
+            loops = await self.list_job_loops(root.id)
+            entry = build_top_job_entry(
+                job_id=root.id,
+                status=str(root.status),
+                priority=int(root.priority),
+                description=root.description,
+                workspace=root.workspace,
+                dag=dag,
+                loops=loops,
+            )
+            if entry is not None:
+                jobs.append(entry)
+        return {
+            "running": status.get("running", False),
+            "dreaming": status.get("dreaming", False),
+            "loop_pool": status.get("loop_pool", {}),
+            "generated_at": datetime.now(UTC).isoformat(),
+            "jobs": jobs,
+        }
+
     async def dag_snapshot(self, root_goal_id: str) -> dict[str, Any]:
         """Export DAG structure for visualization (RFC-228).
 

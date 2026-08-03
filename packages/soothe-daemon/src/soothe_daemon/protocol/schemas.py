@@ -74,11 +74,13 @@ __all__ = [
     "AutopilotListGoalsParams",
     "AutopilotGetGoalParams",
     "AutopilotCancelGoalParams",
+    "AutopilotCancelAllParams",
     "AutopilotWakeParams",
     "AutopilotDreamParams",
     "AutopilotResumeParams",
     "AutopilotListJobsParams",
     "AutopilotGetJobParams",
+    "AutopilotTopParams",
     "ConnectionInitParams",
     "DisconnectParams",
     "PingParams",
@@ -479,6 +481,10 @@ class AutopilotGetJobParams(ParamsBase):
     job_id: str = Field(..., min_length=1)
 
 
+class AutopilotTopParams(EmptyParams):
+    """Params for method=autopilot_top, type=request (IG-679)."""
+
+
 class ConnectionInitParams(_SdkConnectionInitParams):
     """Server-side params for type=connection_init (protocol-1 handshake).
 
@@ -617,6 +623,7 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("request", "autopilot_resume"): AutopilotResumeParams,
     ("request", "autopilot_list_jobs"): AutopilotListJobsParams,
     ("request", "autopilot_get_job"): AutopilotGetJobParams,
+    ("request", "autopilot_top"): AutopilotTopParams,
     # Cron RPC (RFC-229)
     ("request", "cron_add"): CronAddParams,
     ("request", "cron_list"): CronListParams,

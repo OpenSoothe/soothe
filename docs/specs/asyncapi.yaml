@@ -105,6 +105,7 @@ channels:
           - $ref: '#/components/messages/autopilotResumeRequest'
           - $ref: '#/components/messages/autopilotListJobsRequest'
           - $ref: '#/components/messages/autopilotGetJobRequest'
+          - $ref: '#/components/messages/autopilotTopRequest'
           # Notifications
           - $ref: '#/components/messages/loopInputNotification'
           - $ref: '#/components/messages/slashCommandNotification'
@@ -718,6 +719,10 @@ components:
           type: string
           minLength: 1
           description: Root goal (job) identifier
+
+    autopilotTopParams:
+      type: object
+      description: No required fields (IG-679 active forest snapshot)
 
     # Disconnect params
     disconnectParams:
@@ -1665,6 +1670,24 @@ components:
                 const: autopilot_get_job
               params:
                 $ref: '#/components/schemas/autopilotGetJobParams'
+              id:
+                type: string
+
+    autopilotTopRequest:
+      title: Active-only jobs/goals/loops snapshot for CLI top
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_top
+              params:
+                $ref: '#/components/schemas/autopilotTopParams'
               id:
                 type: string
 

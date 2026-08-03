@@ -5,13 +5,15 @@
 **Status**: Proposed
 **Kind**: Protocol Specification
 **Created**: 2026-06-04
-**Updated**: 2026-07-03
+**Updated**: 2026-08-04
 **Dependencies**: RFC-222 (Autopilot and Goal Engine Architecture), RFC-450 (Daemon Communication Protocol)
-**Related**: RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands)
+**Related**: RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands), IG-677 (Job↔Loop Index), IG-613 (protocol-1 `autopilot_*` RPCs)
 
 ## Abstract
 
 This RFC defines WebSocket IPC commands for desktop client interaction with the daemon's AutopilotService. Commands cover job lifecycle (create, status, pause, resume, cancel), DAG visualization data retrieval, user guidance absorption, and autopilot worker event subscription. These commands enable the Desktop app (RFC-700) to monitor and influence autopilot sessions through the singleton AutopilotService.
+
+It also defines the protocol-1 aggregate snapshot RPC `autopilot_top` for the CLI live dashboard (`soothe autopilot top`): active-only jobs → goal DAG → JobLoopIndex loops in one round-trip.
 
 ## Overview
 
@@ -37,7 +39,8 @@ Extend the daemon IPC protocol with a new command category: **Autopilot Job Comm
 | In Scope | Out of Scope |
 |----------|--------------|
 | Job creation/status/cancel IPC | Job persistence (SQLite in desktop app) |
-| DAG snapshot for visualization | Real-time DAG diff streaming |
+| DAG snapshot for visualization | Real-time DAG diff streaming (push) |
+| Active-only aggregate top snapshot (`autopilot_top`) | Interactive CLI keybindings / `--all` history |
 | User guidance absorption | Guidance result feedback |
 | Worker event subscription | Worker pool management |
 
@@ -95,6 +98,9 @@ All client → server commands accept an optional `request_id` field (string). T
 | `job_guidance` | `job_id` (req, string), `goal_id` (opt, string), `text` (req, string), `request_id` (opt) | Send user guidance to ContextEngine (absorbed as BackoffDecision) |
 | `autopilot_subscribe` | `request_id` (opt) | Subscribe to all autopilot worker events (bypasses `autopilot__*` filter) |
 | `autopilot_unsubscribe` | `request_id` (opt) | Release autopilot worker subscription |
+| `autopilot_top` | `request_id` (opt) | Protocol-1 aggregate: active jobs → filtered DAG → active loops (CLI `top`) |
+
+> **Protocol-1 note**: Desktop job envelopes use `type: "job_*"`. CLI / `AsyncCommandClient` use protocol-1 `type: "request"` with `method: "autopilot_*"` (IG-613). `autopilot_top` is defined as a protocol-1 method; the response body shape below is the `result` payload.
 
 ### Server → Client Messages
 
@@ -109,6 +115,7 @@ All client → server commands accept an optional `request_id` field (string). T
 | `job_guidance_response` | `job_id` (req), `goal_id` (opt), `absorbed` (req, bool), `request_id` (opt) | Guidance received by ContextEngine |
 | `autopilot_subscribe_response` | `client_id` (req), `subscribed` (req, bool), `request_id` (opt) | Subscription confirmed |
 | `autopilot_unsubscribe_response` | `client_id` (req), `subscribed` (req, bool: false), `request_id` (opt) | Unsubscription confirmed |
+| `autopilot_top` result | See §autopilot_top | Active-only forest snapshot for CLI live dashboard |
 | `error` | `code` (req), `message` (req), `details` (opt) | Protocol error (see error codes below) |
 
 ### Error Codes
@@ -573,6 +580,107 @@ Releases autopilot worker subscription.
 }
 ```
 
+### autopilot_top
+
+Protocol-1 aggregate snapshot for the CLI live dashboard (`soothe autopilot top`).
+One round-trip returns header pool stats plus an **active-only** forest of
+jobs → filtered goal DAG → active JobLoopIndex entries (IG-677).
+
+This is **not** push/diff streaming (still out of scope). Clients poll on an
+interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
+`autopilot_get_job` commands remain unchanged.
+
+**Request** (protocol-1):
+```json
+{
+  "type": "request",
+  "method": "autopilot_top",
+  "params": {},
+  "request_id": "req-top-001"
+}
+```
+
+**Result payload**:
+```json
+{
+  "running": true,
+  "dreaming": false,
+  "loop_pool": {
+    "active": 1,
+    "idle": 0,
+    "total": 1,
+    "max": 4
+  },
+  "generated_at": "2026-08-04T01:00:00+00:00",
+  "jobs": [
+    {
+      "id": "a1b2c3d4",
+      "status": "active",
+      "priority": 50,
+      "description": "Implement auth",
+      "workspace": "/path/to/ws",
+      "dag": {
+        "root_id": "a1b2c3d4",
+        "nodes": [
+          {
+            "id": "a1b2c3d4",
+            "description": "Implement auth",
+            "status": "active",
+            "priority": 50,
+            "depends_on": [],
+            "assigned_loop_id": "autopilot__a1b2c3d4__f47ac10b58cc4372a5670e02b2c3d479",
+            "steps_completed": 1,
+            "steps_total": 4,
+            "tool_calls": 3
+          }
+        ],
+        "edges": []
+      },
+      "loops": [
+        {
+          "seq": 3,
+          "loop_id": "autopilot__a1b2c3d4__f47ac10b58cc4372a5670e02b2c3d479",
+          "goal_id": "a1b2c3d4",
+          "status": "active",
+          "attempt": 1,
+          "started_at": "2026-08-04T00:59:00+00:00"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Processing** (`AutopilotService.top_snapshot()`):
+
+1. Build header from `status()` (`running`, `dreaming`, `loop_pool`) and set
+   `generated_at` (UTC ISO).
+2. Enumerate root goals (jobs).
+3. For each job, build `dag` via existing `dag_snapshot(job_id)` and load
+   `loops` via `list_job_loops(job_id)`.
+4. Apply **active filters** (server SoT):
+   - Goal / job visibility uses CE `TERMINAL_STATES`
+     (`completed`, `failed`, `cancelled`). Non-terminal includes
+     `pending`, `active`, `blocked`, `suspended`, `awaiting_clarification`, etc.
+   - Include a job if the root ∉ `TERMINAL_STATES` **or** any descendant ∉
+     `TERMINAL_STATES`.
+   - Keep only goal nodes with status ∉ `TERMINAL_STATES`; keep edges only when
+     both endpoints remain.
+   - Keep only loops with `JobLoopEntry.status == "active"`.
+   - Drop jobs that have no remaining visible goals after filtering.
+5. Return the payload as the protocol-1 `result`.
+
+**CLI consumer** (`soothe autopilot top`):
+
+- Rich `Live` redraw each poll until Ctrl+C.
+- Flag `--interval` / `-n` (default `1.0`).
+- Render ASCII tree: job → goals → loops nested under `JobLoopEntry.goal_id`.
+- Empty `jobs` → header + “No active jobs”.
+- Daemon not live / mid-session RPC failure → error + non-zero exit (same as
+  other autopilot CLI commands).
+
+**Authz**: read-only; same as `job_status` / `job_dag` (any authenticated client).
+
 ## Security and Authorization
 
 ### Authentication Model
@@ -586,6 +694,7 @@ All IPC commands require an authenticated WebSocket session (RFC-450 §30-38). T
 | `job_create` | Any authenticated client may create jobs. No per-user quota in current scope. The session-derived `user_id` is recorded on the root GoalNode at creation time and serves as the job owner for subsequent ownership checks. |
 | `job_status` | Any authenticated client may query any job's status (read-only, no ownership check). |
 | `job_dag` | Same as `job_status` — read-only, no ownership check. |
+| `autopilot_top` | Same as `job_status` — read-only aggregate snapshot, no ownership check. |
 | `job_pause` / `job_resume` | **Job owner only.** The `user_id` of the requesting session must match the `user_id` recorded on the job's root GoalNode at creation time. Mismatch → `error` with code `JOB_NOT_AUTHORIZED`. |
 | `job_cancel` | **Job owner only.** Same ownership check as pause/resume. Cancellation is destructive — terminates all descendant goals and releases workers. |
 | `job_guidance` | Any authenticated client may submit guidance to any job (guidance is advisory, non-destructive). |
@@ -652,6 +761,13 @@ Future enhancement: scoped subscriptions (`autopilot_subscribe` with optional `j
 4. (events: soothe.goal.status → "active")
 ```
 
+**CLI live top** (`soothe autopilot top`):
+```
+1. autopilot_top → result (header + active forest)
+2. (poll interval; redraw Rich Live)
+3. Ctrl+C → exit
+```
+
 ## Implementation Checklist
 
 ### Daemon Side
@@ -664,6 +780,7 @@ Future enhancement: scoped subscriptions (`autopilot_subscribe` with optional `j
 - [ ] `job_guidance` handler routing to ContextEngine
 - [ ] `autopilot_subscribe` handler bypassing namespace filter
 - [ ] `autopilot_unsubscribe` handler releasing subscription
+- [ ] `autopilot_top` protocol-1 handler → `AutopilotService.top_snapshot()`
 - [ ] Event emission for `soothe.goal.*` and `soothe.worker.*`
 
 ### ContextEngine Side
@@ -672,6 +789,12 @@ Future enhancement: scoped subscriptions (`autopilot_subscribe` with optional `j
 - [ ] DAG snapshot export method (`ce.get_dag_snapshot()`)
 - [ ] Status transition event emission (CE callbacks → InternalEventBus)
 - [ ] Progress update event emission (CE `step_completed` callbacks)
+
+### Host / CLI Side
+
+- [ ] `AutopilotService.top_snapshot()` with `TERMINAL_STATES` + active-loop filters
+- [ ] Client stubs: `autopilot_top` in soothe-client / sdk params registry
+- [ ] `soothe autopilot top` Rich Live renderer
 
 ### Desktop Client Side (RFC-700)
 
@@ -682,6 +805,8 @@ Future enhancement: scoped subscriptions (`autopilot_subscribe` with optional `j
 ## Changelog
 
 ### 2026-08-04
+- Added protocol-1 `autopilot_top` aggregate snapshot (active jobs → DAG → loops)
+  for CLI live dashboard; documented filters via CE `TERMINAL_STATES` + IG-677
 - Aligned worker `loop_id` examples with IG-677 assignment-scoped format
   (`autopilot__{job_id}__{uuid}`); documented pool slots vs loop dirs and JobLoopIndex
 

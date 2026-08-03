@@ -3240,6 +3240,10 @@ class MessageRouter:
         """Handle autopilot_get_job request."""
         await self._dispatch_autopilot_rpc(client_id, msg, "get_job")
 
+    async def _handle_autopilot_top(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_top request (CLI live dashboard)."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "top")
+
     async def _handle_autopilot_subscribe(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle autopilot_subscribe RPC request (RFC-228).
 
