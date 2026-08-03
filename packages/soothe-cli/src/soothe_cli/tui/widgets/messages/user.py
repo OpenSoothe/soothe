@@ -13,7 +13,7 @@ from soothe_cli.tui.config import (
     PREFIX_TO_MODE,
     is_ascii_mode,
 )
-from soothe_cli.tui.input import EMAIL_PREFIX_PATTERN, INPUT_HIGHLIGHT_PATTERN
+from soothe_cli.tui.input import EMAIL_PREFIX_PATTERN, FILE_MENTION_PATTERN, command_token_span
 from soothe_cli.tui.widgets.messages._helpers import _mode_color
 
 _QUEUE_TIPS_ASCII = "  ·  enter send now | ^ edit | esc cancel"
@@ -97,29 +97,32 @@ class UserMessage(Static):
             parts.append((f"{glyph} ", f"bold {_mode_color(mode, self)}"))
             content = content[1:]
 
-        # Highlight @mentions and /commands in the content
+        # Highlight the leading command token (after `/` moved into the glyph)
+        # and any @file mentions. Shared with the live input box via
+        # `command_token_span` so `/skill:name` highlights in full.
         last_end = 0
-        for match in INPUT_HIGHLIGHT_PATTERN.finditer(content):
+        if mode == "command":
+            start, end = command_token_span(content)
+            if end > start:
+                parts.append((content[start:end], f"bold {colors.mode_command}"))
+                last_end = end
+
+        for match in FILE_MENTION_PATTERN.finditer(content):
             start, end = match.span()
+            if start < last_end:
+                continue
             token = match.group()
 
             # Skip @mentions that look like email addresses
-            if token.startswith("@") and start > 0:
+            if start > 0:
                 char_before = content[start - 1]
                 if EMAIL_PREFIX_PATTERN.match(char_before):
                     continue
 
-            # Add text before the match (high-contrast body)
             if start > last_end:
                 parts.append((content[last_end:start], colors.foreground))
 
-            # The regex only matches tokens starting with / or @
-            if token.startswith("/") and start == 0:
-                # /command at start
-                parts.append((token, f"bold {colors.warning}"))
-            elif token.startswith("@"):
-                # @file mention
-                parts.append((token, f"bold {colors.primary}"))
+            parts.append((token, f"bold {colors.primary}"))
             last_end = end
 
         # Add remaining text after last match

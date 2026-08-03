@@ -32,6 +32,7 @@ from soothe_cli.tui.input import (
     IMAGE_PLACEHOLDER_PATTERN,
     VIDEO_PLACEHOLDER_PATTERN,
     abbreviate_pasted_input_display,
+    command_token_span,
     compose_paste_into_input,
     should_abbreviate_pasted_input,
 )
@@ -75,6 +76,7 @@ simultaneously; a human deliberately typing `\\` then pressing Enter would
 have a much larger gap."""
 
 if TYPE_CHECKING:
+    from rich.text import Text
     from textual import events
     from textual.app import ComposeResult
     from textual.events import Click
@@ -432,6 +434,7 @@ class ChatTextArea(TextArea):
         self._skip_history_change_events = 0
         self._in_history = False
         self._completion_active = False
+        self._command_highlight = False
         # Buffer quote-prefixed high-frequency key bursts from terminals that
         # emulate paste via rapid key events instead of dispatching a paste
         # event.
@@ -481,6 +484,37 @@ class ChatTextArea(TextArea):
     def set_completion_active(self, *, active: bool) -> None:
         """Set whether completion suggestions are visible."""
         self._completion_active = active
+
+    def set_command_highlight(self, *, active: bool) -> None:
+        """Set whether the leading command token should be color-highlighted.
+
+        Args:
+            active: Whether the input is in command mode.
+        """
+        if self._command_highlight == active:
+            return
+        self._command_highlight = active
+        # Mode changes can happen without a text edit (e.g. backspace at
+        # offset 0 exits command mode), so repaint explicitly.
+        self.refresh()
+
+    def get_line(self, line_index: int) -> Text:
+        """Return the styled line, coloring the command token in command mode.
+
+        Args:
+            line_index: The index of the line.
+
+        Returns:
+            A `rich.Text` object for the requested line.
+        """
+        line = super().get_line(line_index)
+        if line_index != 0 or not self._command_highlight:
+            return line
+        start, end = command_token_span(line.plain)
+        if end > start:
+            colors = theme.get_theme_colors(self)
+            line.stylize(f"bold {colors.mode_command}", start, end)
+        return line
 
     def action_insert_newline(self) -> None:
         """Insert a newline character."""
@@ -1919,6 +1953,8 @@ class ChatInput(Vertical):
             self.remove_class("mode-shell", "mode-command")
             if glyph:
                 self.add_class(f"mode-{mode}")
+            if self._text_area:
+                self._text_area.set_command_highlight(active=mode == "command")
             try:
                 prompt = self.query_one("#prompt", Static)
             except NoMatches:

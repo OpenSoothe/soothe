@@ -45,18 +45,29 @@ is likely part of an email address (e.g., `user@example.com`) rather than
 a file reference.
 """
 
-INPUT_HIGHLIGHT_PATTERN = re.compile(r"(^\/[a-zA-Z0-9_-]+|@(?:\\.|[" + PATH_CHAR_CLASS + r"])+)")
-"""Pattern for highlighting `@mentions` and `/commands` in rendered
-user messages.
 
-Matches either:
-- Slash commands at the start of the string (e.g., `/help`)
-- `@file` mentions anywhere in the text (e.g., `@README.md`)
+def command_token_span(line: str) -> tuple[int, int]:
+    """Return the `(start, end)` span of the leading slash-command token.
 
-Note: The `^` anchor matches start of string, not start of line. The consumer
-in `UserMessage.compose()` additionally checks `start == 0` before styling
-slash commands, so a `/` mid-string is not highlighted.
-"""
+    Used by the live input box (where `/` may still be present for one frame
+    before the mode prompt glyph strips it) and by submitted `UserMessage`
+    cards (where `/` has already been moved into the mode glyph).
+
+    A leading `/` is skipped when measuring the token body but included in
+    the returned span so the transient trigger character is highlighted too.
+
+    Args:
+        line: Plain text of the first input line, with or without a leading `/`.
+
+    Returns:
+        Span of the token, or `(0, 0)` when there is no token.
+    """
+    start = 1 if line.startswith("/") else 0
+    end = start
+    while end < len(line) and not line[end].isspace():
+        end += 1
+    return (0, end) if end > start else (0, 0)
+
 
 MediaKind = Literal["image", "video"]
 """Accepted values for the `kind` parameter in `MediaTracker` methods."""
