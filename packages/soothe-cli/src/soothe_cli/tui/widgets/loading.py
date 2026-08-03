@@ -62,7 +62,7 @@ class LoadingWidget(Static):
 
     DEFAULT_CSS = """
     LoadingWidget {
-        height: auto;
+        height: 1;
         padding: 0 1;
         margin-top: 1;
     }
@@ -102,6 +102,7 @@ class LoadingWidget(Static):
         self._last_rendered_elapsed: int = -1
         self._token_count: int = 0
         self._token_approximate: bool = False
+        self._has_laid_out_line: bool = False
 
     @staticmethod
     def _format_token_segment(count: int, *, approximate: bool = False) -> str:
@@ -157,8 +158,11 @@ class LoadingWidget(Static):
         return Content.assemble(spinner_part, status_part, hint_part)
 
     def _refresh_line(self) -> None:
-        """Repaint the full status line without triggering layout."""
-        self.update(self._build_content(), layout=False)
+        """Repaint the full status line without triggering sibling relayout."""
+        # First paint must layout so an empty Static does not stay height 0.
+        layout = not self._has_laid_out_line
+        self.update(self._build_content(), layout=layout)
+        self._has_laid_out_line = True
 
     def on_mount(self) -> None:
         """Start animation on mount."""

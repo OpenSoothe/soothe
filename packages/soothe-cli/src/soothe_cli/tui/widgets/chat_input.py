@@ -1025,6 +1025,17 @@ class ChatInput(Vertical):
 
     mode: reactive[str] = reactive("normal")
 
+    def scroll_visible(self, animate: bool = True, **_kwargs: Any) -> None:  # noqa: ARG002
+        """No-op: bottom chrome is Screen-docked above the status bar.
+
+        The default ``Widget.scroll_visible`` scrolls the Screen to reveal this
+        widget. When the input (or plan panel + input) is taller than the
+        viewport, that Screen scroll clips ``#thinking-status`` above the
+        chat box. Cursor visibility inside the text area still uses
+        ``ChatTextArea.scroll_cursor_visible``.
+        """
+        return
+
     def __init__(
         self,
         cwd: str | Path | None = None,

@@ -508,10 +508,11 @@ class _MessagesMixin:
         # Prune old widgets if window exceeded
         await self._prune_old_messages()
 
-        # Scroll to keep input bar visible
+        # Keep the transcript pinned to the latest message. Do NOT call
+        # scroll_visible() on #bottom-app-container / ChatInput — that scrolls
+        # the Screen and clips the thinking row above the docked input chrome.
         try:
-            input_container = self.query_one("#bottom-app-container", Container)
-            input_container.scroll_visible()
+            self.query_one("#chat", VerticalScroll).anchor()
         except NoMatches:
             pass
 

@@ -387,30 +387,6 @@ class _UIMixin:
                 return
         await container.mount(widget)
 
-    def _is_spinner_at_correct_position(self, container: Container) -> bool:
-        """Check whether the loading spinner is already correctly positioned.
-
-        The spinner should be immediately before the first queued widget, or
-        at the very end of the container when the queue is empty.
-
-        Args:
-            container: The `#messages` container.
-
-        Returns:
-            `True` if the spinner is already in the correct position.
-        """
-        children = list(container.children)
-        if not children or self._loading_widget not in children:
-            return False
-
-        if self._queued_widgets:
-            first_queued = self._queued_widgets[0]
-            if first_queued not in children:
-                return False
-            return children.index(self._loading_widget) == (children.index(first_queued) - 1)
-
-        return children[-1] == self._loading_widget
-
     async def _set_spinner(
         self,
         status: SpinnerStatus,

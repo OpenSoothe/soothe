@@ -218,3 +218,75 @@ async def test_loading_widget_elapsed_ticks_after_connect_status_change() -> Non
         assert widget._format_hint_line(float(elapsed_after), include_interrupt=False) == (
             f" · attempt 2/3 · {elapsed_after}s"
         )
+
+
+def test_bottom_chrome_css_docks_thinking_above_input() -> None:
+    """Sticky bottom chrome must be Screen-docked so scroll cannot clip the spinner."""
+    from pathlib import Path
+
+    css = (Path(__file__).resolve().parents[4] / "src/soothe_cli/tui/app/app.tcss").read_text(
+        encoding="utf-8"
+    )
+    block = css.split("#bottom-app-container {")[1].split("}")[0]
+    assert "dock: bottom" in block
+    assert "max-height: 100%" in block
+
+
+def test_chat_input_scroll_visible_is_noop_for_screen() -> None:
+    """ChatInput.scroll_visible must not scroll the Screen (clips thinking row)."""
+    import inspect
+
+    from soothe_cli.tui.widgets.chat_input import ChatInput
+
+    source = inspect.getsource(ChatInput.scroll_visible)
+    assert "No-op" in source or "no-op" in source.lower()
+    assert "super().scroll_visible" not in source
+
+
+@pytest.mark.asyncio
+async def test_thinking_row_stays_above_input_after_scroll_visible() -> None:
+    """Tall input + scroll_visible must not clip the thinking row above the chat box."""
+    from pathlib import Path
+
+    from textual.app import App, ComposeResult
+    from textual.containers import Container, Vertical, VerticalScroll
+    from textual.widgets import Static
+
+    from soothe_cli.tui import theme
+    from soothe_cli.tui.widgets.chat_input import ChatInput
+
+    css = (Path(__file__).resolve().parents[4] / "src/soothe_cli/tui/app/app.tcss").read_text(
+        encoding="utf-8"
+    )
+
+    class _Harness(App[None]):
+        CSS = css
+
+        def get_theme_variable_defaults(self) -> dict[str, str]:
+            return theme.get_css_variable_defaults(colors=theme.DARK_COLORS)
+
+        def compose(self) -> ComposeResult:
+            with VerticalScroll(id="chat"):
+                with Vertical(id="chat-body"):
+                    yield Static("Welcome", id="welcome-banner")
+                    yield Container(id="messages")
+            with Container(id="bottom-app-container"):
+                yield Container(id="thinking-status")
+                yield ChatInput(id="input-area")
+                yield Static("status", id="status-bar")
+
+    app = _Harness()
+    async with app.run_test(size=(60, 14)) as pilot:
+        thinking = app.query_one("#thinking-status", Container)
+        widget = LoadingWidget("Thinking")
+        await thinking.mount(widget)
+        text_area = app.query_one("#chat-input")
+        text_area.load_text("\n".join(f"line {i}" for i in range(12)))
+        await pilot.pause()
+        app.query_one("#input-area").scroll_visible(animate=False, immediate=True)
+        await pilot.pause()
+
+        assert widget.region.y >= 0
+        input_area = app.query_one("#input-area")
+        assert widget.region.y + widget.region.height <= input_area.region.y
+        assert app.screen.scroll_offset.y == 0
