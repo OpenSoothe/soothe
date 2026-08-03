@@ -18,6 +18,7 @@ from typing import Any, Literal
 
 from soothe.sloop.goal_text import resolve_planning_goal
 from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.orchestrator.mid_loop_intake import mid_loop_allow_inventory
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.prompts.plan_ledger_projection import (
     _current_goal_has_execute_ledger,
@@ -101,21 +102,21 @@ def should_run_inventory(ctx: LoopRuntimeContext) -> bool:
     """True when evaluate should run gap inventory before assess.
 
     Inventory is always enabled for applicable mid-goal paths (IG-672). Skips
-    are structural only: trivial intake, or new_goal with no execute evidence.
+    are structural only: trivial intake, or new_goal with no execute evidence
+    (IG-676 mid-loop intake policy).
     """
     state = ctx.loop_state
     intake = getattr(state.intent, "intake_label", None) if state.intent is not None else None
-    if intake == IntakeLabel.TRIVIAL:
-        return False
     mode = resolve_planner_projection_mode(state)
-    if (
-        mode == "new_goal"
-        and not state.step_results
-        and not _current_goal_has_execute_ledger(state)
-    ):
+    allowed = mid_loop_allow_inventory(
+        intake_label=intake,
+        projection_mode=mode,
+        has_step_results=bool(state.step_results),
+        has_execute_ledger=_current_goal_has_execute_ledger(state),
+    )
+    if not allowed and mode == "new_goal" and intake != IntakeLabel.TRIVIAL:
         logger.info("[Plan] evaluate inventory skipped (reason=iter0_no_execution)")
-        return False
-    return True
+    return allowed
 
 
 def seed_inventory_facets(ctx: LoopRuntimeContext) -> list[str]:

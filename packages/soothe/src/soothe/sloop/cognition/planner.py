@@ -172,7 +172,11 @@ def _parse_status_assessment_from_raw_message(response: Any) -> Any:
 
 
 def _apply_continuation_intake_guardrails(result: Any, state: LoopState) -> Any:
-    """Override bootstrap when intake complexity or empty reasoning forbids it."""
+    """Override bootstrap when intake complexity or empty reasoning forbids it.
+
+    Simple/complex continuation normally skip ``assess_continuation`` before the
+    LLM runs. This guardrail remains defense-in-depth if bootstrap still arrives.
+    """
     from soothe.sloop.intention.models import IntakeLabel
 
     if getattr(result, "action", None) != "bootstrap":

@@ -152,10 +152,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         ENTER_LOOP,
         route_after_preprocess,
         {
-            CHECK_LIMITS: CHECK_LIMITS,
             GATHER_EVIDENCE: GATHER_EVIDENCE,
-            GENERATE_PLAN: GENERATE_PLAN,
-            EVALUATE: EVALUATE,
             COMMIT_PLAN: COMMIT_PLAN,
             DELEGATE: DELEGATE,
             END: END,

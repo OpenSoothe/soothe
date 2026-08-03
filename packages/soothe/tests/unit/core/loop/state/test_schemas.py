@@ -415,21 +415,47 @@ class TestPlanResult:
             )
 
     def test_progress_validation(self) -> None:
-        """Test goal_progress validation."""
-        PlanResult(
+        """Valid goal_progress accepted; invalid prose coerces to none."""
+        ok = PlanResult(
             status="done",
             plan_action="keep",
             goal_progress="medium",
-            reasoning="Test",
         )
+        assert ok.goal_progress == "medium"
 
-        with pytest.raises(ValueError):
-            PlanResult(
-                status="done",
-                plan_action="keep",
-                goal_progress="invalid_level",  # Invalid level for testing validation
-                reasoning="Test",
-            )
+        coerced = PlanResult(
+            status="done",
+            plan_action="keep",
+            goal_progress="invalid_level",  # type: ignore[arg-type]
+        )
+        assert coerced.goal_progress == "none"
+
+
+class TestGoalProgressCoercion:
+    """Invalid LLM prose for goal_progress must not fail structured bind."""
+
+    def test_continuation_assessment_coerces_prose_goal_progress(self) -> None:
+        from soothe.sloop.state.schemas import ContinuationAssessment
+
+        result = ContinuationAssessment(
+            action="plan_generate",
+            reasoning="I need to read the new documents.",
+            goal_progress=(  # type: ignore[arg-type]
+                "Analyzing the provided Word documents on Apache Hamilton "
+                "ecosystem positioning and strategies for building a Pandas "
+                "API framework using Hamilton + Ray Data."
+            ),
+        )
+        assert result.goal_progress == "none"
+
+    def test_status_assessment_coerces_prose_goal_progress(self) -> None:
+        from soothe.sloop.state.schemas import StatusAssessment
+
+        result = StatusAssessment(
+            status="continue",
+            goal_progress="still working on it",  # type: ignore[arg-type]
+        )
+        assert result.goal_progress == "none"
 
 
 class TestPlanGeneration:

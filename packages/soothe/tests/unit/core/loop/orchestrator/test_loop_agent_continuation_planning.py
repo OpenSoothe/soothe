@@ -217,6 +217,7 @@ async def test_continuation_complex_goal_produces_multi_step_plan() -> None:
     graph_state.update(init_out)
 
     assert graph_state["is_continuation"] is True
+    assert graph_state["is_fresh_goal"] is False
     assert graph_state["intake_label"] == IntakeLabel.COMPLEX
     assert ctx.scratch.plan_result is None
 
@@ -345,9 +346,10 @@ async def test_continuation_trivial_git_commit_still_bootstraps() -> None:
 
     graph_state = {
         "is_continuation": True,
+        "is_fresh_goal": False,
         "intake_label": IntakeLabel.TRIVIAL,
     }
-    assert route_by_intent(graph_state) == "evaluate"
+    assert route_by_intent(graph_state) == "gather_evidence"
 
     assess_out = await node_plan_assess(ctx, graph_state)
     assert assess_out.get("assess_route") == "skip_generate"
@@ -357,8 +359,8 @@ async def test_continuation_trivial_git_commit_still_bootstraps() -> None:
 
 
 @pytest.mark.asyncio
-async def test_continuation_simple_routes_to_assess_and_bootstraps() -> None:
-    """Continuation+simple should use continuation-assess and may bootstrap a single step."""
+async def test_continuation_simple_skips_assess_and_forces_generate() -> None:
+    """Continuation+simple skips assess LLM and escalates to lightweight generate."""
     now = datetime.now(UTC)
     ce = ContextEngine(
         persistence=SqliteContextPersistence(loop_id="loop-simple", db_path=Path(":memory:"))
@@ -396,21 +398,12 @@ async def test_continuation_simple_routes_to_assess_and_bootstraps() -> None:
     )
     loop_state.bind_ce(ce, active_goal.id)
 
-    continuation = MagicMock()
-    continuation.action = "bootstrap"
-    continuation.reasoning = "Prior context already identifies one concrete next action."
-    continuation.goal_progress = "medium"
-
-    assess_continuation = AsyncMock(return_value=continuation)
+    assess_continuation = AsyncMock(
+        side_effect=AssertionError("simple continuation must skip assess_continuation LLM")
+    )
     strange_loop = MagicMock()
     strange_loop._build_plan_context.return_value = PlanContext()
     strange_loop.loop_planner.assess_continuation = assess_continuation
-    strange_loop.plan_phase.generate_from_assessment = AsyncMock(
-        side_effect=AssertionError("bootstrap path should not call plan_generate")
-    )
-    strange_loop.plan_phase.generate_lightweight = AsyncMock(
-        side_effect=AssertionError("bootstrap path should not call lightweight generate")
-    )
     strange_loop.config = MagicMock()
 
     ctx = LoopRuntimeContext(
@@ -432,12 +425,13 @@ async def test_continuation_simple_routes_to_assess_and_bootstraps() -> None:
 
     graph_state = {
         "is_continuation": True,
+        "is_fresh_goal": False,
         "intake_label": IntakeLabel.SIMPLE,
     }
-    assert route_by_intent(graph_state) == "evaluate"
+    assert route_by_intent(graph_state) == "gather_evidence"
 
     assess_out = await node_plan_assess(ctx, graph_state)
-    assert assess_out.get("assess_route") == "skip_generate"
-    assert ctx.scratch.plan_result is not None
-    assert len(ctx.scratch.plan_result.decision.steps) == 1
-    assess_continuation.assert_awaited_once()
+    assert assess_out.get("assess_route") == "continue_generate"
+    assert ctx.scratch.plan_assessment is not None
+    assert ctx.scratch.plan_result is None
+    assess_continuation.assert_not_awaited()

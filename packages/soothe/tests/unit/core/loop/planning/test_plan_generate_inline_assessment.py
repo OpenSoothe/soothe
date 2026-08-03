@@ -8,6 +8,7 @@ import pytest
 from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.sloop.cognition.planner import LLMPlanner
+from soothe.sloop.orchestrator.continuation_routing import FRESH_LOOP_BYPASS_REASON
 from soothe.sloop.state.schemas import (
     LoopState,
     PlanGenerateStep,
@@ -22,7 +23,7 @@ async def test_generate_from_assessment_passes_inline_assessment_when_assess_ski
     assessment = StatusAssessment(
         status="replan",
         goal_progress="none",
-        assessment_reasoning="Fresh-loop bypass: no prior execution to assess.",
+        assessment_reasoning=FRESH_LOOP_BYPASS_REASON,
     )
     state = LoopState(goal="count files", thread_id="t1", iteration=0)
     plan = PlanGeneration(

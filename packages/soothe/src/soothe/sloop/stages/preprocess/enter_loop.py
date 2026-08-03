@@ -1,18 +1,13 @@
-"""Loop Graph ``init_or_resume`` node (RFC-220, RFC-630, IG-554, IG-599).
+"""Loop Graph ``init_or_resume`` node (RFC-220, RFC-630, IG-554, IG-599, IG-676).
 
 Hydrates intent/routing from intake classified in the graph entry node.
-Loop continuation is derived in ``StrangeLoop`` from the checkpoint. This
-node emits the classified intake for event streaming, surfaces the 3-class
-``intake_label`` and a structural ``is_continuation`` flag onto the graph
-state for ``route_by_intent``. Trivial and simple fresh-loop labels inject
-a pseudo single-step plan and route through resolve_decision → execute →
-goal_completion. Wired specialist requests set
-``intent_route=wired_subagent``; the plan is built in
-``invoke_wired_subagent``.
+Surfaces ``intake_label``, ``is_fresh_goal``, and ``is_continuation`` for routing.
+Fresh trivial/simple inject a pseudo single-step plan; mid-loop goals share the
+default ``gather_evidence`` spine. Wired specialists set
+``intent_route=wired_subagent`` (plan built in ``invoke_wired_subagent``).
 
-IG-554: Derives ``new_goal_created`` from ``recovery_valid_resume`` for the
-routing guard that blocks chitchat fast-path when daemon has committed to
-starting agentic work.
+IG-554: ``new_goal_created`` blocks chitchat fast-path when daemon already
+committed to agentic work.
 """
 
 from __future__ import annotations
@@ -22,42 +17,41 @@ from typing import Any
 
 from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.orchestrator.continuation_routing import (
+    is_fresh_goal,
+    is_structural_continuation,
+)
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.utils.continue_keyword import is_continue_keyword
 
 logger = logging.getLogger(__name__)
 
 
-def _has_prior_goal_context(ctx: LoopRuntimeContext) -> bool:
-    """True when prior orchestration work exists for continuation routing."""
-    ce = getattr(ctx, "ce", None)
-    current_id = getattr(ctx, "ce_goal_id", None)
-    if ce is not None:
-        for goal in ce.get_all_goals():
-            if current_id and goal.id == current_id:
-                continue
-            completed_steps = [s for s in goal.steps.nodes.values() if s.status == "completed"]
-            if completed_steps or goal.action_history:
-                return True
-            if goal.status in ("completed", "cancelled", "failed"):
-                return True
-    checkpoint = getattr(ctx, "checkpoint", None)
-    return bool(checkpoint and len(checkpoint.goal_history) >= 2)
-
-
-def _is_continuation(ctx: LoopRuntimeContext) -> bool:
-    """Structural continuation overlay (RFC-225/RFC-226/RFC-630).
-
-    True when ``continue_loop_mode`` is set and prior goal context exists.
-    Continuation is derived from checkpoint state, not classified by the intake LLM.
-    """
-    if not getattr(ctx, "continue_loop_mode", False):
-        return False
-    return _has_prior_goal_context(ctx)
+def _graph_flags(
+    *,
+    intake_label: IntakeLabel | None,
+    is_continuation: bool,
+    is_fresh: bool,
+    new_goal_created: bool,
+    graph_intake_fields: dict[str, Any],
+    intent_route: str,
+) -> dict[str, Any]:
+    return {
+        "intent_route": intent_route,
+        "intake_label": intake_label,
+        "is_continuation": is_continuation,
+        "is_fresh_goal": is_fresh,
+        "new_goal_created": new_goal_created,
+        "plan_route": None,
+        "assess_route": None,
+        "last_outcome": None,
+        "resume_synth": None,
+        **graph_intake_fields,
+    }
 
 
 async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Emit pre-classified intake, surface ``intake_label``, handle trivial/simple branch."""
+    """Emit pre-classified intake, surface ``intake_label``, handle fresh trivial/simple."""
     intent = ctx.loop_state.intent
 
     if intent is not None:
@@ -70,11 +64,10 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         )
 
     intake_label: IntakeLabel | None = getattr(intent, "intake_label", None)
-    is_continuation = _is_continuation(ctx)
+    is_continuation = is_structural_continuation(ctx)
+    is_fresh = is_fresh_goal(ctx)
 
     # IG-554: new_goal_created signals daemon committed to agentic work.
-    # True when NOT resuming an existing running goal. Used by routing guard
-    # to block chitchat fast-path when structural admission contradicts social.
     new_goal_created = not getattr(ctx, "recovery_valid_resume", False)
 
     is_task = intake_label != IntakeLabel.CHITCHAT if intake_label is not None else None
@@ -93,9 +86,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         "has_deliverable": has_deliverable,
     }
 
-    # RFC-630 chitchat fast-path: runner emits piggybacked response directly.
-    # Chitchat always bypasses StrangeLoop — even on loop continuation turns
-    # (e.g. a second "who are you" in the same session).
     if (
         intake_label == IntakeLabel.CHITCHAT
         and not is_continue_keyword(ctx.loop_state.goal)
@@ -113,20 +103,15 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
                 "thread_id": ctx.loop_state.thread_id,
             },
         )
-        return {
-            "intent_route": "fast_path",
-            "intake_label": intake_label,
-            "is_continuation": is_continuation,
-            "new_goal_created": new_goal_created,
-            "plan_route": None,
-            "assess_route": None,
-            "last_outcome": None,
-            "resume_synth": None,
-            **graph_intake_fields,
-        }
+        return _graph_flags(
+            intake_label=intake_label,
+            is_continuation=is_continuation,
+            is_fresh=is_fresh,
+            new_goal_created=new_goal_created,
+            graph_intake_fields=graph_intake_fields,
+            intent_route="fast_path",
+        )
 
-    # IG-599: wired specialist — route only; plan is built in invoke_wired_subagent.
-    # Wins over continuation / trivial / simple / complex once chitchat is out.
     if intake_label != IntakeLabel.CHITCHAT:
         wire = resolve_user_requested_wire_subagent(
             routing_classification=getattr(ctx.loop_state, "routing_classification", None),
@@ -137,28 +122,19 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
                 "[Intent] Wired subagent branch selected (subagent=%s)",
                 wire,
             )
-            return {
-                "intent_route": "wired_subagent",
-                "intake_label": intake_label,
-                "is_continuation": is_continuation,
-                "new_goal_created": new_goal_created,
-                "plan_route": None,
-                "assess_route": None,
-                "last_outcome": None,
-                "resume_synth": None,
-                **graph_intake_fields,
-            }
+            return _graph_flags(
+                intake_label=intake_label,
+                is_continuation=is_continuation,
+                is_fresh=is_fresh,
+                new_goal_created=new_goal_created,
+                graph_intake_fields=graph_intake_fields,
+                intent_route="wired_subagent",
+            )
 
-    # RFC-630 trivial branch: pseudo 1-step plan (user goal), skip
-    # plan_assess/plan_generate, execute on a step thread branch, then
-    # goal_completion via terminal_after_execute (auto strategy selects ledger vs synthesize).
-    # Allowlisted wire_subagent never reaches here (wired branch above owns that path).
-    # ``simple`` fresh-loop goals use the same trivial pseudo-plan path; both route
-    # to ``commit_plan`` in ``route_after_preprocess``.
+    # Fresh trivial/simple only: mid-loop never injects (IG-676).
     if (
-        intake_label in (IntakeLabel.TRIVIAL, IntakeLabel.SIMPLE)
-        and not is_continuation
-        and not getattr(ctx, "continue_loop_mode", False)
+        is_fresh
+        and intake_label in (IntakeLabel.TRIVIAL, IntakeLabel.SIMPLE)
         and not is_continue_keyword(ctx.loop_state.goal)
     ):
         from soothe.sloop.cognition.trivial_plan import build_trivial_plan
@@ -172,30 +148,24 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             requires_tool_use=bool(getattr(intent, "requires_tool_use", False)),
         )
         logger.info(
-            "[Intent] Trivial branch: pseudo plan injected (label=%s, goal=%s)",
+            "[Intent] Fresh trivial/simple: pseudo plan injected (label=%s, goal=%s)",
             intake_label,
             goal_text[:50],
         )
-        return {
-            "intent_route": "continue_loop",
-            "intake_label": intake_label,
-            "is_continuation": is_continuation,
-            "new_goal_created": new_goal_created,
-            "plan_route": None,
-            "assess_route": None,
-            "last_outcome": None,
-            "resume_synth": None,
-            **graph_intake_fields,
-        }
+        return _graph_flags(
+            intake_label=intake_label,
+            is_continuation=is_continuation,
+            is_fresh=is_fresh,
+            new_goal_created=new_goal_created,
+            graph_intake_fields=graph_intake_fields,
+            intent_route="continue_loop",
+        )
 
-    return {
-        "intent_route": "continue_loop",
-        "intake_label": intake_label,
-        "is_continuation": is_continuation,
-        "new_goal_created": new_goal_created,
-        "plan_route": None,
-        "assess_route": None,
-        "last_outcome": None,
-        "resume_synth": None,
-        **graph_intake_fields,
-    }
+    return _graph_flags(
+        intake_label=intake_label,
+        is_continuation=is_continuation,
+        is_fresh=is_fresh,
+        new_goal_created=new_goal_created,
+        graph_intake_fields=graph_intake_fields,
+        intent_route="continue_loop",
+    )

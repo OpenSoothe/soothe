@@ -22,53 +22,13 @@ from soothe.sloop.cognition.structural_keep import (
     reset_structural_keep_streak,
     structural_keep_block_reason,
 )
+from soothe.sloop.orchestrator.continuation_routing import (
+    fresh_loop_bypass_assessment,
+    is_fresh_loop_skip_evaluate,
+)
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.state.schemas import StatusAssessment
 
 logger = logging.getLogger(__name__)
-
-
-def _is_fresh_loop(ctx: LoopRuntimeContext) -> bool:
-    """Detect fresh-loop conditions where evaluate can be skipped (IG-476).
-
-    RFC-624 Phase 4 Stage 2: Uses CE query instead of checkpoint.goal_history.
-
-    A loop is "fresh" when ALL of:
-    - state.iteration == 0
-    - not state.step_results (no prior execution)
-    - not ctx.continue_loop_mode (not a continuation)
-    - CE has no completed goals (no prior goal context)
-    - No recovery state requiring assessment
-    """
-    state = ctx.loop_state
-    if state.iteration != 0:
-        return False
-    if state.step_results:
-        return False
-    if ctx.continue_loop_mode:
-        return False
-    # RFC-624 Phase 4: CE is guaranteed active when graph nodes execute.
-    # Check CE DAG for completed goals instead of checkpoint.goal_history.
-    if ctx.ce is None:
-        # No CE should not happen in production; tests must provide CE backend.
-        return False
-    has_completed_goals = any(g.status == "completed" for g in ctx.ce.get_all_goals())
-    if has_completed_goals:
-        return False
-    # Recovery paths may need assessment
-    if ctx.recovery_valid_resume:
-        return False
-    return True
-
-
-def _create_fresh_loop_assessment() -> StatusAssessment:
-    """Create synthetic StatusAssessment for fresh-loop bypass (IG-476)."""
-    return StatusAssessment(
-        status="continue",
-        goal_progress="none",
-        assessment_reasoning="Fresh-loop bypass: no prior execution to assess.",
-        require_goal_completion=False,
-    )
 
 
 def _structural_keep_config(ctx: LoopRuntimeContext) -> tuple[bool, int]:
@@ -108,8 +68,7 @@ async def node_bounded_evidence_gather(
 ) -> dict[str, Any]:
     """Detect fresh-loop / structural-keep shortcuts before evaluate (IG-476, IG-671).
 
-    For fresh loops (no prior execution, iter=0, not continuation), sets a synthetic
-    StatusAssessment and routes directly to plan_generate, saving evaluate latency.
+    Fresh complex skips evaluate. Mid-loop always continues to evaluate (IG-676).
     """
     keep_route = _try_structural_keep(ctx)
     if keep_route is not None:
@@ -130,8 +89,8 @@ async def node_bounded_evidence_gather(
 
     reset_structural_keep_streak(ctx.loop_state)
 
-    if _is_fresh_loop(ctx):
+    if is_fresh_loop_skip_evaluate(ctx):
         logger.info("[EvidenceGather] Fresh-loop detected, skipping evaluate")
-        ctx.scratch.plan_assessment = _create_fresh_loop_assessment()
+        ctx.scratch.plan_assessment = fresh_loop_bypass_assessment()
         return {"evidence_gather_route": "plan_generate_skip_evaluate"}
     return {"evidence_gather_route": "evaluate"}

@@ -31,12 +31,14 @@ class LoopGraphState(TypedDict, total=False):
     assess_route: AssessRoute | None
     evidence_gather_route: EvidenceGatherRoute | None
     # RFC-630: 4-class intake label set by enter_loop, read by
-    # route_after_preprocess to dispatch to chitchat/trivial/simple/complex branches.
+    # route_after_preprocess for fresh trivial/simple inject vs gather_evidence.
     intake_label: IntakeLabel | None
-    # RFC-630: structural continuation overlay set by enter_loop from
-    # checkpoint state (continue_loop_mode + prior completed goals). When True,
-    # route_after_preprocess dispatches via evaluate / gather_evidence overlays.
+    # RFC-630: structural continuation overlay (continue_loop_mode + prior goals).
+    # Kept for ledger/prompts; preprocess routing uses ``is_fresh_goal`` (IG-676).
     is_continuation: bool | None
+    # IG-676: True for first goal with no prior loop work. Fresh trivial/simple
+    # inject → commit_plan; all mid-loop and fresh complex → gather_evidence.
+    is_fresh_goal: bool | None
     # IG-554: True when daemon created a new goal record (fresh loop or new goal
     # on idle loop). Used by route_after_preprocess routing guard to block chitchat
     # fast-path when structural admission contradicts social classification.

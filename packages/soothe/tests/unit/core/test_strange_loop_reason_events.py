@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from soothe.sloop.orchestrator.continuation_routing import FRESH_LOOP_BYPASS_REASON
 from soothe.sloop.utils.loop_reason_display import (
     is_displayable_assessment_reasoning,
     should_emit_loop_reason_event,
@@ -20,9 +21,7 @@ def test_should_emit_loop_reason_event_for_assessment_reasoning() -> None:
 
 
 def test_is_displayable_assessment_reasoning_rejects_fresh_loop_placeholder() -> None:
-    assert not is_displayable_assessment_reasoning(
-        "Fresh-loop bypass: no prior execution to assess."
-    )
+    assert not is_displayable_assessment_reasoning(FRESH_LOOP_BYPASS_REASON)
     assert not is_displayable_assessment_reasoning(
         "Continue keyword: resume prior loop work from ledger context."
     )

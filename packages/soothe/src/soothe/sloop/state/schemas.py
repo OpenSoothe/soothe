@@ -8,9 +8,9 @@ import re
 import secrets
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, PrivateAttr, model_validator
 from soothe_sdk.protocols.planner import planner_outcome_text_preview
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
@@ -28,6 +28,20 @@ logger = logging.getLogger(__name__)
 
 ExecutionMode = Literal["parallel", "dependency"]
 """Planner/executor execution mode for step waves."""
+
+_GOAL_PROGRESS_VALUES = frozenset({"none", "low", "medium", "high", "complete"})
+GoalProgressLiteral = Literal["none", "low", "medium", "high", "complete"]
+
+
+def _coerce_goal_progress(value: Any) -> str:
+    """Map non-enum LLM prose to ``none`` so structured bind does not fail."""
+    if isinstance(value, str) and value in _GOAL_PROGRESS_VALUES:
+        return value
+    return "none"
+
+
+GoalProgress = Annotated[GoalProgressLiteral, BeforeValidator(_coerce_goal_progress)]
+"""Descriptive progress level; invalid wire values coerce to ``none``."""
 
 
 class EvidenceEntry(BaseModel):
@@ -650,7 +664,7 @@ class PlanResult(BaseModel):
 
     status: Literal["continue", "replan", "done"]
     evidence_summary: str = ""
-    goal_progress: Literal["none", "low", "medium", "high", "complete"] = "none"
+    goal_progress: GoalProgress = "none"
     """Descriptive progress level inherited from assessment (IG-399)."""
 
     assessment_reasoning: str = Field(default="", max_length=500)
@@ -715,7 +729,7 @@ class StatusAssessment(BaseModel):
     """
 
     status: Literal["continue", "replan", "done"]
-    goal_progress: Literal["none", "low", "medium", "high", "complete"] = "none"
+    goal_progress: GoalProgress = "none"
     """Descriptive progress level - easier for LLMs to estimate accurately (IG-399)."""
     assessment_reasoning: str = ""
     """Brief status justification."""
@@ -778,7 +792,13 @@ class ContinuationAssessment(BaseModel):
             '(e.g. "I will bootstrap from prior context.").'
         ),
     )
-    goal_progress: Literal["none", "low", "medium", "high", "complete"] = "low"
+    goal_progress: GoalProgress = Field(
+        default="low",
+        description=(
+            "Initial progress estimate for the new goal. Must be exactly one of: "
+            "none, low, medium, high, complete — never free-form prose."
+        ),
+    )
 
 
 class ToolCallHead(BaseModel):

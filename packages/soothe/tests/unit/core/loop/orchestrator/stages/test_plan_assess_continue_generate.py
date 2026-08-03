@@ -309,3 +309,25 @@ async def test_continuation_complex_intake_skips_bootstrap() -> None:
     ctx.strange_loop.loop_planner.assess_continuation.assert_not_called()
     assert ctx.scratch.plan_assessment is not None
     assert ctx.scratch.plan_result is None
+
+
+@pytest.mark.asyncio
+async def test_continuation_simple_intake_skips_assess_llm() -> None:
+    """Simple intake on continuation skips assess LLM and forces plan_generate."""
+    from soothe_sdk.intention.models import TaskComplexity
+
+    from soothe.sloop.intention import IntentClassification
+    from soothe.sloop.intention.models import IntakeLabel
+
+    ctx = _make_ctx(goal="apply the previous recommendation to auth.py")
+    ctx.loop_state.intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+
+    result = await node_plan_assess(ctx, {})
+
+    assert result.get("assess_route") == "continue_generate"
+    ctx.strange_loop.loop_planner.assess_continuation.assert_not_called()
+    assert ctx.scratch.plan_assessment is not None
+    assert ctx.scratch.plan_result is None

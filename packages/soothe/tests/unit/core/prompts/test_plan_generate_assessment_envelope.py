@@ -5,6 +5,7 @@ from __future__ import annotations
 from langchain_core.messages import SystemMessage
 from soothe_sdk.protocols.planner import PlanContext
 
+from soothe.sloop.orchestrator.continuation_routing import FRESH_LOOP_BYPASS_REASON
 from soothe.sloop.prompts import PromptBuilder
 from soothe.sloop.prompts.user_message import UserMessageBuilder
 from soothe.sloop.state.schemas import LoopState, StatusAssessment
@@ -73,7 +74,7 @@ def test_build_plan_messages_includes_assessment_when_assess_skipped() -> None:
         inline_assessment=StatusAssessment(
             status="continue",
             goal_progress="none",
-            assessment_reasoning="Fresh-loop bypass: no prior execution to assess.",
+            assessment_reasoning=FRESH_LOOP_BYPASS_REASON,
         ),
     )
     human = msgs[-1].content

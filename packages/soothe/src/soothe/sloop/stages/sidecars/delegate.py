@@ -423,11 +423,11 @@ async def _handle_planner_subagent_review_answer(
         _record_wired_execute_ledger(
             ctx, goal_text=goal_text, report=note, wire=wire, step_id=step_id
         )
-        from soothe.sloop.stages.plan.gather_evidence import _create_fresh_loop_assessment
+        from soothe.sloop.orchestrator.continuation_routing import fresh_loop_bypass_assessment
 
         # StrangeLoop will own the decision; drop the intake trivial plan.
         ctx.scratch.plan_result = None
-        ctx.scratch.plan_assessment = _create_fresh_loop_assessment()
+        ctx.scratch.plan_assessment = fresh_loop_bypass_assessment()
         ctx.scratch.planner_subagent_review_comments = None
         ctx.scratch.planner_implement_handoff = True
         ctx.preferred_subagent = None

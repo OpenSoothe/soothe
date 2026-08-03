@@ -1,8 +1,7 @@
 """Assess-only planning node (RFC-220 split plan flow).
 
-RFC-226: iter=0 continuation goals coordinate intake complexity with optional
-``assess_continuation`` for trivial follow-ups. Simple/complex intake skips the
-discriminator and routes to ``plan_generate`` (or the evidence-gather spine).
+RFC-226 / IG-676: iter=0 mid-loop goals — trivial may run ``assess_continuation``;
+simple/complex skip the discriminator and route to ``plan_generate``.
 
 IG-555: Reject terminal done at complex iter=0 before any step results (anti-anchoring).
 IG-654: Complex goals may use a single CoreAgent execute step.
@@ -33,7 +32,9 @@ from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.continuation_routing import (
     bootstrap_terminal_after_execute,
     continuation_forced_plan_generate_assessment,
+    has_prior_goal_context,
 )
+from soothe.sloop.orchestrator.mid_loop_intake import mid_loop_skip_continuation_assess
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.state import PLAN_ROUTE_GOAL_DONE
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
@@ -92,24 +93,6 @@ _CONTINUE_THREAD_DESCRIPTIONS = [
     "I'll handle this follow-up based on our earlier work.",
     "I'll proceed with your request from our previous context.",
 ]
-
-
-def _has_prior_goal_for_continuation(ctx: LoopRuntimeContext) -> bool:
-    """Check CE DAG for prior goal work usable by continuation routing."""
-    if ctx.ce is None:
-        return False
-    current_id = ctx.ce_goal_id
-    for goal in ctx.ce.get_all_goals():
-        if current_id and goal.id == current_id:
-            continue
-        completed_steps = [s for s in goal.steps.nodes.values() if s.status == "completed"]
-        if completed_steps or goal.action_history:
-            return True
-        if goal.status in ("completed", "cancelled", "failed"):
-            return True
-    if ctx.checkpoint and len(ctx.checkpoint.goal_history) >= 2:
-        return True
-    return False
 
 
 def build_continue_loop_bootstrap_plan(
@@ -224,7 +207,7 @@ async def _handle_continuation_first_plan(
         state.iteration == 0
         and ctx.continue_loop_mode
         and not state.step_results
-        and _has_prior_goal_for_continuation(ctx)
+        and has_prior_goal_context(ctx)
         and (
             not ctx.recovery_valid_resume
             or (
@@ -246,10 +229,9 @@ async def _handle_continuation_first_plan(
 
     intake_label = intake_label_from_state(state)
 
-    # Continuation + complex should always escalate to full planning.
-    # Continuation + simple still runs the discriminator so it can bootstrap
-    # when prior execution context already makes the follow-up single-pass.
-    if intake_label == IntakeLabel.COMPLEX:
+    # Mid-loop simple/complex never bootstrap: skip assess LLM and escalate to
+    # plan_generate (lightweight for simple). Trivial alone runs the discriminator.
+    if mid_loop_skip_continuation_assess(intake_label):
         logger.info("[Plan] continuation-assess skipped (intake=%s)", intake_label.value)
         ctx.scratch.plan_assessment = continuation_forced_plan_generate_assessment()
         return {"assess_route": "continue_generate"}

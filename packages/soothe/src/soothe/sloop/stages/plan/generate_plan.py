@@ -11,7 +11,8 @@ import logging
 from typing import Any
 
 from soothe.sloop.goal_text import resolve_planning_goal
-from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.orchestrator.continuation_routing import FRESH_LOOP_BYPASS_PREFIX
+from soothe.sloop.orchestrator.mid_loop_intake import mid_loop_use_lightweight_generate
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
@@ -55,7 +56,9 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         logger.info("[PlanGenerate] Implementing operator-approved plan artifact")
 
     # IG-476: Log when using fresh-loop bypass assessment
-    if assessment.assessment_reasoning and "Fresh-loop bypass" in assessment.assessment_reasoning:
+    if assessment.assessment_reasoning and assessment.assessment_reasoning.startswith(
+        FRESH_LOOP_BYPASS_PREFIX
+    ):
         logger.info("[PlanGenerate] Using fresh-loop bypass assessment")
 
     context = strange_loop._build_plan_context(state)
@@ -63,11 +66,9 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
 
     await emit_plan_phase_status(ctx, label=_PLAN_GENERATE_STATUS_LABEL)
 
-    # RFC-630: the ``simple`` intake branch skips plan_assess and reaches
-    # plan_generate directly with a synthetic assessment. Use the cheaper
-    # lightweight plan call (reduced context, same schema).
+    # RFC-630 / IG-676: simple intake uses the cheaper lightweight plan call.
     intake_label = getattr(state.intent, "intake_label", None) if state.intent else None
-    if intake_label == IntakeLabel.SIMPLE:
+    if mid_loop_use_lightweight_generate(intake_label):
         logger.info("[PlanGenerate] Using lightweight generate for simple intake branch")
         plan_result = await strange_loop.plan_phase.generate_lightweight(
             goal=resolve_planning_goal(state),

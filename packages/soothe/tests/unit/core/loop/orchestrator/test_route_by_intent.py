@@ -29,28 +29,44 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_route_by_intent_continuation_trivial() -> None:
-    """Continuation trivial goals use evaluate (continuation discriminator)."""
-    state = {"is_continuation": True, "intake_label": IntakeLabel.TRIVIAL}
-    assert route_by_intent(state) == "evaluate"
+    """Mid-loop trivial enters gather_evidence (default spine; IG-676)."""
+    state = {
+        "is_continuation": True,
+        "is_fresh_goal": False,
+        "intake_label": IntakeLabel.TRIVIAL,
+    }
+    assert route_by_intent(state) == "gather_evidence"
 
 
 def test_route_by_intent_continuation_simple() -> None:
-    state = {"is_continuation": True, "intake_label": IntakeLabel.SIMPLE}
-    assert route_by_intent(state) == "evaluate"
+    state = {
+        "is_continuation": True,
+        "is_fresh_goal": False,
+        "intake_label": IntakeLabel.SIMPLE,
+    }
+    assert route_by_intent(state) == "gather_evidence"
 
 
 def test_route_by_intent_continuation_complex() -> None:
-    state = {"is_continuation": True, "intake_label": IntakeLabel.COMPLEX}
+    state = {
+        "is_continuation": True,
+        "is_fresh_goal": False,
+        "intake_label": IntakeLabel.COMPLEX,
+    }
     assert route_by_intent(state) == "gather_evidence"
 
 
 def test_route_by_intent_continuation_missing_label() -> None:
-    state = {"is_continuation": True, "intake_label": None}
+    state = {"is_continuation": True, "is_fresh_goal": False, "intake_label": None}
     assert route_by_intent(state) == "gather_evidence"
 
 
 def test_route_by_intent_trivial() -> None:
-    state = {"is_continuation": False, "intake_label": IntakeLabel.TRIVIAL}
+    state = {
+        "is_continuation": False,
+        "is_fresh_goal": True,
+        "intake_label": IntakeLabel.TRIVIAL,
+    }
     assert route_by_intent(state) == "commit_plan"
 
 
@@ -74,18 +90,26 @@ def test_route_by_intent_chitchat_fast_path_wins_over_continuation() -> None:
 
 
 def test_route_by_intent_simple() -> None:
-    state = {"is_continuation": False, "intake_label": IntakeLabel.SIMPLE}
+    state = {
+        "is_continuation": False,
+        "is_fresh_goal": True,
+        "intake_label": IntakeLabel.SIMPLE,
+    }
     assert route_by_intent(state) == "commit_plan"
 
 
 def test_route_by_intent_complex() -> None:
-    state = {"is_continuation": False, "intake_label": IntakeLabel.COMPLEX}
+    state = {
+        "is_continuation": False,
+        "is_fresh_goal": True,
+        "intake_label": IntakeLabel.COMPLEX,
+    }
     assert route_by_intent(state) == "gather_evidence"
 
 
 def test_route_by_intent_missing_label_falls_back_to_complex() -> None:
-    """Fail-safe: a missing label routes to the full pipeline (complex)."""
-    state = {"is_continuation": False, "intake_label": None}
+    """Fail-safe: a missing label on fresh routes to gather_evidence."""
+    state = {"is_continuation": False, "is_fresh_goal": True, "intake_label": None}
     assert route_by_intent(state) == "gather_evidence"
 
 
@@ -165,13 +189,14 @@ async def test_init_or_resume_trivial_injects_pseudo_plan() -> None:
         ce=None,
         ce_goal_id=None,
         continue_loop_mode=False,
-        recovery_valid_resume=True,
+        recovery_valid_resume=False,
         emit=_emit,
     )
 
     result = await node_init_or_resume(ctx, {})
 
     assert result["intake_label"] == IntakeLabel.TRIVIAL
+    assert result["is_fresh_goal"] is True
     assert result["intent_route"] == "continue_loop"
     assert not any(t == "intent_fast_path" for t, _ in emitted)
     assert scratch.plan_result is not None
@@ -218,7 +243,7 @@ async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
 
 @pytest.mark.asyncio
 async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuation() -> None:
-    """Simple intake on continuation turns defers to continuation plan_assess."""
+    """Simple mid-loop does not inject trivial plan; gather_evidence spine owns planning."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
@@ -247,6 +272,7 @@ async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuat
     result = await node_init_or_resume(ctx, {})
 
     assert result["is_continuation"] is True
+    assert result["is_fresh_goal"] is False
     assert scratch.plan_assessment is None
     assert scratch.plan_result is None
 
@@ -273,6 +299,7 @@ async def test_init_or_resume_simple_injects_trivial_plan() -> None:
     result = await node_init_or_resume(ctx, {})
 
     assert result["intake_label"] == IntakeLabel.SIMPLE
+    assert result["is_fresh_goal"] is True
     assert scratch.plan_result is not None
     assert scratch.plan_result.terminal_after_execute is True
     assert scratch.plan_result.decision is not None

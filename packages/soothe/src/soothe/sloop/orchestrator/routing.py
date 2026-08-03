@@ -1,4 +1,4 @@
-"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630, IG-663, IG-672)."""
+"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630, IG-663, IG-672, IG-676)."""
 
 from __future__ import annotations
 
@@ -58,17 +58,24 @@ def _pending_clarification(state: dict[str, Any]) -> bool:
 
 
 def route_after_preprocess(state: dict[str, Any]) -> str:
-    """RFC-630 / IG-663: branch dispatch after enter_loop by intake.
+    """RFC-630 / IG-676: branch dispatch after enter_loop.
 
     Priority (first match wins):
 
     1. ``intent_route == fast_path`` → END (chitchat)
     2. ``intent_route == wired_subagent`` → ``delegate``
-    3. Continuation overlay from structural ``is_continuation``
-    4. Fresh-loop labels (trivial+simple → trivial plan; complex → full spine)
+    3. **Fresh** + trivial|simple → ``commit_plan`` (injected pseudo-plan)
+    4. **Everything else** (fresh complex + all mid-loop) → ``gather_evidence``
+
+    Mid-loop intake tiers (trivial bootstrap / simple lightweight / complex full)
+    live inside gather → evaluate → generate, not as a preprocess overlay.
     """
     new_goal_created = state.get("new_goal_created", False)
     label = state.get("intake_label")
+    is_fresh_goal = state.get("is_fresh_goal")
+    if is_fresh_goal is None:
+        # Backward-compatible fallback for tests that omit the new channel.
+        is_fresh_goal = not state.get("is_continuation", False)
 
     if new_goal_created and label == IntakeLabel.CHITCHAT:
         logger.warning(
@@ -76,6 +83,7 @@ def route_after_preprocess(state: dict[str, Any]) -> str:
             "forcing complex route (structural override)"
         )
         label = IntakeLabel.COMPLEX
+        is_fresh_goal = False
 
     if state.get("intent_route") == "fast_path":
         if new_goal_created:
@@ -91,24 +99,21 @@ def route_after_preprocess(state: dict[str, Any]) -> str:
         logger.info("[routing] route_after_preprocess → delegate")
         return DELEGATE
 
-    if state.get("is_continuation"):
-        if label == IntakeLabel.SIMPLE:
-            logger.info("[routing] route_after_preprocess → evaluate (continuation+simple)")
-            return EVALUATE
-        if label == IntakeLabel.COMPLEX or label is None:
-            logger.info("[routing] route_after_preprocess → gather_evidence (continuation+complex)")
-            return GATHER_EVIDENCE
-        logger.info("[routing] route_after_preprocess → evaluate (continuation+trivial)")
-        return EVALUATE
-
-    if label == IntakeLabel.TRIVIAL or label == IntakeLabel.SIMPLE:
+    if is_fresh_goal and label in (IntakeLabel.TRIVIAL, IntakeLabel.SIMPLE):
         logger.info(
-            "[routing] route_after_preprocess → commit_plan (trivial pseudo-plan; label=%s)",
+            "[routing] route_after_preprocess → commit_plan (fresh trivial/simple; label=%s)",
             label,
         )
-        return COMMIT_PLAN  # build_trivial_plan → 1-step terminal
-    logger.info("[routing] route_after_preprocess → gather_evidence (complex/default)")
-    return GATHER_EVIDENCE  # full spine (default fallback)
+        return COMMIT_PLAN
+
+    if is_fresh_goal:
+        logger.info("[routing] route_after_preprocess → gather_evidence (fresh complex/default)")
+    else:
+        logger.info(
+            "[routing] route_after_preprocess → gather_evidence (mid-loop; label=%s)",
+            getattr(label, "value", label),
+        )
+    return GATHER_EVIDENCE
 
 
 # Historical name used by tests and docs.
