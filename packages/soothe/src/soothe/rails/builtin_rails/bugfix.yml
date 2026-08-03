@@ -1,0 +1,50 @@
+id: bugfix
+version: "1.0"
+
+summary: |
+  Reproduce and diagnose a defect, then fix and verify with a separate QA
+  goal. Differs from no-rail by gating implement on repro/root-cause evidence
+  and requiring QA against the original failure.
+
+applies_when: |
+  The user reports a bug, regression, failing test, or unexpected behavior
+  in existing code — not a greenfield feature or open-ended spike.
+
+conditions:
+  ready_to_fix: |
+    Reproduction or root-cause evidence is sufficient to attempt a fix
+    without guessing (failing test, stack trace, or confirmed repro steps).
+  needs_review: |
+    A fix was implemented and should be reviewed before merge.
+  needs_qa: |
+    Review passed or was skipped, and automated verification should re-check
+    the original failure path plus related tests.
+  branch_is_stuck: |
+    Fix attempts failed review or QA twice, or evidence shows the
+    hypothesized root cause is wrong.
+  job_complete: |
+    QA verified the original failure is resolved and no pending children remain.
+
+flow:
+  - event: job_start
+    then: decompose_parallel
+
+  - event: goal_completed
+    when: ready_to_fix
+    then: plan_and_implement
+
+  - event: goal_completed
+    when: needs_review
+    then: review
+
+  - event: goal_completed
+    when: needs_qa
+    then: qa_verify
+
+  - event: goal_failed
+    when: branch_is_stuck
+    then: retry_branch
+
+  - event: dag_idle
+    when: job_complete
+    then: complete_job

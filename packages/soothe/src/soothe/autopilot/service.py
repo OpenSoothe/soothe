@@ -34,6 +34,8 @@ from soothe.events.internal_events import (
     InternalAutopilotDreamingEvent,
     InternalAutopilotStartedEvent,
     InternalAutopilotStoppedEvent,
+    InternalGoalCompletedEvent,
+    InternalGoalFailedEvent,
     InternalGoalsReadyEvent,
     InternalGoalStateChangedEvent,
     InternalGoalUnblockedEvent,
@@ -154,10 +156,38 @@ class AutopilotService:
         self._context_store: Any = None
         self._context_projector: Any = None
         self._dispatch_tasks: dict[str, asyncio.Task] = {}  # goal_id → consumer task
+        self._persist_fail_count = 0
+        self._rail_interpreter: Any = None
+        self._init_rail_interpreter()
 
         if subscribe_to_bus:
             self._setup_subscriptions()
             self._subscribed = True
+
+    def _init_rail_interpreter(self) -> None:
+        """Construct LoopRail interpreter with job-scoped JSONL traces (IG-RQJ-02)."""
+        try:
+            from pathlib import Path
+
+            from soothe_sdk.paths import SOOTHE_DATA_DIR
+
+            from soothe.autopilot.rail.guards import LLMGuardEvaluator
+            from soothe.autopilot.rail.interpreter import LoopRailInterpreter
+            from soothe.autopilot.rail.trace_store import JsonlRailTraceStore
+
+            guards = None
+            if self._consensus_model is not None:
+                guards = LLMGuardEvaluator(model=self._consensus_model)
+            trace_root = Path(SOOTHE_DATA_DIR) / "loops"
+            trace_root.mkdir(parents=True, exist_ok=True)
+            self._rail_interpreter = LoopRailInterpreter(
+                self._ce,
+                guards=guards,
+                trace=JsonlRailTraceStore(root=trace_root),
+            )
+        except Exception:
+            logger.warning("LoopRail interpreter unavailable", exc_info=True)
+            self._rail_interpreter = None
 
     def _setup_subscriptions(self) -> None:
         """Subscribe to InternalEventBus events."""
@@ -365,6 +395,8 @@ class AutopilotService:
         source_file: str | None = None,
         workspace: str | None = None,
         cron_job_id: str | None = None,  # RFC-229: Cron job tracking for recurring rescheduling
+        rail_id: str | None = None,
+        verification_rules: str | None = None,
     ) -> GoalNode:
         """Create a goal in this service's ContextEngine (RFC-222 revised, RFC-625).
 
@@ -387,6 +419,8 @@ class AutopilotService:
             workspace: Optional client workspace path. When set, workers execute
                 in this directory and scheduling-time reservation uses it.
             cron_job_id: Optional cron job ID for tracking recurring job goals (RFC-229).
+            rail_id: Optional LoopRail id (IG-678). Resolved via selector when None.
+            verification_rules: Optional operator criteria (RFC-228; stored on goal).
 
         Returns:
             The newly-created ``GoalNode``. Callers can read ``.id`` to track it.
@@ -399,6 +433,14 @@ class AutopilotService:
             from soothe.workspace import validate_client_workspace
 
             resolved_workspace = str(validate_client_workspace(workspace))
+
+        from soothe.rails.selector import resolve_rail_id
+
+        resolved_rail = resolve_rail_id(
+            rail_id,
+            workspace=resolved_workspace,
+            default_rail=getattr(self._config, "default_rail", None),
+        )
 
         if self._monitor is not None:
             intake = await self._monitor.intake_goal(
@@ -436,13 +478,90 @@ class AutopilotService:
         if cron_job_id is not None:
             goal.cron_job_id = cron_job_id
             logger.debug("Goal %s linked to cron job %s", goal.id, cron_job_id)
+        if verification_rules and verification_rules.strip():
+            goal.verification_rules = verification_rules.strip()
+        if resolved_rail and goal.parent_id is None:
+            goal.rail_id = resolved_rail
+            goal.role = goal.role or "root"
         # IG-677: root goals are jobs — ensure membership record exists.
         if goal.parent_id is None:
             await self._job_loop_index.ensure_job(goal.id)
+            await self._bind_rail_for_job(goal)
         if self._dreaming:
             await self.wake_from_dreaming(trigger="new_task")
         await self._persist_goals()
         return goal
+
+    async def _bind_rail_for_job(self, goal: GoalNode) -> None:
+        """Bind LoopRail interpreter for a root job and fire ``job_start``."""
+        if self._rail_interpreter is None or not goal.rail_id:
+            return
+        try:
+            from soothe.autopilot.rail.interpreter import RailEvent
+
+            await self._rail_interpreter.bind_job(
+                goal.id,
+                rail_id=goal.rail_id,
+                workspace=goal.workspace,
+            )
+            await self._rail_interpreter.handle(
+                RailEvent(name="job_start", job_id=goal.id, goal_id=goal.id)
+            )
+        except Exception:
+            logger.warning(
+                "Failed to bind/start rail %s for job %s",
+                goal.rail_id,
+                goal.id,
+                exc_info=True,
+            )
+
+    def _job_id_for_goal(self, goal_id: str) -> str | None:
+        """Walk parents to the root job id."""
+        goal = self._ce._dag.get_goal(goal_id)
+        if goal is None:
+            return None
+        seen: set[str] = set()
+        while goal is not None and goal.parent_id and goal.parent_id not in seen:
+            seen.add(goal.id)
+            parent = self._ce._dag.get_goal(goal.parent_id)
+            if parent is None:
+                break
+            goal = parent
+        return goal.id if goal is not None else None
+
+    async def _notify_rail(self, event_name: str, goal_id: str, **payload: Any) -> None:
+        if self._rail_interpreter is None:
+            return
+        job_id = self._job_id_for_goal(goal_id)
+        if job_id is None:
+            return
+        root = self._ce._dag.get_goal(job_id)
+        if root is None or not root.rail_id:
+            return
+        # Rebind after restore if needed
+        if job_id not in getattr(self._rail_interpreter, "_rails", {}):
+            try:
+                await self._rail_interpreter.bind_job(
+                    job_id,
+                    rail_id=root.rail_id,
+                    workspace=root.workspace,
+                )
+            except Exception:
+                logger.debug("Rail rebind failed for %s", job_id, exc_info=True)
+                return
+        try:
+            from soothe.autopilot.rail.interpreter import RailEvent
+
+            await self._rail_interpreter.handle(
+                RailEvent(
+                    name=event_name,
+                    job_id=job_id,
+                    goal_id=goal_id,
+                    payload=dict(payload),
+                )
+            )
+        except Exception:
+            logger.warning("Rail handle %s failed for goal %s", event_name, goal_id, exc_info=True)
 
     async def list_goals(self, *, status: str | None = None) -> list[GoalNode]:
         """Read-through to ContextEngine for HTTP/CLI surfaces."""
@@ -545,6 +664,86 @@ class AutopilotService:
 
         await self._persist_goals()
         return {"cancelled_count": len(cancelled_ids), "goal_ids": cancelled_ids}
+
+    async def pause_job(self, job_id: str, *, reason: str = "user_pause") -> GoalNode | None:
+        """Suspend a job root and all non-terminal descendants; stop workers.
+
+        IG-678 P1-1: unlike a bare ``CE.suspend_goal`` on the root, this
+        cancels in-flight child workers so pause actually stops work.
+
+        Args:
+            job_id: Root goal id (job).
+            reason: Audit reason stored on suspended goals.
+
+        Returns:
+            Updated root GoalNode, or None if missing.
+        """
+        root = await self._ce.get_goal(job_id)
+        if root is None:
+            return None
+
+        for gid in self._ce.collect_subtree_ids(job_id):
+            node = await self._ce.get_goal(gid)
+            if node is None or node.status in TERMINAL_STATES:
+                continue
+            if node.status == "suspended":
+                continue
+            await self._pause_open_goal_node(node, reason=reason)
+
+        if root.parent_id is None:
+            try:
+                await self._job_loop_index.mark_job_status(job_id, "paused")
+            except Exception:
+                logger.debug("Failed to mark job %s paused", job_id, exc_info=True)
+
+        await self._persist_goals()
+        return await self._ce.get_goal(job_id)
+
+    async def resume_job(self, job_id: str) -> GoalNode | None:
+        """Reactivate a paused job and fire rail ``user_intervention`` (IG-678 P2).
+
+        Reactivates the root and any suspended descendants paused with it.
+        """
+        root = await self._ce.get_goal(job_id)
+        if root is None:
+            return None
+        if root.status not in ("suspended", "blocked"):
+            msg = f"Job {job_id} is not paused (status: {root.status})"
+            raise ValueError(msg)
+
+        for gid in self._ce.collect_subtree_ids(job_id):
+            node = await self._ce.get_goal(gid)
+            if node is None or node.status not in ("suspended", "blocked"):
+                continue
+            await self._ce.reactivate_goal(gid)
+
+        if root.parent_id is None:
+            try:
+                await self._job_loop_index.mark_job_status(job_id, "running")
+            except Exception:
+                logger.debug("Failed to mark job %s running", job_id, exc_info=True)
+
+        await self._notify_rail("user_intervention", job_id)
+        await self._persist_goals()
+        return await self._ce.get_goal(job_id)
+
+    async def _pause_open_goal_node(self, goal: GoalNode, *, reason: str) -> None:
+        """Suspend one non-terminal goal and stop its worker if assigned."""
+        loop_id = goal.assigned_loop_id
+        await self._cancel_goal_worker(goal)
+        await self._ce.suspend_goal(goal.id, reason=reason)
+        if loop_id:
+            try:
+                await self._job_loop_index.record_end(loop_id, status="cancelled")
+            except Exception:
+                logger.warning(
+                    "Failed to record paused loop %s for goal %s",
+                    loop_id,
+                    goal.id,
+                    exc_info=True,
+                )
+        if self._workspace_reservation is not None:
+            self._workspace_reservation.release(goal.id)
 
     # ---- Internals ----------------------------------------------------
 
@@ -743,23 +942,63 @@ class AutopilotService:
     async def _build_merged_context(self, goal: GoalNode) -> Any:
         """Build the GoalDispatchContextBundle for ``goal``.
 
-        Hooks the ``ContextProjector`` if one was wired.
-        Returns an empty bundle by default so dispatch always succeeds.
+        Hooks the ``ContextProjector`` if one was wired, then attaches
+        operator guidance accumulated on the goal (and job-scoped root).
         """
         from soothe.autopilot.engine_models import GoalDispatchContextBundle
 
         projector = getattr(self, "_context_projector", None)
         if projector is None:
-            return GoalDispatchContextBundle()
-        try:
-            return await projector.project(goal, self._ce._dag.goals)
-        except Exception:
-            logger.warning(
-                "ContextProjector failed for goal %s; falling back to empty bundle",
-                goal.id,
-                exc_info=True,
+            bundle = GoalDispatchContextBundle()
+        else:
+            try:
+                bundle = await projector.project(goal, self._ce._dag.goals)
+            except Exception:
+                logger.warning(
+                    "ContextProjector failed for goal %s; falling back to empty bundle",
+                    goal.id,
+                    exc_info=True,
+                )
+                bundle = GoalDispatchContextBundle()
+
+        guidance = _collect_operator_guidance(goal, self._ce._dag.goals)
+        if guidance:
+            return bundle.model_copy(update={"operator_guidance": guidance})
+        return bundle
+
+    async def _emit_goal_completed(self, goal_id: str, *, loop_id: str | None = None) -> None:
+        """Notify monitor subscribers that a goal completed."""
+        lid = loop_id or ""
+        if not lid:
+            goal = await self._ce.get_goal(goal_id)
+            lid = (goal.assigned_loop_id if goal else None) or ""
+        await self._internal_bus.emit(
+            InternalGoalCompletedEvent(goal_id=goal_id, loop_id=lid, plan_result={})
+        )
+        await self._notify_rail("goal_completed", goal_id)
+
+    async def _emit_goal_failed(
+        self,
+        goal_id: str,
+        *,
+        evidence: dict[str, Any] | None = None,
+        error_message: str | None = None,
+        loop_id: str | None = None,
+    ) -> None:
+        """Notify monitor subscribers that a goal failed."""
+        lid = loop_id or ""
+        if not lid:
+            goal = await self._ce.get_goal(goal_id)
+            lid = (goal.assigned_loop_id if goal else None) or ""
+        await self._internal_bus.emit(
+            InternalGoalFailedEvent(
+                goal_id=goal_id,
+                loop_id=lid,
+                evidence=evidence or {},
+                error_message=error_message,
             )
-            return GoalDispatchContextBundle()
+        )
+        await self._notify_rail("goal_failed", goal_id, error=error_message)
 
     async def _consume_worker_stream(self, goal_id: str, worker: Any, request: Any) -> None:
         """Drain a worker's stream and react to ``GoalCompletionChunk``.
@@ -841,6 +1080,7 @@ class AutopilotService:
                     await self._apply_consensus_and_finalize(
                         goal_id,
                         evidence_summary=str(data.get("evidence_summary", "")),
+                        loop_id=worker.loop_id,
                     )
                 else:  # failed / needs_replan → fail with evidence
                     evidence = EvidenceBundle(
@@ -854,6 +1094,12 @@ class AutopilotService:
                     )
                     try:
                         await self._ce.fail_goal(goal_id, evidence=evidence)
+                        await self._emit_goal_failed(
+                            goal_id,
+                            evidence=evidence.model_dump(mode="json"),
+                            error_message=evidence.narrative,
+                            loop_id=worker.loop_id,
+                        )
                     except Exception:
                         logger.exception("fail_goal raised for goal %s", goal_id)
 
@@ -877,6 +1123,12 @@ class AutopilotService:
                         narrative="Worker exited without emitting GoalCompletionChunk",
                         source="layer2_execute",
                     ),
+                )
+                await self._emit_goal_failed(
+                    goal_id,
+                    evidence={"outcome": "no_completion_chunk"},
+                    error_message="Worker exited without emitting GoalCompletionChunk",
+                    loop_id=worker.loop_id,
                 )
             except Exception:
                 logger.debug("fail_goal raised on missing completion", exc_info=True)
@@ -915,6 +1167,7 @@ class AutopilotService:
         goal_id: str,
         *,
         evidence_summary: str,
+        loop_id: str | None = None,
     ) -> None:
         """RFC-204: validate worker completion before accepting the goal."""
         from soothe.autopilot.consensus import evaluate_goal_completion
@@ -938,8 +1191,10 @@ class AutopilotService:
         try:
             if decision == "accept":
                 await self._ce.complete_goal(goal_id)
+                await self._emit_goal_completed(goal_id, loop_id=loop_id)
             elif decision == "send_back":
                 await self._ce.send_back_goal(goal_id, reason=reasoning)
+                await self._notify_rail("goal_send_back", goal_id, reason=reasoning)
             else:
                 await self._ce.suspend_goal(goal_id, reason=reasoning)
         except Exception:
@@ -1099,8 +1354,15 @@ class AutopilotService:
                 self._GOALS_SNAPSHOT_KEY,
                 self._ce.get_dag_snapshot().model_dump(mode="json"),
             )
+            self._persist_fail_count = 0
         except Exception:
-            logger.warning("Failed to persist autopilot goals snapshot", exc_info=True)
+            self._persist_fail_count += 1
+            log = logger.error if self._persist_fail_count >= 3 else logger.warning
+            log(
+                "Failed to persist autopilot goals snapshot (consecutive=%d)",
+                self._persist_fail_count,
+                exc_info=True,
+            )
 
     async def _restore_persisted_goals(self) -> None:
         """Restore ContextEngine DAG from persistence and recover stranded actives."""
@@ -1238,3 +1500,41 @@ class AutopilotService:
             "edges": edges,
             "root_id": root_goal_id,
         }
+
+
+def _collect_operator_guidance(
+    goal: GoalNode,
+    all_goals: dict[str, GoalNode],
+) -> list[str]:
+    """Collect RFC-228 guidance texts for a goal about to be dispatched.
+
+    Includes guidance on the goal itself plus job-scoped entries on the root.
+    """
+    texts: list[str] = []
+    seen: set[str] = set()
+
+    def _append(entries: list[dict[str, Any]] | None) -> None:
+        for entry in entries or []:
+            text = str(entry.get("text") or "").strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            texts.append(text)
+
+    _append(goal.guidance_accumulated)
+
+    root: GoalNode | None = goal
+    visited: set[str] = set()
+    while root is not None and root.parent_id and root.parent_id not in visited:
+        visited.add(root.id)
+        parent = all_goals.get(root.parent_id)
+        if parent is None:
+            break
+        root = parent
+    if root is not None and root.id != goal.id:
+        job_scoped = [
+            e for e in (root.guidance_accumulated or []) if str(e.get("scope") or "") == "job"
+        ]
+        _append(job_scoped)
+
+    return texts

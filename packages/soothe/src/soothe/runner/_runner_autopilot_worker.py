@@ -141,8 +141,9 @@ class AutopilotWorkerMixin:
 
         plan_result: PlanResult | None = None
         try:
+            goal_text = _goal_text_with_guidance(job)
             async for event_type, event_data in strange_loop.run_with_progress(
-                goal=job.goal_description,
+                goal=goal_text,
                 thread_id=tid,
                 workspace=workspace,
                 max_iterations=max_iterations
@@ -381,3 +382,13 @@ def _proposals_to_directives(
             )
 
     return directives
+
+
+def _goal_text_with_guidance(job: GoalDispatchEnvelope) -> str:
+    """Append operator guidance from the dispatch bundle onto the goal text."""
+    base = job.goal_description
+    guidance = list(getattr(job.merged_context, "operator_guidance", None) or [])
+    if not guidance:
+        return base
+    lines = "\n".join(f"- {g}" for g in guidance)
+    return f"{base}\n\n## Operator guidance\n{lines}"

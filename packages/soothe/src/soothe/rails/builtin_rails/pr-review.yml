@@ -1,0 +1,38 @@
+id: pr-review
+version: "1.0"
+
+summary: |
+  Independent review of an existing change set: read the diff, record findings,
+  optionally run QA. Differs from no-rail by starting at review and forbidding
+  an implementation branch by policy.
+
+applies_when: |
+  Review a pull request, patch, or diff the user already produced — not
+  implement a new feature or fix from scratch.
+
+conditions:
+  needs_qa: |
+    Review found issues that tests can catch, or the user asked for
+    verification in addition to review.
+  needs_human: |
+    Review found a blocking design or security concern that needs an owner
+    decision before the job can close.
+  job_complete: |
+    Review (and optional QA / human ack) finished with findings recorded
+    and no pending children remain.
+
+flow:
+  - event: job_start
+    then: review
+
+  - event: goal_completed
+    when: needs_qa
+    then: qa_verify
+
+  - event: goal_completed
+    when: needs_human
+    then: pause_for_user
+
+  - event: dag_idle
+    when: job_complete
+    then: complete_job

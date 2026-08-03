@@ -207,6 +207,14 @@ class AutopilotConfig(BaseModel):
         description="Router model role for RFC-204 goal consensus validation.",
     )
 
+    default_rail: str | None = Field(
+        default=None,
+        description=(
+            "Optional LoopRail id applied when submit omits rail_id and the "
+            "workspace has no .soothe/rails/.rail-default. Empty/None = no rail."
+        ),
+    )
+
     # RFC-625: AutopilotMonitor settings
     verify_interval: int = Field(
         default=30,

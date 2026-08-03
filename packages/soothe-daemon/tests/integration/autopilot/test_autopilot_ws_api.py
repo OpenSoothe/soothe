@@ -119,6 +119,21 @@ async def ws_daemon(tmp_path: Path):
     ge.reactivate_goal = AsyncMock(return_value=_FakeGoal(status="pending"))
     ge.absorb_guidance = AsyncMock(return_value=True)
 
+    async def _pause_job(job_id: str, reason: str = "user_pause") -> _FakeGoal:
+        await ge.suspend_goal(job_id, reason=reason)
+        paused = _FakeGoal(goal_id=job_id, status="suspended")
+        ge.get_goal.return_value = paused
+        return paused
+
+    async def _resume_job(job_id: str) -> _FakeGoal:
+        await ge.reactivate_goal(job_id)
+        resumed = _FakeGoal(goal_id=job_id, status="pending")
+        ge.get_goal.return_value = resumed
+        return resumed
+
+    svc.pause_job = AsyncMock(side_effect=_pause_job)
+    svc.resume_job = AsyncMock(side_effect=_resume_job)
+
     await asyncio.sleep(0.3)
 
     try:
@@ -277,11 +292,11 @@ async def test_job_pause_failed_goal(ws_daemon) -> None:
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_job_pause_suspend_exception(ws_daemon) -> None:
-    """job_pause returns JOB_PAUSE_FAILED when suspend_goal raises."""
+    """job_pause returns JOB_PAUSE_FAILED when pause_job raises."""
     daemon = ws_daemon["daemon"]
     ge = daemon._autopilot_service._ce
     ge.get_goal = AsyncMock(return_value=_FakeGoal(status="active"))
-    ge.suspend_goal = AsyncMock(side_effect=RuntimeError("suspend error"))
+    daemon._autopilot_service.pause_job = AsyncMock(side_effect=RuntimeError("suspend error"))
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _handshake(ws)
@@ -352,11 +367,11 @@ async def test_job_resume_pending_not_paused(ws_daemon) -> None:
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_job_resume_reactivate_exception(ws_daemon) -> None:
-    """job_resume returns JOB_RESUME_FAILED when reactivate_goal raises."""
+    """job_resume returns JOB_RESUME_FAILED when resume_job raises."""
     daemon = ws_daemon["daemon"]
     ge = daemon._autopilot_service._ce
     ge.get_goal = AsyncMock(return_value=_FakeGoal(status="suspended"))
-    ge.reactivate_goal = AsyncMock(side_effect=RuntimeError("reactivate error"))
+    daemon._autopilot_service.resume_job = AsyncMock(side_effect=RuntimeError("reactivate error"))
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _handshake(ws)

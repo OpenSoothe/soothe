@@ -42,6 +42,8 @@ def _make_fake_autopilot_service() -> MagicMock:
     service.submit_task = AsyncMock()
     service.get_goal = AsyncMock()
     service.cancel_goal = AsyncMock()
+    service.pause_job = AsyncMock()
+    service.resume_job = AsyncMock()
     service.list_goals = AsyncMock(return_value=[])
     service.dag_snapshot = AsyncMock(return_value={"nodes": [], "edges": []})
     service._ce = MagicMock()
@@ -122,6 +124,8 @@ class TestJobCreate:
             description="Build feature X",
             priority=50,
             workspace=None,
+            rail_id=None,
+            verification_rules=None,
         )
 
     @pytest.mark.asyncio
@@ -326,10 +330,9 @@ class TestJobPause:
         router = _make_router(daemon)
 
         root_goal = _make_fake_goal(goal_id="job-p1", status="pending")
-        daemon._autopilot_service._ce.get_goal.return_value = root_goal
-
         suspended_goal = _make_fake_goal(goal_id="job-p1", status="suspended")
-        daemon._autopilot_service._ce.suspend_goal.return_value = suspended_goal
+        daemon._autopilot_service._ce.get_goal.side_effect = [root_goal, suspended_goal]
+        daemon._autopilot_service.pause_job.return_value = suspended_goal
 
         await router.dispatch(
             "client-1",
@@ -348,9 +351,7 @@ class TestJobPause:
         assert msg["result"]["job_id"] == "job-p1"
         assert msg["result"]["status"] == "suspended"
 
-        daemon._autopilot_service._ce.suspend_goal.assert_awaited_once_with(
-            "job-p1", reason="user_pause"
-        )
+        daemon._autopilot_service.pause_job.assert_awaited_once_with("job-p1", reason="user_pause")
 
     @pytest.mark.asyncio
     async def test_job_pause_already_suspended(self) -> None:
@@ -379,6 +380,7 @@ class TestJobPause:
         assert msg["error"]["code"] == ErrorCode.JOB_ALREADY_PAUSED.value
 
         daemon._autopilot_service._ce.suspend_goal.assert_not_awaited()
+        daemon._autopilot_service.pause_job.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_job_pause_completed_job(self) -> None:
@@ -420,7 +422,7 @@ class TestJobResume:
         daemon._autopilot_service._ce.get_goal.return_value = suspended_goal
 
         reactivated_goal = _make_fake_goal(goal_id="job-r1", status="pending")
-        daemon._autopilot_service._ce.reactivate_goal.return_value = reactivated_goal
+        daemon._autopilot_service.resume_job.return_value = reactivated_goal
 
         await router.dispatch(
             "client-1",
@@ -439,9 +441,7 @@ class TestJobResume:
         assert msg["result"]["job_id"] == "job-r1"
         assert msg["result"]["status"] == "pending"
 
-        daemon._autopilot_service._ce.reactivate_goal.assert_awaited_once_with("job-r1")
-
-        daemon._autopilot_service._ce.reactivate_goal.assert_awaited_once_with("job-r1")
+        daemon._autopilot_service.resume_job.assert_awaited_once_with("job-r1")
 
     @pytest.mark.asyncio
     async def test_job_resume_not_suspended(self) -> None:
@@ -852,6 +852,8 @@ class TestJobCreateOptionalFields:
             description="Normal task",
             priority=50,
             workspace=None,
+            rail_id=None,
+            verification_rules=None,
         )
 
 
@@ -1234,7 +1236,9 @@ class TestJobLifecycleIntegration:
 
         # Step 3: Goal becomes active, pause it
         active_goal = _make_fake_goal(goal_id="lifecycle-test", status="active")
-        daemon._autopilot_service.get_goal.return_value = active_goal
+        suspended_goal = _make_fake_goal(goal_id="lifecycle-test", status="suspended")
+        daemon._autopilot_service._ce.get_goal.side_effect = [active_goal, suspended_goal]
+        daemon._autopilot_service.pause_job.return_value = suspended_goal
 
         await router.dispatch(
             "client-1",
@@ -1252,9 +1256,10 @@ class TestJobLifecycleIntegration:
 
         # Step 4: Resume suspended job
         suspended_goal = _make_fake_goal(goal_id="lifecycle-test", status="suspended")
+        daemon._autopilot_service._ce.get_goal.side_effect = None
         daemon._autopilot_service._ce.get_goal.return_value = suspended_goal
         reactivated_goal = _make_fake_goal(goal_id="lifecycle-test", status="pending")
-        daemon._autopilot_service._ce.reactivate_goal.return_value = reactivated_goal
+        daemon._autopilot_service.resume_job.return_value = reactivated_goal
 
         await router.dispatch(
             "client-1",
@@ -1419,6 +1424,8 @@ class TestParameterValidation:
             description="Build feature X",
             priority=50,
             workspace=None,
+            rail_id=None,
+            verification_rules=None,
         )
 
     @pytest.mark.asyncio

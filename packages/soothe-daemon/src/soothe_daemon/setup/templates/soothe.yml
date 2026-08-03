@@ -22,6 +22,7 @@ agent:
     dreaming_health_check_interval: 60
     monitor_model_role: think
     consensus_model_role: think
+    default_rail: null
     verify_interval: 30
     dreaming_interval: 300
     dreaming_scope: workspace

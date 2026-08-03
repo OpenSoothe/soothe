@@ -1,0 +1,48 @@
+id: hotfix
+version: "1.0"
+
+summary: |
+  Minimal-blast-radius production fix: skip wide exploration, patch, mandatory
+  review and QA, pause for a human when risk is high. Differs from no-rail by
+  forbidding scout fan-out and requiring human gates on irreversible risk.
+
+applies_when: |
+  Production incident, SEV, or urgent regression where speed and blast-radius
+  matter more than exploration breadth.
+
+conditions:
+  needs_human: |
+    The change touches auth, payments, data migration, credentials, or
+    irreversible ops — human approval is required before continuing.
+  needs_review: |
+    A patch was produced and must be reviewed before deploy consideration.
+  needs_qa: |
+    Review passed and the original failure path should be re-verified.
+  branch_is_stuck: |
+    Two failed attempts or the fix introduces a worse failure mode.
+  job_complete: |
+    Review and QA passed for the incident symptom and no pending work remains.
+
+flow:
+  - event: job_start
+    then: plan_and_implement
+
+  - event: goal_completed
+    when: needs_human
+    then: pause_for_user
+
+  - event: goal_completed
+    when: needs_review
+    then: review
+
+  - event: goal_completed
+    when: needs_qa
+    then: qa_verify
+
+  - event: goal_failed
+    when: branch_is_stuck
+    then: retry_branch
+
+  - event: dag_idle
+    when: job_complete
+    then: complete_job

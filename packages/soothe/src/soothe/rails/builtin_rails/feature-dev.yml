@@ -1,0 +1,51 @@
+id: feature-dev
+version: "1.0"
+
+summary: |
+  Implement or refactor a feature with parallel exploration, planning,
+  implementation, independent review, and QA. Differs from no-rail by
+  requiring a scout barrier before implement and separate review/QA goals.
+
+applies_when: |
+  The user wants to build or change functionality in an existing codebase,
+  not a one-line fix, pure research spike, or production incident hotfix.
+
+conditions:
+  ready_to_plan: |
+    All exploration scouts for the current effort have completed,
+    and their findings are sufficient to write an implementation plan.
+  needs_review: |
+    An implementation goal just finished and the changes should be
+    reviewed before merging or continuing.
+  needs_qa: |
+    Review passed or was skipped by policy, and automated verification
+    (tests / lint relevant to the change) should run.
+  branch_is_stuck: |
+    This approach has failed review or execution twice, or evidence
+    shows it conflicts with the codebase architecture.
+  job_complete: |
+    All review and QA goals passed and no pending work remains.
+
+flow:
+  - event: job_start
+    then: decompose_parallel
+
+  - event: goal_completed
+    when: ready_to_plan
+    then: plan_and_implement
+
+  - event: goal_completed
+    when: needs_review
+    then: review
+
+  - event: goal_completed
+    when: needs_qa
+    then: qa_verify
+
+  - event: goal_failed
+    when: branch_is_stuck
+    then: retry_branch
+
+  - event: dag_idle
+    when: job_complete
+    then: complete_job

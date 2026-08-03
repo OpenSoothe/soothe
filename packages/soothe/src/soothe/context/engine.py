@@ -118,6 +118,7 @@ class ContextEngine:
         self._semantic = SemanticLoader(soothe_home=soothe_home, workspace=workspace)
         self._projection = ProjectionEngine(projection_config)
         self._persistence = persistence
+        self._persist_fail_count = 0
         self._save_dirty = False
         self.execute_ai_ledger_max_tokens: int = 0
 
@@ -559,6 +560,47 @@ class ContextEngine:
         )
         return goal
 
+    async def retry_failed_goal(self, goal_id: str, *, reason: str = "") -> GoalNode:
+        """Re-queue a failed goal when retry budget remains (IG-678 P1-2).
+
+        Increments ``retry_count``. When budget is exhausted, leaves the goal
+        failed and raises ``ValueError``.
+
+        Args:
+            goal_id: Failed goal to retry.
+            reason: Backoff / operator reason for the retry.
+
+        Returns:
+            The updated GoalNode in ``pending`` status.
+
+        Raises:
+            KeyError: If goal not found.
+            ValueError: If goal is not failed or retry budget is exhausted.
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            raise KeyError(f"Goal {goal_id} not found")
+        if goal.status != "failed":
+            raise ValueError(f"Goal {goal_id} is {goal.status}, not failed")
+        if goal.retry_count >= goal.max_retries:
+            raise ValueError(
+                f"Goal {goal_id} retry budget exhausted ({goal.retry_count}/{goal.max_retries})"
+            )
+
+        goal.retry_count += 1
+        goal.status = "pending"
+        goal.assigned_loop_id = None
+        goal.error = None
+        goal.updated_at = datetime.now(UTC)
+        logger.info(
+            "Retrying failed goal %s (retry %d/%d): %s",
+            goal_id,
+            goal.retry_count,
+            goal.max_retries,
+            reason,
+        )
+        return goal
+
     async def reactivate_goal(self, goal_id: str) -> GoalNode:
         """Reactivate a suspended/blocked goal back to pending.
 
@@ -773,15 +815,16 @@ class ContextEngine:
 
     # ── RFC-228 guidance ─────────────────────────────────────────────────────
 
-    def absorb_guidance(
+    async def absorb_guidance(
         self,
         goal_id: str,
         guidance_text: str,
         scope: str = "goal",
     ) -> bool:
-        """Absorb user guidance from desktop LOR.
+        """Absorb user guidance from desktop / job IPC (RFC-228).
 
-        Accumulates guidance for use in next reasoning cycle.
+        Accumulates guidance for the next worker dispatch (see Autopilot
+        ``GoalDispatchContextBundle.operator_guidance``).
 
         Args:
             goal_id: Target goal ID.
@@ -936,8 +979,15 @@ class ContextEngine:
             dag, ledger_data = self.persistence_snapshot()
             await self._persistence.save_dag(dag)
             await self._persistence.save_ledger(ledger_data)
+            self._persist_fail_count = 0
         except Exception:
-            logger.warning("Persistence save failed", exc_info=True)
+            self._persist_fail_count += 1
+            log = logger.error if self._persist_fail_count >= 3 else logger.warning
+            log(
+                "Persistence save failed (consecutive=%d)",
+                self._persist_fail_count,
+                exc_info=True,
+            )
 
     async def load(self) -> bool:
         """Load persisted state. Returns True if DAG was loaded."""
@@ -965,5 +1015,24 @@ class ContextEngine:
     # ── Recovery ─────────────────────────────────────────────────
 
     async def recover(self) -> list[str]:
-        """Reset goals stuck in 'active' to 'pending' after crash."""
-        return self._dag.recover_active_goals()
+        """Reset goals stuck in 'active' to 'pending' after crash.
+
+        Goals whose ``attempts_after_crash`` exceeds ``max_retries`` are
+        suspended instead of requeued (IG-678 P1-3).
+        """
+        recovered = self._dag.recover_active_goals()
+        suspended: list[str] = []
+        for goal_id in list(recovered):
+            goal = self._dag.get_goal(goal_id)
+            if goal is None:
+                continue
+            if goal.attempts_after_crash > goal.max_retries:
+                await self.suspend_goal(
+                    goal_id,
+                    reason=(
+                        f"crash recovery budget exhausted "
+                        f"({goal.attempts_after_crash}/{goal.max_retries})"
+                    ),
+                )
+                suspended.append(goal_id)
+        return [gid for gid in recovered if gid not in suspended]

@@ -1,0 +1,47 @@
+id: maker-checker
+version: "1.0"
+
+summary: |
+  Evaluator-optimizer style workflow: implement, then independently review
+  until the checker passes or the branch is replanted. Differs from no-rail
+  consensus (same-goal send_back) by forcing a separate checker goal and
+  replant on recoverable checker failure.
+
+applies_when: |
+  High-stakes change where self-grading is unacceptable: security-sensitive
+  logic, correctness-critical paths, payments, or explicit adversarial /
+  maker-checker review requested by the user.
+
+conditions:
+  ready_to_implement: |
+    Scope is clear enough to implement (a plan may already be provided).
+  needs_check: |
+    Implementation completed; an independent review goal must run with a
+    fresh checker identity (not the maker's completion trail).
+  checker_failed_recoverable: |
+    Checker rejected the work but the approach can be fixed on a new branch
+    with salvaged context.
+  needs_qa: |
+    Checker passed; automated verification should run.
+  job_complete: |
+    Checker and QA passed and no pending children remain.
+
+flow:
+  - event: job_start
+    then: plan_and_implement
+
+  - event: goal_completed
+    when: needs_check
+    then: review
+
+  - event: goal_send_back
+    when: checker_failed_recoverable
+    then: retry_branch
+
+  - event: goal_completed
+    when: needs_qa
+    then: qa_verify
+
+  - event: dag_idle
+    when: job_complete
+    then: complete_job

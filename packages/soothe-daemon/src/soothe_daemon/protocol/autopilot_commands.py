@@ -38,10 +38,26 @@ async def run_autopilot_action(
         description = payload.get("description", "")
         priority = payload.get("priority", 50)
         workspace = payload.get("workspace")
+        rail_id = payload.get("rail_id")
+        verification_rules = payload.get("verification_rules")
         if not description:
             raise RuntimeError("description is required")
-        goal = await service.submit_task(description, priority=priority, workspace=workspace)
-        return {"status": "submitted", "goal_id": goal.id}
+        goal = await service.submit_task(
+            description,
+            priority=priority,
+            workspace=workspace,
+            rail_id=rail_id if isinstance(rail_id, str) else None,
+            verification_rules=(
+                verification_rules.strip()
+                if isinstance(verification_rules, str) and verification_rules.strip()
+                else None
+            ),
+        )
+        return {
+            "status": "submitted",
+            "goal_id": goal.id,
+            "rail_id": goal.rail_id,
+        }
 
     if action == "list_goals":
         goals = await service.list_goals()
@@ -74,14 +90,19 @@ async def run_autopilot_action(
 
     if action == "resume":
         goal_id = payload.get("goal_id")
-        context_engine = service._ce
-        goal = await context_engine.get_goal(goal_id)
-        if goal is None:
+        if not goal_id:
+            raise RuntimeError("goal_id is required")
+        try:
+            reactivated = await service.resume_job(goal_id)
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        if reactivated is None:
             raise RuntimeError("Goal not found")
-        if goal.status not in ("suspended", "blocked"):
-            raise RuntimeError(f"Goal is not paused (status: {goal.status})")
-        reactivated = await context_engine.reactivate_goal(goal_id)
-        return {"status": "reactivated", "goal_id": goal_id, "new_status": reactivated.status}
+        return {
+            "status": "reactivated",
+            "goal_id": goal_id,
+            "new_status": reactivated.status,
+        }
 
     if action == "wake":
         await service.wake_from_dreaming(trigger="ws_command")

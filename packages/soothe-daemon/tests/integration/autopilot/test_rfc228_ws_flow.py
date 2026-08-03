@@ -107,6 +107,21 @@ async def daemon_with_autopilot_ws(tmp_path: Path):
     daemon._autopilot_service._ce.absorb_guidance = AsyncMock(return_value=True)
     daemon._autopilot_service._ce.get_goal = AsyncMock(return_value=test_goal)
 
+    async def _pause_job(job_id: str, reason: str = "user_pause") -> _FakeGoal:
+        await daemon._autopilot_service._ce.suspend_goal(job_id, reason=reason)
+        paused = _FakeGoal(goal_id=job_id, status="suspended")
+        daemon._autopilot_service._ce.get_goal.return_value = paused
+        return paused
+
+    async def _resume_job(job_id: str) -> _FakeGoal:
+        await daemon._autopilot_service._ce.reactivate_goal(job_id)
+        resumed = _FakeGoal(goal_id=job_id, status="pending")
+        daemon._autopilot_service._ce.get_goal.return_value = resumed
+        return resumed
+
+    daemon._autopilot_service.pause_job = AsyncMock(side_effect=_pause_job)
+    daemon._autopilot_service.resume_job = AsyncMock(side_effect=_resume_job)
+
     await asyncio.sleep(0.5)
 
     try:

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from soothe.autopilot import AutopilotService
+from soothe.autopilot.consensus import ConsensusVerdict
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.events.internal_bus import InternalEventBus
@@ -14,10 +15,12 @@ from soothe.events.internal_bus import InternalEventBus
 from .fakes import IdleFakeFactory
 
 
-def _mock_consensus_model(*, decision: str, reasoning: str) -> AsyncMock:
-    mock_model = AsyncMock()
-    mock_model.ainvoke.return_value.type = "ai"
-    mock_model.ainvoke.return_value.content = f"DECISION: {decision}\nREASONING: {reasoning}"
+def _mock_consensus_model(*, decision: str, reasoning: str) -> MagicMock:
+    verdict = ConsensusVerdict(decision=decision, reasoning=reasoning)  # type: ignore[arg-type]
+    structured = MagicMock()
+    structured.ainvoke = AsyncMock(return_value=verdict.model_dump())
+    mock_model = MagicMock()
+    mock_model.with_structured_output = MagicMock(return_value=structured)
     return mock_model
 
 

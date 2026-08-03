@@ -117,15 +117,22 @@ class TestIdleReuse:
         assert pool.total_count() == 1
 
     @pytest.mark.asyncio
-    async def test_mark_idle_with_failure_does_not_requeue(self) -> None:
-        pool = WorkerPool(_FakeFactory(), max_loops=2)
+    async def test_mark_idle_with_failure_requeues_slot(self) -> None:
+        """Failed dispatches must not leak pool capacity (IG-678 P0-4)."""
+        pool = WorkerPool(_FakeFactory(), max_loops=1)
         w = await _pick(pool, _goal("g1"))
         assert w is not None
+        failed_slot = w.slot_id
         await pool.mark_idle(w.loop_id, success=False)
+
+        assert pool.idle_count() == 1
+        assert w.status == "idle"
+        assert w.last_dispatch_ok is False
 
         w2 = await _pick(pool, _goal("g2"))
         assert w2 is not None
-        assert w2.slot_id != w.slot_id
+        assert w2.slot_id == failed_slot
+        assert pool.total_count() == 1
 
 
 class TestStickyAffinity:

@@ -63,21 +63,23 @@ class WorkerSlot:
         slot_id: stable pool key (``autopilot__slot_NNN``).
         loop_id: current (or last) assignment loop id under ``data/loops/``.
         runner: LoopRunnerProtocol bound to the current ``loop_id``.
-        status: ``idle`` → ``active`` → ``idle`` (or ``error`` on failure).
+        status: ``idle`` → ``active`` → ``idle``.
         current_goal_id: id of the goal currently executing on this slot.
         last_goal_ids: recency list of recent goal_ids (sticky-affinity cache).
+        last_dispatch_ok: whether the previous assignment completed cleanly.
     """
 
     slot_id: str
     runner: LoopRunnerProtocol
     loop_id: str
-    status: Literal["idle", "active", "error"] = "idle"
+    status: Literal["idle", "active"] = "idle"
     current_goal_id: str | None = None
     last_goal_ids: list[str] = field(default_factory=list)
     active_task: Any = None
     idle_since: datetime | None = field(default_factory=lambda: datetime.now(UTC))
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     dispatch_started_at: datetime | None = None
+    last_dispatch_ok: bool = True
 
     _LAST_GOALS_MAX = 16
 
@@ -91,7 +93,11 @@ class WorkerSlot:
         self.dispatch_started_at = datetime.now(UTC)
 
     def release_to_idle(self, success: bool = True) -> None:
-        """Move this slot back to idle (or error) after a goal completes."""
+        """Return this slot to idle after a goal finishes (success or failure).
+
+        Failed dispatches must not permanently remove capacity (IG-678 P0-4).
+        ``last_dispatch_ok`` records outcome for observability only.
+        """
         if self.current_goal_id:
             self.last_goal_ids.append(self.current_goal_id)
             if len(self.last_goal_ids) > self._LAST_GOALS_MAX:
@@ -99,8 +105,9 @@ class WorkerSlot:
         self.current_goal_id = None
         self.active_task = None
         self.dispatch_started_at = None
-        self.status = "idle" if success else "error"
-        self.idle_since = datetime.now(UTC) if success else None
+        self.last_dispatch_ok = success
+        self.status = "idle"
+        self.idle_since = datetime.now(UTC)
 
     def has_recently_run(self, goal_id: str) -> bool:
         """True if ``goal_id`` is in this slot's recency cache."""
@@ -229,13 +236,16 @@ class WorkerPool:
         return w
 
     async def mark_idle(self, loop_id: str, *, success: bool = True) -> None:
-        """Return the slot owning ``loop_id`` to the idle queue."""
+        """Return the slot owning ``loop_id`` to the idle queue.
+
+        Always requeues the slot so failed goals do not leak pool capacity.
+        """
         async with self._assignment_lock:
             w = self._get_by_loop_id_unlocked(loop_id)
             if w is None:
                 return
             w.release_to_idle(success=success)
-            if success:
+            if w.slot_id not in self._idle:
                 self._idle.append(w.slot_id)
 
     async def release_worker(self, loop_id: str) -> WorkerSlot | None:

@@ -21,12 +21,29 @@ from soothe.autopilot.monitor_models import (
     GoalPlacement,
 )
 from soothe.context.engine import ContextEngine
+from soothe.events.internal_events import (
+    INTERNAL_GOAL_COMPLETED,
+    INTERNAL_GOAL_FAILED,
+)
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.events.internal_bus import InternalEventBus
 
 logger = logging.getLogger(__name__)
+
+
+def _event_goal_id(event: Any) -> str | None:
+    """Extract goal_id from a bus event model or dict."""
+    if event is None:
+        return None
+    gid = getattr(event, "goal_id", None)
+    if gid:
+        return str(gid)
+    if isinstance(event, dict):
+        raw = event.get("goal_id")
+        return str(raw) if raw else None
+    return None
 
 
 class AutopilotMonitor:
@@ -61,9 +78,9 @@ class AutopilotMonitor:
         self._verifier = GoalDAGVerifier(ce, config)
         self._shutdown_event = asyncio.Event()
 
-        # Subscribe to events
-        self._bus.subscribe("goal_completed", self._on_goal_completed)
-        self._bus.subscribe("goal_failed", self._on_goal_failed)
+        # Subscribe to internal bus topics (IG-678 P0-3).
+        self._bus.subscribe(INTERNAL_GOAL_COMPLETED, self._on_goal_completed)
+        self._bus.subscribe(INTERNAL_GOAL_FAILED, self._on_goal_failed)
 
     async def start(self) -> None:
         """Start background verification and dreaming timer loops."""
@@ -154,9 +171,9 @@ class AutopilotMonitor:
 
     # ── Event Handlers ────────────────────────────────────────────────────────
 
-    async def _on_goal_completed(self, event: dict[str, Any]) -> None:
-        """Handle goal_completed event."""
-        goal_id = event.get("goal_id")
+    async def _on_goal_completed(self, event: Any) -> None:
+        """Handle soothe.internal.goal.completed."""
+        goal_id = _event_goal_id(event)
         if not goal_id:
             return
 
@@ -169,37 +186,86 @@ class AutopilotMonitor:
         if self._ce.is_dag_complete():
             await self._trigger_dreaming()
 
-    async def _on_goal_failed(self, event: dict[str, Any]) -> None:
-        """Handle goal_failed event."""
-        goal_id = event.get("goal_id")
-        evidence = event.get("evidence")
+    async def _on_goal_failed(self, event: Any) -> None:
+        """Handle soothe.internal.goal.failed."""
+        goal_id = _event_goal_id(event)
         if not goal_id:
             return
 
         logger.warning("Goal %s failed, triggering backoff reasoning", goal_id)
 
-        # Backoff reasoning
+        evidence_raw = getattr(event, "evidence", None)
+        if evidence_raw is None and isinstance(event, dict):
+            evidence_raw = event.get("evidence")
+
         goals = {g.id: g for g in self._ce.get_goals_by_status(None)}
-        if evidence:
+        if evidence_raw is not None:
             from soothe.autopilot.engine_models import EvidenceBundle
 
-            if isinstance(evidence, EvidenceBundle):
-                decision = await self._backoff_reasoner.reason_backoff(goal_id, goals, evidence)
-                logger.info(
-                    "Backoff decision: backoff_to=%s, reason=%s",
-                    decision.backoff_to_goal_id,
-                    decision.reason,
+            if isinstance(evidence_raw, EvidenceBundle):
+                evidence = evidence_raw
+            elif isinstance(evidence_raw, dict):
+                try:
+                    evidence = EvidenceBundle.model_validate(evidence_raw)
+                except Exception:
+                    evidence = EvidenceBundle(
+                        structured=evidence_raw if evidence_raw else {},
+                        narrative=str(getattr(event, "error_message", "") or "goal failed"),
+                        source="layer2_execute",
+                    )
+            else:
+                evidence = EvidenceBundle(
+                    structured={},
+                    narrative=str(evidence_raw),
+                    source="layer2_execute",
                 )
-                # Apply decision (reset goals, create directives)
-                await self._apply_backoff_decision(decision)
+            decision = await self._backoff_reasoner.reason_backoff(goal_id, goals, evidence)
+            logger.info(
+                "Backoff decision: backoff_to=%s, reason=%s",
+                decision.backoff_to_goal_id,
+                decision.reason,
+            )
+            await self._apply_backoff_decision(decision, failed_goal_id=goal_id)
 
-    async def _apply_backoff_decision(self, decision: Any) -> None:
-        """Apply backoff decision to DAG.
+    async def _apply_backoff_decision(self, decision: Any, *, failed_goal_id: str) -> None:
+        """Apply backoff decision to the CE DAG (IG-678 P1-2).
 
-        Currently logs the decision; full DAG mutation (reset goals, create
-        directives) is delegated to downstream consumers.
+        Prefer retrying the failed goal while ``retry_count < max_retries``.
+        Otherwise suspend the failed goal (backoff target is logged for
+        operators; full DAG replant remains a later phase).
         """
-        logger.info("Applying backoff decision: %s", decision.reason)
+        logger.info(
+            "Applying backoff decision for %s → %s: %s",
+            failed_goal_id,
+            decision.backoff_to_goal_id,
+            decision.reason,
+        )
+        failed = await self._ce.get_goal(failed_goal_id)
+        if failed is None:
+            return
+
+        if failed.status == "failed" and failed.retry_count < failed.max_retries:
+            try:
+                await self._ce.retry_failed_goal(failed_goal_id, reason=decision.reason)
+                return
+            except ValueError:
+                logger.warning(
+                    "Retry rejected for %s despite budget check; suspending",
+                    failed_goal_id,
+                )
+
+        if failed.status == "failed":
+            await self._ce.suspend_goal(
+                failed_goal_id,
+                reason=decision.reason or "backoff: retry budget exhausted",
+            )
+            return
+
+        # Non-failed (e.g. already suspended elsewhere): try reactivate backoff target.
+        target_id = getattr(decision, "backoff_to_goal_id", None) or failed_goal_id
+        target = await self._ce.get_goal(target_id)
+        if target is not None and target.status in ("suspended", "blocked"):
+            await self._ce.reactivate_goal(target_id)
 
     # ── Background Loops ────────────────────────────────────────────────────────
 
@@ -249,7 +315,7 @@ class AutopilotMonitor:
         """Trigger dreaming distillation.
 
         Emits dreaming/awake lifecycle events. Per-mode LLM distillation is
-        performed by downstream consumers of the event, not inline here.
+        deferred (IG-678 P1-7); events only until a follow-on IG.
         """
         await self._bus.emit_autopilot_dreaming()
         await self._bus.emit_autopilot_awake()

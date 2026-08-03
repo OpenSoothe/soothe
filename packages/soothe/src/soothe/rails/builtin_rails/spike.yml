@@ -1,0 +1,33 @@
+id: spike
+version: "1.0"
+
+summary: |
+  Timeboxed investigation or prototype. Parallel scouts gather evidence, then
+  pause for the human to choose a path. Differs from no-rail by never
+  auto-implementing — the rail stops at a human decision.
+
+applies_when: |
+  Spike, PoC, architecture comparison, or "should we do X?" research with an
+  explicit decision needed before coding for real.
+
+conditions:
+  scouts_done: |
+    All exploration goals completed with enough evidence to choose among
+    options (or conclude more information is needed from a human).
+  job_complete: |
+    Human has acknowledged the spike outcome and no further goals are pending.
+
+flow:
+  - event: job_start
+    then: decompose_parallel
+
+  - event: goal_completed
+    when: scouts_done
+    then: pause_for_user
+
+  - event: user_intervention
+    then: complete_job
+
+  - event: dag_idle
+    when: job_complete
+    then: complete_job

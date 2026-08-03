@@ -7,9 +7,10 @@ If not satisfied, Layer 3 can send the goal back with refined instructions.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
-from soothe_nano.utils.text_preview import preview, preview_first
+from pydantic import BaseModel, Field
+from soothe_nano.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -18,6 +19,18 @@ logger = logging.getLogger(__name__)
 
 
 ConsensusDecision = Literal["accept", "send_back", "suspend"]
+
+
+class ConsensusVerdict(BaseModel):
+    """Structured consensus outcome (RFC-630 — no free-text decision parsing)."""
+
+    decision: ConsensusDecision = Field(
+        description="accept if complete; send_back to retry; suspend if blocked"
+    )
+    reasoning: str = Field(
+        default="",
+        description="Brief explanation for the decision",
+    )
 
 
 class ConsensusEvaluationError(RuntimeError):
@@ -30,10 +43,7 @@ async def evaluate_goal_completion(
     evidence_summary: str = "",
     model: BaseChatModel | None = None,
 ) -> tuple[ConsensusDecision, str]:
-    """RFC-204: Holistic evaluation of goal completion via LLM.
-
-    Goal manager reflection LLM evaluates whether the agentic loop's output truly
-    satisfies the goal criteria.
+    """RFC-204: Holistic evaluation of goal completion via structured LLM.
 
     Args:
         goal_description: The original goal text.
@@ -54,11 +64,13 @@ async def evaluate_goal_completion(
 
     prompt = _build_consensus_prompt(goal_description, response_text, evidence_summary)
     try:
+        from langchain_core.messages import HumanMessage
         from soothe_nano.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
         from soothe_nano.utils.llm.observability import create_llm_call_metadata
+        from soothe_nano.utils.llm.structured import invoke_structured_chat_typed
 
         invoke_config = {
             "metadata": create_llm_call_metadata(
@@ -68,29 +80,25 @@ async def evaluate_goal_completion(
             )
         }
 
-        async def _invoke() -> Any:
-            return await model.ainvoke(prompt, config=invoke_config)
+        async def _invoke() -> ConsensusVerdict:
+            return await invoke_structured_chat_typed(
+                model,
+                [HumanMessage(content=prompt)],
+                ConsensusVerdict,
+                config=invoke_config,
+            )
 
-        response = await await_with_llm_call_policy(
+        verdict = await await_with_llm_call_policy(
             _invoke,
             config=llm_rate_limit_config_from(None),
         )
-        content = response.content.strip().lower() if hasattr(response, "content") else ""
-
-        if "send_back" in content:
-            decision: ConsensusDecision = "send_back"
-            reasoning = _extract_reasoning(content)
-        elif "suspend" in content:
-            decision = "suspend"
-            reasoning = _extract_reasoning(content)
-        else:
-            decision = "accept"
-            reasoning = _extract_reasoning(content)
+        decision: ConsensusDecision = verdict.decision
+        reasoning = (verdict.reasoning or "").strip() or f"Consensus decided {decision}"
 
         logger.info(
             "Consensus evaluation: decision=%s reasoning=%s",
             decision,
-            preview(reasoning),
+            preview_first(reasoning, 200),
         )
         return decision, reasoning
     except ConsensusEvaluationError:
@@ -106,7 +114,7 @@ def _build_consensus_prompt(
     response: str,
     evidence: str,
 ) -> str:
-    """Build prompt for consensus evaluation.
+    """Build prompt for structured consensus evaluation.
 
     Args:
         goal: Goal description.
@@ -125,27 +133,10 @@ def _build_consensus_prompt(
         parts.append(f"\nEvidence Summary: {preview_first(evidence, 500)}")
 
     parts.append(
-        "\nRespond with exactly one line in this format:\n"
-        "DECISION: <accept|send_back|suspend>\n"
-        "REASONING: <brief explanation>\n\n"
-        "Use 'send_back' if the agent should try again with a different approach.\n"
-        "Use 'suspend' if the goal appears fundamentally blocked or needs external input.\n"
-        "Use 'accept' if the goal appears completed satisfactorily."
+        "\nChoose one decision:\n"
+        "- accept: the goal appears completed satisfactorily\n"
+        "- send_back: the agent should try again with a different approach\n"
+        "- suspend: the goal appears fundamentally blocked or needs external input\n"
+        "Provide a brief reasoning string."
     )
     return "\n".join(parts)
-
-
-def _extract_reasoning(content: str) -> str:
-    """Extract reasoning from LLM response.
-
-    Args:
-        content: LLM response text.
-
-    Returns:
-        Reasoning text.
-    """
-    for line in content.splitlines():
-        if line.lower().startswith("reasoning:"):
-            return line.split(":", 1)[1].strip()
-    # Use preview with empty marker to stay within 200 char limit (test expects <= 200)
-    return preview(content, mode="chars", first=200, marker="")

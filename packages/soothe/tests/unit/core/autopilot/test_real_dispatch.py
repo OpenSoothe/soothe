@@ -8,11 +8,12 @@ Covers the full path: submit_task → scheduling tick → WorkerPool.pick_worker
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from soothe.autopilot import AutopilotService
+from soothe.autopilot.consensus import ConsensusVerdict
 from soothe.autopilot.context_store import InMemoryGoalDispatchContextStore
 from soothe.autopilot.workspace_reservation import WorkspaceReservation
 from soothe.config.models import AutopilotConfig
@@ -76,10 +77,13 @@ class _FakeFactory:
 # ---- Helpers -----------------------------------------------------------
 
 
-def _mock_consensus_model(*, decision: str = "accept", reasoning: str = "test") -> AsyncMock:
-    mock_model = AsyncMock()
-    mock_model.ainvoke.return_value.type = "ai"
-    mock_model.ainvoke.return_value.content = f"DECISION: {decision}\nREASONING: {reasoning}"
+def _mock_consensus_model(*, decision: str = "accept", reasoning: str = "test") -> MagicMock:
+    """Consensus model stub compatible with invoke_structured_chat_typed (IG-678)."""
+    verdict = ConsensusVerdict(decision=decision, reasoning=reasoning)  # type: ignore[arg-type]
+    structured = MagicMock()
+    structured.ainvoke = AsyncMock(return_value=verdict.model_dump())
+    mock_model = MagicMock()
+    mock_model.with_structured_output = MagicMock(return_value=structured)
     return mock_model
 
 

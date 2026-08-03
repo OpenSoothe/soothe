@@ -250,6 +250,14 @@ class JobCreateParams(ParamsBase):
     max_iterations: int | None = Field(default=None, gt=0)
     guidance: str | None = None
     intent_hint: str | None = None
+    rail_id: str | None = None
+    verification_rules: str | None = Field(
+        default=None,
+        description=(
+            "Optional operator criteria stored on the root goal. "
+            "Advisory for consensus; single-tenant daemon (no JOB_NOT_AUTHORIZED)."
+        ),
+    )
 
 
 class JobStatusParams(ParamsBase):
@@ -423,6 +431,8 @@ class AutopilotSubmitParams(ParamsBase):
     description: str = Field(..., min_length=1)
     priority: int = 50
     workspace: str | None = None
+    rail_id: str | None = None
+    verification_rules: str | None = None
 
 
 class AutopilotListGoalsParams(EmptyParams):

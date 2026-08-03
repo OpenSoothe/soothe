@@ -650,7 +650,11 @@ class SootheDaemon(DaemonHandlersMixin):
 
                 # Isolated bus for the daemon's autopilot domain.
                 daemon_autopilot_bus = InternalEventBus()
-                # RFC-625: ContextEngine is the sole source of truth for goal/step state.
+                # RFC-625: ContextEngine is the sole in-process SoT for the
+                # autopilot goal DAG. Persistence is the sidecar snapshot in
+                # ``goal_persist_store`` (restored in AutopilotService.start);
+                # worker StrangeLoop CEs remain loop-scoped (ledger/steps).
+                # Full unified durability is tracked in IG-678 P1-4.
                 daemon_ce = ContextEngine()
                 # RFC-625: AutopilotMonitor handles proactive DAG monitoring.
                 daemon_monitor = AutopilotMonitor(

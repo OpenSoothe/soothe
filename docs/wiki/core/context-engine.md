@@ -104,29 +104,24 @@ The async API manages goal state transitions:
 - `create_goal(description, priority=, depends_on=)` — creates a pending goal with optional dependencies.
 - `activate_goal(goal_id, loop_id=)` — transitions pending → active, assigning it to a StrangeLoop instance.
 - `complete_goal(goal_id)` — terminal transition to completed.
-- `fail_goal(goal_id, error=, evidence=, allow_retry=True)` — failure with retry support; if retries remain, the goal can be re-activated.
+- `fail_goal(goal_id, error=, evidence=)` — terminal failure (retry/backoff is applied by AutopilotMonitor / consensus, not by CE itself).
 - `suspend_goal(goal_id, reason)` / `block_goal(goal_id)` / `unblock_goal(goal_id)` — temporary pauses.
 - `cancel_goal(goal_id, reason=)` — terminal cancellation.
+- `absorb_guidance(goal_id, text, scope=)` — async; accumulates operator guidance for the next autopilot dispatch.
 
 ### Retry and Backoff
 
-`GoalNode` tracks `retry_count`, `max_retries` (default 2), `send_back_count`, and `max_send_backs` (default 3). The `fail_goal` call with `allow_retry=True` checks whether retries remain before transitioning to the terminal `failed` state. This gives the engine automatic retry without external orchestration.
+`GoalNode` tracks `retry_count`, `max_retries` (default 2), `send_back_count`, and `max_send_backs` (default 3). Automatic retry-from-failed is **not** performed inside `fail_goal` today — Autopilot consensus `send_back` and monitor backoff (IG-678) own re-queue policy.
 
 ### Dreaming (RFC-625)
 
-Goals have `topic` and `findings` fields for "cross-loop dreaming" — a mechanism where completed goals' findings can inform future goal planning. This is part of the autopilot-monitor unification (RFC-625).
+Goals have `topic` and `findings` fields for "cross-loop dreaming." AutopilotMonitor currently emits dreaming/awake **events only**; per-mode LLM distillation is deferred.
 
 ---
 
-## Callback System
+## Lifecycle observers
 
-ContextEngine fires callbacks for lifecycle events: `goal_created`, `goal_activated`, `goal_completed`, `goal_failed`, `goal_suspended`, `goal_cancelled`, `goal_blocked`, `goal_unblocked`, `step_completed`, `step_failed`, `step_skipped`.
-
-```python
-engine.on("goal_completed", lambda goal_id: log.info(f"Done: {goal_id}"))
-```
-
-This is a simple pub/sub for in-process observers — not to be confused with the event system's client-facing stream.
+ContextEngine does **not** expose an in-process `.on()` callback API. Autopilot coordinates via the daemon `InternalEventBus` (`soothe.internal.goal.completed` / `.failed` / `.state_changed`, etc.). See AutopilotService / AutopilotMonitor.
 
 ---
 

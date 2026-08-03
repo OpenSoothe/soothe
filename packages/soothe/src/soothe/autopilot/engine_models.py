@@ -170,6 +170,10 @@ class GoalDispatchContextBundle(BaseModel):
     files_touched: dict[str, FileTouchSummary] = Field(default_factory=dict)
     findings: list[ParentFinding] = Field(default_factory=list)
     tool_call_summary: ToolCallStats = Field(default_factory=ToolCallStats)
+    operator_guidance: list[str] = Field(
+        default_factory=list,
+        description="Operator guidance texts absorbed via RFC-228 job_guidance",
+    )
     cached_system_prompt_hash: str | None = Field(
         default=None,
         description="Stable hash of the provider-cached system prompt prefix, when available",

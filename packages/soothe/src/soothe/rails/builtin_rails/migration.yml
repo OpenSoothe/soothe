@@ -1,0 +1,51 @@
+id: migration
+version: "1.0"
+
+summary: |
+  Multi-step migration or upgrade as a goal loop: decompose into waves,
+  implement, QA after each meaningful chunk, pause on irreversible cutover.
+  Differs from no-rail by continuing until a checkable stop condition holds
+  rather than opportunistic one-shot placement.
+
+applies_when: |
+  Framework upgrade, schema migration, API version bump, or multi-file
+  mechanical migration with a clear done condition.
+
+conditions:
+  ready_for_next_wave: |
+    Prior wave completed and it is safe to plan the next batch of remaining
+    migration work.
+  needs_qa: |
+    A wave of changes landed and migration invariants / tests must run.
+  needs_human: |
+    Next step is irreversible (production migrate, data backfill, or cutover).
+  branch_is_stuck: |
+    A wave failed QA twice or rolled-back invariants broke.
+  job_complete: |
+    Declared migration success condition holds in checkable terms
+    (for example: targeted suite green, deprecated path removed, dual-write
+    drained) and the DAG is idle with no pending children.
+
+flow:
+  - event: job_start
+    then: decompose_parallel
+
+  - event: goal_completed
+    when: ready_for_next_wave
+    then: plan_and_implement
+
+  - event: goal_completed
+    when: needs_qa
+    then: qa_verify
+
+  - event: goal_completed
+    when: needs_human
+    then: pause_for_user
+
+  - event: goal_failed
+    when: branch_is_stuck
+    then: retry_branch
+
+  - event: dag_idle
+    when: job_complete
+    then: complete_job

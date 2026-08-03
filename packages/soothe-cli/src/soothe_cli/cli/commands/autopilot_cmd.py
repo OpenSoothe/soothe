@@ -63,6 +63,11 @@ def run(
         "-w",
         help="Filesystem workspace for the goal (default: current directory).",
     ),
+    rail: str | None = typer.Option(
+        None,
+        "--rail",
+        help="LoopRail id (e.g. feature-dev, spike). Omit for no-rail Monitor/CE path.",
+    ),
     wait: bool = typer.Option(True, "--wait/--no-wait", help="Poll until the goal completes."),
 ) -> None:
     """Submit a task to the daemon autopilot and optionally wait for completion.
@@ -73,9 +78,11 @@ def run(
     del max_iterations  # daemon owns config for autopilot dispatch
     client = _require_daemon_ws()
     submit_workspace = _resolve_submit_workspace(workspace)
-    result = client.autopilot_submit(prompt, workspace=submit_workspace)
+    result = client.autopilot_submit(prompt, workspace=submit_workspace, rail_id=rail)
     goal_id = result.get("goal_id", "")
     typer.echo(f"Submitted goal: {goal_id}")
+    if result.get("rail_id"):
+        typer.echo(f"  Rail: {result['rail_id']}")
     if not wait or not goal_id:
         return
 
@@ -104,15 +111,24 @@ def submit(
         "-w",
         help="Filesystem workspace for the goal (default: current directory).",
     ),
+    rail: str | None = typer.Option(
+        None,
+        "--rail",
+        help="LoopRail id (e.g. feature-dev, spike).",
+    ),
 ) -> None:
     """Submit a new task to the daemon autopilot."""
     client = _require_daemon_ws()
     submit_workspace = _resolve_submit_workspace(workspace)
-    result = client.autopilot_submit(task, priority=priority, workspace=submit_workspace)
+    result = client.autopilot_submit(
+        task, priority=priority, workspace=submit_workspace, rail_id=rail
+    )
     goal_id = result.get("goal_id", "?")
     typer.echo(f"Task submitted (goal_id={goal_id})")
     typer.echo(f"  Priority: {priority}")
     typer.echo(f"  Workspace: {submit_workspace}")
+    if result.get("rail_id"):
+        typer.echo(f"  Rail: {result['rail_id']}")
 
 
 @app.command("status")

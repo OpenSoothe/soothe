@@ -266,10 +266,19 @@ class GoalNode(BaseModel):
     # Guidance (from Goal, RFC-228)
     guidance_accumulated: list[dict[str, Any]] = Field(default_factory=list)
 
+    # Operator verification criteria (RFC-228 job_create; advisory for consensus)
+    verification_rules: str | None = None
+
+    # LoopRail binding (IG-678 P2) — job-scoped policy metadata on the DAG
+    rail_id: str | None = None
+    rail_tags: list[str] = Field(default_factory=list)
+    branch_id: str | None = None
+    branch_status: Literal["active", "pruned", "suspended"] | None = None
+    role: str | None = None  # scout | planner | maker | checker | qa | root | …
+
     # Cron job tracking (RFC-229)
     cron_job_id: str | None = None  # Cron job that spawned this goal (for recurring rescheduling)
 
-    # Dreaming (NEW, RFC-625)
     # Dreaming (NEW, RFC-625)
     topic: str | None = None  # Topic tag for cross-loop dreaming
     findings: list[str] = Field(default_factory=list)  # Key findings from execution
@@ -485,7 +494,10 @@ class GoalStepDAG(BaseModel):
     # ── Recovery ────────────────────────────────────────────────
 
     def recover_active_goals(self) -> list[str]:
-        """Reset goals stuck in 'active' to 'pending' (crash recovery)."""
+        """Reset goals stuck in 'active' to 'pending' (crash recovery).
+
+        Increments ``attempts_after_crash`` on each recovered goal (IG-678 P1-3).
+        """
         recovered: list[str] = []
         now = datetime.now(UTC)
         for goal in self.goals.values():
@@ -493,11 +505,13 @@ class GoalStepDAG(BaseModel):
                 continue
             goal.assigned_loop_id = None
             goal.status = "pending"
+            goal.attempts_after_crash += 1
             goal.updated_at = now
             recovered.append(goal.id)
             logger.warning(
-                "Crash recovery: reset goal %s → pending",
+                "Crash recovery: reset goal %s → pending (attempts_after_crash=%d)",
                 goal.id,
+                goal.attempts_after_crash,
             )
         return recovered
 

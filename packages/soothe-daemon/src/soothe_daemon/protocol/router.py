@@ -2618,8 +2618,8 @@ class MessageRouter:
         d = self._daemon
         request_id = msg.get("request_id")
         goal_text = msg.get("goal")
-        # TODO: verification_rules to be passed to ContextEngine when supported
-        _verification_rules = msg.get("verification_rules")  # noqa: F841
+        verification_rules = msg.get("verification_rules")
+        rail_id = msg.get("rail_id")
 
         if not isinstance(goal_text, str) or not goal_text.strip():
             await d._send_client_message(
@@ -2654,6 +2654,12 @@ class MessageRouter:
                 description=goal_text.strip(),
                 priority=50,  # Default priority
                 workspace=workspace,
+                rail_id=rail_id if isinstance(rail_id, str) else None,
+                verification_rules=(
+                    verification_rules.strip()
+                    if isinstance(verification_rules, str) and verification_rules.strip()
+                    else None
+                ),
             )
         except Exception as exc:
             logger.error("[JobCreate] Failed to submit task: %s", exc, exc_info=True)
@@ -2825,11 +2831,11 @@ class MessageRouter:
             )
             return
 
-        # Suspend the root goal
+        # Suspend the job subtree and stop in-flight workers (IG-678 P1-1).
         try:
-            await context_engine.suspend_goal(job_id, reason="user_pause")
+            await service.pause_job(job_id, reason="user_pause")
         except Exception as exc:
-            logger.error("[JobPause] Failed to suspend goal %s: %s", job_id, exc)
+            logger.error("[JobPause] Failed to pause job %s: %s", job_id, exc)
             await d._send_client_message(
                 client_id,
                 build_error_response(
@@ -2840,10 +2846,12 @@ class MessageRouter:
             )
             return
 
+        paused = await context_engine.get_goal(job_id)
+        status = paused.status if paused is not None else "suspended"
         await self._send_response(
             client_id,
             request_id,
-            {"job_id": job_id, "status": "suspended"},
+            {"job_id": job_id, "status": status},
         )
         logger.info("[JobPause] Paused job %s", job_id)
 
@@ -2901,11 +2909,21 @@ class MessageRouter:
             )
             return
 
-        # Reactivate the root goal
+        # Resume the job subtree and notify LoopRail (IG-678 P2).
         try:
-            await context_engine.reactivate_goal(job_id)
+            resumed = await service.resume_job(job_id)
+        except ValueError as exc:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.JOB_NOT_PAUSED,
+                    str(exc),
+                    request_id=request_id,
+                ),
+            )
+            return
         except Exception as exc:
-            logger.error("[JobResume] Failed to reactivate goal %s: %s", job_id, exc)
+            logger.error("[JobResume] Failed to resume job %s: %s", job_id, exc)
             await d._send_client_message(
                 client_id,
                 build_error_response(
@@ -2916,10 +2934,11 @@ class MessageRouter:
             )
             return
 
+        status = resumed.status if resumed is not None else "pending"
         await self._send_response(
             client_id,
             request_id,
-            {"job_id": job_id, "status": "pending"},
+            {"job_id": job_id, "status": status},
         )
         logger.info("[JobResume] Resumed job %s", job_id)
 

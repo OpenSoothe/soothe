@@ -593,31 +593,31 @@ The `soothe --autopilot` CLI command (per Q7) **becomes a daemon client**: it po
 
 ## Configuration
 
-Per IG-434, the project's autonomous + autopilot config blocks were merged into `agent.autonomous:`. RFC-222 fields live there.
+Per IG-434 / current config, autopilot fields live under `agent.autopilot:`.
+RFC-222 historically said `agent.autonomous:` — that key is obsolete; use
+`agent.autopilot.enabled` (default `false`).
 
 ```yaml
 agent:
-  autonomous:
-    enabled_by_default: false
+  autopilot:
+    enabled: false
 
-    # Goal execution (existing)
+    # Goal execution
     max_iterations: 10
     max_retries: 2
     max_parallel_goals: 3
     enable_dynamic_goals: true
 
-    # Orchestration (existing)
+    # Orchestration
     max_send_backs: 3
     checkpoint_interval: 10
 
-    # Dreaming (existing)
+    # Dreaming
     dreaming_enabled: true
     dreaming_consolidation_interval: 300
     dreaming_health_check_interval: 60
 
-    # Scheduler (existing)
-    scheduler_enabled: true
-    max_scheduled_tasks: 100
+    # Scheduler / webhooks
     webhooks: {}
 
     # Loop pool (RFC-222) — AutopilotService worker management.
@@ -638,6 +638,9 @@ agent:
       enabled: true
       strict_overlap: true           # treat any prefix overlap as conflict
 ```
+
+> Full field list lives in `config/soothe.template.yml` under `agent.autopilot`.
+> Production readiness gaps: [IG-678](../impl/IG-678-autopilot-ce-rails-production-readiness.md).
 
 ---
 
@@ -717,13 +720,13 @@ Remaining gaps (H1, H2, H3, H6, H7, M2–M8, M10) are deliberately out of scope 
 
 **Status**: Implemented (2026-07-01)
 
-When `agent.autonomous.enabled=true`, the following wiring is required before unattended 24/7 operation. This section tracks the **minimum bar** for a guarded pilot (explicit opt-in, deadlines, monitoring).
+When `agent.autopilot.enabled=true`, the following wiring is required before unattended 24/7 operation. This section tracks the **minimum bar** for a guarded pilot (explicit opt-in, deadlines, monitoring).
 
 ### Configuration
 
 | Setting | Pilot recommendation | Notes |
 |---------|---------------------|-------|
-| `agent.autonomous.enabled` | `true` | Master switch; scheduling loop does not start when `false` |
+| `agent.autopilot.enabled` | `true` | Master switch; scheduling loop does not start when `false` |
 | `goal_deadline_seconds` | `1209600` (14 days) | AutopilotMonitor cancels workers past this wall-clock budget; `null` disables |
 | `max_parallel_goals` | tuned to capacity | Service + runner semaphores |
 | `verify_interval` | `30` | AutopilotMonitor DAG health cadence |
@@ -752,7 +755,7 @@ Pydantic default for `enabled` remains **`false`** — production deploys must o
 - StrangeLoop proposal tools (`suggest_goal`, `add_finding`)
 - Webhook notifications
 - Token-budget enforcement (gap H3)
-- Per-loop solo/autopilot toggle (removed; use `/autopilot` job submit + `agent.autonomous.enabled`)
+- Per-loop solo/autopilot toggle (removed; use `/autopilot` job submit + `agent.autopilot.enabled`)
 
 ---
 

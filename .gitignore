@@ -227,6 +227,8 @@ plot_*
 
 checkpoint.json
 manifest.json
+**/tests/**/evaluation_results.json
+**/tests/**/llm_evaluation_results.json
 _bmad
 __MACOSX
 .qoder

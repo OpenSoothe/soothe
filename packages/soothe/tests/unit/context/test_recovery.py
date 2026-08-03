@@ -21,6 +21,7 @@ class TestRecovery:
         fetched = await engine.get_goal(g1.id)
         assert fetched.status == "pending"
         assert fetched.assigned_loop_id is None
+        assert fetched.attempts_after_crash == 1
 
     @pytest.mark.asyncio
     async def test_recover_no_active_goals(self) -> None:

@@ -113,22 +113,22 @@ conditions:
     All review and QA goals passed and no pending work remains.
 
 flow:
-  - on: job_start
+  - event: job_start
     then: decompose_parallel
 
-  - on: goal_completed
+  - event: goal_completed
     when: ready_to_plan
     then: plan_and_implement
 
-  - on: goal_completed
+  - event: goal_completed
     when: needs_review
     then: review
 
-  - on: goal_failed
+  - event: goal_failed
     when: branch_is_stuck
     then: retry_branch
 
-  - on: dag_idle
+  - event: dag_idle
     when: job_complete
     then: complete_job
 ```
@@ -138,13 +138,13 @@ flow:
 ```yaml
 rules:
   - id: review_after_impl
-    on: goal_completed
+    event: goal_completed
     when:
       nl: $conditions.needs_review
     then: review
 
   - id: replant_stuck_branch
-    on: goal_failed
+    event: goal_failed
     when:
       all:
         - nl: $conditions.branch_is_stuck
@@ -171,8 +171,9 @@ Both styles may coexist in one file.
 | `summary` | yes | NL overview; used by auto-pick and documentation |
 | `applies_when` | yes | NL condition for rail selection |
 | `conditions` | optional | Named NL guards referenced by `when:` / `$conditions.*` |
-| `flow` | optional | NL-first event hooks |
-| `rules` | optional | Explicit rule list |
+| `flow` | optional | NL-first event hooks (`event` + optional `when` + `then`) |
+| `rules` | optional | Explicit rule list (`event` / `when` / `then`; legacy `on` accepted) |
+| `rules[].event` | yes* | Trigger event name (`job_start`, `goal_completed`, …). Prefer over legacy `on` (YAML 1.1 boolean trap) |
 | `rules[].priority` | no | Sort key; lower runs first (default 100) |
 | `rules[].allow_multiple` | no | When true, do not stop after first match |
 
@@ -180,7 +181,7 @@ Inline `when:` strings are allowed in `flow` without a named `conditions` entry:
 
 ```yaml
 flow:
-  - on: goal_completed
+  - event: goal_completed
     when: |
       The completed goal tagged exploration and all siblings are done.
     then: plan_and_implement
@@ -217,12 +218,12 @@ conditions:
     Two failed CI runs or reviewer sent back critical issues twice.
 
 flow:
-  - on: job_start
+  - event: job_start
     then: decompose_parallel
-  - on: goal_completed
+  - event: goal_completed
     when: needs_security_review
     then: review
-  - on: goal_failed
+  - event: goal_failed
     when: branch_is_stuck
     then: retry_branch
 ```
@@ -570,10 +571,18 @@ packages/soothe/src/soothe/rails/
 ├── builtins.py                 # get_rails_paths(workspace) — mirrors skills/builtins.py
 └── builtin_rails/
     ├── README.md
-    ├── default.yml
-    ├── feature-dev.yml
-    └── bugfix.yml
+    ├── feature-dev.yml         # scout barrier → impl → review → QA
+    ├── bugfix.yml             # repro gate → fix → review → QA
+    ├── maker-checker.yml       # evaluator-optimizer (separate checker + replant)
+    ├── hotfix.yml              # narrow path + human on blast radius
+    ├── spike.yml               # explore → pause (no auto-impl)
+    ├── pr-review.yml           # review-only (+ optional QA)
+    └── migration.yml           # wave goal-loop until checkable stop
 ```
+
+There is **no** `default.yml`. Jobs without `rail_id` keep AutopilotMonitor /
+ContextEngine opportunistic behavior. A rail ships only when its policy
+**differs** from that path (see `builtin_rails/README.md`).
 
 **User (`~/.soothe`)**
 
@@ -640,15 +649,17 @@ packages/soothe/src/soothe/rails/builtin_rails/   ← shipped (lowest precedence
 **Fallback when auto-pick confidence is low** (first hit wins):
 
 1. `<workspace>/.soothe/rails/.rail-default` (single line, rail id)
-2. `config.yml` → `agent.autopilot.default_rail` (see §8.3)
-3. Built-in `default`
+2. `config.yml` → `agent.autopilot.default_rail` (optional; omit or empty = no rail)
+3. **No rail** — Monitor/CE defaults (do **not** invent a built-in `default` rail)
 
-Config field (operator-level, sync to `config/config.template.yml` + `config/develop/nano.yml` on implementation):
+Config field (operator-level, sync to `config/soothe.template.yml` + `config/develop/nano.yml` on implementation):
 
 ```yaml
 agent:
   autopilot:
-    default_rail: default
+    # Optional. Empty / unset → no rail (Monitor/CE opportunistic path).
+    # Set only when the operator wants a repo-wide specialized rail.
+    default_rail: null
     rail_auto_pick_min_confidence: 0.6
 ```
 
@@ -687,6 +698,10 @@ Project rails resolve to `/.soothe/rails/` under virtual workspace (same as skil
 ## 9. Rail-distiller subagent
 
 Converts existing skill assets into draft LoopRail YAML.
+
+Agents authoring rails by hand should load the **`looprail-creator`** skill
+(`soothe_nano` builtin) so drafts match the protocol (`event` / `when` / `then`,
+CE builtins only, no `default` rail).
 
 **Input:** skill names or paths (e.g. `platonic-coding`, `scout-then-plan`, project `.soothe/skills/*`)
 
@@ -732,15 +747,15 @@ conditions:
     An implementation guide exists and matches the approved RFC scope.
 
 flow:
-  - on: job_start
+  - event: job_start
     then: decompose_parallel
-  - on: goal_completed
+  - event: goal_completed
     when: ready_for_rfc
     then: plan_and_implement
-  - on: goal_completed
+  - event: goal_completed
     when: ready_to_implement
     then: qa_verify
-  - on: goal_failed
+  - event: goal_failed
     when: branch_is_stuck
     then: retry_branch
 ```
@@ -793,7 +808,7 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 | CE builtin failure | Trace `builtin_error`; no partial DAG commit (atomic builtin batch) |
 | Conflicting rules | Priority ordering; first match wins unless `allow_multiple: true` on rule |
 | Rail not found | Reject at intake with actionable error |
-| Auto-pick low confidence | Fall back to `default`; log reasoning |
+| Auto-pick low confidence | Fall back to `.rail-default` / config / **no rail**; log reasoning |
 | Prune while worker active | `cancel_goal` existing path first, then prune |
 | Resume after crash | Interpreter rebinds to job root; trace reopened in append mode (no merge); incomplete `retry_branch` detected and completed via CE built-in recovery |
 | Trace log missing, DAG intact | Interpreter resumes with fresh trace; rule-fire history lost but branch state intact (live-derived from DAG) |
@@ -851,14 +866,14 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 
 | Module | Path (proposed) |
 |--------|-----------------|
-| `LoopRailCatalog` | `soothe/rails/catalog.py` |
-| `get_rails_paths` | `soothe/rails/builtins.py` |
+| `LoopRailCatalog` | `soothe/rails/catalog.py` (shipped) |
+| `get_rails_paths` | `soothe/rails/builtins.py` (shipped) |
 | `LoopRailInterpreter` | `soothe/autopilot/rail/interpreter.py` |
 | `RailSelector` | `soothe/autopilot/rail/selector.py` |
 | CE branch builtins | `soothe/context/branch_manager.py` |
 | Guard schemas | `soothe/autopilot/rail/guards/` |
 | `rail-distiller` subagent | `soothe/subagents/rail_distiller/` |
-| Built-in rails | `soothe/rails/builtin_rails/*.yml` |
+| Built-in rails | `soothe/rails/builtin_rails/*.yml` (shipped; no `default.yml`) |
 | Postgres DDL | `soothe/persistence/sql/soothe_rails/init.sql` |
 | Trace writer (SQLite) | `soothe/autopilot/rail/trace_store.py` |
 | Trace writer (Postgres) | `soothe/autopilot/rail/trace_store.py` (same interface, backend-selected) |
@@ -871,7 +886,7 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 - Should distiller auto-register promoted rails in a project `catalog.yml` manifest?
 - Guard result caching across identical events within a job?
 - TUI rail timeline as first-class card (RFC-628 pattern)?
-- Migration path: auto-attach `default` rail to all new autopilot jobs?
+- Migration path: leave new jobs no-rail by default, or require explicit `--rail` / `.rail-default`?
 - Should `flow` entries support `then: [review, qa_verify]` sequences in one hook?
 
 ---
@@ -884,35 +899,23 @@ No existing LoopRail RFC. Closest related: RFC-222, RFC-625, RFC-626.
 
 ---
 
-## Appendix A: built-in `default.yml` (sketch)
+## Appendix A: built-in catalog (no `default` rail)
 
-Minimal rail for jobs that do not match a specialized pattern:
+**Rule:** a rail is valid iff removing it changes job outcomes under the same
+submit text. Opportunistic placement, verifier suggest-decompose/merge, backoff,
+and consensus `send_back` are **no-rail** Monitor/CE behavior — not a rail.
 
-```yaml
-id: default
-version: "1.0"
+Shipped under `packages/soothe/src/soothe/rails/builtin_rails/`:
 
-summary: |
-  Single-threaded autopilot: one root goal, standard retry and review on failure.
+| Rail | Differs from no-rail by |
+|------|-------------------------|
+| `feature-dev` | Scout barrier before implement; separate review + QA goals |
+| `bugfix` | Repro / root-cause gate before fix; QA re-checks original failure |
+| `maker-checker` | Independent checker goal; fail → `retry_branch` (not same-goal consensus) |
+| `hotfix` | No wide scout fan-out; mandatory review/QA; human pause on blast radius |
+| `spike` | Explore → `pause_for_user`; never auto-implement |
+| `pr-review` | Starts at `review`; no implementation branch |
+| `migration` | Wave goal-loop until a checkable `job_complete` |
 
-applies_when: |
-  General task with no specialized workflow requirement.
-
-conditions:
-  needs_retry: |
-    The goal failed but the approach may still succeed with a fresh attempt.
-  job_complete: |
-    The root goal completed successfully with no pending children.
-
-flow:
-  - on: job_start
-    then: decompose_parallel   # degenerates to single goal when LLM sees simple task
-  - on: goal_failed
-    when: needs_retry
-    then: retry_branch
-  - on: dag_idle
-    when: job_complete
-    then: complete_job
-```
-
-Built-in catalog should also ship `feature-dev.yml` and `bugfix.yml` as documented examples in §4.1 and §10.
+NL-first examples: §4.1 (`feature-dev`), §10 (end-to-end). YAML sources of truth
+are the files in `builtin_rails/`.
