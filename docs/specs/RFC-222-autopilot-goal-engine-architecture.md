@@ -330,10 +330,17 @@ Per RFC-204 — 7 states: `pending`, `active`, `validated`, `completed`, `failed
 
 ### Autopilot-specific Goal fields (revised)
 
-Already present in `core/goal_engine/models.py`:
-- `assigned_loop_id: str | None` — workspace-namespaced worker loop_id (e.g. `autopilot__w001`)
+Already present on `GoalNode` (ContextEngine / RFC-626):
+- `assigned_loop_id: str | None` — live assignment loop id while the goal is active
+  (format `autopilot__{job_id}__{uuid}` per IG-677; cleared when the assignment ends)
 - `locked_files: list[str]` — **reserved for future fine-grained locking; unused in v1**
 - `lock_status`, `lock_acquired_at` — **reserved for future fine-grained locking; unused in v1**
+
+> **IG-677**: Durable job↔loop membership is **not** `assigned_loop_id` alone.
+> `JobLoopIndex` (`autopilot:job_loops:{job_id}` / `autopilot:loop_owner:{loop_id}`)
+> records assignment history. Pool **slots** (`autopilot__slot_NNN`) are capacity
+> handles; each dispatch allocates a fresh assignment `loop_id` under
+> `data/loops/{loop_id}/`.
 
 ### `peek_ready_goals` and `claim_goal` (Phase 1 deliverables)
 
@@ -495,25 +502,36 @@ This is the **only place** the daemon reacts to worker outcomes — single choke
 
 ```python
 class WorkerPool:
-    """Sticky-affinity wrapper around LoopRunnerFactory."""
+    """Sticky-affinity wrapper around LoopRunnerFactory (IG-677)."""
 
-    async def pick_worker(self, goal: Goal, prefer: str | None) -> WorkerSlot | None:
-        # 1. Sticky: worker that recently ran any goal.depends_on → if idle, reuse
-        # 2. Any idle worker
-        # 3. Spawn new under max_loops cap
-        # 4. None — caller defers
+    async def pick_worker(
+        self, goal: Goal, *, job_id: str, prefer: str | None = None
+    ) -> WorkerSlot | None:
+        # 1. Prefer idle slot (by slot_id or last loop_id)
+        # 2. Sticky: idle slot that recently ran any goal.depends_on
+        # 3. Any idle slot (LRU) — rebind with a NEW assignment loop_id
+        # 4. Spawn new slot under max_loops cap
+        # 5. None — caller defers
 ```
 
-Worker `loop_id` is **namespaced**: `autopilot__w001`, `autopilot__w002`, …. The daemon's WebSocket broadcast layer (`daemon/protocol/router.py`) filters `autopilot__*` out of client `subscribe_loop` requests — autopilot workers are not user sessions. Clients see their own session loop_ids; autopilot workers stay private to the daemon.
+**Slot vs assignment loop id (IG-677):**
 
-This addresses the prior RFC's lineage-pinning by softening it to *preference*. A child of a parent that just completed will likely land on the same worker (warm caches), but won't fail if that worker is busy.
+| Id | Format | Role |
+|----|--------|------|
+| `slot_id` | `autopilot__slot_NNN` | Reusable pool capacity / sticky affinity key |
+| `loop_id` | `autopilot__{job_id}__{uuid4().hex}` | Per-assignment runtime home under `data/loops/{loop_id}/` |
+
+Idle slot reuse keeps the **slot** and allocates a **new** `loop_id` + runner so directories never mix jobs. The daemon filters `autopilot__*` out of client `subscribe_loop` requests — autopilot workers are not user sessions.
+
+This softens lineage-pinning to *preference*: a child of a parent that just completed will likely land on the same **slot**, but gets its own assignment `loop_id`.
 
 ### Crash recovery
 
-On daemon start, after `GoalEngine.restore_from_durability()`:
-1. Scan `_goals` for `status == "active"` — these were mid-flight when the daemon died.
-2. Reset to `pending`, clear `assigned_loop_id`, increment `attempts_after_crash` counter, log loudly.
-3. Scheduling loop picks them up on next tick.
+On daemon start, after restoring the CE DAG snapshot (and `JobLoopIndex`):
+1. Scan goals for `status == "active"` — mid-flight when the daemon died.
+2. Reset to `pending`, clear `assigned_loop_id`, increment `attempts_after_crash`, log loudly.
+3. Mark stranded index entries `interrupted` (`JobLoopIndex.interrupt_active_loops`).
+4. Scheduling loop picks pending goals on the next tick (new assignment `loop_id`s).
 
 `GoalDispatchContextContribution` for completed parents is in durability — re-dispatch hydrates from there. One bundle's worth of work is the maximum re-execution loss per crashed goal. Closes gap H4.
 
@@ -768,7 +786,7 @@ Pydantic default for `enabled` remains **`false`** — production deploys must o
 - **`WorkspaceReservation`** replaces `FileLockRegistry` / `FileLockMiddleware` as the conflict gate. Enforced at scheduling time in the daemon. Fine-grained per-path locking preserved unwired (revivable when needed).
 - **Job contract** added: `LoopRunRequest.autopilot_job: AutopilotJob | None`. Worker branches on presence; solo callers pass `None`.
 - **Stream contract** added: `GoalCompletionChunk` emitted exactly once by worker, consumed by daemon's `_route_chunk`. No new IPC mechanism.
-- **`WorkerPool` sticky-affinity wrapper** over `LoopRunnerFactory` (RFC-221). Worker `loop_id` namespaced as `autopilot__*` and filtered from client subscriptions.
+- **`WorkerPool` sticky-affinity wrapper** over `LoopRunnerFactory` (RFC-221). Autopilot ids namespaced as `autopilot__*` and filtered from client subscriptions.
 - **Crash recovery** added: scan `active` goals on daemon start, reset to `pending`, re-dispatch.
 - **Async backoff reasoning** — `BackoffReasoner` runs as a separate task; scheduling loop is non-blocking.
 - **`InternalEventBus` singleton dropped** — bus owned by `AutopilotService`, injected to consumers.
@@ -778,6 +796,10 @@ Pydantic default for `enabled` remains **`false`** — production deploys must o
 ### 2026-07-01 (Guarded production pilot minimum bar)
 - Documented **Guarded Production Pilot** section: config recommendations, monitor lifecycle wiring, intake routing, consensus model fallback.
 - Implementation: `AutopilotService` starts/stops `AutopilotMonitor`; `submit_task` uses `intake_goal` when monitor wired; `create_chat_model(consensus_model_role)` for daemon consensus model.
+
+### 2026-08-04 (IG-677 Job↔Loop Index)
+- Assignment `loop_id` is `autopilot__{job_id}__{uuid}` (unbounded); pool **slots** are separate reusable capacity keys.
+- Durable `JobLoopIndex` records job↔loop membership across restarts; live `assigned_loop_id` remains the in-flight pointer only.
 
 ---
 

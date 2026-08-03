@@ -3,7 +3,10 @@
 **Status**: Draft (in review)  
 **Date**: 2026-07-11  
 **Kind**: Design  
-**Related**: RFC-222 (Autopilot Architecture), RFC-228 (Autopilot Job IPC), RFC-625 (AutopilotMonitor / ContextEngine), RFC-626 (Entity Model), RFC-630 (No Keyword Heuristics), RFC-105 (Skills — distillation source)  
+**Related**: RFC-222 (Autopilot Architecture), RFC-228 (Autopilot Job IPC),
+RFC-625 (AutopilotMonitor / ContextEngine), RFC-626 (Entity Model),
+RFC-630 (No Keyword Heuristics), RFC-105 (Skills — distillation source),
+IG-677 (Job↔Loop Index), IG-RQJ-02 (rail trace continuity)
 
 ---
 
@@ -290,7 +293,8 @@ flowchart LR
 | `prune_branch(branch_root_id, reason)` | Atomic prune with salvage |
 | `replant_branch(parent_id, spec, informs_from)` | Sibling branch with context links |
 | Job root: `rail_id`, `rail_version` | Job ↔ rail binding |
-| Rail trace ref on job root | Pointer to trace store |
+
+**Rail trace path is derivable from `job_id`** — no separate trace-ref field on the goal node. The path `~/.soothe/data/loops/{job_id}/rail_trace.jsonl` (SQLite) or the `rail_trace` table keyed by `job_id` (Postgres) is computed from the root goal ID at runtime (see §7).
 
 ---
 
@@ -342,9 +346,206 @@ class RuleFireRecord:
     builtin_result: str | None   # success / error summary
 ```
 
-**Persistence:** job root metadata + `~/.soothe/data/loops/{loop_id}/rail_trace.jsonl` (runtime — not in `rails/` catalog dirs).
+**Persistence (SQLite mode):** job root metadata + a **job-scoped** append-only
+trace file (runtime — not in `rails/` catalog dirs):
+
+```text
+~/.soothe/data/loops/{job_id}/rail_trace.jsonl
+```
+
+Where `job_id` = the **root goal ID** of the autopilot job. This directory is a
+**job artifact home**, distinct from per-assignment StrangeLoop dirs
+(`data/loops/autopilot__{job_id}__{uuid}/` per IG-677). Assignment `loop_id`s
+are never used in the rail trace path.
+
+A single job's goal DAG may span multiple assignment loops (e.g.
+`decompose_parallel` dispatches scouts to separate workers) — the trace is one
+append-only file per job regardless of which worker executes each goal.
+
+The rail interpreter is the **sole trace writer**, bound to the job root. Workers emit `goal_*` events that the interpreter consumes; workers never touch the trace file. This means:
+- **No cross-loop trace fragmentation**: decomposition spawns child goals in the same DAG under the same `job_id`; the interpreter continues writing to the same trace.
+- **No trace inheritance needed for sub-loops**: there are no "sub-loops" for trace purposes. Assignment loops are execution contexts; the trace lives above them (JobLoopIndex maps job → loops; rail does not).
+- **Trace survives `retry_branch`**: the append-only log is never pruned. Pruned-branch `RuleFireRecord` entries remain in the log. The `informs` mechanism carries *salvaged context* (goal summaries, findings — not trace records) to the replacement branch via `GoalDispatchContextBundle` projection.
+
+**Persistence (PostgreSQL mode):** when `persistence.default_backend: postgresql` (AGENTS.md §10), the trace and job metadata MUST be Postgres tables, not filesystem `jsonl` files. Three tables are required:
+
+```sql
+-- rail_job_meta: job ↔ rail binding (one row per autopilot job with a rail attached).
+CREATE TABLE IF NOT EXISTS rail_job_meta (
+    job_id      TEXT PRIMARY KEY,          -- root goal ID; stable, job-scoped
+    rail_id     TEXT NOT NULL,             -- rail catalog id (e.g. "feature-dev")
+    rail_version TEXT NOT NULL,            -- semver from rail document
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- rail_trace: append-only rule-fire log (many rows per job).
+CREATE TABLE IF NOT EXISTS rail_trace (
+    job_id      TEXT NOT NULL,
+    seq         BIGINT NOT NULL,           -- monotonic append ordering per job
+    rule_id     TEXT,                     -- from rules[].id or synthetic flow index
+    event       TEXT NOT NULL,            -- triggering event (e.g. "goal_completed")
+    condition   TEXT,                     -- NL text or condition name evaluated
+    guard_result JSONB NOT NULL,          -- {matched, confidence, reasoning}
+    builtin     TEXT,                     -- then: verb invoked (e.g. "retry_branch")
+    builtin_result TEXT,                  -- success / error summary
+    record      JSONB NOT NULL,           -- full serialized RuleFireRecord
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (job_id, seq),
+    FOREIGN KEY (job_id) REFERENCES rail_job_meta(job_id) ON DELETE CASCADE
+);
+
+-- Indexes (match naming convention from soothe_checkpoints/init.sql).
+CREATE INDEX IF NOT EXISTS idx_rail_trace_job_created
+    ON rail_trace(job_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rail_trace_created
+    ON rail_trace(created_at DESC);       -- global retention purge scan
+
+-- rail_branch_state: snapshot-optimized branch view (denormalized from goal DAG).
+-- Branch lifecycle is CE-owned (goal DAG entities); this table is a query cache
+-- for RailSnapshot reconstruction. The goal DAG remains the source of truth.
+CREATE TABLE IF NOT EXISTS rail_branch_state (
+    job_id         TEXT NOT NULL,
+    branch_id      TEXT NOT NULL,          -- branch root goal ID
+    branch_root_id TEXT NOT NULL,          -- parent goal ID anchoring the branch
+    branch_status  TEXT NOT NULL,          -- active | pruned | suspended
+    salvaged_goal_ids JSONB,               -- completed goals kept on pruned branches
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (job_id, branch_id),
+    FOREIGN KEY (job_id) REFERENCES rail_job_meta(job_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_rail_branch_state_job_status
+    ON rail_branch_state(job_id, branch_status);
+```
+
+**Migration:** tables are created by `init.sql` in a new `soothe_rails` database (registered under `persistence.postgres_databases.rails`), idempotent via `IF NOT EXISTS`. Incremental schema changes use numbered migration files (`NNN_name.sql`), matching the convention in `soothe_checkpoints/init.sql`.
+
+**Branch state is CE-owned (goal DAG), not loop-owned.** Branch lifecycle (`active` / `pruned` / `suspended`) lives on goal DAG entities (§5.2 extensions), traversed from the root goal via `parent_id` / `depends_on` / `informs` edges. The `rail_branch_state` table is a denormalized query cache for fast `RailSnapshot` reconstruction; the goal DAG remains the single source of truth and is written first. The trace is reconstructable from two job-scoped inputs: the branch list (from `rail_branch_state` or derived from the goal DAG) + the fired-rules log (from `rail_trace` or `{job_id}/rail_trace.jsonl`). No per-`loop_id` directory visits or table scans are required for snapshot reconstruction.
+
+**Retention config** (operator-level, not in rail YAML):
+
+```yaml
+agent:
+  autopilot:
+    rails:
+      # --- Trace retention ---
+      trace_max_rule_fires_per_job: 1000    # oldest entries evicted per job (both backends)
+      trace_max_dirs: 500                   # SQLite: LRU eviction of {job_id}/ directories
+      trace_retention_days: 30              # Postgres: periodic purge of rail_trace rows
+      trace_purge_interval_seconds: 3600    # Postgres: how often the purge sweep runs
+      # --- Job metadata retention ---
+      job_meta_retention_days: 90           # Postgres: purge completed-job rows from rail_job_meta
+      # --- Branch state cache ---
+      branch_state_cache_ttl_seconds: 300   # rail_branch_state rows considered stale after this age
+```
+
+On implementation, sync these fields to `config/soothe.template.yml` (under `agent.autopilot.rails`) and `config/develop/nano.yml` with matching structure (AGENTS.md §2 Config Sync). The `rails` key under `persistence.postgres_databases` must also be added:
+
+```yaml
+persistence:
+  postgres_databases:
+    checkpoints: soothe_checkpoints
+    metadata: soothe_metadata
+    vectors: soothe_vectors
+    memory: soothe_memory
+    rails: soothe_rails                   # NEW — rail_trace, rail_job_meta, rail_branch_state
+```
 
 **Events:** emit `soothe.system.loop_rail.rule_fired` for TUI timeline (verbosity NORMAL).
+
+### 7.1 Resume and trace continuity
+
+A job may be interrupted by daemon restart, crash, worker timeout, or operator pause. Resume re-establishes the interpreter's binding to the job root and continues the append-only trace. **No trace merge is needed** — there is one trace file per job, the interpreter is the sole writer, and workers never produce trace fragments that need reconciliation.
+
+**Resume triggers and handling:**
+
+| Trigger | What resumes | What is lost |
+|---------|-------------|-------------|
+| Daemon restart / crash recovery | Goal DAG (persisted), trace log (append-only file), interpreter rebinds to job root | In-flight worker sessions (workers are ephemeral; their goals are re-dispatched) |
+| Worker timeout / release | Goal re-dispatched to a new worker by AutopilotService; interpreter trace continues unbroken | Nothing in trace — workers don't write trace |
+| `pause_for_user` | Branch suspended; interpreter remains bound; trace holds `pause` record | Nothing — resume unsuspends branch and continues appending |
+| `retry_branch` during resume | Pruned branch entries preserved in append-only log; replacement branch spawned | Nothing — trace is never pruned |
+
+**Resume workflow (daemon restart):**
+
+```
+1. AutopilotService loads persisted goal DAG for each job_id from CE store
+2. For each job with rail_id set:
+   a. RailSelector re-resolves rail (same rail_id + version from job root metadata)
+   b. LoopRailInterpreter rebinds to job root goal (job_id)
+   c. Trace file reopened in append mode:
+      - SQLite: open ~/.soothe/data/loops/{job_id}/rail_trace.jsonl (append)
+      - Postgres: SELECT MAX(seq) FROM rail_trace WHERE job_id = ? → next seq = max+1
+   d. Snapshot reconstruction (see below)
+   e. In-flight goals (status=active, no worker) → re-queued for dispatch
+   f. Interpreter resumes event processing from live DAG state
+3. Emit soothe.system.loop_rail.job_resumed (verbosity NORMAL)
+```
+
+**Snapshot reconstruction:**
+
+The `RailSnapshot` (§7) is rebuilt from two job-scoped inputs on resume — neither requires per-worker or per-`loop_id` directory visits:
+
+```python
+def reconstruct_snapshot(job_id: str, goal_dag: GoalDAG) -> RailSnapshot:
+    # 1. Branch state: traverse goal DAG from root via parent_id / depends_on / informs
+    active_branches = derive_branches(goal_dag, status="active")
+    pruned_branches = derive_branches(goal_dag, status="pruned")  # includes salvaged goal ids
+
+    # 2. Fired rules: replay append-only trace log
+    fired_rules = read_trace_records(job_id)  # jsonl file or rail_trace table
+
+    # 3. Rail binding from job root metadata
+    rail_id = goal_dag.root.rail_id
+    rail_version = goal_dag.root.rail_version
+
+    return RailSnapshot(
+        job_id=job_id,
+        rail_id=rail_id,
+        rail_version=rail_version,
+        active_branches=active_branches,
+        pruned_branches=pruned_branches,
+        fired_rules=fired_rules,
+    )
+```
+
+Branch state is **live-derived** from the goal DAG, not replayed from the trace. The trace log provides the rule-fire history (guard results, builtins invoked) but is not the source of truth for current branch topology — the goal DAG is. This means:
+
+- If the goal DAG was persisted but the trace log is missing (data loss), the interpreter can still resume: branch state is intact, only rule-fire history is lost. The interpreter starts appending fresh records from the resume point.
+- If the trace log exists but the goal DAG is missing (worse data loss), the job cannot resume — the DAG is the source of truth for what work remains.
+
+**Trace seq continuity (Postgres mode):**
+
+On resume, the interpreter queries `MAX(seq)` for the `job_id` and continues from `max+1`. The `PRIMARY KEY (job_id, seq)` constraint guarantees no duplicate seq even if the previous interpreter instance crashed mid-write (the uncommitted transaction is rolled back). SQLite mode uses file-append; JSONL lines are atomic at the line level (one `RuleFireRecord` per line, flushed with `fsync` after each append).
+
+**Cross-loop context inheritance (summary):**
+
+| Artifact | Crosses loop/worker boundary? | Mechanism |
+|----------|-------------------------------|-----------|
+| Rail trace | N/A — job-scoped, never per-worker | Single file/table at `{job_id}` |
+| Salvaged context (summaries, findings) | ✅ Yes | `informs` edges → `GoalDispatchContextBundle` projection |
+| Branch topology | ✅ Yes (within job) | CE-owned goal DAG, live-derived from root |
+| StrangeLoop checkpoint | ❌ No | Per `loop_id` (RFC-225); ephemeral worker state, not resumed |
+| Rule-fire history | ✅ Yes (within job) | Append-only trace log, replayed on resume |
+
+StrangeLoop checkpoints (RFC-225) are per-`loop_id` and **do not survive worker release**. This is by design: when a worker is released or times out, its StrangeLoop checkpoint is abandoned. The goal is re-dispatched to a new worker, which starts a fresh StrangeLoop session. The new worker receives dispatch context (including `informs` from salvaged goals) via `GoalDispatchContextBundle` — this is the **only** context that crosses the worker boundary. The rail trace is unaffected because it lives above the worker layer.
+
+**Concurrent worker events — no merge needed:**
+
+Multiple workers may emit `goal_completed` / `goal_failed` events concurrently for different goals in the same job. The interpreter processes these events sequentially (single-threaded event loop or serialized via queue). Since the interpreter is the sole trace writer and the trace is append-only with monotonic seq, there are no concurrent writes to reconcile. No "trace merge" step exists — events are simply appended in processing order.
+
+**Resume after `retry_branch`:**
+
+If the daemon restarts while a `retry_branch` is in progress (branch pruned, replacement not yet spawned):
+
+1. Reconstruct snapshot: goal DAG shows the pruned branch (goals marked `branch_status: pruned`) and no replacement branch yet.
+2. The last trace record is the `retry_branch` builtin invocation (possibly with `builtin_result: null` if crash interrupted it).
+3. Interpreter detects the incomplete builtin: pruned branch exists but no replacement branch under the same parent.
+4. CE built-in recovery: `replant_branch` is re-invoked with the original `informs_from` list (stored on the pruned branch root's metadata).
+5. Trace continues with a `builtin_resume` record noting the recovery.
+
+This recovery is possible because `retry_branch` is **atomic at the CE level**: either the full prune + replant completed (branch pruned + replacement spawned), or neither did. The CE goal DAG transaction commits both operations together. On resume, the interpreter checks for this half-done state and completes it.
 
 ---
 
@@ -406,8 +607,11 @@ packages/soothe/src/soothe/rails/builtin_rails/   ← shipped (lowest precedence
 │   ├── *.yml
 │   └── drafts/
 ├── skills/                   ← existing
-└── data/loops/{id}/
-    └── rail_trace.jsonl      ← runtime trace (not catalog)
+└── data/
+    ├── loops/{job_id}/
+    │   └── rail_trace.jsonl          ← job artifact (not an assignment loop)
+    └── loops/autopilot__{job_id}__{uuid}/
+        └── …                         ← StrangeLoop assignment runtime (IG-677)
 
 <workspace>/.soothe/
 ├── rails/                    ← project (highest precedence)
@@ -472,7 +676,7 @@ Project rails resolve to `/.soothe/rails/` under virtual workspace (same as skil
 
 | Data | Location |
 |------|----------|
-| Per-job trace | `~/.soothe/data/loops/{id}/rail_trace.jsonl` |
+| Per-job trace | `~/.soothe/data/loops/{job_id}/rail_trace.jsonl` (SQLite) or `rail_trace` + `rail_job_meta` + `rail_branch_state` tables in `soothe_rails` database (Postgres; see §7) |
 | Guard cache (v2) | `~/.soothe/data/rails/cache/` |
 | Distiller subagent runtime | `~/.soothe/agents/rail-distiller/` |
 
@@ -591,6 +795,9 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 | Rail not found | Reject at intake with actionable error |
 | Auto-pick low confidence | Fall back to `default`; log reasoning |
 | Prune while worker active | `cancel_goal` existing path first, then prune |
+| Resume after crash | Interpreter rebinds to job root; trace reopened in append mode (no merge); incomplete `retry_branch` detected and completed via CE built-in recovery |
+| Trace log missing, DAG intact | Interpreter resumes with fresh trace; rule-fire history lost but branch state intact (live-derived from DAG) |
+| DAG missing | Job cannot resume; error logged; operator must re-submit |
 
 ---
 
@@ -604,7 +811,8 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 | CE builtins | `retry_branch` preserves completed + `informs` wiring |
 | Interpreter integration | Event sequences → expected DAG shapes |
 | Distiller | Fixture skills → valid draft YAML → validate passes |
-| Trace | Rule fire order; replay reproduces snapshot |
+| Trace | Rule fire order; replay reproduces snapshot; trace isolation across worker reuse — two goals from different jobs dispatched to the same worker do not mix traces |
+| Resume (§7.1) | Daemon restart → interpreter rebinds, trace continues appending (no merge); snapshot reconstructs from goal DAG + trace log; incomplete `retry_branch` detected and completed; Postgres seq continuity (`MAX(seq)+1`) after crash |
 
 ---
 
@@ -634,6 +842,8 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 | Precedence | built-in → user → project (last wins) |
 | Bootstrap | `rail-distiller` subagent from skills |
 | StrangeLoop boundary | Unchanged RFC-222 invariant |
+| Resume model | Trace is job-scoped append-only; no merge needed across workers; interpreter rebinds on restart |
+| Recovery source of truth | Goal DAG is source of truth for branch state; trace log is rule-fire history only |
 
 ---
 
@@ -649,6 +859,10 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 | Guard schemas | `soothe/autopilot/rail/guards/` |
 | `rail-distiller` subagent | `soothe/subagents/rail_distiller/` |
 | Built-in rails | `soothe/rails/builtin_rails/*.yml` |
+| Postgres DDL | `soothe/persistence/sql/soothe_rails/init.sql` |
+| Trace writer (SQLite) | `soothe/autopilot/rail/trace_store.py` |
+| Trace writer (Postgres) | `soothe/autopilot/rail/trace_store.py` (same interface, backend-selected) |
+| Retention sweeper | `soothe/autopilot/rail/retention.py` |
 
 ---
 

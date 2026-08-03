@@ -48,7 +48,7 @@ class TestDeadlineMonitorNoOps:
         svc = _service(deadline=None)
         # Manually claim a worker far in the past — no deadline so no action.
         goal = await svc.submit_task("g1", max_retries=0)
-        worker = await svc._worker_pool.pick_worker(goal)
+        worker = await svc._worker_pool.pick_worker(goal, job_id=goal.id)
         assert worker is not None
         worker.dispatch_started_at = datetime.now(UTC) - timedelta(seconds=600)
         await svc._monitor_loop_health()
@@ -58,7 +58,7 @@ class TestDeadlineMonitorNoOps:
     async def test_under_deadline_skips(self) -> None:
         svc = _service(deadline=60.0)
         goal = await svc.submit_task("g1", max_retries=0)
-        worker = await svc._worker_pool.pick_worker(goal)
+        worker = await svc._worker_pool.pick_worker(goal, job_id=goal.id)
         assert worker is not None
         svc._ce.claim_goal(goal.id, loop_id=worker.loop_id)
         # Just started — well under deadline.
@@ -73,7 +73,7 @@ class TestDeadlineMonitorEnforces:
     async def test_overrun_cancels_worker_and_fails_goal(self) -> None:
         svc = _service(deadline=1.0)
         goal = await svc.submit_task("slow", max_retries=0)
-        worker = await svc._worker_pool.pick_worker(goal)
+        worker = await svc._worker_pool.pick_worker(goal, job_id=goal.id)
         assert worker is not None
         svc._ce.claim_goal(goal.id, loop_id=worker.loop_id)
         # Pretend the worker started long enough ago to overrun.
@@ -90,7 +90,7 @@ class TestDeadlineMonitorEnforces:
     async def test_no_started_at_skips(self) -> None:
         svc = _service(deadline=1.0)
         goal = await svc.submit_task("g1", max_retries=0)
-        worker = await svc._worker_pool.pick_worker(goal)
+        worker = await svc._worker_pool.pick_worker(goal, job_id=goal.id)
         assert worker is not None
         worker.dispatch_started_at = None  # idle-ish
         await svc._monitor_loop_health()

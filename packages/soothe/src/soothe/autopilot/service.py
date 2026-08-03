@@ -117,6 +117,7 @@ class AutopilotService:
                 When ``None``, completed goals suspend until a model is configured.
             goal_persist_store: Optional ``AsyncPersistStore`` for persisting
                 the ContextEngine DAG snapshot across daemon restarts.
+                Also backs the job↔loop membership index (IG-677).
         """
         if runner_factory is None:
             msg = "runner_factory is required"
@@ -142,12 +143,14 @@ class AutopilotService:
 
         # RFC-222 revised (Phase C): WorkerPool-driven dispatch.
         self._runner_factory = runner_factory
+        from soothe.autopilot.job_loop_index import JobLoopIndex
         from soothe.autopilot.worker_pool import WorkerPool
 
         self._worker_pool = WorkerPool(factory=runner_factory, max_loops=self._config.max_loops)
         self._workspace_reservation = workspace_reservation
         self._consensus_model = consensus_model
         self._goal_persist_store = goal_persist_store
+        self._job_loop_index = JobLoopIndex(store=goal_persist_store)
         self._context_store: Any = None
         self._context_projector: Any = None
         self._dispatch_tasks: dict[str, asyncio.Task] = {}  # goal_id → consumer task
@@ -266,6 +269,12 @@ class AutopilotService:
             return
 
         await self._restore_persisted_goals()
+        interrupted = await self._job_loop_index.interrupt_active_loops()
+        if interrupted:
+            logger.warning(
+                "[Autopilot] crash recovery: interrupted %d active loop assignment(s)",
+                len(interrupted),
+            )
 
         if self._monitor is not None:
             await self._monitor.start()
@@ -427,6 +436,9 @@ class AutopilotService:
         if cron_job_id is not None:
             goal.cron_job_id = cron_job_id
             logger.debug("Goal %s linked to cron job %s", goal.id, cron_job_id)
+        # IG-677: root goals are jobs — ensure membership record exists.
+        if goal.parent_id is None:
+            await self._job_loop_index.ensure_job(goal.id)
         if self._dreaming:
             await self.wake_from_dreaming(trigger="new_task")
         await self._persist_goals()
@@ -463,10 +475,26 @@ class AutopilotService:
 
     async def _cancel_open_goal_node(self, goal: GoalNode, *, reason: str) -> None:
         """Cancel one non-terminal goal: stop worker, CE transition, release workspace."""
+        loop_id = goal.assigned_loop_id
         await self._cancel_goal_worker(goal)
         await self._ce.cancel_goal(goal.id, reason=reason)
+        if loop_id:
+            try:
+                await self._job_loop_index.record_end(loop_id, status="cancelled")
+            except Exception:
+                logger.warning(
+                    "Failed to record cancelled loop %s for goal %s",
+                    loop_id,
+                    goal.id,
+                    exc_info=True,
+                )
         if self._workspace_reservation is not None:
             self._workspace_reservation.release(goal.id)
+        if goal.parent_id is None:
+            try:
+                await self._job_loop_index.mark_job_status(goal.id, "cancelled")
+            except Exception:
+                logger.debug("Failed to mark job %s cancelled", goal.id, exc_info=True)
 
     async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> GoalNode | None:
         """Cancel a goal and all non-terminal descendants.
@@ -622,7 +650,8 @@ class AutopilotService:
             if not self._workspace_reservation.acquire(goal.id, ws):
                 return False
 
-        worker = await self._worker_pool.pick_worker(goal)
+        job_id = self._resolve_job_id(goal)
+        worker = await self._worker_pool.pick_worker(goal, job_id=job_id)
         if worker is None:
             if self._workspace_reservation is not None:
                 self._workspace_reservation.release(goal.id)
@@ -637,6 +666,20 @@ class AutopilotService:
                 self._workspace_reservation.release(goal.id)
             return False
 
+        try:
+            await self._job_loop_index.record_start(
+                job_id,
+                loop_id=worker.loop_id,
+                goal_id=goal.id,
+                attempt=goal.retry_count + 1,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to record job loop start for goal %s",
+                goal.id,
+                exc_info=True,
+            )
+
         await self._internal_bus.emit(
             InternalLoopAssignedEvent(
                 loop_id=worker.loop_id,
@@ -647,6 +690,18 @@ class AutopilotService:
         )
         await self._dispatch_to_worker(claimed, worker)
         return True
+
+    def _resolve_job_id(self, goal: GoalNode) -> str:
+        """Walk parent_id chain to the root goal (job_id)."""
+        current = goal
+        seen: set[str] = {goal.id}
+        while current.parent_id:
+            parent = self._ce.get_goal_sync(current.parent_id)
+            if parent is None or parent.id in seen:
+                break
+            seen.add(parent.id)
+            current = parent
+        return current.id
 
     async def _dispatch_to_worker(self, goal: GoalNode, worker: Any) -> None:
         """Build the LoopRunRequest and spawn a stream-consuming task."""
@@ -827,6 +882,26 @@ class AutopilotService:
                 logger.debug("fail_goal raised on missing completion", exc_info=True)
 
         # Always release worker + reservation, even on errors.
+        end_status = "completed" if completion_seen else "failed"
+        # Prefer outcome from CE if available.
+        finished = await self._ce.get_goal(goal_id)
+        if finished is not None:
+            if finished.status == "completed":
+                end_status = "completed"
+            elif finished.status in ("cancelled", "failed", "suspended"):
+                end_status = "failed" if finished.status != "cancelled" else "cancelled"
+        try:
+            await self._job_loop_index.record_end(
+                worker.loop_id,
+                status=end_status,  # type: ignore[arg-type]
+            )
+        except Exception:
+            logger.warning(
+                "Failed to record job loop end for goal %s loop %s",
+                goal_id,
+                worker.loop_id,
+                exc_info=True,
+            )
         if self._worker_pool is not None:
             await self._worker_pool.mark_idle(worker.loop_id, success=completion_seen)
         if self._workspace_reservation is not None:
@@ -1072,6 +1147,11 @@ class AutopilotService:
                 "poll_interval": self._config.poll_interval,
             },
         }
+
+    async def list_job_loops(self, job_id: str) -> list[dict[str, Any]]:
+        """Return durable loop membership history for a job (IG-677)."""
+        entries = await self._job_loop_index.list_loops(job_id)
+        return [e.model_dump(mode="json") for e in entries]
 
     async def dag_snapshot(self, root_goal_id: str) -> dict[str, Any]:
         """Export DAG structure for visualization (RFC-228).

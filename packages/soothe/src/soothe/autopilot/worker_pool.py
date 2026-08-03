@@ -1,20 +1,19 @@
-"""WorkerPool — sticky-affinity wrapper over LoopRunnerFactory (RFC-222 revised).
+"""WorkerPool — sticky-affinity wrapper over LoopRunnerFactory (RFC-222 / IG-677).
 
 WorkerPool is the daemon-owned abstraction over RFC-221's per-loop_id
-subprocess workers. It tracks which goal each worker is running, which
-goals each worker has recently run (for sticky scheduling), and the idle
-queue. The pool itself does not spawn processes — it asks the injected
-``runner_factory`` for new ``LoopRunnerProtocol`` instances on demand.
+runners. Capacity is tracked by reusable **slots**; each goal assignment
+gets a unique job-attributable ``loop_id``:
 
-Worker loop_ids are namespaced as ``autopilot__wNNN`` so the daemon's
-client subscription router can filter them out — autopilot workers are
-not user-facing sessions.
+    autopilot__{job_id}__{uuid4().hex}
+
+so ``data/loops/{loop_id}/`` never mixes jobs when a slot is reused.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -26,7 +25,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_WORKER_LOOP_ID_PREFIX = "autopilot__w"
+_AUTOPILOT_LOOP_PREFIX = "autopilot__"
+_SLOT_ID_PREFIX = "autopilot__slot_"
 
 
 class _RunnerFactoryProtocol(Protocol):
@@ -35,47 +35,63 @@ class _RunnerFactoryProtocol(Protocol):
     def create_runner(self, loop_id: str) -> LoopRunnerProtocol: ...
 
 
+def allocate_assignment_loop_id(job_id: str) -> str:
+    """Allocate a unique, job-attributable assignment loop id."""
+    clean = (job_id or "").strip()
+    if not clean:
+        msg = "job_id is required to allocate an autopilot loop id"
+        raise ValueError(msg)
+    return f"{_AUTOPILOT_LOOP_PREFIX}{clean}__{uuid.uuid4().hex}"
+
+
+def parse_job_id_from_loop_id(loop_id: str) -> str | None:
+    """Extract ``job_id`` from ``autopilot__{job_id}__{uuid}``; else None."""
+    if not loop_id.startswith(_AUTOPILOT_LOOP_PREFIX):
+        return None
+    rest = loop_id[len(_AUTOPILOT_LOOP_PREFIX) :]
+    if "__" not in rest:
+        return None
+    job_id, _suffix = rest.split("__", 1)
+    return job_id or None
+
+
 @dataclass
 class WorkerSlot:
-    """One worker in the pool — wraps an RFC-221 LoopRunnerProtocol.
+    """One capacity slot in the pool.
 
     Tracks:
-        loop_id: namespaced (``autopilot__wNNN``) — opaque to clients.
-        runner: the live LoopRunnerProtocol instance handling jobs.
+        slot_id: stable pool key (``autopilot__slot_NNN``).
+        loop_id: current (or last) assignment loop id under ``data/loops/``.
+        runner: LoopRunnerProtocol bound to the current ``loop_id``.
         status: ``idle`` → ``active`` → ``idle`` (or ``error`` on failure).
-        current_goal_id: id of the goal currently executing on this worker.
+        current_goal_id: id of the goal currently executing on this slot.
         last_goal_ids: recency list of recent goal_ids (sticky-affinity cache).
-        active_task: the asyncio.Task draining the worker's stream; settable
-            by AutopilotService so it can cancel cleanly.
-        idle_since: when status last transitioned to ``idle``.
-        created_at: spawn timestamp.
     """
 
-    loop_id: str
+    slot_id: str
     runner: LoopRunnerProtocol
+    loop_id: str
     status: Literal["idle", "active", "error"] = "idle"
     current_goal_id: str | None = None
     last_goal_ids: list[str] = field(default_factory=list)
-    active_task: Any = None  # asyncio.Task[Any] | None — Any avoids generic-in-dataclass headaches
+    active_task: Any = None
     idle_since: datetime | None = field(default_factory=lambda: datetime.now(UTC))
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    # RFC-222 H5: wall-clock dispatch start, used by AutopilotService monitor
-    # to detect deadline overruns. None whenever the worker is idle.
     dispatch_started_at: datetime | None = None
 
-    # Recency cache bound — see RFC-222 §"WorkerPool". Larger than typical DAG
-    # depth so the sticky lookup keeps working for long lineages.
     _LAST_GOALS_MAX = 16
 
-    def assign(self, goal_id: str) -> None:
-        """Mark this worker as actively running ``goal_id``."""
+    def assign(self, goal_id: str, *, loop_id: str, runner: LoopRunnerProtocol) -> None:
+        """Bind this slot to a new assignment."""
         self.status = "active"
         self.current_goal_id = goal_id
+        self.loop_id = loop_id
+        self.runner = runner
         self.idle_since = None
         self.dispatch_started_at = datetime.now(UTC)
 
     def release_to_idle(self, success: bool = True) -> None:
-        """Move this worker back to idle (or error) after a goal completes."""
+        """Move this slot back to idle (or error) after a goal completes."""
         if self.current_goal_id:
             self.last_goal_ids.append(self.current_goal_id)
             if len(self.last_goal_ids) > self._LAST_GOALS_MAX:
@@ -87,16 +103,15 @@ class WorkerSlot:
         self.idle_since = datetime.now(UTC) if success else None
 
     def has_recently_run(self, goal_id: str) -> bool:
-        """True if ``goal_id`` is in this worker's recency cache."""
+        """True if ``goal_id`` is in this slot's recency cache."""
         return goal_id in self.last_goal_ids or goal_id == self.current_goal_id
 
 
 class WorkerPool:
-    """Sticky-affinity wrapper over LoopRunnerFactory (RFC-222 revised).
+    """Sticky-affinity wrapper over LoopRunnerFactory (RFC-222 / IG-677).
 
     Args:
-        factory: source of ``LoopRunnerProtocol`` instances (typically RFC-221's
-            ``LoopRunnerFactory``).
+        factory: source of ``LoopRunnerProtocol`` instances.
         max_loops: maximum concurrent worker slots in the pool.
     """
 
@@ -110,14 +125,11 @@ class WorkerPool:
             raise ValueError(msg)
         self._factory = factory
         self._max_loops = max_loops
-        self._workers: dict[str, WorkerSlot] = {}
-        self._idle: deque[str] = deque()  # LRU of idle loop_ids
+        self._workers: dict[str, WorkerSlot] = {}  # slot_id → slot
+        self._by_loop_id: dict[str, str] = {}  # loop_id → slot_id
+        self._idle: deque[str] = deque()  # LRU of idle slot_ids
         self._next_seq = 0
-        # All scheduling mutations serialized — fixes the race that a pure
-        # asyncio model would otherwise leave between idle-pop and assign.
         self._assignment_lock = asyncio.Lock()
-
-    # ---- capacity ------------------------------------------------------
 
     @property
     def max_loops(self) -> int:
@@ -132,84 +144,84 @@ class WorkerPool:
     def active_count(self) -> int:
         return sum(1 for w in self._workers.values() if w.status == "active")
 
-    # ---- pick / release -----------------------------------------------
-
     async def pick_worker(
         self,
         goal: GoalNode,
         *,
+        job_id: str,
         prefer: str | None = None,
     ) -> WorkerSlot | None:
-        """Pick a worker for ``goal`` under the sticky-affinity rule.
+        """Pick a slot for ``goal`` and bind a fresh assignment ``loop_id``.
 
-        Preference order:
-        1. The worker named in ``prefer`` if it is idle.
-        2. Any idle worker whose ``last_goal_ids`` contains one of
-           ``goal.depends_on`` (warm-cache lineage).
-        3. Any idle worker (LRU).
-        4. Spawn a new worker if under ``max_loops``.
-        5. ``None`` (no capacity; caller defers).
-
-        Args:
-            goal: Goal about to be dispatched.
-            prefer: Optional loop_id to prefer (e.g. from a recency cache
-                outside the pool).
-
-        Returns:
-            A WorkerSlot marked active and assigned to ``goal.id``, or None.
+        Preference order (by slot):
+        1. Slot matching ``prefer`` (slot_id or current/last loop_id) if idle.
+        2. Idle slot whose ``last_goal_ids`` contains a ``goal.depends_on`` id.
+        3. Any idle slot (LRU).
+        4. Spawn a new slot if under ``max_loops``.
+        5. ``None`` (no capacity).
         """
         async with self._assignment_lock:
-            # 1. Explicit preference, if idle.
-            if prefer and (w := self._workers.get(prefer)) and w.status == "idle":
-                return self._claim(w, goal.id)
+            prefer_slot = self._resolve_slot_id(prefer) if prefer else None
 
-            # 2. Sticky: idle worker that recently ran any parent of ``goal``.
+            if prefer_slot and (w := self._workers.get(prefer_slot)) and w.status == "idle":
+                return self._claim(w, goal.id, job_id)
+
             for parent_id in goal.depends_on:
                 for w in self._workers.values():
                     if w.status == "idle" and w.has_recently_run(parent_id):
-                        return self._claim(w, goal.id)
+                        return self._claim(w, goal.id, job_id)
 
-            # 3. Any idle worker (LRU).
             while self._idle:
-                loop_id = self._idle.popleft()
-                w = self._workers.get(loop_id)
+                slot_id = self._idle.popleft()
+                w = self._workers.get(slot_id)
                 if w and w.status == "idle":
-                    return self._claim(w, goal.id)
+                    return self._claim(w, goal.id, job_id)
 
-            # 4. Spawn under cap.
             if len(self._workers) < self._max_loops:
-                w = self._spawn()
-                return self._claim(w, goal.id)
+                return self._spawn_and_claim(goal.id, job_id)
 
-            # 5. No capacity.
             return None
 
-    def _claim(self, w: WorkerSlot, goal_id: str) -> WorkerSlot:
-        """Internal: mark a worker active. Caller must hold _assignment_lock."""
-        w.assign(goal_id)
-        # Remove from the idle queue if present.
+    def _resolve_slot_id(self, prefer: str) -> str | None:
+        if prefer in self._workers:
+            return prefer
+        return self._by_loop_id.get(prefer)
+
+    def _claim(self, w: WorkerSlot, goal_id: str, job_id: str) -> WorkerSlot:
+        """Bind slot to a new assignment loop_id. Caller holds lock."""
+        loop_id = allocate_assignment_loop_id(job_id)
+        if w.loop_id and self._by_loop_id.get(w.loop_id) == w.slot_id:
+            del self._by_loop_id[w.loop_id]
+        runner = self._factory.create_runner(loop_id)
+        w.assign(goal_id, loop_id=loop_id, runner=runner)
+        self._by_loop_id[loop_id] = w.slot_id
         try:
-            self._idle.remove(w.loop_id)
+            self._idle.remove(w.slot_id)
         except ValueError:
             pass
         logger.debug(
-            "WorkerPool: claimed %s for goal %s (active=%d, idle=%d)",
-            w.loop_id,
+            "WorkerPool: claimed slot %s as %s for goal %s (active=%d, idle=%d)",
+            w.slot_id,
+            loop_id,
             goal_id,
             self.active_count(),
             self.idle_count(),
         )
         return w
 
-    def _spawn(self) -> WorkerSlot:
-        """Internal: create a new worker. Caller must hold _assignment_lock."""
+    def _spawn_and_claim(self, goal_id: str, job_id: str) -> WorkerSlot:
+        """Create a new slot and immediately bind an assignment loop_id."""
         self._next_seq += 1
-        loop_id = f"{_WORKER_LOOP_ID_PREFIX}{self._next_seq:03d}"
+        slot_id = f"{_SLOT_ID_PREFIX}{self._next_seq:03d}"
+        loop_id = allocate_assignment_loop_id(job_id)
         runner = self._factory.create_runner(loop_id)
-        w = WorkerSlot(loop_id=loop_id, runner=runner)
-        self._workers[loop_id] = w
+        w = WorkerSlot(slot_id=slot_id, runner=runner, loop_id=loop_id)
+        w.assign(goal_id, loop_id=loop_id, runner=runner)
+        self._workers[slot_id] = w
+        self._by_loop_id[loop_id] = slot_id
         logger.info(
-            "WorkerPool: spawned worker %s (total=%d, cap=%d)",
+            "WorkerPool: spawned slot %s as %s (total=%d, cap=%d)",
+            slot_id,
             loop_id,
             len(self._workers),
             self._max_loops,
@@ -217,37 +229,51 @@ class WorkerPool:
         return w
 
     async def mark_idle(self, loop_id: str, *, success: bool = True) -> None:
-        """Return a worker to the idle queue after its goal completes."""
+        """Return the slot owning ``loop_id`` to the idle queue."""
         async with self._assignment_lock:
-            w = self._workers.get(loop_id)
+            w = self._get_by_loop_id_unlocked(loop_id)
             if w is None:
                 return
             w.release_to_idle(success=success)
             if success:
-                self._idle.append(loop_id)
+                self._idle.append(w.slot_id)
 
     async def release_worker(self, loop_id: str) -> WorkerSlot | None:
-        """Remove a worker from the pool entirely (idle timeout / error)."""
+        """Remove the slot owning ``loop_id`` from the pool entirely."""
         async with self._assignment_lock:
-            w = self._workers.pop(loop_id, None)
+            w = self._get_by_loop_id_unlocked(loop_id)
             if w is None:
                 return None
+            self._workers.pop(w.slot_id, None)
+            # Drop all reverse entries pointing at this slot.
+            stale = [lid for lid, sid in self._by_loop_id.items() if sid == w.slot_id]
+            for lid in stale:
+                del self._by_loop_id[lid]
             try:
-                self._idle.remove(loop_id)
+                self._idle.remove(w.slot_id)
             except ValueError:
                 pass
             logger.info(
-                "WorkerPool: released worker %s (remaining=%d)",
+                "WorkerPool: released slot %s (loop %s, remaining=%d)",
+                w.slot_id,
                 loop_id,
                 len(self._workers),
             )
             return w
 
     def get_worker(self, loop_id: str) -> WorkerSlot | None:
-        return self._workers.get(loop_id)
+        return self._get_by_loop_id_unlocked(loop_id)
+
+    def _get_by_loop_id_unlocked(self, loop_id: str) -> WorkerSlot | None:
+        slot_id = self._by_loop_id.get(loop_id)
+        if slot_id is not None:
+            return self._workers.get(slot_id)
+        for w in self._workers.values():
+            if w.loop_id == loop_id:
+                return w
+        return None
 
     def workers(self) -> list[WorkerSlot]:
-        """Snapshot of all workers — safe for read-only iteration."""
         return list(self._workers.values())
 
     def idle_workers(self) -> list[WorkerSlot]:
@@ -260,7 +286,7 @@ class WorkerPool:
 def is_autopilot_worker_loop_id(loop_id: str) -> bool:
     """True if ``loop_id`` belongs to an autopilot-owned worker.
 
-    Daemon's WebSocket router uses this to filter autopilot workers out of
-    client ``subscribe_loop`` requests — workers are not user sessions.
+    Matches assignment-scoped ids (``autopilot__{job}__{uuid}``), pool slot
+    placeholders (``autopilot__slot_*``), and legacy ``autopilot__wNNN``.
     """
-    return loop_id.startswith(_WORKER_LOOP_ID_PREFIX)
+    return loop_id.startswith(_AUTOPILOT_LOOP_PREFIX)

@@ -190,7 +190,12 @@ def goal_subtree(self, root_goal_id: str) -> dict[str, Any]:
 
 **No Goal wrapper model**: The `Goal` class in `autopilot/models.py` is deleted. All fields already migrated to GoalNode per RFC-625 §2.
 
-**Job-to-Worker mapping**: Job (root goal) → assigned worker via GoalNode.assigned_loop_id. Worker executes goal and all descendants via StrangeLoop iteration.
+**Job-to-Worker mapping**: While a goal is active, `GoalNode.assigned_loop_id`
+points at its current assignment loop
+(`autopilot__{job_id}__{uuid}`, IG-677). A job (root goal) may span many
+assignments over time; durable membership is `JobLoopIndex`, not a single
+worker pinned to the whole job DAG. Each assignment runs one StrangeLoop
+session for that goal.
 
 ---
 

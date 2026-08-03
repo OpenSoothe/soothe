@@ -49,13 +49,19 @@ Extend the daemon IPC protocol with a new command category: **Autopilot Job Comm
 | **GoalNode** | CE entity model for goals; root GoalNode = Job | RFC-626 §40-44 |
 | **AutopilotService** | Daemon-owned singleton managing ContextEngine and WorkerPool | RFC-222 §86-89, RFC-625 §1 |
 | **ContextEngine** | Unified goal/step DAG management (supersedes GoalEngine) | RFC-624, RFC-625 |
-| **Worker** | StrangeLoop subprocess assigned to execute a goal | RFC-222 §95-104 |
-| **Worker loop_id** | Namespaced `autopilot__w001`, `autopilot__w002`, etc. | RFC-222 §467-468 |
+| **Worker** | StrangeLoop executor bound to one goal assignment | RFC-222 / IG-677 |
+| **Worker loop_id** | Assignment id `autopilot__{job_id}__{uuid}` under `data/loops/{loop_id}/` | IG-677 |
+| **Pool slot** | Reusable capacity key `autopilot__slot_NNN` (sticky affinity); not a filesystem key | IG-677 |
+| **JobLoopIndex** | Durable job↔loop membership (`autopilot:job_loops:{job_id}`) | IG-677 |
 
 > **Job Abstraction Clarification (RFC-626)**: The Job concept originally referenced "root Goal" from GoalEngine's flat goal dict (RFC-222). RFC-626 eliminated GoalEngine and consolidated entity models under ContextEngine. A **Job** is now defined as a **root GoalNode** (GoalNode with `parent_id=None`) managed by ContextEngine. No intermediate `Goal` wrapper model exists — Job IPC commands query ContextEngine directly for root goals. This unification ensures:
 > - Job state = GoalNode state (no dual-source-of-truth)
 > - Job lifecycle transitions = GoalNode status transitions
 > - Job cancellation operates on GoalNode and descendant StepNodes via CE DAG traversal
+>
+> **IG-677**: Live mapping of active goals to workers remains `GoalNode.assigned_loop_id`.
+> Historical / multi-assignment membership is `JobLoopIndex` (not CE). One job may have
+> many assignment `loop_id`s over its lifetime; `job_status.workers` lists only **active** ones.
 
 ## Protocol Specification
 
@@ -272,8 +278,8 @@ Queries current state of a job.
   "completed_goals": 5,
   "total_goals": 12,
   "workers": [
-    {"goal_id": "e5f6g7h8", "loop_id": "autopilot__w001"},
-    {"goal_id": "i9j0k1l2", "loop_id": "autopilot__w002"}
+    {"goal_id": "e5f6g7h8", "loop_id": "autopilot__a1b2c3d4__f47ac10b58cc4372a5670e02b2c3d479"},
+    {"goal_id": "i9j0k1l2", "loop_id": "autopilot__a1b2c3d4__0c9f8e7d6b5a4932a1b0c9d8e7f6a543"}
   ],
   "last_error": null,
   "request_id": "req-002"
@@ -417,7 +423,7 @@ Retrieves DAG structure for visualization.
         "status": "active",
         "priority": 80,
         "depends_on": ["a1b2c3d4"],
-        "assigned_loop_id": "autopilot__w001",
+        "assigned_loop_id": "autopilot__a1b2c3d4__f47ac10b58cc4372a5670e02b2c3d479",
         "steps_completed": 2,
         "steps_total": 5,
         "tool_calls": 8
@@ -541,7 +547,9 @@ Subscribes to autopilot worker events, bypassing the `autopilot__*` namespace fi
 3. Events routed through EventBus (RFC-450 §62-72)
 4. Worker `autopilot__*` loop events now visible to this client
 
-> **Note**: Without this subscription, client's `subscribe_thread` requests for `autopilot__w001` etc. are rejected (RFC-222 §467-468 filter).
+> **Note**: Without this subscription, client's `subscribe_thread` requests for
+> assignment loop ids (`autopilot__{job_id}__{uuid}`, or legacy `autopilot__wNNN`)
+> are rejected (`autopilot__*` filter; RFC-222 / IG-677).
 
 ### autopilot_unsubscribe
 
@@ -631,7 +639,7 @@ Future enhancement: scoped subscriptions (`autopilot_subscribe` with optional `j
 ```
 1. autopilot_subscribe (already subscribed from job view)
 2. job_dag → get goal's assigned_loop_id
-3. subscribe_thread(loop_id: "autopilot__w001") → subscription_confirmed
+3. subscribe_thread(loop_id: "autopilot__a1b2c3d4__f47ac10b…") → subscription_confirmed
 4. (events: soothe.loop.* for worker messages)
 5. job_guidance → send comment to goal
 ```
@@ -672,6 +680,10 @@ Future enhancement: scoped subscriptions (`autopilot_subscribe` with optional `j
 - [ ] DAG data transformation for React Flow
 
 ## Changelog
+
+### 2026-08-04
+- Aligned worker `loop_id` examples with IG-677 assignment-scoped format
+  (`autopilot__{job_id}__{uuid}`); documented pool slots vs loop dirs and JobLoopIndex
 
 ### 2026-07-03
 - Reconciled all GoalEngine references with RFC-626 ContextEngine alignment (Command Details, Error Codes, Implementation Checklist)

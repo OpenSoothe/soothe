@@ -59,7 +59,7 @@ class TestCancelGoal:
     async def test_active_goal_cancels_worker_and_transitions_to_cancelled(self) -> None:
         svc = _service()
         goal = await svc.submit_task("g", max_retries=0)
-        worker = await svc._worker_pool.pick_worker(goal)
+        worker = await svc._worker_pool.pick_worker(goal, job_id=goal.id)
         assert worker is not None
         # Mark goal active on this worker.
         svc._ce.claim_goal(goal.id, loop_id=worker.loop_id)
@@ -75,7 +75,7 @@ class TestCancelGoal:
         """Cancellation is terminal regardless of retry budget."""
         svc = _service()
         goal = await svc.submit_task("g", max_retries=5)
-        worker = await svc._worker_pool.pick_worker(goal)
+        worker = await svc._worker_pool.pick_worker(goal, job_id=goal.id)
         assert worker is not None
         svc._ce.claim_goal(goal.id, loop_id=worker.loop_id)
 

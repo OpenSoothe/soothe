@@ -29,9 +29,12 @@ __all__ = [
     "GoalDirective",
     "GoalReport",
     "AutopilotService",
+    "JobLoopIndex",
     "WorkerPool",
     "WorkerSlot",
     "WorkspaceReservation",
+    "is_autopilot_worker_loop_id",
+    "allocate_assignment_loop_id",
 ]
 
 
@@ -69,6 +72,18 @@ def __getattr__(name: str) -> Any:
         from soothe.autopilot.worker_pool import WorkerSlot
 
         return WorkerSlot
+    if name == "JobLoopIndex":
+        from soothe.autopilot.job_loop_index import JobLoopIndex
+
+        return JobLoopIndex
+    if name == "is_autopilot_worker_loop_id":
+        from soothe.autopilot.worker_pool import is_autopilot_worker_loop_id
+
+        return is_autopilot_worker_loop_id
+    if name == "allocate_assignment_loop_id":
+        from soothe.autopilot.worker_pool import allocate_assignment_loop_id
+
+        return allocate_assignment_loop_id
     if name == "ContextProjector":
         from soothe.autopilot.context_projector import ContextProjector
 

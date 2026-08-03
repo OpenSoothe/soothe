@@ -414,7 +414,10 @@ LOR is a special view for autopilot loops:
 | `autopilot_subscribe` | Subscribe to autopilot worker events (bypasses `autopilot__*` filter) |
 | `autopilot_unsubscribe` | Release autopilot worker subscription |
 
-> **Note**: Worker loop_ids are namespaced `autopilot__w001`, `autopilot__w002` (RFC-222 §467-468) and **filtered from client `subscribe_loop` requests**. Desktop must use `autopilot_subscribe` (RFC-228) to receive worker events for LOR.
+> **Note**: Autopilot assignment loop ids are namespaced `autopilot__{job_id}__{uuid}`
+> (IG-677; legacy `autopilot__wNNN` may still appear in old data) and **filtered
+> from client `subscribe_loop` requests**. Desktop must use `autopilot_subscribe`
+> (RFC-228) to receive worker events for LOR.
 
 ### Event Types
 

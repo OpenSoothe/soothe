@@ -1,8 +1,9 @@
 # Autopilot Goal Intake and DAG State Management Flow
 
-> **Analysis Date**: 2026-06-25
+> **Analysis Date**: 2026-06-25 (dispatch notes updated 2026-08-04 for IG-677)
 > **Scope**: Goal lifecycle from intake → scheduling → execution → completion
-> **Key RFCs**: RFC-625 (ContextEngine/AutopilotMonitor), RFC-222 (Autopilot Architecture), RFC-204 (Autopilot Mode)
+> **Key RFCs**: RFC-625 (ContextEngine/AutopilotMonitor), RFC-222 (Autopilot Architecture),
+> RFC-204 (Autopilot Mode), [IG-677](../impl/IG-677-autopilot-job-loop-index.md)
 
 ---
 
@@ -123,7 +124,7 @@ class GoalNode:
     # Execution tracking
     iteration_count: int       # Current loop iteration
     retry_count: int           # Attempt count
-    assigned_loop_id: str      # Worker assignment
+    assigned_loop_id: str      # Live assignment loop (autopilot__{job}__{uuid}); see JobLoopIndex
 ```
 
 ---
@@ -241,7 +242,9 @@ AutopilotService._run_scheduling_loop() [background task]
     │       │           │
     │       │           ├─► peek_ready_goals(cap_remaining)
     │       │           ├─► WorkspaceReservation.conflicts_with_active()
-    │       │           ├─► WorkerPool.pick_worker()
+    │       │           ├─► WorkerPool.pick_worker(goal, job_id=…)
+    │       │           │       • Allocates autopilot__{job_id}__{uuid}
+    │       │           │       • JobLoopIndex.record_start(…)
     │       │           ├─► ContextEngine.claim_goal(goal_id, loop_id)
     │       │           │       • Atomic status → "active"
     │       │           │       • Re-check conflicts at claim time
