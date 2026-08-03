@@ -5,6 +5,29 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.15] - 2026-08-03
+
+### Changed
+- StrangeLoop now routes simple fresh-loop tasks through the same trivial
+  pseudo-plan path as TRIVIAL, bypassing the plan_assess/plan_generate cycle
+  entirely. SIMPLE is folded into the COMMIT_PLAN branch with a pre-built
+  1-step plan; the standalone SIMPLE → GENERATE_PLAN branch is removed.
+- Continuation intake is unified at route_after_preprocess: all non-fresh
+  goals now enter gather_evidence, with intake-tiered work
+  (trivial/simple/complex) handled inside the mid-loop spine. The
+  continuation-assess LLM is skipped for continuation+simple (it could never
+  change the route), and goal_progress prose is coerced to none to avoid
+  burning a schema-repair retry. Unused ENTER_LOOP targets are pruned and
+  synthetic StatusAssessment factories are unified.
+
+### Added
+- TUI highlights the leading slash-command token (e.g. `/skill:foo`) in the
+  live chat input box and in submitted user cards, with the command accent
+  color following the mode glyph. A shared `command_token_span` helper
+  replaces the combined @mention+/command regex.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.14...v0.9.15
+
 ## [v0.9.14] - 2026-08-03
 
 ### Fixed
