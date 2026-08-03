@@ -8,6 +8,10 @@
 > **Superseded**: HTTP REST references (`channels/http_rest.py`) below are
 > superseded by IG-504 (Remove HTTP REST Channel). Autopilot commands now use
 > WebSocket RPC handlers exclusively.
+>
+> **Historical note (IG-677)**: Worker assignment `loop_id` is now
+> `autopilot__{job_id}__{uuid}` (filter remains `autopilot__*`). See
+> [IG-677](../../impl/IG-677-autopilot-job-loop-index.md) and updated RFC-228.
 
 ## Progress
 

@@ -6,6 +6,10 @@
 **Created**: 2026-05-28
 **Dependencies**: RFC-221 (LoopRunner protocol), RFC-200, RFC-204
 
+> **Historical note (IG-677)**: Phase A WorkerPool used recycled `autopilot__wNNN`
+> ids. Current format is assignment-scoped `autopilot__{job_id}__{uuid}` with
+> separate pool slots — see [IG-677](../../impl/IG-677-autopilot-job-loop-index.md).
+
 ---
 
 ## Purpose
@@ -80,6 +84,11 @@ New files:
 - `WorkerPool` — `pick_worker(goal, prefer)` with sticky preference → idle fallback → spawn-under-cap. `_assignment_lock` for atomicity. `mark_idle`, `release`, capacity helpers.
 
 Sticky scheduling rule: prefer the worker whose `last_goal_ids` contains any of `goal.depends_on`.
+
+> **Superseded by IG-677**: assignment `loop_id` is now
+> `autopilot__{job_id}__{uuid}` (pool **slots** are separate reusable capacity
+> keys). Historical Phase A used recycled `autopilot__wNNN` as both slot and
+> filesystem id — do not treat that as current.
 
 **Tests**: `tests/unit/core/autopilot/test_worker_pool.py` (sticky reuse, idle reuse, spawn under cap, concurrent pick atomicity).
 

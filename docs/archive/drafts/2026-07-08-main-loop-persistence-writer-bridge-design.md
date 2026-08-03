@@ -11,7 +11,11 @@
 
 IG-550 introduced `LoopPersistenceWriter` — a process-scoped singleton that coalesces checkpoint and ContextEngine writes onto the shared PostgreSQL pool (`SharedPostgreSQLPool` / `PostgresPoolRegistry`). The design is correct for high-concurrency thread_pool mode, but the first implementation binds `asyncio.Lock`, `asyncio.Event`, and the flush `Task` to whichever event loop first initializes the writer (typically the daemon main loop).
 
-Thread pool workers each run a **dedicated asyncio event loop**. When multiple autopilot goals execute concurrently (`autopilot__w006`, `autopilot__w007`, …), workers call `writer.enqueue_checkpoint()` from their own loops and hit:
+Thread pool workers each run a **dedicated asyncio event loop**. When multiple
+autopilot goals execute concurrently (assignment loop ids such as
+`autopilot__a1b2c3d4__f47ac10b…`, `autopilot__a1b2c3d4__0c9f8e7d…` — see IG-677;
+legacy logs may still show recycled `autopilot__wNNN`), workers call
+`writer.enqueue_checkpoint()` from their own loops and hit:
 
 ```
 RuntimeError: <asyncio.locks.Lock …> is bound to a different event loop

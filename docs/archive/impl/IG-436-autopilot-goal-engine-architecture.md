@@ -5,6 +5,11 @@
 **Created**: 2026-05-27  
 **Dependencies**: RFC-204, RFC-200, IG-420
 
+> **Historical note (IG-677)**: This guide predates assignment-scoped loop ids.
+> Current autopilot assignment ids are `autopilot__{job_id}__{uuid}` with separate
+> pool slots; durable job↔loop membership is `JobLoopIndex`. See
+> [IG-677](../../impl/IG-677-autopilot-job-loop-index.md).
+
 ---
 
 ## Purpose

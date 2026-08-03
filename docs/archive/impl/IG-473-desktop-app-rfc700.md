@@ -4,6 +4,10 @@
 > **RFC**: RFC-700, RFC-228
 > **Created**: 2026-06-05
 > **Dependencies**: IG-471 (RFC-228 daemon IPC complete)
+>
+> **Historical note (IG-677)**: Autopilot assignment loop ids are
+> `autopilot__{job_id}__{uuid}`; `autopilot__*` prefix filtering is unchanged.
+> See [IG-677](../../impl/IG-677-autopilot-job-loop-index.md).
 
 ## Overview
 
