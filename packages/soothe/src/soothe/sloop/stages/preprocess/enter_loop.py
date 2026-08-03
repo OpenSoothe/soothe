@@ -4,9 +4,10 @@ Hydrates intent/routing from intake classified in the graph entry node.
 Loop continuation is derived in ``StrangeLoop`` from the checkpoint. This
 node emits the classified intake for event streaming, surfaces the 3-class
 ``intake_label`` and a structural ``is_continuation`` flag onto the graph
-state for ``route_by_intent``. Trivial labels inject a pseudo single-step plan
-and route through resolve_decision → execute → goal_completion. Wired
-specialist requests set ``intent_route=wired_subagent``; the plan is built in
+state for ``route_by_intent``. Trivial and simple fresh-loop labels inject
+a pseudo single-step plan and route through resolve_decision → execute →
+goal_completion. Wired specialist requests set
+``intent_route=wired_subagent``; the plan is built in
 ``invoke_wired_subagent``.
 
 IG-554: Derives ``new_goal_created`` from ``recovery_valid_resume`` for the
@@ -56,7 +57,7 @@ def _is_continuation(ctx: LoopRuntimeContext) -> bool:
 
 
 async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Emit pre-classified intake, surface ``intake_label``, handle trivial branch."""
+    """Emit pre-classified intake, surface ``intake_label``, handle trivial/simple branch."""
     intent = ctx.loop_state.intent
 
     if intent is not None:
@@ -83,6 +84,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
     has_deliverable = intake_label is not None and intake_label not in (
         IntakeLabel.CHITCHAT,
         IntakeLabel.TRIVIAL,
+        IntakeLabel.SIMPLE,
     )
 
     graph_intake_fields = {
@@ -151,8 +153,10 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
     # plan_assess/plan_generate, execute on a step thread branch, then
     # goal_completion via terminal_after_execute (auto strategy selects ledger vs synthesize).
     # Allowlisted wire_subagent never reaches here (wired branch above owns that path).
+    # ``simple`` fresh-loop goals use the same trivial pseudo-plan path; both route
+    # to ``commit_plan`` in ``route_after_preprocess``.
     if (
-        intake_label == IntakeLabel.TRIVIAL
+        intake_label in (IntakeLabel.TRIVIAL, IntakeLabel.SIMPLE)
         and not is_continuation
         and not getattr(ctx, "continue_loop_mode", False)
         and not is_continue_keyword(ctx.loop_state.goal)
@@ -167,7 +171,11 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             goal_text,
             requires_tool_use=bool(getattr(intent, "requires_tool_use", False)),
         )
-        logger.info("[Intent] Trivial branch: pseudo plan injected (goal=%s)", goal_text[:50])
+        logger.info(
+            "[Intent] Trivial branch: pseudo plan injected (label=%s, goal=%s)",
+            intake_label,
+            goal_text[:50],
+        )
         return {
             "intent_route": "continue_loop",
             "intake_label": intake_label,
@@ -179,17 +187,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             "resume_synth": None,
             **graph_intake_fields,
         }
-
-    # RFC-630: fresh-loop simple branch reaches plan_generate directly (skipping
-    # plan_assess), so synthesize the assessment here. Mirrors the fresh-loop
-    # bypass in bounded_evidence_gather.
-    if intake_label == IntakeLabel.SIMPLE and not is_continuation:
-        from soothe.sloop.stages.plan.gather_evidence import _create_fresh_loop_assessment
-
-        ctx.scratch.plan_assessment = _create_fresh_loop_assessment()
-        logger.info(
-            "[Intent] Fresh-loop simple branch: synthesized assessment for lightweight plan"
-        )
 
     return {
         "intent_route": "continue_loop",

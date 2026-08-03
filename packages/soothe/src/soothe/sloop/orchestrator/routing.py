@@ -65,7 +65,7 @@ def route_after_preprocess(state: dict[str, Any]) -> str:
     1. ``intent_route == fast_path`` → END (chitchat)
     2. ``intent_route == wired_subagent`` → ``delegate``
     3. Continuation overlay from structural ``is_continuation``
-    4. Fresh-loop labels (trivial / simple / complex)
+    4. Fresh-loop labels (trivial+simple → trivial plan; complex → full spine)
     """
     new_goal_created = state.get("new_goal_created", False)
     label = state.get("intake_label")
@@ -101,14 +101,14 @@ def route_after_preprocess(state: dict[str, Any]) -> str:
         logger.info("[routing] route_after_preprocess → evaluate (continuation+trivial)")
         return EVALUATE
 
-    if label == IntakeLabel.TRIVIAL:
-        logger.info("[routing] route_after_preprocess → commit_plan (trivial pseudo-plan)")
-        return COMMIT_PLAN
-    if label == IntakeLabel.SIMPLE:
-        logger.info("[routing] route_after_preprocess → generate_plan (simple)")
-        return GENERATE_PLAN
+    if label == IntakeLabel.TRIVIAL or label == IntakeLabel.SIMPLE:
+        logger.info(
+            "[routing] route_after_preprocess → commit_plan (trivial pseudo-plan; label=%s)",
+            label,
+        )
+        return COMMIT_PLAN  # build_trivial_plan → 1-step terminal
     logger.info("[routing] route_after_preprocess → gather_evidence (complex/default)")
-    return GATHER_EVIDENCE
+    return GATHER_EVIDENCE  # full spine (default fallback)
 
 
 # Historical name used by tests and docs.

@@ -75,7 +75,7 @@ def test_route_by_intent_chitchat_fast_path_wins_over_continuation() -> None:
 
 def test_route_by_intent_simple() -> None:
     state = {"is_continuation": False, "intake_label": IntakeLabel.SIMPLE}
-    assert route_by_intent(state) == "generate_plan"
+    assert route_by_intent(state) == "commit_plan"
 
 
 def test_route_by_intent_complex() -> None:
@@ -248,11 +248,12 @@ async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuat
 
     assert result["is_continuation"] is True
     assert scratch.plan_assessment is None
+    assert scratch.plan_result is None
 
 
 @pytest.mark.asyncio
-async def test_init_or_resume_simple_synthesizes_assessment() -> None:
-    """The simple label synthesizes a plan_assessment so plan_generate can run."""
+async def test_init_or_resume_simple_injects_trivial_plan() -> None:
+    """Fresh-loop simple label injects the trivial 1-step plan (same as trivial)."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
@@ -272,8 +273,11 @@ async def test_init_or_resume_simple_synthesizes_assessment() -> None:
     result = await node_init_or_resume(ctx, {})
 
     assert result["intake_label"] == IntakeLabel.SIMPLE
-    assert scratch.plan_assessment is not None
-    assert scratch.plan_assessment.status == "continue"
+    assert scratch.plan_result is not None
+    assert scratch.plan_result.terminal_after_execute is True
+    assert scratch.plan_result.decision is not None
+    assert len(scratch.plan_result.decision.steps) == 1
+    assert scratch.plan_result.decision.steps[0].description == "summarize RFC-220 topology"
 
 
 @pytest.mark.asyncio
@@ -371,7 +375,7 @@ def test_routing_guard_simple_not_blocked_by_new_goal() -> None:
         "intake_label": IntakeLabel.SIMPLE,
         "new_goal_created": True,
     }
-    assert route_by_intent(state) == "generate_plan"
+    assert route_by_intent(state) == "commit_plan"
 
 
 def test_routing_guard_trivial_not_blocked_by_new_goal() -> None:
