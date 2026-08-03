@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
@@ -70,6 +71,7 @@ class LoopRailInterpreter:
         self._catalog = catalog or LoopRailCatalog()
         self._rails: dict[str, RailDefinition] = {}
         self._rules: dict[str, list[_NormalizedRule]] = {}
+        self._lock = asyncio.Lock()
 
     @property
     def builtins(self) -> RailBuiltinExecutor:
@@ -95,9 +97,10 @@ class LoopRailInterpreter:
         """Resolve rail and bind job state."""
         catalog = LoopRailCatalog(workspace=workspace) if workspace else self._catalog
         rail = catalog.resolve(rail_id)
-        self._rails[job_id] = rail
-        self._rules[job_id] = _normalize_rules(rail)
-        self._builtins.bind_job(
+        async with self._lock:
+            self._rails[job_id] = rail
+            self._rules[job_id] = _normalize_rules(rail)
+        await self._builtins.bind_job(
             RailJobState(
                 job_id=job_id,
                 rail_id=rail.id,
@@ -111,12 +114,14 @@ class LoopRailInterpreter:
     async def handle(self, event: RailEvent) -> list[RuleFireRecord]:
         """Evaluate matching rules for one event; return newly appended records."""
         job_id = event.job_id
-        rail = self._rails.get(job_id)
+        async with self._lock:
+            rail = self._rails.get(job_id)
+            rules = list(self._rules.get(job_id, ()))
         if rail is None:
             logger.debug("No rail bound for job %s; ignoring %s", job_id, event.name)
             return []
 
-        rules = [r for r in self._rules.get(job_id, ()) if r.event == event.name]
+        rules = [r for r in rules if r.event == event.name]
         rules = sorted(rules, key=lambda r: r.priority)
 
         fired: list[RuleFireRecord] = []
@@ -231,9 +236,9 @@ class LoopRailInterpreter:
             )
 
         goal = await self._ce.get_goal(event.goal_id) if event.goal_id else None
-        descendants = self._builtins.descendant_goals(event.job_id)
+        descendants = await self._builtins.descendant_goals(event.job_id)
         siblings = {g.id: g.status for g in descendants}
-        tags_by_goal = self._builtins.tags_by_goal(event.job_id)
+        tags_by_goal = await self._builtins.tags_by_goal(event.job_id)
         trigger_tags = tags_by_goal.get(event.goal_id or "", [])
 
         from soothe.context.models import TERMINAL_STATES

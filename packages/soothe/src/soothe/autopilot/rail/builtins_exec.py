@@ -6,6 +6,7 @@ Mutates ContextEngine goal DAG. Goal tags / branch metadata live in
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Any
@@ -56,23 +57,27 @@ class RailBuiltinExecutor:
     def __init__(self, ce: ContextEngine) -> None:
         self._ce = ce
         self._jobs: dict[str, RailJobState] = {}
+        self._lock = asyncio.Lock()
 
-    def bind_job(self, state: RailJobState) -> None:
+    async def bind_job(self, state: RailJobState) -> None:
         """Register or replace job state for a root goal id."""
-        self._jobs[state.job_id] = state
-        self._jobs[state.job_id].annotations.setdefault(
-            state.job_id,
-            GoalAnnotation(tags=["job_root"], branch_id=state.job_id, role="root"),
-        )
+        async with self._lock:
+            self._jobs[state.job_id] = state
+            self._jobs[state.job_id].annotations.setdefault(
+                state.job_id,
+                GoalAnnotation(tags=["job_root"], branch_id=state.job_id, role="root"),
+            )
 
-    def job_state(self, job_id: str) -> RailJobState | None:
-        return self._jobs.get(job_id)
+    async def job_state(self, job_id: str) -> RailJobState | None:
+        async with self._lock:
+            return self._jobs.get(job_id)
 
-    def annotation(self, goal_id: str, job_id: str) -> GoalAnnotation:
-        state = self._jobs[job_id]
-        return state.annotations.setdefault(goal_id, GoalAnnotation())
+    async def annotation(self, goal_id: str, job_id: str) -> GoalAnnotation:
+        async with self._lock:
+            state = self._jobs[job_id]
+            return state.annotations.setdefault(goal_id, GoalAnnotation())
 
-    def annotate_goal(
+    async def annotate_goal(
         self,
         goal_id: str,
         job_id: str,
@@ -83,8 +88,8 @@ class RailBuiltinExecutor:
         branch_status: str | None = None,
     ) -> GoalAnnotation:
         """Update rail annotations and mirror them onto the CE GoalNode."""
-        state = self._require(job_id)
-        ann = self.annotation(goal_id, job_id)
+        state = await self._require(job_id)
+        ann = await self.annotation(goal_id, job_id)
         if tags is not None:
             ann.tags = list(tags)
         if role is not None:
@@ -115,11 +120,12 @@ class RailBuiltinExecutor:
             goal.branch_status = ann.branch_status  # type: ignore[assignment]
         goal.role = ann.role
 
-    def tags_by_goal(self, job_id: str) -> dict[str, list[str]]:
-        state = self._jobs.get(job_id)
-        if state is None:
-            return {}
-        return {gid: list(ann.tags) for gid, ann in state.annotations.items()}
+    async def tags_by_goal(self, job_id: str) -> dict[str, list[str]]:
+        async with self._lock:
+            state = self._jobs.get(job_id)
+            if state is None:
+                return {}
+            return {gid: list(ann.tags) for gid, ann in state.annotations.items()}
 
     async def invoke(
         self,
@@ -136,12 +142,15 @@ class RailBuiltinExecutor:
             return await handler(job_id=job_id, trigger_goal_id=trigger_goal_id)
         except Exception as exc:
             logger.exception("Rail builtin %s failed", builtin)
-            return BuiltinResult(status="error", detail=str(exc))
+            return BuiltinResult(
+                status="error",
+                detail=f"{type(exc).__name__}: builtin {builtin} failed",
+            )
 
     async def _do_decompose_parallel(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        state = self._require(job_id)
+        state = await self._require(job_id)
         plan = state.decompose_plan
         if plan is None:
             plan = [
@@ -162,7 +171,7 @@ class RailBuiltinExecutor:
                 priority=int(spec.get("priority", 60)),
                 rail_id=state.rail_id,
             )
-            self.annotate_goal(
+            await self.annotate_goal(
                 goal.id,
                 job_id,
                 tags=tags,
@@ -179,7 +188,7 @@ class RailBuiltinExecutor:
     async def _do_plan_and_implement(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        state = self._require(job_id)
+        state = await self._require(job_id)
         informs = [
             gid
             for gid, ann in state.annotations.items()
@@ -196,7 +205,9 @@ class RailBuiltinExecutor:
             informs=informs,
             rail_id=state.rail_id,
         )
-        self.annotate_goal(plan.id, job_id, tags=["planning"], role="planner", branch_id=job_id)
+        await self.annotate_goal(
+            plan.id, job_id, tags=["planning"], role="planner", branch_id=job_id
+        )
 
         impl = await self._ce.create_goal(
             f"Implement for job {job_id}",
@@ -207,7 +218,9 @@ class RailBuiltinExecutor:
             informs=informs,
             rail_id=state.rail_id,
         )
-        self.annotate_goal(impl.id, job_id, tags=["implementation"], role="maker", branch_id=job_id)
+        await self.annotate_goal(
+            impl.id, job_id, tags=["implementation"], role="maker", branch_id=job_id
+        )
         return BuiltinResult(
             status="success",
             detail="spawned plan+implement",
@@ -222,9 +235,9 @@ class RailBuiltinExecutor:
             depends_on=deps or None,
             source="decomposition",
             priority=80,
-            rail_id=self._require(job_id).rail_id,
+            rail_id=(await self._require(job_id)).rail_id,
         )
-        self.annotate_goal(goal.id, job_id, tags=["review"], role="checker", branch_id=job_id)
+        await self.annotate_goal(goal.id, job_id, tags=["review"], role="checker", branch_id=job_id)
         return BuiltinResult(
             status="success",
             detail="spawned review",
@@ -239,9 +252,9 @@ class RailBuiltinExecutor:
             depends_on=deps or None,
             source="decomposition",
             priority=85,
-            rail_id=self._require(job_id).rail_id,
+            rail_id=(await self._require(job_id)).rail_id,
         )
-        self.annotate_goal(goal.id, job_id, tags=["qa"], role="qa", branch_id=job_id)
+        await self.annotate_goal(goal.id, job_id, tags=["qa"], role="qa", branch_id=job_id)
         return BuiltinResult(
             status="success",
             detail="spawned qa",
@@ -249,7 +262,7 @@ class RailBuiltinExecutor:
         )
 
     async def _do_retry_branch(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:
-        state = self._require(job_id)
+        state = await self._require(job_id)
         # Prune non-terminal active/pending descendants on same branch; salvage completed.
         salvaged: list[str] = []
         pruned: list[str] = []
@@ -258,14 +271,14 @@ class RailBuiltinExecutor:
                 continue
             if goal.status == "completed":
                 salvaged.append(goal.id)
-                self.annotate_goal(goal.id, job_id, branch_status="pruned")
+                await self.annotate_goal(goal.id, job_id, branch_status="pruned")
                 continue
             if goal.status in TERMINAL_STATES:
-                self.annotate_goal(goal.id, job_id, branch_status="pruned")
+                await self.annotate_goal(goal.id, job_id, branch_status="pruned")
                 continue
-            # Cancel in-flight / pending
-            goal.status = "cancelled"
-            self.annotate_goal(goal.id, job_id, branch_status="pruned")
+            # Cancel in-flight / pending via CE state machine API (not direct mutation)
+            await self._ce.cancel_goal(goal.id, reason="rail:retry_branch_prune")
+            await self.annotate_goal(goal.id, job_id, branch_status="pruned")
             pruned.append(goal.id)
 
         replacement = await self._ce.create_goal(
@@ -276,7 +289,7 @@ class RailBuiltinExecutor:
             informs=salvaged,
             rail_id=state.rail_id,
         )
-        self.annotate_goal(
+        await self.annotate_goal(
             replacement.id,
             job_id,
             tags=["implementation", "replant"],
@@ -297,17 +310,17 @@ class RailBuiltinExecutor:
     async def _do_pause_for_user(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        state = self._require(job_id)
+        state = await self._require(job_id)
         state.suspended = True
         if trigger_goal_id:
-            self.annotate_goal(trigger_goal_id, job_id, branch_status="suspended")
+            await self.annotate_goal(trigger_goal_id, job_id, branch_status="suspended")
         root = await self._ce.get_goal(job_id)
         if root is not None and root.status not in TERMINAL_STATES:
             await self._ce.suspend_goal(job_id, reason="rail:pause_for_user")
         return BuiltinResult(status="success", detail="job suspended for user")
 
     async def _do_complete_job(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:
-        state = self._require(job_id)
+        state = await self._require(job_id)
         root = await self._ce.get_goal(job_id)
         if root is None:
             return BuiltinResult(status="error", detail="job root missing")
@@ -317,12 +330,13 @@ class RailBuiltinExecutor:
         state.suspended = False
         return BuiltinResult(status="success", detail="job completed")
 
-    def _require(self, job_id: str) -> RailJobState:
-        state = self._jobs.get(job_id)
-        if state is None:
-            msg = f"job {job_id} not bound to rail builtins"
-            raise KeyError(msg)
-        return state
+    async def _require(self, job_id: str) -> RailJobState:
+        async with self._lock:
+            state = self._jobs.get(job_id)
+            if state is None:
+                msg = f"job {job_id} not bound to rail builtins"
+                raise KeyError(msg)
+            return state
 
-    def descendant_goals(self, job_id: str) -> list[GoalNode]:
+    async def descendant_goals(self, job_id: str) -> list[GoalNode]:
         return [g for g in self._ce._dag.goals.values() if g.id == job_id or g.parent_id == job_id]

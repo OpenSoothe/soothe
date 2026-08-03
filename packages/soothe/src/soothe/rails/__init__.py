@@ -10,6 +10,7 @@ from soothe.rails.catalog import (
     LoopRailCatalog,
     RailCatalogError,
     RailDefinition,
+    compute_rail_hash,
     load_rail_file,
 )
 from soothe.rails.selector import resolve_rail_id
@@ -19,6 +20,7 @@ __all__ = [
     "LoopRailCatalog",
     "RailCatalogError",
     "RailDefinition",
+    "compute_rail_hash",
     "get_builtin_rails_dir",
     "get_rails_paths",
     "load_rail_file",

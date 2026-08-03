@@ -6,10 +6,27 @@ Memory backend for tests; JSONL file backend for SQLite-mode jobs.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
+
+logger = logging.getLogger(__name__)
+
+
+def _sanitize_job_id(job_id: str) -> str:
+    """Reject job_ids containing path separators or traversal sequences.
+
+    Prevents path traversal via ``JsonlRailTraceStore._path()`` when
+    a caller passes an unsanitized ``job_id`` containing ``../`` or
+    ``/`` / ``\\`` characters.
+    """
+    if not job_id or not job_id.strip():
+        raise ValueError("job_id must be a non-empty string")
+    if "/" in job_id or "\\" in job_id or ".." in job_id:
+        raise ValueError(f"job_id contains invalid path characters: {job_id!r}")
+    return job_id
 
 
 @dataclass
@@ -75,9 +92,11 @@ class JsonlRailTraceStore:
     root: Path
 
     def _path(self, job_id: str) -> Path:
+        _sanitize_job_id(job_id)
         return self.root / job_id / "rail_trace.jsonl"
 
     def append(self, job_id: str, record: RuleFireRecord) -> RuleFireRecord:
+        _sanitize_job_id(job_id)
         path = self._path(job_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         existing = self.read(job_id)
@@ -87,6 +106,7 @@ class JsonlRailTraceStore:
         return record
 
     def read(self, job_id: str) -> list[RuleFireRecord]:
+        _sanitize_job_id(job_id)
         path = self._path(job_id)
         if not path.is_file():
             return []
@@ -94,25 +114,39 @@ class JsonlRailTraceStore:
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
-            raw = json.loads(line)
-            gr = raw.get("guard_result") or {}
-            out.append(
-                RuleFireRecord(
-                    timestamp=datetime.fromisoformat(raw["timestamp"]),
-                    rule_id=raw.get("rule_id"),
-                    event=raw["event"],
-                    condition=raw.get("condition"),
-                    guard_result=GuardResult(
-                        matched=bool(gr.get("matched")),
-                        confidence=float(gr.get("confidence", 1.0)),
-                        reasoning=str(gr.get("reasoning", "")),
-                    ),
-                    builtin=raw.get("builtin"),
-                    builtin_result=raw.get("builtin_result"),
-                    goal_id=raw.get("goal_id"),
-                    seq=int(raw.get("seq", len(out))),
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                logger.warning(
+                    "[rail] Skipping malformed JSONL trace line for job %s",
+                    job_id,
                 )
-            )
+                continue
+            try:
+                gr = raw.get("guard_result") or {}
+                out.append(
+                    RuleFireRecord(
+                        timestamp=datetime.fromisoformat(raw["timestamp"]),
+                        rule_id=raw.get("rule_id"),
+                        event=raw["event"],
+                        condition=raw.get("condition"),
+                        guard_result=GuardResult(
+                            matched=bool(gr.get("matched")),
+                            confidence=float(gr.get("confidence", 1.0)),
+                            reasoning=str(gr.get("reasoning", "")),
+                        ),
+                        builtin=raw.get("builtin"),
+                        builtin_result=raw.get("builtin_result"),
+                        goal_id=raw.get("goal_id"),
+                        seq=int(raw.get("seq", len(out))),
+                    )
+                )
+            except (KeyError, TypeError, ValueError):
+                logger.warning(
+                    "[rail] Skipping incomplete JSONL trace line for job %s",
+                    job_id,
+                )
+                continue
         return out
 
 

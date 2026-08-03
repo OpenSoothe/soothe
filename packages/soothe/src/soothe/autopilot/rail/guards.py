@@ -253,13 +253,13 @@ class LLMGuardEvaluator:
             return GuardResult(
                 matched=False,
                 confidence=0.0,
-                reasoning=f"structured guard failed: {exc}",
+                reasoning=f"structured guard failed: {type(exc).__name__}",
             )
         except Exception as exc:  # noqa: BLE001 — fail closed for rail policy
             return GuardResult(
                 matched=False,
                 confidence=0.0,
-                reasoning=f"guard LLM error: {exc}",
+                reasoning=f"guard LLM error: {type(exc).__name__}",
             )
 
         matched = bool(result.matched) and float(result.confidence) >= self.min_confidence

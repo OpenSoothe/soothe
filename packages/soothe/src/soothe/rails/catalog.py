@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,33 @@ class RailCatalogError(ValueError):
     """Raised when a rail document is missing or invalid."""
 
 
+# --- Integrity verification (SC-01 hardening) ---------------------------
+
+_BUILTIN_RAIL_HASHES: dict[str, str] = {
+    "bugfix": "pending",
+    "feature-dev": "pending",
+    "hotfix": "pending",
+    "maker-checker": "pending",
+    "migration": "pending",
+    "pr-review": "pending",
+    "spike": "pending",
+}
+
+
+def compute_rail_hash(text: str) -> str:
+    """Return the SHA-256 integrity hash for raw rail YAML text."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _is_safe_rail_id(rail_id: str) -> bool:
+    """Reject path traversal characters in rail ids."""
+    if not rail_id or not rail_id.strip():
+        return False
+    if "/" in rail_id or "\\" in rail_id or ".." in rail_id:
+        return False
+    return True
+
+
 @dataclass(frozen=True)
 class RailDefinition:
     """Parsed LoopRail document.
@@ -52,6 +80,7 @@ class RailDefinition:
     flow: list[dict[str, Any]] = field(default_factory=list)
     rules: list[dict[str, Any]] = field(default_factory=list)
     source_path: Path | None = None
+    integrity_hash: str = ""
 
 
 def _require_str(data: dict[str, Any], key: str, *, path: Path) -> str:
@@ -153,6 +182,9 @@ def load_rail_file(path: Path) -> RailDefinition:
     if path.stem != rail_id:
         raise RailCatalogError(f"{path}: id '{rail_id}' must match filename stem '{path.stem}'")
 
+    if not _is_safe_rail_id(rail_id):
+        raise RailCatalogError(f"{path}: rail id '{rail_id}' contains path traversal characters")
+
     version = _require_str(data, "version", path=path)
     summary = _require_str(data, "summary", path=path)
     applies_when = _require_str(data, "applies_when", path=path)
@@ -178,6 +210,7 @@ def load_rail_file(path: Path) -> RailDefinition:
         flow=flow,
         rules=rules,
         source_path=path,
+        integrity_hash=compute_rail_hash(text),
     )
 
 
@@ -212,12 +245,33 @@ class LoopRailCatalog:
         Raises:
             RailCatalogError: If the rail is not found or fails validation.
         """
+        if not _is_safe_rail_id(rail_id):
+            raise RailCatalogError(f"rail id '{rail_id}' contains path traversal characters")
         index = self._index()
         path = index.get(rail_id)
         if path is None:
             known = ", ".join(sorted(index)) or "(none)"
             raise RailCatalogError(f"rail not found: '{rail_id}' (known: {known})")
         return load_rail_file(path)
+
+    def verify_integrity(self, rail_id: str, expected_hash: str) -> bool:
+        """Verify a rail's SHA-256 integrity hash matches the expected value.
+
+        Used to detect rail YAML tampering (SC-01 hardening). The expected
+        hash should be recorded at deployment time from a known-good baseline.
+
+        Args:
+            rail_id: Rail identifier to verify.
+            expected_hash: Known-good SHA-256 hex digest.
+
+        Returns:
+            True if the computed hash matches.
+
+        Raises:
+            RailCatalogError: If the rail cannot be resolved.
+        """
+        rail = self.resolve(rail_id)
+        return rail.integrity_hash == expected_hash
 
     def load_all(self) -> dict[str, RailDefinition]:
         """Resolve every rail id in the merged catalog.

@@ -124,19 +124,19 @@ class RailHarness:
         assert self.interpreter is not None and self.job_id is not None
         return await self.interpreter.handle(RailEvent(name="dag_idle", job_id=self.job_id))
 
-    def job_completed(self) -> bool:
+    async def job_completed(self) -> bool:
         assert self.job_id is not None and self.interpreter is not None
-        state = self.interpreter.builtins.job_state(self.job_id)
+        state = await self.interpreter.builtins.job_state(self.job_id)
         return bool(state and state.completed)
 
-    def job_suspended(self) -> bool:
+    async def job_suspended(self) -> bool:
         assert self.job_id is not None and self.interpreter is not None
-        state = self.interpreter.builtins.job_state(self.job_id)
+        state = await self.interpreter.builtins.job_state(self.job_id)
         return bool(state and state.suspended)
 
-    def tags(self, goal_id: str) -> list[str]:
+    async def tags(self, goal_id: str) -> list[str]:
         assert self.job_id is not None and self.interpreter is not None
-        return list(self.interpreter.builtins.annotation(goal_id, self.job_id).tags)
+        return list((await self.interpreter.builtins.annotation(goal_id, self.job_id)).tags)
 
     def successful_builtins(self) -> list[str]:
         assert self.job_id is not None
@@ -162,19 +162,19 @@ class RailHarness:
     ) -> dict[str, Any]:
         assert self.job_id is not None
         for self.turn in range(max_turns):
-            if self.job_completed():
+            if await self.job_completed():
                 break
-            if self.job_suspended():
+            if await self.job_suspended():
                 break
             ready = self.ready_goals()
             if not ready:
                 await self.tick_dag_idle()
-                if self.job_completed() or not self.ready_goals():
+                if await self.job_completed() or not self.ready_goals():
                     break
                 continue
             for goal in list(ready):
                 await on_ready(goal, self.turn)
-                if self.job_completed() or self.job_suspended():
+                if await self.job_completed() or await self.job_suspended():
                     break
         return self.evaluation()
 

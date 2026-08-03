@@ -52,7 +52,7 @@ async def test_feature_dev_happy_path_trace(harness: RailHarness) -> None:
     report["expected_builtins"] = expected
     report["fired_builtins"] = harness.successful_builtins()
     report["builtins_match_expected"] = harness.successful_builtins() == expected
-    assert harness.job_completed()
+    assert await harness.job_completed()
     assert harness.successful_builtins() == expected, report
     assert report["job_id"] == job_id
 
@@ -79,14 +79,14 @@ async def test_spike_stops_for_human(harness: RailHarness) -> None:
         await harness.pseudo_complete(goal.id)
 
     await harness.run_turns(on_ready)
-    assert harness.job_suspended()
+    assert await harness.job_suspended()
     assert "plan_and_implement" not in harness.successful_builtins()
     assert harness.successful_builtins()[:2] == [
         "decompose_parallel",
         "pause_for_user",
     ]
     await harness.user_intervention()
-    assert harness.job_completed()
+    assert await harness.job_completed()
     assert harness.successful_builtins() == expected
 
 
@@ -114,7 +114,7 @@ async def test_maker_checker_independent_review(harness: RailHarness) -> None:
 
     await harness.run_turns(on_ready)
     assert harness.successful_builtins() == expected
-    reviews = [g for g in await harness.ce.list_goals() if "review" in harness.tags(g.id)]
+    reviews = [g for g in await harness.ce.list_goals() if "review" in await harness.tags(g.id)]
     assert len(reviews) >= 1
 
 
@@ -141,7 +141,7 @@ async def test_maker_checker_send_back_replants(harness: RailHarness) -> None:
 
     async def on_ready(goal: GoalNode, turn: int) -> None:
         nonlocal saw_review
-        tags = harness.tags(goal.id)
+        tags = await harness.tags(goal.id)
         if "review" in tags and not saw_review:
             saw_review = True
             await harness.activate(goal.id)
@@ -153,7 +153,7 @@ async def test_maker_checker_send_back_replants(harness: RailHarness) -> None:
     fired = harness.successful_builtins()
     assert fired[:3] == expected_prefix, fired
     assert "retry_branch" in fired
-    assert harness.job_completed()
+    assert await harness.job_completed()
     assert "qa_verify" in fired
     assert "complete_job" in fired
 

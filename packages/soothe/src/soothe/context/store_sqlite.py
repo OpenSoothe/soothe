@@ -87,6 +87,7 @@ class SqliteContextPersistence:
             await self._runtime.run_write(_save)
         except Exception:
             logger.warning("[CE] Failed to save DAG to SQLite", exc_info=True)
+            raise
 
     async def load_dag(self) -> GoalStepDAG | None:
         loop_id = self._loop_id
@@ -140,6 +141,7 @@ class SqliteContextPersistence:
             await self._runtime.run_write(_save)
         except Exception:
             logger.warning("[CE] Failed to save ledger to SQLite", exc_info=True)
+            raise
 
     async def load_ledger(self) -> list[dict[str, Any]]:
         loop_id = self._loop_id
