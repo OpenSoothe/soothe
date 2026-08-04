@@ -9,9 +9,15 @@ import pytest
 
 from soothe.autopilot import AutopilotService
 from soothe.autopilot.consensus import ConsensusVerdict
-from soothe.autopilot.engine_models import Finding, GoalDispatchContextContribution
+from soothe.autopilot.engine_models import (
+    Finding,
+    GoalDispatchContextContribution,
+    StepSummary,
+    ToolCallStats,
+)
 from soothe.autopilot.evidence_grounding import (
     format_contribution_evidence,
+    synthesize_completion_evidence,
     workspace_deliverable_probe,
     workspace_has_deliverables,
 )
@@ -248,6 +254,70 @@ class TestConsensusEmptyEvidence:
         assert updated is not None
         assert updated.status == "completed"
 
+    @pytest.mark.asyncio
+    async def test_full_output_finding_grounds_consensus_without_workspace(self) -> None:
+        """No-artifact success: ledger/full_output finding is enough to run consensus."""
+        bus = InternalEventBus()
+        ce = ContextEngine()
+        svc = AutopilotService(
+            ce=ce,
+            config=AutopilotConfig(max_loops=1, max_parallel_goals=1),
+            internal_bus=bus,
+            consensus_model=_mock_consensus_model(
+                decision="accept",
+                reasoning="stdout evidence present",
+            ),
+            runner_factory=IdleFakeFactory(),
+        )
+        goal = await svc.submit_task("echo hello", workspace=None)
+        ce.claim_goal(goal.id, loop_id="w1")
+        contribution = GoalDispatchContextContribution(
+            findings=[Finding(summary="hello", relevance_score=0.8)],
+        )
+
+        await svc._apply_consensus_and_finalize(
+            goal.id,
+            evidence_summary="hello",
+            contribution=contribution,
+        )
+
+        updated = await ce.get_goal(goal.id)
+        assert updated is not None
+        assert updated.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_plan_steps_alone_ground_consensus(self) -> None:
+        bus = InternalEventBus()
+        ce = ContextEngine()
+        svc = AutopilotService(
+            ce=ce,
+            config=AutopilotConfig(max_loops=1, max_parallel_goals=1),
+            internal_bus=bus,
+            consensus_model=_mock_consensus_model(
+                decision="accept",
+                reasoning="completed steps present",
+            ),
+            runner_factory=IdleFakeFactory(),
+        )
+        goal = await svc.submit_task("echo hello", workspace=None)
+        ce.claim_goal(goal.id, loop_id="w1")
+        contribution = GoalDispatchContextContribution(
+            plan_steps_executed=[
+                StepSummary(id="S1", action="echo hello", outcome="completed"),
+            ],
+            tool_call_stats=ToolCallStats(counts_by_name={"shell": 1}),
+        )
+
+        await svc._apply_consensus_and_finalize(
+            goal.id,
+            evidence_summary="",
+            contribution=contribution,
+        )
+
+        updated = await ce.get_goal(goal.id)
+        assert updated is not None
+        assert updated.status == "completed"
+
 
 class TestEvidenceHelpers:
     def test_workspace_probe(self, tmp_path: Path) -> None:
@@ -267,6 +337,41 @@ class TestEvidenceHelpers:
             format_contribution_evidence(evidence_summary="", files_touched=None, findings=None)
             == ""
         )
+
+    def test_format_contribution_includes_plan_steps_and_tools(self) -> None:
+        text = format_contribution_evidence(
+            evidence_summary="",
+            files_touched=None,
+            findings=None,
+            plan_steps=[StepSummary(id="S1", action="echo hello", outcome="completed")],
+            tool_call_stats=ToolCallStats(counts_by_name={"shell": 1}),
+        )
+        assert "plan_steps_completed" in text
+        assert "echo hello" in text
+        assert "tool_calls: shell=1" in text
+
+    def test_synthesize_completion_evidence_prefers_summary(self) -> None:
+        pr = MagicMock()
+        pr.evidence_summary = "explicit summary"
+        pr.full_output = "ignored full"
+        pr.decision = None
+        assert synthesize_completion_evidence(pr) == "explicit summary"
+
+    def test_synthesize_completion_evidence_uses_full_output(self) -> None:
+        pr = MagicMock()
+        pr.evidence_summary = ""
+        pr.full_output = "hello from ledger"
+        pr.decision = None
+        assert synthesize_completion_evidence(pr) == "hello from ledger"
+
+    def test_synthesize_completion_evidence_uses_completed_steps(self) -> None:
+        pr = MagicMock()
+        pr.evidence_summary = ""
+        pr.full_output = None
+        decision = MagicMock()
+        decision.actions = [{"description": "run echo hello"}]
+        pr.decision = decision
+        assert "run echo hello" in synthesize_completion_evidence(pr)
 
 
 class TestPostCompletionSkip:

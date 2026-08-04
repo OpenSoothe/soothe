@@ -41,6 +41,7 @@ def _plan_result(*, is_done: bool, status: str = "complete") -> PlanResult:
     pr.is_done = MagicMock(return_value=is_done)
     pr.status = status
     pr.evidence_summary = "summary text"
+    pr.full_output = None
     pr.decision = None
     return pr
 
@@ -107,8 +108,26 @@ class TestBuildContribution:
     def test_plan_result_with_no_summary_creates_no_findings(self) -> None:
         pr = _plan_result(is_done=True)
         pr.evidence_summary = ""
+        pr.full_output = None
         c = AutopilotWorkerMixin._build_contribution(pr)
         assert c.findings == []
+
+    def test_full_output_synthesizes_finding_when_summary_empty(self) -> None:
+        pr = _plan_result(is_done=True)
+        pr.evidence_summary = ""
+        pr.full_output = "hello\n"
+        c = AutopilotWorkerMixin._build_contribution(pr)
+        assert len(c.findings) == 1
+        assert "hello" in c.findings[0].summary
+
+    def test_completion_chunk_uses_full_output_as_evidence(self) -> None:
+        mixin = _BareMixin()
+        pr = _plan_result(is_done=True)
+        pr.evidence_summary = ""
+        pr.full_output = "echo ok"
+        chunk = mixin._goal_completion_chunk(_job(), outcome="completed", plan_result=pr)
+        _, _, payload = chunk
+        assert payload["evidence_summary"] == "echo ok"
 
     def test_decision_actions_become_plan_steps(self) -> None:
         pr = _plan_result(is_done=True)

@@ -1235,10 +1235,14 @@ class AutopilotService:
 
         files = getattr(contribution, "files_touched", None) if contribution else None
         findings = getattr(contribution, "findings", None) if contribution else None
+        plan_steps = getattr(contribution, "plan_steps_executed", None) if contribution else None
+        tool_stats = getattr(contribution, "tool_call_stats", None) if contribution else None
         grounded = format_contribution_evidence(
             evidence_summary=evidence_summary,
             files_touched=files,
             findings=findings,
+            plan_steps=plan_steps,
+            tool_call_stats=tool_stats,
         )
         # Always attach structural workspace evidence when present — a thin
         # evidence_summary alone previously skipped the probe and caused

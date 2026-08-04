@@ -1,4 +1,4 @@
-"""Consensus / health evidence helpers (IG-680).
+"""Consensus / health evidence helpers (IG-680, IG-685).
 
 Structural workspace probes and path extraction from execution evidence —
 not content-judgment keyword heuristics (RFC-630).
@@ -179,11 +179,47 @@ def build_files_touched(
     return out
 
 
+def synthesize_completion_evidence(plan_result: Any | None) -> str:
+    """Derive consensus-ready evidence from a completed ``PlanResult``.
+
+    Prefer explicit ``evidence_summary``, then user-visible ``full_output``,
+    then completed decision action descriptions. Never uses the goal text.
+    """
+    if plan_result is None:
+        return ""
+
+    summary = (getattr(plan_result, "evidence_summary", None) or "").strip()
+    if summary:
+        return summary[:2048]
+
+    full_output = (getattr(plan_result, "full_output", None) or "").strip()
+    if full_output:
+        return full_output[:2048]
+
+    decision = getattr(plan_result, "decision", None)
+    actions = getattr(decision, "actions", None) if decision is not None else None
+    if isinstance(actions, list) and actions:
+        bits: list[str] = []
+        for action in actions[:10]:
+            if isinstance(action, dict):
+                text = str(action.get("description", "") or "").strip()
+            else:
+                text = str(getattr(action, "description", "") or "").strip()
+            if text:
+                bits.append(text[:200])
+        if bits:
+            return "Completed steps: " + "; ".join(bits)
+
+    return ""
+
+
 def format_contribution_evidence(
     *,
     evidence_summary: str,
     files_touched: dict[str, FileTouchSummary] | None,
     findings: list[Any] | None,
+    plan_steps: list[Any] | None = None,
+    tool_call_stats: Any | None = None,
 ) -> str:
     """Build grounded consensus evidence text (never the bare goal description)."""
     parts: list[str] = []
@@ -199,4 +235,31 @@ def format_contribution_evidence(
             text = str(text).strip()
             if text:
                 parts.append(f"finding: {text[:500]}")
+    if plan_steps:
+        completed: list[str] = []
+        for step in plan_steps[:10]:
+            outcome = getattr(step, "outcome", None)
+            if outcome is None and isinstance(step, dict):
+                outcome = step.get("outcome")
+            if outcome != "completed":
+                continue
+            action = getattr(step, "action", None)
+            step_id = getattr(step, "id", None)
+            if isinstance(step, dict):
+                action = action if action is not None else step.get("action")
+                step_id = step_id if step_id is not None else step.get("id")
+            label = str(action or "").strip()
+            if not label:
+                continue
+            prefix = str(step_id).strip() if step_id else ""
+            completed.append(f"{prefix}:{label}" if prefix else label)
+        if completed:
+            parts.append("plan_steps_completed: " + "; ".join(completed))
+    if tool_call_stats is not None:
+        counts = getattr(tool_call_stats, "counts_by_name", None)
+        if counts is None and isinstance(tool_call_stats, dict):
+            counts = tool_call_stats.get("counts_by_name")
+        if isinstance(counts, dict) and counts:
+            rendered = ", ".join(f"{name}={counts[name]}" for name in sorted(counts)[:20])
+            parts.append(f"tool_calls: {rendered}")
     return "\n".join(parts).strip()

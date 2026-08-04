@@ -19,6 +19,8 @@ Phase B (this file) ships a minimal working implementation:
 
 IG-680 enriches contribution synthesis with files_touched extracted from
 PlanResult evidence / action text (hashed when present on disk).
+IG-685 synthesizes consensus evidence from full_output / completed steps when
+``evidence_summary`` is empty (no-artifact successes).
 """
 
 from __future__ import annotations
@@ -34,7 +36,10 @@ from soothe.autopilot.engine_models import (
     StepSummary,
     ToolCallStats,
 )
-from soothe.autopilot.evidence_grounding import build_files_touched
+from soothe.autopilot.evidence_grounding import (
+    build_files_touched,
+    synthesize_completion_evidence,
+)
 from soothe.autopilot.proposal_queue import Proposal, ProposalQueue
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.sloop.state.schemas import PlanResult
@@ -258,7 +263,7 @@ class AutopilotWorkerMixin:
             return GoalDispatchContextContribution()
 
         findings: list[Finding] = []
-        summary = (getattr(plan_result, "evidence_summary", "") or "").strip()
+        summary = synthesize_completion_evidence(plan_result)
         if summary:
             findings.append(Finding(summary=summary[:2000], relevance_score=0.8))
 
@@ -330,7 +335,7 @@ class AutopilotWorkerMixin:
         }
         if plan_result is not None:
             payload["plan_result_status"] = getattr(plan_result, "status", None)
-            payload["evidence_summary"] = getattr(plan_result, "evidence_summary", "")
+            payload["evidence_summary"] = synthesize_completion_evidence(plan_result)
         if error_text is not None:
             payload["error_text"] = error_text
         return _custom(payload)
