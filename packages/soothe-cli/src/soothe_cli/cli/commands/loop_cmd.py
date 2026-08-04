@@ -30,7 +30,7 @@ console = Console()
 logger = logging.getLogger(__name__)
 
 # Create loop command group
-loop_app = typer.Typer(help="Manage StrangeLoop instances")
+loop_app = typer.Typer(help="Manage StrangeLoop instances.")
 
 
 def _require_daemon(ws_url: str) -> None:
@@ -159,7 +159,7 @@ def list_loops(
 
 @loop_app.command("show")
 def describe_loop(
-    loop_id: Annotated[str, typer.Argument(help="Loop identifier")],
+    loop_id: Annotated[str, typer.Argument(help="Loop identifier.")],
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Show detailed branch analysis."),
@@ -271,7 +271,7 @@ def describe_loop(
 
 @loop_app.command("tree")
 def visualize_loop_tree(
-    loop_id: Annotated[str, typer.Argument(help="Loop identifier")],
+    loop_id: Annotated[str, typer.Argument(help="Loop identifier.")],
     format: Annotated[
         str,
         typer.Option("--format", "-f", help="Visualization format (ascii, json, dot)."),
@@ -323,7 +323,7 @@ def visualize_loop_tree(
 
 @loop_app.command("prune")
 def prune_loop_branches(
-    loop_id: Annotated[str, typer.Argument(help="Loop identifier")],
+    loop_id: Annotated[str, typer.Argument(help="Loop identifier.")],
     retention_days: Annotated[
         int,
         typer.Option("--retention-days", "-r", help="Retention period in days."),
@@ -369,7 +369,7 @@ def prune_loop_branches(
 
 @loop_app.command("delete")
 def delete_loop(
-    loop_id: Annotated[str, typer.Argument(help="Loop identifier")],
+    loop_id: Annotated[str, typer.Argument(help="Loop identifier.")],
     force: Annotated[
         bool,
         typer.Option("--force", "-f", help="Delete without confirmation."),
@@ -633,7 +633,7 @@ def render_dot_tree(tree: dict[str, Any]) -> None:
 
 @loop_app.command("continue")
 def continue_loop(
-    loop_id: Annotated[str | None, typer.Argument(help="Loop identifier to continue")] = None,
+    loop_id: Annotated[str | None, typer.Argument(help="Loop identifier to continue.")] = None,
     prompt: Annotated[
         str | None,
         typer.Option("--prompt", "-p", help="Optional prompt to send after continuing."),
@@ -646,7 +646,7 @@ def continue_loop(
         ),
     ] = False,
 ) -> None:
-    """Continue execution on existing loop.
+    """Continue execution on an existing loop.
 
     Behavior:
     - Resolve target loop (explicit `LOOP_ID` or most-recent loop)
@@ -707,21 +707,21 @@ def continue_loop(
 
 @loop_app.command("resume")
 def resume_loop(
-    loop_id: Annotated[str | None, typer.Argument(help="Loop identifier to continue")] = None,
+    loop_id: Annotated[str | None, typer.Argument(help="Loop identifier to continue.")] = None,
     prompt: Annotated[
         str | None,
         typer.Option("--prompt", "-p", help="Optional prompt to send after continuing."),
     ] = None,
 ) -> None:
-    """Resume execution on existing loop from the daemon's last step index."""
+    """Alias for continue --resume — resume from the daemon's last step index."""
     continue_loop(loop_id, prompt, resume=True)
 
 
 @loop_app.command("detach")
 def detach_loop(
-    loop_id: Annotated[str, typer.Argument(help="Loop identifier to detach")],
+    loop_id: Annotated[str, typer.Argument(help="Loop identifier to detach.")],
 ) -> None:
-    """Detach loop (keep running in background).
+    """Detach loop (keep running in the background).
 
     Behavior:
     - Unsubscribe client from loop events
@@ -756,7 +756,7 @@ def detach_loop(
 
 @loop_app.command("attach")
 def attach_loop(
-    loop_id: Annotated[str, typer.Argument(help="Loop identifier to attach")],
+    loop_id: Annotated[str, typer.Argument(help="Loop identifier to attach.")],
 ) -> None:
     """Attach to detached loop (reattach capability).
 

@@ -9,6 +9,7 @@ load_dotenv()
 from pathlib import Path  # noqa: E402
 from typing import Annotated  # noqa: E402
 
+import click  # noqa: E402
 import typer  # noqa: E402
 from soothe_sdk.paths import SOOTHE_HOME  # noqa: E402
 
@@ -22,42 +23,95 @@ from soothe_cli.tui.markdown_theme import (  # noqa: E402
     markdown_theme_help,
 )
 
+# Make -h and --help equivalent everywhere (Click inherits this to nested cmds).
+_HELP_OPTION_NAMES = ["-h", "--help"]
+
 app = typer.Typer(
     name="soothe",
-    help="Intelligent AI assistant for complex tasks",
+    help="Intelligent AI assistant for complex tasks.",
     no_args_is_help=False,
     add_completion=False,
+    context_settings={"help_option_names": _HELP_OPTION_NAMES},
 )
 
 
-def add_help_alias(nested_app: typer.Typer) -> None:
-    """Add -h as an alias for --help to a nested Typer app.
-
-    This is a workaround for Typer not supporting -h for nested command groups.
-    Must be called AFTER creating the nested app but BEFORE adding commands.
+def _echo_help_for(base_ctx: click.Context, commands: list[str] | None) -> None:
+    """Print help for ``base_ctx`` or a nested command path under it.
 
     Args:
-        nested_app: The nested Typer app to add -h support to.
+        base_ctx: Context whose help is shown when ``commands`` is empty.
+        commands: Optional path of subcommand names relative to ``base_ctx``.
     """
+    if not commands:
+        typer.echo(base_ctx.get_help())
+        raise typer.Exit(code=0)
 
-    # Add a callback that defines -h option
-    @nested_app.callback(invoke_without_command=True)
-    def help_callback(
+    current_cmd = base_ctx.command
+    current_ctx = base_ctx
+    for name in commands:
+        # TyperGroup may not subclass click.Group; duck-type the MultiCommand API.
+        get_command = getattr(current_cmd, "get_command", None)
+        if get_command is None:
+            typer.echo(
+                f"Error: '{current_ctx.info_name}' has no subcommands.",
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        next_cmd = get_command(current_ctx, name)
+        if next_cmd is None:
+            typer.echo(f"Error: No such command '{name}'.", err=True)
+            raise typer.Exit(code=2)
+        current_ctx = click.Context(next_cmd, info_name=name, parent=current_ctx)
+        current_cmd = next_cmd
+    typer.echo(current_ctx.get_help())
+    raise typer.Exit(code=0)
+
+
+def _register_help_command(typer_app: typer.Typer) -> None:
+    """Register a ``help`` subcommand equivalent to ``-h`` / ``--help``."""
+
+    @typer_app.command("help")
+    def help_cmd(
         ctx: typer.Context,
-        show_help: Annotated[  # noqa: FBT002
-            bool,
-            typer.Option("-h", "--help", is_flag=True, help="Show this message and exit."),
-        ] = False,
+        commands: Annotated[
+            list[str] | None,
+            typer.Argument(help="Optional subcommand path (e.g. list)."),
+        ] = None,
     ) -> None:
-        # If -h/--help is passed, show help and exit before command parsing
-        if show_help:
-            typer.echo(ctx.get_help())
-            raise typer.Exit(code=0)
+        """Show this message and exit."""
+        _echo_help_for(ctx.parent or ctx, commands)
 
-        # If no subcommand and no help flag, show help by default
-        if ctx.invoked_subcommand is None:
-            typer.echo(ctx.get_help())
-            raise typer.Exit(code=0)
+
+def configure_command_group(
+    nested_app: typer.Typer,
+    *,
+    show_help_on_no_args: bool = True,
+) -> None:
+    """Make ``-h``, ``--help``, and ``help`` equivalent for a nested group.
+
+    ``-h`` / ``--help`` come from the root app's ``help_option_names`` (inherited
+    by Click contexts). This registers a matching ``help`` subcommand and,
+    optionally, prints help when the group is invoked with no subcommand.
+
+    Args:
+        nested_app: Nested Typer app to configure.
+        show_help_on_no_args: When True, bare group invocation prints help
+            (same as ``-h``). Set False when the group has its own default
+            action or already sets ``no_args_is_help``.
+    """
+    if show_help_on_no_args:
+
+        @nested_app.callback(invoke_without_command=True)
+        def _no_args_help(ctx: typer.Context) -> None:
+            if ctx.invoked_subcommand is None:
+                typer.echo(ctx.get_help())
+                raise typer.Exit(code=0)
+
+    _register_help_command(nested_app)
+
+
+# Backwards-compatible alias used by older call sites / tests.
+add_help_alias = configure_command_group
 
 
 @app.callback(invoke_without_command=True)
@@ -127,7 +181,7 @@ def main(
     ] = None,
     streaming_mode: Annotated[
         str | None,
-        typer.Option("--streaming-mode", help="Streaming mode: 'streaming' or 'batch'"),
+        typer.Option("--streaming-mode", help="Streaming mode: 'streaming' or 'batch'."),
     ] = None,
     mcp_config: Annotated[
         str | None,
@@ -168,21 +222,17 @@ def main(
             ),
         ),
     ] = False,
-    show_help: Annotated[  # noqa: FBT002
-        bool,
-        typer.Option("--help", "-h", is_flag=True, help="Show this message and exit."),
-    ] = False,
     show_version: Annotated[  # noqa: FBT002
         bool,
-        typer.Option("--version", is_flag=True, help="Show version and exit."),
+        typer.Option("--version", help="Show version and exit."),
     ] = False,
 ) -> None:
-    """Soothe CLI - Intelligent AI assistant client.
+    """Soothe CLI — intelligent AI assistant client.
 
     Run without arguments for interactive TUI mode, or pass --prompt for a one-shot
     headless query (stdout, then exit).
 
-    Note: This is the CLI client. Use 'soothed' command to manage the daemon server.
+    Note: This is the CLI client. Use 'soothed' to manage the daemon server.
 
     Examples:
         soothe                           # Interactive TUI mode
@@ -190,13 +240,8 @@ def main(
         soothe -p "Hello" --tui         # TUI with an auto-submitted prompt
         soothe --daemon-port 9000 loop list  # Subcommands inherit global flags
         soothe loop list                 # List StrangeLoop instances
+        soothe help loop                 # Same as: soothe loop --help
     """
-    # Handle -h/--help flag
-    if show_help:
-        typer.echo(ctx.get_help())
-        raise typer.Exit
-
-    # Handle --version flag
     if show_version:
         typer.echo(f"soothe {__version__}")
         raise typer.Exit
@@ -259,31 +304,35 @@ from soothe_cli.cli.commands.cron_cmd import app as _cron_app  # noqa: E402
 from soothe_cli.cli.commands.loop_cmd import loop_app as _loop_app  # noqa: E402
 from soothe_cli.cli.commands.status_cmd import status_app as _status_app  # noqa: E402
 
-# status_app has custom default behavior (shows combined status), skip add_help_alias
 for _sub_app, _name in (
     (_loop_app, "loop"),
     (_autopilot_app, "autopilot"),
     (_cron_app, "cron"),
     (_config_app, "config"),
 ):
-    add_help_alias(_sub_app)
+    configure_command_group(_sub_app, show_help_on_no_args=True)
     app.add_typer(_sub_app, name=_name)
 
-# status_app has its own callback for default behavior
+# status has a custom default action (combined status) — keep it; add help only.
+configure_command_group(_status_app, show_help_on_no_args=False)
 app.add_typer(_status_app, name="status")
 
 
 # ---------------------------------------------------------------------------
-# Help Command
+# Help Command (same meaning as -h / --help; optional topic path)
 # ---------------------------------------------------------------------------
 
 
 @app.command(name="help")
-def help_command(ctx: typer.Context) -> None:
-    """Show help message and exit."""
-    # Get the parent context (the main app) to show full help
-    parent_ctx = ctx.parent or ctx
-    typer.echo(parent_ctx.get_help())
+def help_command(
+    ctx: typer.Context,
+    commands: Annotated[
+        list[str] | None,
+        typer.Argument(help="Optional command path (e.g. loop, loop list, autopilot top)."),
+    ] = None,
+) -> None:
+    """Show this message and exit."""
+    _echo_help_for(ctx.parent or ctx, commands)
 
 
 if __name__ == "__main__":

@@ -185,7 +185,7 @@ def list_jobs(
 def list_jobs_alias(
     status_filter: str = typer.Option("", "--status", "-s", help="Filter by status."),
 ) -> None:
-    """Alias for ``list`` — list root autopilot jobs."""
+    """Alias for list — list root autopilot jobs."""
     _list_jobs_impl(status_filter)
 
 

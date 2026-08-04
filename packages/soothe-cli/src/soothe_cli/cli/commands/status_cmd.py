@@ -27,7 +27,7 @@ from soothe_cli.config.loader import load_config
 console = Console()
 
 # Create status command group
-status_app = typer.Typer(help="Check daemon and client status", no_args_is_help=False)
+status_app = typer.Typer(help="Check daemon and client status.", no_args_is_help=False)
 
 
 async def _fetch_status(ws_url: str, timeout: float = 5.0) -> dict[str, Any]:
@@ -266,20 +266,12 @@ def connection_status(
 @status_app.callback(invoke_without_command=True)
 def status_main(
     ctx: typer.Context,
-    show_help: Annotated[
-        bool,
-        typer.Option("-h", "--help", is_flag=True, help="Show this message and exit."),
-    ] = False,
     json_output: Annotated[
         bool,
         typer.Option("--json", help="Output as JSON."),
     ] = False,
 ) -> None:
     """Show overall daemon and connection status (default when no subcommand)."""
-    if show_help:
-        typer.echo(ctx.get_help())
-        raise typer.Exit(code=0)
-
     if ctx.invoked_subcommand is not None:
         return
 

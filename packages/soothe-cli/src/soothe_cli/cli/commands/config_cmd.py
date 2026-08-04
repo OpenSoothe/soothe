@@ -21,7 +21,7 @@ from soothe_cli.config.loader import load_config
 console = Console()
 
 # Create config command group
-config_app = typer.Typer(help="Manage daemon configuration", no_args_is_help=True)
+config_app = typer.Typer(help="Manage daemon configuration.", no_args_is_help=False)
 
 
 async def _trigger_config_reload(ws_url: str, timeout: float = 5.0) -> dict[str, Any]:
