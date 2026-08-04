@@ -92,22 +92,25 @@ async def test_interrupt_resume_emits_raw_tuple_on_heartbeat(
 
 
 @pytest.mark.asyncio
-async def test_interrupt_resume_dispatch_timeout_disabled_by_default(
+async def test_interrupt_resume_dispatch_idle_disabled_without_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Graph stream reader disables dispatch watchdog when config is absent."""
+    """Graph stream reader gets idle_timeout=0 when config is absent."""
 
     class _FakeReader:
         def __init__(
             self,
             _chunk_iter: AsyncIterator[str],
             *,
-            dispatch_timeout: float | None = None,
             step_id: str | None = None,
             heartbeat_interval: float | None = None,
+            idle_timeout: float | None = None,
+            tool_timeout: float | None = None,
+            max_heartbeats: int | None = None,
         ) -> None:
-            _ = step_id, heartbeat_interval
-            self.dispatch_timeout = dispatch_timeout
+            _ = step_id, heartbeat_interval, max_heartbeats
+            self.idle_timeout = idle_timeout
+            self.tool_timeout = tool_timeout
 
         async def read_next(self) -> str:
             raise StopAsyncIteration
@@ -119,7 +122,8 @@ async def test_interrupt_resume_dispatch_timeout_disabled_by_default(
 
     def _reader_factory(*args: object, **kwargs: object) -> _FakeReader:
         reader = _FakeReader(*args, **kwargs)
-        captured["dispatch_timeout"] = reader.dispatch_timeout
+        captured["idle_timeout"] = reader.idle_timeout
+        captured["tool_timeout"] = reader.tool_timeout
         return reader
 
     monkeypatch.setattr(
@@ -144,26 +148,30 @@ async def test_interrupt_resume_dispatch_timeout_disabled_by_default(
     with pytest.raises(StopAsyncIteration):
         await anext(stream)
 
-    assert captured["dispatch_timeout"] == 0
+    assert captured["idle_timeout"] == 0
+    assert captured["tool_timeout"] == 0
 
 
 @pytest.mark.asyncio
-async def test_interrupt_resume_uses_config_dispatch_timeout(
+async def test_interrupt_resume_uses_config_dispatch_idle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Graph stream reader should honor agent.loop.dispatch_timeout_seconds."""
+    """Graph stream reader should honor agent.loop.dispatch_idle_seconds."""
 
     class _FakeReader:
         def __init__(
             self,
             _chunk_iter: AsyncIterator[str],
             *,
-            dispatch_timeout: float | None = None,
             step_id: str | None = None,
             heartbeat_interval: float | None = None,
+            idle_timeout: float | None = None,
+            tool_timeout: float | None = None,
+            max_heartbeats: int | None = None,
         ) -> None:
-            _ = step_id, heartbeat_interval
-            self.dispatch_timeout = dispatch_timeout
+            _ = step_id, heartbeat_interval, max_heartbeats
+            self.idle_timeout = idle_timeout
+            self.tool_timeout = tool_timeout
 
         async def read_next(self) -> str:
             raise StopAsyncIteration
@@ -175,7 +183,8 @@ async def test_interrupt_resume_uses_config_dispatch_timeout(
 
     def _reader_factory(*args: object, **kwargs: object) -> _FakeReader:
         reader = _FakeReader(*args, **kwargs)
-        captured["dispatch_timeout"] = reader.dispatch_timeout
+        captured["idle_timeout"] = reader.idle_timeout
+        captured["tool_timeout"] = reader.tool_timeout
         return reader
 
     monkeypatch.setattr(
@@ -191,7 +200,8 @@ async def test_interrupt_resume_uses_config_dispatch_timeout(
     mock_agent.execution_astream = MagicMock(return_value=empty_stream())
     mock_agent.can_read_graph_state = False
     config = SootheConfig()
-    config.agent.loop.dispatch_timeout_seconds = 300
+    config.agent.loop.dispatch_idle_seconds = 120
+    config.agent.loop.dispatch_tool_timeout_seconds = 0
     executor = Executor(mock_agent, config=config)
 
     stream = executor._core_agent_astream_with_interrupt_resume(
@@ -202,4 +212,5 @@ async def test_interrupt_resume_uses_config_dispatch_timeout(
     with pytest.raises(StopAsyncIteration):
         await anext(stream)
 
-    assert captured["dispatch_timeout"] == 300
+    assert captured["idle_timeout"] == 120
+    assert captured["tool_timeout"] == 0

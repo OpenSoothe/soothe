@@ -44,3 +44,17 @@ def test_validate_host_file_ownership_rejects_nano_owned_keys() -> None:
         validate_host_file_ownership(data, source_file="soothe.yml")
     assert "providers" in str(exc.value)
     assert "nano.yml" in str(exc.value)
+
+
+def test_strange_loop_rejects_nano_middleware_keys() -> None:
+    from soothe.config.models import StrangeLoopConfig
+
+    with pytest.raises(ValueError, match="agent.middleware"):
+        StrangeLoopConfig(tool_timeout={"enabled": False})
+
+
+def test_strange_loop_rejects_legacy_dispatch_timeout() -> None:
+    from soothe.config.models import StrangeLoopConfig
+
+    with pytest.raises(ValueError, match="dispatch_timeout_seconds removed"):
+        StrangeLoopConfig(dispatch_timeout_seconds=600)

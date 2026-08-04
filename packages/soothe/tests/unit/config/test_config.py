@@ -45,7 +45,9 @@ class TestSootheConfig:
         assert cfg.embedding_model == "openai:text-embedding-3-small"
         assert cfg.embedding_dims == 1536
         assert cfg.agent.autopilot.enabled is False
-        assert cfg.agent.loop.dispatch_timeout_seconds == 600.0
+        assert cfg.agent.loop.dispatch_idle_seconds == 300.0
+        assert cfg.agent.loop.dispatch_tool_timeout_seconds == 0.0
+        assert cfg.agent.middleware.llm_rate_limit.enabled is True
         assert len(cfg.vector_stores) == 1
         assert cfg.vector_stores[0].name == "sqlite_vec_default"
         assert cfg.vector_store_router.default == "sqlite_vec_default:soothe_default"
@@ -81,7 +83,7 @@ class TestSootheConfig:
 
     def test_llm_rate_limit_enabled_by_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.agent.loop.llm_rate_limit.enabled is True
+        assert cfg.agent.middleware.llm_rate_limit.enabled is True
 
     def test_checkpoint_defaults(self) -> None:
         cfg = SootheConfig()

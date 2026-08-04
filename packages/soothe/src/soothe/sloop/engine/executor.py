@@ -372,11 +372,17 @@ class Executor:
             return _DEFAULT_MAX_TOOL_CALLS_PER_STEP
         return max(0, int(self._config.agent.loop.max_tool_calls_per_step))
 
-    def _dispatch_timeout_seconds(self) -> float:
-        """Graph stream inactivity watchdog for Execute (0 = disabled)."""
+    def _dispatch_idle_seconds(self) -> float:
+        """Deadlock detector: max inactivity when no root tool is pending."""
         if self._config is None:
             return 0.0
-        return max(0.0, float(self._config.agent.loop.dispatch_timeout_seconds))
+        return max(0.0, float(self._config.agent.loop.dispatch_idle_seconds))
+
+    def _dispatch_tool_timeout_seconds(self) -> float:
+        """Optional graph-level tool-wave wall-clock cap. 0 = disabled."""
+        if self._config is None:
+            return 0.0
+        return max(0.0, float(self._config.agent.loop.dispatch_tool_timeout_seconds))
 
     def _execute_action_retry_max(self) -> int:
         if self._config is None:
@@ -702,12 +708,13 @@ class Executor:
                 current_input,
                 graph_config=graph_config,
             )
-            # LLM timeout: LLMRateLimitMiddleware. Dispatch watchdog: opt-in via
-            # agent.loop.dispatch_timeout_seconds (0 = disabled by default).
+            # LLM timeout: LLMRateLimitMiddleware. Dispatch watchdog: tool-aware
+            # idle/tool timers (root pending-tool set; nested msgs are progress only).
             chunk_reader = GraphStreamChunkReader(
                 chunk_iter,
-                dispatch_timeout=self._dispatch_timeout_seconds(),
                 step_id=step_id,
+                idle_timeout=self._dispatch_idle_seconds(),
+                tool_timeout=self._dispatch_tool_timeout_seconds(),
             )
             try:
                 while True:
@@ -2345,7 +2352,8 @@ class Executor:
         outcomes: list[dict] = []
 
         no_progress_watchdog_triggered = 0
-        watchdog_seconds = self._dispatch_timeout_seconds()
+        # IG-681: use idle_timeout (tool-aware) for no-progress watchdog.
+        watchdog_seconds = self._dispatch_idle_seconds()
         last_progress_at = time.perf_counter()
 
         def _maybe_cap_subagent_tasks(msg: ToolMessage) -> bool:
@@ -2391,7 +2399,7 @@ class Executor:
             text_out = extract_text_from_message_content(content)
             if text_out:
                 tool_output = (
-                    self._config.agent.loop.tool_output
+                    self._config.agent.middleware.tool_output
                     if self._config and hasattr(self._config, "agent")
                     else None
                 )
@@ -2627,7 +2635,7 @@ class Executor:
                 text_out = extract_text_from_message_content(getattr(tm, "content", None))
                 if text_out and str(getattr(tm, "name", "") or "") != "task":
                     tool_output = (
-                        self._config.agent.loop.tool_output
+                        self._config.agent.middleware.tool_output
                         if self._config and hasattr(self._config, "agent")
                         else None
                     )

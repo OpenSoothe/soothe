@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # Re-export facade — canonical source: soothe_nano.config.models
 from soothe_nano.config.models import (  # noqa: F401
@@ -878,8 +878,10 @@ class StrangeLoopConfig(BaseModel):
         general_purpose_subagent: When false (default), hide/block deepagents ``general-purpose``
             on CoreAgent ``task`` even if nano ``agent.runtime.general_purpose_subagent`` is true.
         max_tool_calls_per_step: Cap tool results consumed per execute step from the Act stream (0 = unlimited).
-        dispatch_timeout_seconds: Max seconds without CoreAgent graph stream chunks during Execute
-            before failing the step. 0 disables the dispatch watchdog.
+        dispatch_idle_seconds: Deadlock detector — max seconds of stream inactivity when no
+            root-level tool is pending. Nested subgraph messages do not clear parent activity.
+        dispatch_tool_timeout_seconds: Optional wall-clock cap for a root tool wave (dispatch
+            until all pending ToolMessages). 0 disables (use ``agent.middleware.tool_timeout``).
         execute_action_retry_max: Extra Execute passes when the step deliverable gate fails (0 = disabled).
         execute_min_answer_chars: Minimum final assistant text length for deliverable satisfaction.
         execute_deliverable_assess: Fast LLM assess mode when structural deliverable checks are inconclusive.
@@ -895,11 +897,6 @@ class StrangeLoopConfig(BaseModel):
         plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts (IG-380).
         checkpoint: Progressive checkpoint persistence and startup resume (RFC-203).
         concurrency: Parallelism caps and step scheduling strategy.
-        tool_output: Tool result size caps for graph state and model context.
-        tool_call_limit: Tool call count limits per thread/run.
-        tool_retry: Tool failure retry policy.
-        llm_rate_limit: LLM rate limiting, per-call timeouts, and retry escalation.
-        tool_timeout: Tool timeout middleware configuration (IG-511).
         plan_evaluate_assess_model_role: Router role for evaluate assess LLM calls (default ``fast``).
         plan_evaluate_gap_model_role: Router role for evaluate inventory LLM calls (default ``fast``).
         plan_generate_model_role: Router role for plan-generate LLM calls (default ``think``).
@@ -963,16 +960,57 @@ class StrangeLoopConfig(BaseModel):
         le=10_000,
     )
 
-    dispatch_timeout_seconds: float = Field(
-        default=600.0,
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_nano_middleware_and_legacy_keys(cls, data: Any) -> Any:
+        """Keep nano middleware knobs out of ``agent.loop`` (IG-631 / IG-681)."""
+        if not isinstance(data, dict):
+            return data
+        banned_middleware = (
+            "tool_output",
+            "tool_call_limit",
+            "tool_retry",
+            "tool_timeout",
+            "llm_rate_limit",
+        )
+        found_mw = [key for key in banned_middleware if key in data]
+        if found_mw:
+            joined = ", ".join(found_mw)
+            raise ValueError(f"agent.loop keys moved to nano.yml agent.middleware: {joined}")
+        if "dispatch_timeout_seconds" in data:
+            raise ValueError(
+                "agent.loop.dispatch_timeout_seconds removed; use "
+                "dispatch_idle_seconds and dispatch_tool_timeout_seconds"
+            )
+        return data
+
+    dispatch_idle_seconds: float = Field(
+        default=300.0,
         description=(
-            "Max seconds without CoreAgent graph stream chunks during Execute before "
-            "failing the step. 0 disables the dispatch watchdog (not recommended; "
-            "a stalled stream would run indefinitely). The default 600s (10 min) "
-            "bounds runaway dispatches while accommodating long tool executions. "
-            "Set a higher value only when tools legitimately exceed 10 min."
+            "Deadlock detector: max seconds of stream inactivity when no root-level "
+            "tool is pending. Resets on every real chunk (including nested subgraph "
+            "progress). Idle fires only after the last root ToolMessage until the "
+            "next LLM hop — the hang class from loop 9e20. Parallel tool waves keep "
+            "idle suppressed until every pending tool_call id completes. Default "
+            "300s (5 min). Set to 0 to disable (not recommended; the idle sentinel "
+            "cap provides a 1-hour secondary safety net when no tools are pending)."
         ),
         ge=0,
+        le=86_400,
+    )
+
+    dispatch_tool_timeout_seconds: float = Field(
+        default=0.0,
+        description=(
+            "Optional wall-clock cap for a root tool wave (from first pending "
+            "dispatch until the pending set empties). 0 disables this cap and "
+            "relies on agent.middleware.tool_timeout per-tool middleware instead. "
+            "Set > 0 only when you need a graph-stream-level bound in addition to "
+            "middleware. When the cap fires, the step fails with "
+            "DispatchTimeoutError(reason='tool_wall_clock')."
+        ),
+        ge=0,
+        le=86_400,
     )
 
     execute_action_retry_max: int = Field(
@@ -1140,32 +1178,6 @@ class StrangeLoopConfig(BaseModel):
         default_factory=LoopConcurrencyConfig,
         description="Parallelism caps and step scheduling strategy",
     )
-
-    tool_output: LoopToolOutputConfig = Field(
-        default_factory=LoopToolOutputConfig,
-        description="Tool result size caps for graph state and model context",
-    )
-
-    tool_call_limit: ToolCallLimitConfig = Field(
-        default_factory=ToolCallLimitConfig,
-        description="Tool call count limits per thread/run",
-    )
-
-    tool_retry: ToolRetryConfig = Field(
-        default_factory=ToolRetryConfig,
-        description="Tool failure retry policy",
-    )
-
-    llm_rate_limit: LLMRateLimitConfig = Field(
-        default_factory=LLMRateLimitConfig,
-        description="LLM rate limiting, per-call timeouts, and retry escalation",
-    )
-
-    tool_timeout: ToolTimeoutConfig = Field(
-        default_factory=ToolTimeoutConfig,
-        description="Tool timeout middleware configuration",
-    )
-    """Wrap tool calls with configurable timeout to prevent indefinite hangs."""
 
     plan_evaluate_assess_model_role: ModelRole = Field(
         default="fast",

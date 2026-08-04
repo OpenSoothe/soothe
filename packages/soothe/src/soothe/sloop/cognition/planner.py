@@ -360,7 +360,7 @@ class LLMPlanner:
     def _llm_rate_limit_config(self) -> LLMRateLimitConfig:
         """Timeout/retry policy for direct planner LLM calls (bypasses middleware stack)."""
         if self._config is not None:
-            return self._config.agent.loop.llm_rate_limit
+            return self._config.agent.middleware.llm_rate_limit
         return LLMRateLimitConfig()
 
     def _gap_llm_rate_limit_config(self) -> LLMRateLimitConfig:
