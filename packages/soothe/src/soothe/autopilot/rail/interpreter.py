@@ -9,7 +9,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.autopilot.rail.builtins_exec import (
+    BuiltinResult,
+    RailBuiltinExecutor,
+    RailJobState,
+)
 from soothe.autopilot.rail.guards import GuardContext, GuardEvaluator
 from soothe.autopilot.rail.trace_store import (
     GuardResult,
@@ -17,7 +21,7 @@ from soothe.autopilot.rail.trace_store import (
     RailTraceStore,
     RuleFireRecord,
 )
-from soothe.context.engine import ContextEngine
+from soothe.context.engine import ContextEngine, InvalidGoalTransitionError
 from soothe.rails.catalog import LoopRailCatalog, RailDefinition
 
 logger = logging.getLogger(__name__)
@@ -138,13 +142,27 @@ class LoopRailInterpreter:
                 goal_id=event.goal_id,
             )
             if matched:
-                result = await self._builtins.invoke(
-                    rule.then,
-                    job_id=job_id,
-                    trigger_goal_id=event.goal_id,
-                )
+                try:
+                    result = await self._builtins.invoke(
+                        rule.then,
+                        job_id=job_id,
+                        trigger_goal_id=event.goal_id,
+                    )
+                except InvalidGoalTransitionError as exc:
+                    # Builtin attempted an invalid state transition (e.g. completing
+                    # an already-terminal goal).  Treat as a benign skip, not an
+                    # error — the guard still matched and the rule fired.
+                    logger.debug(
+                        "Builtin %s skipped: %s (goal already in target state)",
+                        rule.then,
+                        exc,
+                    )
+                    result = BuiltinResult(
+                        status="skipped",
+                        detail=f"invalid transition: {type(exc).__name__}",
+                    )
                 record.builtin_result = result.status
-                if result.status != "success":
+                if result.status not in ("success", "skipped"):
                     record.guard_result = GuardResult(
                         matched=True,
                         confidence=guard_result.confidence,
@@ -334,7 +352,7 @@ def _eval_check(expr: str, event: RailEvent, ce: ContextEngine) -> bool:
     """Tiny deterministic predicate evaluator for tests / opt-in checks."""
     m = _CHECK_RETRY.search(str(expr))
     if m and event.goal_id:
-        goal = ce._dag.get_goal(event.goal_id)
+        goal = ce.get_goal_sync(event.goal_id)
         if goal is None:
             return False
         return goal.retry_count >= int(m.group(1))

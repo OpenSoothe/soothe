@@ -37,6 +37,44 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+# ── Goal lifecycle state machine ─────────────────────────────────────────
+# Source state → set of valid target states.
+# Terminal states (completed, failed, cancelled) have no outgoing transitions
+# (idempotent re-application is handled before validation).
+# Any non-terminal state may transition to any terminal state since lifecycle
+# operations (complete, cancel, fail) must be able to terminate a goal from any
+# live state.
+VALID_GOAL_TRANSITIONS: dict[str, frozenset[str]] = {
+    "pending": frozenset({"active", "completed", "failed", "suspended", "blocked", "cancelled"}),
+    "active": frozenset({"completed", "failed", "suspended", "blocked", "cancelled", "pending"}),
+    "completed": frozenset(),  # terminal
+    "failed": frozenset({"pending"}),  # retry
+    "suspended": frozenset({"pending", "completed", "failed", "cancelled"}),
+    "blocked": frozenset({"pending", "completed", "failed", "cancelled"}),
+    "validated": frozenset({"completed", "failed", "cancelled"}),
+    "awaiting_clarification": frozenset({"pending", "completed", "failed", "cancelled"}),
+    "cancelled": frozenset(),  # terminal
+}
+
+
+class InvalidGoalTransitionError(ValueError):
+    """Raised when a goal lifecycle transition is not permitted by the state machine."""
+
+
+def _validate_transition(goal_id: str, from_status: str, to_status: str) -> None:
+    """Validate a goal lifecycle transition against the state machine.
+
+    Raises ``InvalidGoalTransitionError`` if ``to_status`` is not reachable
+    from ``from_status``.
+    """
+    valid = VALID_GOAL_TRANSITIONS.get(from_status, frozenset())
+    if to_status not in valid:
+        raise InvalidGoalTransitionError(
+            f"Goal {goal_id} cannot transition from '{from_status}' to '{to_status}'"
+        )
+
+
 _MESSAGE_TYPES: dict[str, type[BaseMessage]] = {
     "AIMessage": AIMessage,
     "HumanMessage": HumanMessage,
@@ -279,6 +317,18 @@ class ContextEngine:
         logger.info("Activated goal %s (loop_id=%s)", goal_id, loop_id)
 
     async def complete_goal(self, goal_id: str) -> None:
+        """Transition goal to completed (terminal).
+
+        Validates the transition through the state machine.  Already-completed
+        goals are a no-op (idempotent).
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            msg = f"Goal {goal_id} not found"
+            raise ValueError(msg)
+        if goal.status == "completed":
+            return  # idempotent
+        _validate_transition(goal_id, goal.status, "completed")
         self._dag.complete_goal(goal_id)
         logger.info("Completed goal %s", goal_id)
 
@@ -291,26 +341,51 @@ class ContextEngine:
     ) -> None:
         """Transition goal to failed.
 
+        Validates the transition through the state machine.  Already-failed
+        goals are a no-op (idempotent).
+
         Args:
             goal_id: Goal to fail.
             error: Error message string.
             evidence: Optional evidence bundle for structured failure info.
         """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            return  # nothing to fail
+        if goal.status == "failed":
+            return  # idempotent
         error_msg = error or (evidence.narrative if evidence else "unknown error")
+        _validate_transition(goal_id, goal.status, "failed")
         self._dag.fail_goal(goal_id, error_msg)
         logger.info("Failed goal %s: %s", goal_id, error_msg)
 
     async def suspend_goal(self, goal_id: str, reason: str) -> None:
+        """Transition goal to suspended.  Idempotent for already-suspended goals."""
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            return  # nothing to suspend
+        if goal.status == "suspended":
+            return  # idempotent
+        _validate_transition(goal_id, goal.status, "suspended")
         self._dag.suspend_goal(goal_id, reason)
         logger.info("Suspended goal %s: %s", goal_id, reason)
 
     async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> None:
         """Transition goal to cancelled (terminal state).
 
+        Validates the transition through the state machine.  Already-cancelled
+        goals are a no-op (idempotent).
+
         Args:
             goal_id: Goal to cancel.
             reason: Cancellation reason for logging/events.
         """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            return  # nothing to cancel
+        if goal.status == "cancelled":
+            return  # idempotent
+        _validate_transition(goal_id, goal.status, "cancelled")
         self._dag.cancel_goal(goal_id)
         logger.info("Cancelled goal %s: %s", goal_id, reason)
 
@@ -320,6 +395,12 @@ class ContextEngine:
 
     async def block_goal(self, goal_id: str) -> None:
         """Transition goal to blocked."""
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            return  # nothing to block
+        if goal.status == "blocked":
+            return  # idempotent
+        _validate_transition(goal_id, goal.status, "blocked")
         self._dag.block_goal(goal_id)
         logger.info("Blocked goal %s", goal_id)
 
@@ -335,6 +416,10 @@ class ContextEngine:
         accumulates duration/tokens from steps and clears per-goal
         execution state while preserving the step DAG for projection.
 
+        Validates the transition through the state machine.  If the goal is
+        already in the target terminal status, the per-goal state is still
+        reset but no transition error is raised.
+
         Args:
             goal_id: Goal to finalize.
             status: Terminal status (``"completed"`` or ``"failed"``).
@@ -342,6 +427,8 @@ class ContextEngine:
         goal = self._dag.get_goal(goal_id)
         if goal is None:
             return
+        if goal.status != status:
+            _validate_transition(goal_id, goal.status, status)
         # Duration/tokens already accumulated incrementally in complete_step/fail_step
         goal.status = status
         goal.updated_at = datetime.now(UTC)
@@ -548,6 +635,8 @@ class ContextEngine:
             await self.suspend_goal(goal_id, reason=reason or "send_back budget exhausted")
             return goal
 
+        # Validate that the goal can transition back to pending.
+        _validate_transition(goal_id, goal.status, "pending")
         goal.status = "pending"
         goal.assigned_loop_id = None
         goal.updated_at = datetime.now(UTC)
@@ -587,6 +676,7 @@ class ContextEngine:
                 f"Goal {goal_id} retry budget exhausted ({goal.retry_count}/{goal.max_retries})"
             )
 
+        _validate_transition(goal_id, goal.status, "pending")
         goal.retry_count += 1
         goal.status = "pending"
         goal.assigned_loop_id = None
@@ -619,6 +709,7 @@ class ContextEngine:
             raise KeyError(f"Goal {goal_id} not found")
         if goal.status not in ("suspended", "blocked"):
             raise ValueError(f"Goal {goal_id} is {goal.status}, not suspended/blocked")
+        _validate_transition(goal_id, goal.status, "pending")
         old = goal.status
         goal.status = "pending"
         goal.send_back_count = 0  # Reset send-back budget
@@ -659,12 +750,15 @@ class ContextEngine:
                     parent = getattr(d, "parent_id", None) or source_goal_id
                     priority = getattr(d, "priority", 50) or 50
                     priority = max(0, min(100, priority))
+                    parent_node = self._dag.get_goal(parent) if parent else None
+                    inherit_ws = parent_node.workspace if parent_node is not None else None
 
                     new_goal = await self.create_goal(
                         description=getattr(d, "description", ""),
                         priority=priority,
                         parent_id=parent,
                         depends_on=list(getattr(d, "depends_on", []) or []),
+                        workspace=inherit_ws,
                     )
                     created_ids.append(new_goal.id)
                     logger.info(
@@ -763,6 +857,7 @@ class ContextEngine:
         goal = self._dag.get_goal(goal_id)
         if goal is None:
             raise KeyError(f"Goal {goal_id} not found")
+        _validate_transition(goal_id, goal.status, "awaiting_clarification")
         goal.status = "awaiting_clarification"
         goal.pending_clarification = pending_clarification
         goal.assigned_loop_id = None
@@ -804,6 +899,7 @@ class ContextEngine:
         pending = goal.pending_clarification or {}
         pending["answers"] = list(answers)
         goal.pending_clarification = pending
+        _validate_transition(goal_id, goal.status, "pending")
         goal.status = "pending"
         goal.updated_at = datetime.now(UTC)
         logger.info(

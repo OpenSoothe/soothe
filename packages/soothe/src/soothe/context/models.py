@@ -230,7 +230,7 @@ class GoalNode(BaseModel):
 
     # Lineage
     generating_reasoning: str | None = None
-    source: Literal["user", "directive", "file_discovery", "decomposition"] = "user"
+    source: Literal["user", "directive", "file_discovery", "decomposition", "reflection"] = "user"
 
     # Execution tracking (RFC-624 Phase 4 Step 4)
     iteration_count: int = 0  # Current iteration number for this goal

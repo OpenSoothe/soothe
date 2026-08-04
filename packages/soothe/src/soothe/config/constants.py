@@ -30,7 +30,9 @@ from soothe_nano.config.constants import (  # noqa: F401
 DEFAULT_MAX_ITERATIONS = 99
 
 # Per execute-step cap on root-graph tool results consumed from the Act stream.
-DEFAULT_MAX_TOOL_CALLS_PER_STEP = 999
+# SEC: 999 is an open door to runaway tool loops. 100 is sufficient for complex
+# multi-tool workflows while bounding cost and resource exhaustion.
+DEFAULT_MAX_TOOL_CALLS_PER_STEP = 100
 
 # Back-compat alias
 DEFAULT_STRANGE_LOOP_MAX_ITERATIONS = DEFAULT_MAX_ITERATIONS

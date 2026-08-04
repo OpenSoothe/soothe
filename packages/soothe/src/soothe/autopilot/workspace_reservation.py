@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from pathlib import Path, PurePosixPath
 
 logger = logging.getLogger(__name__)
@@ -95,13 +96,17 @@ class WorkspaceReservation:
         self._enabled = enabled
         # goal_id → normalized workspace string
         self._reservations: dict[str, str] = {}
+        # Serialize check-and-set so concurrent callers cannot both pass the
+        # overlap check and write before the other has committed (TOCTOU).
+        self._lock = threading.Lock()
 
     @property
     def enabled(self) -> bool:
         return self._enabled
 
     def reservation_count(self) -> int:
-        return len(self._reservations)
+        with self._lock:
+            return len(self._reservations)
 
     def conflicts_with_active(
         self, workspace: str | Path, *, exclude_goal_id: str | None = None
@@ -116,11 +121,12 @@ class WorkspaceReservation:
         if not self._enabled:
             return None
         norm = _normalize(workspace)
-        for goal_id, held in self._reservations.items():
-            if goal_id == exclude_goal_id:
-                continue
-            if _overlaps(norm, held, strict=self._strict):
-                return goal_id
+        with self._lock:
+            for goal_id, held in self._reservations.items():
+                if goal_id == exclude_goal_id:
+                    continue
+                if _overlaps(norm, held, strict=self._strict):
+                    return goal_id
         return None
 
     def acquire(self, goal_id: str, workspace: str | Path) -> bool:
@@ -132,36 +138,42 @@ class WorkspaceReservation:
             on the same workspace.
         """
         if not self._enabled:
-            self._reservations[goal_id] = _normalize(workspace)
+            with self._lock:
+                self._reservations[goal_id] = _normalize(workspace)
             return True
         norm = _normalize(workspace)
 
-        # Idempotent: same goal, same workspace → success without re-checking.
-        existing = self._reservations.get(goal_id)
-        if existing is not None and existing == norm:
+        # Atomic check-and-set under lock: prevents TOCTOU where two
+        # concurrent callers both pass the overlap check and both write.
+        with self._lock:
+            # Idempotent: same goal, same workspace → success without re-checking.
+            existing = self._reservations.get(goal_id)
+            if existing is not None and existing == norm:
+                return True
+
+            # Check overlap against every OTHER reservation.
+            for held_goal, held_ws in self._reservations.items():
+                if held_goal == goal_id:
+                    continue
+                if _overlaps(norm, held_ws, strict=self._strict):
+                    logger.debug(
+                        "WorkspaceReservation: conflict for goal %s on %s — held by %s on %s",
+                        goal_id,
+                        norm,
+                        held_goal,
+                        held_ws,
+                    )
+                    return False
+
+            self._reservations[goal_id] = norm
             return True
-
-        # Check overlap against every OTHER reservation.
-        for held_goal, held_ws in self._reservations.items():
-            if held_goal == goal_id:
-                continue
-            if _overlaps(norm, held_ws, strict=self._strict):
-                logger.debug(
-                    "WorkspaceReservation: conflict for goal %s on %s — held by %s on %s",
-                    goal_id,
-                    norm,
-                    held_goal,
-                    held_ws,
-                )
-                return False
-
-        self._reservations[goal_id] = norm
-        return True
 
     def release(self, goal_id: str) -> bool:
         """Release ``goal_id``'s reservation. Returns True if it existed."""
-        return self._reservations.pop(goal_id, None) is not None
+        with self._lock:
+            return self._reservations.pop(goal_id, None) is not None
 
     def active_reservations(self) -> dict[str, str]:
         """Snapshot of goal_id → normalized workspace for observability."""
-        return dict(self._reservations)
+        with self._lock:
+            return dict(self._reservations)

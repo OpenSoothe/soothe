@@ -30,17 +30,19 @@ Step Progress Summary:
 
 Identify issues in the goal DAG:
 
-1. **Stale Goals**: Goals pending for too long (> 1 hour) that may need reset or removal
-2. **Merge Opportunities**: Similar pending goals that could be consolidated
-3. **Decomposition Opportunities**: Completed complex goals that should spawn follow-up goals
-4. **Priority Imbalances**: Goals with mismatched priorities vs importance
-5. **Dependency Issues**: Goals with unmet or invalid dependencies
+1. **Stale Goals**: Goals pending for too long (> 1 hour) that may need reset
+2. **Clutter Removal**: Only cancelled/failed goals with ZERO dependents and ZERO
+   non-terminal descendants — never remove job roots or active/suspended goals
+3. **Merge Opportunities**: Similar pending goals that could be consolidated (suggestions only)
+4. **Decomposition Opportunities**: Completed complex goals that should spawn follow-ups
+5. **Priority Imbalances**: Goals with mismatched priorities vs importance
+6. **Dependency Issues**: Pipeline goals missing hard depends_on edges — use wire_dependencies
 
 Output JSON structure (strict format):
 ```json
 {{
   "reset_goals": ["goal_id1", "goal_id2"],
-  "remove_goals": ["goal_id3"],
+  "remove_goals": ["cancelled_clutter_id"],
   "merge_goals": [
     {{
       "goal_ids": ["goal_id4", "goal_id5"],
@@ -51,10 +53,13 @@ Output JSON structure (strict format):
     {{
       "goal_id": "goal_id6",
       "subgoals": [
-        {{"description": "Subgoal 1...", "priority": 50}},
-        {{"description": "Subgoal 2...", "priority": 40}}
+        {{"description": "Subgoal 1...", "priority": 50, "depends_on": []}},
+        {{"description": "Subgoal 2...", "priority": 40, "depends_on": ["0"]}}
       ]
     }}
+  ],
+  "wire_dependencies": [
+    {{"goal_id": "goal_id_test", "depends_on": ["goal_id_implement"]}}
   ],
   "priority_adjustments": {{"goal_id7": 70, "goal_id8": 30}},
   "reasoning": "Overall DAG health assessment..."
@@ -62,10 +67,13 @@ Output JSON structure (strict format):
 ```
 
 Constraints:
-- reset_goals: Goals stuck in pending that should retry
-- remove_goals: Goals that are no longer relevant (no dependents)
-- merge_goals: Combine similar goals to reduce redundancy
-- decompose_goals: Split completed complex goals into follow-ups
+- reset_goals: Goals stuck in pending/suspended that should retry
+- remove_goals: ONLY cancelled or failed clutter with no dependents; NEVER job roots
+  (parent_id null) that are still active/pending/suspended; NEVER goals with live children
+- merge_goals: Combine similar goals (logged; not always auto-applied)
+- decompose_goals: Split completed complex goals into follow-ups; each subgoal MUST
+  include depends_on when a pipeline is implied (use sibling index "0","1",… or real IDs)
+- wire_dependencies: Set hard depends_on on existing goals to enforce pipeline order
 - All goal IDs MUST exist in current DAG
 """
 
@@ -95,7 +103,8 @@ Active Goals:
 
 After goal completion, analyze:
 
-1. **Decomposition**: Should completed goal spawn follow-up sub-goals?
+1. **Decomposition**: Should completed goal spawn follow-up sub-goals? Prefer null
+   when the outcome already delivered the job (e.g. SUMMARY.md / tests present).
 2. **Redundancy**: Are pending goals now redundant given completion results?
 3. **New Goals**: Should new follow-up goals be created?
 4. **Ready Goals**: Which pending goals can now proceed (dependencies satisfied)?
@@ -111,7 +120,7 @@ Output JSON structure (strict format):
   "decomposition": {{
     "goal_id": "{completed_goal_id}",
     "subgoals": [
-      {{"description": "Subgoal from decomposition...", "priority": 45}}
+      {{"description": "Subgoal from decomposition...", "priority": 45, "depends_on": []}}
     ]
   }},
   "reasoning": "Analysis of completion impact on DAG..."
@@ -120,9 +129,11 @@ Output JSON structure (strict format):
 
 Constraints:
 - new_goals: Create follow-up goals that inherit from completed goal
-- redundant_goals: Goals whose purpose was already fulfilled
+- redundant_goals: Goals whose purpose was already fulfilled (cancelled/failed clutter only preferred)
 - ready_goals: Pending goals with newly satisfied dependencies
-- decomposition is optional (null if not needed)
+- decomposition is optional (null if not needed); when present, subgoals MUST include
+  depends_on for pipeline order (sibling index refs allowed)
+- Prefer decomposition=null when key_findings/outcome already show deliverables complete
 """
 
 # ── Goal Placement Analysis ───────────────────────────────────────────────────────

@@ -5,9 +5,9 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-06-15
-**Updated**: 2026-06-16
+**Updated**: 2026-08-04
 **Dependencies**: RFC-624 (Context Engine), RFC-222 (Autopilot and Goal Engine Architecture), RFC-200 (Autonomous Goal Management)
-**Related**: RFC-204 (Autopilot Mode — user-facing surface: CLI, HTTP endpoints, consensus semantics; RFC-625 defines runtime implementation: AutopilotMonitor, ContextEngine integration, proactive DAG monitoring), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination)
+**Related**: RFC-204 (Autopilot Mode — user-facing surface: CLI, HTTP endpoints, consensus semantics; RFC-625 defines runtime implementation: AutopilotMonitor, ContextEngine integration, proactive DAG monitoring), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), [IG-678](../impl/IG-678-autopilot-ce-rails-production-readiness.md), [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
 **Supersedes**: RFC-200 (Goal Management) — GoalEngine deleted, features migrated to ContextEngine
 **Implements**: RFC-303 (MemoryProtocol) — CE's EpisodicSubmodule implements MemoryProtocol API for persistent episodic memory
 
@@ -1031,9 +1031,38 @@ All LLM-driven verification and distillation reasoners are fully implemented:
 
 The `BackoffReasoner` (migrated from GoalEngine) has full LLM integration and serves as the pattern for all reasoners.
 
+### Errata / known runtime gaps (2026-08-04) — closed by IG-680
+
+Long-running eval (`IG-680`) showed design-vs-runtime drift. **Implemented** in
+IG-680 (unit regression in `test_ig680_health_evidence_deps.py`):
+
+| Spec claim | Resolution | Tracking |
+|------------|------------|----------|
+| §7 `remove_goal` validates no dependents | Health `may_auto_remove` + cascade cancel binding | IG-680 AH-1 ✅ |
+| §7 `update_dependencies` for restructuring | `wire_dependencies` on health report + apply | IG-680 AH-3 ✅ |
+| §4 / §5 decompose produces ordered DAG | Sequential `depends_on` chain when LLM omits deps | IG-680 AH-3 ✅ |
+| GoalNode.workspace on dispatch children | `create_subgoals` / directives inherit `parent.workspace` | IG-680 AH-2 ✅ |
+| Post-completion follow-ups once | Cooldown + description dedupe + deliverable probe skip | IG-680 AH-4 ✅ |
+| §7 `merge_goals` | Merge suggestions still logged only (intentional) | deferred |
+
+**Normative addenda (enforced after IG-680):**
+
+1. **Health remove policy** — Auto-apply of `remove_goals` is limited to terminal
+   clutter with zero live dependents/descendants. Non-terminal goals are never
+   health-cancelled. Cascade cancels use `AutopilotService.cancel_goal` when wired.
+2. **Workspace inheritance** — `GoalPlanningSubengine.create_subgoals` /
+   `apply_llm_subgoals` copy `parent.workspace`.
+3. **Dependency wiring** — Health reports may include `wire_dependencies` applied
+   via `ContextEngine.update_dependencies`. Pipeline decompose falls back to a
+   sequential chain when LLM omits deps.
+4. **Decompose budget** — One health/post-completion decompose wave per parent
+   per cooldown window; duplicate descriptions under the same parent are rejected.
+
 ### Completion Tracking
 
-See `docs/impl/IG-494-rfc625-completion.md` for remaining implementation work.
+See `docs/impl/IG-494-rfc625-completion.md` for historical completion work, and
+[IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) for health /
+evidence / deps production fixes.
 
 ---
 

@@ -9,6 +9,7 @@
 [RFC-626](../specs/RFC-626-entity-model-state-consolidation.md),
 [RFC-630](../specs/RFC-630-no-keyword-heuristics.md),
 [IG-677](IG-677-autopilot-job-loop-index.md),
+[IG-680](IG-680-autopilot-dag-health-evidence-deps.md),
 [IG-RQJ-02](IG-RQJ-02-rail-trace-continuity-analysis.md),
 [IG-670](IG-670-daemon-auto-resume-interrupted-goals.md),
 [LoopRail draft](../drafts/2026-07-11-loop-rail-design.md)
@@ -227,6 +228,20 @@ policy shapes the DAG; StrangeLoop still executes single goals.
 | P3-3 | Optional live-runner soak (nightly): one feature-dev rail job against a fixture repo | RL-9, AP-8 |
 | P3-4 | Update RFC-222 / 228 / 624 / 625 status sections; archive readiness notes; mark LoopRail RFC | CE-6, RL-10 |
 | P3-5 | Operator runbook: enablement, consensus model roles, pause/cancel, rail catalog, crash expectations | — |
+| P3-6 | **Blocking predecessor:** land [IG-680](IG-680-autopilot-dag-health-evidence-deps.md) P0 (health remove guards, workspace inherit, consensus evidence) before trusting multi-goal soak results — 2026-08-04 eval showed workspace SUCCESS with job `cancelled` | AP-8, soak honesty |
+
+### Soak finding (2026-08-04) → IG-680
+
+A long-running taskkit eval (auto decompose, 4-wide pool, CLI surface)
+produced a correct workspace deliverable but a misleading job terminal status.
+Do **not** treat P3-3 green as production-ready until IG-680 P0 accepts:
+
+| Eval ID | Finding | IG-680 |
+|---------|---------|--------|
+| AH-1 | DAG health cancelled umbrella root (`dag_health_verification`) | P0-1/P0-2 |
+| AH-2 | Consensus `send_back` / `no narrative` despite on-disk success; subgoals lost workspace | P0-3…P0-6 |
+| AH-3 | Decomposed pipeline had `deps=[none]` | P1 |
+| AH-4 | Post-completion over-decompose under design goal | P1 |
 
 ### Acceptance (P3)
 
@@ -234,6 +249,7 @@ policy shapes the DAG; StrangeLoop still executes single goals.
 - [ ] Crash E2E green
 - [ ] RFCs and wiki match shipped behavior
 - [ ] Runbook linked from wiki autopilot / CE pages
+- [ ] IG-680 P0 acceptance met (or explicitly waived with operator risk note)
 
 ---
 
@@ -298,3 +314,7 @@ All of the following hold:
 
 When exit criteria are met, set this IG **Status: Implemented** and file any
 remaining dreaming/distillation or cost-budget work as follow-on IGs.
+
+**Follow-on (filed):** [IG-680](IG-680-autopilot-dag-health-evidence-deps.md) —
+DAG health guardrails, consensus evidence grounding, decompose dependency
+wiring, and post-completion decompose budget.

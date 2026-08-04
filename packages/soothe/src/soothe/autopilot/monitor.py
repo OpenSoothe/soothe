@@ -82,6 +82,14 @@ class AutopilotMonitor:
         self._bus.subscribe(INTERNAL_GOAL_COMPLETED, self._on_goal_completed)
         self._bus.subscribe(INTERNAL_GOAL_FAILED, self._on_goal_failed)
 
+    def bind_service_cancel(self, cancel_goal: Any) -> None:
+        """Wire AutopilotService.cancel_goal into health/post-completion removals (IG-680)."""
+
+        async def _cancel(goal_id: str, reason: str) -> Any:
+            return await cancel_goal(goal_id, reason=reason)
+
+        self._verifier.bind_cancel_goal(_cancel)
+
     async def start(self) -> None:
         """Start background verification and dreaming timer loops."""
         self._verify_task = asyncio.create_task(self._verification_loop())

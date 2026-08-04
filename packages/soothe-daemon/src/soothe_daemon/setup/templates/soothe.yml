@@ -63,8 +63,8 @@ agent:
     enabled: true
     max_iterations: 99
     max_plan_steps_per_wave: 10
-    max_tool_calls_per_step: 999
-    dispatch_timeout_seconds: 0
+    max_tool_calls_per_step: 100
+    dispatch_timeout_seconds: 600
     execute_action_retry_max: 1
     execute_min_answer_chars: 20
     execute_deliverable_assess: auto

@@ -160,3 +160,83 @@ class TestReuseAfterRelease:
         r.acquire("g1", "/proj/a")
         assert r.release("g1") is True
         assert r.release("g1") is False  # second release no-op
+
+
+class TestTOCTOUMitigation:
+    """Verify that check-and-set is atomic — no double-acquire under
+    concurrent access to the same overlapping workspace."""
+
+    def test_concurrent_acquire_same_path_only_one_wins(self) -> None:
+        """Two threads acquire the same path for different goals
+        simultaneously — exactly one must succeed."""
+        import threading
+
+        r = WorkspaceReservation()
+        results: list[bool] = []
+        barrier = threading.Barrier(2)
+
+        def _acquire(goal_id: str) -> None:
+            barrier.wait()
+            results.append(r.acquire(goal_id, "/proj/shared"))
+
+        t1 = threading.Thread(target=_acquire, args=("g1",))
+        t2 = threading.Thread(target=_acquire, args=("g2",))
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        # Exactly one should have acquired
+        assert results.count(True) == 1
+        assert results.count(False) == 1
+        assert r.reservation_count() == 1
+
+    def test_concurrent_acquire_overlapping_paths(self) -> None:
+        """Parent path and child path acquired concurrently — one must fail."""
+        import threading
+
+        r = WorkspaceReservation()
+        results: list[bool] = []
+        barrier = threading.Barrier(2)
+
+        def _acquire(goal_id: str, ws: str) -> None:
+            barrier.wait()
+            results.append(r.acquire(goal_id, ws))
+
+        t1 = threading.Thread(target=_acquire, args=("g1", "/proj/a"))
+        t2 = threading.Thread(target=_acquire, args=("g2", "/proj/a/sub"))
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        assert results.count(True) == 1
+        assert results.count(False) == 1
+
+    def test_acquire_then_conflicts_with_active_is_consistent(self) -> None:
+        """After acquire succeeds, conflicts_with_active must immediately
+        see the reservation (no stale read)."""
+        r = WorkspaceReservation()
+        r.acquire("g1", "/proj/a")
+        # Immediately checking from another "thread" must see the hold
+        assert r.conflicts_with_active("/proj/a") == "g1"
+
+    def test_release_then_acquire_is_atomic(self) -> None:
+        """Release followed by acquire from another goal must not leave
+        a window where both or neither hold the reservation."""
+        r = WorkspaceReservation()
+        r.acquire("g1", "/proj/a")
+        assert r.release("g1") is True
+        # Immediately re-acquiring for a different goal must succeed
+        assert r.acquire("g2", "/proj/a") is True
+        assert r.reservation_count() == 1
+
+    def test_snapshot_isolation_under_mutation(self) -> None:
+        """active_reservations() returns a copy that is safe to mutate
+        even if the internal dict is being modified."""
+        r = WorkspaceReservation()
+        r.acquire("g1", "/proj/a")
+        snap = r.active_reservations()
+        # Mutate snapshot — must not affect internal state
+        snap.clear()
+        assert r.reservation_count() == 1

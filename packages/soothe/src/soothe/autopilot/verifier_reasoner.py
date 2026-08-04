@@ -51,6 +51,13 @@ class DecomposeSuggestionResponse(BaseModel):
     subgoals: list[dict[str, Any]]
 
 
+class WireDependencyResponse(BaseModel):
+    """LLM response for dependency wiring (IG-680)."""
+
+    goal_id: str
+    depends_on: list[str] = Field(default_factory=list)
+
+
 class DagHealthResponse(BaseModel):
     """LLM response for DAG health verification."""
 
@@ -59,6 +66,7 @@ class DagHealthResponse(BaseModel):
     merge_goals: list[MergeSuggestionResponse] = Field(default_factory=list)
     decompose_goals: list[DecomposeSuggestionResponse] = Field(default_factory=list)
     priority_adjustments: dict[str, int] = Field(default_factory=dict)
+    wire_dependencies: list[WireDependencyResponse] = Field(default_factory=list)
     reasoning: str
 
 
@@ -279,11 +287,12 @@ class DagVerificationReasoner:
         result = self._parse_health_response(response_text)
         logger.info(
             "DAG health verification: reset=%d remove=%d merge=%d decompose=%d "
-            "priority_adjust=%d reasoning=%s",
+            "wire_deps=%d priority_adjust=%d reasoning=%s",
             len(result.reset_goals),
             len(result.remove_goals),
             len(result.merge_goals),
             len(result.decompose_goals),
+            len(result.wire_dependencies),
             len(result.priority_adjustments),
             preview_first(result.reasoning),
         )
@@ -491,12 +500,25 @@ class DagVerificationReasoner:
                 )
             )
 
+        wire_dependencies = []
+        for wire in data.get("wire_dependencies", []) or []:
+            gid = str(wire.get("goal_id", "") or "")
+            if not gid:
+                continue
+            wire_dependencies.append(
+                WireDependencyResponse(
+                    goal_id=gid,
+                    depends_on=[str(d) for d in (wire.get("depends_on") or [])],
+                )
+            )
+
         return DagHealthResponse(
             reset_goals=data.get("reset_goals", []),
             remove_goals=data.get("remove_goals", []),
             merge_goals=merge_goals,
             decompose_goals=decompose_goals,
             priority_adjustments=data.get("priority_adjustments", {}),
+            wire_dependencies=wire_dependencies,
             reasoning=data.get("reasoning", ""),
         )
 

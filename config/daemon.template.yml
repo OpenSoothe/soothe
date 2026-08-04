@@ -47,7 +47,7 @@ max_input_queue_size: 1000
 # ============================================================================
 # TIMEOUTS & CANCELLATION
 # ============================================================================
-max_query_duration_minutes: 0  # 0 = unlimited
+max_query_duration_minutes: 1440  # 24h; 0 = unlimited (not recommended)
 thread_max_age_hours: 24
 cancel_retry_count: 3
 cancel_retry_interval_seconds: 2.0

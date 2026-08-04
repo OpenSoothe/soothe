@@ -964,12 +964,13 @@ class StrangeLoopConfig(BaseModel):
     )
 
     dispatch_timeout_seconds: float = Field(
-        default=0.0,
+        default=600.0,
         description=(
             "Max seconds without CoreAgent graph stream chunks during Execute before "
-            "failing the step. 0 disables the dispatch watchdog (default; rely on "
-            "tool/LLM timeouts and user cancel). Set a positive value only when "
-            "explicit stream-stall detection is needed."
+            "failing the step. 0 disables the dispatch watchdog (not recommended; "
+            "a stalled stream would run indefinitely). The default 600s (10 min) "
+            "bounds runaway dispatches while accommodating long tool executions. "
+            "Set a higher value only when tools legitimately exceed 10 min."
         ),
         ge=0,
     )

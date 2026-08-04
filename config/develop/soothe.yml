@@ -1,14 +1,13 @@
-# Soothe Host Overlay Template (soothe.yml)
-# ------------------------------------------------------------
-# Host-only configuration overlay. Compose with nano.yml.
-# This file must not contain nano-owned/shared keys.
+# Team develop soothe host profile (host-owned keys only).
+# Compose with config/develop/nano.yml.
+# Autopilot scheduling is ON by default for local long-running evals.
 
 agent:
   goal_completion_mode: llm_only
   final_response: auto
 
   autopilot:
-    enabled: false
+    enabled: true
     max_iterations: 10
     max_retries: 2
     max_total_goals: 50

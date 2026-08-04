@@ -757,6 +757,24 @@ Pydantic default for `enabled` remains **`false`** — production deploys must o
 - Token-budget enforcement (gap H3)
 - Per-loop solo/autopilot toggle (removed; use `/autopilot` job submit + `agent.autopilot.enabled`)
 
+### Production gaps from long-running eval (2026-08-04)
+
+Tracked in [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) (not
+optional soak — these break job-status honesty):
+
+| Gap | Impact | Fix home |
+|-----|--------|----------|
+| Subgoals omit `parent.workspace` | Workers write under `~/.soothe/data/workspaces/anonymous/ws_*` while the job workspace is the client path; consensus rejects “wrong” paths | IG-680 P0-3; RFC-625 errata |
+| `GoalDispatchContextContribution.files_touched` empty | Consensus sees restated goal text → false `send_back` | IG-680 P0-4/P0-5; RFC-204 note |
+| DAG health auto-cancels umbrella roots | Job status `cancelled` despite workspace success | IG-680 P0-1; RFC-625 remove policy |
+| Flat `depends_on` after decompose | Test/review race implement | IG-680 P1; RFC-625 `wire_dependencies` |
+
+**Invariant addendum:** When `AutopilotJob.workspace` (or root `GoalNode.workspace`)
+is set, every descendant created by monitor/health/worker decompose MUST inherit
+that workspace unless an intake explicitly overrides it. Workspace reservation
+still gates overlapping **distinct** workspaces; same-job children share one
+reservation key via the inherited path.
+
 ---
 
 ## References
@@ -803,6 +821,11 @@ Pydantic default for `enabled` remains **`false`** — production deploys must o
 ### 2026-08-04 (IG-677 Job↔Loop Index)
 - Assignment `loop_id` is `autopilot__{job_id}__{uuid}` (unbounded); pool **slots** are separate reusable capacity keys.
 - Durable `JobLoopIndex` records job↔loop membership across restarts; live `assigned_loop_id` remains the in-flight pointer only.
+
+### 2026-08-04 (IG-680 eval gaps)
+- Documented production gaps: workspace inherit on decompose, consensus evidence
+  grounding, health remove guardrails, pipeline `depends_on` wiring.
+- Related errata in RFC-625; implementation backlog [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md).
 
 ---
 

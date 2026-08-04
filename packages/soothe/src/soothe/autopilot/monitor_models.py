@@ -51,6 +51,14 @@ class DecomposeSuggestion:
 
 
 @dataclass
+class WireDependencySuggestion:
+    """Suggestion to set hard depends_on edges on a goal (IG-680)."""
+
+    goal_id: str
+    depends_on: list[str]
+
+
+@dataclass
 class DagHealthReport:
     """LLM-driven DAG health verification report."""
 
@@ -59,5 +67,6 @@ class DagHealthReport:
     suggest_merge: list[MergeSuggestion] = field(default_factory=list)
     suggest_decompose: list[DecomposeSuggestion] = field(default_factory=list)
     suggest_priority_adjust: dict[str, int] = field(default_factory=dict)
+    wire_dependencies: list[WireDependencySuggestion] = field(default_factory=list)
     reasoning: str = ""
     errors: list[str] = field(default_factory=list)

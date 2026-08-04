@@ -132,6 +132,9 @@ class AutopilotService:
         self._dreaming = False
         self._scheduling_task: asyncio.Task | None = None
         self._subscribed = False
+        # IG-680: health removals cascade through service cancel when monitor is wired.
+        if self._monitor is not None:
+            self._monitor.bind_service_cancel(self.cancel_goal)
 
         # RFC-222: parallel-execution concurrency control.
         # `_assignment_lock` makes loop assignment atomic so two concurrent
@@ -592,8 +595,35 @@ class AutopilotService:
                 exc_info=True,
             )
 
+    async def _release_worker_after_cancel(self, goal_id: str, loop_id: str | None) -> None:
+        """Release the worker slot and dispatch task after goal cancellation.
+
+        The stream consumer (``_consume_worker_stream``) normally calls
+        ``mark_idle`` when the runner stream terminates.  But when a goal is
+        cancelled externally (WebSocket/CLI), the consumer task may still be
+        blocked on the stream — leaving the worker slot in ``active`` status
+        indefinitely (a dead worker).  This method proactively returns the
+        slot to idle and cancels the consumer task so no dead workers remain.
+        """
+        if loop_id and self._worker_pool is not None:
+            await self._worker_pool.mark_idle(loop_id, success=False)
+            logger.info(
+                "[Autopilot] cancel_goal: returned worker %s to idle after cancelling goal %s",
+                loop_id,
+                goal_id,
+            )
+        task = self._dispatch_tasks.pop(goal_id, None)
+        if task is not None and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+
     async def _cancel_open_goal_node(self, goal: GoalNode, *, reason: str) -> None:
-        """Cancel one non-terminal goal: stop worker, CE transition, release workspace."""
+        """Cancel one non-terminal goal: stop worker, CE transition, release workspace.
+
+        Ensures the worker slot is returned to idle and the dispatch consumer
+        task is cancelled so no dead workers remain after ``cancel_goal``.
+        """
         loop_id = goal.assigned_loop_id
         await self._cancel_goal_worker(goal)
         await self._ce.cancel_goal(goal.id, reason=reason)
@@ -614,6 +644,10 @@ class AutopilotService:
                 await self._job_loop_index.mark_job_status(goal.id, "cancelled")
             except Exception:
                 logger.debug("Failed to mark job %s cancelled", goal.id, exc_info=True)
+
+        # Return worker slot to idle pool and cancel the dispatch consumer task
+        # so no dead workers are left behind after cancel_goal invocation.
+        await self._release_worker_after_cancel(goal.id, loop_id)
 
     async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> GoalNode | None:
         """Cancel a goal and all non-terminal descendants.
@@ -744,6 +778,7 @@ class AutopilotService:
                 )
         if self._workspace_reservation is not None:
             self._workspace_reservation.release(goal.id)
+        await self._release_worker_after_cancel(goal.id, loop_id)
 
     # ---- Internals ----------------------------------------------------
 
@@ -1081,15 +1116,28 @@ class AutopilotService:
                         goal_id,
                         evidence_summary=str(data.get("evidence_summary", "")),
                         loop_id=worker.loop_id,
+                        contribution=contribution,
                     )
-                else:  # failed / needs_replan → fail with evidence
+                elif outcome == "needs_replan":
+                    # IG-680: clarification / empty PlanResult → suspend, not fail.
+                    narrative = (
+                        str(data.get("evidence_summary", "")).strip()
+                        or str(data.get("error_text", "")).strip()
+                        or "Worker needs replan (insufficient terminal evidence)"
+                    )
+                    try:
+                        await self._ce.suspend_goal(goal_id, reason=narrative)
+                    except Exception:
+                        logger.exception("suspend_goal raised for needs_replan %s", goal_id)
+                else:  # failed
                     evidence = EvidenceBundle(
                         structured={
                             "outcome": outcome,
                             "plan_result_status": data.get("plan_result_status"),
                         },
-                        narrative=str(data.get("evidence_summary", ""))
-                        or str(data.get("error_text", "no narrative")),
+                        narrative=str(data.get("evidence_summary", "")).strip()
+                        or str(data.get("error_text", "")).strip()
+                        or "Worker reported failure without evidence summary",
                         source="layer2_execute",
                     )
                     try:
@@ -1168,20 +1216,59 @@ class AutopilotService:
         *,
         evidence_summary: str,
         loop_id: str | None = None,
+        contribution: Any | None = None,
     ) -> None:
-        """RFC-204: validate worker completion before accepting the goal."""
+        """RFC-204 / IG-680: validate worker completion before accepting the goal.
+
+        Never falls back to ``goal.description`` as the agent response when
+        evidence is empty — that path caused false send_backs in eval.
+        """
         from soothe.autopilot.consensus import evaluate_goal_completion
+        from soothe.autopilot.evidence_grounding import (
+            format_contribution_evidence,
+            workspace_deliverable_probe,
+        )
 
         goal = await self._ce.get_goal(goal_id)
         if goal is None:
             return
 
-        response_text = evidence_summary or goal.description
+        files = getattr(contribution, "files_touched", None) if contribution else None
+        findings = getattr(contribution, "findings", None) if contribution else None
+        grounded = format_contribution_evidence(
+            evidence_summary=evidence_summary,
+            files_touched=files,
+            findings=findings,
+        )
+        if not grounded:
+            grounded = workspace_deliverable_probe(goal.workspace)
+        if not grounded:
+            reason = "insufficient evidence for consensus (empty summary and workspace probe)"
+            logger.warning("Consensus suspend for %s: %s", goal_id, reason)
+            try:
+                await self._ce.suspend_goal(goal_id, reason=reason)
+            except Exception:
+                logger.exception(
+                    "suspend_goal raised after empty consensus evidence for %s", goal_id
+                )
+            return
+
+        # Persist findings onto the goal for post-completion context (IG-680 P1-7).
+        if findings:
+            try:
+                for finding in findings[:20]:
+                    summary = getattr(finding, "summary", None) or str(finding)
+                    if summary and summary not in goal.findings:
+                        goal.findings.append(str(summary)[:500])
+            except Exception:
+                logger.debug("Failed to attach findings to goal %s", goal_id, exc_info=True)
+
+        response_text = grounded
         try:
             decision, reasoning = await evaluate_goal_completion(
                 goal.description,
                 response_text,
-                evidence_summary,
+                grounded,
                 model=self._consensus_model,
             )
         except Exception:

@@ -65,8 +65,13 @@ class _BareMixin(AutopilotWorkerMixin):
 
 
 class TestDeriveOutcome:
-    def test_none_plan_result_is_failed(self) -> None:
-        assert AutopilotWorkerMixin._derive_outcome(None) == "failed"
+    def test_none_plan_result_is_needs_replan(self) -> None:
+        # IG-680: empty/clarification terminal → needs_replan (suspend), not fail
+        assert AutopilotWorkerMixin._derive_outcome(None) == "needs_replan"
+
+    def test_status_continue_is_needs_replan(self) -> None:
+        pr = _plan_result(is_done=False, status="continue")
+        assert AutopilotWorkerMixin._derive_outcome(pr) == "needs_replan"
 
     def test_is_done_true_is_completed(self) -> None:
         pr = _plan_result(is_done=True)

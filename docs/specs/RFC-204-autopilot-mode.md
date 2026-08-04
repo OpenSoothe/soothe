@@ -5,9 +5,10 @@
 **Status**: Implemented — runtime architecture refined by RFC-222 (revised 2026-05-28)
 **Kind**: Architecture Design
 **Created**: 2026-04-03
-**Updated**: 2026-05-28
+**Updated**: 2026-08-04
 **Dependencies**: RFC-200, RFC-201, RFC-203, RFC-222, RFC-450, RFC-500
-**Related**: RFC-229 (Cron Service for Autopilot — natural language scheduled jobs)
+**Related**: RFC-229 (Cron Service for Autopilot — natural language scheduled jobs),
+[IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) (consensus evidence grounding)
 
 > **Compatibility note (2026-05-28)**: This RFC defines autopilot's **user-facing surface** — file layout (`SOOTHE_HOME/autopilot/`), CLI commands (`soothe autopilot ...`), HTTP endpoints (`/autopilot/*`), and consensus/dreaming semantics. The **runtime implementation** — daemon-owned `AutopilotService`, subprocess worker dispatch, `GoalDispatchContextBundle`, `WorkspaceReservation`, sticky-affinity `WorkerPool` — is specified in RFC-222 (revised). The two are complementary: RFC-204 owns "what users see and submit," RFC-222 owns "how the daemon executes it."
 >
@@ -119,6 +120,15 @@ Autopilot validates StrangeLoop's completion judgment:
 4. Unrecoverable error (tool failure, permission denied, timeout exceeded)
 
 > **Implementation Note**: The reflection LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). Reflection prompts include: goal description, success criteria, accumulated evidence, StrangeLoop confidence score, and iteration history. The decision output is structured (`decision: accept | send_back | suspend`, `reasoning: string`, `refined_instructions: string?`).
+>
+> **Evidence grounding (normative; IG-680)**: Consensus MUST NOT treat an empty
+> evidence summary by substituting the goal description as the “agent response”
+> (that path produces false `send_back` loops). Acceptable evidence includes
+> non-empty `PlanResult.evidence_summary`, `GoalDispatchContextContribution`
+> (`files_touched`, findings, tool stats), and/or a workspace artifact probe when
+> `GoalNode.workspace` is set. Headless clarification deferral MUST map to
+> `suspend` / `needs_replan`, not `failed` with narrative `"no narrative"`.
+> See [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) AH-2.
 
 ### 1.4 Termination → Dreaming Transition
 

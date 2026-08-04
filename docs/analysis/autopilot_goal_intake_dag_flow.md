@@ -1,9 +1,26 @@
 # Autopilot Goal Intake and DAG State Management Flow
 
-> **Analysis Date**: 2026-06-25 (dispatch notes updated 2026-08-04 for IG-677)
+> **Analysis Date**: 2026-06-25 (dispatch notes updated 2026-08-04 for IG-677;
+> production gaps updated 2026-08-04 for IG-680)
 > **Scope**: Goal lifecycle from intake → scheduling → execution → completion
 > **Key RFCs**: RFC-625 (ContextEngine/AutopilotMonitor), RFC-222 (Autopilot Architecture),
-> RFC-204 (Autopilot Mode), [IG-677](../impl/IG-677-autopilot-job-loop-index.md)
+> RFC-204 (Autopilot Mode), [IG-677](../impl/IG-677-autopilot-job-loop-index.md),
+> [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
+
+---
+
+## Known production gaps (2026-08-04)
+
+The intended flow below assumes ordered `depends_on`, shared job workspace, and
+health that only prunes clutter. Runtime gaps that violate that assumption are
+tracked in **IG-680** (do not treat the diagrams as fully enforced until then):
+
+| Gap | Breaks |
+|-----|--------|
+| Health `remove_goals` can cancel job roots | Job terminal status honesty |
+| Decompose omits `parent.workspace` | Consensus path / artifact locality |
+| LLM decompose often emits `depends_on=[]` | Pipeline ordering under parallel pool |
+| Thin consensus evidence + description fallback | False `send_back` / `no narrative` |
 
 ---
 

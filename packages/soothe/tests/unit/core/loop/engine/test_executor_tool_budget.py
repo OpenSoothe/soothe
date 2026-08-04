@@ -68,13 +68,13 @@ async def test_stream_stops_after_tool_budget_with_partial_outcomes() -> None:
     assert len(final.outcomes) == 2
 
 
-def test_default_max_tool_calls_per_step_is_999() -> None:
-    assert _DEFAULT_MAX_TOOL_CALLS_PER_STEP == 999
+def test_default_max_tool_calls_per_step_is_100() -> None:
+    assert _DEFAULT_MAX_TOOL_CALLS_PER_STEP == 100
     assert (
         Executor(
             MagicMock(), max_parallel_steps=1, context_engine=_make_ce()
         )._max_tool_calls_per_step()
-        == 999
+        == 100
     )
 
 

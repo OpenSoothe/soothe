@@ -6,18 +6,23 @@ Coordinates:
 3. Placement analysis for new goal intake
 
 Uses DagVerificationReasoner for structured LLM calls.
+IG-680: health remove guardrails, wire_dependencies, decompose budget.
 """
 
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
+from soothe.autopilot.evidence_grounding import workspace_has_deliverables
 from soothe.autopilot.monitor_models import (
     DagHealthReport,
     DecomposeSuggestion,
     GoalPlacement,
     MergeSuggestion,
+    WireDependencySuggestion,
 )
 from soothe.autopilot.verifier_reasoner import (
     CompletionVerificationContext,
@@ -26,11 +31,17 @@ from soothe.autopilot.verifier_reasoner import (
     GoalPlacementContext,
 )
 from soothe.context.engine import ContextEngine
+from soothe.context.models import TERMINAL_STATES
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
+
+# Max one health/post-completion decompose wave per parent within this window.
+_DECOMPOSE_COOLDOWN_SECONDS = 300.0
+
+CancelGoalFn = Callable[[str, str], Awaitable[Any]]
 
 
 class GoalDAGVerifier:
@@ -42,30 +53,35 @@ class GoalDAGVerifier:
     Args:
         ce: ContextEngine instance for goal access.
         config: SootheConfig for LLM model access.
-
-    Attributes:
-        _reasoner: DagVerificationReasoner for LLM calls.
+        cancel_goal: Optional AutopilotService.cancel_goal for cascading cancels.
     """
 
-    def __init__(self, ce: ContextEngine, config: SootheConfig) -> None:
+    def __init__(
+        self,
+        ce: ContextEngine,
+        config: SootheConfig,
+        *,
+        cancel_goal: CancelGoalFn | None = None,
+    ) -> None:
         """Initialize verifier with ContextEngine and config.
 
         Args:
             ce: ContextEngine instance
             config: SootheConfig for LLM model access
+            cancel_goal: Optional async ``(goal_id, reason) -> ...`` cascade cancel
         """
         self._ce = ce
         self._config = config
         self._reasoner = DagVerificationReasoner(config)
+        self._cancel_goal = cancel_goal
+        self._decompose_at: dict[str, float] = {}
+
+    def bind_cancel_goal(self, cancel_goal: CancelGoalFn) -> None:
+        """Wire AutopilotService.cancel_goal for health removals that need cascade."""
+        self._cancel_goal = cancel_goal
 
     async def verify_dag_health(self) -> DagHealthReport:
         """LLM-driven periodic background verification.
-
-        Process:
-          1. Gather full DAG snapshot (goals, statuses, step progress)
-          2. Call DagVerificationReasoner.verify_health() for LLM analysis
-          3. Parse LLM response into structured DagHealthReport
-          4. Report includes: reset, remove, merge, decompose suggestions
 
         Falls back to heuristics on LLM failure.
 
@@ -83,14 +99,7 @@ class GoalDAGVerifier:
             return self._heuristic_health_check(goals)
 
     def _convert_health_response(self, response: Any) -> DagHealthReport:
-        """Convert DagHealthResponse to DagHealthReport.
-
-        Args:
-            response: DagHealthResponse from LLM.
-
-        Returns:
-            DagHealthReport for monitor consumption.
-        """
+        """Convert DagHealthResponse to DagHealthReport."""
         report = DagHealthReport(
             suggest_reset=response.reset_goals,
             suggest_remove=response.remove_goals,
@@ -98,7 +107,6 @@ class GoalDAGVerifier:
             reasoning=response.reasoning,
         )
 
-        # Convert merge suggestions
         for merge in response.merge_goals:
             report.suggest_merge.append(
                 MergeSuggestion(
@@ -107,7 +115,6 @@ class GoalDAGVerifier:
                 )
             )
 
-        # Convert decompose suggestions
         for decomp in response.decompose_goals:
             report.suggest_decompose.append(
                 DecomposeSuggestion(
@@ -116,52 +123,115 @@ class GoalDAGVerifier:
                 )
             )
 
+        for wire in getattr(response, "wire_dependencies", None) or []:
+            report.wire_dependencies.append(
+                WireDependencySuggestion(
+                    goal_id=wire.goal_id,
+                    depends_on=list(wire.depends_on),
+                )
+            )
+
         return report
 
     def _heuristic_health_check(self, goals: list[Any]) -> DagHealthReport:
-        """Fallback heuristic health check.
-
-        Args:
-            goals: List of all goals in DAG.
-
-        Returns:
-            DagHealthReport with heuristic suggestions.
-        """
+        """Fallback heuristic health check."""
         report = DagHealthReport(reasoning="Heuristic-based verification (LLM fallback)")
 
         pending = [g for g in goals if g.status == "pending"]
         for goal in pending:
-            # Check for orphaned goals (deps not satisfied)
             deps_met = all(
                 self._ce.get_goal_sync(dep) is not None
                 and self._ce.get_goal_sync(dep).status in ("completed", "failed", "cancelled")
                 for dep in goal.depends_on
             )
             if goal.depends_on and not deps_met:
-                report.suggest_remove.append(goal.id)
+                # Suggest reset rather than remove for orphaned pending (safer).
+                report.suggest_reset.append(goal.id)
 
         return report
 
-    async def verify_dag_post_completion(self, completed_goal_id: str) -> dict[str, Any]:
-        """LLM-driven analysis after goal completion.
+    def may_auto_remove(self, goal_id: str) -> bool:
+        """Return True if health may auto-remove this goal (IG-680 AH-1).
 
-        Process:
-          1. Gather completed goal + its steps + outcomes
-          2. Gather pending goals that may be affected
-          3. Call DagVerificationReasoner.verify_post_completion()
-          4. Parse into structured response
-
-        Falls back to heuristics on LLM failure.
-
-        Args:
-            completed_goal_id: ID of the completed goal.
-
-        Returns:
-            Dict with new goals, redundant goals, ready goals, decomposition.
+        Only cancelled/failed clutter with zero dependents and no non-terminal
+        descendants. Job roots that are still non-terminal are never removable.
         """
+        goal = self._ce.get_goal_sync(goal_id)
+        if goal is None:
+            return False
+
+        if goal.status not in ("cancelled", "failed"):
+            logger.info(
+                "Health remove skipped for %s: status=%s (only cancelled/failed clutter)",
+                goal_id,
+                goal.status,
+            )
+            return False
+
+        # Never strip a job root that still has live work under it.
+        subtree = self._ce.collect_subtree_ids(goal_id)
+        for gid in subtree:
+            if gid == goal_id:
+                continue
+            child = self._ce.get_goal_sync(gid)
+            if child is not None and child.status not in TERMINAL_STATES:
+                logger.info(
+                    "Health remove skipped for %s: non-terminal descendant %s",
+                    goal_id,
+                    gid,
+                )
+                return False
+
+        dependents = self._ce.get_goal_dependents(goal_id)
+        for dep_id in dependents:
+            dep = self._ce.get_goal_sync(dep_id)
+            if dep is not None and dep.status not in TERMINAL_STATES:
+                logger.info(
+                    "Health remove skipped for %s: non-terminal dependent %s",
+                    goal_id,
+                    dep_id,
+                )
+                return False
+
+        return True
+
+    def _decompose_allowed(self, parent_id: str) -> bool:
+        """Enforce per-parent decompose cooldown (IG-680 AH-4)."""
+        now = time.monotonic()
+        last = self._decompose_at.get(parent_id)
+        if last is not None and (now - last) < _DECOMPOSE_COOLDOWN_SECONDS:
+            logger.info(
+                "Decompose skipped for %s: cooldown %.0fs remaining",
+                parent_id,
+                _DECOMPOSE_COOLDOWN_SECONDS - (now - last),
+            )
+            return False
+        return True
+
+    def _mark_decomposed(self, parent_id: str) -> None:
+        self._decompose_at[parent_id] = time.monotonic()
+
+    async def verify_dag_post_completion(self, completed_goal_id: str) -> dict[str, Any]:
+        """LLM-driven analysis after goal completion."""
         completed = self._ce.get_goal_sync(completed_goal_id)
         if not completed:
             return {}
+
+        # Skip further decompose when workspace already shows deliverables.
+        if workspace_has_deliverables(getattr(completed, "workspace", None)):
+            logger.info(
+                "Post-completion skip decompose for %s: workspace deliverables present",
+                completed_goal_id,
+            )
+            return {
+                "completed_goal_id": completed_goal_id,
+                "new_goals": [],
+                "redundant_goals": [],
+                "ready_goals": [],
+                "decomposition": None,
+                "reasoning": "Workspace deliverable probe satisfied; no further decompose",
+                "skip_decompose": True,
+            }
 
         pending = self._ce.get_goals_by_status("pending")
         active = self._ce.get_goals_by_status("active")
@@ -201,21 +271,7 @@ class GoalDAGVerifier:
             }
 
     async def analyze_placement(self, description: str) -> GoalPlacement:
-        """LLM-driven placement analysis for new goal.
-
-        Process:
-          1. Gather current DAG state (active, pending, recently completed)
-          2. Call DagVerificationReasoner.analyze_placement()
-          3. Parse into GoalPlacement
-
-        Falls back to load-based heuristic on LLM failure.
-
-        Args:
-            description: Goal description to analyze.
-
-        Returns:
-            GoalPlacement with priority, dependencies, merge suggestion.
-        """
+        """LLM-driven placement analysis for new goal."""
         goals = self._ce.get_goals_by_status(None)
         context = GoalPlacementContext.from_description(description, goals)
 
@@ -231,7 +287,6 @@ class GoalDAGVerifier:
             )
         except Exception:
             logger.exception("LLM placement analysis failed, using heuristics")
-            # Fallback heuristic
             active = self._ce.get_goals_by_status("active")
             pending = self._ce.get_goals_by_status("pending")
             load = len(active) + len(pending)
@@ -241,7 +296,7 @@ class GoalDAGVerifier:
             )
 
     def _build_dag_snapshot(self) -> dict[str, Any]:
-        """Build serializable DAG snapshot for LLM context."""
+        """Build serializable DAG snapshot for LLM context / tests."""
         goals = self._ce.get_goals_by_status(None)
         return {
             "goals": [
@@ -260,22 +315,64 @@ class GoalDAGVerifier:
         }
 
     async def apply_health_report(self, report: DagHealthReport) -> None:
-        """Apply DAG health verification suggestions via ContextEngine planning APIs.
-
-        Args:
-            report: Structured health report from :meth:`verify_dag_health`.
-        """
+        """Apply DAG health verification suggestions via ContextEngine planning APIs."""
         goal_planner = self._ce.planning.goal
 
-        for decomp in report.suggest_decompose:
-            goal_planner.apply_llm_subgoals(decomp.goal_id, decomp.subgoals)
-
-        for goal_id in report.suggest_remove:
+        for wire in report.wire_dependencies:
             try:
-                await self._ce.cancel_goal(goal_id, reason="dag_health_verification")
+                await self._ce.update_dependencies(wire.goal_id, list(wire.depends_on))
+                logger.info(
+                    "Health wired depends_on for %s → %s",
+                    wire.goal_id,
+                    wire.depends_on,
+                )
             except Exception:
                 logger.warning(
-                    "Failed to cancel goal %s from health report", goal_id, exc_info=True
+                    "Failed to wire dependencies for %s",
+                    wire.goal_id,
+                    exc_info=True,
+                )
+
+        for decomp in report.suggest_decompose:
+            parent = self._ce.get_goal_sync(decomp.goal_id)
+            if parent is not None and workspace_has_deliverables(
+                getattr(parent, "workspace", None)
+            ):
+                logger.info(
+                    "Health decompose skipped for %s: workspace deliverables present",
+                    decomp.goal_id,
+                )
+                continue
+            if not self._decompose_allowed(decomp.goal_id):
+                continue
+            created = goal_planner.apply_llm_subgoals(decomp.goal_id, decomp.subgoals)
+            if created:
+                self._mark_decomposed(decomp.goal_id)
+
+        for goal_id in report.suggest_remove:
+            if not self.may_auto_remove(goal_id):
+                continue
+            try:
+                goal = self._ce.get_goal_sync(goal_id)
+                if goal is None:
+                    continue
+                # Terminal clutter: prefer DAG remove; cascade cancel only if still open.
+                if goal.status in TERMINAL_STATES:
+                    removed = await self._ce.remove_goal(goal_id)
+                    if not removed:
+                        logger.info(
+                            "Health remove of terminal %s deferred (dependents remain)",
+                            goal_id,
+                        )
+                elif self._cancel_goal is not None:
+                    await self._cancel_goal(goal_id, "dag_health_verification")
+                else:
+                    await self._ce.cancel_goal(goal_id, reason="dag_health_verification")
+            except Exception:
+                logger.warning(
+                    "Failed to cancel/remove goal %s from health report",
+                    goal_id,
+                    exc_info=True,
                 )
 
         for goal_id in report.suggest_reset:
@@ -301,12 +398,8 @@ class GoalDAGVerifier:
             )
 
     async def apply_post_completion(self, result: dict[str, Any]) -> None:
-        """Apply post-completion verification suggestions to the CE DAG.
-
-        Args:
-            result: Dict returned by :meth:`verify_dag_post_completion`.
-        """
-        if not result:
+        """Apply post-completion verification suggestions to the CE DAG."""
+        if not result or result.get("skip_decompose"):
             return
 
         completed_id = result.get("completed_goal_id") or ""
@@ -314,22 +407,51 @@ class GoalDAGVerifier:
 
         new_goals = result.get("new_goals") or []
         if new_goals:
-            await goal_planner.reflect_and_create_goals(
-                completed_id,
-                new_goals=new_goals,
-            )
+            if completed_id and not self._decompose_allowed(completed_id):
+                new_goals = []
+            else:
+                created = await goal_planner.reflect_and_create_goals(
+                    completed_id,
+                    new_goals=new_goals,
+                )
+                if created and completed_id:
+                    self._mark_decomposed(completed_id)
 
         decomp = result.get("decomposition")
         if decomp and decomp.get("goal_id"):
-            goal_planner.apply_llm_subgoals(
-                decomp["goal_id"],
-                decomp.get("subgoals") or [],
-                reasoning=result.get("reasoning", ""),
-            )
+            parent_id = decomp["goal_id"]
+            parent = self._ce.get_goal_sync(parent_id)
+            if parent is not None and workspace_has_deliverables(
+                getattr(parent, "workspace", None)
+            ):
+                logger.info(
+                    "Post-completion decompose skipped for %s: deliverables present",
+                    parent_id,
+                )
+            elif self._decompose_allowed(parent_id):
+                created = goal_planner.apply_llm_subgoals(
+                    parent_id,
+                    decomp.get("subgoals") or [],
+                    reasoning=result.get("reasoning", ""),
+                )
+                if created:
+                    self._mark_decomposed(parent_id)
 
         for redundant_id in result.get("redundant_goals") or []:
+            if not self.may_auto_remove(redundant_id):
+                # Only cancel if already cancelled/failed clutter path allows; otherwise skip.
+                goal = self._ce.get_goal_sync(redundant_id)
+                if goal is None or goal.status not in ("cancelled", "failed"):
+                    logger.info(
+                        "Post-completion redundant skip for %s (not removable clutter)",
+                        redundant_id,
+                    )
+                    continue
             try:
-                await self._ce.cancel_goal(redundant_id, reason="post_completion_redundant")
+                if self._cancel_goal is not None:
+                    await self._cancel_goal(redundant_id, "post_completion_redundant")
+                else:
+                    await self._ce.cancel_goal(redundant_id, reason="post_completion_redundant")
             except Exception:
                 logger.warning(
                     "Failed to cancel redundant goal %s",

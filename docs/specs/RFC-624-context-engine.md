@@ -5,9 +5,9 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-12
-**Updated**: 2026-06-15 (Phase 4 Stage 2 cleanup)
+**Updated**: 2026-08-04 (workspace inherit addendum for decompose)
 **Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (StrangeLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-803 (Persistence Backend)
-**Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation)
+**Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation), [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
 
 ---
 
@@ -654,6 +654,14 @@ class PlanningFacade:
 `ContextEngine.planning` property returns `PlanningFacade`.
 
 **GoalPlanningSubengine**: LLM-driven decomposition flows through the AutopilotMonitor verifier (`apply_llm_subgoals()` → `create_subgoals()`); `compute_orchestration_strategy()` computes from goal DAG.
+
+**Workspace inheritance (normative addendum, 2026-08-04):** When creating
+children via `create_subgoals` / `apply_llm_subgoals`, each child `GoalNode`
+MUST inherit `parent.workspace` unless the decomposition payload explicitly
+sets another workspace. Without this, autopilot dispatch falls back to
+per-loop anonymous workspaces and consensus cannot ground on the job path.
+Tracked in [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) AH-2 /
+RFC-625 errata.
 
 **GoalScheduler**: Extracts scheduling logic from `GoalEngine._filter_ready_candidates` — `ready_goals()`, `claim_goal()`, `is_complete()`.
 

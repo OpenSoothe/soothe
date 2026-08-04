@@ -17,9 +17,8 @@ Phase B (this file) ships a minimal working implementation:
   ``PlanResult`` (no full context extraction yet — that's later phase work).
 - Maps ``PlanResult`` status to ``completed`` / ``failed`` / ``needs_replan``.
 
-Later phases will enrich the contribution synthesis (real files_touched,
-findings extracted from working memory, etc.) without changing the wire
-contract.
+IG-680 enriches contribution synthesis with files_touched extracted from
+PlanResult evidence / action text (hashed when present on disk).
 """
 
 from __future__ import annotations
@@ -35,6 +34,7 @@ from soothe.autopilot.engine_models import (
     StepSummary,
     ToolCallStats,
 )
+from soothe.autopilot.evidence_grounding import build_files_touched
 from soothe.autopilot.proposal_queue import Proposal, ProposalQueue
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.sloop.state.schemas import PlanResult
@@ -175,6 +175,7 @@ class AutopilotWorkerMixin:
                 plan_result=None,
                 directives=[],  # No directives on exception
                 error_text=f"{type(exc).__name__}: {exc}",
+                workspace=workspace,
             )
             return
 
@@ -201,6 +202,7 @@ class AutopilotWorkerMixin:
             outcome=outcome,
             plan_result=plan_result,
             directives=all_directives,
+            workspace=workspace,
         )
 
     # ---- helpers --------------------------------------------------------
@@ -223,30 +225,34 @@ class AutopilotWorkerMixin:
         """Map ``PlanResult`` to the GoalCompletionChunk outcome enum.
 
         - PlanResult.is_done() True → ``completed``
-        - PlanResult status indicates retryable failure → ``needs_replan``
-        - Anything else (or None) → ``failed``
+        - PlanResult status indicates retryable / incomplete → ``needs_replan``
+        - None (clarification exit / empty terminal) → ``needs_replan`` (IG-680)
+        - Anything else → ``failed``
         """
         if plan_result is None:
-            return "failed"
+            return "needs_replan"
         try:
             if plan_result.is_done():
                 return "completed"
         except Exception:
             logger.debug("PlanResult.is_done() raised", exc_info=True)
         status = getattr(plan_result, "status", None)
-        if status in ("replan", "in_progress"):
+        if status in ("replan", "in_progress", "continue"):
             return "needs_replan"
         return "failed"
 
     @staticmethod
     def _build_contribution(
         plan_result: PlanResult | None,
+        *,
+        goal_id: str = "",
+        workspace: str | None = None,
     ) -> GoalDispatchContextContribution:
-        """Synthesize a minimal contribution from the final ``PlanResult``.
+        """Synthesize a contribution from the final ``PlanResult`` (IG-680).
 
-        Extracts evidence summary as a finding and best-effort plan steps from
-        decision actions. ``files_touched`` and ``tool_call_stats`` are empty
-        until the runner exposes per-tool telemetry to autopilot.
+        Extracts evidence summary as a finding, best-effort plan steps from
+        decision actions, and ``files_touched`` from path tokens in evidence
+        (hashed when the file exists under workspace).
         """
         if plan_result is None:
             return GoalDispatchContextContribution()
@@ -257,17 +263,20 @@ class AutopilotWorkerMixin:
             findings.append(Finding(summary=summary[:2000], relevance_score=0.8))
 
         plan_steps: list[StepSummary] = []
-        # Best-effort: the PlanResult may carry decision.actions or similar;
-        # the shape is not guaranteed.
         decision = getattr(plan_result, "decision", None)
         actions = getattr(decision, "actions", None) if decision else None
+        tool_counts: dict[str, int] = {}
         if isinstance(actions, list):
             for idx, action in enumerate(actions[:30]):
-                action_text = (
-                    action.get("description", str(action))
-                    if isinstance(action, dict)
-                    else str(action)
-                )
+                if isinstance(action, dict):
+                    action_text = str(action.get("description", action))
+                    tool_name = str(action.get("tool") or action.get("name") or "action")
+                else:
+                    action_text = str(getattr(action, "description", action) or action)
+                    tool_name = str(
+                        getattr(action, "tool", None) or getattr(action, "name", None) or "action"
+                    )
+                tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
                 plan_steps.append(
                     StepSummary(
                         id=f"S{idx + 1}",
@@ -276,10 +285,18 @@ class AutopilotWorkerMixin:
                     )
                 )
 
+        files_touched = build_files_touched(
+            goal_id=goal_id or "unknown",
+            workspace=workspace,
+            evidence_summary=summary,
+            plan_result=plan_result,
+        )
+
         return GoalDispatchContextContribution(
             plan_steps_executed=plan_steps,
             findings=findings,
-            tool_call_stats=ToolCallStats(),
+            files_touched=files_touched,
+            tool_call_stats=ToolCallStats(counts_by_name=tool_counts),
         )
 
     def _goal_completion_chunk(
@@ -290,6 +307,7 @@ class AutopilotWorkerMixin:
         plan_result: PlanResult | None,
         directives: list[GoalDirective] = [],  # RFC-204 Group C
         error_text: str | None = None,
+        workspace: str | None = None,
     ) -> StreamChunk:
         """Build the single terminal ``GoalCompletionChunk`` for ``job``.
 
@@ -297,7 +315,11 @@ class AutopilotWorkerMixin:
         per RFC-403 internal naming. The daemon's stream consumer reacts to
         this exact type string to advance the DAG.
         """
-        contribution = self._build_contribution(plan_result)
+        contribution = self._build_contribution(
+            plan_result,
+            goal_id=job.goal_id,
+            workspace=workspace,
+        )
         payload: dict[str, Any] = {
             "type": _GOAL_COMPLETION_TYPE,
             "goal_id": job.goal_id,

@@ -168,7 +168,7 @@ tools:
     proxy: null
   http_requests:
     enabled: true
-    allow_dangerous_requests: true
+    allow_dangerous_requests: false  # SEC: opt-in; prevents SSRF/arbitrary POST
     headers: {}
     verify_ssl: true
   deepxiv:
