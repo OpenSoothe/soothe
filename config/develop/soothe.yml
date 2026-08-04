@@ -16,6 +16,8 @@ agent:
     enable_dynamic_goals: true
     max_send_backs: 3
     checkpoint_interval: 10
+    # Dreaming is automatic (DAG complete / timer) and config-driven — no CLI dream/wake.
+    # Wake happens on submit or scheduled task. Set dreaming_enabled: false to disable.
     dreaming_enabled: true
     dreaming_consolidation_interval: 300
     dreaming_health_check_interval: 60

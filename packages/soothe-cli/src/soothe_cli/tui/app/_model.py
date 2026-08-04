@@ -304,7 +304,7 @@ class _ModelMixin:
         self.push_screen(HelpScreen(), handle_result)
 
     async def _submit_autopilot_job(self, task: str) -> None:
-        """Submit an autopilot job via WebSocket (like CLI `soothe autopilot run`).
+        """Submit an autopilot job via WebSocket (like CLI `soothe autopilot submit`).
 
         Args:
             task: Task description for autonomous execution.

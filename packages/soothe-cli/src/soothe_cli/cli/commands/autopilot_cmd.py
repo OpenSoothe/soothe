@@ -12,6 +12,7 @@ import sys
 import time
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 import typer
 from soothe_client import (
@@ -21,7 +22,10 @@ from soothe_client import (
 )
 from soothe_sdk.wire.protocol import preview_first
 
-app = typer.Typer(help="Autopilot mode — long-running autonomous agent control.")
+app = typer.Typer(help="Autopilot — autonomous goal control.")
+
+_TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled", "suspended"})
+_WAIT_TIMEOUT_S = 600.0
 
 
 def _resolve_submit_workspace(explicit: str | None) -> str:
@@ -49,49 +53,14 @@ def _require_daemon_ws():
     return command_client_from_config(cfg)
 
 
-@app.command("run")
-def run(
-    prompt: str = typer.Argument(..., help="Task for autonomous execution."),
-    max_iterations: int | None = typer.Option(
-        None,
-        "--max-iterations",
-        help="Ignored — use daemon config agent.autopilot.max_iterations.",
-    ),
-    workspace: str | None = typer.Option(
-        None,
-        "--workspace",
-        "-w",
-        help="Filesystem workspace for the goal (default: current directory).",
-    ),
-    rail: str | None = typer.Option(
-        None,
-        "--rail",
-        help="LoopRail id (e.g. feature-dev, spike). Omit for no-rail Monitor/CE path.",
-    ),
-    wait: bool = typer.Option(True, "--wait/--no-wait", help="Poll until the goal completes."),
-) -> None:
-    """Submit a task to the daemon autopilot and optionally wait for completion.
-
-    Requires the daemon (``soothed start``). This is the production autopilot
-    path — distinct from a one-shot agentic query via ``soothe -p``.
-    """
-    del max_iterations  # daemon owns config for autopilot dispatch
-    client = _require_daemon_ws()
-    submit_workspace = _resolve_submit_workspace(workspace)
-    result = client.autopilot_submit(prompt, workspace=submit_workspace, rail_id=rail)
-    goal_id = result.get("goal_id", "")
-    typer.echo(f"Submitted goal: {goal_id}")
-    if result.get("rail_id"):
-        typer.echo(f"  Rail: {result['rail_id']}")
-    if not wait or not goal_id:
-        return
-
-    deadline = time.time() + 600
+def _wait_for_goal(client: Any, goal_id: str, *, timeout_s: float = _WAIT_TIMEOUT_S) -> None:
+    """Poll until the goal reaches a terminal status or timeout."""
+    deadline = time.time() + timeout_s
     while time.time() < deadline:
         detail = client.autopilot_get_goal(goal_id)
         goal = detail.get("goal") or {}
         status = goal.get("status", "unknown")
-        if status in ("completed", "failed", "cancelled", "suspended"):
+        if status in _TERMINAL_STATUSES:
             typer.echo(f"Goal {goal_id[:8]}: {status}")
             if status == "failed":
                 sys.exit(1)
@@ -99,6 +68,28 @@ def run(
         time.sleep(1.0)
     typer.echo(f"Timed out waiting for goal {goal_id}", err=True)
     sys.exit(1)
+
+
+def _submit_impl(
+    task: str,
+    *,
+    priority: int = 50,
+    workspace: str | None = None,
+    rail: str | None = None,
+    wait: bool = False,
+) -> None:
+    """Submit a task; optionally wait for completion."""
+    client = _require_daemon_ws()
+    submit_workspace = _resolve_submit_workspace(workspace)
+    result = client.autopilot_submit(
+        task, priority=priority, workspace=submit_workspace, rail_id=rail
+    )
+    goal_id = str(result.get("goal_id") or "")
+    typer.echo(f"Submitted goal: {goal_id or '?'}")
+    if result.get("rail_id"):
+        typer.echo(f"  Rail: {result['rail_id']}")
+    if wait and goal_id:
+        _wait_for_goal(client, goal_id)
 
 
 @app.command("submit")
@@ -109,7 +100,32 @@ def submit(
         None,
         "--workspace",
         "-w",
-        help="Filesystem workspace for the goal (default: current directory).",
+        help="Workspace directory (default: current directory).",
+    ),
+    rail: str | None = typer.Option(
+        None,
+        "--rail",
+        help="LoopRail id (e.g. feature-dev, spike).",
+    ),
+    wait: bool = typer.Option(
+        False,
+        "--wait",
+        help="Wait until the goal completes (sync).",
+    ),
+) -> None:
+    """Submit a task (async unless --wait)."""
+    _submit_impl(task, priority=priority, workspace=workspace, rail=rail, wait=wait)
+
+
+@app.command("run")
+def run(
+    prompt: str = typer.Argument(..., help="Task description."),
+    priority: int = typer.Option(50, "--priority", "-p", help="Goal priority (0-100)."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "-w",
+        help="Workspace directory (default: current directory).",
     ),
     rail: str | None = typer.Option(
         None,
@@ -117,23 +133,13 @@ def submit(
         help="LoopRail id (e.g. feature-dev, spike).",
     ),
 ) -> None:
-    """Submit a new task to the daemon autopilot."""
-    client = _require_daemon_ws()
-    submit_workspace = _resolve_submit_workspace(workspace)
-    result = client.autopilot_submit(
-        task, priority=priority, workspace=submit_workspace, rail_id=rail
-    )
-    goal_id = result.get("goal_id", "?")
-    typer.echo(f"Task submitted (goal_id={goal_id})")
-    typer.echo(f"  Priority: {priority}")
-    typer.echo(f"  Workspace: {submit_workspace}")
-    if result.get("rail_id"):
-        typer.echo(f"  Rail: {result['rail_id']}")
+    """Alias for submit --wait (sync)."""
+    _submit_impl(prompt, priority=priority, workspace=workspace, rail=rail, wait=True)
 
 
 @app.command("status")
 def status() -> None:
-    """Show overall autopilot state and goal DAG summary."""
+    """Show autopilot state and job summary."""
     client = _require_daemon_ws()
     data = client.autopilot_status()
     state = data.get("state", data.get("status", "unknown"))
@@ -145,7 +151,10 @@ def status() -> None:
         typer.echo("Dreaming: yes")
     loop_pool = data.get("loop_pool")
     if isinstance(loop_pool, dict) and loop_pool:
-        typer.echo(f"Worker pool: {loop_pool}")
+        active = loop_pool.get("active", 0)
+        idle = loop_pool.get("idle", 0)
+        max_loops = loop_pool.get("max", "?")
+        typer.echo(f"Worker pool: {active}/{idle}/{max_loops} (active/idle/max)")
 
     jobs = client.autopilot_list_jobs().get("jobs") or []
     goals = client.autopilot_list_goals().get("goals") or []
@@ -166,30 +175,13 @@ def status() -> None:
             sstat = j.get("status", "pending")
             sdesc = preview_first(j.get("description", ""), 50)
             typer.echo(f"  [{sid}] {sstat:10s}  {sdesc}")
-        typer.echo("\nFull DAG for a job: soothe autopilot job <job_id>")
-
-
-@app.command("list")
-def list_jobs(
-    status_filter: str = typer.Option("", "--status", "-s", help="Filter by status."),
-) -> None:
-    """List jobs (root goals) from the daemon autopilot.
-
-    Jobs are user-submitted tasks. Subgoals created during autonomous
-    execution are not shown here; use ``goals`` or ``goal <id>`` for details.
-    """
-    _list_jobs_impl(status_filter)
 
 
 @app.command("jobs")
-def list_jobs_alias(
+def list_jobs(
     status_filter: str = typer.Option("", "--status", "-s", help="Filter by status."),
 ) -> None:
-    """Alias for list — list root autopilot jobs."""
-    _list_jobs_impl(status_filter)
-
-
-def _list_jobs_impl(status_filter: str) -> None:
+    """List root jobs."""
     client = _require_daemon_ws()
     payload = client.autopilot_list_jobs()
     jobs = payload.get("jobs") or []
@@ -211,7 +203,7 @@ def _list_jobs_impl(status_filter: str) -> None:
 def list_goals(
     status_filter: str = typer.Option("", "--status", "-s", help="Filter by status."),
 ) -> None:
-    """List all goals in the daemon autopilot DAG (including subgoals)."""
+    """List all goals (including subgoals)."""
     client = _require_daemon_ws()
     payload = client.autopilot_list_goals()
     goals = payload.get("goals") or []
@@ -235,22 +227,18 @@ def _render_dag_tree(dag: dict, root_id: str) -> None:
     nodes = {n["id"]: n for n in dag.get("nodes", [])}
     edges = dag.get("edges", [])
 
-    # Build children map from edges
     children: dict[str, list[str]] = {}
     for edge in edges:
         src = edge.get("source")
         tgt = edge.get("target")
         if src and tgt:
-            if src not in children:
-                children[src] = []
-            children[src].append(tgt)
+            children.setdefault(src, []).append(tgt)
 
     def render_node(goal_id: str, indent: str = "", is_last: bool = True) -> None:
         node = nodes.get(goal_id)
         if not node:
             return
 
-        # Prefix for this level
         if indent:
             prefix = indent + ("└─ " if is_last else "├─ ")
         else:
@@ -260,7 +248,6 @@ def _render_dag_tree(dag: dict, root_id: str) -> None:
         desc = preview_first(node.get("description", ""), 50)
         typer.echo(f'{prefix}{goal_id[:8]} ({status}) "{desc}"')
 
-        # Render children
         child_ids = children.get(goal_id, [])
         for i, child_id in enumerate(child_ids):
             child_indent = indent + ("    " if is_last else "│   ")
@@ -271,13 +258,9 @@ def _render_dag_tree(dag: dict, root_id: str) -> None:
 
 @app.command("job")
 def show_job(
-    job_id: str = typer.Argument(..., help="Job ID to show details and goal DAG."),
+    job_id: str = typer.Argument(..., help="Job ID."),
 ) -> None:
-    """Show job status and goal DAG tree visualization.
-
-    A job is a root goal submitted by the user. This command shows
-    the job's details and the complete goal DAG under it.
-    """
+    """Show job and goal DAG."""
     client = _require_daemon_ws()
     try:
         payload = client.autopilot_get_job(job_id)
@@ -292,7 +275,6 @@ def show_job(
         typer.echo(f"Job '{job_id}' not found.", err=True)
         raise typer.Exit(1)
 
-    # Job header
     typer.echo(f"Job ID:          {job.get('id')}")
     typer.echo(f"Status:          {job.get('status', 'pending')}")
     typer.echo(f"Priority:        {job.get('priority', 50)}")
@@ -319,9 +301,9 @@ def show_job(
 
 @app.command("goal")
 def show_goal(
-    goal_id: str = typer.Argument(..., help="Goal ID to show details for."),
+    goal_id: str = typer.Argument(..., help="Goal ID."),
 ) -> None:
-    """Show details for a specific goal."""
+    """Show goal details."""
     client = _require_daemon_ws()
     payload = client.autopilot_get_goal(goal_id)
     found = payload.get("goal")
@@ -343,20 +325,20 @@ def show_goal(
 def cancel_goal(
     goal_id: str | None = typer.Argument(
         None,
-        help="Goal ID to cancel (omit when using --all or --job).",
+        help="Goal ID (omit with --all or --job).",
     ),
     cancel_all: bool = typer.Option(
         False,
         "--all",
-        help="Cancel every open (non-terminal) autopilot goal.",
+        help="Cancel all open goals.",
     ),
     job_id: str | None = typer.Option(
         None,
         "--job",
-        help="Cancel a job root and all descendant goals.",
+        help="Cancel a job and its descendants.",
     ),
 ) -> None:
-    """Cancel a goal, a job subtree, or all open goals via the daemon."""
+    """Cancel a goal, job subtree, or all open goals."""
     modes = sum(1 for flag in (bool(goal_id), cancel_all, bool(job_id)) if flag)
     if modes != 1:
         typer.echo(
@@ -382,13 +364,9 @@ def cancel_goal(
 
 @app.command("resume")
 def resume_goal(
-    goal_id: str = typer.Argument(..., help="Goal ID to resume."),
+    goal_id: str = typer.Argument(..., help="Goal ID."),
 ) -> None:
-    """Resume a suspended or blocked goal.
-
-    Reactivates a paused goal back to pending status so the scheduler
-    can pick it up for execution. Use 'jobs' to list goals and their status.
-    """
+    """Resume a suspended or blocked goal."""
     client = _require_daemon_ws()
     try:
         result = client.autopilot_resume(goal_id)
@@ -398,22 +376,6 @@ def resume_goal(
     typer.echo(
         f"Goal resumed: {result.get('goal_id', goal_id)} → {result.get('new_status', 'pending')}"
     )
-
-
-@app.command("wake")
-def wake() -> None:
-    """Exit dreaming mode — resume active execution."""
-    client = _require_daemon_ws()
-    client.autopilot_wake()
-    typer.echo("Wake signal sent.")
-
-
-@app.command("dream")
-def dream() -> None:
-    """Force enter dreaming mode."""
-    client = _require_daemon_ws()
-    client.autopilot_dream()
-    typer.echo("Dream signal sent.")
 
 
 def _short_loop_id(loop_id: str, *, keep: int = 8) -> str:
@@ -561,10 +523,7 @@ def top(
         help="Refresh interval in seconds (must be > 0).",
     ),
 ) -> None:
-    """Live dashboard of active autopilot jobs, goals, and loops.
-
-    Requires the daemon (``soothed start``). Redraws until Ctrl+C.
-    """
+    """Live jobs/goals/loops dashboard."""
     if interval <= 0:
         typer.echo("Error: --interval must be > 0.", err=True)
         raise typer.Exit(1)

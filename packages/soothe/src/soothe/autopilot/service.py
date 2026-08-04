@@ -1447,7 +1447,11 @@ class AutopilotService:
         logger.info("Woke from dreaming mode - trigger: %s", trigger)
 
     async def force_dream(self) -> None:
-        """Force-enter dreaming mode (HTTP/CLI ``dream`` command)."""
+        """Force-enter dreaming mode (WS ``autopilot_dream`` / programmatic).
+
+        Prefer ``agent.autopilot.dreaming_enabled`` and automatic DAG-complete
+        entry over manual force; this remains for wire/protocol callers.
+        """
         if not self._config.dreaming_enabled:
             logger.info("Dreaming disabled in config; ignoring force_dream")
             return

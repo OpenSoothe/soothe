@@ -623,7 +623,7 @@ class _ExecutionMixin:
             rewritten = f"/skill:skill-creator {args}" if args else "/skill:skill-creator"
             await self._handle_skill_command(rewritten)
         elif cmd == "/autopilot" or cmd.startswith("/autopilot "):
-            # Submit autopilot job via HTTP REST (like CLI `soothe autopilot run`)
+            # Submit autopilot job via WebSocket (like CLI `soothe autopilot submit`)
             args = command.strip()[len("/autopilot") :].strip()
             if not args:
                 await self._mount_message(UserMessage(command))
