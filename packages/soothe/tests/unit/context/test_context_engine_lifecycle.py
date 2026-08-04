@@ -75,6 +75,29 @@ class TestContextEngineGoalLifecycle:
         fetched = await engine.get_goal(goal.id)
         assert fetched.status == "suspended"
 
+    @pytest.mark.asyncio
+    async def test_resume_interrupted_goal_from_suspended(self) -> None:
+        engine = ContextEngine()
+        goal = await engine.create_goal("Partial work")
+        await engine.activate_goal(goal.id, loop_id="loop-1")
+        step = StepNode(id="S1", description="Done step")
+        await engine.add_step(goal.id, step)
+        await engine.suspend_goal(goal.id, "user_cancelled")
+        resumed = await engine.resume_interrupted_goal(goal.id, loop_id="loop-1")
+        assert resumed.status == "active"
+        assert resumed.assigned_loop_id == "loop-1"
+        assert "S1" in resumed.steps.nodes
+
+    @pytest.mark.asyncio
+    async def test_resume_interrupted_goal_from_cancelled(self) -> None:
+        engine = ContextEngine()
+        goal = await engine.create_goal("Legacy cancel")
+        await engine.activate_goal(goal.id, loop_id="loop-1")
+        await engine.cancel_goal(goal.id, reason="user_cancelled")
+        resumed = await engine.resume_interrupted_goal(goal.id, loop_id="loop-1")
+        assert resumed.status == "active"
+        assert resumed.error is None
+
 
 class TestContextEngineStepLifecycle:
     @pytest.mark.asyncio

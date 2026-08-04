@@ -777,18 +777,17 @@ class QueryEngine:
             "skip_redundant_tool_message_wire": streaming_cfg.skip_redundant_tool_message_wire,
         }
 
-    async def _mark_active_context_goals_cancelled(
+    async def _suspend_active_context_goals_for_interrupt(
         self,
         loop_id: str,
         *,
         reason: str = "user_cancelled",
     ) -> int:
-        """Mark active ContextEngine goals cancelled and persist the DAG.
+        """Suspend active ContextEngine goals so interrupt resume can reactivate them.
 
-        The `/context` popup reads persisted CE DAG state. When a turn is
-        interrupted mid-flight, we need to transition active goals to
-        ``cancelled`` before stream teardown so cancelled attempts remain visible
-        in the DAG view.
+        User-interrupt parks CE goals as ``suspended`` (not terminal ``cancelled``)
+        so ``retry`` / ``resume`` reuses the same CE goal and step DAG. The
+        ``goal_interrupted`` ledger marker still bounds partial work for projection.
         """
         lid = str(loop_id or "").strip()
         if not lid:
@@ -806,33 +805,31 @@ class QueryEngine:
                     return 0
 
                 now = datetime.now(UTC)
-                cancelled = 0
+                suspended = 0
                 for goal in dag.goals.values():
                     if str(getattr(goal, "status", "")).strip().lower() != "active":
                         continue
-                    goal.status = "cancelled"
+                    goal.status = "suspended"
                     if getattr(goal, "error", None) in (None, ""):
                         goal.error = reason
                     goal.updated_at = now
-                    cancelled += 1
+                    suspended += 1
 
-                if cancelled:
+                if suspended:
                     await persistence.save_dag(dag)
                     logger.info(
-                        "Marked %d active CE goal(s) cancelled for loop %s",
-                        cancelled,
+                        "Suspended %d active CE goal(s) for interrupt resume on loop %s",
+                        suspended,
                         lid[:16],
                     )
                     # RFC-214: also write a `goal_interrupted` ledger marker so the
-                    # next goal's planning projection can bound this cancelled
-                    # goal's partial segment and surface what was done. Best-effort;
-                    # failures are swallowed inside the helper.
+                    # next planning projection can bound this goal's partial segment.
                     from soothe.context.goal_interrupt_persistence import (
                         mark_cancelled_goal_interrupted,
                     )
 
                     await mark_cancelled_goal_interrupted(self._daemon._config, lid, reason=reason)
-                return cancelled
+                return suspended
             finally:
                 close = getattr(persistence, "close", None)
                 if callable(close):
@@ -841,7 +838,7 @@ class QueryEngine:
                         await maybe_coro
         except Exception:
             logger.warning(
-                "Failed to persist cancelled CE goals for loop %s",
+                "Failed to persist suspended CE goals for loop %s",
                 lid[:16],
                 exc_info=True,
             )
@@ -1531,7 +1528,7 @@ class QueryEngine:
 
                         still_owns = self._owns_turn(effective_loop_id, turn_generation)
                         if turn_cancelled and still_owns:
-                            await self._mark_active_context_goals_cancelled(
+                            await self._suspend_active_context_goals_for_interrupt(
                                 effective_loop_id,
                                 reason="user_cancelled",
                             )

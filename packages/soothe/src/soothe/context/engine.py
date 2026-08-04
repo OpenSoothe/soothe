@@ -54,7 +54,8 @@ VALID_GOAL_TRANSITIONS: dict[str, frozenset[str]] = {
     "blocked": frozenset({"pending", "completed", "failed", "cancelled"}),
     "validated": frozenset({"completed", "failed", "cancelled"}),
     "awaiting_clarification": frozenset({"pending", "completed", "failed", "cancelled"}),
-    "cancelled": frozenset(),  # terminal
+    # IG-684: interrupt resume may re-queue a cancelled mid-goal attempt.
+    "cancelled": frozenset({"pending"}),
 }
 
 
@@ -692,7 +693,7 @@ class ContextEngine:
         return goal
 
     async def reactivate_goal(self, goal_id: str) -> GoalNode:
-        """Reactivate a suspended/blocked goal back to pending.
+        """Reactivate a suspended/blocked/cancelled goal back to pending.
 
         Args:
             goal_id: Goal to reactivate.
@@ -702,20 +703,61 @@ class ContextEngine:
 
         Raises:
             KeyError: If goal not found.
-            ValueError: If goal is not suspended/blocked.
+            ValueError: If goal is not suspended/blocked/cancelled.
         """
         goal = self._dag.get_goal(goal_id)
         if goal is None:
             raise KeyError(f"Goal {goal_id} not found")
-        if goal.status not in ("suspended", "blocked"):
-            raise ValueError(f"Goal {goal_id} is {goal.status}, not suspended/blocked")
+        if goal.status not in ("suspended", "blocked", "cancelled"):
+            raise ValueError(f"Goal {goal_id} is {goal.status}, not suspended/blocked/cancelled")
         _validate_transition(goal_id, goal.status, "pending")
         old = goal.status
         goal.status = "pending"
         goal.send_back_count = 0  # Reset send-back budget
+        if old == "cancelled":
+            goal.error = None
         goal.updated_at = datetime.now(UTC)
         logger.info("Reactivated goal %s (was %s)", goal_id, old)
         return goal
+
+    async def resume_interrupted_goal(
+        self, goal_id: str, *, loop_id: str | None = None
+    ) -> GoalNode:
+        """Bring an interrupted CE goal back to ``active`` for in-place resume.
+
+        Handles ``active`` (no-op), ``pending``, ``suspended``, ``blocked``, and
+        ``cancelled`` (legacy interrupt path). Preserves the step DAG so planning
+        continues from completed checkpoints.
+
+        Args:
+            goal_id: Goal to resume.
+            loop_id: StrangeLoop id to re-assign.
+
+        Returns:
+            The active GoalNode.
+
+        Raises:
+            KeyError: If goal not found.
+            ValueError: If goal is in a non-resumable terminal state (completed).
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            raise KeyError(f"Goal {goal_id} not found")
+        if goal.status == "active":
+            if loop_id is not None:
+                goal.assigned_loop_id = loop_id
+            return goal
+        if goal.status == "completed":
+            raise ValueError(f"Goal {goal_id} is completed; cannot resume")
+        if goal.status in ("suspended", "blocked", "cancelled"):
+            await self.reactivate_goal(goal_id)
+        elif goal.status != "pending":
+            raise ValueError(f"Goal {goal_id} is {goal.status}; cannot resume")
+        await self.activate_goal(goal_id, loop_id=loop_id)
+        resumed = self._dag.get_goal(goal_id)
+        if resumed is None:
+            raise KeyError(f"Goal {goal_id} missing after resume")
+        return resumed
 
     # ── RFC-204 Group C directives ──────────────────────────────────────────
 

@@ -8,6 +8,7 @@ from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.sloop.utils.structural_continuation import (
     chitchat_may_finalize_checkpoint,
     has_active_running_goal,
+    has_resumable_interrupted_goal,
     is_loop_continuation_phrase,
     is_loop_control_signal,
     should_bypass_pass1_social_fast_path,
@@ -57,13 +58,16 @@ def test_loop_continuation_phrase_rejects_unrelated_text() -> None:
 
 def test_is_loop_control_signal_includes_keyword_and_phrase() -> None:
     assert is_loop_control_signal("continue")
+    assert is_loop_control_signal("retry")
     assert is_loop_control_signal("continue this loop")
+    assert is_loop_control_signal("retry this goal")
     assert not is_loop_control_signal("hello")
 
 
 def test_should_bypass_pass1_for_control_phrase_on_idle_checkpoint() -> None:
     checkpoint = _checkpoint(status="idle", goal_status="completed", current_goal_index=-1)
     assert should_bypass_pass1_social_fast_path(checkpoint, "continue this loop")
+    assert should_bypass_pass1_social_fast_path(checkpoint, "retry")
 
 
 def test_should_not_bypass_pass1_for_social_on_running_checkpoint() -> None:
@@ -79,6 +83,13 @@ def test_should_not_bypass_pass1_for_social_on_idle_without_running_goal() -> No
 def test_has_active_running_goal() -> None:
     assert has_active_running_goal(_checkpoint(status="running", goal_status="running"))
     assert not has_active_running_goal(_checkpoint(status="idle", goal_status="completed"))
+
+
+def test_has_resumable_interrupted_goal() -> None:
+    assert has_resumable_interrupted_goal(_checkpoint(status="idle", goal_status="running"))
+    assert has_resumable_interrupted_goal(_checkpoint(status="running", goal_status="running"))
+    assert has_resumable_interrupted_goal(_checkpoint(status="idle", goal_status="cancelled"))
+    assert not has_resumable_interrupted_goal(_checkpoint(status="idle", goal_status="completed"))
 
 
 def test_chitchat_finalize_allowed_only_on_idle_checkpoint() -> None:

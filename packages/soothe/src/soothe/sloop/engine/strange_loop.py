@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,8 +31,15 @@ from soothe.sloop.state.schemas import (
 )
 from soothe.sloop.state.sloop_manager import StrangeLoopStateManager
 from soothe.sloop.state.working_memory import LoopWorkingMemory
-from soothe.sloop.utils.continue_keyword import is_continue_keyword
+from soothe.sloop.utils.continue_keyword import (
+    is_continue_keyword,
+    is_interrupt_resume_keyword,
+)
 from soothe.sloop.utils.reflection import _default_agent_decision
+from soothe.sloop.utils.structural_continuation import (
+    has_resumable_interrupted_goal,
+    is_loop_control_signal,
+)
 
 from .anchor_manager import CheckpointAnchorManager
 
@@ -47,6 +53,28 @@ if TYPE_CHECKING:
     from soothe.protocols.loop_planner import LoopPlannerProtocol
 
 logger = logging.getLogger(__name__)
+
+
+def _hydrate_previous_plan_from_ce(state: LoopState, ce_goal: Any) -> None:
+    """Restore ``LoopState.previous_plan`` from a reused CE goal when present.
+
+    Without this, interrupt resume plans as if no prior wave existed even though
+    the CE step DAG still holds completed steps.
+    """
+    raw = getattr(ce_goal, "previous_plan", None)
+    if not raw or state.previous_plan is not None:
+        return
+    try:
+        if isinstance(raw, PlanResult):
+            state.previous_plan = raw
+        elif isinstance(raw, dict):
+            state.previous_plan = PlanResult.model_validate(raw)
+    except Exception:
+        logger.debug(
+            "[Goal] previous_plan hydrate failed for CE goal %s",
+            getattr(ce_goal, "id", None),
+            exc_info=True,
+        )
 
 
 class StrangeLoop:
@@ -502,20 +530,46 @@ class StrangeLoop:
                 checkpoint.current_thread_id = main_thread_id
                 if main_thread_id not in checkpoint.thread_ids:
                     checkpoint.thread_ids.append(main_thread_id)
-                goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
-                checkpoint.goal_history.append(goal_record)
-                checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
-                checkpoint.status = "running"
-                # RFC-624 Phase 4 Step 3: seeding removed — CE ledger spans all goals
-                # via ce.load() which restores prior DAG + ledger state.
-                await state_manager.save(checkpoint, include_goal_history=True)
-                iteration = 0
-                logger.info(
-                    "continued loop %s: new goal id=%s idx=%d",
-                    state_manager.loop_id,
-                    goal_record.goal_id,
-                    checkpoint.current_goal_index,
-                )
+                user_line_early = (goal_user_submission or goal or "").strip()
+                # After cancel, interrupt touch may leave status=idle while the
+                # StrangeLoop goal index entry is still running. Resume that goal in place
+                # when the user sends retry/continue/resume instead of start_new_goal("retry").
+                if (
+                    not resume_interrupted
+                    and not clarification_answer
+                    and has_resumable_interrupted_goal(checkpoint)
+                    and is_loop_control_signal(user_line_early)
+                ):
+                    goal_record = checkpoint.goal_history[checkpoint.current_goal_index]
+                    if goal_record.status == "cancelled":
+                        goal_record.status = "running"
+                        goal_record.completed_at = None
+                    exec_cp = checkpoint.execution_checkpoint or {}
+                    iteration = int(exec_cp.get("iteration") or 0)
+                    checkpoint.status = "running"
+                    await state_manager.save(checkpoint, include_goal_history=True)
+                    recovery_valid_resume = True
+                    logger.info(
+                        "Resuming interrupted goal after idle touch: loop=%s goal=%s iter=%d",
+                        state_manager.loop_id,
+                        goal_record.goal_id,
+                        iteration,
+                    )
+                else:
+                    goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
+                    checkpoint.goal_history.append(goal_record)
+                    checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
+                    checkpoint.status = "running"
+                    # RFC-624 Phase 4 Step 3: seeding removed — CE ledger spans all goals
+                    # via ce.load() which restores prior DAG + ledger state.
+                    await state_manager.save(checkpoint, include_goal_history=True)
+                    iteration = 0
+                    logger.info(
+                        "continued loop %s: new goal id=%s idx=%d",
+                        state_manager.loop_id,
+                        goal_record.goal_id,
+                        checkpoint.current_goal_index,
+                    )
 
             else:
                 if checkpoint is not None:
@@ -540,42 +594,34 @@ class StrangeLoop:
                 await state_manager.save(checkpoint, include_goal_history=True)
 
             user_submission_line = (goal_user_submission or goal or "").strip()
-            force_continue_loop = (not resume_interrupted) and is_continue_keyword(
-                user_submission_line
-            )
-            if (
-                force_continue_loop
+            # Interrupt-resume keywords resume the same goal in place. Idle-loop
+            # continue keywords (without recovery) still bootstrap a new goal.
+            interrupt_resume_in_place = (
+                (not resume_interrupted)
                 and recovery_valid_resume
-                and goal_record is not None
-                and checkpoint is not None
-            ):
-                goal_record.status = "cancelled"
-                goal_record.completed_at = datetime.now(UTC)
-                checkpoint.status = "idle"
-                goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
-                checkpoint.goal_history.append(goal_record)
-                checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
-                checkpoint.status = "running"
-                recovery_valid_resume = False
-                iteration = 0
-                await state_manager.save(checkpoint, include_goal_history=True)
+                and is_loop_control_signal(user_submission_line)
+            )
+            force_continue_loop = (
+                (not resume_interrupted)
+                and is_continue_keyword(user_submission_line)
+                and not interrupt_resume_in_place
+            )
+            if interrupt_resume_in_place and goal_record is not None:
+                if goal_record.status == "cancelled":
+                    goal_record.status = "running"
+                    goal_record.completed_at = None
+                    if checkpoint is not None:
+                        checkpoint.status = "running"
+                        await state_manager.save(checkpoint, include_goal_history=True)
                 logger.info(
-                    "[Goal] continue keyword promoted interrupted goal to cancelled; "
-                    "new goal=%s history=%d",
+                    "[Goal] interrupt resume in place (goal=%s iter=%d signal=%s)",
                     goal_record.goal_id,
-                    len(checkpoint.goal_history),
+                    iteration,
+                    log_preview(user_submission_line, 40),
                 )
 
-            # RFC-225: derive continue_loop_mode from the FINAL checkpoint state, AFTER
-            # branching has settled goal_history. True iff at least one prior goal exists
-            # alongside the active one (i.e., goal_history has 2+ entries). The valid-resume
-            # branch keeps goal_history unchanged, so this also covers resumes where the
-            # in-flight goal is not the first goal of the loop.
-            continue_loop_mode = len(checkpoint.goal_history) >= 2 or (
-                recovery_valid_resume and len(checkpoint.goal_history) >= 2
-            )
-            if force_continue_loop and len(checkpoint.goal_history) >= 2:
-                continue_loop_mode = True
+            # RFC-225: continue_loop when prior goal(s) exist beside the active one.
+            continue_loop_mode = len(checkpoint.goal_history) >= 2
 
             state = LoopState(
                 goal=execution_goal,
@@ -820,6 +866,7 @@ class StrangeLoop:
             from soothe.sloop.goal_text import (
                 apply_clarification_resume_goal_text,
                 resolve_clarification_resume_ce_goal,
+                resolve_interrupt_resume_ce_goal,
                 resolve_planning_goal,
             )
 
@@ -845,6 +892,51 @@ class StrangeLoop:
                         "creating a new CE goal from restored state",
                         state_manager.loop_id,
                     )
+
+            # IG-684: resume interrupted work on the same CE goal + step DAG.
+            if ce_goal is None and (
+                interrupt_resume_in_place or (recovery_valid_resume and resume_interrupted)
+            ):
+                ce_goal = resolve_interrupt_resume_ce_goal(
+                    ce_instance, loop_id=state_manager.loop_id
+                )
+                if ce_goal is not None:
+                    try:
+                        await ce_instance.resume_interrupted_goal(
+                            ce_goal.id, loop_id=state_manager.loop_id
+                        )
+                    except Exception:
+                        logger.warning(
+                            "[Goal] CE resume_interrupted_goal failed for %s; falling back",
+                            getattr(ce_goal, "id", None),
+                            exc_info=True,
+                        )
+                        ce_goal = None
+                    else:
+                        original = apply_clarification_resume_goal_text(state, ce_goal)
+                        _hydrate_previous_plan_from_ce(state, ce_goal)
+                        # Pass2 may have classified the bare keyword ("retry") as
+                        # simple/trivial — upgrade so plan continues remaining work.
+                        if is_interrupt_resume_keyword(user_submission_line):
+                            from soothe.sloop.intention.models import IntakeLabel
+
+                            intent_obj = state.intent
+                            label = (
+                                getattr(intent_obj, "intake_label", None) if intent_obj else None
+                            )
+                            if label in (
+                                IntakeLabel.SIMPLE,
+                                IntakeLabel.TRIVIAL,
+                                IntakeLabel.CHITCHAT,
+                                None,
+                            ):
+                                if intent_obj is not None:
+                                    intent_obj.intake_label = IntakeLabel.COMPLEX
+                        logger.info(
+                            "[Goal] interrupt resume reused CE goal %s: %s",
+                            ce_goal.id,
+                            log_preview(original or "(empty)", 80),
+                        )
 
             if ce_goal is None:
                 ce_goal = await ce_instance.create_goal(

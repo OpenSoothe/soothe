@@ -933,8 +933,9 @@ class StrangeLoopMixin:
                 await _touch_loop_after_interrupt(self._config, strange_loop_id)
                 # RFC-214: best-effort `goal_interrupted` ledger marker for the
                 # cancelled goal's partial work. The daemon cancel path
-                # (``_mark_active_context_goals_cancelled``) normally writes this,
-                # but a hard client disconnect lands here too. Swallowed on failure.
+                # (``_suspend_active_context_goals_for_interrupt``) normally writes
+                # this, but a hard client disconnect lands here too. Swallowed on
+                # failure.
                 await _mark_interrupted_goal_ledger(self._config, strange_loop_id)
             if increment_ai_message_count:
                 await _increment_loop_ai_message_count(self._config, strange_loop_id)

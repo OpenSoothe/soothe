@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from soothe.sloop.utils.continue_keyword import is_continue_keyword
+from soothe.sloop.utils.continue_keyword import is_interrupt_resume_keyword
 
 if TYPE_CHECKING:
     from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
@@ -22,13 +22,14 @@ _LOOP_CONTINUATION_PHRASE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bresume\s+(?:this|the|current)\s+loop\b", re.IGNORECASE),
     re.compile(r"\bproceed\s+(?:with\s+)?(?:this|the|current)\s+loop\b", re.IGNORECASE),
     re.compile(r"\bcontinue\s+this\s+loop\s+to\s+finish\b", re.IGNORECASE),
+    re.compile(r"\bretry\s+(?:this|the|current)\s+(?:goal|loop|task)\b", re.IGNORECASE),
 )
 
 
 def is_loop_continuation_phrase(text: str | None) -> bool:
     """Return True when *text* is an explicit loop-resume phrase.
 
-    Single-word keywords are handled by :func:`is_continue_keyword`.
+    Single-word keywords are handled by :func:`is_interrupt_resume_keyword`.
     """
     normalized = (text or "").strip()
     if not normalized:
@@ -38,7 +39,7 @@ def is_loop_continuation_phrase(text: str | None) -> bool:
 
 def is_loop_control_signal(text: str | None) -> bool:
     """Return True when *text* is a deterministic loop-control signal."""
-    return is_continue_keyword(text) or is_loop_continuation_phrase(text)
+    return is_interrupt_resume_keyword(text) or is_loop_continuation_phrase(text)
 
 
 def _active_goal_record(checkpoint: Any) -> GoalIndexEntry | None:
@@ -55,6 +56,22 @@ def has_active_running_goal(checkpoint: Any | None) -> bool:
         return False
     goal = _active_goal_record(checkpoint)
     return goal is not None and getattr(goal, "status", None) == "running"
+
+
+def has_resumable_interrupted_goal(checkpoint: Any | None) -> bool:
+    """Return True when the checkpoint holds an incomplete goal worth resuming.
+
+    Covers ``status=running`` mid-flight recovery and the post-cancel case where
+    loop metadata was marked ``idle`` while the StrangeLoop goal index entry is
+    still ``running`` (interrupt touch).
+    """
+    if checkpoint is None:
+        return False
+    goal = _active_goal_record(checkpoint)
+    if goal is None:
+        return False
+    status = getattr(goal, "status", None)
+    return status in ("running", "cancelled")
 
 
 def should_bypass_pass1_social_fast_path(
@@ -90,6 +107,7 @@ def chitchat_may_finalize_checkpoint(checkpoint: Any | None) -> bool:
 __all__ = [
     "chitchat_may_finalize_checkpoint",
     "has_active_running_goal",
+    "has_resumable_interrupted_goal",
     "is_loop_continuation_phrase",
     "is_loop_control_signal",
     "should_bypass_pass1_social_fast_path",

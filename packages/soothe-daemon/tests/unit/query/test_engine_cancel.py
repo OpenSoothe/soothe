@@ -230,10 +230,10 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancelled_query_persists_context_goal_cancellation(
+async def test_cancelled_query_suspends_context_goals_for_resume(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Cancelled turns should persist CE goal status updates for /context DAG."""
+    """Cancelled turns should suspend CE goals so interrupt resume can reactivate."""
     broadcasts: list[dict[str, Any]] = []
     runner = _FakeRunner()
     daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
@@ -242,8 +242,8 @@ async def test_cancelled_query_persists_context_goal_cancellation(
     daemon._card_manager = SimpleNamespace(freeze_goal_display=freeze_goal_display)
 
     engine = QueryEngine(daemon)
-    cancel_ce_goals = AsyncMock(return_value=1)
-    monkeypatch.setattr(engine, "_mark_active_context_goals_cancelled", cancel_ce_goals)
+    suspend_ce_goals = AsyncMock(return_value=1)
+    monkeypatch.setattr(engine, "_suspend_active_context_goals_for_interrupt", suspend_ce_goals)
 
     await engine.run_query("cancel me", loop_id="loop-cancel")
     task = daemon._current_query_task
@@ -252,7 +252,7 @@ async def test_cancelled_query_persists_context_goal_cancellation(
     with suppress(asyncio.CancelledError):
         await task
 
-    cancel_ce_goals.assert_awaited_once_with(
+    suspend_ce_goals.assert_awaited_once_with(
         "loop-cancel",
         reason="user_cancelled",
     )

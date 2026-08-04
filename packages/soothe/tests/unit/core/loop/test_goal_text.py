@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from soothe.sloop.goal_text import (
     apply_clarification_resume_goal_text,
     resolve_clarification_resume_ce_goal,
+    resolve_interrupt_resume_ce_goal,
     resolve_planning_goal,
     resolve_user_request,
 )
@@ -91,3 +92,46 @@ def test_apply_clarification_resume_goal_text_overwrites_answer() -> None:
     assert state.goal == original
     assert state.goal_user_submission is None
     assert resolve_user_request(state) == original
+
+
+def test_resolve_interrupt_resume_prefers_active_over_cancelled() -> None:
+    active = SimpleNamespace(
+        id="g-active",
+        status="active",
+        assigned_loop_id="loop-1",
+        description="implement statemachine",
+        updated_at=1,
+    )
+    cancelled = SimpleNamespace(
+        id="g-old",
+        status="cancelled",
+        assigned_loop_id="loop-1",
+        description="old attempt",
+        updated_at=9,
+    )
+    ce = SimpleNamespace(get_all_goals=lambda: [cancelled, active])
+    assert resolve_interrupt_resume_ce_goal(ce, loop_id="loop-1") is active
+
+
+def test_resolve_interrupt_resume_finds_suspended_or_cancelled() -> None:
+    suspended = SimpleNamespace(
+        id="g-susp",
+        status="suspended",
+        assigned_loop_id="loop-1",
+        description="partial work",
+        updated_at=2,
+    )
+    ce = SimpleNamespace(get_all_goals=lambda: [suspended])
+    assert resolve_interrupt_resume_ce_goal(ce, loop_id="loop-1") is suspended
+
+    cancelled = SimpleNamespace(
+        id="g-can",
+        status="cancelled",
+        assigned_loop_id="loop-1",
+        description="legacy cancel",
+        updated_at=3,
+    )
+    ce2 = SimpleNamespace(get_all_goals=lambda: [cancelled])
+    assert resolve_interrupt_resume_ce_goal(ce2, loop_id="loop-1") is cancelled
+    # Clarification path still requires active.
+    assert resolve_clarification_resume_ce_goal(ce2, loop_id="loop-1") is None
