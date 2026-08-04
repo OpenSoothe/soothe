@@ -14,6 +14,16 @@ providers:
       - MiniMax-M3
       - text-embedding-v4
 
+  - name: coding-plan
+    provider_type: openai
+    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
+    api_key: "${DASHSCOPE_CP_API_KEY}"
+    models:
+      - glm-5
+      - kimi-k2.5
+      - MiniMax-M2.5
+      - qwen3.7-plus
+
   - name: agnes
     provider_type: openai
     api_base_url: "https://apihub.agnes-ai.com/v1"
@@ -44,6 +54,13 @@ router_profiles:
       image: "dashscope:qwen3.7-plus"
       ocr: "omlx,PaddleOCR-VL-1.5-4bit"
 
+  - name: coding-plan
+    router:
+      default: "coding-plan:glm-5"
+      fast: "coding-plan:kimi-k2.5"
+      image: "coding-plan:qwen3.7-plus"
+      ocr: "omlx,PaddleOCR-VL-1.5-4bit"
+
   - name: production-minimax
     router:
       default: "dashscope:MiniMax-M3"
@@ -64,7 +81,7 @@ router_profiles:
       image: "omlx:GLM-4.6V-Flash-4bit"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
-active_router_profile: production
+active_router_profile: coding-plan
 
 embedding_profile:
   - model_role: dashscope:text-embedding-v4
