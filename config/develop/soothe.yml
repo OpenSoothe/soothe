@@ -175,7 +175,6 @@ agent:
         flush_interval: 5.0
         close_timeout_seconds: 30
         durable_flush_timeout: 10
-    loop_orchestrator_evidence_validate: true
 
   clarification:
     auto_policy: veritas
