@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -71,6 +72,52 @@ def workspace_deliverable_probe(workspace: str | None) -> str:
 def workspace_has_deliverables(workspace: str | None) -> bool:
     """True when structural deliverable markers exist under workspace."""
     return bool(workspace_deliverable_probe(workspace))
+
+
+def workspace_pytest_probe(workspace: str | None, *, timeout_s: float = 60.0) -> str:
+    """Run ``python -m pytest -q`` when ``pyproject.toml`` + ``tests/`` exist.
+
+    Structural success-criteria check for TASK.md-style deliverables — not
+    content judgment. Returns a one-line result or empty string on skip/error.
+    """
+    if not workspace or not str(workspace).strip():
+        return ""
+    root = Path(workspace).expanduser()
+    if not root.is_dir():
+        return ""
+    if not (root / "pyproject.toml").is_file():
+        return ""
+    tests_dir = root / "tests"
+    if not tests_dir.is_dir():
+        return ""
+    try:
+        proc = subprocess.run(
+            ["python", "-m", "pytest", "-q", "--tb=no"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.debug("pytest probe skipped for %s: %s", root, exc)
+        return ""
+    tail = (proc.stdout or proc.stderr or "").strip().splitlines()
+    summary = tail[-1] if tail else f"exit={proc.returncode}"
+    status = "PASS" if proc.returncode == 0 else "FAIL"
+    return f"pytest -q: {status} ({summary})"
+
+
+def enrich_workspace_evidence(workspace: str | None) -> str:
+    """Combine artifact markers + optional pytest probe for consensus grounding."""
+    parts: list[str] = []
+    probe = workspace_deliverable_probe(workspace)
+    if probe:
+        parts.append(probe)
+    pytest_line = workspace_pytest_probe(workspace)
+    if pytest_line:
+        parts.append(pytest_line)
+    return "\n".join(parts).strip()
 
 
 def extract_path_tokens(*texts: str) -> list[str]:

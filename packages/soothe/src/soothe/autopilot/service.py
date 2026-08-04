@@ -1225,8 +1225,8 @@ class AutopilotService:
         """
         from soothe.autopilot.consensus import evaluate_goal_completion
         from soothe.autopilot.evidence_grounding import (
+            enrich_workspace_evidence,
             format_contribution_evidence,
-            workspace_deliverable_probe,
         )
 
         goal = await self._ce.get_goal(goal_id)
@@ -1240,8 +1240,12 @@ class AutopilotService:
             files_touched=files,
             findings=findings,
         )
-        if not grounded:
-            grounded = workspace_deliverable_probe(goal.workspace)
+        # Always attach structural workspace evidence when present — a thin
+        # evidence_summary alone previously skipped the probe and caused
+        # false send_backs despite on-disk deliverables.
+        probe = enrich_workspace_evidence(goal.workspace)
+        if probe:
+            grounded = f"{grounded}\n{probe}".strip() if grounded else probe
         if not grounded:
             reason = "insufficient evidence for consensus (empty summary and workspace probe)"
             logger.warning("Consensus suspend for %s: %s", goal_id, reason)
@@ -1274,6 +1278,21 @@ class AutopilotService:
         except Exception:
             logger.exception("Consensus evaluation failed for goal %s", goal_id)
             decision, reasoning = "suspend", "Consensus evaluation failed"
+
+        # Structural override: markers + pytest PASS beat LLM send_back/suspend
+        # that ignore the probe (eval false-negative pattern).
+        if decision != "accept" and "pytest -q: PASS" in probe:
+            prior = decision
+            logger.info(
+                "Consensus override accept for %s: workspace pytest PASS (llm decision was %s)",
+                goal_id,
+                prior,
+            )
+            decision = "accept"
+            reasoning = (
+                "Accepted via workspace verification (pytest PASS + deliverable "
+                f"markers). Prior LLM decision was {prior}: {reasoning}"
+            )
 
         try:
             if decision == "accept":

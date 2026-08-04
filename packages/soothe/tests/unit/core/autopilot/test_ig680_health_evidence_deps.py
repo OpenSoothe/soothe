@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -199,6 +199,51 @@ class TestConsensusEmptyEvidence:
 
         await svc._apply_consensus_and_finalize(goal.id, evidence_summary="")
 
+        updated = await ce.get_goal(goal.id)
+        assert updated is not None
+        assert updated.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_thin_summary_still_appends_workspace_probe(self, tmp_path: Path) -> None:
+        """Thin narrative alone must not hide on-disk deliverable markers."""
+        (tmp_path / "SUMMARY.md").write_text("done\n", encoding="utf-8")
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "DESIGN.md").write_text("arch\n", encoding="utf-8")
+        seen: dict[str, str] = {}
+
+        async def _capture(
+            goal_desc: str, agent_response: str, evidence: str, **kwargs: object
+        ) -> tuple[str, str]:
+            seen["evidence"] = evidence
+            seen["response"] = agent_response
+            return "accept", "probe visible"
+
+        bus = InternalEventBus()
+        ce = ContextEngine()
+        model = MagicMock()
+        # evaluate_goal_completion is imported inside the method; patch via consensus_model
+        # by wrapping AutopilotService path with a monkeypatch at call site below.
+        svc = AutopilotService(
+            ce=ce,
+            config=AutopilotConfig(max_loops=1, max_parallel_goals=1),
+            internal_bus=bus,
+            consensus_model=model,
+            runner_factory=IdleFakeFactory(),
+        )
+        goal = await svc.submit_task("verify deliverable", workspace=str(tmp_path))
+        ce.claim_goal(goal.id, loop_id="w1")
+
+        with patch(
+            "soothe.autopilot.consensus.evaluate_goal_completion",
+            side_effect=_capture,
+        ):
+            await svc._apply_consensus_and_finalize(
+                goal.id,
+                evidence_summary="wrote a todo list and ran one command",
+            )
+
+        assert "SUMMARY.md" in seen.get("evidence", "")
+        assert "DESIGN.md" in seen.get("evidence", "")
         updated = await ce.get_goal(goal.id)
         assert updated is not None
         assert updated.status == "completed"
