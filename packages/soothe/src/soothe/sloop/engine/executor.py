@@ -2878,6 +2878,10 @@ class Executor:
             # Planner can still revise plan based on timeout metadata
             return "execution"
 
+        # IG-681 / IG-683: stream stall / tool wall-clock — planner should replan
+        if isinstance(exc, DispatchTimeoutError):
+            return "timeout"
+
         # LangChain dedicated context limit exception
         if isinstance(exc, ContextOverflowError):
             return "fatal"

@@ -92,3 +92,26 @@ async def test_assess_replan_continues_generate() -> None:
     out = await node_plan_assess(ctx, {})
     assert out.get("assess_route") == "continue_generate"
     assert ctx.scratch.plan_result is None
+
+
+@pytest.mark.asyncio
+async def test_assess_keep_rejected_after_failed_step() -> None:
+    """IG-683: last-step failure must not skip_generate / keep the dead plan."""
+    ctx = _make_ctx()
+    ctx.loop_state._step_results_cache = [
+        StepExecutionRecord(
+            step_id="01",
+            success=False,
+            error="CoreAgent stream stalled for 300s without graph chunks",
+            error_type="timeout",
+            duration_ms=300_000,
+            thread_id="t1",
+        )
+    ]
+    out = await node_plan_assess(ctx, {})
+    assert out.get("assess_route") == "continue_generate"
+    assert ctx.scratch.plan_result is None
+    assert ctx.scratch.plan_assessment is not None
+    assert ctx.scratch.plan_assessment.status == "replan"
+    assert "last_step_failed" in (ctx.scratch.plan_assessment.assessment_reasoning or "")
+    ctx.plan_manager.ingest_plan.assert_not_called()

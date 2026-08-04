@@ -25,7 +25,7 @@ KEEP_NEXT_ACTION = "I'll continue with the remaining steps in the current plan."
 
 
 def detect_stuck_loop(state: LoopState) -> str | None:
-    """Detect repeated actions or consecutive step failures (IG-454)."""
+    """Detect repeated actions or consecutive step failures (IG-454 / IG-683)."""
     if len(state.action_history) >= _STUCK_ACTION_REPEAT_THRESHOLD:
         recent_actions = state.get_recent_actions(_STUCK_ACTION_REPEAT_THRESHOLD)
         if len(recent_actions) == _STUCK_ACTION_REPEAT_THRESHOLD:
@@ -39,9 +39,34 @@ def detect_stuck_loop(state: LoopState) -> str | None:
     if len(state.step_results) >= _STUCK_ERROR_STEP_THRESHOLD:
         recent_results = state.step_results[-_STUCK_ERROR_STEP_THRESHOLD:]
         if all(not r.success for r in recent_results):
+            same_id = recent_results[0].step_id
+            if all(r.step_id == same_id for r in recent_results):
+                err = (recent_results[-1].error or "unknown")[:50]
+                return f"Same step {same_id} failed {_STUCK_ERROR_STEP_THRESHOLD} times: {err}"
             previews = [(r.error or "unknown")[:50] for r in recent_results[:2]]
             return f"Consecutive step failures: {', '.join(previews)}"
 
+    return None
+
+
+def assess_keep_block_reason(state: LoopState) -> str | None:
+    """Return why assess/PlanGen must not keep the in-flight plan, else None.
+
+    Structural keep already refuses a failed last wave. Assess keep and the
+    PlanGen keep short-circuit previously ignored that gate, so failed steps
+    (including stream stalls) were retried forever via ``skip_generate`` (IG-683).
+    """
+    if not state.step_results:
+        return None
+    if not state.step_results[-1].success:
+        return "last_step_failed"
+    if state.last_wave_hit_subagent_cap:
+        return "subagent_cap"
+    if state.last_wave_hit_tool_budget:
+        return "tool_budget"
+    stuck = detect_stuck_loop(state)
+    if stuck:
+        return f"stuck:{stuck[:80]}"
     return None
 
 
@@ -133,6 +158,7 @@ def reset_structural_keep_streak(state: LoopState) -> None:
 
 __all__ = [
     "KEEP_NEXT_ACTION",
+    "assess_keep_block_reason",
     "build_keep_plan_result",
     "detect_stuck_loop",
     "note_structural_keep",

@@ -47,3 +47,38 @@ def test_detect_stuck_loop_consecutive_failures() -> None:
     assert reason is not None
     assert reason.startswith("Consecutive step failures:")
     assert "File not found" in reason
+
+
+def test_detect_stuck_loop_same_step_failures() -> None:
+    state = LoopState(goal="g", thread_id="t")
+    state._step_results_cache = [
+        StepExecutionRecord(
+            step_id="MVI-12",
+            success=False,
+            error="CoreAgent stream stalled for 300s without graph chunks",
+            error_type="timeout",
+            duration_ms=1,
+            thread_id="t",
+        ),
+        StepExecutionRecord(
+            step_id="MVI-12",
+            success=False,
+            error="CoreAgent stream stalled for 300s without graph chunks",
+            error_type="timeout",
+            duration_ms=1,
+            thread_id="t",
+        ),
+        StepExecutionRecord(
+            step_id="MVI-12",
+            success=False,
+            error="CoreAgent stream stalled for 300s without graph chunks",
+            error_type="timeout",
+            duration_ms=1,
+            thread_id="t",
+        ),
+    ]
+
+    reason = detect_stuck_loop(state)
+
+    assert reason is not None
+    assert "Same step MVI-12 failed" in reason

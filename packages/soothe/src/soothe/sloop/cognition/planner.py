@@ -39,6 +39,7 @@ from soothe.sloop.cognition.status_assessment_wire import (
     parse_status_assessment_payload,
 )
 from soothe.sloop.cognition.structural_keep import (
+    assess_keep_block_reason,
     build_keep_plan_result,
     detect_stuck_loop,
     remaining_plan_step_count,
@@ -1381,16 +1382,28 @@ class LLMPlanner:
             )
             == "keep"
         ):
-            logger.info(
-                "[PlanGen] Reusing in-flight plan (%d step(s) remain)",
-                remaining_plan_step_count(state),
-            )
-            return build_keep_plan_result(
-                state,
-                status=assessment.status,
-                goal_progress=assessment.goal_progress,
-                require_goal_completion=assessment.require_goal_completion,
-            )
+            keep_block = assess_keep_block_reason(state)
+            if keep_block is not None:
+                # IG-683: defense in depth — do not short-circuit generate after a
+                # failed wave even if assess status is still "continue".
+                logger.warning(
+                    "[PlanGen] Reject keep short-circuit (%s); generating new plan",
+                    keep_block,
+                )
+                assessment.status = "replan"
+                if assessment.goal_progress in ("medium", "high", "complete"):
+                    assessment.goal_progress = "low"
+            else:
+                logger.info(
+                    "[PlanGen] Reusing in-flight plan (%d step(s) remain)",
+                    remaining_plan_step_count(state),
+                )
+                return build_keep_plan_result(
+                    state,
+                    status=assessment.status,
+                    goal_progress=assessment.goal_progress,
+                    require_goal_completion=assessment.require_goal_completion,
+                )
 
         # Build DAG context for progressive planning (IG-400)
         dag_context = None

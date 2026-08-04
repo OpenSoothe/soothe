@@ -80,3 +80,17 @@ def test_executor_timeout_not_misclassified_as_rate_limit() -> None:
     assert _is_rate_limit_error(msg) is False, (
         "Timeout should not be classified as rate limit error"
     )
+
+
+def test_executor_dispatch_timeout_classified_as_timeout() -> None:
+    """IG-683: DispatchTimeoutError maps to timeout for planner evidence."""
+    from soothe.sloop.engine.graph_interrupt import DispatchTimeoutError
+
+    exc = DispatchTimeoutError(300.0, step_id="LIS-04", reason="idle")
+    core_agent = MagicMock(spec=CoreAgent)
+    executor = Executor(core_agent=core_agent, max_parallel_steps=16)
+
+    assert executor._classify_error_severity(exc) == "timeout"
+    msg = executor._extract_error_message(exc, "fallback")
+    assert "stalled" in msg.lower()
+    assert "300" in msg

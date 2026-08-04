@@ -19,6 +19,7 @@ from soothe.sloop.cognition.plan_step_safety import (
     terminal_assess_may_complete,
 )
 from soothe.sloop.cognition.structural_keep import (
+    assess_keep_block_reason,
     build_keep_plan_result,
     remaining_plan_step_count,
 )
@@ -497,6 +498,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         return terminal_route
 
     # IG-671: reuse in-flight plan without entering generate_plan.
+    # IG-683: refuse keep when the last wave failed (or stuck) — force replan.
     if (
         derive_plan_action(
             assessment_status=assessment.status,
@@ -504,6 +506,21 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         )
         == "keep"
     ):
+        keep_block = assess_keep_block_reason(state)
+        if keep_block is not None:
+            logger.warning(
+                "[Plan] Reject assess keep: %s → continue_generate (force replan)",
+                keep_block,
+            )
+            assessment.status = "replan"
+            if assessment.goal_progress in ("medium", "high", "complete"):
+                assessment.goal_progress = "low"
+            prior = (assessment.assessment_reasoning or "").strip()
+            forced = f"Forced replan: {keep_block}"
+            assessment.assessment_reasoning = f"{prior} ({forced})" if prior else forced
+            ctx.scratch.plan_assessment = assessment
+            return {"assess_route": "continue_generate"}
+
         plan_result = build_keep_plan_result(
             state,
             status=assessment.status,

@@ -1,10 +1,12 @@
-"""Tests for structural plan keep gates (IG-671)."""
+"""Tests for structural plan keep gates (IG-671 / IG-683)."""
 
 from __future__ import annotations
 
 from soothe.sloop.cognition.structural_keep import (
     KEEP_NEXT_ACTION,
+    assess_keep_block_reason,
     build_keep_plan_result,
+    detect_stuck_loop,
     note_structural_keep,
     remaining_plan_step_count,
     reset_structural_keep_streak,
@@ -77,3 +79,32 @@ def test_note_and_reset_streak() -> None:
     assert note_structural_keep(state) == 2
     reset_structural_keep_streak(state)
     assert state.structural_keep_streak == 0
+
+
+def test_assess_keep_block_reason_last_step_failed() -> None:
+    state = _state_with_remaining(success=False)
+    assert assess_keep_block_reason(state) == "last_step_failed"
+
+
+def test_assess_keep_block_reason_allows_healthy() -> None:
+    state = _state_with_remaining(success=True)
+    assert assess_keep_block_reason(state) is None
+
+
+def test_detect_stuck_same_step_failures() -> None:
+    state = LoopState(goal="g", thread_id="t")
+    for _ in range(3):
+        state.add_step_result(
+            StepExecutionRecord(
+                step_id="LIS-04",
+                success=False,
+                error="CoreAgent stream stalled for 300s without graph chunks",
+                error_type="timeout",
+                duration_ms=300_000,
+                thread_id="t",
+            )
+        )
+    reason = detect_stuck_loop(state)
+    assert reason is not None
+    assert "Same step LIS-04 failed" in reason
+    assert assess_keep_block_reason(state) == "last_step_failed"
