@@ -2966,6 +2966,7 @@ async def execute_task_textual(
     turn_stats: SessionStats | None = None,
     skip_daemon_send_turn: bool = False,
     clarification_mode: str | None = None,
+    sticky_preferred_subagent: str | None = None,
     is_shutting_down: Callable[[], bool] | None = None,
 ) -> SessionStats:
     """Execute a task with output directed to Textual UI.
@@ -2998,6 +2999,9 @@ async def execute_task_textual(
         skip_daemon_send_turn: When ``True``, skip ``send_turn`` and only consume
             chunks (prompt already queued, e.g. after ``invoke_skill`` or a
             running loop).
+        clarification_mode: Wire clarification relay mode (``auto`` / ``manual``).
+        sticky_preferred_subagent: Optional preferred_subagent when the message
+            has no slash route (composer Plan mode).
 
     Returns:
         Stats accumulated over this turn (request count, token counts,
@@ -3138,6 +3142,8 @@ async def execute_task_textual(
             chunk_source = daemon_session.iter_turn_chunks()
         else:
             subagent_name, routed_text = parse_subagent_from_input(final_input)
+            if subagent_name is None and sticky_preferred_subagent:
+                subagent_name = sticky_preferred_subagent
             ctx_model = context.get("model") if context else None
             raw_mp = context.get("model_params") if context else None
             mp = raw_mp if isinstance(raw_mp, dict) else None

@@ -134,8 +134,8 @@ class _StartupMixin:
                 PlanQuickViewOverlay,
             )
 
-        # Seed the badge from the app-level clarification mode (CLI flag, default Auto).
-        self._status_bar.set_clarification_mode(self._clarification_mode)
+        # Seed the badge from the app-level composer mode (CLI flag, default Auto).
+        self._status_bar.set_clarification_mode(self._composer_mode)
 
         # Seed the status footer with the first rotating tip and start rotation.
         self.set_default_session_tip(self._tip_rotator.next_tip())
@@ -375,10 +375,13 @@ class _StartupMixin:
             )
             return
         try:
+            from soothe_cli.tui.composer_mode import resolve_composer_wire_fields
+
+            wire_clar, _ = resolve_composer_wire_fields(getattr(self, "_composer_mode", "auto"))
             resp = await self._daemon_session.invoke_skill(
                 skill_name,
                 args,
-                clarification_mode=getattr(self, "_clarification_mode", None),
+                clarification_mode=wire_clar,
             )
         except RuntimeError as exc:
             await self._mount_message(UserMessage(command))

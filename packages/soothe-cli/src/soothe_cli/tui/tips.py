@@ -26,6 +26,7 @@ SESSION_TIPS: list[str] = [
     "Use /skill:skill-creator to build reusable agent skills",
     "Use /auto-update to toggle automatic CLI updates",
     "Press ctrl+t to peek at the live plan while the agent is working",
+    "Press shift+tab to switch into Plan mode (or use /plan)",
     "Use /plan to draft a goal without executing it right away",
 ]
 

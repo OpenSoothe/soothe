@@ -18,7 +18,7 @@ def _startup_app(echo: dict[str, Any]) -> Any:  # noqa: ANN401  # Test stub app
     app._daemon_session = SimpleNamespace(invoke_skill=AsyncMock(return_value={"echo": echo}))
     app._agent_running = False
     app._shell_running = False
-    app._clarification_mode = None
+    app._composer_mode = "auto"
     app._mount_message = AsyncMock()
     app._send_to_agent = AsyncMock()
     return app
@@ -83,7 +83,7 @@ def _execution_app() -> Any:  # noqa: ANN401  # Test stub app
     app._model_override = None
     app._model_params_override = None
     app._router_profile_override = None
-    app._clarification_mode = None
+    app._composer_mode = "auto"
     app._exit = False
     app._inflight_turn_stats = None
     app._inflight_turn_start = None
@@ -131,3 +131,41 @@ async def test_connection_drop_without_content_is_not_retried(monkeypatch: Any) 
     assert calls == [True]
     mounted = app._mount_message.await_args_list[0].args[0]
     assert "Daemon connection error" in mounted._content
+
+
+@pytest.mark.asyncio
+async def test_plan_mode_passes_sticky_planner(monkeypatch: Any) -> None:  # noqa: ANN401
+    """Composer Plan mode forwards sticky preferred_subagent=planner."""
+    app = _execution_app()
+    app._composer_mode = "plan"
+    captured: dict[str, Any] = {}
+
+    async def fake_execute(**kwargs: Any) -> SessionStats:
+        captured.update(kwargs)
+        return SessionStats()
+
+    monkeypatch.setattr("soothe_cli.tui.textual_adapter.execute_task_textual", fake_execute)
+
+    await app._run_agent_task("draft a migration", skip_daemon_send_turn=False)
+
+    assert captured["clarification_mode"] == "auto"
+    assert captured["sticky_preferred_subagent"] == "planner"
+
+
+@pytest.mark.asyncio
+async def test_manual_mode_passes_no_sticky_subagent(monkeypatch: Any) -> None:  # noqa: ANN401
+    """Manual mode only sets clarification_mode, not sticky planner."""
+    app = _execution_app()
+    app._composer_mode = "manual"
+    captured: dict[str, Any] = {}
+
+    async def fake_execute(**kwargs: Any) -> SessionStats:
+        captured.update(kwargs)
+        return SessionStats()
+
+    monkeypatch.setattr("soothe_cli.tui.textual_adapter.execute_task_textual", fake_execute)
+
+    await app._run_agent_task("hello", skip_daemon_send_turn=False)
+
+    assert captured["clarification_mode"] == "manual"
+    assert captured["sticky_preferred_subagent"] is None

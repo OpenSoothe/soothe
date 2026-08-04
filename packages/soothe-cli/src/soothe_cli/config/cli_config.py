@@ -43,9 +43,10 @@ class CLIConfig:
     output_streaming_mode: str | None = None
     """Override daemon streaming mode: 'streaming' or 'batch'."""
 
-    # RFC-622: clarification relay mode
+    # Composer mode (Auto / Manual / Plan). Auto/Manual map to RFC-622
+    # clarification_mode; Plan is sticky preferred_subagent=planner (IG-682).
     clarification_mode: str | None = None
-    """'manual' (relay to human) or 'auto' (veritas auto-answer). None = auto-detect from TTY."""
+    """'manual', 'auto', or 'plan'. None = auto-detect from TTY (auto)."""
 
     # Resume behavior: when the launcher finds an active loop on startup,
     # auto-resume it (True) or prompt the user (False, default).

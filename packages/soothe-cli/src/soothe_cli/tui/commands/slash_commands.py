@@ -161,7 +161,7 @@ KEYBOARD_SHORTCUTS: dict[str, str] = {
     "Ctrl+V": "Paste image from clipboard as [image N] attachment",
     "Ctrl+T": "Toggle plan panel above thinking row",
     "Ctrl+O": "Toggle expand/collapse of the most recent skill or tool card",
-    "Shift+Tab": "Toggle clarification relay mode (Auto/Manual)",
+    "Shift+Tab": "Cycle composer mode (Auto → Manual → Plan)",
 }
 
 

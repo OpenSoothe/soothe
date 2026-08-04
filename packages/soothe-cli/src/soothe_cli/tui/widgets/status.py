@@ -14,6 +14,13 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
+from soothe_cli.tui.composer_mode import (
+    COMPOSER_MODE_AUTO,
+    COMPOSER_MODE_MANUAL,
+    COMPOSER_MODE_PLAN,
+    VALID_COMPOSER_MODES,
+    normalize_composer_mode,
+)
 from soothe_cli.tui.config import get_glyphs
 
 logger = logging.getLogger(__name__)
@@ -69,17 +76,20 @@ class ModelLabel(Widget):
         return Content("\u2026")
 
 
-CLARIFICATION_MODE_AUTO = "auto"
-CLARIFICATION_MODE_MANUAL = "manual"
-_VALID_CLARIFICATION_MODES = frozenset({CLARIFICATION_MODE_AUTO, CLARIFICATION_MODE_MANUAL})
+# Backward-compatible aliases (tests and call sites still use these names).
+CLARIFICATION_MODE_AUTO = COMPOSER_MODE_AUTO
+CLARIFICATION_MODE_MANUAL = COMPOSER_MODE_MANUAL
+CLARIFICATION_MODE_PLAN = COMPOSER_MODE_PLAN
+_VALID_CLARIFICATION_MODES = VALID_COMPOSER_MODES
 
 
 class ClarificationModeBadge(Static):
-    """Visual block showing the active clarification relay mode (RFC-622).
+    """Visual block showing the active composer mode (Auto / Manual / Plan).
 
     ``Auto`` renders as muted/dim text — matching the welcome banner's
     ``Loop:`` line — to stay visually quiet in the default state. ``Manual``
-    keeps a bold orange pill so the override stands out.
+    keeps a bold orange pill so the override stands out. ``Plan`` uses a teal
+    pill for sticky planner routing (IG-682).
     """
 
     DEFAULT_CSS = """
@@ -96,13 +106,19 @@ class ClarificationModeBadge(Static):
         color: black;
         text-style: bold;
     }
+
+    ClarificationModeBadge.plan {
+        background: #1abc9c;
+        color: black;
+        text-style: bold;
+    }
     """
 
     mode: reactive[str] = reactive(CLARIFICATION_MODE_AUTO, init=False)
 
     def __init__(self, *args: Any, mode: str = CLARIFICATION_MODE_AUTO, **kwargs: Any) -> None:
         """Initialize with the badge text already rendered so it shows on first paint."""
-        initial = mode if mode in _VALID_CLARIFICATION_MODES else CLARIFICATION_MODE_AUTO
+        initial = normalize_composer_mode(mode)
         super().__init__(initial.capitalize(), *args, **kwargs)
         self.add_class(initial)
         # Defer reactive assignment until mount so watchers run normally afterwards.
@@ -118,8 +134,8 @@ class ClarificationModeBadge(Static):
         self._refresh(new_value)
 
     def _refresh(self, mode: str) -> None:
-        normalized = mode if mode in _VALID_CLARIFICATION_MODES else CLARIFICATION_MODE_AUTO
-        self.remove_class("auto", "manual")
+        normalized = normalize_composer_mode(mode)
+        self.remove_class("auto", "manual", "plan")
         self.add_class(normalized)
         self.update(normalized.capitalize())
 
@@ -482,9 +498,8 @@ class StatusBar(Horizontal):
             badge = self.query_one("#clarification-mode-badge", ClarificationModeBadge)
         except NoMatches:
             return
-        badge.mode = mode if mode in _VALID_CLARIFICATION_MODES else CLARIFICATION_MODE_AUTO
+        badge.mode = normalize_composer_mode(mode)
 
     def set_clarification_mode(self, mode: str) -> None:
-        """Set the active clarification relay mode (``'auto'`` or ``'manual'``)."""
-        normalized = mode if mode in _VALID_CLARIFICATION_MODES else CLARIFICATION_MODE_AUTO
-        self.clarification_mode = normalized
+        """Set the active composer mode (``auto``, ``manual``, or ``plan``)."""
+        self.clarification_mode = normalize_composer_mode(mode)

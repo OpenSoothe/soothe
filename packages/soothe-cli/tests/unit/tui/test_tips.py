@@ -20,9 +20,10 @@ def test_session_tips_contains_plan_generation_tips() -> None:
 
 
 def test_plan_tips_reference_action_triggers() -> None:
-    """Plan tips should surface actionable bindings (ctrl+t or /plan)."""
+    """Plan tips should surface actionable bindings (ctrl+t, shift+tab, or /plan)."""
     plan_tips = [t for t in SESSION_TIPS if "plan" in t.lower()]
     assert any("ctrl+t" in t.lower() for t in plan_tips), "expected a ctrl+t plan-quick-view tip"
+    assert any("shift+tab" in t.lower() for t in plan_tips), "expected a shift+tab Plan mode tip"
     assert any("/plan" in t.lower() for t in plan_tips), "expected a /plan command tip"
 
 

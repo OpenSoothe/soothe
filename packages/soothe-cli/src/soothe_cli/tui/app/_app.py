@@ -37,6 +37,7 @@ from soothe_cli.tui.app._module_init import (
 )
 from soothe_cli.tui.app._startup import _StartupMixin
 from soothe_cli.tui.app._ui import _UIMixin
+from soothe_cli.tui.composer_mode import normalize_composer_mode
 from soothe_cli.tui.tips import TipRotator
 from soothe_cli.tui.widgets.chat_input import ChatInput
 from soothe_cli.tui.widgets.loading import LoadingWidget
@@ -218,9 +219,11 @@ class SootheApp(
 
         self._router_profile_override: str | None = None
 
-        # RFC-622: clarification relay mode. Seeded from --mode flag (CLIConfig);
-        # default to Auto so loops keep moving when the user hasn't opted in.
-        self._clarification_mode: str = getattr(daemon_config, "clarification_mode", None) or "auto"
+        # Composer mode (Auto / Manual / Plan). Seeded from --mode (CLIConfig);
+        # default Auto so loops keep moving when the user hasn't opted in.
+        self._composer_mode: str = normalize_composer_mode(
+            getattr(daemon_config, "clarification_mode", None)
+        )
 
         self._mcp_tool_count = sum(len(s.tools) for s in (mcp_server_info or []))
 

@@ -8,6 +8,7 @@ from textual.app import App, ComposeResult
 from soothe_cli.tui.widgets.status import (
     CLARIFICATION_MODE_AUTO,
     CLARIFICATION_MODE_MANUAL,
+    CLARIFICATION_MODE_PLAN,
     ClarificationModeBadge,
     ModelLabel,
     StatusBar,
@@ -46,7 +47,21 @@ async def test_badge_flips_to_manual_when_mode_assigned() -> None:
         await pilot.pause()
         assert badge.has_class("manual")
         assert not badge.has_class("auto")
+        assert not badge.has_class("plan")
         assert _read_static_content(badge) == "Manual"
+
+
+@pytest.mark.asyncio
+async def test_badge_flips_to_plan_when_mode_assigned() -> None:
+    """Setting ``mode`` to plan applies the teal Plan pill."""
+    async with _BadgeOnlyApp().run_test() as pilot:
+        badge = pilot.app.query_one("#badge", ClarificationModeBadge)
+        badge.mode = CLARIFICATION_MODE_PLAN
+        await pilot.pause()
+        assert badge.has_class("plan")
+        assert not badge.has_class("auto")
+        assert not badge.has_class("manual")
+        assert _read_static_content(badge) == "Plan"
 
 
 @pytest.mark.asyncio
@@ -72,6 +87,13 @@ def test_badge_constructor_accepts_initial_manual_mode() -> None:
     badge = ClarificationModeBadge(id="pre-mount-manual", mode="manual")
     assert _read_static_content(badge) == "Manual"
     assert badge.has_class("manual")
+
+
+def test_badge_constructor_accepts_initial_plan_mode() -> None:
+    """``ClarificationModeBadge(mode="plan")`` starts on the plan variant."""
+    badge = ClarificationModeBadge(id="pre-mount-plan", mode="plan")
+    assert _read_static_content(badge) == "Plan"
+    assert badge.has_class("plan")
 
 
 def test_model_label_truncates_from_the_right_when_too_narrow() -> None:

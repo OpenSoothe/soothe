@@ -68,7 +68,7 @@ def build_keyboard_shortcut_rows() -> list[tuple[str, str]]:
             "Toggle plan panel (auto-shown when a plan is active; --no-plan-panel disables)",
         ),
         ("Ctrl+O", "Toggle expand/collapse of the most recent skill or tool card"),
-        ("Shift+Tab", "Toggle clarification relay mode (Auto/Manual)"),
+        ("Shift+Tab", "Cycle composer mode (Auto → Manual → Plan)"),
         ("@filename", "Autocomplete files and inject content"),
         ("/command", "Slash commands (e.g. /help, /clear, /quit)"),
         ("!command", "Run shell commands directly"),

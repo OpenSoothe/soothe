@@ -33,7 +33,8 @@ def test_build_keyboard_shortcut_rows_cover_core_bindings() -> None:
         rows["Ctrl+T"]
         == "Toggle plan panel (auto-shown when a plan is active; --no-plan-panel disables)"
     )
-    assert rows["Shift+Tab"] == "Toggle clarification relay mode (Auto/Manual)"
+    assert rows["Shift+Tab"] == "Cycle composer mode (Auto → Manual → Plan)"
+    assert "Ctrl+Tab" not in rows
 
 
 def test_build_help_content_includes_docs_link() -> None:

@@ -951,32 +951,31 @@ class _MessagesMixin:
         App.exit(self, result=result, return_code=return_code, message=message)
 
     def action_shift_tab(self) -> None:
-        """Shift+Tab: navigate loop selector when active, otherwise flip relay mode.
+        """Shift+Tab: navigate loop selector when active, otherwise cycle mode.
 
         - In the LoopSelectorScreen, defer to its filter navigation.
-        - On the main screen, toggle the clarification relay mode
-          (Auto ↔ Manual) so users can switch between the veritas
-          auto-answerer and human-in-the-loop relay at any point (RFC-622).
+        - On the main screen, cycle composer mode Auto → Manual → Plan.
         """
         from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 
         if isinstance(self.screen, LoopSelectorScreen):
             self.screen.action_focus_previous_filter()
             return
-        self.toggle_clarification_mode()
+        self.cycle_composer_mode()
 
-    def toggle_clarification_mode(self) -> None:
-        """Flip clarification mode between Auto and Manual and refresh the badge.
+    def cycle_composer_mode(self) -> None:
+        """Advance composer mode and refresh the status-bar badge.
 
-        The new mode is held on the app (``self._clarification_mode``) and
-        attached to every subsequent ``send_turn`` via the
-        ``clarification_mode`` field of the daemon's ``loop_input`` payload
-        (RFC-622). The status-bar badge updates immediately; no toast is
-        emitted because the badge itself is the visual feedback.
+        The mode is held on the app (``self._composer_mode``). Auto/Manual map
+        to the ``clarification_mode`` wire field; Plan sets sticky
+        ``preferred_subagent=planner`` on subsequent turns. The badge updates
+        immediately; no toast is emitted because the badge is the feedback.
         """
-        current = getattr(self, "_clarification_mode", "auto")
-        new_mode = "manual" if current == "auto" else "auto"
-        self._clarification_mode = new_mode
+        from soothe_cli.tui.composer_mode import next_composer_mode
+
+        current = getattr(self, "_composer_mode", "auto")
+        new_mode = next_composer_mode(current)
+        self._composer_mode = new_mode
         if self._status_bar is not None:
             self._status_bar.set_clarification_mode(new_mode)
 

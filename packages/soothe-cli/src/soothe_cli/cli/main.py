@@ -141,9 +141,10 @@ def main(
         typer.Option(
             "--mode",
             help=(
-                "Clarification mode: 'manual' (relay AI questions to you) or "
-                "'auto' (veritas auto-answers). Default: 'manual' when stdin is "
-                "a TTY, 'auto' otherwise."
+                "Composer mode: 'manual' (relay AI questions to you), "
+                "'auto' (veritas auto-answers), or 'plan' (sticky planner "
+                "routing without typing /plan). Default: 'manual' when stdin "
+                "is a TTY, 'auto' otherwise."
             ),
         ),
     ] = None,
@@ -201,8 +202,11 @@ def main(
         raise typer.Exit
 
     home_path = Path(soothe_home).expanduser() if soothe_home else Path(SOOTHE_HOME)
-    if mode is not None and mode not in ("manual", "auto"):
-        typer.echo(f"Invalid --mode {mode!r}; expected 'manual' or 'auto'.", err=True)
+    if mode is not None and mode not in ("manual", "auto", "plan"):
+        typer.echo(
+            f"Invalid --mode {mode!r}; expected 'manual', 'auto', or 'plan'.",
+            err=True,
+        )
         raise typer.Exit(code=2)
     if markdown_theme is not None and markdown_theme not in REGISTRY:
         typer.echo(

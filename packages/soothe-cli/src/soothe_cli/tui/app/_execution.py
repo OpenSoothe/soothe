@@ -868,6 +868,7 @@ class _ExecutionMixin:
             return
         # Import from submodule so package ``__init__`` does not eagerly load
         # unrelated symbols; ``execute_task_textual`` graph is prewarmed on startup.
+        from soothe_cli.tui.composer_mode import resolve_composer_wire_fields
         from soothe_cli.tui.textual_adapter import execute_task_textual
 
         # Create the stats object up-front and store on the app so
@@ -876,6 +877,9 @@ class _ExecutionMixin:
         turn_stats = SessionStats()
         self._inflight_turn_stats = turn_stats
         self._inflight_turn_start = time.monotonic()
+        wire_clar, sticky_subagent = resolve_composer_wire_fields(
+            getattr(self, "_composer_mode", "auto")
+        )
         try:
             for attempt in (1, 2):
                 try:
@@ -895,7 +899,8 @@ class _ExecutionMixin:
                         ),
                         turn_stats=turn_stats,
                         skip_daemon_send_turn=skip_daemon_send_turn,
-                        clarification_mode=getattr(self, "_clarification_mode", None),
+                        clarification_mode=wire_clar,
+                        sticky_preferred_subagent=sticky_subagent,
                         is_shutting_down=lambda: getattr(self, "_exit", False),
                     )
                     break
