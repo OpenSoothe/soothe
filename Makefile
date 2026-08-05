@@ -320,7 +320,7 @@ test-unit: sync
 	@echo "Running unit tests..."
 	@set -e; for pkg in $(PACKAGES); do \
 		if test -d "packages/$$pkg/tests/unit"; then \
-			echo "  $$pkg" && (cd packages/$$pkg && uv run pytest tests/unit/ -v --tb=short); \
+			echo "  $$pkg" && uv run pytest packages/$$pkg/tests/unit/ -v --tb=short; \
 		fi; \
 	done
 
