@@ -5,6 +5,38 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.16] - 2026-08-05
+
+### Added
+- `soothe autopilot top` interactive linux-`top` keymaps (`a` all/active goals,
+  `s`/`l` steps/loops, `d` density, `+/-` delay, scroll, help) plus
+  `include_terminal` on `autopilot_top` (IG-688).
+- Autopilot live top dashboard, JobLoopIndex assignment loop ids, LoopRails
+  wiring, greenfield-system rail, and job-scoped artifacts under `data/jobs/`
+  with full-screen StepDAG nesting (IG-677 / IG-679 / IG-686 / IG-687).
+- Consensus evidence grounding and DAG health guardrails for autopilot
+  (IG-685 / IG-680).
+- StrangeLoop: tool-aware dispatch timeout, resume from successful checkpoint,
+  assess keep/reject for failed steps (IG-681 / IG-683 / IG-684).
+- TUI sticky Plan composer mode (Shift+Tab) and equivalent `-h` / `--help` /
+  `help` everywhere (IG-682).
+
+### Fixed
+- Autopilot `dag_snapshot` includes `parent_id` children for correct top trees.
+- Autopilot top/status collapses multiline descriptions to single-line previews.
+- CLI help tests tolerate ANSI styling; pytest runs from workspace root for
+  editable installs.
+- Build: remove duplicate force-include that broke wheel packaging.
+- TUI: dock bottom chrome so the thinking row is not clipped; show intake
+  complexity on the plan panel goal header.
+
+### Changed
+- Streamline autopilot CLI submit/run; remove manual dream/wake commands.
+- Pin language clients to python 1.0.10 / typescript 0.5.7 / go 0.4.13;
+  require `soothe-nano>=1.1.2`.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.15...v0.9.16
+
 ## [v0.9.15] - 2026-08-03
 
 ### Changed
