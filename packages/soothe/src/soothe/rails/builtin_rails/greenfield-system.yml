@@ -87,5 +87,9 @@ flow:
     then: retry_branch
 
   - event: dag_idle
+    when: needs_feedback
+    then: spawn_feedback_cycle
+
+  - event: dag_idle
     when: job_complete
     then: complete_job

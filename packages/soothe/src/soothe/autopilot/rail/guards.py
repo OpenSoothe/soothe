@@ -237,13 +237,17 @@ def _structural_short_circuit(
         )
 
     if name in {"needs_feedback"}:
-        # Find→optimize→verify cycle after wave QA / prior feedback verify.
+        # Find→optimize→verify after wave QA / verify, or when DAG is idle
+        # with acceptance still unmet (dag_idle recovery path).
         feedback_inflight = bool(structural.get("feedback_inflight"))
         feedback_round = int(structural.get("feedback_round") or 0)
         max_feedback_rounds = int(structural.get("max_feedback_rounds") or 8)
-        trigger_ok = event in {"goal_completed", "goal_failed"} and (
-            "qa" in trigger_tags or "verify" in trigger_tags
-        )
+        if event == "dag_idle":
+            trigger_ok = True
+        elif event in {"goal_completed", "goal_failed"}:
+            trigger_ok = "qa" in trigger_tags or "verify" in trigger_tags
+        else:
+            trigger_ok = False
         ok = (
             has_architecture
             and trigger_ok
@@ -257,13 +261,15 @@ def _structural_short_circuit(
             confidence=1.0,
             reasoning=(
                 f"structural short-circuit: needs_feedback tags={trigger_tags} "
-                f"inflight={feedback_inflight} round={feedback_round}/{max_feedback_rounds}"
+                f"event={event} inflight={feedback_inflight} "
+                f"round={feedback_round}/{max_feedback_rounds}"
             ),
         )
 
     if name in {"job_complete"}:
         reviews = list(structural.get("review_goal_ids") or [])
         qas = list(structural.get("qa_goal_ids") or [])
+        acceptance_met = bool(structural.get("acceptance_met", False))
         # Require at least one qa terminal when qa goals exist; else pending==0.
         ok = pending == 0 and (not qas or bool(structural.get("all_qa_terminal", True)))
         if reviews and pending == 0 and not qas:
@@ -271,21 +277,18 @@ def _structural_short_circuit(
         # greenfield: if waves remain, not complete
         if has_architecture and wave_below_max and qas:
             ok = False
-        # greenfield feedback: do not complete while acceptance unmet and
-        # another feedback round is still allowed.
-        if has_architecture and not bool(structural.get("acceptance_met", False)):
-            feedback_round = int(structural.get("feedback_round") or 0)
-            max_feedback_rounds = int(structural.get("max_feedback_rounds") or 8)
-            if feedback_round < max_feedback_rounds and (
-                qas or list(structural.get("feedback_goal_ids") or [])
-            ):
-                ok = False
+        # Host maturity latch required for greenfield (RFC-230). Do not complete
+        # on idle DAG alone when acceptance is unmet — even if rail-tagged QA
+        # is missing (verifier-spawned review/QA left qa_ids empty).
+        if has_architecture and not acceptance_met:
+            ok = False
         return GuardResult(
             matched=ok,
             confidence=1.0,
             reasoning=(
                 f"structural short-circuit: pending_or_active_count={pending} "
-                f"qa_ids={qas} reviews={reviews} wave_below_max={wave_below_max}"
+                f"qa_ids={qas} reviews={reviews} wave_below_max={wave_below_max} "
+                f"acceptance_met={acceptance_met}"
             ),
         )
 

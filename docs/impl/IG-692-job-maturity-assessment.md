@@ -51,7 +51,9 @@ verifier spawned review/QA outside the rail; `acceptance_met` never latched.
 ### P2 — Levels + feedback loop
 
 - [ ] Derive maturity levels per RFC-230 §6.2
-- [ ] Ensure `needs_feedback` / `job_complete` short-circuits use latch
+- [x] Ensure `needs_feedback` / `job_complete` short-circuits use latch
+      (`dag_idle` → feedback when unmet; never `complete_job` without latch
+      on greenfield — fixed after premature complete of `20999e64`)
 - [ ] Exhausted feedback → `blocked` snapshot + operator-visible status
 - [ ] CLI/top polish for maturity (optional; may share IG-686/679 surface)
 

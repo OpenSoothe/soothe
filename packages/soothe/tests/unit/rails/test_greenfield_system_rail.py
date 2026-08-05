@@ -303,6 +303,45 @@ def test_needs_feedback_short_circuit() -> None:
     assert blocked is not None and blocked.matched is False
 
 
+def test_dag_idle_needs_feedback_without_qa_tags() -> None:
+    """Idle DAG + unmet acceptance must spawn feedback even with empty qa_ids."""
+    structural = {
+        "architecture_goal_ids": ["a1"],
+        "qa_goal_ids": [],
+        "review_goal_ids": [],
+        "feedback_goal_ids": [],
+        "feedback_inflight": False,
+        "feedback_round": 0,
+        "max_feedback_rounds": 8,
+        "acceptance_met": False,
+        "pending_or_active_count": 0,
+        "wave_below_max": True,
+    }
+    feedback = _structural_short_circuit(
+        condition_name="needs_feedback",
+        event="dag_idle",
+        trigger_tags=[],
+        structural=structural,
+    )
+    assert feedback is not None and feedback.matched is True
+
+    complete = _structural_short_circuit(
+        condition_name="job_complete",
+        event="dag_idle",
+        trigger_tags=[],
+        structural=structural,
+    )
+    assert complete is not None and complete.matched is False
+
+    latched = _structural_short_circuit(
+        condition_name="job_complete",
+        event="dag_idle",
+        trigger_tags=[],
+        structural={**structural, "acceptance_met": True},
+    )
+    assert latched is not None and latched.matched is True
+
+
 @pytest.mark.asyncio
 async def test_rail_job_root_dispatch_skipped() -> None:
     from soothe.autopilot import AutopilotService
