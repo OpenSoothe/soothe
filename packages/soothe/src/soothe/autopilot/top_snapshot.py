@@ -59,6 +59,7 @@ def build_top_job_entry(
     workspace: str | None,
     dag: dict[str, Any],
     loops: list[dict[str, Any]],
+    created_at: str | None = None,
 ) -> dict[str, Any] | None:
     """Assemble one job row for ``autopilot_top``, or ``None`` if fully terminal.
 
@@ -70,6 +71,7 @@ def build_top_job_entry(
         workspace: Optional workspace path.
         dag: Full DAG snapshot for the job.
         loops: JobLoopIndex entries (any status).
+        created_at: Optional root ``created_at`` ISO timestamp.
 
     Returns:
         Job dict with filtered ``dag`` and active ``loops``, or ``None``.
@@ -87,4 +89,6 @@ def build_top_job_entry(
     }
     if workspace:
         entry["workspace"] = workspace
+    if created_at:
+        entry["created_at"] = created_at
     return entry

@@ -140,8 +140,10 @@ Early draft text keyed the SQLite trace at
 | Slot reuse ≠ loop_id reuse (IG-677) | Slots recycle; assignment `loop_id`s do not — but that still does not make `loop_id` a job SoT. |
 | `RailSnapshot` is job-scoped | Snapshot's first field is `job_id`; persistence must match. |
 
-The draft now uses `data/loops/{job_id}/rail_trace.jsonl` (job artifact dir,
-distinct from `autopilot__{job_id}__{uuid}` assignment homes). Keep that rule.
+The draft previously used `data/loops/{job_id}/rail_trace.jsonl` as a job
+artifact dir (distinct from `autopilot__{job_id}__{uuid}` assignment homes).
+**IG-686** moves this to `data/jobs/{job_id}/rail_trace.jsonl` so job soft-state
+does not share the `loops/` tree with StrangeLoop assignment dirs.
 
 ---
 

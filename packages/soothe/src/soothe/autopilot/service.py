@@ -181,12 +181,14 @@ class AutopilotService:
             guards = None
             if self._consensus_model is not None:
                 guards = LLMGuardEvaluator(model=self._consensus_model)
-            trace_root = Path(SOOTHE_DATA_DIR) / "loops"
+            data_dir = Path(SOOTHE_DATA_DIR)
+            trace_root = data_dir / "jobs"
+            legacy_root = data_dir / "loops"
             trace_root.mkdir(parents=True, exist_ok=True)
             self._rail_interpreter = LoopRailInterpreter(
                 self._ce,
                 guards=guards,
-                trace=JsonlRailTraceStore(root=trace_root),
+                trace=JsonlRailTraceStore(root=trace_root, legacy_root=legacy_root),
             )
         except Exception:
             logger.warning("LoopRail interpreter unavailable", exc_info=True)
@@ -1548,6 +1550,8 @@ class AutopilotService:
         for root in roots:
             dag = await self.dag_snapshot(root.id)
             loops = await self.list_job_loops(root.id)
+            created = root.created_at
+            created_at = created.isoformat() if hasattr(created, "isoformat") else str(created)
             entry = build_top_job_entry(
                 job_id=root.id,
                 status=str(root.status),
@@ -1556,6 +1560,7 @@ class AutopilotService:
                 workspace=root.workspace,
                 dag=dag,
                 loops=loops,
+                created_at=created_at,
             )
             if entry is not None:
                 jobs.append(entry)
@@ -1616,9 +1621,10 @@ class AutopilotService:
                 if child_id not in visited:
                     queue.append(child_id)
 
-        # Build nodes for React Flow
+        # Build nodes for React Flow / CLI top (include planned StepDAG)
         nodes: list[dict[str, Any]] = []
         for g in descendants:
+            step_payload = _serialize_goal_steps(g)
             node: dict[str, Any] = {
                 "id": g.id,
                 "description": (g.description[:100] if len(g.description) > 100 else g.description),
@@ -1626,19 +1632,27 @@ class AutopilotService:
                 "priority": g.priority,
                 "depends_on": list(g.depends_on or []),
                 "assigned_loop_id": g.assigned_loop_id,
-                "steps_completed": 0,
-                "steps_total": 0,
+                "steps_completed": step_payload["steps_completed"],
+                "steps_total": step_payload["steps_total"],
                 "tool_calls": 0,
+                "created_at": (
+                    g.created_at.isoformat()
+                    if hasattr(g.created_at, "isoformat")
+                    else str(g.created_at)
+                ),
             }
-            # Add report fields if available
+            if step_payload["steps"] is not None:
+                node["steps"] = step_payload["steps"]
+            # Report fields fill counts only when StepDAG is empty
             if g.report is not None:
-                node["steps_completed"] = getattr(g.report, "steps_completed", 0) or 0
-                node["steps_total"] = getattr(g.report, "steps_total", 0) or 0
-                node["tool_calls"] = getattr(g.report, "tool_calls", 0) or 0
+                report = g.report if isinstance(g.report, dict) else {}
+                if step_payload["steps_total"] == 0:
+                    node["steps_completed"] = report.get("steps_completed", 0) or 0
+                    node["steps_total"] = report.get("steps_total", 0) or 0
+                node["tool_calls"] = report.get("tool_calls", 0) or 0
                 if g.status == "completed":
-                    node["summary"] = getattr(g.report, "summary", None)
-                    findings = getattr(g.report, "findings", None)
-                    node["findings"] = findings if findings else []
+                    node["summary"] = report.get("summary")
+                    node["findings"] = report.get("findings") or []
             nodes.append(node)
 
         # Build edges from depends_on relationships
@@ -1652,6 +1666,45 @@ class AutopilotService:
             "edges": edges,
             "root_id": root_goal_id,
         }
+
+
+def _serialize_goal_steps(goal: GoalNode) -> dict[str, Any]:
+    """Build planned StepDAG payload and live counts for dag/top snapshots.
+
+    Returns:
+        Dict with ``steps_completed``, ``steps_total``, and optional ``steps``
+        (``nodes`` + ``edges``) when the goal has planned steps.
+    """
+    step_dag = getattr(goal, "steps", None)
+    nodes_map = getattr(step_dag, "nodes", None) if step_dag is not None else None
+    if not nodes_map:
+        return {"steps_completed": 0, "steps_total": 0, "steps": None}
+
+    step_nodes: list[dict[str, Any]] = []
+    step_edges: list[dict[str, str]] = []
+    completed = 0
+    for sn in nodes_map.values():
+        desc = sn.description or ""
+        if len(desc) > 80:
+            desc = desc[:80]
+        status = str(sn.status)
+        if status == "completed":
+            completed += 1
+        step_nodes.append(
+            {
+                "id": sn.id,
+                "description": desc,
+                "status": status,
+                "dependencies": list(sn.dependencies or []),
+            }
+        )
+        for dep in sn.dependencies or []:
+            step_edges.append({"source": str(dep), "target": str(sn.id)})
+    return {
+        "steps_completed": completed,
+        "steps_total": len(step_nodes),
+        "steps": {"nodes": step_nodes, "edges": step_edges},
+    }
 
 
 def _collect_operator_guidance(

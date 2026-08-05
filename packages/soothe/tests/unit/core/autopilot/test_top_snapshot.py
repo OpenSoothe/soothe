@@ -87,10 +87,26 @@ def test_build_top_job_entry_includes_active_loops_and_workspace() -> None:
         priority=80,
         description="Implement auth",
         workspace="/ws",
+        created_at="2026-08-05T00:00:00+00:00",
         dag={
             "root_id": "j1",
             "nodes": [
-                {"id": "j1", "status": "active", "description": "Implement auth"},
+                {
+                    "id": "j1",
+                    "status": "active",
+                    "description": "Implement auth",
+                    "steps": {
+                        "nodes": [
+                            {
+                                "id": "s1",
+                                "status": "pending",
+                                "description": "do",
+                                "dependencies": [],
+                            }
+                        ],
+                        "edges": [],
+                    },
+                },
                 {"id": "g2", "status": "pending", "description": "tests"},
             ],
             "edges": [{"source": "j1", "target": "g2"}],
@@ -113,8 +129,10 @@ def test_build_top_job_entry_includes_active_loops_and_workspace() -> None:
     assert entry is not None
     assert entry["id"] == "j1"
     assert entry["workspace"] == "/ws"
+    assert entry["created_at"] == "2026-08-05T00:00:00+00:00"
     assert entry["priority"] == 80
     assert len(entry["dag"]["nodes"]) == 2
+    assert entry["dag"]["nodes"][0]["steps"]["nodes"][0]["id"] == "s1"
     assert entry["loops"] == [
         {
             "seq": 3,

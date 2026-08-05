@@ -66,7 +66,9 @@ membership**.
 ~/.soothe/data/loops/autopilot__{job_id}__{uuid}/
 ```
 
-No `data/jobs/` tree. Job scope = index → loop list → dirs.
+Assignment runtime only under `loops/`. Job soft-state (e.g. rail trace) lives
+under `data/jobs/{job_id}/` per IG-686. Job↔loop membership SoT remains the
+persist index (not a directory tree of goals).
 
 ### Lifecycle hooks
 

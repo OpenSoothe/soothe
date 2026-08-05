@@ -74,7 +74,7 @@ async def test_spike_pause_resume_user_intervention_and_jsonl_trace(tmp_path: Pa
         ("goal_completed", "scouts_done"): [False, True],
         ("dag_idle", "job_complete"): [True],
     }
-    trace = JsonlRailTraceStore(root=data / "loops")
+    trace = JsonlRailTraceStore(root=data / "jobs", legacy_root=data / "loops")
     svc._rail_interpreter = LoopRailInterpreter(
         svc._ce,
         guards=ScriptedGuardEvaluator.from_mapping(scripts),
@@ -106,7 +106,7 @@ async def test_spike_pause_resume_user_intervention_and_jsonl_trace(tmp_path: Pa
     assert "decompose_parallel" in builtins
     assert "pause_for_user" in builtins
     assert "complete_job" in builtins
-    assert (data / "loops" / job.id / "rail_trace.jsonl").is_file()
+    assert (data / "jobs" / job.id / "rail_trace.jsonl").is_file()
 
 
 @pytest.mark.asyncio

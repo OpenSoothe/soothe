@@ -619,6 +619,7 @@ interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
       "priority": 50,
       "description": "Implement auth",
       "workspace": "/path/to/ws",
+      "created_at": "2026-08-04T00:50:00+00:00",
       "dag": {
         "root_id": "a1b2c3d4",
         "nodes": [
@@ -629,9 +630,27 @@ interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
             "priority": 50,
             "depends_on": [],
             "assigned_loop_id": "autopilot__a1b2c3d4__f47ac10b58cc4372a5670e02b2c3d479",
+            "created_at": "2026-08-04T00:50:00+00:00",
             "steps_completed": 1,
-            "steps_total": 4,
-            "tool_calls": 3
+            "steps_total": 2,
+            "tool_calls": 3,
+            "steps": {
+              "nodes": [
+                {
+                  "id": "UZH-01",
+                  "description": "Scaffold routes",
+                  "status": "completed",
+                  "dependencies": []
+                },
+                {
+                  "id": "UZH-02",
+                  "description": "Add JWT",
+                  "status": "pending",
+                  "dependencies": ["UZH-01"]
+                }
+              ],
+              "edges": [{"source": "UZH-01", "target": "UZH-02"}]
+            }
           }
         ],
         "edges": []
@@ -656,8 +675,9 @@ interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
 1. Build header from `status()` (`running`, `dreaming`, `loop_pool`) and set
    `generated_at` (UTC ISO).
 2. Enumerate root goals (jobs).
-3. For each job, build `dag` via existing `dag_snapshot(job_id)` and load
-   `loops` via `list_job_loops(job_id)`.
+3. For each job, build `dag` via existing `dag_snapshot(job_id)` (includes
+   planned `GoalNode.steps` StepDAG + live counts) and load
+   `loops` via `list_job_loops(job_id)`. Include root `created_at`.
 4. Apply **active filters** (server SoT):
    - Goal / job visibility uses CE `TERMINAL_STATES`
      (`completed`, `failed`, `cancelled`). Non-terminal includes
@@ -665,19 +685,25 @@ interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
    - Include a job if the root ∉ `TERMINAL_STATES` **or** any descendant ∉
      `TERMINAL_STATES`.
    - Keep only goal nodes with status ∉ `TERMINAL_STATES`; keep edges only when
-     both endpoints remain.
+     both endpoints remain. Nested `steps` ride along with kept goal nodes
+     (step statuses use step vocab — not goal `TERMINAL_STATES`).
    - Keep only loops with `JobLoopEntry.status == "active"`.
    - Drop jobs that have no remaining visible goals after filtering.
 5. Return the payload as the protocol-1 `result`.
 
 **CLI consumer** (`soothe autopilot top`):
 
-- Rich `Live` redraw each poll until Ctrl+C.
+- Rich `Live` with alternate screen (`screen=True`) — full terminal like linux
+  `top`; quit restores prior buffer (Ctrl+C).
 - Flag `--interval` / `-n` (default `1.0`).
-- Render ASCII tree: job → goals → loops nested under `JobLoopEntry.goal_id`.
+- Render ASCII tree: job → goal DAG → nested planned step DAG → loops under
+  `JobLoopEntry.goal_id`. Show execution elapsed as `HH:MM:SS` from job
+  `created_at` and loop `started_at`.
 - Empty `jobs` → header + “No active jobs”.
 - Daemon not live / mid-session RPC failure → error + non-zero exit (same as
   other autopilot CLI commands).
+
+See also IG-686 (job artifact dir `data/jobs/{job_id}/` vs assignment loops).
 
 **Authz**: read-only; same as `job_status` / `job_dag` (any authenticated client).
 

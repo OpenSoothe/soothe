@@ -390,7 +390,39 @@ def _short_loop_id(loop_id: str, *, keep: int = 8) -> str:
     return loop_id[:keep] + "…"
 
 
-def _format_top_header(snapshot: dict, *, interval: float) -> list[str]:
+def format_elapsed(started_at: Any, *, now: Any | None = None) -> str:
+    """Format execution elapsed time as ``HH:MM:SS``.
+
+    Args:
+        started_at: ISO timestamp string or datetime.
+        now: Optional clock override (datetime).
+
+    Returns:
+        Elapsed string, or empty when ``started_at`` is missing/invalid.
+    """
+    from datetime import UTC, datetime
+
+    if started_at is None or started_at == "":
+        return ""
+    if isinstance(started_at, datetime):
+        start = started_at
+    else:
+        try:
+            start = datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return ""
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=UTC)
+    clock = now if isinstance(now, datetime) else datetime.now(UTC)
+    if clock.tzinfo is None:
+        clock = clock.replace(tzinfo=UTC)
+    secs = max(0, int((clock - start).total_seconds()))
+    hours, rem = divmod(secs, 3600)
+    mins, secs = divmod(rem, 60)
+    return f"{hours:02d}:{mins:02d}:{secs:02d}"
+
+
+def _format_top_header(snapshot: dict, *, interval: float, width: int = 72) -> list[str]:
     """Build header lines for autopilot top."""
     from datetime import datetime
 
@@ -403,18 +435,76 @@ def _format_top_header(snapshot: dict, *, interval: float) -> list[str]:
     max_loops = pool.get("max", "?")
     jobs = snapshot.get("jobs") or []
     clock = datetime.now().strftime("%H:%M:%S")
+    rule = "─" * max(8, width)
     return [
         (
             f"Autopilot top · {running}{dreaming} · "
             f"pool {active}/{idle}/{max_loops} (active/idle/max) · "
             f"{len(jobs)} job(s) · {clock}"
         ),
-        "─" * 72,
+        rule,
     ]
 
 
+def _children_from_edges(edges: list[Any]) -> dict[str, list[str]]:
+    """Build adjacency from ``source`` → ``target`` edge list."""
+    children: dict[str, list[str]] = {}
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        src, tgt = edge.get("source"), edge.get("target")
+        if src and tgt:
+            children.setdefault(str(src), []).append(str(tgt))
+    return children
+
+
+def _format_step_forest(
+    steps: dict,
+    *,
+    indent: str,
+    lines: list[str],
+    trailing_siblings: int,
+) -> None:
+    """Append nested planned step DAG lines under a goal."""
+    step_nodes = {
+        str(n["id"]): n for n in (steps.get("nodes") or []) if isinstance(n, dict) and n.get("id")
+    }
+    if not step_nodes:
+        return
+    step_edges = steps.get("edges") or []
+    step_children = _children_from_edges(list(step_edges))
+    targets = {str(e.get("target")) for e in step_edges if isinstance(e, dict)}
+    roots = [sid for sid in step_nodes if sid not in targets] or list(step_nodes.keys())
+    rendered: set[str] = set()
+
+    def render_step(step_id: str, step_indent: str, is_last: bool, *, more_after: int) -> None:
+        node = step_nodes.get(step_id)
+        if not node or step_id in rendered:
+            return
+        rendered.add(step_id)
+        kids = [c for c in step_children.get(step_id, []) if c in step_nodes]
+        # last among steps only when no more loops/goal-children after the whole step tree
+        last_among_steps = is_last and more_after == 0 and not kids
+        branch = "└─ " if last_among_steps else "├─ "
+        # Keep vertical rails while later siblings (loops / child goals) remain
+        child_indent = step_indent + ("    " if is_last and more_after == 0 else "│   ")
+        status = str(node.get("status", "pending"))
+        desc = preview_first(node.get("description", ""), 40)
+        sid = step_id if len(step_id) <= 12 else step_id[:12] + "…"
+        lines.append(f'{step_indent}{branch}[{sid}] {status:10s} "{desc}"')
+        for i, kid in enumerate(kids):
+            render_step(kid, child_indent, i == len(kids) - 1, more_after=more_after)
+
+    for i, sid in enumerate(roots):
+        render_step(sid, indent, i == len(roots) - 1, more_after=trailing_siblings)
+
+    orphans = [sid for sid in step_nodes if sid not in rendered]
+    for i, sid in enumerate(orphans):
+        render_step(sid, indent, i == len(orphans) - 1, more_after=trailing_siblings)
+
+
 def _format_top_forest(snapshot: dict) -> list[str]:
-    """Render active jobs → goals → loops as ASCII tree lines."""
+    """Render jobs → goal DAG → step DAG → loops as ASCII tree lines."""
     jobs = snapshot.get("jobs") or []
     if not jobs:
         return ["No active jobs."]
@@ -427,20 +517,16 @@ def _format_top_forest(snapshot: dict) -> list[str]:
         jstat = str(job.get("status", "pending"))
         jpri = job.get("priority", 50)
         jdesc = preview_first(job.get("description", ""), 50)
-        lines.append(f'[{jid[:8]}] {jstat:10s} pri={jpri}  "{jdesc}"')
+        jelapsed = format_elapsed(job.get("created_at"))
+        jelapsed_s = f"  {jelapsed}" if jelapsed else ""
+        lines.append(f'[{jid[:8]}] {jstat:10s} pri={jpri}{jelapsed_s}  "{jdesc}"')
 
         dag = job.get("dag") if isinstance(job.get("dag"), dict) else {}
         nodes = {
             str(n["id"]): n for n in (dag.get("nodes") or []) if isinstance(n, dict) and n.get("id")
         }
         edges = dag.get("edges") or []
-        children: dict[str, list[str]] = {}
-        for edge in edges:
-            if not isinstance(edge, dict):
-                continue
-            src, tgt = edge.get("source"), edge.get("target")
-            if src and tgt:
-                children.setdefault(str(src), []).append(str(tgt))
+        children = _children_from_edges(list(edges))
 
         loops = [L for L in (job.get("loops") or []) if isinstance(L, dict)]
         loops_by_goal: dict[str, list[dict]] = {}
@@ -462,18 +548,30 @@ def _format_top_forest(snapshot: dict) -> list[str]:
             desc = preview_first(node.get("description", ""), 50)
             steps_c = node.get("steps_completed", 0) or 0
             steps_t = node.get("steps_total", 0) or 0
-            steps = f"  steps {steps_c}/{steps_t}" if steps_t else ""
-            lines.append(f'{indent}{branch}[{goal_id[:8]}] {status:10s} "{desc}"{steps}')
+            steps_s = f"  steps {steps_c}/{steps_t}" if steps_t else ""
+            lines.append(f'{indent}{branch}[{goal_id[:8]}] {status:10s} "{desc}"{steps_s}')
 
             goal_loops = loops_by_goal.get(goal_id, [])
             child_ids = children.get(goal_id, [])
+            steps_blob = node.get("steps") if isinstance(node.get("steps"), dict) else None
+            trailing = len(goal_loops) + len(child_ids)
+            if steps_blob:
+                _format_step_forest(
+                    steps_blob,
+                    indent=child_indent,
+                    lines=lines,
+                    trailing_siblings=trailing,
+                )
+
             for i, entry in enumerate(goal_loops):
                 last_sub = (i == len(goal_loops) - 1) and not child_ids
                 lb = "└─ " if last_sub else "├─ "
                 lid = _short_loop_id(str(entry.get("loop_id", "?")))
                 seq = entry.get("seq", "?")
                 lstat = entry.get("status", "active")
-                lines.append(f"{child_indent}{lb}loop {lid}  {lstat}  #{seq}")
+                elapsed = format_elapsed(entry.get("started_at"))
+                elapsed_s = f"  {elapsed}" if elapsed else ""
+                lines.append(f"{child_indent}{lb}loop {lid}  {lstat}  #{seq}{elapsed_s}")
             for i, child_id in enumerate(child_ids):
                 render_goal(child_id, child_indent, i == len(child_ids) - 1)
 
@@ -494,8 +592,11 @@ def _format_top_forest(snapshot: dict) -> list[str]:
             lid = _short_loop_id(str(entry.get("loop_id", "?")))
             seq = entry.get("seq", "?")
             gid = str(entry.get("goal_id") or "?")[:8]
+            elapsed = format_elapsed(entry.get("started_at"))
+            elapsed_s = f"  {elapsed}" if elapsed else ""
             lines.append(
-                f"{branch}loop {lid}  {entry.get('status', 'active')}  #{seq}  ?goal={gid}"
+                f"{branch}loop {lid}  {entry.get('status', 'active')}  "
+                f"#{seq}{elapsed_s}  ?goal={gid}"
             )
 
         lines.append("")
@@ -505,13 +606,31 @@ def _format_top_forest(snapshot: dict) -> list[str]:
     return lines
 
 
-def render_top_snapshot(snapshot: dict, *, interval: float) -> str:
-    """Render a full autopilot top screen as plain text."""
-    parts = _format_top_header(snapshot, interval=interval)
-    parts.extend(_format_top_forest(snapshot))
-    parts.append("─" * 72)
-    parts.append(f"Ctrl+C quit · refresh {interval:g}s")
-    return "\n".join(parts)
+def render_top_snapshot(
+    snapshot: dict,
+    *,
+    interval: float,
+    width: int | None = None,
+    height: int | None = None,
+) -> str:
+    """Render a full autopilot top screen as plain text.
+
+    When ``height`` is set, pad so the footer sits on the last terminal row
+    (linux-``top`` style viewport).
+    """
+    cols = max(40, width or 72)
+    header = _format_top_header(snapshot, interval=interval, width=cols)
+    body = _format_top_forest(snapshot)
+    rule = "─" * cols
+    footer = [rule, f"Ctrl+C quit · refresh {interval:g}s"]
+    if height is not None and height > 0:
+        max_body = max(1, height - len(header) - len(footer))
+        if len(body) > max_body:
+            body = body[: max(0, max_body - 1)] + ["… (truncated)"]
+        pad = height - len(header) - len(body) - len(footer)
+        if pad > 0:
+            body = body + [""] * pad
+    return "\n".join(header + body + footer)
 
 
 @app.command("top")
@@ -523,7 +642,7 @@ def top(
         help="Refresh interval in seconds (must be > 0).",
     ),
 ) -> None:
-    """Live jobs/goals/loops dashboard."""
+    """Live full-screen jobs/goals/steps/loops dashboard (linux-top style)."""
     if interval <= 0:
         typer.echo("Error: --interval must be > 0.", err=True)
         raise typer.Exit(1)
@@ -536,17 +655,26 @@ def top(
 
     def _fetch() -> str:
         data = client.autopilot_top()
-        return render_top_snapshot(data if isinstance(data, dict) else {}, interval=interval)
+        size = console.size
+        return render_top_snapshot(
+            data if isinstance(data, dict) else {},
+            interval=interval,
+            width=size.width,
+            height=size.height,
+        )
 
     try:
         with Live(
-            console=console, refresh_per_second=max(1, int(1 / interval)), screen=False
+            console=console,
+            refresh_per_second=max(1, int(1 / interval)),
+            screen=True,
+            transient=True,
         ) as live:
             while True:
                 live.update(_fetch())
                 time.sleep(interval)
     except KeyboardInterrupt:
-        typer.echo("\nStopped.")
+        pass
     except RuntimeError as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
