@@ -39,7 +39,8 @@ def _usage_line(output: str) -> str:
     """Extract the Usage line from help output, stripping ANSI codes."""
     for line in output.splitlines():
         stripped = _strip_ansi(line.strip())
-        if stripped.startswith("Usage:"):
+        # "Usage:" may appear mid-line after ANSI codes are stripped
+        if "Usage:" in stripped:
             return stripped
     return ""
 
