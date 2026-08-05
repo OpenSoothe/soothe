@@ -795,10 +795,13 @@ For jobs with `rail_id` set:
 | `GoalDAGVerifier` suggests remove/decompose/merge | Verifier emits **events** or defers to CE health builtins; LoopRail owns job-scoped restructuring |
 | Monitor applies verifier suggestions directly | Monitor **forwards events** to LoopRail interpreter |
 | Implicit decomposition after completion | `then:` built-ins triggered by rail conditions |
+| Consensus exhaust → suspend (dead-end under rail) | Exhaust → **fail** + `goal_failed`; rail `retry_maker` / policy (IG-693). Autopilot does not judge git/commit/pytest for rail accept |
 
 **Job maturity** (`acceptance_met`, production `dag_idle`, probe-based
 acceptance) is normative in **RFC-230** / **IG-692**. Rails consume the latch;
-they do not invent executable GOAL checks themselves.
+they do not invent executable GOAL checks themselves. **Domain probes**
+(cargo, pytest, git) belong in maturity registry / rail builtins — not as
+Autopilot consensus hard-accept overrides.
 
 Dreaming, backoff reasoning, and cron intake remain in AutopilotMonitor unchanged.
 
@@ -810,6 +813,7 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 
 | Failure | Behavior |
 |---------|----------|
+| Consensus send-back budget exhausted (rail-bound subgoal) | Subgoal → **failed**; emit `goal_failed`; rail recovers (e.g. `retry_maker`). Do **not** silent-suspend (IG-693 / RFC-204) |
 | LLM guard timeout / error | Log `guard_error`; skip rule; optional fallback rule with deterministic `check:` |
 | Unknown `then:` verb | Rail **validation error at load time** (fail fast) |
 | CE builtin failure | Trace `builtin_error`; no partial DAG commit (atomic builtin batch) |

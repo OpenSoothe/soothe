@@ -114,7 +114,6 @@ def _structural_short_circuit(
     architecture_done = bool(structural.get("all_architecture_terminal"))
     has_architecture = bool(structural.get("architecture_goal_ids"))
     has_makers = bool(structural.get("implementation_goal_ids"))
-    all_makers_done = bool(structural.get("all_implementation_terminal"))
     wave_below_max = bool(structural.get("wave_below_max", True))
 
     if name == "architecture_ready":
@@ -134,29 +133,36 @@ def _structural_short_circuit(
         )
 
     if name == "wave_makers_done":
+        # Integrate only when every maker completed — failed/cancelled must not
+        # unlock the wave (rail replants failed makers first).
+        all_makers_completed = bool(structural.get("all_implementation_completed"))
         ok = (
             event == "goal_completed"
             and "implementation" in trigger_tags
-            and all_makers_done
+            and all_makers_completed
             and has_makers
         )
         return GuardResult(
             matched=ok,
             confidence=1.0,
-            reasoning=f"structural short-circuit: all_makers_done={all_makers_done}",
+            reasoning=(f"structural short-circuit: all_makers_completed={all_makers_completed}"),
         )
 
     if name == "needs_integrate":
+        all_makers_completed = bool(structural.get("all_implementation_completed"))
         ok = (
             event == "goal_completed"
             and "implementation" in trigger_tags
-            and all_makers_done
+            and all_makers_completed
+            and has_makers
             and not bool(structural.get("integrate_goal_ids"))
         )
         return GuardResult(
             matched=ok,
             confidence=1.0,
-            reasoning=f"structural short-circuit: needs_integrate makers_done={all_makers_done}",
+            reasoning=(
+                f"structural short-circuit: needs_integrate makers_completed={all_makers_completed}"
+            ),
         )
 
     if name == "needs_commit":
@@ -234,6 +240,21 @@ def _structural_short_circuit(
             matched=ok,
             confidence=1.0,
             reasoning=f"structural short-circuit: review_completed={ok}",
+        )
+
+    if name in {"branch_is_stuck"}:
+        # Failed maker / implementation → rail replants (IG-693).
+        ok = (
+            event == "goal_failed"
+            and has_architecture
+            and ("maker" in trigger_tags or "implementation" in trigger_tags)
+        )
+        return GuardResult(
+            matched=ok,
+            confidence=1.0,
+            reasoning=(
+                f"structural short-circuit: branch_is_stuck tags={trigger_tags} event={event}"
+            ),
         )
 
     if name in {"needs_feedback"}:

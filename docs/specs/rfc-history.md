@@ -58,6 +58,13 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - Production `dag_idle` for rail job completion; verifier must not spawn on rail-bound jobs
 - RFC-228 `verification_rules` lifecycle points at RFC-230; implementation **IG-692**
 
+**RFC-204 amendment + IG-693**: Rail-bound consensus send-back exhaustion
+
+- Send-back budget is **per subgoal**, not the job root
+- Rail-bound subgoals: exhaustion → **`failed`** + LoopRail `goal_failed` (not silent suspend)
+- Greenfield recovers via `retry_maker` (replace one maker); Autopilot must not hard-accept via git/pytest for rail jobs
+- LoopRail design draft error-handling row aligned
+
 ---
 
 ### Major Changes - 2026-07-24

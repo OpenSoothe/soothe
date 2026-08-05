@@ -906,6 +906,92 @@ class RailBuiltinExecutor:
             created_goal_ids=[diagnose.id, optimize.id, verify.id],
         )
 
+    async def _do_retry_maker(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:
+        """Replace a single failed maker; preserve completed siblings (IG-693)."""
+        if not trigger_goal_id:
+            return BuiltinResult(status="skipped", detail="no trigger maker")
+        state = await self._require(job_id)
+        failed = self._ce._dag.get_goal(trigger_goal_id)
+        if failed is None:
+            return BuiltinResult(status="error", detail="trigger maker missing")
+        ann = state.annotations.get(trigger_goal_id, GoalAnnotation())
+        tags = list(ann.tags or failed.rail_tags or [])
+        if "maker" not in tags and "implementation" not in tags:
+            return BuiltinResult(status="skipped", detail="trigger is not a maker")
+
+        slug = next(
+            (
+                t
+                for t in tags
+                if t not in {"implementation", "maker", "replant"} and not t.startswith("wave-")
+            ),
+            "module",
+        )
+        wave_tag = next((t for t in tags if t.startswith("wave-")), f"wave-{state.wave_index}")
+        try:
+            wave = int(wave_tag.split("-", 1)[1])
+        except (IndexError, ValueError):
+            wave = state.wave_index or 1
+
+        if failed.status not in TERMINAL_STATES:
+            await self._ce.cancel_goal(trigger_goal_id, reason="rail:retry_maker_replace")
+        await self.annotate_goal(trigger_goal_id, job_id, branch_status="pruned")
+
+        arch_ids = [
+            gid
+            for gid, a in state.annotations.items()
+            if "architecture" in a.tags
+            and (g := self._ce._dag.get_goal(gid)) is not None
+            and g.status == "completed"
+        ]
+        repo = _job_workspace(self._ce, job_id)
+        maker_ws: str | None = str(repo) if repo else None
+        branch = f"job/{job_id[:8]}/w{wave}/{slug}-retry"
+        if state.worktrees_enabled and repo is not None and _is_git_repo(repo):
+            wt = repo / ".soothe" / "worktrees" / f"w{wave}-{slug}-retry"
+            ensured = _ensure_worktree(repo, branch=branch, worktree_path=wt)
+            if ensured is not None:
+                maker_ws = str(ensured)
+
+        desc = (
+            f"Wave {wave} maker [{slug}] retry for job {job_id}. "
+            f"Implement only the '{slug}' module ownership. "
+            f"Work in workspace isolation (branch {branch}). "
+            "Do not modify unrelated modules. Leave atomic commits on this "
+            "branch for later integrate/commit gates."
+        )
+        replacement = await self._ce.create_goal(
+            desc,
+            parent_id=job_id,
+            depends_on=arch_ids or None,
+            source="decomposition",
+            priority=75,
+            workspace=maker_ws,
+            rail_id=state.rail_id,
+            informs=[trigger_goal_id],
+        )
+        new_tags = ["implementation", "maker", wave_tag, slug, "replant"]
+        await self.annotate_goal(
+            replacement.id,
+            job_id,
+            tags=new_tags,
+            role="maker",
+            branch_id=branch,
+        )
+
+        root = await self._ce.get_goal(job_id)
+        if root is not None:
+            deps = [d for d in (root.depends_on or []) if d != trigger_goal_id]
+            if replacement.id not in deps:
+                deps.append(replacement.id)
+            await self._ce.update_dependencies(job_id, deps)
+
+        return BuiltinResult(
+            status="success",
+            detail=f"retried maker {slug} → {replacement.id}",
+            created_goal_ids=[replacement.id],
+        )
+
     async def _do_retry_branch(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:
         state = await self._require(job_id)
         # Prune non-terminal active/pending descendants on same branch; salvage completed.

@@ -1455,9 +1455,10 @@ class AutopilotService:
             logger.exception("Consensus evaluation failed for goal %s", goal_id)
             decision, reasoning = "suspend", "Consensus evaluation failed"
 
-        # Structural override: markers + pytest PASS beat LLM send_back/suspend
-        # that ignore the probe (eval false-negative pattern).
-        if decision != "accept" and "pytest -q: PASS" in probe:
+        # Soft probes may ground the LLM; do not hard-accept via language-
+        # specific tools for rail-bound goals (policy lives in rails / maturity).
+        rail_bound = bool(getattr(goal, "rail_id", None))
+        if not rail_bound and decision != "accept" and "pytest -q: PASS" in probe:
             prior = decision
             logger.info(
                 "Consensus override accept for %s: workspace pytest PASS (llm decision was %s)",
@@ -1477,8 +1478,26 @@ class AutopilotService:
                 await self._maybe_assess_job_maturity(goal_id)
                 await self._maybe_emit_dag_idle(goal_id)
             elif decision == "send_back":
-                await self._ce.send_back_goal(goal_id, reason=reasoning)
-                await self._notify_rail("goal_send_back", goal_id, reason=reasoning)
+                updated = await self._ce.send_back_goal(goal_id, reason=reasoning)
+                if updated.status == "failed":
+                    # Rail-bound send-back budget exhausted → LoopRail recovery.
+                    await self._emit_goal_failed(
+                        goal_id,
+                        error_message=reasoning,
+                        loop_id=loop_id,
+                    )
+                    await self._maybe_emit_dag_idle(goal_id)
+                else:
+                    await self._notify_rail("goal_send_back", goal_id, reason=reasoning)
+            elif rail_bound:
+                # Rail jobs: treat consensus suspend as failed so rails recover.
+                await self._ce.fail_goal(goal_id, error=reasoning)
+                await self._emit_goal_failed(
+                    goal_id,
+                    error_message=reasoning,
+                    loop_id=loop_id,
+                )
+                await self._maybe_emit_dag_idle(goal_id)
             else:
                 await self._ce.suspend_goal(goal_id, reason=reasoning)
         except Exception:

@@ -296,6 +296,9 @@ class LoopRailInterpreter:
         def _all_terminal(ids: list[str]) -> bool:
             return bool(ids) and all(siblings.get(gid) in TERMINAL_STATES for gid in ids)
 
+        def _all_completed(ids: list[str]) -> bool:
+            return bool(ids) and all(siblings.get(gid) == "completed" for gid in ids)
+
         from soothe.autopilot.maturity import latch_acceptance_met
 
         job_state = await self._builtins.job_state(event.job_id)
@@ -329,6 +332,7 @@ class LoopRailInterpreter:
             "all_exploration_terminal": _all_terminal(exploration_ids),
             "all_architecture_terminal": _all_terminal(architecture_ids),
             "all_implementation_terminal": _all_terminal(implementation_ids),
+            "all_implementation_completed": _all_completed(implementation_ids),
             "all_integrate_terminal": _all_terminal(integrate_ids) if integrate_ids else True,
             "all_commit_terminal": _all_terminal(commit_ids) if commit_ids else True,
             "all_review_terminal": _all_terminal(review_ids) if review_ids else True,

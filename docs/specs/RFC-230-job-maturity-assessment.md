@@ -222,15 +222,17 @@ job-scoped restructuring).
 
 ## 10. Consensus relationship (RFC-204)
 
-Unchanged for **child** goals: accept / send_back / suspend.
+Unchanged for **non-rail child** goals: accept / send_back / suspend.
 
-Additions:
+Rail-bound children (IG-693):
 
 1. Child accept does not complete the job root.
-2. For `qa` / `verify` goals, consensus grounding SHOULD include the latest
-   probe excerpt when available (or run a light probe pre-consensus).
-3. Structural override (e.g. pytest PASS) remains language-specific; Cargo/GOAL
-   probes extend the same idea — still not narrative-only PASS.
+2. Send-back budget exhaustion → **`failed`** + LoopRail `goal_failed` (not
+   silent suspend). Rails may `retry_maker` / equivalent — Autopilot does not
+   invent git/commit/pytest accept overrides for rail jobs.
+3. Soft workspace probes may ground the consensus LLM; **hard** language- or
+   VCS-specific accept overrides are out of scope for rail consensus (host
+   maturity probes remain RFC-230 / registry).
 
 ## 11. IPC / observation (RFC-228)
 
@@ -279,3 +281,5 @@ Implementation tracking: **IG-692**.
 | Date | Change |
 |------|--------|
 | 2026-08-05 | Initial draft from job `20999e64` hang + GOAL maturity gap analysis |
+| 2026-08-05 | Clarify consensus: rail exhaust → fail+rail recovery (IG-693); no
+  engine git/pytest hard-accept for rail jobs |

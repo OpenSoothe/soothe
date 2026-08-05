@@ -615,7 +615,10 @@ class ContextEngine:
     async def send_back_goal(self, goal_id: str, reason: str = "") -> GoalNode:
         """Return goal to pending after consensus rejection.
 
-        Increments send_back_count. When budget exhausted, suspends instead.
+        Increments send_back_count. When budget is exhausted:
+        - Rail-bound goals (``rail_id`` on goal or job root) → ``failed`` so
+          LoopRail can recover (IG-693).
+        - Otherwise → ``suspended`` for operator resume (RFC-204).
 
         Args:
             goal_id: Goal to send back.
@@ -633,7 +636,11 @@ class ContextEngine:
 
         goal.send_back_count += 1
         if goal.send_back_count >= goal.max_send_backs:
-            await self.suspend_goal(goal_id, reason=reason or "send_back budget exhausted")
+            exhaust_reason = reason or "send_back budget exhausted"
+            if self._goal_is_rail_bound(goal):
+                await self.fail_goal(goal_id, error=exhaust_reason)
+            else:
+                await self.suspend_goal(goal_id, reason=exhaust_reason)
             return goal
 
         # Validate that the goal can transition back to pending.
@@ -649,6 +656,23 @@ class ContextEngine:
             reason,
         )
         return goal
+
+    def _goal_is_rail_bound(self, goal: Any) -> bool:
+        """True when the goal or its job root has ``rail_id`` set."""
+        cur = goal
+        seen: set[str] = set()
+        while cur is not None:
+            gid = getattr(cur, "id", None)
+            if gid is None or gid in seen:
+                break
+            seen.add(gid)
+            if getattr(cur, "rail_id", None):
+                return True
+            parent_id = getattr(cur, "parent_id", None)
+            if not parent_id:
+                break
+            cur = self._dag.get_goal(parent_id)
+        return False
 
     async def retry_failed_goal(self, goal_id: str, *, reason: str = "") -> GoalNode:
         """Re-queue a failed goal when retry budget remains (IG-678 P1-2).

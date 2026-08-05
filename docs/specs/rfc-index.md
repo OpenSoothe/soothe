@@ -227,7 +227,8 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-08-05
   - Depends on: RFC-204, RFC-222, RFC-228, RFC-624, RFC-625, RFC-630
-  - Related: LoopRail design draft, IG-687, IG-691, IG-692
+  - Related: LoopRail design draft, IG-687, IG-691, IG-692, IG-693
+  - Notes: Host maturity latch; rail exclusivity; consensus exhaust recovery in IG-693
 
 ---
 

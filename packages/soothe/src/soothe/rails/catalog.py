@@ -24,6 +24,7 @@ CE_RAIL_BUILTINS: frozenset[str] = frozenset(
         "review",
         "qa_verify",
         "retry_branch",
+        "retry_maker",
         "merge_branches",
         "pause_for_user",
         "complete_job",

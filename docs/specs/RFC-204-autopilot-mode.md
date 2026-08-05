@@ -5,10 +5,13 @@
 **Status**: Implemented — runtime architecture refined by RFC-222 (revised 2026-05-28)
 **Kind**: Architecture Design
 **Created**: 2026-04-03
-**Updated**: 2026-08-04
+**Updated**: 2026-08-05
 **Dependencies**: RFC-200, RFC-201, RFC-203, RFC-222, RFC-450, RFC-500
 **Related**: RFC-229 (Cron Service for Autopilot — natural language scheduled jobs),
-[IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) (consensus evidence grounding)
+RFC-230 (job maturity; host probes ≠ per-goal consensus gates),
+LoopRail design draft, [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
+(consensus evidence grounding), [IG-693](../impl/IG-693-rail-subgoal-consensus-exhaustion-recovery.md)
+(rail-bound send-back exhaustion → fail + maker replant)
 
 > **Compatibility note (2026-05-28)**: This RFC defines autopilot's **user-facing surface** — file layout (`SOOTHE_HOME/autopilot/`), CLI commands (`soothe autopilot ...`), HTTP endpoints (`/autopilot/*`), and consensus/dreaming semantics. The **runtime implementation** — daemon-owned `AutopilotService`, subprocess worker dispatch, `GoalDispatchContextBundle`, `WorkspaceReservation`, sticky-affinity `WorkerPool` — is specified in RFC-222 (revised). The two are complementary: RFC-204 owns "what users see and submit," RFC-222 owns "how the daemon executes it."
 >
@@ -101,23 +104,36 @@ Autopilot validates StrangeLoop's completion judgment:
 - Independent from StrangeLoop's Plan-and-Execute iteration budget
 
 **Budget Exhaustion**:
-- Suspended goals preserved with current state
-- Continue with other ready goals
-- Dependency-driven reactivation when blockers clear
+- Budget is **per subgoal** (`GoalNode.send_back_count` /
+  `max_send_backs`), never the job root’s counter.
+- **Non-rail goals**: Suspended goals preserved with current state; continue
+  with other ready goals; operator `resume` reactivates and resets the budget.
+- **Rail-bound goals** (`rail_id` set on the goal or its job root): exhaustion
+  MUST transition the subgoal to **`failed`** and emit `goal_failed` to
+  LoopRail (not silent `suspended`). LoopRail owns recovery (e.g. `retry_maker`).
+  DAG health MUST NOT auto-reset send-back-exhausted goals.
+- Autopilot MUST NOT encode tool- or VCS-specific “done” gates (git commit,
+  cargo, pytest hard-accept) as engine consensus overrides for rail jobs —
+  those policies live in rails / host maturity probes (RFC-230), not Layer 3
+  consensus.
 
 **Reflection LLM Decision Criteria**:
 
 | Decision | Conditions | Outcome |
 |----------|------------|---------|
-| **Accept** | Evidence satisfies success criteria; high confidence (>0.8); no unresolved blockers | Goal → `validated` state |
-| **Send back** | Evidence incomplete; low confidence (<0.8); minor gaps in findings | Refined instructions → StrangeLoop retry |
-| **Suspend** | Budget exhausted (3 send-backs); unrecoverable blocker; external dependency required | Goal → `suspended` state, await resolution |
+| **Accept** | Evidence satisfies success criteria; high confidence (>0.8); no unresolved blockers | Goal → `validated` / `completed` state |
+| **Send back** | Evidence incomplete; low confidence (<0.8); minor gaps in findings | Refined instructions → StrangeLoop retry; count toward budget |
+| **Suspend** | Unrecoverable blocker; external dependency required (non-rail) | Goal → `suspended`, await operator |
+| **Fail (rail exhaust)** | Send-back budget exhausted on a rail-bound subgoal | Goal → `failed`; LoopRail `goal_failed` recovery |
 
 **Suspension Triggers** (explicit conditions):
-1. Send-back budget exhausted (3 rounds without acceptable result)
+1. Send-back budget exhausted on a **non-rail** goal (3 rounds without acceptable result)
 2. External blocker identified (user input required, resource unavailable)
 3. Dependency on suspended/blocked goal
 4. Unrecoverable error (tool failure, permission denied, timeout exceeded)
+
+**Rail-bound exhaustion** uses **fail** (trigger 1 variant), not suspend — see
+LoopRail design draft / IG-693.
 
 > **Implementation Note**: The reflection LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). Reflection prompts include: goal description, success criteria, accumulated evidence, StrangeLoop confidence score, and iteration history. The decision output is structured (`decision: accept | send_back | suspend`, `reasoning: string`, `refined_instructions: string?`).
 >

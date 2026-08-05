@@ -84,7 +84,7 @@ flow:
 
   - event: goal_failed
     when: branch_is_stuck
-    then: retry_branch
+    then: retry_maker
 
   - event: dag_idle
     when: needs_feedback
