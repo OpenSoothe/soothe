@@ -142,7 +142,7 @@ class AutopilotConfig(BaseModel):
         enabled: Whether the AutopilotService scheduling loop is enabled.
             When False, the daemon constructs the service but does not start
             the scheduling loop. HTTP /autopilot/submit endpoints are available
-            but goals won't be dispatched automatically. Default is False.
+            but goals won't be dispatched automatically. Default is True.
         max_iterations: Maximum iterations per autopilot thread (goal-level).
         max_retries: Maximum retries per goal on failure.
         max_total_goals: Maximum goals allowed (RFC-0007 §5.6).
@@ -165,12 +165,12 @@ class AutopilotConfig(BaseModel):
 
     # === Autopilot scheduling (daemon-level) ===
     enabled: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "Enable the AutopilotService scheduling loop. When True, the daemon "
-            "starts the scheduling loop on startup for 24/7 autonomous operation. "
-            "When False (default), the service is constructed but the scheduling loop does not "
-            "start automatically; goals must be dispatched manually."
+            "Enable the AutopilotService scheduling loop. When True (default), the "
+            "daemon starts the scheduling loop on startup for 24/7 autonomous "
+            "operation. When False, the service is constructed but the scheduling "
+            "loop does not start automatically; goals must be dispatched manually."
         ),
     )
     max_iterations: int = 10

@@ -8,7 +8,7 @@ agent:
   final_response: auto
 
   autopilot:
-    enabled: false
+    enabled: true
     max_iterations: 10
     max_retries: 2
     max_total_goals: 50

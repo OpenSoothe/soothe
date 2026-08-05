@@ -73,8 +73,8 @@ Set defaults in your configuration file:
 ```yaml
 agent:
   autopilot:
-    # Enable autopilot scheduling loop (starts on daemon startup for 24/7 operation)
-    enabled: false
+    # Enable autopilot scheduling loop (default true; starts on daemon startup)
+    enabled: true
 
     # Maximum iterations per autopilot thread (default: 10)
     max_iterations: 10

@@ -44,7 +44,7 @@ class TestSootheConfig:
         assert cfg.router.default == "openai:gpt-4o-mini"
         assert cfg.embedding_model == "openai:text-embedding-3-small"
         assert cfg.embedding_dims == 1536
-        assert cfg.agent.autopilot.enabled is False
+        assert cfg.agent.autopilot.enabled is True
         assert cfg.agent.loop.dispatch_idle_seconds == 300.0
         assert cfg.agent.loop.dispatch_tool_timeout_seconds == 0.0
         assert cfg.agent.middleware.llm_rate_limit.enabled is True

@@ -595,12 +595,12 @@ The `soothe --autopilot` CLI command (per Q7) **becomes a daemon client**: it po
 
 Per IG-434 / current config, autopilot fields live under `agent.autopilot:`.
 RFC-222 historically said `agent.autonomous:` — that key is obsolete; use
-`agent.autopilot.enabled` (default `false`).
+`agent.autopilot.enabled` (default `true`).
 
 ```yaml
 agent:
   autopilot:
-    enabled: false
+    enabled: true
 
     # Goal execution
     max_iterations: 10
@@ -720,18 +720,18 @@ Remaining gaps (H1, H2, H3, H6, H7, M2–M8, M10) are deliberately out of scope 
 
 **Status**: Implemented (2026-07-01)
 
-When `agent.autopilot.enabled=true`, the following wiring is required before unattended 24/7 operation. This section tracks the **minimum bar** for a guarded pilot (explicit opt-in, deadlines, monitoring).
+When `agent.autopilot.enabled=true` (the default), the following wiring is required before unattended 24/7 operation. This section tracks the **minimum bar** for a guarded pilot (deadlines, monitoring; set `enabled: false` to opt out).
 
 ### Configuration
 
 | Setting | Pilot recommendation | Notes |
 |---------|---------------------|-------|
-| `agent.autopilot.enabled` | `true` | Master switch; scheduling loop does not start when `false` |
+| `agent.autopilot.enabled` | `true` (default) | Master switch; scheduling loop does not start when `false` |
 | `goal_deadline_seconds` | `1209600` (14 days) | AutopilotMonitor cancels workers past this wall-clock budget; `null` disables |
 | `max_parallel_goals` | tuned to capacity | Service + runner semaphores |
 | `verify_interval` | `30` | AutopilotMonitor DAG health cadence |
 
-Pydantic default for `enabled` remains **`false`** — production deploys must opt in explicitly.
+Pydantic default for `enabled` is **`true`** — set `agent.autopilot.enabled: false` to disable the scheduling loop.
 
 ### Daemon wiring (implemented)
 

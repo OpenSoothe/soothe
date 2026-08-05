@@ -54,7 +54,7 @@ phased so each phase leaves the system shippable at a higher trust tier:
 
 | ID | Gap | Impact |
 |----|-----|--------|
-| AP-1 | Default `enabled: false` OK, but RFC-222 still mentions `agent.autonomous.enabled` | Config drift |
+| AP-1 | Default `enabled: true` (was `false`); RFC-222 historically mentioned `agent.autonomous.enabled` | Config drift |
 | AP-2 | Monitor subscribes to `"goal_completed"` / `"goal_failed"`; CE never emits those; bus uses `soothe.internal.*` | Reactive monitor paths dead |
 | AP-3 | `_apply_backoff_decision` logs only — no DAG mutation; `max_retries` unused | Failed goals stay failed forever |
 | AP-4 | Worker `error` slots never return to idle → pool capacity leak | Throughput death under crashes |
