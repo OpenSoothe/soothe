@@ -6,6 +6,7 @@ from soothe.autopilot.top_snapshot import (
     build_top_job_entry,
     filter_active_dag,
     filter_active_loops,
+    filter_active_steps,
 )
 
 
@@ -52,6 +53,55 @@ def test_filter_active_dag_keeps_suspended() -> None:
     filtered = filter_active_dag(dag)
     assert filtered is not None
     assert filtered["nodes"][0]["id"] == "a"
+
+
+def test_filter_active_steps_omits_terminal() -> None:
+    steps = {
+        "nodes": [
+            {"id": "s1", "status": "completed", "description": "done"},
+            {"id": "s2", "status": "active", "description": "run"},
+            {"id": "s3", "status": "pending", "description": "todo"},
+            {"id": "s4", "status": "failed", "description": "fail"},
+            {"id": "s5", "status": "skipped", "description": "skip"},
+        ],
+        "edges": [
+            {"source": "s1", "target": "s2"},
+            {"source": "s2", "target": "s3"},
+        ],
+    }
+    filtered = filter_active_steps(steps)
+    assert filtered is not None
+    assert {n["id"] for n in filtered["nodes"]} == {"s2", "s3"}
+    assert filtered["edges"] == [{"source": "s2", "target": "s3"}]
+
+
+def test_filter_active_dag_strips_terminal_steps() -> None:
+    dag = {
+        "root_id": "root1",
+        "nodes": [
+            {
+                "id": "root1",
+                "status": "active",
+                "description": "root",
+                "steps_completed": 1,
+                "steps_total": 2,
+                "steps": {
+                    "nodes": [
+                        {"id": "s1", "status": "completed", "description": "done"},
+                        {"id": "s2", "status": "pending", "description": "todo"},
+                    ],
+                    "edges": [{"source": "s1", "target": "s2"}],
+                },
+            },
+        ],
+        "edges": [],
+    }
+    filtered = filter_active_dag(dag)
+    assert filtered is not None
+    node = filtered["nodes"][0]
+    assert node["steps_completed"] == 1
+    assert node["steps_total"] == 2
+    assert [n["id"] for n in node["steps"]["nodes"]] == ["s2"]
 
 
 def test_filter_active_loops() -> None:
@@ -177,7 +227,21 @@ def test_build_top_job_include_terminal_keeps_completed() -> None:
         dag={
             "root_id": "j1",
             "nodes": [
-                {"id": "j1", "status": "completed", "description": "done"},
+                {
+                    "id": "j1",
+                    "status": "completed",
+                    "description": "done",
+                    "steps": {
+                        "nodes": [
+                            {
+                                "id": "s1",
+                                "status": "completed",
+                                "description": "done step",
+                            }
+                        ],
+                        "edges": [],
+                    },
+                },
                 {"id": "g2", "status": "failed", "description": "fail"},
             ],
             "edges": [{"source": "j1", "target": "g2"}],
@@ -191,6 +255,8 @@ def test_build_top_job_include_terminal_keeps_completed() -> None:
     assert {n["id"] for n in entry["dag"]["nodes"]} == {"j1", "g2"}
     assert entry["dag"]["edges"] == [{"source": "j1", "target": "g2"}]
     assert entry["loops"] == [{"loop_id": "L1", "status": "active", "goal_id": "j1"}]
+    root = next(n for n in entry["dag"]["nodes"] if n["id"] == "j1")
+    assert root["steps"]["nodes"][0]["status"] == "completed"
 
 
 def test_sort_top_jobs_newest_first() -> None:

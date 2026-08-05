@@ -37,6 +37,7 @@ def test_render_top_empty() -> None:
     assert "No active jobs." in text
     assert "pool 0/0/4" in text
     assert "mode=active" in text
+    assert "(live)" in text
     assert "q Quit" in text
     assert "refresh 1s" in text
     assert "legend" in text
@@ -117,18 +118,21 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
     assert "steps 1/2" in text
     assert "JOB  [a1b2c3d4]" in text
     assert "GOAL [a1b2c3d4]" in text
-    assert "STEP [UZH-01]" in text
+    # mode=active hides completed STEP [UZH-01]; pending remains.
+    assert "STEP [UZH-01]" not in text
+    assert "STEP [UZH-02]" in text
     assert "Add JWT" in text
     assert "←UZH-01" in text  # flat list keeps deps inline, not nested tree
     assert "Write tests" in text
     # Steps are a flat list (same indent), not a nested step tree.
     step_lines = [ln for ln in text.splitlines() if "STEP [" in ln]
-    assert len(step_lines) == 2
-    assert all(ln.index("STEP") == step_lines[0].index("STEP") for ln in step_lines)
+    assert len(step_lines) == 1
     assert "LOOP autopilot__a1b2c3d4__deadbeef…" in text
     assert "#3" in text
     assert "refresh 2.5s" in text
     assert "bright_cyan" in rendered.markup
+    assert "mode=active" in text
+    assert "(live)" in text
 
 
 def test_render_top_hides_steps_and_loops() -> None:
@@ -300,6 +304,72 @@ def test_render_top_orphan_loop_marker() -> None:
     )
     assert "?goal=missing1" in text
     assert "LOOP " in text
+
+
+def test_render_top_mode_all_shows_terminal_steps() -> None:
+    """mode=all keeps completed/failed/skipped STEP rows; mode=active hides them."""
+    snap = {
+        "running": True,
+        "loop_pool": {"active": 1, "idle": 0, "max": 4},
+        "jobs": [
+            {
+                "id": "a1b2c3d4",
+                "status": "active",
+                "priority": 50,
+                "description": "Implement auth",
+                "dag": {
+                    "root_id": "a1b2c3d4",
+                    "nodes": [
+                        {
+                            "id": "a1b2c3d4",
+                            "status": "active",
+                            "description": "Implement auth",
+                            "steps_completed": 1,
+                            "steps_total": 3,
+                            "steps": {
+                                "nodes": [
+                                    {
+                                        "id": "UZH-01",
+                                        "status": "completed",
+                                        "description": "Scaffold",
+                                        "dependencies": [],
+                                    },
+                                    {
+                                        "id": "UZH-02",
+                                        "status": "active",
+                                        "description": "Add JWT",
+                                        "dependencies": ["UZH-01"],
+                                    },
+                                    {
+                                        "id": "UZH-03",
+                                        "status": "skipped",
+                                        "description": "Docs",
+                                        "dependencies": [],
+                                    },
+                                ],
+                                "edges": [],
+                            },
+                        }
+                    ],
+                    "edges": [],
+                },
+                "loops": [],
+            }
+        ],
+    }
+    active = _plain(snap, state=TopViewState(include_terminal=False))
+    assert "STEP [UZH-01]" not in active
+    assert "STEP [UZH-02]" in active
+    assert "STEP [UZH-03]" not in active
+    assert "mode=active" in active
+    assert "(live)" in active
+
+    all_mode = _plain(snap, state=TopViewState(include_terminal=True))
+    assert "STEP [UZH-01]" in all_mode
+    assert "STEP [UZH-02]" in all_mode
+    assert "STEP [UZH-03]" in all_mode
+    assert "mode=all" in all_mode
+    assert "(live)" not in all_mode
 
 
 def test_render_top_shows_active_not_pending_for_running_work() -> None:

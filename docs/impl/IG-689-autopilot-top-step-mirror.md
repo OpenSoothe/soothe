@@ -70,6 +70,8 @@ No wire/CLI changes; `s` toggle already client-renders `node.steps`.
 - ``StepStatus.active`` + ``step_started`` mirror so in-flight STEPs are not
   stuck on ``pending``.
 - CLI renders STEPs as a flat list (deps as ``←id``), not a nested step tree.
+- ``mode=active`` filters terminal STEP statuses (server + CLI); ``mode=all``
+  shows the full StepDAG.
 - Removed unused AutopilotService ``_execution_semaphore`` /
   ``_assignment_lock`` (schedule uses ``max_loops`` / ``max_parallel_goals``;
   ``WorkerPool`` owns assignment locking).

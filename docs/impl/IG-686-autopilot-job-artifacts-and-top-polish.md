@@ -75,9 +75,10 @@ Per goal node in `dag_snapshot` (and thus `top`):
 
 Job entry also carries root `created_at`. Loops already expose `started_at`.
 
-Active goal filter unchanged (`TERMINAL_STATES`). Step statuses use step vocab
-(`pending` / `completed` / `failed` / `skipped`) — do not apply goal terminal
-filter to steps.
+Active goal filter unchanged (`TERMINAL_STATES`). In `mode=active`, terminal
+StepDAG rows (`completed` / `failed` / `skipped`) are also omitted; `mode=all`
+keeps the full step list. Goal `steps_completed` / `steps_total` counters stay
+unfiltered.
 
 ### 3. CLI — linux-`top` viewport
 

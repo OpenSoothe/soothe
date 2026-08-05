@@ -34,7 +34,13 @@ _TOP_HELP_LINES = (
     "  q Quit          h/? Help          Space Refresh",
     "  a All/active    s Steps           l Loops       d Density",
     "  +/- Delay       j/k or arrows Scroll           g/G Top/bottom",
+    "",
+    "mode=active hides completed/failed/cancelled goals and",
+    "completed/failed/skipped steps; mode=all shows the full forest.",
 )
+
+# StepDAG terminal statuses (mode=active hides these; mirrors server SoT).
+_STEP_TERMINAL_STATUSES = frozenset({"completed", "failed", "skipped"})
 
 # Concept colors for autopilot top (jobs / goals / steps / loops).
 _STYLE_JOB = "bold bright_cyan"
@@ -649,6 +655,7 @@ def _format_top_header(
     jobs = snapshot.get("jobs") or []
     clock = datetime.now().strftime("%H:%M:%S")
     mode = "all" if state.include_terminal else "active"
+    mode_style = _STYLE_META if state.include_terminal else "bold bright_green"
     steps = "on" if state.show_steps else "off"
     loops = "on" if state.show_loops else "off"
     rule = "─" * max(8, width)
@@ -667,13 +674,19 @@ def _format_top_header(
     title.append(f" · {clock}", style=_STYLE_TREE)
 
     flags = Text()
-    flags.append(f"mode={mode}", style=_STYLE_META)
+    flags.append("mode=", style=_STYLE_DIM)
+    flags.append(mode, style=mode_style)
+    if not state.include_terminal:
+        flags.append(" (live)", style="dim green")
     flags.append("  ")
-    flags.append(f"steps={steps}", style=_STYLE_STEP)
+    flags.append("steps=", style=_STYLE_DIM)
+    flags.append(steps, style=_STYLE_STEP if state.show_steps else _STYLE_DIM)
     flags.append("  ")
-    flags.append(f"loops={loops}", style=_STYLE_LOOP)
+    flags.append("loops=", style=_STYLE_DIM)
+    flags.append(loops, style=_STYLE_LOOP if state.show_loops else _STYLE_DIM)
     flags.append("  ")
-    flags.append(f"delay={state.interval:g}s", style=_STYLE_META)
+    flags.append("delay=", style=_STYLE_DIM)
+    flags.append(f"{state.interval:g}s", style=_STYLE_META)
 
     legend = Text()
     legend.append("legend  ", style=_STYLE_DIM)
@@ -694,12 +707,20 @@ def _format_step_list(
     indent: str,
     lines: list[Text],
     trailing_siblings: int,
+    include_terminal: bool = False,
 ) -> None:
-    """Append planned steps as a flat list under a goal (space-efficient vs tree)."""
+    """Append planned steps as a flat list under a goal (space-efficient vs tree).
+
+    When ``include_terminal`` is false (mode=active), omit terminal step
+    statuses so the forest stays focused on live work.
+    """
     ordered_nodes: list[dict] = []
     seen: set[str] = set()
     for raw in steps.get("nodes") or []:
         if not isinstance(raw, dict) or not raw.get("id"):
+            continue
+        status = str(raw.get("status", "pending"))
+        if not include_terminal and status in _STEP_TERMINAL_STATUSES:
             continue
         sid = str(raw["id"])
         if sid in seen:
@@ -738,7 +759,8 @@ def _format_top_forest(
     """Render jobs → goal DAG → step DAG → loops as colored Rich Text rows.
 
     Jobs are shown newest-first (by ``created_at``) so the latest job sits at
-    the top of the forest.
+    the top of the forest. In mode=active (``include_terminal=False``),
+    terminal step statuses are omitted client-side as a defense in depth.
     """
     raw_jobs = [j for j in (snapshot.get("jobs") or []) if isinstance(j, dict)]
     jobs = _sort_jobs_newest_first(raw_jobs)
@@ -818,6 +840,7 @@ def _format_top_forest(
                     indent=child_indent,
                     lines=lines,
                     trailing_siblings=trailing,
+                    include_terminal=include_terminal,
                 )
 
             for i, entry in enumerate(goal_loops):
@@ -915,11 +938,15 @@ def render_top_snapshot(
             (" · ", _STYLE_TREE),
             ("h Help", _STYLE_DIM),
             (" · ", _STYLE_TREE),
-            ("a All", _STYLE_DIM),
+            ("a ", _STYLE_DIM),
+            (
+                "All" if not view.include_terminal else "Active",
+                "bold bright_green" if view.include_terminal else _STYLE_META,
+            ),
             (" · ", _STYLE_TREE),
-            ("s Steps", _STYLE_STEP),
+            ("s Steps", _STYLE_STEP if view.show_steps else _STYLE_DIM),
             (" · ", _STYLE_TREE),
-            ("l Loops", _STYLE_LOOP),
+            ("l Loops", _STYLE_LOOP if view.show_loops else _STYLE_DIM),
             (" · ", _STYLE_TREE),
             ("d Density", _STYLE_DIM),
             (" · ", _STYLE_TREE),

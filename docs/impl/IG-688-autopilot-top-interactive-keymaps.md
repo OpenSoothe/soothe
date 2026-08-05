@@ -54,13 +54,14 @@ remain out of scope.
 autopilot_top params: { include_terminal?: bool }  # default false
 ```
 
-| `include_terminal` | Goals | Loops |
-|--------------------|-------|-------|
-| `false` (default) | Non-`TERMINAL_STATES` only; omit fully terminal jobs | `status == "active"` |
-| `true` | Full `dag_snapshot` nodes/edges; include all-terminal jobs | Still active-only |
+| `include_terminal` | Goals | Steps | Loops |
+|--------------------|-------|-------|-------|
+| `false` (default) | Non-`TERMINAL_STATES` only; omit fully terminal jobs | Non-terminal only (`pending` / `active`) | `status == "active"` |
+| `true` | Full `dag_snapshot` nodes/edges; include all-terminal jobs | Full StepDAG | Still active-only |
 
-Server remains SoT for filtering. Step show/hide is **client render only**
-(steps already ride on kept goal nodes).
+Server remains SoT for filtering (goals + step status). Client `s` toggles
+StepDAG visibility; client also re-applies step-status filter in `mode=active`
+as defense in depth.
 
 ### Input loop
 
@@ -68,8 +69,9 @@ Keep `Live(screen=True)`. Between polls, drain stdin with short `select`
 timeouts (cbreak/raw). Keys update view state and redraw immediately when
 possible; `Space` forces an RPC refresh.
 
-Footer shows live bindings + mode badges (`mode=active|all`, `steps=on|off`,
-`loops=on|off`, `delay=Ns`).
+Footer shows live bindings + mode badges (`mode=active (live)|all`,
+`steps=on|off`, `loops=on|off`, `delay=Ns`). Active mode badge is emphasized
+green; `a` footer hint flips between All ↔ Active.
 
 ### Keymap
 
