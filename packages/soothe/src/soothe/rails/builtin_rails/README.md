@@ -28,6 +28,16 @@ Fallback when auto-pick confidence is low:
 | `migration` | Wave goal-loop until a checkable stop condition |
 | `greenfield-system` | Milestones → worktree makers → integrate → commit → review → QA → find/optimize/verify feedback until acceptance |
 
+### Submit with `greenfield-system`
+
+From a repo that has a `GOAL.md` (pass `--rail` explicitly; auto-pick does not
+select greenfield):
+
+```bash
+soothe autopilot submit --file GOAL.md --rail greenfield-system -w /path/to/repo
+soothe autopilot top
+```
+
 ## Format
 
 See `docs/drafts/2026-07-11-loop-rail-design.md`. Each file: `id` must match

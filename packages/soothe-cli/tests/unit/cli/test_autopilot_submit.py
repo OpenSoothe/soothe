@@ -47,6 +47,8 @@ def test_submit_help_documents_async_and_wait() -> None:
     assert "--no-wait" not in result.output
     assert "--workspace" in result.output or "-workspace" in result.output
     assert "-w" in result.output
+    assert "--file" in result.output
+    assert "-f" in result.output
     assert "max-iterations" not in result.output
 
 
@@ -58,6 +60,7 @@ def test_run_help_is_submit_wait_alias() -> None:
     assert "submit" in output
     assert "wait" in output
     assert "sync" in output
+    assert "--file" in result.output
     assert "max-iterations" not in result.output
 
 
@@ -134,3 +137,70 @@ def test_submit_passes_priority_and_rail(mock_autopilot_client: MagicMock) -> No
     assert kwargs["priority"] == 80
     assert kwargs["rail_id"] == "feature-dev"
     assert kwargs["workspace"] == "/ws"
+
+
+def test_submit_from_file(mock_autopilot_client: MagicMock, tmp_path) -> None:
+    path = tmp_path / "job.md"
+    path.write_text("Build the thing\n\nwith details\n", encoding="utf-8")
+    result = runner.invoke(app, ["autopilot", "submit", "--file", str(path)])
+    assert result.exit_code == 0, result.output
+    args, _kwargs = mock_autopilot_client.autopilot_submit.call_args
+    assert args[0] == "Build the thing\n\nwith details"
+
+
+def test_submit_from_stdin(mock_autopilot_client: MagicMock) -> None:
+    result = runner.invoke(
+        app,
+        ["autopilot", "submit", "-f", "-"],
+        input="From stdin task\n",
+    )
+    assert result.exit_code == 0, result.output
+    args, _kwargs = mock_autopilot_client.autopilot_submit.call_args
+    assert args[0] == "From stdin task"
+
+
+def test_run_from_file(mock_autopilot_client: MagicMock, tmp_path) -> None:
+    path = tmp_path / "job.txt"
+    path.write_text("Sync file task\n", encoding="utf-8")
+    result = runner.invoke(app, ["autopilot", "run", "-f", str(path), "-w", "/tmp/proj"])
+    assert result.exit_code == 0, result.output
+    args, kwargs = mock_autopilot_client.autopilot_submit.call_args
+    assert args[0] == "Sync file task"
+    assert kwargs.get("workspace") == "/tmp/proj"
+    mock_autopilot_client.autopilot_get_goal.assert_called()
+
+
+def test_submit_requires_task_or_file(mock_autopilot_client: MagicMock) -> None:
+    result = runner.invoke(app, ["autopilot", "submit"])
+    assert result.exit_code == 1
+    assert "exactly one of: TASK or --file" in result.output
+    mock_autopilot_client.autopilot_submit.assert_not_called()
+
+
+def test_submit_rejects_task_and_file(mock_autopilot_client: MagicMock, tmp_path) -> None:
+    path = tmp_path / "job.md"
+    path.write_text("file task\n", encoding="utf-8")
+    result = runner.invoke(
+        app,
+        ["autopilot", "submit", "inline task", "--file", str(path)],
+    )
+    assert result.exit_code == 1
+    assert "exactly one of: TASK or --file" in result.output
+    mock_autopilot_client.autopilot_submit.assert_not_called()
+
+
+def test_submit_rejects_empty_file(mock_autopilot_client: MagicMock, tmp_path) -> None:
+    path = tmp_path / "empty.md"
+    path.write_text("   \n", encoding="utf-8")
+    result = runner.invoke(app, ["autopilot", "submit", "-f", str(path)])
+    assert result.exit_code == 1
+    assert "empty" in result.output.lower()
+    mock_autopilot_client.autopilot_submit.assert_not_called()
+
+
+def test_submit_rejects_missing_file(mock_autopilot_client: MagicMock, tmp_path) -> None:
+    missing = tmp_path / "missing.md"
+    result = runner.invoke(app, ["autopilot", "submit", "-f", str(missing)])
+    assert result.exit_code == 1
+    assert "Error reading task file" in result.output
+    mock_autopilot_client.autopilot_submit.assert_not_called()

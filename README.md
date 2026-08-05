@@ -51,6 +51,14 @@ soothed start
 soothe -p "Your first task"   # requires a running daemon
 ```
 
+Submit an Autopilot job from a workspace `GOAL.md` on the `greenfield-system` rail:
+
+```bash
+soothed start
+soothe autopilot submit --file GOAL.md --rail greenfield-system -w /path/to/repo
+soothe autopilot top   # live jobs / goals / loops dashboard
+```
+
 **[Quick Start guide](docs/wiki/getting-started/Quick-Start.md)** — install, Docker, local daemon, first prompt.
 
 ### Language clients

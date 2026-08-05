@@ -47,7 +47,7 @@ job roots are not dispatched as workers.
 ## Operator usage
 
 ```bash
-soothe autopilot submit "$(cat GOAL.md)" \
+soothe autopilot submit --file GOAL.md \
   --workspace /path/to/repo \
   --rail greenfield-system
 ```

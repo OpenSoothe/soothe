@@ -119,19 +119,66 @@ def _wait_for_goal(client: Any, goal_id: str, *, timeout_s: float = _WAIT_TIMEOU
     sys.exit(1)
 
 
+def _resolve_submit_task(task: str | None, file: str | None) -> str:
+    """Resolve task text from an inline argument or ``--file``.
+
+    Args:
+        task: Optional inline task description.
+        file: Optional path to a UTF-8 file (or ``-`` for stdin).
+
+    Returns:
+        Non-empty task description.
+
+    Raises:
+        typer.Exit: When neither/both sources are set, the file is missing,
+            unreadable, or empty.
+    """
+    has_task = bool(task and task.strip())
+    has_file = bool(file and file.strip())
+    if has_task == has_file:
+        typer.echo(
+            "Specify exactly one of: TASK or --file <path>.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    if has_task:
+        assert task is not None
+        return task
+
+    assert file is not None
+    path = file.strip()
+    try:
+        if path == "-":
+            content = sys.stdin.read()
+        else:
+            content = Path(path).expanduser().read_text(encoding="utf-8")
+    except OSError as exc:
+        typer.echo(f"Error reading task file: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    text = content.strip()
+    if not text:
+        typer.echo("Error: task file is empty.", err=True)
+        raise typer.Exit(1)
+    return text
+
+
 def _submit_impl(
-    task: str,
+    task: str | None,
     *,
+    file: str | None = None,
     priority: int = 50,
     workspace: str | None = None,
     rail: str | None = None,
     wait: bool = False,
 ) -> None:
     """Submit a task; optionally wait for completion."""
+    resolved = _resolve_submit_task(task, file)
     client = _require_daemon_ws()
     submit_workspace = _resolve_submit_workspace(workspace)
     result = client.autopilot_submit(
-        task, priority=priority, workspace=submit_workspace, rail_id=rail
+        resolved, priority=priority, workspace=submit_workspace, rail_id=rail
     )
     goal_id = str(result.get("goal_id") or "")
     typer.echo(f"Submitted goal: {goal_id or '?'}")
@@ -143,7 +190,16 @@ def _submit_impl(
 
 @app.command("submit")
 def submit(
-    task: str = typer.Argument(..., help="Task description."),
+    task: str | None = typer.Argument(
+        None,
+        help="Task description (omit when using --file).",
+    ),
+    file: str | None = typer.Option(
+        None,
+        "--file",
+        "-f",
+        help="Read task description from a UTF-8 file (use - for stdin).",
+    ),
     priority: int = typer.Option(50, "--priority", "-p", help="Goal priority (0-100)."),
     workspace: str | None = typer.Option(
         None,
@@ -163,12 +219,21 @@ def submit(
     ),
 ) -> None:
     """Submit a task (async unless --wait)."""
-    _submit_impl(task, priority=priority, workspace=workspace, rail=rail, wait=wait)
+    _submit_impl(task, file=file, priority=priority, workspace=workspace, rail=rail, wait=wait)
 
 
 @app.command("run")
 def run(
-    prompt: str = typer.Argument(..., help="Task description."),
+    prompt: str | None = typer.Argument(
+        None,
+        help="Task description (omit when using --file).",
+    ),
+    file: str | None = typer.Option(
+        None,
+        "--file",
+        "-f",
+        help="Read task description from a UTF-8 file (use - for stdin).",
+    ),
     priority: int = typer.Option(50, "--priority", "-p", help="Goal priority (0-100)."),
     workspace: str | None = typer.Option(
         None,
@@ -183,7 +248,7 @@ def run(
     ),
 ) -> None:
     """Alias for submit --wait (sync)."""
-    _submit_impl(prompt, priority=priority, workspace=workspace, rail=rail, wait=True)
+    _submit_impl(prompt, file=file, priority=priority, workspace=workspace, rail=rail, wait=True)
 
 
 @app.command("status")
