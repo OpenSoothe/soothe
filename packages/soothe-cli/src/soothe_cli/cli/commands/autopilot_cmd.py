@@ -28,6 +28,13 @@ _TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled", "suspended"}
 _WAIT_TIMEOUT_S = 600.0
 
 
+def _preview_desc(text: object, max_chars: int) -> str:
+    """Collapse whitespace/newlines and truncate for a single-line preview."""
+    raw = text if isinstance(text, str) else str(text or "")
+    compact = " ".join(raw.split())
+    return preview_first(compact, max_chars)
+
+
 def _resolve_submit_workspace(explicit: str | None) -> str:
     """Resolve workspace for autopilot submit (IG-344 aligned with headless/TUI)."""
     raw = (
@@ -173,7 +180,7 @@ def status() -> None:
             jid = str(j.get("id", "?"))
             sid = jid[:8]
             sstat = j.get("status", "pending")
-            sdesc = preview_first(j.get("description", ""), 50)
+            sdesc = _preview_desc(j.get("description", ""), 50)
             typer.echo(f"  [{sid}] {sstat:10s}  {sdesc}")
 
 
@@ -193,7 +200,7 @@ def list_jobs(
         if status_filter and j.get("status", "") != status_filter:
             continue
         sid = j.get("id", "?")[:8]
-        sdesc = preview_first(j.get("description", ""), 60)
+        sdesc = _preview_desc(j.get("description", ""), 60)
         sstat = j.get("status", "pending")
         spri = j.get("priority", 50)
         typer.echo(f"  [{sid}] {sstat:10s} pri={spri:3d}  {sdesc}")
@@ -217,7 +224,7 @@ def list_goals(
         gid = str(g.get("id", "?"))[:8]
         parent = g.get("parent_id")
         parent_s = f" parent={str(parent)[:8]}" if parent else ""
-        desc = preview_first(g.get("description", ""), 50)
+        desc = _preview_desc(g.get("description", ""), 50)
         stat = g.get("status", "pending")
         typer.echo(f"  [{gid}] {stat:10s}{parent_s}  {desc}")
 
@@ -245,7 +252,7 @@ def _render_dag_tree(dag: dict, root_id: str) -> None:
             prefix = ""
 
         status = node.get("status", "pending")
-        desc = preview_first(node.get("description", ""), 50)
+        desc = _preview_desc(node.get("description", ""), 50)
         typer.echo(f'{prefix}{goal_id[:8]} ({status}) "{desc}"')
 
         child_ids = children.get(goal_id, [])
@@ -489,7 +496,7 @@ def _format_step_forest(
         # Keep vertical rails while later siblings (loops / child goals) remain
         child_indent = step_indent + ("    " if is_last and more_after == 0 else "│   ")
         status = str(node.get("status", "pending"))
-        desc = preview_first(node.get("description", ""), 40)
+        desc = _preview_desc(node.get("description", ""), 40)
         sid = step_id if len(step_id) <= 12 else step_id[:12] + "…"
         lines.append(f'{step_indent}{branch}[{sid}] {status:10s} "{desc}"')
         for i, kid in enumerate(kids):
@@ -516,7 +523,7 @@ def _format_top_forest(snapshot: dict) -> list[str]:
         jid = str(job.get("id", "?"))
         jstat = str(job.get("status", "pending"))
         jpri = job.get("priority", 50)
-        jdesc = preview_first(job.get("description", ""), 50)
+        jdesc = _preview_desc(job.get("description", ""), 50)
         jelapsed = format_elapsed(job.get("created_at"))
         jelapsed_s = f"  {jelapsed}" if jelapsed else ""
         lines.append(f'[{jid[:8]}] {jstat:10s} pri={jpri}{jelapsed_s}  "{jdesc}"')
@@ -545,7 +552,7 @@ def _format_top_forest(snapshot: dict) -> list[str]:
             branch = "└─ " if is_last else "├─ "
             child_indent = indent + ("    " if is_last else "│   ")
             status = str(node.get("status", "pending"))
-            desc = preview_first(node.get("description", ""), 50)
+            desc = _preview_desc(node.get("description", ""), 50)
             steps_c = node.get("steps_completed", 0) or 0
             steps_t = node.get("steps_total", 0) or 0
             steps_s = f"  steps {steps_c}/{steps_t}" if steps_t else ""
@@ -649,18 +656,22 @@ def top(
 
     from rich.console import Console
     from rich.live import Live
+    from rich.text import Text
 
     client = _require_daemon_ws()
     console = Console()
 
-    def _fetch() -> str:
+    def _fetch() -> Text:
         data = client.autopilot_top()
         size = console.size
-        return render_top_snapshot(
-            data if isinstance(data, dict) else {},
-            interval=interval,
-            width=size.width,
-            height=size.height,
+        # Plain Text: bracketed ids like [a1b2c3d4] must not be parsed as markup.
+        return Text(
+            render_top_snapshot(
+                data if isinstance(data, dict) else {},
+                interval=interval,
+                width=size.width,
+                height=size.height,
+            )
         )
 
     try:

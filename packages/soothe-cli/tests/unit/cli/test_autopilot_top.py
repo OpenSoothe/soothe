@@ -123,6 +123,47 @@ def test_render_top_pads_to_height() -> None:
     assert len(text.splitlines()) == 12
 
 
+def test_render_top_multiline_descriptions_stay_one_line() -> None:
+    text = render_top_snapshot(
+        {
+            "running": True,
+            "loop_pool": {"active": 0, "idle": 0, "max": 2},
+            "jobs": [
+                {
+                    "id": "fad4717e",
+                    "status": "pending",
+                    "priority": 70,
+                    "description": "Task: Initial C Compiler Scaffold\nBuilding the compiler frontend",
+                    "dag": {
+                        "root_id": "fad4717e",
+                        "nodes": [
+                            {
+                                "id": "fad4717e",
+                                "status": "pending",
+                                "description": (
+                                    "Task: Initial C Compiler Scaffold\n"
+                                    "Building the compiler frontend"
+                                ),
+                            },
+                        ],
+                        "edges": [],
+                    },
+                    "loops": [],
+                }
+            ],
+        },
+        interval=1.0,
+    )
+    assert "\nBuilding" not in text
+    job_line = next(ln for ln in text.splitlines() if ln.startswith("[fad4717e]"))
+    assert "pri=70" in job_line
+    assert "Task: Initial C Compiler Scaffold Building" in job_line
+    goal_line = next(ln for ln in text.splitlines() if ln.startswith("└─ [fad4717e]"))
+    assert "Task: Initial C Compiler Scaffold Building" in goal_line
+    assert "\n" not in job_line
+    assert "\n" not in goal_line
+
+
 def test_render_top_orphan_loop_marker() -> None:
     text = render_top_snapshot(
         {
