@@ -1,7 +1,10 @@
 """CE-facing LoopRail builtins (v1 test/runtime implementation).
 
-Mutates ContextEngine goal DAG. Goal tags / branch metadata live in
-``RailJobState`` until GoalNode gains first-class rail fields.
+Mutates ContextEngine goal DAG. Goal tags / branch metadata are mirrored onto
+``GoalNode.rail_*`` (IG-678 P2-2) and also kept in ``RailJobState`` for wave
+counters. IG-691: ``tags_by_goal`` falls back to CE ``rail_tags``, hydrates
+annotations on bind, and optionally persists ``rail_state.json`` under the
+job artifact dir so guards survive daemon restart.
 
 IG-687 adds greenfield-system builtins: plan_milestones, spawn_wave_makers
 (with optional git worktrees), spawn_integrate, commit_milestone,
@@ -11,9 +14,10 @@ spawn_feedback_cycle (find → optimize → verify).
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +25,8 @@ from soothe.context.engine import ContextEngine
 from soothe.context.models import TERMINAL_STATES, GoalNode
 
 logger = logging.getLogger(__name__)
+
+_RAIL_STATE_FILENAME = "rail_state.json"
 
 # Default parallel maker modules when greenfield has no custom plan.
 _DEFAULT_WAVE_MODULES: tuple[str, ...] = ("core", "api", "cli", "tests")
@@ -123,19 +129,42 @@ def _ensure_worktree(
 class RailBuiltinExecutor:
     """Execute ``then:`` verbs against ContextEngine + RailJobState."""
 
-    def __init__(self, ce: ContextEngine) -> None:
+    def __init__(
+        self,
+        ce: ContextEngine,
+        *,
+        jobs_root: Path | None = None,
+    ) -> None:
         self._ce = ce
         self._jobs: dict[str, RailJobState] = {}
         self._lock = asyncio.Lock()
+        self._jobs_root = jobs_root
 
     async def bind_job(self, state: RailJobState) -> None:
-        """Register or replace job state for a root goal id."""
+        """Register or replace job state for a root goal id.
+
+        Merges prior in-memory state and on-disk ``rail_state.json``, then
+        hydrates annotations from CE ``GoalNode.rail_*`` (IG-691).
+        """
         async with self._lock:
-            self._jobs[state.job_id] = state
-            self._jobs[state.job_id].annotations.setdefault(
-                state.job_id,
-                GoalAnnotation(tags=["job_root"], branch_id=state.job_id, role="root"),
+            loaded = self._load_rail_state_unlocked(state.job_id)
+            prev = self._jobs.get(state.job_id)
+            merged = state
+            if loaded is not None:
+                merged = self._merge_rail_state(state, loaded)
+            elif prev is not None:
+                merged = self._merge_rail_state(state, prev)
+            self._hydrate_annotations_from_ce(merged)
+            merged.annotations.setdefault(
+                merged.job_id,
+                GoalAnnotation(
+                    tags=["job_root"],
+                    branch_id=merged.job_id,
+                    role="root",
+                ),
             )
+            self._jobs[merged.job_id] = merged
+            self._persist_rail_state_unlocked(merged)
 
     async def job_state(self, job_id: str) -> RailJobState | None:
         async with self._lock:
@@ -168,6 +197,8 @@ class RailBuiltinExecutor:
         if branch_status is not None:
             ann.branch_status = branch_status
         self._sync_goal_fields(goal_id, ann, rail_id=state.rail_id)
+        async with self._lock:
+            self._persist_rail_state_unlocked(state)
         return ann
 
     def _sync_goal_fields(
@@ -189,12 +220,158 @@ class RailBuiltinExecutor:
             goal.branch_status = ann.branch_status  # type: ignore[assignment]
         goal.role = ann.role
 
+    def _job_descendants(self, job_id: str) -> list[GoalNode]:
+        return [g for g in self._ce._dag.goals.values() if g.id == job_id or g.parent_id == job_id]
+
+    def _hydrate_annotations_from_ce(self, state: RailJobState) -> None:
+        """Fill missing annotation fields from persisted CE GoalNode rail_*."""
+        for goal in self._job_descendants(state.job_id):
+            if not (goal.rail_tags or goal.role or goal.branch_id):
+                continue
+            ann = state.annotations.setdefault(goal.id, GoalAnnotation())
+            if goal.rail_tags:
+                if not ann.tags:
+                    ann.tags = list(goal.rail_tags)
+                else:
+                    for tag in goal.rail_tags:
+                        if tag not in ann.tags:
+                            ann.tags.append(tag)
+            if goal.role and not ann.role:
+                ann.role = goal.role
+            if goal.branch_id and not ann.branch_id:
+                ann.branch_id = goal.branch_id
+            if goal.branch_status in ("active", "pruned", "suspended"):
+                ann.branch_status = goal.branch_status
+
+    @staticmethod
+    def _merge_rail_state(base: RailJobState, donor: RailJobState) -> RailJobState:
+        """Prefer ``base`` identity; keep donor annotations / wave counters."""
+        annotations = dict(donor.annotations)
+        annotations.update(base.annotations)
+        return RailJobState(
+            job_id=base.job_id,
+            rail_id=base.rail_id or donor.rail_id,
+            rail_version=base.rail_version or donor.rail_version,
+            annotations=annotations,
+            suspended=base.suspended or donor.suspended,
+            completed=base.completed or donor.completed,
+            scout_count=base.scout_count if base.scout_count != 2 else donor.scout_count,
+            decompose_plan=base.decompose_plan
+            if base.decompose_plan is not None
+            else donor.decompose_plan,
+            wave_index=max(base.wave_index, donor.wave_index),
+            max_waves=max(base.max_waves, donor.max_waves),
+            wave_modules=base.wave_modules if base.wave_modules is not None else donor.wave_modules,
+            worktrees_enabled=donor.worktrees_enabled,
+            feedback_round=max(base.feedback_round, donor.feedback_round),
+            max_feedback_rounds=max(base.max_feedback_rounds, donor.max_feedback_rounds),
+            acceptance_met=base.acceptance_met or donor.acceptance_met,
+        )
+
+    async def _persist_job(self, state: RailJobState) -> None:
+        async with self._lock:
+            self._persist_rail_state_unlocked(state)
+
+    def _rail_state_path(self, job_id: str) -> Path | None:
+        if self._jobs_root is None:
+            return None
+        safe = job_id.replace("/", "_").replace("\\", "_")
+        if ".." in safe or not safe.strip():
+            return None
+        return self._jobs_root / safe / _RAIL_STATE_FILENAME
+
+    def _persist_rail_state_unlocked(self, state: RailJobState) -> None:
+        path = self._rail_state_path(state.job_id)
+        if path is None:
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "job_id": state.job_id,
+                "rail_id": state.rail_id,
+                "rail_version": state.rail_version,
+                "suspended": state.suspended,
+                "completed": state.completed,
+                "scout_count": state.scout_count,
+                "decompose_plan": state.decompose_plan,
+                "wave_index": state.wave_index,
+                "max_waves": state.max_waves,
+                "wave_modules": state.wave_modules,
+                "worktrees_enabled": state.worktrees_enabled,
+                "feedback_round": state.feedback_round,
+                "max_feedback_rounds": state.max_feedback_rounds,
+                "acceptance_met": state.acceptance_met,
+                "annotations": {gid: asdict(ann) for gid, ann in state.annotations.items()},
+            }
+            path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        except OSError:
+            logger.debug("Failed to persist rail state for %s", state.job_id, exc_info=True)
+
+    def _load_rail_state_unlocked(self, job_id: str) -> RailJobState | None:
+        path = self._rail_state_path(job_id)
+        if path is None or not path.is_file():
+            return None
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            logger.debug("Failed to load rail state for %s", job_id, exc_info=True)
+            return None
+        if not isinstance(raw, dict):
+            return None
+        annotations: dict[str, GoalAnnotation] = {}
+        for gid, ann_raw in (raw.get("annotations") or {}).items():
+            if not isinstance(ann_raw, dict):
+                continue
+            annotations[str(gid)] = GoalAnnotation(
+                tags=list(ann_raw.get("tags") or []),
+                branch_id=ann_raw.get("branch_id"),
+                branch_status=str(ann_raw.get("branch_status") or "active"),
+                role=ann_raw.get("role"),
+            )
+        return RailJobState(
+            job_id=str(raw.get("job_id") or job_id),
+            rail_id=str(raw.get("rail_id") or ""),
+            rail_version=str(raw.get("rail_version") or ""),
+            annotations=annotations,
+            suspended=bool(raw.get("suspended")),
+            completed=bool(raw.get("completed")),
+            scout_count=int(raw.get("scout_count") or 2),
+            decompose_plan=raw.get("decompose_plan"),
+            wave_index=int(raw.get("wave_index") or 0),
+            max_waves=int(raw.get("max_waves") or 3),
+            wave_modules=raw.get("wave_modules"),
+            worktrees_enabled=bool(raw.get("worktrees_enabled", True)),
+            feedback_round=int(raw.get("feedback_round") or 0),
+            max_feedback_rounds=int(raw.get("max_feedback_rounds") or 8),
+            acceptance_met=bool(raw.get("acceptance_met")),
+        )
+
+    def _tags_by_goal_unlocked(self, job_id: str) -> dict[str, list[str]]:
+        """Union in-memory annotations with CE ``rail_tags`` (IG-691)."""
+        out: dict[str, list[str]] = {}
+        state = self._jobs.get(job_id)
+        if state is not None:
+            for gid, ann in state.annotations.items():
+                if ann.tags:
+                    out[gid] = list(ann.tags)
+        for goal in self._job_descendants(job_id):
+            ce_tags = list(goal.rail_tags or [])
+            if not ce_tags:
+                continue
+            existing = out.get(goal.id, [])
+            if not existing:
+                out[goal.id] = ce_tags
+                continue
+            merged = list(existing)
+            for tag in ce_tags:
+                if tag not in merged:
+                    merged.append(tag)
+            out[goal.id] = merged
+        return out
+
     async def tags_by_goal(self, job_id: str) -> dict[str, list[str]]:
         async with self._lock:
-            state = self._jobs.get(job_id)
-            if state is None:
-                return {}
-            return {gid: list(ann.tags) for gid, ann in state.annotations.items()}
+            return self._tags_by_goal_unlocked(job_id)
 
     async def invoke(
         self,
@@ -369,6 +546,7 @@ class RailBuiltinExecutor:
 
         state.wave_index += 1
         wave = state.wave_index
+        await self._persist_job(state)
         repo = _job_workspace(self._ce, job_id)
         created: list[str] = []
 
@@ -592,6 +770,7 @@ class RailBuiltinExecutor:
 
         state.feedback_round += 1
         round_n = state.feedback_round
+        await self._persist_job(state)
         ws = _job_workspace(self._ce, job_id)
         ws_str = str(ws) if ws else None
         base_deps = [trigger_goal_id] if trigger_goal_id else []
@@ -733,6 +912,7 @@ class RailBuiltinExecutor:
             await self._ce.complete_goal(job_id)
         state.completed = True
         state.suspended = False
+        await self._persist_job(state)
         return BuiltinResult(status="success", detail="job completed")
 
     async def _require(self, job_id: str) -> RailJobState:

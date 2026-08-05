@@ -328,3 +328,128 @@ async def test_rail_job_root_dispatch_skipped() -> None:
     refreshed = await ce.get_goal(root.id)
     assert refreshed is not None
     assert refreshed.status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_tags_by_goal_falls_back_to_ce_rail_tags() -> None:
+    """IG-691: empty RailJobState still exposes CE rail_tags for guards."""
+    ce = ContextEngine()
+    root = await ce.create_goal("Build system", priority=70)
+    integ = await ce.create_goal(
+        "Integrate wave 1",
+        parent_id=root.id,
+        source="decomposition",
+        rail_id="greenfield-system",
+    )
+    integ.rail_tags = ["integrate", "wave-1"]
+
+    ex = RailBuiltinExecutor(ce)
+    # No bind — simulates lost in-memory annotations after restart
+    tags = await ex.tags_by_goal(root.id)
+    assert tags.get(integ.id) == ["integrate", "wave-1"]
+
+    needs = _structural_short_circuit(
+        condition_name="needs_commit",
+        event="goal_completed",
+        trigger_tags=tags[integ.id],
+        structural={"pending_or_active_count": 0},
+    )
+    assert needs is not None and needs.matched is True
+
+
+@pytest.mark.asyncio
+async def test_bind_job_hydrates_annotations_from_ce(tmp_path: Path) -> None:
+    """IG-691: rebind after empty state restores tags from GoalNode."""
+    ce = ContextEngine()
+    root = await ce.create_goal("Build system", priority=70, workspace=str(tmp_path))
+    integ = await ce.create_goal(
+        "Integrate",
+        parent_id=root.id,
+        source="decomposition",
+        rail_id="greenfield-system",
+    )
+    integ.rail_tags = ["integrate", "wave-1"]
+    integ.role = "integrator"
+
+    ex = RailBuiltinExecutor(ce, jobs_root=tmp_path / "jobs")
+    await ex.bind_job(RailJobState(job_id=root.id, rail_id="greenfield-system", rail_version="1.1"))
+    tags = await ex.tags_by_goal(root.id)
+    assert "integrate" in tags.get(integ.id, [])
+    state = await ex.job_state(root.id)
+    assert state is not None
+    assert "integrate" in state.annotations[integ.id].tags
+
+
+@pytest.mark.asyncio
+async def test_rail_state_persists_across_new_executor(tmp_path: Path) -> None:
+    """IG-691: rail_state.json restores annotations after process restart."""
+    jobs_root = tmp_path / "jobs"
+    ce = ContextEngine()
+    root = await ce.create_goal("Build system", priority=70, workspace=str(tmp_path))
+    ex1 = RailBuiltinExecutor(ce, jobs_root=jobs_root)
+    await ex1.bind_job(
+        RailJobState(job_id=root.id, rail_id="greenfield-system", rail_version="1.1")
+    )
+    maker = await ce.create_goal("Maker", parent_id=root.id, source="decomposition")
+    await ex1.annotate_goal(
+        maker.id,
+        root.id,
+        tags=["implementation", "maker", "wave-1"],
+        role="maker",
+    )
+    state1 = await ex1.job_state(root.id)
+    assert state1 is not None
+    state1.wave_index = 2
+    await ex1._persist_job(state1)
+
+    # Fresh executor + CE still has mirrored rail_tags
+    ex2 = RailBuiltinExecutor(ce, jobs_root=jobs_root)
+    await ex2.bind_job(
+        RailJobState(job_id=root.id, rail_id="greenfield-system", rail_version="1.1")
+    )
+    state2 = await ex2.job_state(root.id)
+    assert state2 is not None
+    assert state2.wave_index == 2
+    assert "implementation" in state2.annotations[maker.id].tags
+    tags = await ex2.tags_by_goal(root.id)
+    assert "maker" in tags.get(maker.id, [])
+
+
+@pytest.mark.asyncio
+async def test_needs_commit_via_ce_tags_after_cleared_memory(tmp_path: Path) -> None:
+    """Integrate complete with CE tags only → needs_commit still matches."""
+    ce = ContextEngine()
+    root = await ce.create_goal("Build system", priority=70, workspace=str(tmp_path))
+    ex = RailBuiltinExecutor(ce, jobs_root=tmp_path / "jobs")
+    await ex.bind_job(
+        RailJobState(
+            job_id=root.id,
+            rail_id="greenfield-system",
+            rail_version="1.1",
+            wave_modules=["a"],
+            worktrees_enabled=False,
+        )
+    )
+    state = await ex.job_state(root.id)
+    assert state is not None
+    state.wave_index = 1
+    maker = await ce.create_goal("Maker a", parent_id=root.id, source="decomposition")
+    await ce.complete_goal(maker.id)
+    await ex.annotate_goal(
+        maker.id, root.id, tags=["implementation", "maker", "wave-1"], role="maker"
+    )
+    integ = await ex.invoke("spawn_integrate", job_id=root.id, trigger_goal_id=maker.id)
+    integ_id = integ.created_goal_ids[0]
+    await ce.complete_goal(integ_id)
+
+    # Simulate restart: drop in-memory jobs, keep CE rail_tags
+    ex._jobs.clear()
+    tags = await ex.tags_by_goal(root.id)
+    assert "integrate" in tags.get(integ_id, [])
+    needs = _structural_short_circuit(
+        condition_name="needs_commit",
+        event="goal_completed",
+        trigger_tags=tags[integ_id],
+        structural={"pending_or_active_count": 0},
+    )
+    assert needs is not None and needs.matched is True

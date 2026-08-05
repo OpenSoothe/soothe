@@ -414,11 +414,21 @@ class GoalDAGVerifier:
             goal = self._ce.get_goal_sync(goal_id)
             if goal is None:
                 continue
-            if goal.status in ("blocked", "suspended"):
-                try:
-                    await self._ce.reactivate_goal(goal_id)
-                except Exception:
-                    logger.warning("Failed to reactivate goal %s", goal_id, exc_info=True)
+            if goal.status not in ("blocked", "suspended"):
+                continue
+            # IG-691: do not undo consensus send-back budget exhaustion.
+            if goal.status == "suspended" and goal.send_back_count >= goal.max_send_backs:
+                logger.info(
+                    "Health reset skipped for %s: consensus send_back budget exhausted (%d/%d)",
+                    goal_id,
+                    goal.send_back_count,
+                    goal.max_send_backs,
+                )
+                continue
+            try:
+                await self._ce.reactivate_goal(goal_id)
+            except Exception:
+                logger.warning("Failed to reactivate goal %s", goal_id, exc_info=True)
 
         for goal_id, priority in report.suggest_priority_adjust.items():
             goal = self._ce.get_goal_sync(goal_id)

@@ -7,6 +7,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from soothe.autopilot.rail.builtins_exec import (
@@ -67,9 +68,13 @@ class LoopRailInterpreter:
         guards: GuardEvaluator | None = None,
         trace: RailTraceStore | None = None,
         catalog: LoopRailCatalog | None = None,
+        jobs_root: Path | None = None,
     ) -> None:
         self._ce = ce
-        self._builtins = builtins or RailBuiltinExecutor(ce)
+        if builtins is not None:
+            self._builtins = builtins
+        else:
+            self._builtins = RailBuiltinExecutor(ce, jobs_root=jobs_root)
         self._guards = guards
         self._trace = trace or MemoryRailTraceStore()
         self._catalog = catalog or LoopRailCatalog()

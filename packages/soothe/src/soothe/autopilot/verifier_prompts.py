@@ -67,7 +67,11 @@ Output JSON structure (strict format):
 ```
 
 Constraints:
-- reset_goals: Goals stuck in pending/suspended that should retry
+- reset_goals: Goals stuck in pending/suspended that should retry —
+  NEVER reset goals suspended after consensus send_back budget exhaustion
+  (send_back_count >= max_send_backs); those need operator resume, not auto-reset.
+  Do reset ordinary suspended/blocked goals whose dependencies are satisfied
+  and that are not send_back-exhausted.
 - remove_goals: ONLY cancelled or failed clutter with no dependents; NEVER job roots
   (parent_id null) that are still active/pending/suspended; NEVER goals with live children
 - merge_goals: Combine similar goals (logged; not always auto-applied)

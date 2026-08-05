@@ -447,6 +447,47 @@ class TestDecomposeCooldown:
         assert len(children2) == 2
 
 
+class TestHealthSkipConsensusExhaustedReset:
+    @pytest.mark.asyncio
+    async def test_skip_reset_when_send_back_budget_exhausted(self, mock_config: MagicMock) -> None:
+        """IG-691: health must not reactivate consensus-exhausted suspends."""
+        ce = ContextEngine()
+        goal = await ce.create_goal("Integrate wave 1", priority=78)
+        ce.claim_goal(goal.id, loop_id="w1")
+        goal.send_back_count = 3
+        goal.max_send_backs = 3
+        await ce.suspend_goal(goal.id, reason="send_back budget exhausted")
+
+        verifier = GoalDAGVerifier(ce, mock_config)
+        report = DagHealthReport(
+            suggest_reset=[goal.id],
+            reasoning="suspended blocker should reset",
+        )
+        await verifier.apply_health_report(report)
+
+        still = await ce.get_goal(goal.id)
+        assert still is not None
+        assert still.status == "suspended"
+        assert still.send_back_count == 3
+
+    @pytest.mark.asyncio
+    async def test_reset_ordinary_suspended_still_works(self, mock_config: MagicMock) -> None:
+        ce = ContextEngine()
+        goal = await ce.create_goal("Ordinary suspended", priority=50)
+        ce.claim_goal(goal.id, loop_id="w1")
+        goal.send_back_count = 0
+        goal.max_send_backs = 3
+        await ce.suspend_goal(goal.id, reason="transient")
+
+        verifier = GoalDAGVerifier(ce, mock_config)
+        report = DagHealthReport(suggest_reset=[goal.id], reasoning="retry")
+        await verifier.apply_health_report(report)
+
+        still = await ce.get_goal(goal.id)
+        assert still is not None
+        assert still.status == "pending"
+
+
 class TestNeedsReplanOutcome:
     def test_derive_outcome_none_is_needs_replan(self) -> None:
         from soothe.runner._runner_autopilot_worker import AutopilotWorkerMixin

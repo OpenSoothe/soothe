@@ -182,6 +182,7 @@ class AutopilotService:
                 self._ce,
                 guards=guards,
                 trace=JsonlRailTraceStore(root=trace_root, legacy_root=legacy_root),
+                jobs_root=trace_root,
             )
         except Exception:
             logger.warning("LoopRail interpreter unavailable", exc_info=True)
