@@ -1,19 +1,36 @@
 ---
 name: diagnose-soothe
 description: >-
-  Diagnose Soothe agent loops from ~/.soothe/logs (soothe.log, daemon.log,
-  cli.log) and per-loop runner.log. Analyzes StrangeLoop plans, CoreAgent
-  write_todos, tool-call anomalies (errors, latency, repetition), step
-  failures, and progressive skill loading (discovery, intent prefetch,
-  invoke_skill, /skill: expansion). Use when debugging loop hangs, failed
-  steps, TUI/daemon mismatches, abnormal tool usage, wasteful plans/todos,
-  skills not found or not loaded, or when the user asks to analyze soothe
-  logs or diagnose a specific loop.
+  Diagnose Soothe agent loops and autopilot jobs from ~/.soothe/logs
+  (soothe.log, daemon.log, cli.log), per-loop runner.log, job rail traces,
+  and persist job/loop indexes. Analyzes StrangeLoop plans, CoreAgent
+  write_todos, tool-call anomalies, skill loading, plus autopilot goal DAG
+  parallelism, LoopRail conformance, multi-goal/multi-loop concurrency,
+  goal latency distributions, workspace reservation stalls, and
+  consensus/send_back. Use when debugging loop hangs, failed steps, TUI
+  mismatches, wasteful plans/todos, skills not loaded, low autopilot
+  parallelism, rail mis-fires, or when the user asks to diagnose a loop
+  or autopilot job.
 ---
 
 # Diagnose Soothe
 
-Systematic log forensics for Soothe loops, daemon lifecycle, and CLI/TUI behavior.
+Systematic log forensics for Soothe loops, autopilot jobs, daemon lifecycle,
+and CLI/TUI behavior.
+
+## Routing
+
+```text
+if user mentions job id / autopilot / rail / pool / multi-goal / "low parallelism"
+  → Workflow C (autopilot job) first; then Workflow B on hot goal loops
+else if specific loop id / suffix / hang / tools / plan / skills
+  → Workflow B (and A if broad)
+else
+  → Workflow A broad triage
+```
+
+Prefer the **venv** CLI when available (`.venv/bin/soothe`) for `autopilot top`
+and `--rail` surfaces.
 
 ## When to Use
 
@@ -22,15 +39,20 @@ Systematic log forensics for Soothe loops, daemon lifecycle, and CLI/TUI behavio
 - User wants root-cause analysis of tool errors, slow steps, or repetitive tool calls
 - User asks whether a StrangeLoop plan or CoreAgent todo list has waste or failed steps
 - User reports a skill did not load, `/skill:name` failed, or agent ignored skill instructions
+- User asks about an **autopilot job** (job/goal id, `--rail`, worker pool, DAG stuck)
+- User reports **low parallelism**, pending implement goals, rail not advancing, or send_backs
 
 ## Log Locations
 
-| File | Logger / purpose | Loop correlation |
-|------|------------------|------------------|
-| `~/.soothe/logs/soothe.log` | `soothe.*`, `soothe_plugins.*` — StrangeLoop, CoreAgent, tools, planner | 4-char suffix tag: `[7cba]` (last 4 chars of loop/thread id) |
-| `~/.soothe/logs/daemon.log` | `soothe_daemon.*` — WebSocket, workers, loop_new/input, thread pool | Full UUID in prefix: `[loop=019f01c8-56e9-73d1-9271-0ca7ba307cba]` |
-| `~/.soothe/logs/cli.log` | `soothe_cli.*` — connection, event routing, structured turn stats | JSON events may include loop context; grep loop id suffix |
-| `~/.soothe/data/loops/{loop_id}/runner.log` | Same format as `soothe.log`, scoped to one loop (worker pool / subprocess) | Always that loop; prefer when central log is noisy |
+| File | Logger / purpose | Loop / job correlation |
+|------|------------------|------------------------|
+| `~/.soothe/logs/soothe.log` | `soothe.*`, `soothe_plugins.*` — StrangeLoop, CoreAgent, tools, planner, autopilot dispatch | 4-char suffix tag: `[7cba]`; also `dispatched goal`, `Consensus` |
+| `~/.soothe/logs/daemon.log` | `soothe_daemon.*` — WebSocket, workers, loop_new/input, thread pool | Full UUID: `[loop=…]` |
+| `~/.soothe/logs/cli.log` | `soothe_cli.*` — connection, event routing, structured turn stats | JSON events may include loop context |
+| `~/.soothe/data/loops/{loop_id}/runner.log` | Same format as `soothe.log`, scoped to one loop | Prefer for pooled / autopilot workers |
+| `~/.soothe/data/jobs/{job_id}/rail_trace.jsonl` | LoopRail rule-fire trace (canonical) | Job-scoped; append-only |
+| `~/.soothe/data/loops/{job_id}/rail_trace.jsonl` | Legacy rail trace path | Migrate/read if jobs/ missing |
+| `~/.soothe/data/databases/persist.db` | `autopilot:goals:snapshot`, `autopilot:job_loops:{job}`, `autopilot:context:{goal}` | Durable DAG + job↔loop index |
 
 Rotated backups: `*.log.1`, `*.log.2`, etc. Search all when the incident is older than the current file.
 
@@ -353,9 +375,202 @@ For each skill the user/task implies (e.g. `/skill:github`, intent match, or exp
 - `progressive_skills.core_skills` — explicit core tier list (`null` = frontmatter `core: true`)
 - `skillify.enabled` / `warehouse_paths` — semantic supplement for `search_skills`
 
+## Workflow C — Diagnose an Autopilot Job
+
+Use when the user names a **job id**, rail, worker pool, multi-goal DAG, or
+complains about low parallelism / stuck pending goals.
+
+Prefer `.venv/bin/soothe` for autopilot commands.
+
+### C0. Resolve job identity
+
+User may give full job UUID, 8-char prefix (`b266c7d3`), or goal id (child).
+
+```bash
+SOOTHE="${SOOTHE:-soothe}"   # prefer: /path/to/repo/.venv/bin/soothe
+$SOOTHE autopilot status
+$SOOTHE autopilot jobs
+$SOOTHE autopilot job <JOB_ID>
+$SOOTHE autopilot goals
+$SOOTHE autopilot top --interval 2   # if available
+```
+
+Filesystem:
+
+```bash
+JOB=<JOB_ID>
+ls ~/.soothe/data/jobs/$JOB/
+ls ~/.soothe/data/loops/autopilot__${JOB}__* 2>/dev/null
+ls ~/.soothe/data/loops/$JOB/ 2>/dev/null   # legacy rail_trace
+```
+
+Persist (SQLite mode):
+
+```bash
+sqlite3 ~/.soothe/data/databases/persist.db \
+  "SELECT key, length(data) FROM soothe_kv WHERE key LIKE '%$JOB%' OR key='autopilot:goals:snapshot';"
+sqlite3 ~/.soothe/data/databases/persist.db \
+  "SELECT data FROM soothe_kv WHERE key='autopilot:job_loops:$JOB';" | python3 -m json.tool
+```
+
+Record: `rail_id`, workspace, root `depends_on`, children (id/status/role/tags/deps),
+pool `active/idle/max`, active loops from `job_loops`.
+
+### C1. Parallelism scorecard (multi-goal + multi-loop)
+
+**Ready vs active vs blocked**
+
+| Question | How to answer |
+|----------|----------------|
+| How many goals *ready*? | `pending` and all `depends_on` terminal (or empty) |
+| How many *active*? | status `active` + non-null assignment / loop in `job_loops.active_loops` |
+| Why blocked? | Hard deps unmet; workspace reservation conflict; `max_loops` / semaphore; dreaming |
+
+```bash
+$SOOTHE autopilot status
+rg 'dispatched goal|claimed slot|deferred: workspace|No worker capacity|WorkerPool:' \
+  ~/.soothe/logs/soothe.log* | tail -60
+```
+
+**Scorecard (required in the report)**
+
+```text
+pool_max=N  pool_active=A  ready_goals=R  active_goals=G  active_loops=L
+parallelism_ratio = A / max(1, min(R, N, max_parallel_goals))
+```
+
+Flag **low parallelism** when:
+
+- `R ≥ 2` and `A ≤ 1` for longer than ~2× `agent.autopilot.poll_interval`, or
+- Rail already spawned multiple makers but only one has a loop, or
+- Multiple ready goals share one workspace path under reservation (expect A=1)
+
+**Same-workspace serialization:** goals with identical `workspace` conflict under
+workspace reservation. Greenfield makers should use distinct worktree paths under
+`<workspace>/.soothe/worktrees/…`. If worktree creation failed, makers fall back
+to the job workspace → serialized execution.
+
+**By-design serial phases** (do not call a bug):
+
+| Rail | Early phase | Parallel phase |
+|------|-------------|----------------|
+| `feature-dev` | after scouts: one plan+one maker | scout fan-out only |
+| `greenfield-system` | `plan_milestones` → one architecture goal | `spawn_wave_makers` after `architecture_ready` |
+| `migration` | wave plan+implement | limited; still often singleton maker |
+
+### C2. Rail conformance
+
+1. Resolve rail YAML: package `builtin_rails/<rail_id>.yml`, else
+   `~/.soothe/rails/`, else `<workspace>/.soothe/rails/`.
+2. Diff `rail_trace.jsonl` against `flow[].then` / conditions.
+
+```bash
+TRACE=~/.soothe/data/jobs/$JOB/rail_trace.jsonl
+# fallback: ~/.soothe/data/loops/$JOB/rail_trace.jsonl
+test -f "$TRACE" || TRACE=~/.soothe/data/loops/$JOB/rail_trace.jsonl
+python3 - "$TRACE" <<'PY'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+for line in p.read_text().splitlines():
+    r = json.loads(line)
+    cols = [
+        r.get("seq"),
+        r.get("event"),
+        r.get("condition"),
+        r.get("builtin"),
+        r.get("builtin_result"),
+        (r.get("goal_id") or "")[:8],
+    ]
+    print("\t".join("" if c is None else str(c) for c in cols))
+    gr = r.get("guard_result") or {}
+    if r.get("condition") and gr:
+        reason = str(gr.get("reasoning", ""))[:120]
+        print(f"  guard matched={gr.get('matched')} conf={gr.get('confidence')} {reason}")
+PY
+```
+
+| Check | Pass | Fail |
+|-------|------|------|
+| `job_start` → first builtin | Matches rail `flow[0].then` | Wrong/missing builtin |
+| Guard `matched` for phase | Advances when prerequisites met | Stuck `matched=false` / never fires next builtin |
+| Maker `depends_on` | Plan/arch/siblings only — **never job root** | Health wired child → root (implement stuck while root active) |
+| Commit / review order | `commit_milestone` before diff-scoped `review` (greenfield) | Review before commit, or skipped gate |
+| Wave advance | `ready_for_next_wave` → another `spawn_wave_makers` under `max_waves` | Idle after QA with waves remaining |
+
+Also inspect goal annotations via CLI / goal detail: `role`, `rail_tags`, `branch_id`, `workspace`.
+
+### C3. Goal execution status matrix
+
+For every goal with `id == JOB` or `parent_id == JOB` (plus relevant orphans):
+
+| Column | Source |
+|--------|--------|
+| id, description preview | `autopilot goals` / job DAG |
+| role / rail_tags | goal detail |
+| status | pending/active/completed/failed/cancelled/suspended |
+| depends_on met? | all deps terminal? |
+| loop_id / attempt | `job_loops` + `assigned_loop_id` |
+| wall time | dispatch → terminal (logs / runner.log) |
+| send_backs | `Sent goal … back for rework` / goal `send_back_count` |
+
+```bash
+rg "dispatched goal|Sent goal .* send_back|Consensus evaluation" \
+  ~/.soothe/logs/soothe.log* | tail -80
+```
+
+### C4. Latency distribution
+
+**Per goal** (use that goal's worker `runner.log` when present):
+
+```bash
+for d in ~/.soothe/data/loops/autopilot__${JOB}__*; do
+  echo "=== $d ==="
+  rg '\[Goal\]|\[Plan\] phase=|Step .* (completed|failed).* in [0-9]+ms|Graph invocation' \
+    "$d/runner.log" 2>/dev/null | head -40
+done
+```
+
+Collect:
+
+- Goal wall-clock (first dispatch / `[Goal]` → complete / cancel)
+- Plan-phase `[Plan] phase=` `elapsed_ms`
+- Step `in {ms}ms` samples
+- Idle gap: goal became ready → `dispatched goal` (flag if much greater than poll interval)
+
+**Across goals (report):**
+
+```text
+p50 / p95 goal_wall_s
+p50 / p95 step_ms
+peak_concurrent_active_goals (from overlapping dispatch windows)
+max ready→dispatch idle_gap_s
+```
+
+Flag: single architecture/planner goal >15–30 min with no completion; or
+`R≥2` with large idle gaps while `pool_active < pool_max`.
+
+### C5. Autopilot-specific failure modes
+
+| Symptom | Likely cause |
+|---------|----------------|
+| Pool `1/0/8`, one child | Expected early rail phase **or** reservation/deps bug |
+| Implement `pending` forever | `depends_on` includes **root** still `active` / send_back |
+| Rail stuck after architecture | Guard never matches `architecture_ready` / LLM guard fail |
+| Many `send_back` | Thin consensus evidence — not a parallelism config issue |
+| Orphan `pending` under old parents | Stale DAG clutter; cancel orphans |
+| Makers share one workspace | Worktree add failed; reservation serializes |
+| `job_start` builtin error | Unknown `then:` verb or CE create failure — check rail allowlist + logs |
+| Submit CLI timeout (30s) | Slow intake/rail bind; job may still exist — verify `jobs` |
+
+### C6. Optional deep dive
+
+For each slow/failed goal loop, run **Workflow B** with that
+`autopilot__{job}__{uuid}` loop id (suffix = last 4 of the uuid segment).
+
+
 ## Output Template
 
-Deliver findings in this structure:
+### Loop diagnosis
 
 ```markdown
 ## Loop {suffix} ({full_uuid})
@@ -392,6 +607,39 @@ One paragraph: outcome (hang / failed / slow / ok-with-waste), primary root caus
 Actionable fixes (config, prompt, tool install, daemon restart, code bug reference if known).
 ```
 
+### Autopilot job diagnosis
+
+```markdown
+## Autopilot job {job_id} (rail={rail_id})
+
+### Summary
+Outcome + whether low parallelism is **by-design phase** vs **defect**; severity.
+
+### Parallelism scorecard
+- pool_max / pool_active / ready_goals / active_goals / active_loops / ratio
+- reservation / shared workspace / worktrees present?
+- peak concurrent active goals
+
+### Rail conformance
+- expected flow vs rail_trace builtins (seq table)
+- guard mismatches; skipped phases
+- bad depends_on (child → root)?
+
+### Goal matrix
+| goal | role/tags | status | deps met? | loop | wall_s | send_backs |
+
+### Latency distribution
+- p50/p95 goal_wall_s; p50/p95 step_ms
+- ready→dispatch idle gaps
+- slowest goals / steps
+
+### Hot loops (optional)
+Link Workflow B summaries for failing or slow `autopilot__{job}__*` loops.
+
+### Recommendations
+…
+```
+
 ## Enable Richer Logs (if forensics insufficient)
 
 ```bash
@@ -410,9 +658,14 @@ Reproduce minimally, then re-run Workflow B. `[write_todos]` and `[Skill]` detai
 - Prefer `runner.log` for pooled workers — it avoids cross-loop noise.
 - Classify before blaming the model: thread-pool `request_timeout` (default **14d** / `1209600`; `0` = no cap), tool budget, missing `rg`/`ag`, and checkpoint races are common infra causes.
 - Never cite internal IG/RFC ids in user-facing diagnosis text.
+- Autopilot: do not call early single-goal execution a parallelism bug when the rail is still in a serial gate (`plan_milestones`, scout barrier, etc.).
+- Autopilot: distinguish **ready but not dispatched** (scheduler/reservation) from **not ready** (deps / root wiring).
+- Prefer `~/.soothe/data/jobs/{job_id}/rail_trace.jsonl` over legacy `loops/{job_id}/` when both exist.
 
 ## Related
 
 - Project debug guide: `docs/wiki/howto_debug.md`
 - CLI loop commands: `soothe loop list|show|tree|continue`
+- CLI autopilot: `soothe autopilot status|jobs|job|goals|top|cancel`
+- Builtin rails: `packages/soothe/src/soothe/rails/builtin_rails/`
 - Example incident writeups: `docs/impl/archive/IG-509-loop-7cba-hang-analysis.md`, `docs/impl/IG-549-loop-worker-goal-boundary-hardening.md`
