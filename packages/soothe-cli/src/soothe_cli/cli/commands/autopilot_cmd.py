@@ -35,12 +35,10 @@ _TOP_HELP_LINES = (
     "  a All/active    s Steps           l Loops       d Density",
     "  +/- Delay       j/k or arrows Scroll           g/G Top/bottom",
     "",
-    "mode=active hides completed/failed/cancelled goals and",
-    "completed/failed/skipped steps; mode=all shows the full forest.",
+    "mode=active hides completed/failed/cancelled goals;",
+    "steps=on lists the StepDAG under remaining live goals.",
+    "mode=all shows the full forest including terminal goals.",
 )
-
-# StepDAG terminal statuses (mode=active hides these; mirrors server SoT).
-_STEP_TERMINAL_STATUSES = frozenset({"completed", "failed", "skipped"})
 
 # Concept colors for autopilot top (jobs / goals / steps / loops).
 _STYLE_JOB = "bold bright_cyan"
@@ -707,20 +705,17 @@ def _format_step_list(
     indent: str,
     lines: list[Text],
     trailing_siblings: int,
-    include_terminal: bool = False,
 ) -> None:
     """Append planned steps as a flat list under a goal (space-efficient vs tree).
 
-    When ``include_terminal`` is false (mode=active), omit terminal step
-    statuses so the forest stays focused on live work.
+    Renders the full StepDAG for goals already present in the forest. Goal
+    filtering (mode=active) happens upstream; do not drop completed steps here
+    or live goals with finished plan waves look empty when ``steps=on``.
     """
     ordered_nodes: list[dict] = []
     seen: set[str] = set()
     for raw in steps.get("nodes") or []:
         if not isinstance(raw, dict) or not raw.get("id"):
-            continue
-        status = str(raw.get("status", "pending"))
-        if not include_terminal and status in _STEP_TERMINAL_STATUSES:
             continue
         sid = str(raw["id"])
         if sid in seen:
@@ -759,8 +754,8 @@ def _format_top_forest(
     """Render jobs → goal DAG → step DAG → loops as colored Rich Text rows.
 
     Jobs are shown newest-first (by ``created_at``) so the latest job sits at
-    the top of the forest. In mode=active (``include_terminal=False``),
-    terminal step statuses are omitted client-side as a defense in depth.
+    the top of the forest. When ``show_steps`` is on, each goal's StepDAG is
+    listed in full (server already filtered which goals appear in mode=active).
     """
     raw_jobs = [j for j in (snapshot.get("jobs") or []) if isinstance(j, dict)]
     jobs = _sort_jobs_newest_first(raw_jobs)
@@ -840,7 +835,6 @@ def _format_top_forest(
                     indent=child_indent,
                     lines=lines,
                     trailing_siblings=trailing,
-                    include_terminal=include_terminal,
                 )
 
             for i, entry in enumerate(goal_loops):

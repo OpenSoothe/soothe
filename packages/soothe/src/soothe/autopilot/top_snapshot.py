@@ -2,8 +2,11 @@
 
 Pure filter/assembly used by ``AutopilotService.top_snapshot``. Server SoT for
 which jobs/goals/loops appear in the live dashboard (active-only by default;
-optional ``include_terminal`` keeps completed/failed/cancelled goals and
-terminal steps).
+optional ``include_terminal`` keeps completed/failed/cancelled goals).
+
+``mode=active`` filters goals and loops only. StepDAG rows under kept goals
+are preserved so ``steps=on`` can show plan progress for live work (including
+recently completed steps while the goal/loop is still active).
 """
 
 from __future__ import annotations
@@ -12,60 +15,12 @@ from typing import Any
 
 from soothe.context.models import TERMINAL_STATES
 
-# StepDAG terminal statuses (mode=active hides these; mode=all keeps them).
-STEP_TERMINAL_STATES: frozenset[str] = frozenset({"completed", "failed", "skipped"})
-
-
-def filter_active_steps(steps: dict[str, Any]) -> dict[str, Any] | None:
-    """Keep non-terminal step nodes and edges that still connect them.
-
-    Args:
-        steps: StepDAG snapshot with ``nodes`` and optional ``edges``.
-
-    Returns:
-        Filtered steps dict, or ``None`` when no non-terminal steps remain.
-    """
-    nodes_in = steps.get("nodes") or []
-    nodes = [
-        n
-        for n in nodes_in
-        if isinstance(n, dict)
-        and n.get("id") is not None
-        and str(n.get("status", "pending")) not in STEP_TERMINAL_STATES
-    ]
-    if not nodes:
-        return None
-    keep = {str(n["id"]) for n in nodes}
-    edges = [
-        e
-        for e in (steps.get("edges") or [])
-        if isinstance(e, dict)
-        and str(e.get("source", "")) in keep
-        and str(e.get("target", "")) in keep
-    ]
-    return {"nodes": nodes, "edges": edges}
-
-
-def _with_active_steps(node: dict[str, Any]) -> dict[str, Any]:
-    """Shallow-copy a goal node with terminal steps stripped (counts preserved)."""
-    steps = node.get("steps")
-    if not isinstance(steps, dict):
-        return node
-    filtered = filter_active_steps(steps)
-    out = dict(node)
-    if filtered is None:
-        out.pop("steps", None)
-    else:
-        out["steps"] = filtered
-    return out
-
 
 def filter_active_dag(dag: dict[str, Any]) -> dict[str, Any] | None:
     """Keep non-terminal goal nodes and edges that still connect them.
 
-    Also strips terminal StepDAG rows under kept goals (``completed`` /
-    ``failed`` / ``skipped``). Goal ``steps_completed`` / ``steps_total``
-    counters are left unchanged.
+    StepDAG payloads under kept goals are left intact (``steps=on`` needs
+    them). Goal ``steps_completed`` / ``steps_total`` counters are unchanged.
 
     Args:
         dag: Snapshot with ``nodes``, ``edges``, and optional ``root_id``.
@@ -75,7 +30,7 @@ def filter_active_dag(dag: dict[str, Any]) -> dict[str, Any] | None:
     """
     nodes_in = dag.get("nodes") or []
     nodes = [
-        _with_active_steps(n)
+        n
         for n in nodes_in
         if isinstance(n, dict) and str(n.get("status", "")) not in TERMINAL_STATES
     ]
@@ -220,7 +175,8 @@ def build_top_job_entry(
         loops: JobLoopIndex entries (any status).
         created_at: Optional root ``created_at`` ISO timestamp.
         include_terminal: When ``False`` (default), drop terminal goals and
-            fully terminal jobs. When ``True``, keep the full DAG.
+            fully terminal jobs. StepDAG under remaining goals is kept intact.
+            When ``True``, keep the full DAG.
 
     Returns:
         Job dict with filtered ``dag`` and active ``loops``, or ``None``.

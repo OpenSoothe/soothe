@@ -127,15 +127,15 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
     assert "steps 1/2" in text
     assert "JOB  [a1b2c3d4]" in text
     assert "GOAL [a1b2c3d4]" in text
-    # mode=active hides completed STEP [UZH-01]; pending remains.
-    assert "STEP [UZH-01]" not in text
+    # steps=on lists full StepDAG under live goals (including completed).
+    assert "STEP [UZH-01]" in text
     assert "STEP [UZH-02]" in text
     assert "Add JWT" in text
     assert "←UZH-01" in text  # flat list keeps deps inline, not nested tree
     assert "Write tests" in text
     # Steps are a flat list (same indent), not a nested step tree.
     step_lines = [ln for ln in text.splitlines() if "STEP [" in ln]
-    assert len(step_lines) == 1
+    assert len(step_lines) == 2
     assert "LOOP autopilot__a1b2c3d4__deadbeef…" in text
     assert "#3" in text
     assert "refresh 2.5s" in text
@@ -318,8 +318,8 @@ def test_render_top_orphan_loop_marker() -> None:
     assert "LOOP " in text
 
 
-def test_render_top_mode_all_shows_terminal_steps() -> None:
-    """mode=all keeps completed/failed/skipped STEP rows; mode=active hides them."""
+def test_render_top_steps_on_shows_full_stepdag_for_live_goals() -> None:
+    """steps=on lists completed/active/skipped STEPs under goals still in the forest."""
     snap = {
         "running": True,
         "loop_pool": {"active": 1, "idle": 0, "max": 4},
@@ -370,9 +370,9 @@ def test_render_top_mode_all_shows_terminal_steps() -> None:
         ],
     }
     active = _plain(snap, state=TopViewState(include_terminal=False, show_steps=True))
-    assert "STEP [UZH-01]" not in active
+    assert "STEP [UZH-01]" in active
     assert "STEP [UZH-02]" in active
-    assert "STEP [UZH-03]" not in active
+    assert "STEP [UZH-03]" in active
     assert "mode=active" in active
     assert "(live)" in active
 
@@ -382,6 +382,67 @@ def test_render_top_mode_all_shows_terminal_steps() -> None:
     assert "STEP [UZH-03]" in all_mode
     assert "mode=all" in all_mode
     assert "(live)" not in all_mode
+
+
+def test_render_top_active_goal_all_completed_steps_still_listed() -> None:
+    """Live goal with steps N/N must still show STEP rows when steps=on."""
+    text = _plain(
+        {
+            "running": True,
+            "loop_pool": {"active": 1, "idle": 0, "max": 4},
+            "jobs": [
+                {
+                    "id": "a1b2c3d4",
+                    "status": "active",
+                    "priority": 50,
+                    "description": "Quality gate",
+                    "dag": {
+                        "root_id": "a1b2c3d4",
+                        "nodes": [
+                            {
+                                "id": "a1b2c3d4",
+                                "status": "active",
+                                "description": "Quality gate",
+                                "steps_completed": 2,
+                                "steps_total": 2,
+                                "steps": {
+                                    "nodes": [
+                                        {
+                                            "id": "JNC-01",
+                                            "status": "completed",
+                                            "description": "Review diff",
+                                            "dependencies": [],
+                                        },
+                                        {
+                                            "id": "JNC-02",
+                                            "status": "completed",
+                                            "description": "Gate decision",
+                                            "dependencies": ["JNC-01"],
+                                        },
+                                    ],
+                                    "edges": [],
+                                },
+                            }
+                        ],
+                        "edges": [],
+                    },
+                    "loops": [
+                        {
+                            "seq": 1,
+                            "loop_id": "autopilot__a1b2c3d4__deadbeef",
+                            "goal_id": "a1b2c3d4",
+                            "status": "active",
+                        }
+                    ],
+                }
+            ],
+        },
+        state=TopViewState(include_terminal=False, show_steps=True, show_loops=True),
+    )
+    assert "steps 2/2" in text
+    assert "STEP [JNC-01] completed" in text
+    assert "STEP [JNC-02] completed" in text
+    assert "LOOP autopilot__a1b2c3d4__deadbeef" in text
 
 
 def test_render_top_shows_active_not_pending_for_running_work() -> None:

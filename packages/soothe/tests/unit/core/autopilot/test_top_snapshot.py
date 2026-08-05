@@ -6,7 +6,6 @@ from soothe.autopilot.top_snapshot import (
     build_top_job_entry,
     filter_active_dag,
     filter_active_loops,
-    filter_active_steps,
 )
 
 
@@ -55,27 +54,8 @@ def test_filter_active_dag_keeps_suspended() -> None:
     assert filtered["nodes"][0]["id"] == "a"
 
 
-def test_filter_active_steps_omits_terminal() -> None:
-    steps = {
-        "nodes": [
-            {"id": "s1", "status": "completed", "description": "done"},
-            {"id": "s2", "status": "active", "description": "run"},
-            {"id": "s3", "status": "pending", "description": "todo"},
-            {"id": "s4", "status": "failed", "description": "fail"},
-            {"id": "s5", "status": "skipped", "description": "skip"},
-        ],
-        "edges": [
-            {"source": "s1", "target": "s2"},
-            {"source": "s2", "target": "s3"},
-        ],
-    }
-    filtered = filter_active_steps(steps)
-    assert filtered is not None
-    assert {n["id"] for n in filtered["nodes"]} == {"s2", "s3"}
-    assert filtered["edges"] == [{"source": "s2", "target": "s3"}]
-
-
-def test_filter_active_dag_strips_terminal_steps() -> None:
+def test_filter_active_dag_keeps_stepdag_on_live_goals() -> None:
+    """mode=active filters goals only — keep StepDAG so steps=on can render."""
     dag = {
         "root_id": "root1",
         "nodes": [
@@ -83,25 +63,36 @@ def test_filter_active_dag_strips_terminal_steps() -> None:
                 "id": "root1",
                 "status": "active",
                 "description": "root",
-                "steps_completed": 1,
+                "steps_completed": 2,
                 "steps_total": 2,
                 "steps": {
                     "nodes": [
                         {"id": "s1", "status": "completed", "description": "done"},
-                        {"id": "s2", "status": "pending", "description": "todo"},
+                        {"id": "s2", "status": "completed", "description": "also done"},
                     ],
                     "edges": [{"source": "s1", "target": "s2"}],
                 },
             },
+            {
+                "id": "done_child",
+                "status": "completed",
+                "description": "finished",
+                "steps": {
+                    "nodes": [{"id": "x1", "status": "completed", "description": "x"}],
+                    "edges": [],
+                },
+            },
         ],
-        "edges": [],
+        "edges": [{"source": "root1", "target": "done_child"}],
     }
     filtered = filter_active_dag(dag)
     assert filtered is not None
+    assert {n["id"] for n in filtered["nodes"]} == {"root1"}
     node = filtered["nodes"][0]
-    assert node["steps_completed"] == 1
+    assert node["steps_completed"] == 2
     assert node["steps_total"] == 2
-    assert [n["id"] for n in node["steps"]["nodes"]] == ["s2"]
+    assert [n["id"] for n in node["steps"]["nodes"]] == ["s1", "s2"]
+    assert [n["status"] for n in node["steps"]["nodes"]] == ["completed", "completed"]
 
 
 def test_filter_active_loops() -> None:

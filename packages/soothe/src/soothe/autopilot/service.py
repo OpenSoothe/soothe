@@ -1694,7 +1694,8 @@ class AutopilotService:
 
         Filters use CE ``TERMINAL_STATES`` for goals (unless
         ``include_terminal``) and ``status == "active"`` for JobLoopIndex
-        entries. See RFC-228 §autopilot_top.
+        entries. StepDAG under kept goals is preserved for ``steps=on``.
+        See RFC-228 §autopilot_top.
 
         Args:
             include_terminal: When ``True``, keep completed/failed/cancelled

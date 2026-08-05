@@ -56,12 +56,12 @@ autopilot_top params: { include_terminal?: bool }  # default false
 
 | `include_terminal` | Goals | Steps | Loops |
 |--------------------|-------|-------|-------|
-| `false` (default) | Non-`TERMINAL_STATES` only; omit fully terminal jobs | Non-terminal only (`pending` / `active`) | `status == "active"` |
+| `false` (default) | Non-`TERMINAL_STATES` only; omit fully terminal jobs | Full StepDAG under kept goals | `status == "active"` |
 | `true` | Full `dag_snapshot` nodes/edges; include all-terminal jobs | Full StepDAG | Still active-only |
 
-Server remains SoT for filtering (goals + step status). Client `s` toggles
-StepDAG visibility; client also re-applies step-status filter in `mode=active`
-as defense in depth.
+Server remains SoT for goal/loop filtering. Client `s` toggles StepDAG
+visibility under goals that remain in the forest (do not strip completed
+steps from live goals — that made `steps=on` empty after a plan wave).
 
 ### Input loop
 
