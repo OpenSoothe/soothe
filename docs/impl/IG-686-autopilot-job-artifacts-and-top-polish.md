@@ -102,13 +102,16 @@ Autopilot top · running · pool 1/0/4 · 1 job(s) · 09:15:02
 │  └─ [UZH-03] pending    "Write tests"
 └─ [e5f6aaaa] pending    "Write e2e"  steps 0/2
 ────────────────────────────────────────────────────────────────
-Ctrl+C quit · refresh 1s
+q Quit · h Help · a All · s Steps · … · refresh 1s
 ```
 
-### Out of scope
+Footer/bindings above reflect the IG-688 keymap polish; IG-686 shipped
+fullscreen + StepDAG nesting with Ctrl+C-only quit.
 
-Interactive keys, scroll offset, Textual fullscreen, push via
-`autopilot_subscribe`, Postgres rail_trace schema changes.
+### Out of scope (this IG)
+
+Textual fullscreen, push via `autopilot_subscribe`, Postgres rail_trace
+schema changes. Interactive keys / `--all` / scroll → [IG-688](IG-688-autopilot-top-interactive-keymaps.md).
 
 ---
 

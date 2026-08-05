@@ -1531,11 +1531,16 @@ class AutopilotService:
         entries = await self._job_loop_index.list_loops(job_id)
         return [e.model_dump(mode="json") for e in entries]
 
-    async def top_snapshot(self) -> dict[str, Any]:
-        """Build active-only jobs → goals → loops snapshot for CLI top (IG-679).
+    async def top_snapshot(self, *, include_terminal: bool = False) -> dict[str, Any]:
+        """Build jobs → goals → loops snapshot for CLI top (IG-679 / IG-688).
 
-        Filters use CE ``TERMINAL_STATES`` for goals and ``status == "active"``
-        for JobLoopIndex entries. See RFC-228 §autopilot_top.
+        Filters use CE ``TERMINAL_STATES`` for goals (unless
+        ``include_terminal``) and ``status == "active"`` for JobLoopIndex
+        entries. See RFC-228 §autopilot_top.
+
+        Args:
+            include_terminal: When ``True``, keep completed/failed/cancelled
+                goals and fully terminal jobs (CLI ``a`` / ``--all``).
 
         Returns:
             Dict with ``running``, ``dreaming``, ``loop_pool``, ``generated_at``,
@@ -1561,6 +1566,7 @@ class AutopilotService:
                 dag=dag,
                 loops=loops,
                 created_at=created_at,
+                include_terminal=include_terminal,
             )
             if entry is not None:
                 jobs.append(entry)

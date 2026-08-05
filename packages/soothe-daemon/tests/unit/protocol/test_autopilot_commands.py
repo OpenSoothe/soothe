@@ -21,6 +21,9 @@ class _FakeGoal:
 
 
 class _FakeService:
+    def __init__(self) -> None:
+        self.last_include_terminal: bool | None = None
+
     def status(self) -> dict[str, Any]:
         return {"running": True, "dreaming": False, "loop_pool": {}}
 
@@ -33,7 +36,8 @@ class _FakeService:
         assert description
         return _FakeGoal("new-goal")
 
-    async def top_snapshot(self) -> dict[str, Any]:
+    async def top_snapshot(self, *, include_terminal: bool = False) -> dict[str, Any]:
+        self.last_include_terminal = include_terminal
         return {
             "running": True,
             "dreaming": False,
@@ -65,10 +69,19 @@ async def test_run_autopilot_submit_requires_description() -> None:
 
 @pytest.mark.asyncio
 async def test_run_autopilot_top() -> None:
-    result = await run_autopilot_action(_FakeService(), "top", {})
+    svc = _FakeService()
+    result = await run_autopilot_action(svc, "top", {})
     assert result["running"] is True
     assert result["jobs"] == []
     assert "generated_at" in result
+    assert svc.last_include_terminal is False
+
+
+@pytest.mark.asyncio
+async def test_run_autopilot_top_include_terminal() -> None:
+    svc = _FakeService()
+    await run_autopilot_action(svc, "top", {"include_terminal": True})
+    assert svc.last_include_terminal is True
 
 
 def test_autopilot_status_registered_in_params_registry() -> None:
@@ -79,3 +92,4 @@ def test_autopilot_status_registered_in_params_registry() -> None:
     assert model.model_validate({}) is not None
     top_model = PARAMS_REGISTRY[("request", "autopilot_top")]
     assert top_model.model_validate({}) is not None
+    assert top_model.model_validate({"include_terminal": True}).include_terminal is True

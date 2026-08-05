@@ -164,3 +164,30 @@ def test_build_top_job_keeps_job_when_root_terminal_but_child_active() -> None:
     assert {n["id"] for n in entry["dag"]["nodes"]} == {"g2"}
     assert entry["dag"]["edges"] == []
     assert "workspace" not in entry
+
+
+def test_build_top_job_include_terminal_keeps_completed() -> None:
+    entry = build_top_job_entry(
+        job_id="j1",
+        status="completed",
+        priority=50,
+        description="done",
+        workspace=None,
+        include_terminal=True,
+        dag={
+            "root_id": "j1",
+            "nodes": [
+                {"id": "j1", "status": "completed", "description": "done"},
+                {"id": "g2", "status": "failed", "description": "fail"},
+            ],
+            "edges": [{"source": "j1", "target": "g2"}],
+        },
+        loops=[
+            {"loop_id": "L1", "status": "active", "goal_id": "j1"},
+            {"loop_id": "L2", "status": "completed", "goal_id": "j1"},
+        ],
+    )
+    assert entry is not None
+    assert {n["id"] for n in entry["dag"]["nodes"]} == {"j1", "g2"}
+    assert entry["dag"]["edges"] == [{"source": "j1", "target": "g2"}]
+    assert entry["loops"] == [{"loop_id": "L1", "status": "active", "goal_id": "j1"}]

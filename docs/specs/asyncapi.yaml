@@ -722,7 +722,15 @@ components:
 
     autopilotTopParams:
       type: object
-      description: No required fields (IG-679 active forest snapshot)
+      description: >
+        Optional filter flags for the CLI live top snapshot (IG-679 / IG-688).
+      properties:
+        include_terminal:
+          type: boolean
+          default: false
+          description: >
+            When true, include completed/failed/cancelled goals and fully
+            terminal jobs. Default is active-only (non-terminal goals).
 
     # Disconnect params
     disconnectParams:

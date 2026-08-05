@@ -1,10 +1,15 @@
-"""Unit tests for autopilot top CLI rendering (IG-679 / IG-686)."""
+"""Unit tests for autopilot top CLI rendering (IG-679 / IG-686 / IG-688)."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from soothe_cli.cli.commands.autopilot_cmd import format_elapsed, render_top_snapshot
+from soothe_cli.cli.commands.autopilot_cmd import (
+    TopViewState,
+    apply_top_key,
+    format_elapsed,
+    render_top_snapshot,
+)
 
 
 def test_format_elapsed_hhmmss() -> None:
@@ -27,7 +32,9 @@ def test_render_top_empty() -> None:
     )
     assert "No active jobs." in text
     assert "pool 0/0/4" in text
-    assert "Ctrl+C quit · refresh 1s" in text
+    assert "mode=active" in text
+    assert "q Quit" in text
+    assert "refresh 1s" in text
 
 
 def test_render_top_forest_nests_steps_and_loops() -> None:
@@ -107,6 +114,86 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
     assert "loop autopilot__a1b2c3d4__deadbeef…" in text
     assert "#3" in text
     assert "refresh 2.5s" in text
+
+
+def test_render_top_hides_steps_and_loops() -> None:
+    state = TopViewState(show_steps=False, show_loops=False, interval=1.0)
+    text = render_top_snapshot(
+        {
+            "running": True,
+            "loop_pool": {"active": 1, "idle": 0, "max": 4},
+            "jobs": [
+                {
+                    "id": "a1b2c3d4",
+                    "status": "active",
+                    "priority": 50,
+                    "description": "Implement auth",
+                    "dag": {
+                        "root_id": "a1b2c3d4",
+                        "nodes": [
+                            {
+                                "id": "a1b2c3d4",
+                                "status": "active",
+                                "description": "Implement auth",
+                                "steps_completed": 1,
+                                "steps_total": 2,
+                                "steps": {
+                                    "nodes": [
+                                        {
+                                            "id": "UZH-01",
+                                            "status": "completed",
+                                            "description": "Scaffold",
+                                            "dependencies": [],
+                                        }
+                                    ],
+                                    "edges": [],
+                                },
+                            }
+                        ],
+                        "edges": [],
+                    },
+                    "loops": [
+                        {
+                            "seq": 1,
+                            "loop_id": "autopilot__a1b2c3d4__deadbeef",
+                            "goal_id": "a1b2c3d4",
+                            "status": "active",
+                        }
+                    ],
+                }
+            ],
+        },
+        state=state,
+    )
+    assert "steps 1/2" in text
+    assert "UZH-01" not in text
+    assert "loop " not in text
+    assert "steps=off" in text
+    assert "loops=off" in text
+
+
+def test_apply_top_key_toggles() -> None:
+    state = TopViewState()
+    apply_top_key(state, "a")
+    assert state.include_terminal is True
+    assert state.force_refresh is True
+    apply_top_key(state, "s")
+    assert state.show_steps is False
+    apply_top_key(state, "l")
+    assert state.show_loops is False
+    apply_top_key(state, "d")
+    assert state.show_steps is True and state.show_loops is False
+    apply_top_key(state, "d")
+    assert state.show_steps is True and state.show_loops is True
+    apply_top_key(state, "d")
+    assert state.show_steps is False and state.show_loops is False
+    apply_top_key(state, "+")
+    assert state.interval == 0.5
+    apply_top_key(state, "q")
+    assert state.quit is True
+    state.help_open = True
+    apply_top_key(state, "x")
+    assert state.help_open is False
 
 
 def test_render_top_pads_to_height() -> None:

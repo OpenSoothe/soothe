@@ -141,6 +141,7 @@ async def run_autopilot_action(
         }
 
     if action == "top":
-        return await service.top_snapshot()
+        include_terminal = bool(payload.get("include_terminal", False))
+        return await service.top_snapshot(include_terminal=include_terminal)
 
     raise RuntimeError(f"Unknown autopilot action: {action}")

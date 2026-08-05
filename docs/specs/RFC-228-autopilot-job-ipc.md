@@ -40,7 +40,7 @@ Extend the daemon IPC protocol with a new command category: **Autopilot Job Comm
 |----------|--------------|
 | Job creation/status/cancel IPC | Job persistence (SQLite in desktop app) |
 | DAG snapshot for visualization | Real-time DAG diff streaming (push) |
-| Active-only aggregate top snapshot (`autopilot_top`) | Interactive CLI keybindings / `--all` history |
+| Active-only aggregate top snapshot (`autopilot_top`) | Push/diff streaming; inactive loop history |
 | User guidance absorption | Guidance result feedback |
 | Worker event subscription | Worker pool management |
 
@@ -115,7 +115,7 @@ All client → server commands accept an optional `request_id` field (string). T
 | `job_guidance_response` | `job_id` (req), `goal_id` (opt), `absorbed` (req, bool), `request_id` (opt) | Guidance received by ContextEngine |
 | `autopilot_subscribe_response` | `client_id` (req), `subscribed` (req, bool), `request_id` (opt) | Subscription confirmed |
 | `autopilot_unsubscribe_response` | `client_id` (req), `subscribed` (req, bool: false), `request_id` (opt) | Unsubscription confirmed |
-| `autopilot_top` result | See §autopilot_top | Active-only forest snapshot for CLI live dashboard |
+| `autopilot_top` result | See §autopilot_top | Forest snapshot for CLI live dashboard (active-only default; `include_terminal` optional) |
 | `error` | `code` (req), `message` (req), `details` (opt) | Protocol error (see error codes below) |
 
 ### Error Codes
@@ -595,11 +595,16 @@ interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
 {
   "type": "request",
   "method": "autopilot_top",
-  "params": {},
+  "params": {
+    "include_terminal": false
+  },
   "request_id": "req-top-001"
 }
 ```
 
+| Param | Default | Meaning |
+|-------|---------|---------|
+| `include_terminal` | `false` | Active-only goals (∉ `TERMINAL_STATES`); omit fully terminal jobs. When `true`, keep the full goal DAG including completed/failed/cancelled (CLI `a` / `--all`). Loops remain `status == "active"` only. |
 **Result payload**:
 ```json
 {
@@ -682,7 +687,7 @@ interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
    rail descendants). Tree `edges` are `parent → child`. Per-node
    `depends_on` is scheduling metadata only — do not invert it into tree
    edges (rails often make the root depend on a child planner).
-4. Apply **active filters** (server SoT):
+4. Apply **active filters** (server SoT) unless `include_terminal=true`:
    - Goal / job visibility uses CE `TERMINAL_STATES`
      (`completed`, `failed`, `cancelled`). Non-terminal includes
      `pending`, `active`, `blocked`, `suspended`, `awaiting_clarification`, etc.
@@ -693,22 +698,27 @@ interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
      (step statuses use step vocab — not goal `TERMINAL_STATES`).
    - Keep only loops with `JobLoopEntry.status == "active"`.
    - Drop jobs that have no remaining visible goals after filtering.
+   - When `include_terminal=true`: keep the full DAG for every job that has
+     nodes; still filter loops to active-only.
 5. Return the payload as the protocol-1 `result`.
 
 **CLI consumer** (`soothe autopilot top`):
 
 - Rich `Live` with alternate screen (`screen=True`) — full terminal like linux
-  `top`; quit restores prior buffer (Ctrl+C).
-- Flag `--interval` / `-n` (default `1.0`).
+  `top`; quit restores prior buffer (`q` or Ctrl+C).
+- Flag `--interval` / `-n` (default `1.0`); `--all` / `-a` seeds
+  `include_terminal`.
+- Interactive single-char keys (IG-688): `a` all/active, `s` steps, `l` loops,
+  `d` density, `+/-` delay, `Space` refresh, `j`/`k` scroll, `h` help.
 - Render ASCII tree: job → goal DAG → nested planned step DAG → loops under
   `JobLoopEntry.goal_id`. Show execution elapsed as `HH:MM:SS` from job
   `created_at` and loop `started_at`.
-- Empty `jobs` → header + “No active jobs”.
+- Empty `jobs` → header + “No active jobs” (or “No jobs” in all mode).
 - Daemon not live / mid-session RPC failure → error + non-zero exit (same as
   other autopilot CLI commands).
 
-See also IG-686 (job artifact dir `data/jobs/{job_id}/` vs assignment loops).
-
+See also IG-686 (job artifact dir `data/jobs/{job_id}/` vs assignment loops)
+and IG-688 (interactive keymaps).
 **Authz**: read-only; same as `job_status` / `job_dag` (any authenticated client).
 
 ## Security and Authorization

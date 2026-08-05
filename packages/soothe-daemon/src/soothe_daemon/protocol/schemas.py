@@ -481,8 +481,15 @@ class AutopilotGetJobParams(ParamsBase):
     job_id: str = Field(..., min_length=1)
 
 
-class AutopilotTopParams(EmptyParams):
-    """Params for method=autopilot_top, type=request (IG-679)."""
+class AutopilotTopParams(ParamsBase):
+    """Params for method=autopilot_top, type=request (IG-679 / IG-688).
+
+    Attributes:
+        include_terminal: When true, include completed/failed/cancelled goals
+            and fully terminal jobs (default active-only).
+    """
+
+    include_terminal: bool = False
 
 
 class ConnectionInitParams(_SdkConnectionInitParams):

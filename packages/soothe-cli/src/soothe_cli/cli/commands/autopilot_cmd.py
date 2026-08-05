@@ -1,16 +1,20 @@
 """Autopilot CLI subcommands for RFC-204.
 
 Daemon-backed control surface: submit tasks and manage goals via WebSocket.
-Requires ``soothed start``. Real-time monitoring is via TUI ``/autopilot``.
+Requires ``soothed start``. Live forest dashboard: ``soothe autopilot top``.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
+import select
 import sys
 import time
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +25,15 @@ from soothe_client import (
     websocket_url_from_config,
 )
 from soothe_sdk.wire.protocol import preview_first
+
+_TOP_INTERVAL_MIN = 0.2
+_TOP_INTERVAL_MAX = 10.0
+_TOP_HELP_LINES = (
+    "Keys:",
+    "  q Quit          h/? Help          Space Refresh",
+    "  a All/active    s Steps           l Loops       d Density",
+    "  +/- Delay       j/k or arrows Scroll           g/G Top/bottom",
+)
 
 app = typer.Typer(help="Autopilot — autonomous goal control.")
 
@@ -229,17 +242,22 @@ def list_goals(
         typer.echo(f"  [{gid}] {stat:10s}{parent_s}  {desc}")
 
 
-def _render_dag_tree(dag: dict, root_id: str) -> None:
-    """Render DAG as ASCII tree for job visualization."""
-    nodes = {n["id"]: n for n in dag.get("nodes", [])}
-    edges = dag.get("edges", [])
-
+def _children_from_edges(edges: list[Any]) -> dict[str, list[str]]:
+    """Build adjacency from ``source`` → ``target`` edge list."""
     children: dict[str, list[str]] = {}
     for edge in edges:
-        src = edge.get("source")
-        tgt = edge.get("target")
+        if not isinstance(edge, dict):
+            continue
+        src, tgt = edge.get("source"), edge.get("target")
         if src and tgt:
-            children.setdefault(src, []).append(tgt)
+            children.setdefault(str(src), []).append(str(tgt))
+    return children
+
+
+def _render_dag_tree(dag: dict, root_id: str) -> None:
+    """Render DAG as ASCII tree for job visualization."""
+    nodes = {n["id"]: n for n in dag.get("nodes", []) if isinstance(n, dict) and n.get("id")}
+    children = _children_from_edges(list(dag.get("edges") or []))
 
     def render_node(goal_id: str, indent: str = "", is_last: bool = True) -> None:
         node = nodes.get(goal_id)
@@ -429,11 +447,137 @@ def format_elapsed(started_at: Any, *, now: Any | None = None) -> str:
     return f"{hours:02d}:{mins:02d}:{secs:02d}"
 
 
-def _format_top_header(snapshot: dict, *, interval: float, width: int = 72) -> list[str]:
+@dataclass
+class TopViewState:
+    """Interactive view flags for autopilot top (IG-688)."""
+
+    include_terminal: bool = False
+    show_steps: bool = True
+    show_loops: bool = True
+    interval: float = 1.0
+    scroll: int = 0
+    help_open: bool = False
+    quit: bool = False
+    force_refresh: bool = False
+    body_line_count: int = 0
+
+
+def apply_top_key(state: TopViewState, key: str) -> None:
+    """Apply a single-char (or special) key to view state.
+
+    Args:
+        state: Mutable view state.
+        key: Key string — single char, or ``up``/``down``/``space``.
+    """
+    if state.help_open:
+        state.help_open = False
+        return
+
+    if key in {"q", "Q"}:
+        state.quit = True
+        return
+    if key in {"h", "?"}:
+        state.help_open = True
+        return
+    if key == "a":
+        state.include_terminal = not state.include_terminal
+        state.force_refresh = True
+        state.scroll = 0
+        return
+    if key == "s":
+        state.show_steps = not state.show_steps
+        return
+    if key == "l":
+        state.show_loops = not state.show_loops
+        return
+    if key == "d":
+        # compact → steps → full → compact
+        if state.show_steps and state.show_loops:
+            state.show_steps = False
+            state.show_loops = False
+        elif not state.show_steps and not state.show_loops:
+            state.show_steps = True
+            state.show_loops = False
+        else:
+            state.show_steps = True
+            state.show_loops = True
+        return
+    if key in {"+", "="}:
+        state.interval = max(_TOP_INTERVAL_MIN, round(state.interval - 0.5, 1))
+        return
+    if key in {"-", "_"}:
+        state.interval = min(_TOP_INTERVAL_MAX, round(state.interval + 0.5, 1))
+        return
+    if key == "space":
+        state.force_refresh = True
+        return
+    if key in {"j", "down"}:
+        state.scroll += 1
+        return
+    if key in {"k", "up"}:
+        state.scroll = max(0, state.scroll - 1)
+        return
+    if key == "g":
+        state.scroll = 0
+        return
+    if key == "G":
+        state.scroll = max(0, state.body_line_count)
+        return
+
+
+@contextmanager
+def _cbreak_stdin() -> Iterator[bool]:
+    """Put stdin in cbreak for single-key reads; yields whether active."""
+    if not sys.stdin.isatty():
+        yield False
+        return
+    try:
+        import termios
+        import tty
+    except ImportError:
+        yield False
+        return
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        yield True
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def _read_top_key(timeout: float, *, cbreak_active: bool) -> str | None:
+    """Non-blocking single key from stdin. Returns None on timeout."""
+    if not cbreak_active or not sys.stdin.isatty():
+        time.sleep(min(timeout, 0.05))
+        return None
+    ready, _, _ = select.select([sys.stdin], [], [], max(0.0, timeout))
+    if not ready:
+        return None
+    ch = sys.stdin.read(1)
+    if ch == "\x1b":
+        more, _, _ = select.select([sys.stdin], [], [], 0.02)
+        if more:
+            seq = sys.stdin.read(2)
+            if seq == "[A":
+                return "up"
+            if seq == "[B":
+                return "down"
+        return None
+    if ch == " ":
+        return "space"
+    return ch
+
+
+def _format_top_header(
+    snapshot: dict,
+    *,
+    state: TopViewState,
+    width: int = 72,
+) -> list[str]:
     """Build header lines for autopilot top."""
     from datetime import datetime
 
-    del interval  # reserved for footer; header shows live clock instead
     running = "running" if snapshot.get("running") else "stopped"
     dreaming = " · dreaming" if snapshot.get("dreaming") else ""
     pool = snapshot.get("loop_pool") if isinstance(snapshot.get("loop_pool"), dict) else {}
@@ -442,6 +586,9 @@ def _format_top_header(snapshot: dict, *, interval: float, width: int = 72) -> l
     max_loops = pool.get("max", "?")
     jobs = snapshot.get("jobs") or []
     clock = datetime.now().strftime("%H:%M:%S")
+    mode = "all" if state.include_terminal else "active"
+    steps = "on" if state.show_steps else "off"
+    loops = "on" if state.show_loops else "off"
     rule = "─" * max(8, width)
     return [
         (
@@ -449,20 +596,9 @@ def _format_top_header(snapshot: dict, *, interval: float, width: int = 72) -> l
             f"pool {active}/{idle}/{max_loops} (active/idle/max) · "
             f"{len(jobs)} job(s) · {clock}"
         ),
+        f"mode={mode}  steps={steps}  loops={loops}  delay={state.interval:g}s",
         rule,
     ]
-
-
-def _children_from_edges(edges: list[Any]) -> dict[str, list[str]]:
-    """Build adjacency from ``source`` → ``target`` edge list."""
-    children: dict[str, list[str]] = {}
-    for edge in edges:
-        if not isinstance(edge, dict):
-            continue
-        src, tgt = edge.get("source"), edge.get("target")
-        if src and tgt:
-            children.setdefault(str(src), []).append(str(tgt))
-    return children
 
 
 def _format_step_forest(
@@ -510,11 +646,17 @@ def _format_step_forest(
         render_step(sid, indent, i == len(orphans) - 1, more_after=trailing_siblings)
 
 
-def _format_top_forest(snapshot: dict) -> list[str]:
+def _format_top_forest(
+    snapshot: dict,
+    *,
+    show_steps: bool = True,
+    show_loops: bool = True,
+    include_terminal: bool = False,
+) -> list[str]:
     """Render jobs → goal DAG → step DAG → loops as ASCII tree lines."""
     jobs = snapshot.get("jobs") or []
     if not jobs:
-        return ["No active jobs."]
+        return ["No jobs." if include_terminal else "No active jobs."]
 
     lines: list[str] = []
     for job in jobs:
@@ -535,7 +677,7 @@ def _format_top_forest(snapshot: dict) -> list[str]:
         edges = dag.get("edges") or []
         children = _children_from_edges(list(edges))
 
-        loops = [L for L in (job.get("loops") or []) if isinstance(L, dict)]
+        loops = [L for L in (job.get("loops") or []) if isinstance(L, dict)] if show_loops else []
         loops_by_goal: dict[str, list[dict]] = {}
         for entry in loops:
             gid = str(entry.get("goal_id") or "")
@@ -560,7 +702,9 @@ def _format_top_forest(snapshot: dict) -> list[str]:
 
             goal_loops = loops_by_goal.get(goal_id, [])
             child_ids = children.get(goal_id, [])
-            steps_blob = node.get("steps") if isinstance(node.get("steps"), dict) else None
+            steps_blob = (
+                node.get("steps") if show_steps and isinstance(node.get("steps"), dict) else None
+            )
             trailing = len(goal_loops) + len(child_ids)
             if steps_blob:
                 _format_step_forest(
@@ -616,24 +760,47 @@ def _format_top_forest(snapshot: dict) -> list[str]:
 def render_top_snapshot(
     snapshot: dict,
     *,
-    interval: float,
+    interval: float | None = None,
     width: int | None = None,
     height: int | None = None,
+    state: TopViewState | None = None,
 ) -> str:
     """Render a full autopilot top screen as plain text.
 
     When ``height`` is set, pad so the footer sits on the last terminal row
     (linux-``top`` style viewport).
     """
+    view = state or TopViewState(interval=interval if interval is not None else 1.0)
+    if interval is not None:
+        view.interval = interval
     cols = max(40, width or 72)
-    header = _format_top_header(snapshot, interval=interval, width=cols)
-    body = _format_top_forest(snapshot)
+    header = _format_top_header(snapshot, state=view, width=cols)
+    if view.help_open:
+        body = list(_TOP_HELP_LINES)
+    else:
+        body = _format_top_forest(
+            snapshot,
+            show_steps=view.show_steps,
+            show_loops=view.show_loops,
+            include_terminal=view.include_terminal,
+        )
+    view.body_line_count = len(body)
     rule = "─" * cols
-    footer = [rule, f"Ctrl+C quit · refresh {interval:g}s"]
+    footer = [
+        rule,
+        (
+            f"q Quit · h Help · a All · s Steps · l Loops · d Density · "
+            f"+/- Delay · refresh {view.interval:g}s"
+        ),
+    ]
     if height is not None and height > 0:
         max_body = max(1, height - len(header) - len(footer))
         if len(body) > max_body:
-            body = body[: max(0, max_body - 1)] + ["… (truncated)"]
+            max_scroll = max(0, len(body) - (max_body - 1))
+            start = min(max(0, view.scroll), max_scroll)
+            view.scroll = start
+            chunk = body[start : start + max_body - 1]
+            body = chunk + ["… (truncated)"]
         pad = height - len(header) - len(body) - len(footer)
         if pad > 0:
             body = body + [""] * pad
@@ -648,6 +815,12 @@ def top(
         "-n",
         help="Refresh interval in seconds (must be > 0).",
     ),
+    show_all: bool = typer.Option(
+        False,
+        "--all",
+        "-a",
+        help="Include completed/failed/cancelled goals (toggle with 'a').",
+    ),
 ) -> None:
     """Live full-screen jobs/goals/steps/loops dashboard (linux-top style)."""
     if interval <= 0:
@@ -660,30 +833,59 @@ def top(
 
     client = _require_daemon_ws()
     console = Console()
+    state = TopViewState(
+        include_terminal=show_all,
+        interval=max(_TOP_INTERVAL_MIN, min(_TOP_INTERVAL_MAX, interval)),
+    )
+    snapshot: dict[str, Any] = {}
 
-    def _fetch() -> Text:
-        data = client.autopilot_top()
+    def _render() -> Text:
         size = console.size
-        # Plain Text: bracketed ids like [a1b2c3d4] must not be parsed as markup.
         return Text(
             render_top_snapshot(
-                data if isinstance(data, dict) else {},
-                interval=interval,
+                snapshot,
                 width=size.width,
                 height=size.height,
+                state=state,
             )
         )
 
+    def _fetch() -> None:
+        nonlocal snapshot
+        data = client.autopilot_top(include_terminal=state.include_terminal)
+        snapshot = data if isinstance(data, dict) else {}
+        state.force_refresh = False
+
     try:
-        with Live(
-            console=console,
-            refresh_per_second=max(1, int(1 / interval)),
-            screen=True,
-            transient=True,
-        ) as live:
-            while True:
-                live.update(_fetch())
-                time.sleep(interval)
+        with (
+            _cbreak_stdin() as cbreak_active,
+            Live(
+                console=console,
+                refresh_per_second=max(4, int(1 / max(state.interval, 0.25))),
+                screen=True,
+                transient=True,
+            ) as live,
+        ):
+            _fetch()
+            live.update(_render())
+            while not state.quit:
+                deadline = time.monotonic() + state.interval
+                while time.monotonic() < deadline and not state.quit:
+                    remaining = deadline - time.monotonic()
+                    key = _read_top_key(
+                        min(0.05, max(0.0, remaining)),
+                        cbreak_active=bool(cbreak_active),
+                    )
+                    if key is None:
+                        continue
+                    apply_top_key(state, key)
+                    live.update(_render())
+                    if state.force_refresh or state.quit:
+                        break
+                if state.quit:
+                    break
+                _fetch()
+                live.update(_render())
     except KeyboardInterrupt:
         pass
     except RuntimeError as exc:

@@ -60,7 +60,8 @@ Blocked / suspended / awaiting_clarification goals **remain visible**.
 
 ### Wire
 
-- Method: `autopilot_top` (protocol-1 `type=request`, empty params)
+- Method: `autopilot_top` (protocol-1 `type=request`; optional
+  `include_terminal` — IG-688)
 - Result shape: RFC-228 §autopilot_top (`running`, `dreaming`, `loop_pool`,
   `generated_at`, `jobs[]` with `dag` + `loops`)
 
@@ -80,8 +81,9 @@ orphan active loops (goal filtered out) under job root with `?` marker.
 
 ### Out of scope (v1)
 
-`--all`, interactive keys, Textual fullscreen, push via `autopilot_subscribe`,
-standalone `list_job_loops` CLI.
+Textual fullscreen, push via `autopilot_subscribe`, standalone
+`list_job_loops` CLI. `--all` / interactive keys / scroll →
+[IG-688](IG-688-autopilot-top-interactive-keymaps.md).
 
 ---
 
@@ -103,7 +105,7 @@ without a full service.
 | File | Change |
 |------|--------|
 | `protocol/autopilot_commands.py` | `action == "top"` → `await service.top_snapshot()` |
-| `protocol/schemas.py` | `AutopilotTopParams(EmptyParams)` + PARAMS_REGISTRY |
+| `protocol/schemas.py` | `AutopilotTopParams` (+ `include_terminal` in IG-688) + PARAMS_REGISTRY |
 | `protocol/router.py` | `_handle_autopilot_top` → `_dispatch_autopilot_rpc(..., "top")` |
 | `docs/specs/asyncapi.yaml` | Document method (keep drift check green) |
 
