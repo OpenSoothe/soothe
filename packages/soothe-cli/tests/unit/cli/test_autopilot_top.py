@@ -24,6 +24,14 @@ def test_format_elapsed_hhmmss() -> None:
     assert format_elapsed("") == ""
 
 
+def test_top_view_state_defaults() -> None:
+    state = TopViewState()
+    assert state.show_steps is False
+    assert state.show_loops is True
+    assert state.interval == 2.0
+    assert state.include_terminal is False
+
+
 def test_render_top_empty() -> None:
     text = _plain(
         {
@@ -32,14 +40,15 @@ def test_render_top_empty() -> None:
             "loop_pool": {"active": 0, "idle": 0, "max": 4},
             "jobs": [],
         },
-        interval=1.0,
+        interval=2.0,
     )
     assert "No active jobs." in text
     assert "pool 0/0/4" in text
     assert "mode=active" in text
     assert "(live)" in text
     assert "q Quit" in text
-    assert "refresh 1s" in text
+    assert "refresh 2s" in text
+    assert "steps=off" in text
     assert "legend" in text
     assert "JOB" in text and "GOAL" in text and "STEP" in text and "LOOP" in text
 
@@ -107,7 +116,7 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
                 }
             ],
         },
-        interval=2.5,
+        state=TopViewState(show_steps=True, show_loops=True, interval=2.5),
     )
     text = rendered.plain
     # Patch elapsed by checking format with known now via direct helper
@@ -194,21 +203,24 @@ def test_render_top_hides_steps_and_loops() -> None:
 
 def test_apply_top_key_toggles() -> None:
     state = TopViewState()
+    assert state.show_steps is False and state.show_loops is True
+    assert state.interval == 2.0
     apply_top_key(state, "a")
     assert state.include_terminal is True
     assert state.force_refresh is True
     apply_top_key(state, "s")
-    assert state.show_steps is False
+    assert state.show_steps is True
     apply_top_key(state, "l")
     assert state.show_loops is False
-    apply_top_key(state, "d")
-    assert state.show_steps is True and state.show_loops is False
+    # density: steps-only → full → compact → steps-only
     apply_top_key(state, "d")
     assert state.show_steps is True and state.show_loops is True
     apply_top_key(state, "d")
     assert state.show_steps is False and state.show_loops is False
+    apply_top_key(state, "d")
+    assert state.show_steps is True and state.show_loops is False
     apply_top_key(state, "+")
-    assert state.interval == 0.5
+    assert state.interval == 1.5
     apply_top_key(state, "q")
     assert state.quit is True
     state.help_open = True
@@ -357,14 +369,14 @@ def test_render_top_mode_all_shows_terminal_steps() -> None:
             }
         ],
     }
-    active = _plain(snap, state=TopViewState(include_terminal=False))
+    active = _plain(snap, state=TopViewState(include_terminal=False, show_steps=True))
     assert "STEP [UZH-01]" not in active
     assert "STEP [UZH-02]" in active
     assert "STEP [UZH-03]" not in active
     assert "mode=active" in active
     assert "(live)" in active
 
-    all_mode = _plain(snap, state=TopViewState(include_terminal=True))
+    all_mode = _plain(snap, state=TopViewState(include_terminal=True, show_steps=True))
     assert "STEP [UZH-01]" in all_mode
     assert "STEP [UZH-02]" in all_mode
     assert "STEP [UZH-03]" in all_mode
@@ -419,7 +431,7 @@ def test_render_top_shows_active_not_pending_for_running_work() -> None:
                 }
             ],
         },
-        interval=1.0,
+        state=TopViewState(show_steps=True, show_loops=True, interval=1.0),
     )
     assert "JOB  [jobjobj1] active" in text
     assert "GOAL [jobjobj1] active" in text

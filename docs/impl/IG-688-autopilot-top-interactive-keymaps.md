@@ -39,9 +39,9 @@ remain out of scope.
 | Flag | Default | Key |
 |------|---------|-----|
 | `include_terminal` | `false` | `a` (also `--all`) |
-| `show_steps` | `true` | `s` |
+| `show_steps` | `false` | `s` |
 | `show_loops` | `true` | `l` |
-| `interval` | `1.0` | `+` / `-` |
+| `interval` | `2.0` | `+` / `-` (also `--interval` / `-n`) |
 | `scroll` | `0` | `j`/`k`, arrows, `g`/`G` |
 | `help_open` | `false` | `h` / `?` |
 
@@ -115,6 +115,7 @@ inactive loop history, Textual rewrite.
 
 - [x] `a` / `--all` shows terminal goals; default remains active-only
 - [x] `s` / `l` / `d` control StepDAG and loops without wire changes
+- [x] Default view: `show_steps=false`, `interval=2.0` (`--interval` / `-n`)
 - [x] `q`/`h`/`+/-`/`Space`/scroll work in fullscreen Live
 - [x] Footer/help document bindings; no IG/RFC ids in user-visible strings
 - [x] Unit tests green; `./scripts/verify_finally.sh` green

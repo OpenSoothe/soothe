@@ -587,7 +587,7 @@ One round-trip returns header pool stats plus an **active-only** forest of
 jobs → filtered goal DAG → active JobLoopIndex entries (IG-677).
 
 This is **not** push/diff streaming (still out of scope). Clients poll on an
-interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
+interval (CLI default 2.0s) and redraw. Existing `job_status` / `job_dag` /
 `autopilot_get_job` commands remain unchanged.
 
 **Request** (protocol-1):
@@ -706,8 +706,8 @@ interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
 
 - Rich `Live` with alternate screen (`screen=True`) — full terminal like linux
   `top`; quit restores prior buffer (`q` or Ctrl+C).
-- Flag `--interval` / `-n` (default `1.0`); `--all` / `-a` seeds
-  `include_terminal`.
+- Flag `--interval` / `-n` (default `2.0`); `--all` / `-a` seeds
+  `include_terminal`. Default view: StepDAG off, loops on (`s` / `l` / `d`).
 - Interactive single-char keys (IG-688): `a` all/active, `s` steps, `l` loops,
   `d` density, `+/-` delay, `Space` refresh, `j`/`k` scroll, `h` help.
 - Render ASCII tree: job → goal DAG → flat planned step list → loops under

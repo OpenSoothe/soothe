@@ -103,7 +103,7 @@ Autopilot top · running · pool 1/0/4 · 1 job(s) · 09:15:02
 │  └─ [UZH-03] pending    "Write tests"
 └─ [e5f6aaaa] pending    "Write e2e"  steps 0/2
 ────────────────────────────────────────────────────────────────
-q Quit · h Help · a All · s Steps · … · refresh 1s
+q Quit · h Help · a All · s Steps · … · refresh 2s
 ```
 
 Footer/bindings above reflect the IG-688 keymap polish; IG-686 shipped

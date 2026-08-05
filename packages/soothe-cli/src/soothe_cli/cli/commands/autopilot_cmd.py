@@ -507,9 +507,9 @@ class TopViewState:
     """Interactive view flags for autopilot top (IG-688)."""
 
     include_terminal: bool = False
-    show_steps: bool = True
+    show_steps: bool = False
     show_loops: bool = True
-    interval: float = 1.0
+    interval: float = 2.0
     scroll: int = 0
     help_open: bool = False
     quit: bool = False
@@ -752,7 +752,7 @@ def _format_step_list(
 def _format_top_forest(
     snapshot: dict,
     *,
-    show_steps: bool = True,
+    show_steps: bool = False,
     show_loops: bool = True,
     include_terminal: bool = False,
 ) -> list[Text]:
@@ -915,7 +915,7 @@ def render_top_snapshot(
     When ``height`` is set, pad so the footer sits on the last terminal row
     (linux-``top`` style viewport). Use ``.plain`` for unstyled assertions.
     """
-    view = state or TopViewState(interval=interval if interval is not None else 1.0)
+    view = state or TopViewState(interval=interval if interval is not None else 2.0)
     if interval is not None:
         view.interval = interval
     cols = max(40, width or 72)
@@ -978,7 +978,7 @@ def render_top_snapshot(
 @app.command("top")
 def top(
     interval: float = typer.Option(
-        1.0,
+        2.0,
         "--interval",
         "-n",
         help="Refresh interval in seconds (must be > 0).",

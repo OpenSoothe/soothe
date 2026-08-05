@@ -70,7 +70,7 @@ Blocked / suspended / awaiting_clarification goals **remain visible**.
 | Item | Choice |
 |------|--------|
 | Command | `soothe autopilot top` |
-| Flags | `--interval` / `-n` (default `1.0`, must be > 0) |
+| Flags | `--interval` / `-n` (default `2.0`, must be > 0) |
 | UI | Rich `Live` clear/redraw |
 | Quit | Ctrl+C |
 | Empty | Header + “No active jobs” |

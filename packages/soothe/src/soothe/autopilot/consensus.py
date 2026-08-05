@@ -116,6 +116,10 @@ def _build_consensus_prompt(
 ) -> str:
     """Build prompt for structured consensus evaluation.
 
+    Pass full response/evidence into the judge prompt (IG-690). Do not clip
+    with ``preview_first`` here — truncation caused false ``suspend`` when the
+    model mistook the preview for incomplete work.
+
     Args:
         goal: Goal description.
         response: Layer 2 response text.
@@ -127,16 +131,20 @@ def _build_consensus_prompt(
     parts = [
         "You are evaluating whether an AI agent has successfully completed a goal.",
         f"\nGoal: {goal}",
-        f"\nAgent Response Preview: {preview_first(response, 500)}",
+        f"\nAgent Response:\n{response}",
     ]
     if evidence:
-        parts.append(f"\nEvidence Summary: {preview_first(evidence, 500)}")
+        parts.append(f"\nEvidence Summary:\n{evidence}")
 
     parts.append(
         "\nChoose one decision:\n"
         "- accept: the goal appears completed satisfactorily\n"
-        "- send_back: the agent should try again with a different approach\n"
+        "- send_back: more verification detail is needed, or the agent should "
+        "retry with a different approach\n"
         "- suspend: the goal appears fundamentally blocked or needs external input\n"
+        "Do not choose suspend solely because the narrative is short when evidence "
+        "lists commits, files, tool results, or workspace probe hits. Prefer "
+        "send_back when more verification detail is needed.\n"
         "Provide a brief reasoning string."
     )
     return "\n".join(parts)

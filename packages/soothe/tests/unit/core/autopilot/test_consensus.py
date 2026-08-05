@@ -1,4 +1,4 @@
-"""Tests for the consensus loop (soothe.autopilot.consensus) — IG-678 P0-7."""
+"""Tests for the consensus loop (soothe.autopilot.consensus) — IG-678 / IG-690."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,22 +19,31 @@ class TestConsensusPrompt:
         prompt = _build_consensus_prompt("Test goal", "Response text", "")
         assert "Test goal" in prompt
         assert "Response text" in prompt
+        assert "Agent Response:\nResponse text" in prompt
+        assert "Agent Response Preview" not in prompt
         assert "accept" in prompt.lower()
 
     def test_prompt_with_evidence(self) -> None:
         prompt = _build_consensus_prompt("Goal", "Response", "Evidence summary")
-        assert "Evidence Summary: Evidence summary" in prompt
+        assert "Evidence Summary:\nEvidence summary" in prompt
 
-    def test_prompt_truncates_long_response(self) -> None:
-        long_response = "x" * 1000
-        prompt = _build_consensus_prompt("Goal", long_response, "")
-        assert len(prompt) < 1000
+    def test_prompt_preserves_long_response_and_evidence(self) -> None:
+        long_response = "R" * 2000
+        long_evidence = "E" * 2000
+        prompt = _build_consensus_prompt("Goal", long_response, long_evidence)
+        assert long_response in prompt
+        assert long_evidence in prompt
+        assert "Agent Response Preview" not in prompt
+        assert "Agent Response:\n" + long_response in prompt
+        assert "Evidence Summary:\n" + long_evidence in prompt
 
     def test_prompt_includes_instructions(self) -> None:
         prompt = _build_consensus_prompt("Goal", "Response", "")
         assert "send_back" in prompt.lower()
         assert "suspend" in prompt.lower()
         assert "accept" in prompt.lower()
+        assert "prefer send_back" in prompt.lower()
+        assert "fundamentally blocked" in prompt.lower()
 
 
 @pytest.mark.asyncio
