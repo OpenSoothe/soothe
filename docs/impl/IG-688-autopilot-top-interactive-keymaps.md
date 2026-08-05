@@ -39,7 +39,7 @@ remain out of scope.
 | Flag | Default | Key |
 |------|---------|-----|
 | `include_terminal` | `false` | `a` (also `--all`) |
-| `show_steps` | `false` | `s` |
+| `show_steps` | `false` | `s` (superseded default: IG-694 → `true`) |
 | `show_loops` | `true` | `l` |
 | `interval` | `2.0` | `+` / `-` (also `--interval` / `-n`) |
 | `scroll` | `0` | `j`/`k`, arrows, `g`/`G` |
@@ -89,6 +89,8 @@ green; `a` footer hint flips between All ↔ Active.
 | `k` / `↑` | Scroll up |
 | `g` / `G` | Scroll top / bottom |
 
+Vim page / half-page / Home / End: see [IG-694](IG-694-autopilot-top-vim-scroll-steps-default.md).
+
 ### Out of scope
 
 Pause/cancel keys, per-goal expand cursor, push via `autopilot_subscribe`,
@@ -116,6 +118,7 @@ inactive loop history, Textual rewrite.
 - [x] `a` / `--all` shows terminal goals; default remains active-only
 - [x] `s` / `l` / `d` control StepDAG and loops without wire changes
 - [x] Default view: `show_steps=false`, `interval=2.0` (`--interval` / `-n`)
+  _(IG-694 flips default to `show_steps=true`)_
 - [x] `q`/`h`/`+/-`/`Space`/scroll work in fullscreen Live
 - [x] Footer/help document bindings; no IG/RFC ids in user-visible strings
 - [x] Unit tests green; `./scripts/verify_finally.sh` green

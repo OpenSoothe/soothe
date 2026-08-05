@@ -1,4 +1,4 @@
-"""Unit tests for autopilot top CLI rendering (IG-679 / IG-686 / IG-688)."""
+"""Unit tests for autopilot top CLI rendering (IG-679 / IG-686 / IG-688 / IG-694)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from soothe_cli.cli.commands.autopilot_cmd import (
     TopViewState,
     apply_top_key,
+    decode_top_csi,
     format_elapsed,
     render_top_snapshot,
 )
@@ -26,10 +27,11 @@ def test_format_elapsed_hhmmss() -> None:
 
 def test_top_view_state_defaults() -> None:
     state = TopViewState()
-    assert state.show_steps is False
+    assert state.show_steps is True
     assert state.show_loops is True
     assert state.interval == 2.0
     assert state.include_terminal is False
+    assert state.page_size == 1
 
 
 def test_render_top_empty() -> None:
@@ -48,9 +50,89 @@ def test_render_top_empty() -> None:
     assert "(live)" in text
     assert "q Quit" in text
     assert "refresh 2s" in text
-    assert "steps=off" in text
+    assert "steps=on" in text
+    assert "loops=on" in text
     assert "legend" in text
     assert "JOB" in text and "GOAL" in text and "STEP" in text and "LOOP" in text
+
+
+def test_decode_top_csi() -> None:
+    assert decode_top_csi("[A") == "up"
+    assert decode_top_csi("[B") == "down"
+    assert decode_top_csi("[5~") == "page_up"
+    assert decode_top_csi("[6~") == "page_down"
+    assert decode_top_csi("[H") == "home"
+    assert decode_top_csi("[F") == "end"
+    assert decode_top_csi("[1~") == "home"
+    assert decode_top_csi("OH") == "home"
+    assert decode_top_csi("[Z") is None
+
+
+def test_apply_top_key_vim_scroll() -> None:
+    state = TopViewState(page_size=10, body_line_count=100, scroll=20)
+    apply_top_key(state, "ctrl_d")
+    assert state.scroll == 25  # half of 10
+    apply_top_key(state, "ctrl_u")
+    assert state.scroll == 20
+    apply_top_key(state, "ctrl_f")
+    assert state.scroll == 30
+    apply_top_key(state, "page_down")
+    assert state.scroll == 40
+    apply_top_key(state, "ctrl_b")
+    assert state.scroll == 30
+    apply_top_key(state, "page_up")
+    assert state.scroll == 20
+    apply_top_key(state, "ctrl_e")
+    assert state.scroll == 21
+    apply_top_key(state, "ctrl_y")
+    assert state.scroll == 20
+    apply_top_key(state, "home")
+    assert state.scroll == 0
+    apply_top_key(state, "end")
+    assert state.scroll == 100
+    apply_top_key(state, "g")
+    assert state.scroll == 0
+    apply_top_key(state, "G")
+    assert state.scroll == 100
+
+
+def test_render_top_sets_page_size() -> None:
+    state = TopViewState()
+    # header(4) + footer(2) → max_body = height - 6; page_size = max_body - 1
+    render_top_snapshot(
+        {"running": True, "loop_pool": {"active": 0, "idle": 0, "max": 1}, "jobs": []},
+        height=20,
+        width=80,
+        state=state,
+    )
+    assert state.page_size == max(1, 20 - 4 - 2 - 1)
+
+
+def test_apply_top_key_toggles() -> None:
+    state = TopViewState()
+    assert state.show_steps is True and state.show_loops is True
+    assert state.interval == 2.0
+    apply_top_key(state, "a")
+    assert state.include_terminal is True
+    assert state.force_refresh is True
+    apply_top_key(state, "s")
+    assert state.show_steps is False
+    apply_top_key(state, "l")
+    assert state.show_loops is False
+    # density from compact: steps-only → full → compact → steps-only
+    apply_top_key(state, "d")
+    assert state.show_steps is True and state.show_loops is False
+    apply_top_key(state, "d")
+    assert state.show_steps is True and state.show_loops is True
+    apply_top_key(state, "d")
+    assert state.show_steps is False and state.show_loops is False
+    apply_top_key(state, "+")
+    assert state.interval == 1.5
+    apply_top_key(state, "q")
+    assert state.quit is True
+    state.help_open = True
+    apply_top_key(state, "x")
+    assert state.help_open is False
 
 
 def test_render_top_forest_nests_steps_and_loops() -> None:
@@ -199,33 +281,6 @@ def test_render_top_hides_steps_and_loops() -> None:
     assert "STEP [UZH" not in text
     assert "steps=off" in text
     assert "loops=off" in text
-
-
-def test_apply_top_key_toggles() -> None:
-    state = TopViewState()
-    assert state.show_steps is False and state.show_loops is True
-    assert state.interval == 2.0
-    apply_top_key(state, "a")
-    assert state.include_terminal is True
-    assert state.force_refresh is True
-    apply_top_key(state, "s")
-    assert state.show_steps is True
-    apply_top_key(state, "l")
-    assert state.show_loops is False
-    # density: steps-only → full → compact → steps-only
-    apply_top_key(state, "d")
-    assert state.show_steps is True and state.show_loops is True
-    apply_top_key(state, "d")
-    assert state.show_steps is False and state.show_loops is False
-    apply_top_key(state, "d")
-    assert state.show_steps is True and state.show_loops is False
-    apply_top_key(state, "+")
-    assert state.interval == 1.5
-    apply_top_key(state, "q")
-    assert state.quit is True
-    state.help_open = True
-    apply_top_key(state, "x")
-    assert state.help_open is False
 
 
 def test_render_top_pads_to_height() -> None:

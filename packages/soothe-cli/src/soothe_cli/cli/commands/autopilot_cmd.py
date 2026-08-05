@@ -33,7 +33,8 @@ _TOP_HELP_LINES = (
     "Keys:",
     "  q Quit          h/? Help          Space Refresh",
     "  a All/active    s Steps           l Loops       d Density",
-    "  +/- Delay       j/k or arrows Scroll           g/G Top/bottom",
+    "  +/- Delay       j/k/^E/^Y line    ^D/^U half    ^F/^B page",
+    "  g/G or Home/End Top/bottom        PgUp/PgDn page",
     "",
     "mode=active hides completed/failed/cancelled goals;",
     "steps=on lists the StepDAG under remaining live goals.",
@@ -502,17 +503,24 @@ def _sort_jobs_newest_first(jobs: list[dict]) -> list[dict]:
 
 @dataclass
 class TopViewState:
-    """Interactive view flags for autopilot top (IG-688)."""
+    """Interactive view flags for autopilot top (IG-688 / IG-694)."""
 
     include_terminal: bool = False
-    show_steps: bool = False
+    show_steps: bool = True
     show_loops: bool = True
     interval: float = 2.0
     scroll: int = 0
+    page_size: int = 1
     help_open: bool = False
     quit: bool = False
     force_refresh: bool = False
     body_line_count: int = 0
+
+
+def _page_delta(state: TopViewState, *, half: bool = False) -> int:
+    """Lines to jump for page / half-page scroll."""
+    size = max(1, state.page_size)
+    return max(1, size // 2) if half else size
 
 
 def apply_top_key(state: TopViewState, key: str) -> None:
@@ -520,7 +528,8 @@ def apply_top_key(state: TopViewState, key: str) -> None:
 
     Args:
         state: Mutable view state.
-        key: Key string — single char, or ``up``/``down``/``space``.
+        key: Key string — single char, named specials (``up``, ``page_down``,
+            ``ctrl_d``, …), or ``space``.
     """
     if state.help_open:
         state.help_open = False
@@ -544,7 +553,7 @@ def apply_top_key(state: TopViewState, key: str) -> None:
         state.show_loops = not state.show_loops
         return
     if key == "d":
-        # compact → steps → full → compact
+        # full → compact → steps → full (default is full)
         if state.show_steps and state.show_loops:
             state.show_steps = False
             state.show_loops = False
@@ -564,16 +573,28 @@ def apply_top_key(state: TopViewState, key: str) -> None:
     if key == "space":
         state.force_refresh = True
         return
-    if key in {"j", "down"}:
+    if key in {"j", "down", "ctrl_e"}:
         state.scroll += 1
         return
-    if key in {"k", "up"}:
+    if key in {"k", "up", "ctrl_y"}:
         state.scroll = max(0, state.scroll - 1)
         return
-    if key == "g":
+    if key in {"ctrl_d"}:
+        state.scroll += _page_delta(state, half=True)
+        return
+    if key in {"ctrl_u"}:
+        state.scroll = max(0, state.scroll - _page_delta(state, half=True))
+        return
+    if key in {"ctrl_f", "page_down"}:
+        state.scroll += _page_delta(state)
+        return
+    if key in {"ctrl_b", "page_up"}:
+        state.scroll = max(0, state.scroll - _page_delta(state))
+        return
+    if key in {"g", "home"}:
         state.scroll = 0
         return
-    if key == "G":
+    if key in {"G", "end"}:
         state.scroll = max(0, state.body_line_count)
         return
 
@@ -599,6 +620,54 @@ def _cbreak_stdin() -> Iterator[bool]:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
+def decode_top_csi(seq: str) -> str | None:
+    """Map a CSI/SS3 tail (bytes after ESC) to a named key, if recognized.
+
+    Args:
+        seq: Escape tail such as ``[A``, ``[5~``, or ``OH``.
+
+    Returns:
+        Named key (``up``, ``page_down``, ``home``, …) or None.
+    """
+    mapping = {
+        "[A": "up",
+        "[B": "down",
+        "[H": "home",
+        "[F": "end",
+        "[1~": "home",
+        "[4~": "end",
+        "[7~": "home",
+        "[8~": "end",
+        "[5~": "page_up",
+        "[6~": "page_down",
+        "OH": "home",
+        "OF": "end",
+    }
+    return mapping.get(seq)
+
+
+def _drain_escape_tail() -> str:
+    """Read CSI/SS3 bytes after ESC until a final byte or short idle."""
+    chunks: list[str] = []
+    # First byte after ESC (usually '[' or 'O')
+    more, _, _ = select.select([sys.stdin], [], [], 0.02)
+    if not more:
+        return ""
+    chunks.append(sys.stdin.read(1))
+    # Continue until final CSI byte (~ or A–Z) or idle
+    while True:
+        more, _, _ = select.select([sys.stdin], [], [], 0.02)
+        if not more:
+            break
+        ch = sys.stdin.read(1)
+        chunks.append(ch)
+        if ch == "~" or (len(ch) == 1 and ch.isalpha()):
+            break
+        if len(chunks) >= 8:
+            break
+    return "".join(chunks)
+
+
 def _read_top_key(timeout: float, *, cbreak_active: bool) -> str | None:
     """Non-blocking single key from stdin. Returns None on timeout."""
     if not cbreak_active or not sys.stdin.isatty():
@@ -609,16 +678,23 @@ def _read_top_key(timeout: float, *, cbreak_active: bool) -> str | None:
         return None
     ch = sys.stdin.read(1)
     if ch == "\x1b":
-        more, _, _ = select.select([sys.stdin], [], [], 0.02)
-        if more:
-            seq = sys.stdin.read(2)
-            if seq == "[A":
-                return "up"
-            if seq == "[B":
-                return "down"
-        return None
+        seq = _drain_escape_tail()
+        if not seq:
+            return None
+        return decode_top_csi(seq)
     if ch == " ":
         return "space"
+    # Vim view-mode Ctrl chords (cbreak delivers the control byte).
+    ctrl_map = {
+        "\x02": "ctrl_b",  # Ctrl-b
+        "\x04": "ctrl_d",  # Ctrl-d
+        "\x05": "ctrl_e",  # Ctrl-e
+        "\x06": "ctrl_f",  # Ctrl-f
+        "\x15": "ctrl_u",  # Ctrl-u
+        "\x19": "ctrl_y",  # Ctrl-y
+    }
+    if ch in ctrl_map:
+        return ctrl_map[ch]
     return ch
 
 
@@ -747,7 +823,7 @@ def _format_step_list(
 def _format_top_forest(
     snapshot: dict,
     *,
-    show_steps: bool = False,
+    show_steps: bool = True,
     show_loops: bool = True,
     include_terminal: bool = False,
 ) -> list[Text]:
@@ -951,6 +1027,8 @@ def render_top_snapshot(
     ]
     if height is not None and height > 0:
         max_body = max(1, height - len(header) - len(footer))
+        # Page jumps use the visible body rows (leave one for “… (truncated)”).
+        view.page_size = max(1, max_body - 1)
         if len(body) > max_body:
             max_scroll = max(0, len(body) - (max_body - 1))
             start = min(max(0, view.scroll), max_scroll)
@@ -960,6 +1038,8 @@ def render_top_snapshot(
         pad = height - len(header) - len(body) - len(footer)
         if pad > 0:
             body = body + [Text("")] * pad
+    else:
+        view.page_size = max(1, view.page_size)
 
     out = Text()
     for i, row in enumerate(header + body + footer):
