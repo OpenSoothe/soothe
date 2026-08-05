@@ -86,6 +86,12 @@ flow:
     when: branch_is_stuck
     then: retry_maker
 
+  # Recover when makers finished but integrate never spawned (e.g. pruned
+  # retries previously blocked wave_makers_done on the last maker completion).
+  - event: dag_idle
+    when: wave_makers_done
+    then: spawn_integrate
+
   - event: dag_idle
     when: needs_feedback
     then: spawn_feedback_cycle

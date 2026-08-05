@@ -831,7 +831,10 @@ class RailBuiltinExecutor:
         await self._persist_job(state)
         ws = _job_workspace(self._ce, job_id)
         ws_str = str(ws) if ws else None
-        base_deps = [trigger_goal_id] if trigger_goal_id else []
+        # Never depend on the rail job root — it is never scheduled/completed.
+        base_deps: list[str] = []
+        if trigger_goal_id and trigger_goal_id != job_id:
+            base_deps = [trigger_goal_id]
 
         diagnose = await self._ce.create_goal(
             (

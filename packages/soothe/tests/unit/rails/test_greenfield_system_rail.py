@@ -23,6 +23,9 @@ def test_greenfield_system_rail_loads() -> None:
     assert "commit_milestone" in thens
     assert "review" in thens
     assert "spawn_feedback_cycle" in thens
+    dag_idle = [e for e in rail.flow if e.get("event") == "dag_idle"]
+    assert any(e.get("when") == "wave_makers_done" for e in dag_idle)
+    assert any(e.get("when") == "needs_feedback" for e in dag_idle)
 
 
 def test_architecture_ready_short_circuit() -> None:
@@ -265,6 +268,8 @@ async def test_spawn_feedback_cycle_order() -> None:
     optimize = await ce.get_goal(optimize_id)
     verify = await ce.get_goal(verify_id)
     assert diagnose is not None and "diagnose" in (diagnose.rail_tags or [])
+    assert qa.id in (diagnose.depends_on or [])
+    assert root.id not in (diagnose.depends_on or [])
     assert optimize is not None and diagnose_id in (optimize.depends_on or [])
     assert "optimize" in (optimize.rail_tags or [])
     assert verify is not None and optimize_id in (verify.depends_on or [])
@@ -277,6 +282,22 @@ async def test_spawn_feedback_cycle_order() -> None:
     assert skip.status == "skipped"
 
 
+@pytest.mark.asyncio
+async def test_spawn_feedback_cycle_dag_idle_skips_root_dep() -> None:
+    """dag_idle trigger is the job root — diagnose must not depend on it."""
+    ce = ContextEngine()
+    root = await ce.create_goal("Build system", priority=70)
+    ex = RailBuiltinExecutor(ce)
+    await ex.bind_job(RailJobState(job_id=root.id, rail_id="greenfield-system", rail_version="1.1"))
+
+    result = await ex.invoke("spawn_feedback_cycle", job_id=root.id, trigger_goal_id=root.id)
+    assert result.status == "success"
+    diagnose = await ce.get_goal(result.created_goal_ids[0])
+    assert diagnose is not None
+    assert root.id not in (diagnose.depends_on or [])
+    assert diagnose.depends_on == []
+
+
 def test_needs_feedback_short_circuit() -> None:
     structural = {
         "architecture_goal_ids": ["a1"],
@@ -285,6 +306,8 @@ def test_needs_feedback_short_circuit() -> None:
         "max_feedback_rounds": 8,
         "acceptance_met": False,
         "pending_or_active_count": 0,
+        "any_qa_completed": False,
+        "any_verify_completed": False,
     }
     ok = _structural_short_circuit(
         condition_name="needs_feedback",
@@ -303,33 +326,46 @@ def test_needs_feedback_short_circuit() -> None:
     assert blocked is not None and blocked.matched is False
 
 
-def test_dag_idle_needs_feedback_without_qa_tags() -> None:
-    """Idle DAG + unmet acceptance must spawn feedback even with empty qa_ids."""
-    structural = {
+def test_dag_idle_needs_feedback_requires_completed_qa() -> None:
+    """Maker-only idle must not spawn feedback; completed QA/verify may."""
+    base = {
         "architecture_goal_ids": ["a1"],
         "qa_goal_ids": [],
         "review_goal_ids": [],
         "feedback_goal_ids": [],
+        "implementation_goal_ids": ["m1"],
+        "all_implementation_completed": True,
+        "integrate_goal_ids": [],
         "feedback_inflight": False,
         "feedback_round": 0,
         "max_feedback_rounds": 8,
         "acceptance_met": False,
         "pending_or_active_count": 0,
         "wave_below_max": True,
+        "any_qa_completed": False,
+        "any_verify_completed": False,
     }
-    feedback = _structural_short_circuit(
+    premature = _structural_short_circuit(
         condition_name="needs_feedback",
         event="dag_idle",
         trigger_tags=[],
-        structural=structural,
+        structural=base,
     )
-    assert feedback is not None and feedback.matched is True
+    assert premature is not None and premature.matched is False
+
+    after_qa = _structural_short_circuit(
+        condition_name="needs_feedback",
+        event="dag_idle",
+        trigger_tags=[],
+        structural={**base, "qa_goal_ids": ["q1"], "any_qa_completed": True},
+    )
+    assert after_qa is not None and after_qa.matched is True
 
     complete = _structural_short_circuit(
         condition_name="job_complete",
         event="dag_idle",
         trigger_tags=[],
-        structural=structural,
+        structural=base,
     )
     assert complete is not None and complete.matched is False
 
@@ -337,9 +373,85 @@ def test_dag_idle_needs_feedback_without_qa_tags() -> None:
         condition_name="job_complete",
         event="dag_idle",
         trigger_tags=[],
-        structural={**structural, "acceptance_met": True},
+        structural={**base, "acceptance_met": True},
     )
     assert latched is not None and latched.matched is True
+
+
+def test_dag_idle_wave_makers_done_spawns_integrate() -> None:
+    structural = {
+        "architecture_goal_ids": ["a1"],
+        "implementation_goal_ids": ["m1", "m2"],
+        "all_implementation_completed": True,
+        "integrate_goal_ids": [],
+        "pending_or_active_count": 0,
+    }
+    ready = _structural_short_circuit(
+        condition_name="wave_makers_done",
+        event="dag_idle",
+        trigger_tags=[],
+        structural=structural,
+    )
+    assert ready is not None and ready.matched is True
+
+    already = _structural_short_circuit(
+        condition_name="wave_makers_done",
+        event="dag_idle",
+        trigger_tags=[],
+        structural={**structural, "integrate_goal_ids": ["i1"]},
+    )
+    assert already is not None and already.matched is False
+
+
+@pytest.mark.asyncio
+async def test_pruned_makers_excluded_from_wave_completion() -> None:
+    """Pruned failed makers must not block wave_makers_done / integrate."""
+    from soothe.autopilot.rail.guards import LLMGuardEvaluator
+    from soothe.autopilot.rail.interpreter import LoopRailInterpreter, RailEvent
+
+    ce = ContextEngine()
+    root = await ce.create_goal("Build system", priority=70, rail_id="greenfield-system")
+    ex = RailBuiltinExecutor(ce)
+    interp = LoopRailInterpreter(ce, builtins=ex, guards=LLMGuardEvaluator(model=None))
+    await interp.bind_job(root.id, rail_id="greenfield-system")
+
+    arch = await ce.create_goal("arch", parent_id=root.id, source="decomposition")
+    await ce.complete_goal(arch.id)
+    await ex.annotate_goal(arch.id, root.id, tags=["architecture", "planning"], role="planner")
+
+    failed = await ce.create_goal("maker failed", parent_id=root.id, source="decomposition")
+    failed.status = "cancelled"
+    await ex.annotate_goal(
+        failed.id,
+        root.id,
+        tags=["implementation", "maker", "wave-1", "api"],
+        role="maker",
+        branch_status="pruned",
+    )
+
+    ok_maker = await ce.create_goal("maker ok", parent_id=root.id, source="decomposition")
+    await ce.complete_goal(ok_maker.id)
+    await ex.annotate_goal(
+        ok_maker.id,
+        root.id,
+        tags=["implementation", "maker", "wave-1", "api", "replant"],
+        role="maker",
+        branch_id="job/x/w1/api-retry",
+    )
+
+    fired = await interp.handle(
+        RailEvent(
+            name="goal_completed",
+            job_id=root.id,
+            goal_id=ok_maker.id,
+        )
+    )
+    integrate_fires = [
+        r for r in fired if r.builtin == "spawn_integrate" and r.builtin_result == "success"
+    ]
+    assert integrate_fires, (
+        f"expected spawn_integrate; got {[(r.condition, r.builtin, r.builtin_result, r.guard_result) for r in fired]}"
+    )
 
 
 @pytest.mark.asyncio

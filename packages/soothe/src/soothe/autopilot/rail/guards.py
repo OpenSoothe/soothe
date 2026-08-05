@@ -133,30 +133,42 @@ def _structural_short_circuit(
         )
 
     if name == "wave_makers_done":
-        # Integrate only when every maker completed — failed/cancelled must not
-        # unlock the wave (rail replants failed makers first).
+        # Integrate only when every *active* wave maker completed — pruned
+        # retries and feedback optimize goals are excluded from the fact set.
+        # dag_idle recovers when makers finished but integrate never spawned.
         all_makers_completed = bool(structural.get("all_implementation_completed"))
-        ok = (
-            event == "goal_completed"
-            and "implementation" in trigger_tags
-            and all_makers_completed
-            and has_makers
-        )
+        no_integrate_yet = not bool(structural.get("integrate_goal_ids"))
+        if event == "dag_idle":
+            ok = all_makers_completed and has_makers and no_integrate_yet
+        else:
+            ok = (
+                event == "goal_completed"
+                and "implementation" in trigger_tags
+                and all_makers_completed
+                and has_makers
+            )
         return GuardResult(
             matched=ok,
             confidence=1.0,
-            reasoning=(f"structural short-circuit: all_makers_completed={all_makers_completed}"),
+            reasoning=(
+                f"structural short-circuit: all_makers_completed={all_makers_completed} "
+                f"event={event} integrate_ids={bool(structural.get('integrate_goal_ids'))}"
+            ),
         )
 
     if name == "needs_integrate":
         all_makers_completed = bool(structural.get("all_implementation_completed"))
-        ok = (
-            event == "goal_completed"
-            and "implementation" in trigger_tags
-            and all_makers_completed
-            and has_makers
-            and not bool(structural.get("integrate_goal_ids"))
-        )
+        no_integrate_yet = not bool(structural.get("integrate_goal_ids"))
+        if event == "dag_idle":
+            ok = all_makers_completed and has_makers and no_integrate_yet
+        else:
+            ok = (
+                event == "goal_completed"
+                and "implementation" in trigger_tags
+                and all_makers_completed
+                and has_makers
+                and no_integrate_yet
+            )
         return GuardResult(
             matched=ok,
             confidence=1.0,
@@ -258,13 +270,17 @@ def _structural_short_circuit(
         )
 
     if name in {"needs_feedback"}:
-        # Find→optimize→verify after wave QA / verify, or when DAG is idle
-        # with acceptance still unmet (dag_idle recovery path).
+        # Find→optimize→verify after wave QA / verify. dag_idle recovers only
+        # when a completed QA/verify already exists — never right after makers
+        # finish without integrate (that path is wave_makers_done → integrate).
         feedback_inflight = bool(structural.get("feedback_inflight"))
         feedback_round = int(structural.get("feedback_round") or 0)
         max_feedback_rounds = int(structural.get("max_feedback_rounds") or 8)
+        qa_or_verify_done = bool(structural.get("any_qa_completed")) or bool(
+            structural.get("any_verify_completed")
+        )
         if event == "dag_idle":
-            trigger_ok = True
+            trigger_ok = qa_or_verify_done
         elif event in {"goal_completed", "goal_failed"}:
             trigger_ok = "qa" in trigger_tags or "verify" in trigger_tags
         else:
@@ -283,7 +299,8 @@ def _structural_short_circuit(
             reasoning=(
                 f"structural short-circuit: needs_feedback tags={trigger_tags} "
                 f"event={event} inflight={feedback_inflight} "
-                f"round={feedback_round}/{max_feedback_rounds}"
+                f"round={feedback_round}/{max_feedback_rounds} "
+                f"qa_or_verify_done={qa_or_verify_done}"
             ),
         )
 

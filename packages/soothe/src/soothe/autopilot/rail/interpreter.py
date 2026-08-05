@@ -281,25 +281,8 @@ class LoopRailInterpreter:
                     event.job_id,
                 )
 
-        from soothe.context.models import TERMINAL_STATES
-
-        exploration_ids = [gid for gid, tags in tags_by_goal.items() if "exploration" in tags]
-        planning_ids = [gid for gid, tags in tags_by_goal.items() if "planning" in tags]
-        architecture_ids = [gid for gid, tags in tags_by_goal.items() if "architecture" in tags]
-        implementation_ids = [gid for gid, tags in tags_by_goal.items() if "implementation" in tags]
-        integrate_ids = [gid for gid, tags in tags_by_goal.items() if "integrate" in tags]
-        commit_ids = [gid for gid, tags in tags_by_goal.items() if "commit" in tags]
-        review_ids = [gid for gid, tags in tags_by_goal.items() if "review" in tags]
-        qa_ids = [gid for gid, tags in tags_by_goal.items() if "qa" in tags]
-        feedback_ids = [gid for gid, tags in tags_by_goal.items() if "feedback" in tags]
-
-        def _all_terminal(ids: list[str]) -> bool:
-            return bool(ids) and all(siblings.get(gid) in TERMINAL_STATES for gid in ids)
-
-        def _all_completed(ids: list[str]) -> bool:
-            return bool(ids) and all(siblings.get(gid) == "completed" for gid in ids)
-
         from soothe.autopilot.maturity import latch_acceptance_met
+        from soothe.context.models import TERMINAL_STATES
 
         job_state = await self._builtins.job_state(event.job_id)
         wave_below_max = True
@@ -316,6 +299,46 @@ class LoopRailInterpreter:
             rail_acceptance_met=rail_acceptance,
             maturity=root.maturity if root is not None else None,
         )
+
+        def _branch_status(gid: str) -> str | None:
+            if job_state is not None:
+                ann = job_state.annotations.get(gid)
+                if ann is not None and ann.branch_status:
+                    return ann.branch_status
+            node = next((g for g in descendants if g.id == gid), None)
+            if node is None:
+                node = self._ce._dag.get_goal(gid)
+            return getattr(node, "branch_status", None) if node is not None else None
+
+        def _is_wave_maker(gid: str, tags: list[str]) -> bool:
+            """Active wave maker — exclude feedback optimize and pruned retries."""
+            if "implementation" not in tags:
+                return False
+            if "feedback" in tags:
+                return False
+            return _branch_status(gid) != "pruned"
+
+        exploration_ids = [gid for gid, tags in tags_by_goal.items() if "exploration" in tags]
+        planning_ids = [gid for gid, tags in tags_by_goal.items() if "planning" in tags]
+        architecture_ids = [gid for gid, tags in tags_by_goal.items() if "architecture" in tags]
+        implementation_ids = [
+            gid for gid, tags in tags_by_goal.items() if _is_wave_maker(gid, tags)
+        ]
+        integrate_ids = [gid for gid, tags in tags_by_goal.items() if "integrate" in tags]
+        commit_ids = [gid for gid, tags in tags_by_goal.items() if "commit" in tags]
+        review_ids = [gid for gid, tags in tags_by_goal.items() if "review" in tags]
+        qa_ids = [gid for gid, tags in tags_by_goal.items() if "qa" in tags]
+        feedback_ids = [gid for gid, tags in tags_by_goal.items() if "feedback" in tags]
+        verify_ids = [gid for gid, tags in tags_by_goal.items() if "verify" in tags]
+
+        def _all_terminal(ids: list[str]) -> bool:
+            return bool(ids) and all(siblings.get(gid) in TERMINAL_STATES for gid in ids)
+
+        def _all_completed(ids: list[str]) -> bool:
+            return bool(ids) and all(siblings.get(gid) == "completed" for gid in ids)
+
+        def _any_completed(ids: list[str]) -> bool:
+            return any(siblings.get(gid) == "completed" for gid in ids)
 
         feedback_inflight = any(siblings.get(gid) in {"pending", "active"} for gid in feedback_ids)
 
@@ -337,6 +360,9 @@ class LoopRailInterpreter:
             "all_commit_terminal": _all_terminal(commit_ids) if commit_ids else True,
             "all_review_terminal": _all_terminal(review_ids) if review_ids else True,
             "all_qa_terminal": _all_terminal(qa_ids) if qa_ids else True,
+            "any_qa_completed": _any_completed(qa_ids),
+            "any_verify_completed": _any_completed(verify_ids),
+            "any_integrate_completed": _any_completed(integrate_ids),
             "feedback_inflight": feedback_inflight,
             "feedback_round": feedback_round,
             "max_feedback_rounds": max_feedback_rounds,
