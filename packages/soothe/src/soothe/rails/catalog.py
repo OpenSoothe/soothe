@@ -16,6 +16,10 @@ CE_RAIL_BUILTINS: frozenset[str] = frozenset(
     {
         "decompose_parallel",
         "plan_and_implement",
+        "plan_milestones",
+        "spawn_wave_makers",
+        "spawn_integrate",
+        "commit_milestone",
         "review",
         "qa_verify",
         "retry_branch",
@@ -40,6 +44,7 @@ _BUILTIN_RAIL_HASHES: dict[str, str] = {
     "migration": "pending",
     "pr-review": "pending",
     "spike": "pending",
+    "greenfield-system": "pending",
 }
 
 

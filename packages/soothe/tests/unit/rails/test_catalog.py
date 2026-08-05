@@ -23,6 +23,7 @@ EXPECTED_BUILTIN_IDS = frozenset(
         "spike",
         "pr-review",
         "migration",
+        "greenfield-system",
     }
 )
 

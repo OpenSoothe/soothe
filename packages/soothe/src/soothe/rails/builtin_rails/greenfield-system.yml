@@ -1,0 +1,77 @@
+id: greenfield-system
+version: "1.0"
+
+summary: |
+  Greenfield multi-module system build: architecture milestones, parallel
+  makers (git worktrees when available), integrate, commit gate, diff-scoped
+  review, and wave QA until system acceptance. Differs from feature-dev by
+  rejecting a single maker pass and by never wiring makers to depend on the
+  job root.
+
+applies_when: |
+  Building a new multi-module system or large scaffold from scratch
+  (compiler, platform, multi-crate product), not a feature in an existing
+  mature codebase, hotfix, bugfix, or research spike.
+
+conditions:
+  architecture_ready: |
+    The architecture / milestone map goal completed, and the first wave of
+    independent maker goals has not been spawned yet.
+  wave_makers_done: |
+    All maker goals for the current wave completed successfully.
+  needs_integrate: |
+    Wave makers finished and cross-module integrate / merge work remains.
+  needs_commit: |
+    Integrate finished (or makers finished when integrate was skipped) and
+    a milestone git commit gate should run before review.
+  needs_review: |
+    Commit milestone completed; independent diff-scoped code review should
+    run against the job branch / commit range.
+  needs_qa: |
+    Review passed or was skipped by policy; wave acceptance tests and build
+    verification should run.
+  ready_for_next_wave: |
+    Wave QA passed, the DAG has no pending children, and further milestones
+    remain in the architecture map.
+  branch_is_stuck: |
+    A maker, integrate, review, or QA goal failed twice or evidence shows
+    the approach conflicts with the architecture.
+  job_complete: |
+    Declared system acceptance holds (required binaries / golden tests /
+    milestone commits) and the DAG is idle with no pending children.
+
+flow:
+  - event: job_start
+    then: plan_milestones
+
+  - event: goal_completed
+    when: architecture_ready
+    then: spawn_wave_makers
+
+  - event: goal_completed
+    when: wave_makers_done
+    then: spawn_integrate
+
+  - event: goal_completed
+    when: needs_commit
+    then: commit_milestone
+
+  - event: goal_completed
+    when: needs_review
+    then: review
+
+  - event: goal_completed
+    when: needs_qa
+    then: qa_verify
+
+  - event: goal_completed
+    when: ready_for_next_wave
+    then: spawn_wave_makers
+
+  - event: goal_failed
+    when: branch_is_stuck
+    then: retry_branch
+
+  - event: dag_idle
+    when: job_complete
+    then: complete_job

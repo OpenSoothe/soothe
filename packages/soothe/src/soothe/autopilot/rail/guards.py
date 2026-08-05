@@ -110,6 +110,64 @@ def _structural_short_circuit(
     if not name or not structural:
         return None
 
+    pending = int(structural.get("pending_or_active_count") or 0)
+    architecture_done = bool(structural.get("all_architecture_terminal"))
+    has_architecture = bool(structural.get("architecture_goal_ids"))
+    has_makers = bool(structural.get("implementation_goal_ids"))
+    all_makers_done = bool(structural.get("all_implementation_terminal"))
+    wave_below_max = bool(structural.get("wave_below_max", True))
+
+    if name == "architecture_ready":
+        ok = (
+            event == "goal_completed"
+            and "architecture" in trigger_tags
+            and architecture_done
+            and not has_makers
+        )
+        return GuardResult(
+            matched=ok,
+            confidence=1.0,
+            reasoning=(
+                f"structural short-circuit: architecture_done={architecture_done} "
+                f"has_makers={has_makers}"
+            ),
+        )
+
+    if name == "wave_makers_done":
+        ok = (
+            event == "goal_completed"
+            and "implementation" in trigger_tags
+            and all_makers_done
+            and has_makers
+        )
+        return GuardResult(
+            matched=ok,
+            confidence=1.0,
+            reasoning=f"structural short-circuit: all_makers_done={all_makers_done}",
+        )
+
+    if name == "needs_integrate":
+        ok = (
+            event == "goal_completed"
+            and "implementation" in trigger_tags
+            and all_makers_done
+            and not bool(structural.get("integrate_goal_ids"))
+        )
+        return GuardResult(
+            matched=ok,
+            confidence=1.0,
+            reasoning=f"structural short-circuit: needs_integrate makers_done={all_makers_done}",
+        )
+
+    if name == "needs_commit":
+        # Only after integrate completes (greenfield commit gate).
+        ok = event == "goal_completed" and "integrate" in trigger_tags
+        return GuardResult(
+            matched=ok,
+            confidence=1.0,
+            reasoning=f"structural short-circuit: needs_commit tags={trigger_tags}",
+        )
+
     if name in {"ready_to_plan", "ready_to_fix", "scouts_done", "ready_for_next_wave"}:
         exploration_done = bool(structural.get("all_exploration_terminal"))
         already_planned = bool(
@@ -118,8 +176,18 @@ def _structural_short_circuit(
         if name == "scouts_done":
             ok = exploration_done
         elif name == "ready_for_next_wave":
-            # Allow repeated waves only when nothing is pending/active.
-            ok = exploration_done and int(structural.get("pending_or_active_count") or 0) == 0
+            if has_architecture:
+                # greenfield-system: QA finished, idle DAG, waves remain
+                ok = (
+                    event == "goal_completed"
+                    and "qa" in trigger_tags
+                    and pending == 0
+                    and wave_below_max
+                    and bool(structural.get("all_qa_terminal", True))
+                )
+            else:
+                # migration / scout-wave rails
+                ok = exploration_done and pending == 0
         else:
             # Gate once: do not re-fire after plan/implement already exists.
             ok = exploration_done and not already_planned
@@ -128,16 +196,24 @@ def _structural_short_circuit(
             confidence=1.0,
             reasoning=(
                 f"structural short-circuit: exploration_done={exploration_done} "
-                f"already_planned={already_planned}"
+                f"already_planned={already_planned} architecture={has_architecture}"
             ),
         )
 
     if name in {"needs_review", "needs_check", "needs_security_review"}:
-        ok = event == "goal_completed" and "implementation" in trigger_tags
+        ok = event == "goal_completed" and (
+            "implementation" in trigger_tags or "commit" in trigger_tags
+        )
+        # greenfield: if a commit gate exists, only review after commit completes
+        commit_ids = list(structural.get("commit_goal_ids") or [])
+        if commit_ids and not bool(structural.get("all_commit_terminal", True)):
+            ok = False
+        elif commit_ids and "commit" not in trigger_tags and has_architecture:
+            ok = False
         return GuardResult(
             matched=ok,
             confidence=1.0,
-            reasoning=f"structural short-circuit: implementation_completed={ok}",
+            reasoning=f"structural short-circuit: review_trigger tags={trigger_tags}",
         )
 
     if name in {"needs_qa"}:
@@ -149,19 +225,21 @@ def _structural_short_circuit(
         )
 
     if name in {"job_complete"}:
-        pending = int(structural.get("pending_or_active_count") or 0)
         reviews = list(structural.get("review_goal_ids") or [])
         qas = list(structural.get("qa_goal_ids") or [])
         # Require at least one qa terminal when qa goals exist; else pending==0.
         ok = pending == 0 and (not qas or bool(structural.get("all_qa_terminal", True)))
         if reviews and pending == 0 and not qas:
             ok = True
+        # greenfield: if waves remain, not complete
+        if has_architecture and wave_below_max and qas:
+            ok = False
         return GuardResult(
             matched=ok,
             confidence=1.0,
             reasoning=(
                 f"structural short-circuit: pending_or_active_count={pending} "
-                f"qa_ids={qas} reviews={reviews}"
+                f"qa_ids={qas} reviews={reviews} wave_below_max={wave_below_max}"
             ),
         )
 

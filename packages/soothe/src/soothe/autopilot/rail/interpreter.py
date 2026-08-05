@@ -263,23 +263,38 @@ class LoopRailInterpreter:
 
         exploration_ids = [gid for gid, tags in tags_by_goal.items() if "exploration" in tags]
         planning_ids = [gid for gid, tags in tags_by_goal.items() if "planning" in tags]
+        architecture_ids = [gid for gid, tags in tags_by_goal.items() if "architecture" in tags]
         implementation_ids = [gid for gid, tags in tags_by_goal.items() if "implementation" in tags]
+        integrate_ids = [gid for gid, tags in tags_by_goal.items() if "integrate" in tags]
+        commit_ids = [gid for gid, tags in tags_by_goal.items() if "commit" in tags]
         review_ids = [gid for gid, tags in tags_by_goal.items() if "review" in tags]
         qa_ids = [gid for gid, tags in tags_by_goal.items() if "qa" in tags]
 
         def _all_terminal(ids: list[str]) -> bool:
             return bool(ids) and all(siblings.get(gid) in TERMINAL_STATES for gid in ids)
 
+        job_state = await self._builtins.job_state(event.job_id)
+        wave_below_max = True
+        if job_state is not None:
+            wave_below_max = job_state.wave_index < job_state.max_waves
+
         structural = {
             "exploration_goal_ids": exploration_ids,
             "planning_goal_ids": planning_ids,
+            "architecture_goal_ids": architecture_ids,
             "implementation_goal_ids": implementation_ids,
+            "integrate_goal_ids": integrate_ids,
+            "commit_goal_ids": commit_ids,
             "review_goal_ids": review_ids,
             "qa_goal_ids": qa_ids,
             "all_exploration_terminal": _all_terminal(exploration_ids),
+            "all_architecture_terminal": _all_terminal(architecture_ids),
             "all_implementation_terminal": _all_terminal(implementation_ids),
+            "all_integrate_terminal": _all_terminal(integrate_ids) if integrate_ids else True,
+            "all_commit_terminal": _all_terminal(commit_ids) if commit_ids else True,
             "all_review_terminal": _all_terminal(review_ids) if review_ids else True,
             "all_qa_terminal": _all_terminal(qa_ids) if qa_ids else True,
+            "wave_below_max": wave_below_max,
             "pending_or_active_count": sum(
                 1
                 for gid, st in siblings.items()

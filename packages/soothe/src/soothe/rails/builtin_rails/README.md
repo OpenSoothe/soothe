@@ -26,6 +26,7 @@ Fallback when auto-pick confidence is low:
 | `spike` | Explore then `pause_for_user`; no auto-implement |
 | `pr-review` | Review-only (+ optional QA); no implementation branch |
 | `migration` | Wave goal-loop until a checkable stop condition |
+| `greenfield-system` | Milestones → parallel worktree makers → integrate → commit → review → QA waves |
 
 ## Format
 

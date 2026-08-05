@@ -105,7 +105,7 @@ def submit(
     rail: str | None = typer.Option(
         None,
         "--rail",
-        help="LoopRail id (e.g. feature-dev, spike).",
+        help="LoopRail id (e.g. feature-dev, greenfield-system, spike).",
     ),
     wait: bool = typer.Option(
         False,
@@ -130,7 +130,7 @@ def run(
     rail: str | None = typer.Option(
         None,
         "--rail",
-        help="LoopRail id (e.g. feature-dev, spike).",
+        help="LoopRail id (e.g. feature-dev, greenfield-system, spike).",
     ),
 ) -> None:
     """Alias for submit --wait (sync)."""
