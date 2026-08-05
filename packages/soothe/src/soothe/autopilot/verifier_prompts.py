@@ -73,7 +73,9 @@ Constraints:
 - merge_goals: Combine similar goals (logged; not always auto-applied)
 - decompose_goals: Split completed complex goals into follow-ups; each subgoal MUST
   include depends_on when a pipeline is implied (use sibling index "0","1",… or real IDs)
-- wire_dependencies: Set hard depends_on on existing goals to enforce pipeline order
+- wire_dependencies: Set hard depends_on on existing goals to enforce pipeline order.
+  NEVER wire a child goal to depend_on a job root (parent_id null). Roots may
+  depend on children; children must never depend on the job root.
 - All goal IDs MUST exist in current DAG
 """
 

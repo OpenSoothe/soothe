@@ -20,6 +20,7 @@ CE_RAIL_BUILTINS: frozenset[str] = frozenset(
         "spawn_wave_makers",
         "spawn_integrate",
         "commit_milestone",
+        "spawn_feedback_cycle",
         "review",
         "qa_verify",
         "retry_branch",

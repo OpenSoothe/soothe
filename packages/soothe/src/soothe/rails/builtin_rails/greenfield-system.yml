@@ -1,12 +1,13 @@
 id: greenfield-system
-version: "1.0"
+version: "1.1"
 
 summary: |
   Greenfield multi-module system build: architecture milestones, parallel
   makers (git worktrees when available), integrate, commit gate, diff-scoped
-  review, and wave QA until system acceptance. Differs from feature-dev by
-  rejecting a single maker pass and by never wiring makers to depend on the
-  job root.
+  review, wave QA, then find→optimize→verify feedback cycles until system
+  acceptance. Differs from feature-dev by rejecting a single maker pass,
+  never wiring makers to depend on the job root, and closing gaps with a
+  feedback loop before next wave or job completion.
 
 applies_when: |
   Building a new multi-module system or large scaffold from scratch
@@ -30,9 +31,14 @@ conditions:
   needs_qa: |
     Review passed or was skipped by policy; wave acceptance tests and build
     verification should run.
+  needs_feedback: |
+    Wave QA or a prior feedback verify finished, system acceptance is not
+    yet met, and another find→optimize→verify round should close remaining
+    bugs and gaps.
   ready_for_next_wave: |
-    Wave QA passed, the DAG has no pending children, and further milestones
-    remain in the architecture map.
+    Feedback verify (or exhausted feedback) shows the wave is ready, the DAG
+    has no pending children, and further milestones remain in the
+    architecture map.
   branch_is_stuck: |
     A maker, integrate, review, or QA goal failed twice or evidence shows
     the approach conflicts with the architecture.
@@ -63,6 +69,14 @@ flow:
   - event: goal_completed
     when: needs_qa
     then: qa_verify
+
+  - event: goal_completed
+    when: needs_feedback
+    then: spawn_feedback_cycle
+
+  - event: goal_failed
+    when: needs_feedback
+    then: spawn_feedback_cycle
 
   - event: goal_completed
     when: ready_for_next_wave

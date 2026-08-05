@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import typer
+from rich.text import Text
 from soothe_client import (
     command_client_from_config,
     is_daemon_live,
@@ -34,6 +35,27 @@ _TOP_HELP_LINES = (
     "  a All/active    s Steps           l Loops       d Density",
     "  +/- Delay       j/k or arrows Scroll           g/G Top/bottom",
 )
+
+# Concept colors for autopilot top (jobs / goals / steps / loops).
+_STYLE_JOB = "bold bright_cyan"
+_STYLE_GOAL = "bold bright_white"
+_STYLE_STEP = "yellow"
+_STYLE_LOOP = "bold bright_magenta"
+_STYLE_TREE = "bright_black"
+_STYLE_META = "cyan"
+_STYLE_HEADER = "bold"
+_STYLE_DIM = "dim"
+_STATUS_STYLE: dict[str, str] = {
+    "active": "bold bright_green",
+    "pending": "yellow",
+    "completed": "dim green",
+    "failed": "bold bright_red",
+    "cancelled": "dim red",
+    "suspended": "bright_yellow",
+    "blocked": "bright_yellow",
+    "running": "bold bright_green",
+    "stopped": "dim red",
+}
 
 app = typer.Typer(help="Autopilot — autonomous goal control.")
 
@@ -569,17 +591,30 @@ def _read_top_key(timeout: float, *, cbreak_active: bool) -> str | None:
     return ch
 
 
+def _status_style(status: str) -> str:
+    """Rich style name for a goal/job/loop/step status."""
+    return _STATUS_STYLE.get(str(status).lower(), "white")
+
+
+def _text_line(*parts: tuple[str, str | None]) -> Text:
+    """Build a single Rich Text line from (segment, style) parts."""
+    line = Text()
+    for text, style in parts:
+        line.append(text, style=style)
+    return line
+
+
 def _format_top_header(
     snapshot: dict,
     *,
     state: TopViewState,
     width: int = 72,
-) -> list[str]:
-    """Build header lines for autopilot top."""
+) -> list[Text]:
+    """Build header lines for autopilot top (Rich Text rows)."""
     from datetime import datetime
 
     running = "running" if snapshot.get("running") else "stopped"
-    dreaming = " · dreaming" if snapshot.get("dreaming") else ""
+    dreaming = bool(snapshot.get("dreaming"))
     pool = snapshot.get("loop_pool") if isinstance(snapshot.get("loop_pool"), dict) else {}
     active = pool.get("active", 0)
     idle = pool.get("idle", 0)
@@ -590,22 +625,47 @@ def _format_top_header(
     steps = "on" if state.show_steps else "off"
     loops = "on" if state.show_loops else "off"
     rule = "─" * max(8, width)
-    return [
-        (
-            f"Autopilot top · {running}{dreaming} · "
-            f"pool {active}/{idle}/{max_loops} (active/idle/max) · "
-            f"{len(jobs)} job(s) · {clock}"
-        ),
-        f"mode={mode}  steps={steps}  loops={loops}  delay={state.interval:g}s",
-        rule,
-    ]
+
+    title = Text()
+    title.append("Autopilot top", style=_STYLE_HEADER)
+    title.append(" · ", style=_STYLE_TREE)
+    title.append(running, style=_status_style(running))
+    if dreaming:
+        title.append(" · ", style=_STYLE_TREE)
+        title.append("dreaming", style="bright_yellow")
+    title.append(" · ", style=_STYLE_TREE)
+    title.append(f"pool {active}/{idle}/{max_loops}", style=_STYLE_META)
+    title.append(" (active/idle/max) · ", style=_STYLE_TREE)
+    title.append(f"{len(jobs)} job(s)", style=_STYLE_JOB)
+    title.append(f" · {clock}", style=_STYLE_TREE)
+
+    flags = Text()
+    flags.append(f"mode={mode}", style=_STYLE_META)
+    flags.append("  ")
+    flags.append(f"steps={steps}", style=_STYLE_STEP)
+    flags.append("  ")
+    flags.append(f"loops={loops}", style=_STYLE_LOOP)
+    flags.append("  ")
+    flags.append(f"delay={state.interval:g}s", style=_STYLE_META)
+
+    legend = Text()
+    legend.append("legend  ", style=_STYLE_DIM)
+    legend.append("JOB", style=_STYLE_JOB)
+    legend.append("  ")
+    legend.append("GOAL", style=_STYLE_GOAL)
+    legend.append("  ")
+    legend.append("STEP", style=_STYLE_STEP)
+    legend.append("  ")
+    legend.append("LOOP", style=_STYLE_LOOP)
+
+    return [title, flags, legend, Text(rule, style=_STYLE_TREE)]
 
 
 def _format_step_forest(
     steps: dict,
     *,
     indent: str,
-    lines: list[str],
+    lines: list[Text],
     trailing_siblings: int,
 ) -> None:
     """Append nested planned step DAG lines under a goal."""
@@ -626,15 +686,22 @@ def _format_step_forest(
             return
         rendered.add(step_id)
         kids = [c for c in step_children.get(step_id, []) if c in step_nodes]
-        # last among steps only when no more loops/goal-children after the whole step tree
         last_among_steps = is_last and more_after == 0 and not kids
         branch = "└─ " if last_among_steps else "├─ "
-        # Keep vertical rails while later siblings (loops / child goals) remain
         child_indent = step_indent + ("    " if is_last and more_after == 0 else "│   ")
         status = str(node.get("status", "pending"))
         desc = _preview_desc(node.get("description", ""), 40)
         sid = step_id if len(step_id) <= 12 else step_id[:12] + "…"
-        lines.append(f'{step_indent}{branch}[{sid}] {status:10s} "{desc}"')
+        lines.append(
+            _text_line(
+                (step_indent, _STYLE_TREE),
+                (branch, _STYLE_TREE),
+                ("STEP ", _STYLE_STEP),
+                (f"[{sid}] ", _STYLE_STEP),
+                (f"{status:10s}", _status_style(status)),
+                (f'  "{desc}"', _STYLE_DIM),
+            )
+        )
         for i, kid in enumerate(kids):
             render_step(kid, child_indent, i == len(kids) - 1, more_after=more_after)
 
@@ -652,13 +719,14 @@ def _format_top_forest(
     show_steps: bool = True,
     show_loops: bool = True,
     include_terminal: bool = False,
-) -> list[str]:
-    """Render jobs → goal DAG → step DAG → loops as ASCII tree lines."""
+) -> list[Text]:
+    """Render jobs → goal DAG → step DAG → loops as colored Rich Text rows."""
     jobs = snapshot.get("jobs") or []
     if not jobs:
-        return ["No jobs." if include_terminal else "No active jobs."]
+        msg = "No jobs." if include_terminal else "No active jobs."
+        return [Text(msg, style="dim italic")]
 
-    lines: list[str] = []
+    lines: list[Text] = []
     for job in jobs:
         if not isinstance(job, dict):
             continue
@@ -668,7 +736,15 @@ def _format_top_forest(
         jdesc = _preview_desc(job.get("description", ""), 50)
         jelapsed = format_elapsed(job.get("created_at"))
         jelapsed_s = f"  {jelapsed}" if jelapsed else ""
-        lines.append(f'[{jid[:8]}] {jstat:10s} pri={jpri}{jelapsed_s}  "{jdesc}"')
+        lines.append(
+            _text_line(
+                ("JOB  ", _STYLE_JOB),
+                (f"[{jid[:8]}] ", _STYLE_JOB),
+                (f"{jstat:10s}", _status_style(jstat)),
+                (f"  pri={jpri}{jelapsed_s}", _STYLE_META),
+                (f'  "{jdesc}"', _STYLE_DIM),
+            )
+        )
 
         dag = job.get("dag") if isinstance(job.get("dag"), dict) else {}
         nodes = {
@@ -698,7 +774,17 @@ def _format_top_forest(
             steps_c = node.get("steps_completed", 0) or 0
             steps_t = node.get("steps_total", 0) or 0
             steps_s = f"  steps {steps_c}/{steps_t}" if steps_t else ""
-            lines.append(f'{indent}{branch}[{goal_id[:8]}] {status:10s} "{desc}"{steps_s}')
+            goal_line = _text_line(
+                (indent, _STYLE_TREE),
+                (branch, _STYLE_TREE),
+                ("GOAL ", _STYLE_GOAL),
+                (f"[{goal_id[:8]}] ", _STYLE_GOAL),
+                (f"{status:10s}", _status_style(status)),
+                (f'  "{desc}"', _STYLE_DIM),
+            )
+            if steps_s:
+                goal_line.append(steps_s, style=_STYLE_STEP)
+            lines.append(goal_line)
 
             goal_loops = loops_by_goal.get(goal_id, [])
             child_ids = children.get(goal_id, [])
@@ -719,10 +805,19 @@ def _format_top_forest(
                 lb = "└─ " if last_sub else "├─ "
                 lid = _short_loop_id(str(entry.get("loop_id", "?")))
                 seq = entry.get("seq", "?")
-                lstat = entry.get("status", "active")
+                lstat = str(entry.get("status", "active"))
                 elapsed = format_elapsed(entry.get("started_at"))
                 elapsed_s = f"  {elapsed}" if elapsed else ""
-                lines.append(f"{child_indent}{lb}loop {lid}  {lstat}  #{seq}{elapsed_s}")
+                lines.append(
+                    _text_line(
+                        (child_indent, _STYLE_TREE),
+                        (lb, _STYLE_TREE),
+                        ("LOOP ", _STYLE_LOOP),
+                        (f"{lid}  ", _STYLE_LOOP),
+                        (lstat, _status_style(lstat)),
+                        (f"  #{seq}{elapsed_s}", _STYLE_META),
+                    )
+                )
             for i, child_id in enumerate(child_ids):
                 render_goal(child_id, child_indent, i == len(child_ids) - 1)
 
@@ -743,16 +838,23 @@ def _format_top_forest(
             lid = _short_loop_id(str(entry.get("loop_id", "?")))
             seq = entry.get("seq", "?")
             gid = str(entry.get("goal_id") or "?")[:8]
+            lstat = str(entry.get("status", "active"))
             elapsed = format_elapsed(entry.get("started_at"))
             elapsed_s = f"  {elapsed}" if elapsed else ""
             lines.append(
-                f"{branch}loop {lid}  {entry.get('status', 'active')}  "
-                f"#{seq}{elapsed_s}  ?goal={gid}"
+                _text_line(
+                    (branch, _STYLE_TREE),
+                    ("LOOP ", _STYLE_LOOP),
+                    (f"{lid}  ", _STYLE_LOOP),
+                    (lstat, _status_style(lstat)),
+                    (f"  #{seq}{elapsed_s}", _STYLE_META),
+                    (f"  ?goal={gid}", "bright_yellow"),
+                )
             )
 
-        lines.append("")
+        lines.append(Text(""))
 
-    if lines and lines[-1] == "":
+    if lines and not lines[-1].plain:
         lines.pop()
     return lines
 
@@ -764,11 +866,11 @@ def render_top_snapshot(
     width: int | None = None,
     height: int | None = None,
     state: TopViewState | None = None,
-) -> str:
-    """Render a full autopilot top screen as plain text.
+) -> Text:
+    """Render a full autopilot top screen as Rich ``Text``.
 
     When ``height`` is set, pad so the footer sits on the last terminal row
-    (linux-``top`` style viewport).
+    (linux-``top`` style viewport). Use ``.plain`` for unstyled assertions.
     """
     view = state or TopViewState(interval=interval if interval is not None else 1.0)
     if interval is not None:
@@ -776,7 +878,7 @@ def render_top_snapshot(
     cols = max(40, width or 72)
     header = _format_top_header(snapshot, state=view, width=cols)
     if view.help_open:
-        body = list(_TOP_HELP_LINES)
+        body: list[Text] = [Text(line, style=_STYLE_META) for line in _TOP_HELP_LINES]
     else:
         body = _format_top_forest(
             snapshot,
@@ -787,10 +889,23 @@ def render_top_snapshot(
     view.body_line_count = len(body)
     rule = "─" * cols
     footer = [
-        rule,
-        (
-            f"q Quit · h Help · a All · s Steps · l Loops · d Density · "
-            f"+/- Delay · refresh {view.interval:g}s"
+        Text(rule, style=_STYLE_TREE),
+        _text_line(
+            ("q Quit", _STYLE_DIM),
+            (" · ", _STYLE_TREE),
+            ("h Help", _STYLE_DIM),
+            (" · ", _STYLE_TREE),
+            ("a All", _STYLE_DIM),
+            (" · ", _STYLE_TREE),
+            ("s Steps", _STYLE_STEP),
+            (" · ", _STYLE_TREE),
+            ("l Loops", _STYLE_LOOP),
+            (" · ", _STYLE_TREE),
+            ("d Density", _STYLE_DIM),
+            (" · ", _STYLE_TREE),
+            ("+/- Delay", _STYLE_DIM),
+            (" · ", _STYLE_TREE),
+            (f"refresh {view.interval:g}s", _STYLE_META),
         ),
     ]
     if height is not None and height > 0:
@@ -800,11 +915,17 @@ def render_top_snapshot(
             start = min(max(0, view.scroll), max_scroll)
             view.scroll = start
             chunk = body[start : start + max_body - 1]
-            body = chunk + ["… (truncated)"]
+            body = chunk + [Text("… (truncated)", style="dim italic")]
         pad = height - len(header) - len(body) - len(footer)
         if pad > 0:
-            body = body + [""] * pad
-    return "\n".join(header + body + footer)
+            body = body + [Text("")] * pad
+
+    out = Text()
+    for i, row in enumerate(header + body + footer):
+        if i:
+            out.append("\n")
+        out.append_text(row)
+    return out
 
 
 @app.command("top")
@@ -829,7 +950,6 @@ def top(
 
     from rich.console import Console
     from rich.live import Live
-    from rich.text import Text
 
     client = _require_daemon_ws()
     console = Console()
@@ -841,13 +961,11 @@ def top(
 
     def _render() -> Text:
         size = console.size
-        return Text(
-            render_top_snapshot(
-                snapshot,
-                width=size.width,
-                height=size.height,
-                state=state,
-            )
+        return render_top_snapshot(
+            snapshot,
+            width=size.width,
+            height=size.height,
+            state=state,
         )
 
     def _fetch() -> None:

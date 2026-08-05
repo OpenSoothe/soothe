@@ -157,6 +157,26 @@ class TestWireDependencies:
         assert updated is not None
         assert updated.depends_on == [a.id]
 
+    @pytest.mark.asyncio
+    async def test_health_skips_child_depends_on_job_root(self, mock_config: MagicMock) -> None:
+        ce = ContextEngine()
+        root = await ce.create_goal("job root", priority=80)
+        child = await ce.create_goal("maker", priority=70, parent_id=root.id)
+        sibling = await ce.create_goal("review", priority=60, parent_id=root.id)
+
+        verifier = GoalDAGVerifier(ce, mock_config)
+        report = DagHealthReport(
+            wire_dependencies=[
+                WireDependencySuggestion(goal_id=sibling.id, depends_on=[root.id, child.id]),
+            ],
+            reasoning="bad root edge",
+        )
+        await verifier.apply_health_report(report)
+        updated = await ce.get_goal(sibling.id)
+        assert updated is not None
+        assert root.id not in updated.depends_on
+        assert child.id in updated.depends_on
+
 
 class TestConsensusEmptyEvidence:
     @pytest.mark.asyncio

@@ -133,6 +133,38 @@ class GoalDAGVerifier:
 
         return report
 
+    def _job_root_id(self, goal_id: str) -> str | None:
+        """Walk parents to the job root id (parent_id is None)."""
+        goal = self._ce.get_goal_sync(goal_id)
+        if goal is None:
+            return None
+        seen: set[str] = set()
+        while goal is not None and goal.parent_id and goal.parent_id not in seen:
+            seen.add(goal.id)
+            parent = self._ce.get_goal_sync(goal.parent_id)
+            if parent is None:
+                break
+            goal = parent
+        return goal.id if goal is not None else None
+
+    def _filter_wire_depends_on(self, goal_id: str, depends_on: list[str]) -> list[str] | None:
+        """Drop child→job-root edges; return None if nothing remains to apply."""
+        root_id = self._job_root_id(goal_id)
+        if root_id is None:
+            return list(depends_on)
+        # Never wire a child to depend on its job root (deadlocks rail pipelines).
+        filtered = [d for d in depends_on if d != root_id]
+        dropped = len(depends_on) - len(filtered)
+        if dropped:
+            logger.info(
+                "Health wire skipped child→job-root edge(s) for %s → %s",
+                goal_id,
+                root_id,
+            )
+        if not filtered and depends_on:
+            return None
+        return filtered
+
     def _heuristic_health_check(self, goals: list[Any]) -> DagHealthReport:
         """Fallback heuristic health check."""
         report = DagHealthReport(reasoning="Heuristic-based verification (LLM fallback)")
@@ -319,12 +351,15 @@ class GoalDAGVerifier:
         goal_planner = self._ce.planning.goal
 
         for wire in report.wire_dependencies:
+            filtered = self._filter_wire_depends_on(wire.goal_id, list(wire.depends_on))
+            if filtered is None:
+                continue
             try:
-                await self._ce.update_dependencies(wire.goal_id, list(wire.depends_on))
+                await self._ce.update_dependencies(wire.goal_id, filtered)
                 logger.info(
                     "Health wired depends_on for %s → %s",
                     wire.goal_id,
-                    wire.depends_on,
+                    filtered,
                 )
             except Exception:
                 logger.warning(

@@ -17,8 +17,11 @@ Ship a built-in LoopRail for **greenfield multi-module system builds**
 2. Parallel makers with **git worktree** isolation when the job workspace is a git repo
 3. **Commit milestone** gate before review
 4. Diff-scoped **code review** then QA, with optional next wave
+5. **Feedback cycle** (`spawn_feedback_cycle`): find → optimize → verify until
+   acceptance (or `max_feedback_rounds`)
 
-Root remains coordinator: children never `depends_on` the job root.
+Root remains coordinator: children never `depends_on` the job root; rail-bound
+job roots are not dispatched as workers.
 
 ---
 
@@ -27,9 +30,11 @@ Root remains coordinator: children never `depends_on` the job root.
 - [x] `builtin_rails/greenfield-system.yml`
 - [x] CE builtins: `plan_milestones`, `spawn_wave_makers`, `spawn_integrate`,
       `commit_milestone` (review prefers commit base)
-- [x] Structural short-circuits for greenfield conditions
+- [x] CE builtin: `spawn_feedback_cycle` (diagnose / optimize / verify)
+- [x] Structural short-circuits for greenfield conditions (incl. `needs_feedback`,
+      commit-gated `needs_review`)
+- [x] DAG health deny child→root for rail jobs
 - [x] Catalog / README / unit tests
-- [ ] Optional follow-up: DAG health deny child→root for rail jobs
 
 ---
 

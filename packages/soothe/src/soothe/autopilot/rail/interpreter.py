@@ -269,14 +269,23 @@ class LoopRailInterpreter:
         commit_ids = [gid for gid, tags in tags_by_goal.items() if "commit" in tags]
         review_ids = [gid for gid, tags in tags_by_goal.items() if "review" in tags]
         qa_ids = [gid for gid, tags in tags_by_goal.items() if "qa" in tags]
+        feedback_ids = [gid for gid, tags in tags_by_goal.items() if "feedback" in tags]
 
         def _all_terminal(ids: list[str]) -> bool:
             return bool(ids) and all(siblings.get(gid) in TERMINAL_STATES for gid in ids)
 
         job_state = await self._builtins.job_state(event.job_id)
         wave_below_max = True
+        feedback_round = 0
+        max_feedback_rounds = 8
+        acceptance_met = False
         if job_state is not None:
             wave_below_max = job_state.wave_index < job_state.max_waves
+            feedback_round = int(job_state.feedback_round)
+            max_feedback_rounds = int(job_state.max_feedback_rounds)
+            acceptance_met = bool(job_state.acceptance_met)
+
+        feedback_inflight = any(siblings.get(gid) in {"pending", "active"} for gid in feedback_ids)
 
         structural = {
             "exploration_goal_ids": exploration_ids,
@@ -287,6 +296,7 @@ class LoopRailInterpreter:
             "commit_goal_ids": commit_ids,
             "review_goal_ids": review_ids,
             "qa_goal_ids": qa_ids,
+            "feedback_goal_ids": feedback_ids,
             "all_exploration_terminal": _all_terminal(exploration_ids),
             "all_architecture_terminal": _all_terminal(architecture_ids),
             "all_implementation_terminal": _all_terminal(implementation_ids),
@@ -294,6 +304,10 @@ class LoopRailInterpreter:
             "all_commit_terminal": _all_terminal(commit_ids) if commit_ids else True,
             "all_review_terminal": _all_terminal(review_ids) if review_ids else True,
             "all_qa_terminal": _all_terminal(qa_ids) if qa_ids else True,
+            "feedback_inflight": feedback_inflight,
+            "feedback_round": feedback_round,
+            "max_feedback_rounds": max_feedback_rounds,
+            "acceptance_met": acceptance_met,
             "wave_below_max": wave_below_max,
             "pending_or_active_count": sum(
                 1

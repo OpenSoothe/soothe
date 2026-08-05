@@ -4,7 +4,8 @@ Mutates ContextEngine goal DAG. Goal tags / branch metadata live in
 ``RailJobState`` until GoalNode gains first-class rail fields.
 
 IG-687 adds greenfield-system builtins: plan_milestones, spawn_wave_makers
-(with optional git worktrees), spawn_integrate, commit_milestone.
+(with optional git worktrees), spawn_integrate, commit_milestone,
+spawn_feedback_cycle (find → optimize → verify).
 """
 
 from __future__ import annotations
@@ -53,6 +54,10 @@ class RailJobState:
     max_waves: int = 3
     wave_modules: list[str] | None = None
     worktrees_enabled: bool = True
+    # find→optimize→verify feedback rounds (greenfield)
+    feedback_round: int = 0
+    max_feedback_rounds: int = 8
+    acceptance_met: bool = False
 
 
 @dataclass
@@ -559,6 +564,106 @@ class RailBuiltinExecutor:
             status="success",
             detail="spawned qa",
             created_goal_ids=[goal.id],
+        )
+
+    async def _do_spawn_feedback_cycle(
+        self, *, job_id: str, trigger_goal_id: str | None
+    ) -> BuiltinResult:
+        """Spawn find→optimize→verify goals until acceptance (greenfield feedback)."""
+        state = await self._require(job_id)
+        if state.feedback_round >= state.max_feedback_rounds:
+            return BuiltinResult(
+                status="skipped",
+                detail=f"max_feedback_rounds={state.max_feedback_rounds} reached",
+            )
+        if state.acceptance_met:
+            return BuiltinResult(status="skipped", detail="acceptance already met")
+
+        # Skip if a prior feedback chain is still in flight.
+        for gid, ann in state.annotations.items():
+            if "feedback" not in ann.tags:
+                continue
+            g = self._ce._dag.get_goal(gid)
+            if g is not None and g.status not in TERMINAL_STATES:
+                return BuiltinResult(
+                    status="skipped",
+                    detail=f"feedback inflight: {gid}",
+                )
+
+        state.feedback_round += 1
+        round_n = state.feedback_round
+        ws = _job_workspace(self._ce, job_id)
+        ws_str = str(ws) if ws else None
+        base_deps = [trigger_goal_id] if trigger_goal_id else []
+
+        diagnose = await self._ce.create_goal(
+            (
+                f"Feedback round {round_n} diagnose for job {job_id}. "
+                "Find bugs, acceptance gaps, and regressions against the "
+                "architecture milestone criteria. Produce a concrete defect "
+                "list; do not implement fixes here."
+            ),
+            parent_id=job_id,
+            depends_on=base_deps or None,
+            source="decomposition",
+            priority=82,
+            workspace=ws_str,
+            rail_id=state.rail_id,
+        )
+        await self.annotate_goal(
+            diagnose.id,
+            job_id,
+            tags=["feedback", "diagnose", f"feedback-{round_n}"],
+            role="diagnoser",
+            branch_id=job_id,
+        )
+
+        optimize = await self._ce.create_goal(
+            (
+                f"Feedback round {round_n} optimize for job {job_id}. "
+                "Fix and optimize against the diagnose findings. Prefer "
+                "minimal targeted changes; do not expand scope beyond gaps."
+            ),
+            parent_id=job_id,
+            depends_on=[diagnose.id],
+            source="decomposition",
+            priority=78,
+            workspace=ws_str,
+            rail_id=state.rail_id,
+        )
+        await self.annotate_goal(
+            optimize.id,
+            job_id,
+            tags=["feedback", "optimize", "implementation", f"feedback-{round_n}"],
+            role="maker",
+            branch_id=job_id,
+        )
+
+        verify = await self._ce.create_goal(
+            (
+                f"Feedback round {round_n} verify for job {job_id}. "
+                "Re-run acceptance checks / golden tests against diagnose "
+                "findings. Report remaining gaps; do not re-implement."
+            ),
+            parent_id=job_id,
+            depends_on=[optimize.id],
+            source="decomposition",
+            priority=85,
+            workspace=ws_str,
+            rail_id=state.rail_id,
+        )
+        await self.annotate_goal(
+            verify.id,
+            job_id,
+            tags=["feedback", "verify", "qa", f"feedback-{round_n}"],
+            role="qa",
+            branch_id=job_id,
+        )
+
+        return BuiltinResult(
+            status="success",
+            detail=f"spawned feedback cycle round {round_n}",
+            created_goal_ids=[diagnose.id, optimize.id, verify.id],
         )
 
     async def _do_retry_branch(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:

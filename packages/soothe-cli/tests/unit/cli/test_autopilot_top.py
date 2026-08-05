@@ -12,6 +12,10 @@ from soothe_cli.cli.commands.autopilot_cmd import (
 )
 
 
+def _plain(snapshot: dict, **kwargs: object) -> str:
+    return render_top_snapshot(snapshot, **kwargs).plain  # type: ignore[arg-type]
+
+
 def test_format_elapsed_hhmmss() -> None:
     now = datetime(2026, 8, 5, 12, 0, 0, tzinfo=UTC)
     started = now - timedelta(hours=1, minutes=2, seconds=3)
@@ -21,7 +25,7 @@ def test_format_elapsed_hhmmss() -> None:
 
 
 def test_render_top_empty() -> None:
-    text = render_top_snapshot(
+    text = _plain(
         {
             "running": True,
             "dreaming": False,
@@ -35,13 +39,15 @@ def test_render_top_empty() -> None:
     assert "mode=active" in text
     assert "q Quit" in text
     assert "refresh 1s" in text
+    assert "legend" in text
+    assert "JOB" in text and "GOAL" in text and "STEP" in text and "LOOP" in text
 
 
 def test_render_top_forest_nests_steps_and_loops() -> None:
     now = datetime(2026, 8, 5, 1, 2, 0, tzinfo=UTC)
     started = (now - timedelta(minutes=3, seconds=21)).isoformat()
     created = (now - timedelta(minutes=12, seconds=34)).isoformat()
-    text = render_top_snapshot(
+    rendered = render_top_snapshot(
         {
             "running": True,
             "dreaming": False,
@@ -102,23 +108,27 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
         },
         interval=2.5,
     )
+    text = rendered.plain
     # Patch elapsed by checking format with known now via direct helper
     assert format_elapsed(created, now=now) == "00:12:34"
     assert format_elapsed(started, now=now) == "00:03:21"
     assert "pri=50" in text
     assert "Implement auth" in text
     assert "steps 1/2" in text
-    assert "[UZH-01] completed" in text or "[UZH-01] completed" in text
+    assert "JOB  [a1b2c3d4]" in text
+    assert "GOAL [a1b2c3d4]" in text
+    assert "STEP [UZH-01]" in text
     assert "Add JWT" in text
     assert "Write tests" in text
-    assert "loop autopilot__a1b2c3d4__deadbeef…" in text
+    assert "LOOP autopilot__a1b2c3d4__deadbeef…" in text
     assert "#3" in text
     assert "refresh 2.5s" in text
+    assert "bright_cyan" in rendered.markup
 
 
 def test_render_top_hides_steps_and_loops() -> None:
     state = TopViewState(show_steps=False, show_loops=False, interval=1.0)
-    text = render_top_snapshot(
+    text = _plain(
         {
             "running": True,
             "loop_pool": {"active": 1, "idle": 0, "max": 4},
@@ -167,7 +177,8 @@ def test_render_top_hides_steps_and_loops() -> None:
     )
     assert "steps 1/2" in text
     assert "UZH-01" not in text
-    assert "loop " not in text
+    assert "LOOP autopilot" not in text
+    assert "STEP [UZH" not in text
     assert "steps=off" in text
     assert "loops=off" in text
 
@@ -197,7 +208,7 @@ def test_apply_top_key_toggles() -> None:
 
 
 def test_render_top_pads_to_height() -> None:
-    text = render_top_snapshot(
+    text = _plain(
         {
             "running": True,
             "loop_pool": {"active": 0, "idle": 0, "max": 2},
@@ -211,7 +222,7 @@ def test_render_top_pads_to_height() -> None:
 
 
 def test_render_top_multiline_descriptions_stay_one_line() -> None:
-    text = render_top_snapshot(
+    text = _plain(
         {
             "running": True,
             "loop_pool": {"active": 0, "idle": 0, "max": 2},
@@ -242,17 +253,17 @@ def test_render_top_multiline_descriptions_stay_one_line() -> None:
         interval=1.0,
     )
     assert "\nBuilding" not in text
-    job_line = next(ln for ln in text.splitlines() if ln.startswith("[fad4717e]"))
+    job_line = next(ln for ln in text.splitlines() if ln.startswith("JOB  [fad4717e]"))
     assert "pri=70" in job_line
     assert "Task: Initial C Compiler Scaffold Building" in job_line
-    goal_line = next(ln for ln in text.splitlines() if ln.startswith("└─ [fad4717e]"))
+    goal_line = next(ln for ln in text.splitlines() if "GOAL [fad4717e]" in ln)
     assert "Task: Initial C Compiler Scaffold Building" in goal_line
     assert "\n" not in job_line
     assert "\n" not in goal_line
 
 
 def test_render_top_orphan_loop_marker() -> None:
-    text = render_top_snapshot(
+    text = _plain(
         {
             "running": True,
             "loop_pool": {"active": 1, "idle": 0, "max": 2},
@@ -283,3 +294,4 @@ def test_render_top_orphan_loop_marker() -> None:
         interval=1.0,
     )
     assert "?goal=missing1" in text
+    assert "LOOP " in text

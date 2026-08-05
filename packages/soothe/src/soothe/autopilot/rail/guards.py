@@ -177,13 +177,23 @@ def _structural_short_circuit(
             ok = exploration_done
         elif name == "ready_for_next_wave":
             if has_architecture:
-                # greenfield-system: QA finished, idle DAG, waves remain
+                # greenfield-system: after feedback verify (or exhausted
+                # feedback / acceptance), idle DAG, waves remain
+                feedback_round = int(structural.get("feedback_round") or 0)
+                max_feedback_rounds = int(structural.get("max_feedback_rounds") or 8)
+                acceptance_met = bool(structural.get("acceptance_met"))
+                feedback_done = (
+                    ("verify" in trigger_tags and "feedback" in trigger_tags)
+                    or acceptance_met
+                    or feedback_round >= max_feedback_rounds
+                )
                 ok = (
                     event == "goal_completed"
-                    and "qa" in trigger_tags
                     and pending == 0
                     and wave_below_max
                     and bool(structural.get("all_qa_terminal", True))
+                    and feedback_done
+                    and not bool(structural.get("feedback_inflight"))
                 )
             else:
                 # migration / scout-wave rails
@@ -201,15 +211,17 @@ def _structural_short_circuit(
         )
 
     if name in {"needs_review", "needs_check", "needs_security_review"}:
-        ok = event == "goal_completed" and (
-            "implementation" in trigger_tags or "commit" in trigger_tags
-        )
-        # greenfield: if a commit gate exists, only review after commit completes
-        commit_ids = list(structural.get("commit_goal_ids") or [])
-        if commit_ids and not bool(structural.get("all_commit_terminal", True)):
-            ok = False
-        elif commit_ids and "commit" not in trigger_tags and has_architecture:
-            ok = False
+        if has_architecture:
+            # greenfield commit gate: only review after commit completes —
+            # never on bare maker implementation (even when commit_ids empty).
+            ok = event == "goal_completed" and "commit" in trigger_tags
+        else:
+            ok = event == "goal_completed" and (
+                "implementation" in trigger_tags or "commit" in trigger_tags
+            )
+            commit_ids = list(structural.get("commit_goal_ids") or [])
+            if commit_ids and not bool(structural.get("all_commit_terminal", True)):
+                ok = False
         return GuardResult(
             matched=ok,
             confidence=1.0,
@@ -224,6 +236,31 @@ def _structural_short_circuit(
             reasoning=f"structural short-circuit: review_completed={ok}",
         )
 
+    if name in {"needs_feedback"}:
+        # Find→optimize→verify cycle after wave QA / prior feedback verify.
+        feedback_inflight = bool(structural.get("feedback_inflight"))
+        feedback_round = int(structural.get("feedback_round") or 0)
+        max_feedback_rounds = int(structural.get("max_feedback_rounds") or 8)
+        trigger_ok = event in {"goal_completed", "goal_failed"} and (
+            "qa" in trigger_tags or "verify" in trigger_tags
+        )
+        ok = (
+            has_architecture
+            and trigger_ok
+            and pending == 0
+            and not feedback_inflight
+            and feedback_round < max_feedback_rounds
+            and not bool(structural.get("acceptance_met"))
+        )
+        return GuardResult(
+            matched=ok,
+            confidence=1.0,
+            reasoning=(
+                f"structural short-circuit: needs_feedback tags={trigger_tags} "
+                f"inflight={feedback_inflight} round={feedback_round}/{max_feedback_rounds}"
+            ),
+        )
+
     if name in {"job_complete"}:
         reviews = list(structural.get("review_goal_ids") or [])
         qas = list(structural.get("qa_goal_ids") or [])
@@ -234,6 +271,15 @@ def _structural_short_circuit(
         # greenfield: if waves remain, not complete
         if has_architecture and wave_below_max and qas:
             ok = False
+        # greenfield feedback: do not complete while acceptance unmet and
+        # another feedback round is still allowed.
+        if has_architecture and not bool(structural.get("acceptance_met", False)):
+            feedback_round = int(structural.get("feedback_round") or 0)
+            max_feedback_rounds = int(structural.get("max_feedback_rounds") or 8)
+            if feedback_round < max_feedback_rounds and (
+                qas or list(structural.get("feedback_goal_ids") or [])
+            ):
+                ok = False
         return GuardResult(
             matched=ok,
             confidence=1.0,

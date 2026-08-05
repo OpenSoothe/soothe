@@ -22,6 +22,7 @@ def test_greenfield_system_rail_loads() -> None:
     assert "spawn_integrate" in thens
     assert "commit_milestone" in thens
     assert "review" in thens
+    assert "spawn_feedback_cycle" in thens
 
 
 def test_architecture_ready_short_circuit() -> None:
@@ -56,6 +57,58 @@ def test_needs_commit_only_on_integrate() -> None:
         structural={"pending_or_active_count": 0},
     )
     assert r2 is not None and r2.matched is True
+
+
+def test_needs_review_architecture_requires_commit() -> None:
+    """Greenfield: maker complete must not fire review before commit gate."""
+    arch_structural = {
+        "architecture_goal_ids": ["a1"],
+        "commit_goal_ids": [],
+        "pending_or_active_count": 0,
+    }
+    maker = _structural_short_circuit(
+        condition_name="needs_review",
+        event="goal_completed",
+        trigger_tags=["implementation", "maker"],
+        structural=arch_structural,
+    )
+    assert maker is not None and maker.matched is False
+
+    empty_commits = _structural_short_circuit(
+        condition_name="needs_review",
+        event="goal_completed",
+        trigger_tags=["implementation"],
+        structural={
+            "architecture_goal_ids": ["a1"],
+            "commit_goal_ids": [],
+            "all_commit_terminal": True,
+            "pending_or_active_count": 0,
+        },
+    )
+    assert empty_commits is not None and empty_commits.matched is False
+
+    after_commit = _structural_short_circuit(
+        condition_name="needs_review",
+        event="goal_completed",
+        trigger_tags=["commit", "milestone"],
+        structural={
+            "architecture_goal_ids": ["a1"],
+            "commit_goal_ids": ["c1"],
+            "all_commit_terminal": True,
+            "pending_or_active_count": 0,
+        },
+    )
+    assert after_commit is not None and after_commit.matched is True
+
+
+def test_needs_review_non_architecture_allows_implementation() -> None:
+    r = _structural_short_circuit(
+        condition_name="needs_review",
+        event="goal_completed",
+        trigger_tags=["implementation"],
+        structural={"architecture_goal_ids": [], "pending_or_active_count": 0},
+    )
+    assert r is not None and r.matched is True
 
 
 @pytest.mark.asyncio
@@ -192,3 +245,86 @@ async def test_integrate_commit_review_chain() -> None:
     assert rg is not None
     assert commit_id in (rg.depends_on or [])
     assert "Diff-scoped" in rg.description
+
+
+@pytest.mark.asyncio
+async def test_spawn_feedback_cycle_order() -> None:
+    ce = ContextEngine()
+    root = await ce.create_goal("Build system", priority=70)
+    ex = RailBuiltinExecutor(ce)
+    await ex.bind_job(RailJobState(job_id=root.id, rail_id="greenfield-system", rail_version="1.1"))
+    qa = await ce.create_goal("QA", parent_id=root.id, source="decomposition")
+    await ce.complete_goal(qa.id)
+    await ex.annotate_goal(qa.id, root.id, tags=["qa"], role="qa")
+
+    result = await ex.invoke("spawn_feedback_cycle", job_id=root.id, trigger_goal_id=qa.id)
+    assert result.status == "success"
+    assert len(result.created_goal_ids) == 3
+    diagnose_id, optimize_id, verify_id = result.created_goal_ids
+    diagnose = await ce.get_goal(diagnose_id)
+    optimize = await ce.get_goal(optimize_id)
+    verify = await ce.get_goal(verify_id)
+    assert diagnose is not None and "diagnose" in (diagnose.rail_tags or [])
+    assert optimize is not None and diagnose_id in (optimize.depends_on or [])
+    assert "optimize" in (optimize.rail_tags or [])
+    assert verify is not None and optimize_id in (verify.depends_on or [])
+    assert "verify" in (verify.rail_tags or [])
+    state = await ex.job_state(root.id)
+    assert state is not None and state.feedback_round == 1
+
+    # In-flight skip
+    skip = await ex.invoke("spawn_feedback_cycle", job_id=root.id, trigger_goal_id=qa.id)
+    assert skip.status == "skipped"
+
+
+def test_needs_feedback_short_circuit() -> None:
+    structural = {
+        "architecture_goal_ids": ["a1"],
+        "feedback_inflight": False,
+        "feedback_round": 0,
+        "max_feedback_rounds": 8,
+        "acceptance_met": False,
+        "pending_or_active_count": 0,
+    }
+    ok = _structural_short_circuit(
+        condition_name="needs_feedback",
+        event="goal_completed",
+        trigger_tags=["qa"],
+        structural=structural,
+    )
+    assert ok is not None and ok.matched is True
+
+    blocked = _structural_short_circuit(
+        condition_name="needs_feedback",
+        event="goal_completed",
+        trigger_tags=["qa"],
+        structural={**structural, "acceptance_met": True},
+    )
+    assert blocked is not None and blocked.matched is False
+
+
+@pytest.mark.asyncio
+async def test_rail_job_root_dispatch_skipped() -> None:
+    from soothe.autopilot import AutopilotService
+    from soothe.config.models import AutopilotConfig
+    from soothe.events.internal_bus import InternalEventBus
+
+    class _IdleFactory:
+        def create_runner(self, loop_id: str):  # noqa: ANN001
+            raise AssertionError("rail job root must not dispatch")
+
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=2, max_parallel_goals=2),
+        internal_bus=bus,
+        runner_factory=_IdleFactory(),
+    )
+    root = await ce.create_goal("root job", priority=80, workspace="/tmp/ws")
+    root.rail_id = "greenfield-system"
+    # Skip path: returns True without claiming/dispatching
+    assert await svc._try_dispatch_goal(root) is True
+    refreshed = await ce.get_goal(root.id)
+    assert refreshed is not None
+    assert refreshed.status == "pending"

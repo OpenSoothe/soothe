@@ -865,11 +865,28 @@ class AutopilotService:
 
         candidates = self._ce.peek_ready_goals(limit=cap_remaining)
         for candidate in candidates:
+            # Rail-bound job roots are coordinators only — skip without
+            # aborting the schedule round (False would break the loop).
+            if candidate.parent_id is None and candidate.rail_id:
+                logger.debug(
+                    "Skipping schedule for rail job root %s (rail_id=%s)",
+                    candidate.id,
+                    candidate.rail_id,
+                )
+                continue
             if not await self._try_dispatch_goal(candidate):
                 break
 
     async def _try_dispatch_goal(self, goal: GoalNode) -> bool:
         """Attempt WorkerPool dispatch for one ready goal."""
+        # Rail-bound job roots are coordinators only — children execute work.
+        if goal.parent_id is None and goal.rail_id:
+            logger.debug(
+                "Skipping dispatch for rail job root %s (rail_id=%s)",
+                goal.id,
+                goal.rail_id,
+            )
+            return True
         if self._workspace_reservation is not None:
             ws = self._infer_workspace(goal)
             conflict = self._workspace_reservation.conflicts_with_active(
