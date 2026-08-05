@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from typer.testing import CliRunner
 
@@ -24,9 +26,19 @@ _LEAF_HELPS = (
 )
 
 
+# ANSI escape sequence pattern
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape sequences from text."""
+    return _ANSI_RE.sub("", text)
+
+
 def _usage_line(output: str) -> str:
+    """Extract the Usage line from help output, stripping ANSI codes."""
     for line in output.splitlines():
-        stripped = line.strip()
+        stripped = _strip_ansi(line.strip())
         if stripped.startswith("Usage:"):
             return stripped
     return ""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -12,16 +13,25 @@ from soothe_cli.cli.main import app
 
 runner = CliRunner()
 
+# ANSI escape sequence pattern
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape sequences from text."""
+    return _ANSI_RE.sub("", text)
+
 
 def test_autopilot_help_is_concise() -> None:
     result = runner.invoke(app, ["autopilot", "--help"])
     assert result.exit_code == 0
-    assert "Autopilot — autonomous goal control." in result.output
-    assert "submit" in result.output
-    assert "run" in result.output
+    output = _strip_ansi(result.output)
+    assert "Autopilot — autonomous goal control." in output
+    assert "submit" in output
+    assert "run" in output
     # Check for 'jobs' command presence (ANSI codes may split '│' from 'jobs' in CI)
-    assert "jobs" in result.output
-    assert "list" not in result.output  # 'list' was renamed to 'jobs'
+    assert "jobs" in output
+    assert "list" not in output  # 'list' was renamed to 'jobs'
     assert "``" not in result.output
     assert "max-iterations" not in result.output
 
@@ -29,10 +39,11 @@ def test_autopilot_help_is_concise() -> None:
 def test_submit_help_documents_async_and_wait() -> None:
     result = runner.invoke(app, ["autopilot", "submit", "--help"])
     assert result.exit_code == 0
-    # Check for async behavior mention (ANSI codes may split '--wait' in CI)
-    assert "async" in result.output
-    assert "wait" in result.output
-    assert "--wait" in result.output
+    output = _strip_ansi(result.output)
+    # Check for async behavior mention
+    assert "async" in output
+    assert "wait" in output
+    assert "--wait" in output
     assert "--no-wait" not in result.output
     assert "--workspace" in result.output or "-workspace" in result.output
     assert "-w" in result.output
@@ -42,10 +53,11 @@ def test_submit_help_documents_async_and_wait() -> None:
 def test_run_help_is_submit_wait_alias() -> None:
     result = runner.invoke(app, ["autopilot", "run", "--help"])
     assert result.exit_code == 0
-    # Check for alias description (ANSI codes may split 'submit --wait' in CI)
-    assert "submit" in result.output
-    assert "wait" in result.output
-    assert "sync" in result.output
+    output = _strip_ansi(result.output)
+    # Check for alias description
+    assert "submit" in output
+    assert "wait" in output
+    assert "sync" in output
     assert "max-iterations" not in result.output
 
 
