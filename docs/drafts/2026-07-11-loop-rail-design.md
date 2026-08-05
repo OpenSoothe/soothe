@@ -4,9 +4,12 @@
 **Date**: 2026-07-11  
 **Kind**: Design  
 **Related**: RFC-222 (Autopilot Architecture), RFC-228 (Autopilot Job IPC),
-RFC-625 (AutopilotMonitor / ContextEngine), RFC-626 (Entity Model),
-RFC-630 (No Keyword Heuristics), RFC-105 (Skills — distillation source),
-IG-677 (Job↔Loop Index), IG-RQJ-02 (rail trace continuity)
+RFC-230 (Job Maturity Assessment — `acceptance_met`, production `dag_idle`,
+rail-exclusive spawn), RFC-625 (AutopilotMonitor / ContextEngine),
+RFC-626 (Entity Model), RFC-630 (No Keyword Heuristics),
+RFC-105 (Skills — distillation source), IG-677 (Job↔Loop Index),
+IG-687 (greenfield-system), IG-692 (maturity implementation),
+IG-RQJ-02 (rail trace continuity)
 
 ---
 
@@ -792,6 +795,10 @@ For jobs with `rail_id` set:
 | `GoalDAGVerifier` suggests remove/decompose/merge | Verifier emits **events** or defers to CE health builtins; LoopRail owns job-scoped restructuring |
 | Monitor applies verifier suggestions directly | Monitor **forwards events** to LoopRail interpreter |
 | Implicit decomposition after completion | `then:` built-ins triggered by rail conditions |
+
+**Job maturity** (`acceptance_met`, production `dag_idle`, probe-based
+acceptance) is normative in **RFC-230** / **IG-692**. Rails consume the latch;
+they do not invent executable GOAL checks themselves.
 
 Dreaming, backoff reasoning, and cron intake remain in AutopilotMonitor unchanged.
 

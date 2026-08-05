@@ -3,6 +3,8 @@
 **Created**: 2026-08-05  
 **Status**: Implemented  
 **Related**: [IG-678](IG-678-autopilot-ce-rails-production-readiness.md),
+[RFC-230](../specs/RFC-230-job-maturity-assessment.md),
+[IG-692](IG-692-job-maturity-assessment.md),
 LoopRail design draft, RFC-222
 
 ---
@@ -22,6 +24,10 @@ Ship a built-in LoopRail for **greenfield multi-module system builds**
 
 Root remains coordinator: children never `depends_on` the job root; rail-bound
 job roots are not dispatched as workers.
+
+> **Follow-up**: Phase choreography alone does not latch product acceptance.
+> Job-level maturity (`acceptance_met`, `dag_idle`, rail-exclusive spawn) is
+> specified in RFC-230 and implemented in IG-692.
 
 ---
 
@@ -53,3 +59,5 @@ soothe autopilot submit "$(cat GOAL.md)" \
 - Full automated `git merge` of worktrees inside the integrate builtin
 - Changing global workspace-reservation defaults
 - RailSelector auto-pick for greenfield (pass `--rail` explicitly)
+- Job maturity assessor / production `dag_idle` / verifier rail exclusivity
+  (→ [IG-692](IG-692-job-maturity-assessment.md) / [RFC-230](../specs/RFC-230-job-maturity-assessment.md))

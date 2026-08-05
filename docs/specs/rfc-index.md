@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-06-30
-**Total RFCs**: 82 (6 archived, 7 reclassified, 1 process specification)
+**Last Updated**: 2026-08-05
+**Total RFCs**: 83 (6 archived, 7 reclassified, 1 process specification)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -215,6 +215,19 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Kind: Protocol Specification
   - Status: Proposed
   - Created: 2026-06-04
+  - Related: RFC-230 (job maturity evaluation of `verification_rules`)
+
+- **RFC-229**: [Cron Service for Autopilot](RFC-229-cron-service.md)
+  - Kind: Architecture Design
+  - Status: Proposed
+  - Created: 2026-06-24
+
+- **RFC-230**: [Job Maturity Assessment for Autopilot Rails](RFC-230-job-maturity-assessment.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-08-05
+  - Depends on: RFC-204, RFC-222, RFC-228, RFC-624, RFC-625, RFC-630
+  - Related: LoopRail design draft, IG-687, IG-691, IG-692
 
 ---
 
@@ -709,6 +722,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 | RFC | Title | Status | Created |
 |-----|-------|--------|---------|
+| RFC-230 | Job Maturity Assessment for Autopilot Rails | Draft | 2026-08-05 |
 | RFC-450 | Unified Daemon Communication Protocol (rewritten) | Draft | 2026-03-19 |
 | RFC-900 | RFC Deprecation and Reclassification Scheme | Proposed | 2026-06-16 |
 | RFC-626 | Entity Model and State Management Consolidation | Draft | 2026-06-16 |
@@ -718,14 +732,6 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 | RFC-413 | Server-Owned Display Card Ledger | Draft (Phases 1–4 / IG-655) | 2026-06-04 |
 | RFC-505 | Soothe Desktop Client Architecture | Draft | 2026-06-04 |
 | RFC-700 | Desktop App Product Redesign | Proposed | 2026-06-04 |
-| RFC-623 | Veritas Auto-Mode Robustness | Draft | 2026-06-03 |
-| RFC-622 | CoreAgent Clarification Relay | Draft | 2026-06-02 |
-| RFC-505 | Soothe Desktop Client Architecture | Draft | 2026-06-04 |
-| RFC-623 | Veritas Auto-Mode Robustness | Draft | 2026-06-03 |
-| RFC-621 | Workspace Host Convention: Path Mapping  | Draft | 2026-06-02 |
-| RFC-622 | CoreAgent Clarification Relay | Draft | 2026-06-02 |
-| RFC-227 | Plan-Assess Prior-Progress Digest | Draft | 2026-06-01 |
-| RFC-105 | Progressive Skill Loading | Draft | 2026-05-29 |
 
 ### Supersede Relationships
 
@@ -763,6 +769,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 ## Recently Added
 
+- **RFC-230**: Job Maturity Assessment for Autopilot Rails (2026-08-05, Draft)
 - **RFC-632**: Loop-Scoped Router Profile Override (2026-07-14, Draft)
 - **RFC-631**: Goal-Bound Display Snapshots (2026-07-05, Draft)
 - **RFC-630**: Start-Phase LLM Intake and Branch Routing (2026-06-30, Draft)

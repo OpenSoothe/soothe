@@ -2750,20 +2750,28 @@ class MessageRouter:
                     last_error = g.error
                     break
 
+        from soothe.autopilot.maturity import maturity_wire_fields
+
+        payload: dict[str, Any] = {
+            "job_id": job_id,
+            "status": root_goal.status,
+            "active_goals": active_count,
+            "completed_goals": completed_count,
+            "failed_goals": failed_count,
+            "cancelled_goals": cancelled_count,
+            "total_goals": total_count,
+            "workers": workers,
+            "last_error": last_error,
+        }
+        maturity = maturity_wire_fields(getattr(root_goal, "maturity", None))
+        if maturity is not None:
+            payload["maturity"] = maturity
+            payload["acceptance_met"] = bool(maturity.get("acceptance_met"))
+
         await self._send_response(
             client_id,
             request_id,
-            {
-                "job_id": job_id,
-                "status": root_goal.status,
-                "active_goals": active_count,
-                "completed_goals": completed_count,
-                "failed_goals": failed_count,
-                "cancelled_goals": cancelled_count,
-                "total_goals": total_count,
-                "workers": workers,
-                "last_error": last_error,
-            },
+            payload,
         )
 
     async def _handle_job_pause(self, client_id: Any, msg: dict[str, Any]) -> None:

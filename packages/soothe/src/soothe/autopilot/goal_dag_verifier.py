@@ -116,6 +116,12 @@ class GoalDAGVerifier:
             )
 
         for decomp in response.decompose_goals:
+            if self._forbid_rail_decompose(decomp.goal_id):
+                logger.info(
+                    "Health decompose dropped for %s: rail-bound job (rail exclusivity)",
+                    decomp.goal_id,
+                )
+                continue
             report.suggest_decompose.append(
                 DecomposeSuggestion(
                     goal_id=decomp.goal_id,
@@ -139,13 +145,19 @@ class GoalDAGVerifier:
         if goal is None:
             return None
         seen: set[str] = set()
-        while goal is not None and goal.parent_id and goal.parent_id not in seen:
-            seen.add(goal.id)
-            parent = self._ce.get_goal_sync(goal.parent_id)
-            if parent is None:
+        while goal is not None:
+            gid = getattr(goal, "id", None)
+            if gid is None or gid in seen:
                 break
+            seen.add(gid)
+            parent_id = getattr(goal, "parent_id", None)
+            if not parent_id:
+                return gid
+            parent = self._ce.get_goal_sync(parent_id)
+            if parent is None:
+                return gid
             goal = parent
-        return goal.id if goal is not None else None
+        return None
 
     def _filter_wire_depends_on(self, goal_id: str, depends_on: list[str]) -> list[str] | None:
         """Drop child→job-root edges; return None if nothing remains to apply."""
@@ -243,11 +255,43 @@ class GoalDAGVerifier:
     def _mark_decomposed(self, parent_id: str) -> None:
         self._decompose_at[parent_id] = time.monotonic()
 
+    def _rail_job_id_for(self, goal_id: str) -> str | None:
+        """Return job root id when the goal sits under a rail-bound job."""
+        root_id = self._job_root_id(goal_id)
+        if root_id is None:
+            return None
+        root = self._ce.get_goal_sync(root_id)
+        if root is None or not getattr(root, "rail_id", None):
+            return None
+        return root_id
+
+    def _forbid_rail_decompose(self, goal_id: str | None) -> bool:
+        """True when create/decompose must not run (rail owns spawning)."""
+        if not goal_id:
+            return False
+        return self._rail_job_id_for(goal_id) is not None
+
     async def verify_dag_post_completion(self, completed_goal_id: str) -> dict[str, Any]:
         """LLM-driven analysis after goal completion."""
         completed = self._ce.get_goal_sync(completed_goal_id)
         if not completed:
             return {}
+
+        # RFC-230 / IG-692: rail-bound jobs — LoopRail owns follow-up spawn.
+        if self._forbid_rail_decompose(completed_goal_id):
+            logger.info(
+                "Post-completion skip decompose for %s: rail-bound job (rail exclusivity)",
+                completed_goal_id,
+            )
+            return {
+                "completed_goal_id": completed_goal_id,
+                "new_goals": [],
+                "redundant_goals": [],
+                "ready_goals": [],
+                "decomposition": None,
+                "reasoning": "Rail-bound job; LoopRail owns follow-up goals",
+                "skip_decompose": True,
+            }
 
         # Skip further decompose when workspace already shows deliverables.
         if workspace_has_deliverables(getattr(completed, "workspace", None)):
@@ -369,6 +413,12 @@ class GoalDAGVerifier:
                 )
 
         for decomp in report.suggest_decompose:
+            if self._forbid_rail_decompose(decomp.goal_id):
+                logger.info(
+                    "Health decompose skipped for %s: rail-bound job (rail exclusivity)",
+                    decomp.goal_id,
+                )
+                continue
             parent = self._ce.get_goal_sync(decomp.goal_id)
             if parent is not None and workspace_has_deliverables(
                 getattr(parent, "workspace", None)
@@ -414,6 +464,13 @@ class GoalDAGVerifier:
             goal = self._ce.get_goal_sync(goal_id)
             if goal is None:
                 continue
+            # Rail job roots are coordinators — never auto-reactivate as workers.
+            if goal.parent_id is None and goal.rail_id:
+                logger.info(
+                    "Health reset skipped for %s: rail job root",
+                    goal_id,
+                )
+                continue
             if goal.status not in ("blocked", "suspended"):
                 continue
             # IG-691: do not undo consensus send-back budget exhaustion.
@@ -448,6 +505,13 @@ class GoalDAGVerifier:
             return
 
         completed_id = result.get("completed_goal_id") or ""
+        if self._forbid_rail_decompose(completed_id):
+            logger.info(
+                "Post-completion apply skipped for %s: rail-bound job",
+                completed_id,
+            )
+            return
+
         goal_planner = self._ce.planning.goal
 
         new_goals = result.get("new_goals") or []

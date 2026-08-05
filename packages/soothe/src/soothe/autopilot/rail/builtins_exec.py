@@ -166,6 +166,15 @@ class RailBuiltinExecutor:
             self._jobs[merged.job_id] = merged
             self._persist_rail_state_unlocked(merged)
 
+    async def set_acceptance_met(self, job_id: str, *, met: bool) -> None:
+        """Persist job acceptance latch for rail guards (RFC-230)."""
+        async with self._lock:
+            state = self._jobs.get(job_id)
+            if state is None:
+                return
+            state.acceptance_met = bool(met)
+            self._persist_rail_state_unlocked(state)
+
     async def job_state(self, job_id: str) -> RailJobState | None:
         async with self._lock:
             return self._jobs.get(job_id)
@@ -372,6 +381,42 @@ class RailBuiltinExecutor:
     async def tags_by_goal(self, job_id: str) -> dict[str, list[str]]:
         async with self._lock:
             return self._tags_by_goal_unlocked(job_id)
+
+    async def ensure_trigger_tags(self, job_id: str, goal_id: str) -> list[str]:
+        """Fail-closed repair: hydrate annotation tags from CE ``rail_tags`` (IG-692).
+
+        When in-memory annotations lack tags after restart, copy CE tags into
+        the annotation map and return the resolved tag list.
+        """
+        async with self._lock:
+            state = self._jobs.get(job_id)
+            tags = self._tags_by_goal_unlocked(job_id).get(goal_id, [])
+            if tags:
+                return list(tags)
+            goal = self._ce._dag.get_goal(goal_id)
+            ce_tags = list(goal.rail_tags or []) if goal is not None else []
+            if not ce_tags:
+                return []
+            if state is not None:
+                ann = state.annotations.setdefault(goal_id, GoalAnnotation())
+                if not ann.tags:
+                    ann.tags = list(ce_tags)
+                    if goal is not None and goal.role and not ann.role:
+                        ann.role = goal.role
+                    self._persist_rail_state_unlocked(state)
+            return list(ce_tags)
+
+    def _acceptance_brief_for_job(self, job_id: str) -> str:
+        """Acceptance contract blurb for QA/verify goal descriptions."""
+        from soothe.autopilot.maturity import acceptance_contract_brief
+
+        root = self._ce._dag.get_goal(job_id)
+        ws = _job_workspace(self._ce, job_id)
+        return acceptance_contract_brief(
+            verification_rules=root.verification_rules if root else None,
+            workspace=str(ws) if ws else (root.workspace if root else None),
+            maturity=root.maturity if root else None,
+        )
 
     async def invoke(
         self,
@@ -729,13 +774,20 @@ class RailBuiltinExecutor:
 
     async def _do_qa_verify(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:
         deps = [trigger_goal_id] if trigger_goal_id else []
+        state = await self._require(job_id)
+        brief = self._acceptance_brief_for_job(job_id)
+        ws = _job_workspace(self._ce, job_id)
         goal = await self._ce.create_goal(
-            f"QA verify for job {job_id}",
+            (
+                f"QA verify for job {job_id}. Run acceptance checks against "
+                f"the job contract and report pass/fail with evidence.\n\n{brief}"
+            ),
             parent_id=job_id,
             depends_on=deps or None,
             source="decomposition",
             priority=85,
-            rail_id=(await self._require(job_id)).rail_id,
+            workspace=str(ws) if ws else None,
+            rail_id=state.rail_id,
         )
         await self.annotate_goal(goal.id, job_id, tags=["qa"], role="qa", branch_id=job_id)
         return BuiltinResult(
@@ -754,7 +806,13 @@ class RailBuiltinExecutor:
                 status="skipped",
                 detail=f"max_feedback_rounds={state.max_feedback_rounds} reached",
             )
-        if state.acceptance_met:
+        root = self._ce._dag.get_goal(job_id)
+        from soothe.autopilot.maturity import latch_acceptance_met
+
+        if latch_acceptance_met(
+            rail_acceptance_met=state.acceptance_met,
+            maturity=root.maturity if root is not None else None,
+        ):
             return BuiltinResult(status="skipped", detail="acceptance already met")
 
         # Skip if a prior feedback chain is still in flight.
@@ -779,8 +837,9 @@ class RailBuiltinExecutor:
             (
                 f"Feedback round {round_n} diagnose for job {job_id}. "
                 "Find bugs, acceptance gaps, and regressions against the "
-                "architecture milestone criteria. Produce a concrete defect "
-                "list; do not implement fixes here."
+                "job acceptance contract. Produce a concrete defect "
+                "list; do not implement fixes here.\n\n"
+                f"{self._acceptance_brief_for_job(job_id)}"
             ),
             parent_id=job_id,
             depends_on=base_deps or None,
@@ -822,7 +881,9 @@ class RailBuiltinExecutor:
             (
                 f"Feedback round {round_n} verify for job {job_id}. "
                 "Re-run acceptance checks / golden tests against diagnose "
-                "findings. Report remaining gaps; do not re-implement."
+                "findings and the job contract. Report remaining gaps; "
+                "do not re-implement.\n\n"
+                f"{self._acceptance_brief_for_job(job_id)}"
             ),
             parent_id=job_id,
             depends_on=[optimize.id],
@@ -924,4 +985,5 @@ class RailBuiltinExecutor:
             return state
 
     async def descendant_goals(self, job_id: str) -> list[GoalNode]:
-        return [g for g in self._ce._dag.goals.values() if g.id == job_id or g.parent_id == job_id]
+        """Direct job children + root (same scope as ``_job_descendants``)."""
+        return self._job_descendants(job_id)

@@ -262,7 +262,24 @@ class LoopRailInterpreter:
         descendants = await self._builtins.descendant_goals(event.job_id)
         siblings = {g.id: g.status for g in descendants}
         tags_by_goal = await self._builtins.tags_by_goal(event.job_id)
-        trigger_tags = tags_by_goal.get(event.goal_id or "", [])
+        trigger_tags = list(tags_by_goal.get(event.goal_id or "", []))
+        # IG-692: fail-closed — repair empty trigger tags from CE before guards.
+        if event.goal_id and not trigger_tags:
+            repaired = await self._builtins.ensure_trigger_tags(event.job_id, event.goal_id)
+            if repaired:
+                trigger_tags = list(repaired)
+                tags_by_goal = await self._builtins.tags_by_goal(event.job_id)
+                logger.info(
+                    "Rail repaired empty trigger tags for goal %s from CE: %s",
+                    event.goal_id,
+                    trigger_tags,
+                )
+            else:
+                logger.warning(
+                    "Rail trigger tags empty for goal %s after CE hydrate (job=%s)",
+                    event.goal_id,
+                    event.job_id,
+                )
 
         from soothe.context.models import TERMINAL_STATES
 
@@ -279,16 +296,23 @@ class LoopRailInterpreter:
         def _all_terminal(ids: list[str]) -> bool:
             return bool(ids) and all(siblings.get(gid) in TERMINAL_STATES for gid in ids)
 
+        from soothe.autopilot.maturity import latch_acceptance_met
+
         job_state = await self._builtins.job_state(event.job_id)
         wave_below_max = True
         feedback_round = 0
         max_feedback_rounds = 8
-        acceptance_met = False
+        rail_acceptance = False
         if job_state is not None:
             wave_below_max = job_state.wave_index < job_state.max_waves
             feedback_round = int(job_state.feedback_round)
             max_feedback_rounds = int(job_state.max_feedback_rounds)
-            acceptance_met = bool(job_state.acceptance_met)
+            rail_acceptance = bool(job_state.acceptance_met)
+        root = await self._ce.get_goal(event.job_id)
+        acceptance_met = latch_acceptance_met(
+            rail_acceptance_met=rail_acceptance,
+            maturity=root.maturity if root is not None else None,
+        )
 
         feedback_inflight = any(siblings.get(gid) in {"pending", "active"} for gid in feedback_ids)
 

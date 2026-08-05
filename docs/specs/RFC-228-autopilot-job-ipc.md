@@ -5,9 +5,9 @@
 **Status**: Proposed
 **Kind**: Protocol Specification
 **Created**: 2026-06-04
-**Updated**: 2026-08-04
+**Updated**: 2026-08-05
 **Dependencies**: RFC-222 (Autopilot and Goal Engine Architecture), RFC-450 (Daemon Communication Protocol)
-**Related**: RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands), IG-677 (Job↔Loop Index), IG-613 (protocol-1 `autopilot_*` RPCs)
+**Related**: RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands), RFC-230 (Job Maturity Assessment), IG-677 (Job↔Loop Index), IG-613 (protocol-1 `autopilot_*` RPCs), IG-692
 
 ## Abstract
 
@@ -254,13 +254,16 @@ The optional `verification_rules` field on `job_create` provides natural-languag
 | Phase | Behavior |
 |-------|---------|
 | **Submission** | Client provides `verification_rules` as a free-text string in `job_create`. Stored on the root GoalNode (e.g., `GoalNode.verification_rules` field). |
-| **Planning** | Scheduler/BackoffDecision reasoner reads `verification_rules` to derive acceptance criteria for subgoal decomposition. Influences which StepNodes are generated. |
-| **Execution** | Workers (StrangeLoop instances) read `verification_rules` from their assigned GoalNode to self-check completion before reporting `completed`. |
-| **Completion** | AutopilotService evaluates `verification_rules` before transitioning root GoalNode to `completed`. If rules are not satisfied, goal transitions to `failed` with `last_error` indicating the unsatisfied rule. |
-| **Observation** | `job_status_response.last_error` reflects verification failures. `job_status` does NOT echo `verification_rules` back (it is write-once at creation). `job_dag_response` nodes expose `summary`/`findings` for completed goals (see §Node Fields). |
-| **Absence** | If omitted, the job completes when all subgoals reach `completed` (no explicit verification gate). Default behavior. |
+| **Planning** | Scheduler/BackoffDecision reasoner and LoopRail QA/feedback builtins may read `verification_rules` to enrich acceptance criteria for subgoals. |
+| **Execution** | Workers (StrangeLoop instances) may read `verification_rules` from their assigned GoalNode (or job root) to self-check before reporting completion. |
+| **Maturity (host)** | **AutopilotService `JobMaturityAssessor`** (RFC-230) evaluates `verification_rules` together with workspace `GOAL.md` / probes and writes `JobMaturitySnapshot` + `acceptance_met`. Per-goal consensus (RFC-204) does **not** latch job acceptance alone. |
+| **Completion** | For **rail-bound** jobs (`rail_id` set), the job root completes via LoopRail `dag_idle` + `job_complete` when maturity allows (RFC-230) — not merely when all children are terminal. For **non-rail** jobs, AutopilotService evaluates maturity/`verification_rules` before transitioning the root to `completed`; unsatisfied required criteria → do not complete (suspend/fail with `last_error` as appropriate). |
+| **Observation** | `job_status_response.last_error` reflects verification failures. Additive maturity fields (`level`, `acceptance_met`, blockers) are defined in RFC-230. `job_status` does NOT echo raw `verification_rules` back (write-once at creation). `job_dag_response` nodes expose `summary`/`findings` for completed goals (see §Node Fields). |
+| **Absence** | If omitted: non-rail jobs may still complete when all subgoals reach `completed` (legacy). Rail jobs still require RFC-230 maturity / rail policy (`acceptance_met` or exhausted-feedback / blocked), not silent “children done ⇒ root done”. |
 
-> **Note**: `verification_rules` is stored as opaque text. Structured rule evaluation (parsing into executable checks) is a future enhancement; current implementation uses LLM-based assessment during the completion phase.
+> **Normative evaluation**: Structured / executable assessment is specified in
+> [RFC-230](RFC-230-job-maturity-assessment.md) (prefer probes; LLM residual only).
+> Implementation: [IG-692](../impl/IG-692-job-maturity-assessment.md).
 
 ### job_status
 
@@ -843,6 +846,13 @@ Future enhancement: scoped subscriptions (`autopilot_subscribe` with optional `j
 - [ ] DAG data transformation for React Flow
 
 ## Changelog
+
+### 2026-08-05
+- `verification_rules` lifecycle: host maturity assessment via RFC-230 / IG-692;
+  rail jobs no longer complete solely because all children are terminal
+- `job_status` / `autopilot_top`: additive `maturity` fields (`level`,
+  `acceptance_met`, `blockers`, …) when assessed
+- Related: RFC-230, IG-692
 
 ### 2026-08-04
 - Added protocol-1 `autopilot_top` aggregate snapshot (active jobs → DAG → loops)

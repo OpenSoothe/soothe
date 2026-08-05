@@ -126,6 +126,7 @@ class DagSnapshot(BaseModel):
                 "step_count": g.steps.total_steps,
                 "completed_steps": g.steps.completed_steps,
                 "failed_steps": g.steps.failed_steps,
+                "rail_id": getattr(g, "rail_id", None),
             }
             for g in goals
         ]
@@ -167,6 +168,7 @@ class CompletionVerificationContext(BaseModel):
                 "description": g.description[:80],
                 "priority": g.priority,
                 "depends_on": list(g.depends_on),
+                "rail_id": getattr(g, "rail_id", None),
             }
             for g in pending
         ]
@@ -175,6 +177,7 @@ class CompletionVerificationContext(BaseModel):
                 "id": g.id,
                 "description": g.description[:80],
                 "priority": g.priority,
+                "rail_id": getattr(g, "rail_id", None),
             }
             for g in active
         ]
@@ -214,6 +217,7 @@ class GoalPlacementContext(BaseModel):
                 "description": g.description[:60],
                 "priority": g.priority,
                 "depends_on": list(g.depends_on),
+                "rail_id": getattr(g, "rail_id", None),
             }
             for g in goals
             if g.status in ("active", "pending", "completed")

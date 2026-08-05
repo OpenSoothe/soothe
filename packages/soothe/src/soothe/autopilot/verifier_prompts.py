@@ -72,11 +72,13 @@ Constraints:
   (send_back_count >= max_send_backs); those need operator resume, not auto-reset.
   Do reset ordinary suspended/blocked goals whose dependencies are satisfied
   and that are not send_back-exhausted.
+  NEVER reset job roots that have rail_id set (rail coordinators, not workers).
 - remove_goals: ONLY cancelled or failed clutter with no dependents; NEVER job roots
   (parent_id null) that are still active/pending/suspended; NEVER goals with live children
 - merge_goals: Combine similar goals (logged; not always auto-applied)
 - decompose_goals: Split completed complex goals into follow-ups; each subgoal MUST
-  include depends_on when a pipeline is implied (use sibling index "0","1",… or real IDs)
+  include depends_on when a pipeline is implied (use sibling index "0","1",… or real IDs).
+  NEVER suggest decompose_goals for goals under a job with rail_id — LoopRail owns spawn.
 - wire_dependencies: Set hard depends_on on existing goals to enforce pipeline order.
   NEVER wire a child goal to depend_on a job root (parent_id null). Roots may
   depend on children; children must never depend on the job root.
@@ -134,11 +136,13 @@ Output JSON structure (strict format):
 ```
 
 Constraints:
-- new_goals: Create follow-up goals that inherit from completed goal
+- new_goals: Create follow-up goals that inherit from completed goal.
+  NEVER suggest new_goals when the completed goal (or its job root) has rail_id —
+  LoopRail owns follow-up spawn for rail-bound jobs.
 - redundant_goals: Goals whose purpose was already fulfilled (cancelled/failed clutter only preferred)
 - ready_goals: Pending goals with newly satisfied dependencies
 - decomposition is optional (null if not needed); when present, subgoals MUST include
-  depends_on for pipeline order (sibling index refs allowed)
+  depends_on for pipeline order (sibling index refs allowed). Prefer null for rail_id jobs.
 - Prefer decomposition=null when key_findings/outcome already show deliverables complete
 """
 
@@ -201,7 +205,9 @@ def format_goals_detail(goals: list[dict]) -> str:
         status = g.get("status", "unknown")
         priority = g.get("priority", 50)
         desc = g.get("description", "")[:80]
-        lines.append(f'  - {g["id"]}: [{status}] pri={priority} deps=[{deps}] "{desc}"')
+        rail = g.get("rail_id") or ""
+        rail_bit = f" rail={rail}" if rail else ""
+        lines.append(f'  - {g["id"]}: [{status}] pri={priority}{rail_bit} deps=[{deps}] "{desc}"')
     return "\n".join(lines)
 
 

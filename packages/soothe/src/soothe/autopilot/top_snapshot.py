@@ -162,6 +162,7 @@ def build_top_job_entry(
     loops: list[dict[str, Any]],
     created_at: str | None = None,
     include_terminal: bool = False,
+    maturity: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Assemble one job row for ``autopilot_top``, or ``None`` if omitted.
 
@@ -177,6 +178,7 @@ def build_top_job_entry(
         include_terminal: When ``False`` (default), drop terminal goals and
             fully terminal jobs. StepDAG under remaining goals is kept intact.
             When ``True``, keep the full DAG.
+        maturity: Optional compact maturity wire fields (RFC-230).
 
     Returns:
         Job dict with filtered ``dag`` and active ``loops``, or ``None``.
@@ -203,4 +205,6 @@ def build_top_job_entry(
         entry["workspace"] = workspace
     if created_at:
         entry["created_at"] = created_at
+    if maturity:
+        entry["maturity"] = maturity
     return apply_top_running_status(entry, root_id=job_id)

@@ -61,6 +61,8 @@ for ~40+ minutes after Wave 1 makers completed.
 
 - P1 structural git probe / send_back checklist for integrate.
 - Automatic re-fire of `goal_completed` for already-stuck roots after upgrade.
+- Job maturity latch / production `dag_idle` / verifier rail exclusivity
+  (→ [IG-692](IG-692-job-maturity-assessment.md) / [RFC-230](../specs/RFC-230-job-maturity-assessment.md)).
 
 ---
 

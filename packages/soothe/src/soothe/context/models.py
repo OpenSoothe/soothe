@@ -272,8 +272,11 @@ class GoalNode(BaseModel):
     # Guidance (from Goal, RFC-228)
     guidance_accumulated: list[dict[str, Any]] = Field(default_factory=list)
 
-    # Operator verification criteria (RFC-228 job_create; advisory for consensus)
+    # Operator verification criteria (RFC-228 job_create; host maturity in RFC-230)
     verification_rules: str | None = None
+
+    # Job-level maturity snapshot (RFC-230 / IG-692) — set on rail job roots
+    maturity: dict[str, Any] | None = None
 
     # LoopRail binding (IG-678 P2) — job-scoped policy metadata on the DAG
     rail_id: str | None = None

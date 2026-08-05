@@ -815,6 +815,9 @@ class AutopilotService:
                 # 1. Schedule ready goals
                 await self._schedule_ready_goals()
 
+                # 1b. Rail jobs with no open children → dag_idle (RFC-230)
+                await self._emit_dag_idle_for_idle_rail_jobs()
+
                 # 2. Monitor active loops
                 await self._monitor_loop_health()
 
@@ -836,6 +839,15 @@ class AutopilotService:
             except Exception:
                 logger.exception("Scheduling loop error")
                 await asyncio.sleep(poll_interval)
+
+    async def _emit_dag_idle_for_idle_rail_jobs(self) -> None:
+        """Scan rail job roots and emit ``dag_idle`` when subtrees are idle."""
+        for goal in list(self._ce._dag.goals.values()):
+            if goal.parent_id is not None or not goal.rail_id:
+                continue
+            if goal.status in ("completed", "cancelled", "failed"):
+                continue
+            await self._maybe_emit_dag_idle(goal.id)
 
     async def _schedule_ready_goals(self) -> None:
         """Schedule all ready goals via WorkerPool dispatch (RFC-222 Phase C+)."""
@@ -1462,6 +1474,8 @@ class AutopilotService:
             if decision == "accept":
                 await self._ce.complete_goal(goal_id)
                 await self._emit_goal_completed(goal_id, loop_id=loop_id)
+                await self._maybe_assess_job_maturity(goal_id)
+                await self._maybe_emit_dag_idle(goal_id)
             elif decision == "send_back":
                 await self._ce.send_back_goal(goal_id, reason=reasoning)
                 await self._notify_rail("goal_send_back", goal_id, reason=reasoning)
@@ -1469,6 +1483,90 @@ class AutopilotService:
                 await self._ce.suspend_goal(goal_id, reason=reasoning)
         except Exception:
             logger.exception("Goal transition failed after consensus for %s", goal_id)
+
+    async def _maybe_assess_job_maturity(self, goal_id: str) -> None:
+        """Run job maturity assessor after verify-class goals (RFC-230 / IG-692)."""
+        from soothe.autopilot.maturity import (
+            JobMaturityAssessor,
+            is_verify_class_goal,
+            load_goal_md_excerpt,
+        )
+
+        goal = await self._ce.get_goal(goal_id)
+        if goal is None:
+            return
+        if not is_verify_class_goal(rail_tags=goal.rail_tags, role=goal.role):
+            return
+        job_id = self._job_id_for_goal(goal_id)
+        if job_id is None:
+            return
+        root = self._ce._dag.get_goal(job_id)
+        if root is None or not root.rail_id:
+            return
+        workspace = root.workspace or goal.workspace
+        try:
+            snapshot = JobMaturityAssessor().assess_workspace(
+                workspace,
+                verification_rules=root.verification_rules,
+                goal_md=load_goal_md_excerpt(workspace),
+            )
+            root.maturity = snapshot.to_dict()
+            root.touch()
+            interp = self._rail_interpreter
+            if interp is not None:
+                await interp.builtins.set_acceptance_met(job_id, met=snapshot.acceptance_met)
+            logger.info(
+                "Job maturity for %s: acceptance_met=%s level=%s signal=%s",
+                job_id,
+                snapshot.acceptance_met,
+                snapshot.level,
+                snapshot.suggested_rail_signal,
+            )
+        except Exception:
+            logger.exception("Job maturity assessment failed for job %s", job_id)
+
+    async def _maybe_emit_dag_idle(self, goal_id: str) -> None:
+        """Emit rail ``dag_idle`` when a rail job subtree has no open work (RFC-230)."""
+        job_id = self._job_id_for_goal(goal_id)
+        if job_id is None:
+            return
+        root = self._ce._dag.get_goal(job_id)
+        if root is None or not root.rail_id:
+            return
+        if root.status in ("completed", "cancelled", "failed"):
+            return
+        from soothe.context.models import TERMINAL_STATES
+
+        open_desc = [
+            g
+            for g in self._ce._dag.goals.values()
+            if g.id != job_id
+            and g.status not in TERMINAL_STATES
+            and self._is_descendant_of(g.id, job_id)
+        ]
+        if open_desc:
+            return
+        if self._worker_pool is not None:
+            for worker in self._worker_pool.active_workers():
+                cg = worker.current_goal_id
+                if cg and (cg == job_id or self._is_descendant_of(cg, job_id)):
+                    return
+        await self._notify_rail("dag_idle", job_id)
+
+    def _is_descendant_of(self, goal_id: str, ancestor_id: str) -> bool:
+        """True if ``goal_id`` is under ``ancestor_id`` via parent_id chains."""
+        if goal_id == ancestor_id:
+            return False
+        seen: set[str] = set()
+        cur = self._ce._dag.get_goal(goal_id)
+        while cur is not None and cur.id not in seen:
+            seen.add(cur.id)
+            if cur.parent_id == ancestor_id:
+                return True
+            if not cur.parent_id:
+                return False
+            cur = self._ce._dag.get_goal(cur.parent_id)
+        return False
 
     @staticmethod
     def _infer_workspace(goal: GoalNode) -> str:
@@ -1705,6 +1803,7 @@ class AutopilotService:
             Dict with ``running``, ``dreaming``, ``loop_pool``, ``generated_at``,
             and ``jobs`` (each with filtered ``dag`` and active ``loops``).
         """
+        from soothe.autopilot.maturity import maturity_wire_fields
         from soothe.autopilot.top_snapshot import build_top_job_entry, sort_top_jobs
 
         status = self.status()
@@ -1726,6 +1825,7 @@ class AutopilotService:
                 loops=loops,
                 created_at=created_at,
                 include_terminal=include_terminal,
+                maturity=maturity_wire_fields(root.maturity),
             )
             if entry is not None:
                 jobs.append(entry)
