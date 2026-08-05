@@ -129,16 +129,17 @@ class TestBuildContribution:
         _, _, payload = chunk
         assert payload["evidence_summary"] == "echo ok"
 
-    def test_decision_actions_become_plan_steps(self) -> None:
+    def test_decision_steps_become_plan_steps(self) -> None:
         pr = _plan_result(is_done=True)
         decision = MagicMock()
-        decision.actions = [
-            {"description": "step A"},
-            {"description": "step B"},
+        decision.steps = [
+            {"id": "A-01", "description": "step A"},
+            {"id": "A-02", "description": "step B"},
         ]
         pr.decision = decision
         c = AutopilotWorkerMixin._build_contribution(pr)
         assert len(c.plan_steps_executed) == 2
+        assert c.plan_steps_executed[0].id == "A-01"
         assert c.plan_steps_executed[0].action == "step A"
         assert c.plan_steps_executed[1].action == "step B"
 

@@ -389,7 +389,7 @@ class TestEvidenceHelpers:
         pr.evidence_summary = ""
         pr.full_output = None
         decision = MagicMock()
-        decision.actions = [{"description": "run echo hello"}]
+        decision.steps = [{"description": "run echo hello"}]
         pr.decision = decision
         assert "run echo hello" in synthesize_completion_evidence(pr)
 

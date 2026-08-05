@@ -119,7 +119,12 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
     assert "GOAL [a1b2c3d4]" in text
     assert "STEP [UZH-01]" in text
     assert "Add JWT" in text
+    assert "←UZH-01" in text  # flat list keeps deps inline, not nested tree
     assert "Write tests" in text
+    # Steps are a flat list (same indent), not a nested step tree.
+    step_lines = [ln for ln in text.splitlines() if "STEP [" in ln]
+    assert len(step_lines) == 2
+    assert all(ln.index("STEP") == step_lines[0].index("STEP") for ln in step_lines)
     assert "LOOP autopilot__a1b2c3d4__deadbeef…" in text
     assert "#3" in text
     assert "refresh 2.5s" in text
@@ -295,3 +300,104 @@ def test_render_top_orphan_loop_marker() -> None:
     )
     assert "?goal=missing1" in text
     assert "LOOP " in text
+
+
+def test_render_top_shows_active_not_pending_for_running_work() -> None:
+    text = _plain(
+        {
+            "running": True,
+            "loop_pool": {"active": 1, "idle": 0, "max": 16},
+            "jobs": [
+                {
+                    "id": "jobjobj1",
+                    "status": "active",
+                    "priority": 55,
+                    "description": "running job",
+                    "created_at": "2026-08-05T12:00:00+00:00",
+                    "dag": {
+                        "root_id": "jobjobj1",
+                        "nodes": [
+                            {
+                                "id": "jobjobj1",
+                                "status": "active",
+                                "description": "running job",
+                                "steps_completed": 0,
+                                "steps_total": 1,
+                                "steps": {
+                                    "nodes": [
+                                        {
+                                            "id": "S-01",
+                                            "status": "active",
+                                            "description": "doing work",
+                                            "dependencies": [],
+                                        }
+                                    ],
+                                    "edges": [],
+                                },
+                            }
+                        ],
+                        "edges": [],
+                    },
+                    "loops": [
+                        {
+                            "seq": 1,
+                            "loop_id": "autopilot__jobjobj1__deadbeef",
+                            "goal_id": "jobjobj1",
+                            "status": "active",
+                        }
+                    ],
+                }
+            ],
+        },
+        interval=1.0,
+    )
+    assert "JOB  [jobjobj1] active" in text
+    assert "GOAL [jobjobj1] active" in text
+    assert "STEP [S-01] active" in text
+    assert "LOOP autopilot__jobjobj1__deadbeef" in text
+    assert "active  #1" in text
+
+
+def test_render_top_jobs_newest_first() -> None:
+    text = _plain(
+        {
+            "running": True,
+            "loop_pool": {"active": 0, "idle": 0, "max": 2},
+            "jobs": [
+                {
+                    "id": "aaaa1111",
+                    "status": "pending",
+                    "priority": 50,
+                    "description": "older job",
+                    "created_at": "2026-08-01T00:00:00+00:00",
+                    "dag": {
+                        "root_id": "aaaa1111",
+                        "nodes": [
+                            {"id": "aaaa1111", "status": "pending", "description": "older job"},
+                        ],
+                        "edges": [],
+                    },
+                    "loops": [],
+                },
+                {
+                    "id": "bbbb2222",
+                    "status": "active",
+                    "priority": 50,
+                    "description": "newer job",
+                    "created_at": "2026-08-05T12:00:00+00:00",
+                    "dag": {
+                        "root_id": "bbbb2222",
+                        "nodes": [
+                            {"id": "bbbb2222", "status": "active", "description": "newer job"},
+                        ],
+                        "edges": [],
+                    },
+                    "loops": [],
+                },
+            ],
+        },
+        interval=1.0,
+    )
+    older = text.index("JOB  [aaaa1111]")
+    newer = text.index("JOB  [bbbb2222]")
+    assert newer < older

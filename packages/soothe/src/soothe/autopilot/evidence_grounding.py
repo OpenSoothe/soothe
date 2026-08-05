@@ -134,6 +134,23 @@ def extract_path_tokens(*texts: str) -> list[str]:
     return found
 
 
+def decision_step_actions(decision: Any | None) -> list[Any]:
+    """Return plan step actions from an ``AgentDecision``-like object.
+
+    Prefer ``steps`` (canonical ``AgentDecision`` field). Accept legacy
+    ``actions`` only for older fixtures / wire payloads.
+    """
+    if decision is None:
+        return []
+    steps = getattr(decision, "steps", None)
+    if isinstance(steps, list) and steps:
+        return list(steps)
+    actions = getattr(decision, "actions", None)
+    if isinstance(actions, list) and actions:
+        return list(actions)
+    return []
+
+
 def build_files_touched(
     *,
     goal_id: str,
@@ -147,13 +164,11 @@ def build_files_touched(
     """
     texts: list[str] = [evidence_summary or ""]
     decision = getattr(plan_result, "decision", None) if plan_result is not None else None
-    actions = getattr(decision, "actions", None) if decision is not None else None
-    if isinstance(actions, list):
-        for action in actions[:40]:
-            if isinstance(action, dict):
-                texts.append(str(action.get("description", "")))
-            else:
-                texts.append(str(getattr(action, "description", action) or ""))
+    for action in decision_step_actions(decision)[:40]:
+        if isinstance(action, dict):
+            texts.append(str(action.get("description", "")))
+        else:
+            texts.append(str(getattr(action, "description", action) or ""))
 
     root = Path(workspace).expanduser() if workspace else None
     out: dict[str, FileTouchSummary] = {}
@@ -183,7 +198,7 @@ def synthesize_completion_evidence(plan_result: Any | None) -> str:
     """Derive consensus-ready evidence from a completed ``PlanResult``.
 
     Prefer explicit ``evidence_summary``, then user-visible ``full_output``,
-    then completed decision action descriptions. Never uses the goal text.
+    then completed decision step descriptions. Never uses the goal text.
     """
     if plan_result is None:
         return ""
@@ -197,8 +212,8 @@ def synthesize_completion_evidence(plan_result: Any | None) -> str:
         return full_output[:2048]
 
     decision = getattr(plan_result, "decision", None)
-    actions = getattr(decision, "actions", None) if decision is not None else None
-    if isinstance(actions, list) and actions:
+    actions = decision_step_actions(decision)
+    if actions:
         bits: list[str] = []
         for action in actions[:10]:
             if isinstance(action, dict):

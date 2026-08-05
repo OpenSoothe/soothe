@@ -51,6 +51,88 @@ def filter_active_loops(loops: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [entry for entry in loops if isinstance(entry, dict) and entry.get("status") == "active"]
 
 
+def derive_top_running_status(
+    root_status: str,
+    *,
+    nodes: list[dict[str, Any]],
+    loops: list[dict[str, Any]],
+) -> str:
+    """Effective status for top when a rail root stays ``pending`` while work runs.
+
+    Rail job roots are coordinators and often remain ``pending`` while child
+    goals / loops execute. Surface ``active`` (or clarification/suspend) so the
+    live forest does not look idle.
+    """
+    if root_status in TERMINAL_STATES:
+        return root_status
+    if any(isinstance(entry, dict) and entry.get("status") == "active" for entry in loops):
+        return "active"
+    statuses = {
+        str(n.get("status", ""))
+        for n in nodes
+        if isinstance(n, dict) and n.get("status") is not None
+    }
+    if "active" in statuses:
+        return "active"
+    if "awaiting_clarification" in statuses:
+        return "awaiting_clarification"
+    if "blocked" in statuses:
+        return "blocked"
+    if "suspended" in statuses and not (statuses & {"pending", "active"}):
+        return "suspended"
+    return root_status
+
+
+def apply_top_running_status(
+    entry: dict[str, Any],
+    *,
+    root_id: str | None = None,
+) -> dict[str, Any]:
+    """Mutate a top job entry so JOB/root GOAL reflect in-flight work."""
+    dag = entry.get("dag") if isinstance(entry.get("dag"), dict) else {}
+    nodes = [n for n in (dag.get("nodes") or []) if isinstance(n, dict)]
+    loops = [L for L in (entry.get("loops") or []) if isinstance(L, dict)]
+    effective = derive_top_running_status(
+        str(entry.get("status") or "pending"),
+        nodes=nodes,
+        loops=loops,
+    )
+    entry["status"] = effective
+    rid = str(root_id or dag.get("root_id") or entry.get("id") or "")
+    if rid:
+        for node in nodes:
+            if str(node.get("id")) == rid and str(node.get("status")) not in TERMINAL_STATES:
+                node["status"] = effective
+                break
+    return entry
+
+
+def _job_recency_key(job: dict[str, Any]) -> tuple[float, str]:
+    """Sort key for top jobs: newest ``created_at`` first; missing timestamps last."""
+    from datetime import UTC, datetime
+
+    raw = job.get("created_at")
+    ts = float("-inf")
+    if isinstance(raw, datetime):
+        start = raw if raw.tzinfo is not None else raw.replace(tzinfo=UTC)
+        ts = start.timestamp()
+    elif raw not in (None, ""):
+        try:
+            start = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=UTC)
+            ts = start.timestamp()
+        except (TypeError, ValueError):
+            ts = float("-inf")
+    # Negate so larger timestamps sort first; id breaks ties stably.
+    return (-ts, str(job.get("id") or ""))
+
+
+def sort_top_jobs(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Order job rows newest-first for ``autopilot top`` (most recent on top)."""
+    return sorted((j for j in jobs if isinstance(j, dict)), key=_job_recency_key)
+
+
 def _copy_dag(dag: dict[str, Any]) -> dict[str, Any]:
     """Shallow-copy ``nodes``/``edges`` (and optional ``root_id``) for a job row."""
     out: dict[str, Any] = {
@@ -113,4 +195,4 @@ def build_top_job_entry(
         entry["workspace"] = workspace
     if created_at:
         entry["created_at"] = created_at
-    return entry
+    return apply_top_running_status(entry, root_id=job_id)

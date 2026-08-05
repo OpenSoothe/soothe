@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from soothe.context.engine import ContextEngine
-from soothe.context.models import TERMINAL_STATES, GoalNode
+from soothe.context.models import TERMINAL_STATES, GoalNode, StepExecution, StepNode
 from soothe.events.internal_bus import InternalEventBus
 from soothe.events.internal_events import (
     INTERNAL_GOAL_STATE_CHANGED,
@@ -136,17 +136,10 @@ class AutopilotService:
         if self._monitor is not None:
             self._monitor.bind_service_cancel(self.cancel_goal)
 
-        # RFC-222: parallel-execution concurrency control.
-        # `_assignment_lock` makes loop assignment atomic so two concurrent
-        # execute_goal calls can't reach into _assign_loop_with_lineage at
-        # the same time and double-claim a loop slot.
-        # `_execution_semaphore` caps the number of in-flight execute_goal
-        # runs at `max_parallel_goals` (independent of `max_loops`, which
-        # caps worker capacity — loops can be reused for lineage).
-        self._assignment_lock = asyncio.Lock()
-        self._execution_semaphore = asyncio.Semaphore(self._config.max_parallel_goals)
-
         # RFC-222 revised (Phase C): WorkerPool-driven dispatch.
+        # Capacity: ``max_loops`` (pool size) and ``max_parallel_goals``
+        # (schedule cap in ``_schedule_via_worker_pool``). Assignment locking
+        # lives on ``WorkerPool``.
         self._runner_factory = runner_factory
         from soothe.autopilot.job_loop_index import JobLoopIndex
         from soothe.autopilot.worker_pool import WorkerPool
@@ -858,8 +851,10 @@ class AutopilotService:
         if self._worker_pool is None:
             return
 
-        # Bound by min(WorkerPool capacity, max_parallel_goals semaphore)
-        cap_remaining = max(0, self._config.max_loops - self._worker_pool.active_count())
+        # Bound by WorkerPool capacity and max_parallel_goals.
+        pool_slots = max(0, self._config.max_loops - self._worker_pool.active_count())
+        goal_slots = max(0, self._config.max_parallel_goals - self._worker_pool.active_count())
+        cap_remaining = min(pool_slots, goal_slots)
         if cap_remaining <= 0:
             return
 
@@ -1054,8 +1049,139 @@ class AutopilotService:
         )
         await self._notify_rail("goal_failed", goal_id, error=error_message)
 
+    async def _mirror_plan_decision(self, goal_id: str, payload: dict[str, Any]) -> None:
+        """Apply worker ``plan_decision`` steps onto the Autopilot CE goal (IG-689).
+
+        Worker StrangeLoop CEs are loop-scoped; ``autopilot top`` reads the daemon
+        Autopilot CE. Mirror planned StepDAG nodes so the live forest can list STEPs.
+        """
+        goal = self._ce.get_goal_sync(goal_id)
+        if goal is None:
+            return
+        steps = payload.get("steps")
+        if not isinstance(steps, list) or not steps:
+            return
+        iteration = int(payload.get("iteration") or 0)
+        added = 0
+        for raw in steps:
+            if not isinstance(raw, dict):
+                continue
+            sid = str(raw.get("id") or "").strip()
+            if not sid:
+                continue
+            deps = [str(d) for d in (raw.get("dependencies") or []) if d]
+            desc = str(raw.get("description") or "").strip()
+            if sid in goal.steps.nodes:
+                existing = goal.steps.nodes[sid]
+                if existing.status == "pending" and deps:
+                    existing.dependencies = deps
+                if desc and not existing.description:
+                    existing.description = desc
+                continue
+            goal.steps.add_step(
+                StepNode(
+                    id=sid,
+                    description=desc,
+                    dependencies=deps,
+                    plan_iteration=iteration,
+                )
+            )
+            added += 1
+        if added or steps:
+            goal.touch()
+            await self._persist_goals()
+
+    async def _mirror_step_started(self, goal_id: str, payload: dict[str, Any]) -> None:
+        """Mark a step ``active`` on the Autopilot CE goal when execution begins."""
+        sid = str(payload.get("step_id") or "").strip()
+        if not sid:
+            return
+        goal = self._ce.get_goal_sync(goal_id)
+        if goal is None:
+            return
+        if sid not in goal.steps.nodes:
+            desc = str(payload.get("description") or sid).strip() or sid
+            goal.steps.add_step(StepNode(id=sid, description=desc))
+        await self._ce.activate_step(goal_id, sid)
+
+    async def _mirror_step_completed(self, goal_id: str, payload: dict[str, Any]) -> None:
+        """Apply worker ``step_completed`` onto the Autopilot CE goal (IG-689)."""
+        sid = str(payload.get("step_id") or "").strip()
+        if not sid:
+            return
+        goal = self._ce.get_goal_sync(goal_id)
+        if goal is None:
+            return
+        if sid not in goal.steps.nodes:
+            desc = str(payload.get("description") or sid).strip() or sid
+            goal.steps.add_step(StepNode(id=sid, description=desc))
+        execution = StepExecution(
+            duration_ms=int(payload.get("duration_ms") or 0),
+            tool_call_count=int(payload.get("tool_call_count") or 0),
+            error=str(payload["error"]) if payload.get("error") else None,
+        )
+        if payload.get("success", True):
+            await self._ce.complete_step(goal_id, sid, execution)
+        else:
+            await self._ce.fail_step(goal_id, sid, execution)
+
+    async def _mirror_contribution_steps(self, goal_id: str, contribution: Any) -> None:
+        """Backfill StepDAG from completion contribution when progress was missed."""
+        plan_steps = getattr(contribution, "plan_steps_executed", None) or []
+        if not plan_steps:
+            return
+        goal = self._ce.get_goal_sync(goal_id)
+        if goal is None:
+            return
+        for step in plan_steps:
+            sid = str(getattr(step, "id", "") or "").strip()
+            if not sid:
+                continue
+            action = str(getattr(step, "action", "") or "").strip()
+            outcome = str(getattr(step, "outcome", "") or "completed").lower()
+            if sid not in goal.steps.nodes:
+                goal.steps.add_step(StepNode(id=sid, description=action or sid))
+            if goal.steps.nodes[sid].status in ("completed", "failed", "skipped"):
+                continue
+            execution = StepExecution()
+            if outcome in {"failed", "failure", "error"}:
+                await self._ce.fail_step(goal_id, sid, execution)
+            elif outcome in {"skipped", "skip"}:
+                await self._ce.skip_step(goal_id, sid)
+            else:
+                await self._ce.complete_step(goal_id, sid, execution)
+
+    async def _apply_worker_progress_event(self, goal_id: str, data: dict[str, Any]) -> None:
+        """Route autopilot progress custom chunks onto Autopilot CE StepDAG."""
+        ctype = str(data.get("type") or "")
+        prefix = "soothe.internal.autopilot.progress."
+        if not ctype.startswith(prefix):
+            return
+        event = ctype[len(prefix) :]
+        payload = data.get("payload")
+        if not isinstance(payload, dict):
+            payload = {k: v for k, v in data.items() if k not in {"type", "goal_id", "payload"}}
+        try:
+            if event == "plan_decision":
+                await self._mirror_plan_decision(goal_id, payload)
+            elif event == "step_started":
+                await self._mirror_step_started(goal_id, payload)
+            elif event == "step_completed":
+                await self._mirror_step_completed(goal_id, payload)
+        except Exception:
+            logger.warning(
+                "Failed to mirror worker progress %s onto goal %s",
+                event,
+                goal_id,
+                exc_info=True,
+            )
+
     async def _consume_worker_stream(self, goal_id: str, worker: Any, request: Any) -> None:
         """Drain a worker's stream and react to ``GoalCompletionChunk``.
+
+        Progress events (``plan_decision``, ``step_started``, ``step_completed``)
+        are mirrored onto the Autopilot CE StepDAG so ``autopilot top`` can list
+        STEPs with live status (IG-689).
 
         On a successful completion: mark goal completed in ContextEngine,
         store the contribution if a context store is wired, return the
@@ -1076,6 +1202,11 @@ class AutopilotService:
                 if mode != "custom" or not isinstance(data, dict):
                     continue
                 ctype = data.get("type", "")
+                if isinstance(ctype, str) and ctype.startswith(
+                    "soothe.internal.autopilot.progress."
+                ):
+                    await self._apply_worker_progress_event(goal_id, data)
+                    continue
                 if ctype != "soothe.internal.autopilot.goal_completion":
                     continue
 
@@ -1091,6 +1222,15 @@ class AutopilotService:
                         exc_info=True,
                     )
                     contribution = GoalDispatchContextContribution()
+
+                try:
+                    await self._mirror_contribution_steps(goal_id, contribution)
+                except Exception:
+                    logger.warning(
+                        "Failed to backfill steps from contribution for goal %s",
+                        goal_id,
+                        exc_info=True,
+                    )
 
                 # RFC-204 Group C: Apply directives BEFORE outcome handling.
                 # This creates subgoals that inherit from the active goal.
@@ -1563,7 +1703,7 @@ class AutopilotService:
             Dict with ``running``, ``dreaming``, ``loop_pool``, ``generated_at``,
             and ``jobs`` (each with filtered ``dag`` and active ``loops``).
         """
-        from soothe.autopilot.top_snapshot import build_top_job_entry
+        from soothe.autopilot.top_snapshot import build_top_job_entry, sort_top_jobs
 
         status = self.status()
         goals = await self.list_goals()
@@ -1592,7 +1732,7 @@ class AutopilotService:
             "dreaming": status.get("dreaming", False),
             "loop_pool": status.get("loop_pool", {}),
             "generated_at": datetime.now(UTC).isoformat(),
-            "jobs": jobs,
+            "jobs": sort_top_jobs(jobs),
         }
 
     async def dag_snapshot(self, root_goal_id: str) -> dict[str, Any]:

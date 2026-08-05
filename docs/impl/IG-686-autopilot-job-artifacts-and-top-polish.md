@@ -86,7 +86,7 @@ filter to steps.
 | Alternate screen | `Live(..., screen=True, transient=True)` |
 | Size | `console.size` each tick; pad body so footer sits on last row |
 | Elapsed | `HH:MM:SS` from job `created_at` and loop `started_at` |
-| Forest | Job → goal DAG → nested step DAG → active loops under goal |
+| Forest | Job → goal DAG → flat step list → active loops under goal |
 | Quit | Ctrl+C restores prior terminal |
 
 Example body:
@@ -133,7 +133,7 @@ schema changes. Interactive keys / `--all` / scroll → [IG-688](IG-688-autopilo
 - [x] Rail JSONL under `data/jobs/{job_id}/`; legacy `loops/{job_id}/` migrated
 - [x] `dag_snapshot` / `top` include planned step DAG + live step counts
 - [x] `soothe autopilot top` uses alternate screen; elapsed `HH:MM:SS`
-- [x] Forest shows goal DAG with nested step DAG and loops
+- [x] Forest shows goal DAG with flat step list and loops
 - [x] Unit tests green; `./scripts/verify_finally.sh` green
 
 ---

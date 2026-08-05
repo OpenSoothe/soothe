@@ -38,6 +38,7 @@ from soothe.autopilot.engine_models import (
 )
 from soothe.autopilot.evidence_grounding import (
     build_files_touched,
+    decision_step_actions,
     synthesize_completion_evidence,
 )
 from soothe.autopilot.proposal_queue import Proposal, ProposalQueue
@@ -256,7 +257,7 @@ class AutopilotWorkerMixin:
         """Synthesize a contribution from the final ``PlanResult`` (IG-680).
 
         Extracts evidence summary as a finding, best-effort plan steps from
-        decision actions, and ``files_touched`` from path tokens in evidence
+        ``decision.steps``, and ``files_touched`` from path tokens in evidence
         (hashed when the file exists under workspace).
         """
         if plan_result is None:
@@ -269,26 +270,27 @@ class AutopilotWorkerMixin:
 
         plan_steps: list[StepSummary] = []
         decision = getattr(plan_result, "decision", None)
-        actions = getattr(decision, "actions", None) if decision else None
+        step_actions = decision_step_actions(decision)
         tool_counts: dict[str, int] = {}
-        if isinstance(actions, list):
-            for idx, action in enumerate(actions[:30]):
-                if isinstance(action, dict):
-                    action_text = str(action.get("description", action))
-                    tool_name = str(action.get("tool") or action.get("name") or "action")
-                else:
-                    action_text = str(getattr(action, "description", action) or action)
-                    tool_name = str(
-                        getattr(action, "tool", None) or getattr(action, "name", None) or "action"
-                    )
-                tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
-                plan_steps.append(
-                    StepSummary(
-                        id=f"S{idx + 1}",
-                        action=str(action_text)[:200],
-                        outcome="completed",
-                    )
+        for idx, action in enumerate(step_actions[:30]):
+            if isinstance(action, dict):
+                action_text = str(action.get("description", action))
+                step_id = str(action.get("id") or f"S{idx + 1}")
+                tool_name = str(action.get("tool") or action.get("name") or "action")
+            else:
+                action_text = str(getattr(action, "description", action) or action)
+                step_id = str(getattr(action, "id", None) or f"S{idx + 1}")
+                tool_name = str(
+                    getattr(action, "tool", None) or getattr(action, "name", None) or "action"
                 )
+            tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+            plan_steps.append(
+                StepSummary(
+                    id=step_id,
+                    action=str(action_text)[:200],
+                    outcome="completed",
+                )
+            )
 
         files_touched = build_files_touched(
             goal_id=goal_id or "unknown",

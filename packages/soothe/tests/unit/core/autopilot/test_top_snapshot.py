@@ -191,3 +191,47 @@ def test_build_top_job_include_terminal_keeps_completed() -> None:
     assert {n["id"] for n in entry["dag"]["nodes"]} == {"j1", "g2"}
     assert entry["dag"]["edges"] == [{"source": "j1", "target": "g2"}]
     assert entry["loops"] == [{"loop_id": "L1", "status": "active", "goal_id": "j1"}]
+
+
+def test_sort_top_jobs_newest_first() -> None:
+    from soothe.autopilot.top_snapshot import sort_top_jobs
+
+    jobs = [
+        {"id": "old", "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "new", "created_at": "2026-08-05T12:00:00+00:00"},
+        {"id": "mid", "created_at": "2026-08-03T06:00:00Z"},
+        {"id": "missing"},
+    ]
+    ordered = sort_top_jobs(jobs)
+    assert [j["id"] for j in ordered] == ["new", "mid", "old", "missing"]
+
+
+def test_build_top_job_derives_active_when_child_running() -> None:
+    """Rail roots stay pending in CE; top should show active while work runs."""
+    entry = build_top_job_entry(
+        job_id="j1",
+        status="pending",
+        priority=80,
+        description="job root",
+        workspace="/ws",
+        dag={
+            "root_id": "j1",
+            "nodes": [
+                {"id": "j1", "status": "pending", "description": "job root"},
+                {"id": "g2", "status": "active", "description": "architecture"},
+            ],
+            "edges": [{"source": "j1", "target": "g2"}],
+        },
+        loops=[
+            {
+                "seq": 1,
+                "loop_id": "autopilot__j1__abc",
+                "goal_id": "g2",
+                "status": "active",
+            }
+        ],
+    )
+    assert entry is not None
+    assert entry["status"] == "active"
+    root = next(n for n in entry["dag"]["nodes"] if n["id"] == "j1")
+    assert root["status"] == "active"

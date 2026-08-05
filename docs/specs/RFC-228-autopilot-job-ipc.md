@@ -710,7 +710,7 @@ interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
   `include_terminal`.
 - Interactive single-char keys (IG-688): `a` all/active, `s` steps, `l` loops,
   `d` density, `+/-` delay, `Space` refresh, `j`/`k` scroll, `h` help.
-- Render ASCII tree: job → goal DAG → nested planned step DAG → loops under
+- Render ASCII tree: job → goal DAG → flat planned step list → loops under
   `JobLoopEntry.goal_id`. Show execution elapsed as `HH:MM:SS` from job
   `created_at` and loop `started_at`.
 - Empty `jobs` → header + “No active jobs” (or “No jobs” in all mode).

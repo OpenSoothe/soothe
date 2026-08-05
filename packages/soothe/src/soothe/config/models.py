@@ -177,13 +177,11 @@ class AutopilotConfig(BaseModel):
     max_retries: int = 2
     max_total_goals: int = Field(default=50, ge=1, le=500)
     max_goal_depth: int = Field(default=5, ge=1, le=10)
-    max_parallel_goals: int = Field(default=3, ge=1, le=10)
+    max_parallel_goals: int = Field(default=3, ge=1, le=32)
     enable_dynamic_goals: bool = Field(default=True)
-    # Concurrency cap for parallel goal execution. Enforced in two places:
-    # 1. ConcurrencyController in the runner (runner-side semaphore)
-    # 2. AutopilotService._execution_semaphore (service-side semaphore, RFC-222)
-    # Independent of `max_loops`: loops can be reused for lineage, so the
-    # number of in-flight executions can be lower than the loop pool size.
+    # Cap on goals scheduled at once (``AutopilotService._schedule_via_worker_pool``).
+    # Independent of ``max_loops`` (WorkerPool capacity). Runner-side
+    # ``ConcurrencyController`` uses ``agent.loop.concurrency.max_parallel_goals``.
 
     # === Orchestration (from old autopilot) ===
     max_send_backs: int = Field(default=3, ge=1, le=10)

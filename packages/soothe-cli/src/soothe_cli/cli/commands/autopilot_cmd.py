@@ -53,6 +53,8 @@ _STATUS_STYLE: dict[str, str] = {
     "cancelled": "dim red",
     "suspended": "bright_yellow",
     "blocked": "bright_yellow",
+    "awaiting_clarification": "bright_yellow",
+    "skipped": "dim",
     "running": "bold bright_green",
     "stopped": "dim red",
 }
@@ -469,6 +471,31 @@ def format_elapsed(started_at: Any, *, now: Any | None = None) -> str:
     return f"{hours:02d}:{mins:02d}:{secs:02d}"
 
 
+def _job_created_sort_key(job: dict) -> tuple[float, str]:
+    """Newest ``created_at`` first; missing timestamps sort last."""
+    from datetime import UTC, datetime
+
+    raw = job.get("created_at")
+    ts = float("-inf")
+    if isinstance(raw, datetime):
+        start = raw if raw.tzinfo is not None else raw.replace(tzinfo=UTC)
+        ts = start.timestamp()
+    elif raw not in (None, ""):
+        try:
+            start = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=UTC)
+            ts = start.timestamp()
+        except (TypeError, ValueError):
+            ts = float("-inf")
+    return (-ts, str(job.get("id") or ""))
+
+
+def _sort_jobs_newest_first(jobs: list[dict]) -> list[dict]:
+    """Order jobs for top forest: most recently created at the top."""
+    return sorted(jobs, key=_job_created_sort_key)
+
+
 @dataclass
 class TopViewState:
     """Interactive view flags for autopilot top (IG-688)."""
@@ -661,56 +688,44 @@ def _format_top_header(
     return [title, flags, legend, Text(rule, style=_STYLE_TREE)]
 
 
-def _format_step_forest(
+def _format_step_list(
     steps: dict,
     *,
     indent: str,
     lines: list[Text],
     trailing_siblings: int,
 ) -> None:
-    """Append nested planned step DAG lines under a goal."""
-    step_nodes = {
-        str(n["id"]): n for n in (steps.get("nodes") or []) if isinstance(n, dict) and n.get("id")
-    }
-    if not step_nodes:
-        return
-    step_edges = steps.get("edges") or []
-    step_children = _children_from_edges(list(step_edges))
-    targets = {str(e.get("target")) for e in step_edges if isinstance(e, dict)}
-    roots = [sid for sid in step_nodes if sid not in targets] or list(step_nodes.keys())
-    rendered: set[str] = set()
+    """Append planned steps as a flat list under a goal (space-efficient vs tree)."""
+    ordered_nodes: list[dict] = []
+    seen: set[str] = set()
+    for raw in steps.get("nodes") or []:
+        if not isinstance(raw, dict) or not raw.get("id"):
+            continue
+        sid = str(raw["id"])
+        if sid in seen:
+            continue
+        seen.add(sid)
+        ordered_nodes.append(raw)
 
-    def render_step(step_id: str, step_indent: str, is_last: bool, *, more_after: int) -> None:
-        node = step_nodes.get(step_id)
-        if not node or step_id in rendered:
-            return
-        rendered.add(step_id)
-        kids = [c for c in step_children.get(step_id, []) if c in step_nodes]
-        last_among_steps = is_last and more_after == 0 and not kids
-        branch = "└─ " if last_among_steps else "├─ "
-        child_indent = step_indent + ("    " if is_last and more_after == 0 else "│   ")
+    for i, node in enumerate(ordered_nodes):
+        is_last = (i == len(ordered_nodes) - 1) and trailing_siblings == 0
+        branch = "└─ " if is_last else "├─ "
         status = str(node.get("status", "pending"))
         desc = _preview_desc(node.get("description", ""), 40)
+        step_id = str(node["id"])
         sid = step_id if len(step_id) <= 12 else step_id[:12] + "…"
-        lines.append(
-            _text_line(
-                (step_indent, _STYLE_TREE),
-                (branch, _STYLE_TREE),
-                ("STEP ", _STYLE_STEP),
-                (f"[{sid}] ", _STYLE_STEP),
-                (f"{status:10s}", _status_style(status)),
-                (f'  "{desc}"', _STYLE_DIM),
-            )
-        )
-        for i, kid in enumerate(kids):
-            render_step(kid, child_indent, i == len(kids) - 1, more_after=more_after)
-
-    for i, sid in enumerate(roots):
-        render_step(sid, indent, i == len(roots) - 1, more_after=trailing_siblings)
-
-    orphans = [sid for sid in step_nodes if sid not in rendered]
-    for i, sid in enumerate(orphans):
-        render_step(sid, indent, i == len(orphans) - 1, more_after=trailing_siblings)
+        deps = [str(d) for d in (node.get("dependencies") or []) if d]
+        parts: list[tuple[str, str | None]] = [
+            (indent, _STYLE_TREE),
+            (branch, _STYLE_TREE),
+            ("STEP ", _STYLE_STEP),
+            (f"[{sid}] ", _STYLE_STEP),
+            (f"{status:10s}", _status_style(status)),
+            (f'  "{desc}"', _STYLE_DIM),
+        ]
+        if deps:
+            parts.append((f"  ←{','.join(deps[:3])}", _STYLE_META))
+        lines.append(_text_line(*parts))
 
 
 def _format_top_forest(
@@ -720,8 +735,13 @@ def _format_top_forest(
     show_loops: bool = True,
     include_terminal: bool = False,
 ) -> list[Text]:
-    """Render jobs → goal DAG → step DAG → loops as colored Rich Text rows."""
-    jobs = snapshot.get("jobs") or []
+    """Render jobs → goal DAG → step DAG → loops as colored Rich Text rows.
+
+    Jobs are shown newest-first (by ``created_at``) so the latest job sits at
+    the top of the forest.
+    """
+    raw_jobs = [j for j in (snapshot.get("jobs") or []) if isinstance(j, dict)]
+    jobs = _sort_jobs_newest_first(raw_jobs)
     if not jobs:
         msg = "No jobs." if include_terminal else "No active jobs."
         return [Text(msg, style="dim italic")]
@@ -793,7 +813,7 @@ def _format_top_forest(
             )
             trailing = len(goal_loops) + len(child_ids)
             if steps_blob:
-                _format_step_forest(
+                _format_step_list(
                     steps_blob,
                     indent=child_indent,
                     lines=lines,

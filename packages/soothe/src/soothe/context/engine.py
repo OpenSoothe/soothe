@@ -1016,6 +1016,16 @@ class ContextEngine:
             step.plan_iteration = plan_iteration
             goal.steps.add_step(step)
 
+    async def activate_step(self, goal_id: str, step_id: str) -> None:
+        """Mark a pending step as actively executing (live monitor / top)."""
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            return
+        if step_id not in goal.steps.nodes:
+            return
+        goal.steps.mark_active(step_id)
+        goal.updated_at = datetime.now(UTC)
+
     async def complete_step(
         self,
         goal_id: str,

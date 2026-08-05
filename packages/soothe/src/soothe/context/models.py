@@ -30,7 +30,7 @@ GoalStatus = Literal[
 TERMINAL_STATES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 BLOCKED_STATES: frozenset[str] = frozenset({"awaiting_clarification", "suspended"})
 
-StepStatus = Literal["pending", "completed", "failed", "skipped"]
+StepStatus = Literal["pending", "active", "completed", "failed", "skipped"]
 
 MAX_GOAL_DEPTH = 5
 
@@ -122,6 +122,12 @@ class StepDAG(BaseModel):
 
     def pending_step_ids(self) -> set[str]:
         return {cid for cid, n in self.nodes.items() if n.status == "pending"}
+
+    def mark_active(self, step_id: str) -> None:
+        """Mark a pending step as actively executing (live UI / top)."""
+        node = self.nodes.get(step_id)
+        if node is not None and node.status == "pending":
+            node.status = "active"
 
     def mark_completed(self, step_id: str, execution: StepExecution) -> None:
         node = self.nodes.get(step_id)
