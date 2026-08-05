@@ -1573,35 +1573,34 @@ class AutopilotService:
         }
 
     async def dag_snapshot(self, root_goal_id: str) -> dict[str, Any]:
-        """Export DAG structure for visualization (RFC-228).
+        """Export job subtree for visualization (RFC-228 / CLI top).
 
-        Returns a structure suitable for React Flow rendering with
-        nodes containing goal details and edges for dependencies.
+        Membership is the ``parent_id`` subtree (same as cancel / rail
+        descendants). Tree ``edges`` are parent → child so CLI ``job`` /
+        ``top`` can nest internal goals. Per-node ``depends_on`` remains
+        scheduling metadata (do not invert it into tree edges — rail often
+        makes the root depend on a child planner).
 
         Args:
             root_goal_id: Root goal ID (job_id) to traverse from.
 
         Returns:
-            Dict with 'nodes' and 'edges' arrays for DAG visualization.
+            Dict with ``nodes``, ``edges``, and ``root_id``.
             Nodes contain: id, description, status, priority, depends_on,
-            assigned_loop_id, steps_completed, steps_total, tool_calls,
-            summary (if completed), findings (if completed).
-            Edges contain: source, target for dependency relationships.
+            parent_id, assigned_loop_id, steps_completed, steps_total,
+            tool_calls, optional ``steps`` StepDAG, summary/findings when
+            completed.
+            Edges contain: source=parent_id, target=child id.
         """
         goals = await self._ce.list_goals()
+        goal_by_id: dict[str, GoalNode] = {g.id: g for g in goals}
 
-        # Build parent → children map from depends_on relationships
+        # parent_id hierarchy (job membership) — not depends_on inversion
         children_map: dict[str, list[str]] = {}
-        goal_by_id: dict[str, GoalNode] = {}
-
         for g in goals:
-            goal_by_id[g.id] = g
-            for dep_id in g.depends_on or []:
-                if dep_id not in children_map:
-                    children_map[dep_id] = []
-                children_map[dep_id].append(g.id)
+            if g.parent_id:
+                children_map.setdefault(g.parent_id, []).append(g.id)
 
-        # Traverse descendants of root goal
         descendants: list[GoalNode] = []
         visited: set[str] = set()
         queue = [root_goal_id]
@@ -1616,7 +1615,6 @@ class AutopilotService:
             if goal is not None:
                 descendants.append(goal)
 
-            # Add children to queue
             for child_id in children_map.get(current_id, []):
                 if child_id not in visited:
                     queue.append(child_id)
@@ -1631,6 +1629,7 @@ class AutopilotService:
                 "status": g.status,
                 "priority": g.priority,
                 "depends_on": list(g.depends_on or []),
+                "parent_id": g.parent_id,
                 "assigned_loop_id": g.assigned_loop_id,
                 "steps_completed": step_payload["steps_completed"],
                 "steps_total": step_payload["steps_total"],
@@ -1655,11 +1654,11 @@ class AutopilotService:
                     node["findings"] = report.get("findings") or []
             nodes.append(node)
 
-        # Build edges from depends_on relationships
+        # Hierarchy edges for ASCII / React tree (parent → child)
         edges: list[dict[str, str]] = []
         for g in descendants:
-            for dep_id in g.depends_on or []:
-                edges.append({"source": dep_id, "target": g.id})
+            if g.parent_id and g.parent_id in visited:
+                edges.append({"source": g.parent_id, "target": g.id})
 
         return {
             "nodes": nodes,

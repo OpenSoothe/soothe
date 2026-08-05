@@ -678,6 +678,10 @@ interval (CLI default 1.0s) and redraw. Existing `job_status` / `job_dag` /
 3. For each job, build `dag` via existing `dag_snapshot(job_id)` (includes
    planned `GoalNode.steps` StepDAG + live counts) and load
    `loops` via `list_job_loops(job_id)`. Include root `created_at`.
+   `dag_snapshot` membership is the **`parent_id` subtree** (same as cancel /
+   rail descendants). Tree `edges` are `parent → child`. Per-node
+   `depends_on` is scheduling metadata only — do not invert it into tree
+   edges (rails often make the root depend on a child planner).
 4. Apply **active filters** (server SoT):
    - Goal / job visibility uses CE `TERMINAL_STATES`
      (`completed`, `failed`, `cancelled`). Non-terminal includes
