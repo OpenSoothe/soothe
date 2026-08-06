@@ -28,13 +28,13 @@ async def test_rail_send_back_exhaust_fails_not_suspends() -> None:
 
 
 @pytest.mark.asyncio
-async def test_non_rail_send_back_exhaust_suspends() -> None:
+async def test_non_rail_send_back_exhaust_fails() -> None:
     ce = ContextEngine()
     goal = await ce.create_goal("solo", priority=50)
     goal.max_send_backs = 1
     goal.status = "active"
     updated = await ce.send_back_goal(goal.id, reason="thin evidence")
-    assert updated.status == "suspended"
+    assert updated.status == "failed"
     assert updated.send_back_count == 1
 
 

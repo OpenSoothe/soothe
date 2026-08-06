@@ -118,7 +118,8 @@ class AutopilotService:
                 goal whose workspace overlaps an active reservation. When
                 ``None``, no workspace gating is applied.
             consensus_model: Optional LLM for RFC-204 consensus validation.
-                When ``None``, completed goals suspend until a model is configured.
+                When ``None``, completed goals fail consensus (host recovery)
+                rather than parking for an operator (IG-707).
             goal_persist_store: Optional ``AsyncPersistStore`` for persisting
                 the ContextEngine DAG snapshot across daemon restarts.
                 Also backs the job↔loop membership index (IG-677).
@@ -1557,16 +1558,21 @@ class AutopilotService:
                         contribution=contribution,
                     )
                 elif outcome == "needs_replan":
-                    # IG-680: clarification / empty PlanResult → suspend, not fail.
+                    # IG-707: clarification / empty PlanResult → send_back (or
+                    # fail on budget exhaust), never operator-wait suspend.
                     narrative = (
                         str(data.get("evidence_summary", "")).strip()
                         or str(data.get("error_text", "")).strip()
                         or "Worker needs replan (insufficient terminal evidence)"
                     )
                     try:
-                        await self._ce.suspend_goal(goal_id, reason=narrative)
+                        await self._apply_send_back_or_fail(
+                            goal_id,
+                            reason=narrative,
+                            loop_id=worker.loop_id,
+                        )
                     except Exception:
-                        logger.exception("suspend_goal raised for needs_replan %s", goal_id)
+                        logger.exception("send_back/fail raised for needs_replan %s", goal_id)
                 else:  # failed
                     evidence = EvidenceBundle(
                         structured={
@@ -1648,6 +1654,28 @@ class AutopilotService:
         self._dispatch_tasks.pop(goal_id, None)
         await self._persist_goals()
 
+    async def _apply_send_back_or_fail(
+        self,
+        goal_id: str,
+        *,
+        reason: str,
+        loop_id: str | None = None,
+    ) -> None:
+        """Send goal back for rework, or fail + notify when budget is exhausted.
+
+        IG-707: never suspend for operator resume on consensus / replan paths.
+        """
+        updated = await self._ce.send_back_goal(goal_id, reason=reason)
+        if updated.status == "failed":
+            await self._emit_goal_failed(
+                goal_id,
+                error_message=reason,
+                loop_id=loop_id,
+            )
+            await self._maybe_emit_dag_idle(goal_id)
+        else:
+            await self._notify_rail("goal_send_back", goal_id, reason=reason)
+
     async def _apply_consensus_and_finalize(
         self,
         goal_id: str,
@@ -1656,10 +1684,11 @@ class AutopilotService:
         loop_id: str | None = None,
         contribution: Any | None = None,
     ) -> None:
-        """RFC-204 / IG-680: validate worker completion before accepting the goal.
+        """RFC-204 / IG-680 / IG-707: validate worker completion before accepting.
 
         Never falls back to ``goal.description`` as the agent response when
         evidence is empty — that path caused false send_backs in eval.
+        Decisions are accept / send_back / fail only (automatic; no operator park).
         """
         from soothe.autopilot.verify.consensus import evaluate_goal_completion
         from soothe.autopilot.verify.evidence_grounding import (
@@ -1690,12 +1719,13 @@ class AutopilotService:
             grounded = f"{grounded}\n{probe}".strip() if grounded else probe
         if not grounded:
             reason = "insufficient evidence for consensus (empty summary and workspace probe)"
-            logger.warning("Consensus suspend for %s: %s", goal_id, reason)
+            logger.warning("Consensus send_back for %s: %s", goal_id, reason)
             try:
-                await self._ce.suspend_goal(goal_id, reason=reason)
+                await self._apply_send_back_or_fail(goal_id, reason=reason, loop_id=loop_id)
             except Exception:
                 logger.exception(
-                    "suspend_goal raised after empty consensus evidence for %s", goal_id
+                    "send_back/fail raised after empty consensus evidence for %s",
+                    goal_id,
                 )
             return
 
@@ -1743,7 +1773,7 @@ class AutopilotService:
                 )
             except Exception:
                 logger.exception("Consensus evaluation failed for goal %s", goal_id)
-                decision, reasoning = "suspend", "Consensus evaluation failed"
+                decision, reasoning = "fail", "Consensus evaluation failed"
 
             # Soft probes may ground the LLM; do not hard-accept via language-
             # specific tools for rail-bound goals (policy lives in rails / maturity).
@@ -1776,19 +1806,9 @@ class AutopilotService:
                 await self._maybe_assess_job_maturity(goal_id)
                 await self._maybe_emit_dag_idle(goal_id)
             elif decision == "send_back":
-                updated = await self._ce.send_back_goal(goal_id, reason=reasoning)
-                if updated.status == "failed":
-                    # Rail-bound send-back budget exhausted → LoopRail recovery.
-                    await self._emit_goal_failed(
-                        goal_id,
-                        error_message=reasoning,
-                        loop_id=loop_id,
-                    )
-                    await self._maybe_emit_dag_idle(goal_id)
-                else:
-                    await self._notify_rail("goal_send_back", goal_id, reason=reasoning)
-            elif rail_bound:
-                # Rail jobs: treat consensus suspend as failed so rails recover.
+                await self._apply_send_back_or_fail(goal_id, reason=reasoning, loop_id=loop_id)
+            else:
+                # fail (or any unexpected non-accept/send_back) — host recovery.
                 await self._ce.fail_goal(goal_id, error=reasoning)
                 await self._emit_goal_failed(
                     goal_id,
@@ -1796,8 +1816,6 @@ class AutopilotService:
                     loop_id=loop_id,
                 )
                 await self._maybe_emit_dag_idle(goal_id)
-            else:
-                await self._ce.suspend_goal(goal_id, reason=reasoning)
         except Exception:
             logger.exception("Goal transition failed after consensus for %s", goal_id)
 

@@ -180,7 +180,7 @@ class TestWireDependencies:
 
 class TestConsensusEmptyEvidence:
     @pytest.mark.asyncio
-    async def test_empty_evidence_suspends_without_description_fallback(self) -> None:
+    async def test_empty_evidence_send_backs_without_description_fallback(self) -> None:
         bus = InternalEventBus()
         ce = ContextEngine()
         svc = AutopilotService(
@@ -200,10 +200,8 @@ class TestConsensusEmptyEvidence:
 
         updated = await ce.get_goal(goal.id)
         assert updated is not None
-        assert updated.status == "suspended"
-        assert "insufficient evidence" in (updated.error or updated.status or "") or True
-        # Suspended goals keep status suspended; reason is in suspend path logs / error field.
-        assert updated.status == "suspended"
+        assert updated.status == "pending"
+        assert updated.send_back_count == 1
 
     @pytest.mark.asyncio
     async def test_workspace_probe_grounds_consensus(self, tmp_path: Path) -> None:

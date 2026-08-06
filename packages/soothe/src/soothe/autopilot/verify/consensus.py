@@ -1,7 +1,9 @@
-"""RFC-204: Consensus loop for Autopilot validation of StrangeLoop completions.
+"""RFC-204 / IG-707: Consensus loop for Autopilot validation of StrangeLoop completions.
 
 Autopilot validates StrangeLoop's "done" judgment before accepting goal completion.
-If not satisfied, Autopilot can send the goal back with refined instructions.
+If not satisfied, Autopilot send_backs the goal with refined instructions, or fails
+it so host recovery (monitor / LoopRail / engine health) can act — never parks for
+an operator mid-goal.
 """
 
 from __future__ import annotations
@@ -18,14 +20,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-ConsensusDecision = Literal["accept", "send_back", "suspend"]
+ConsensusDecision = Literal["accept", "send_back", "fail"]
 
 
 class ConsensusVerdict(BaseModel):
     """Structured consensus outcome (RFC-630 — no free-text decision parsing)."""
 
     decision: ConsensusDecision = Field(
-        description="accept if complete; send_back to retry; suspend if blocked"
+        description="accept if complete; send_back to retry; fail if blocked/unrecoverable"
     )
     reasoning: str = Field(
         default="",
@@ -43,7 +45,7 @@ async def evaluate_goal_completion(
     evidence_summary: str = "",
     model: BaseChatModel | None = None,
 ) -> tuple[ConsensusDecision, str]:
-    """RFC-204: Holistic evaluation of goal completion via structured LLM.
+    """RFC-204 / IG-707: Holistic evaluation of goal completion via structured LLM.
 
     Args:
         goal_description: The original goal text.
@@ -53,7 +55,7 @@ async def evaluate_goal_completion(
 
     Returns:
         Tuple of (decision, reasoning).
-        decision is "accept", "send_back", or "suspend".
+        decision is "accept", "send_back", or "fail".
 
     Raises:
         ConsensusEvaluationError: When ``model`` is missing or the LLM call fails.
@@ -117,7 +119,7 @@ def _build_consensus_prompt(
     """Build prompt for structured consensus evaluation.
 
     Pass full response/evidence into the judge prompt (IG-690). Do not clip
-    with ``preview_first`` here — truncation caused false ``suspend`` when the
+    with ``preview_first`` here — truncation caused false ``fail`` when the
     model mistook the preview for incomplete work.
 
     Args:
@@ -141,8 +143,9 @@ def _build_consensus_prompt(
         "- accept: the goal appears completed satisfactorily\n"
         "- send_back: more verification detail is needed, or the agent should "
         "retry with a different approach\n"
-        "- suspend: the goal appears fundamentally blocked or needs external input\n"
-        "Do not choose suspend solely because the narrative is short when evidence "
+        "- fail: the goal appears fundamentally blocked or unrecoverable by "
+        "further agent retries (host recovery will decide next steps)\n"
+        "Do not choose fail solely because the narrative is short when evidence "
         "lists commits, files, tool results, or workspace probe hits. Prefer "
         "send_back when more verification detail is needed.\n"
         "Provide a brief reasoning string."

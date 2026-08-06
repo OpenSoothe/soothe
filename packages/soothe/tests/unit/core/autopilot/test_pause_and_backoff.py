@@ -75,16 +75,16 @@ async def test_retry_failed_goal_then_exhaust() -> None:
 
 
 @pytest.mark.asyncio
-async def test_recover_increments_crash_attempts_and_suspends_over_budget() -> None:
+async def test_recover_increments_crash_attempts_and_fails_over_budget() -> None:
     ce = ContextEngine()
     goal = await ce.create_goal("active-ish", max_retries=0)
     goal.status = "active"
     goal.assigned_loop_id = "loop-x"
 
     recovered = await ce.recover()
-    # max_retries=0 → attempts_after_crash=1 > 0 → suspended, not in recovered list
+    # max_retries=0 → attempts_after_crash=1 > 0 → failed, not in recovered list
     assert goal.id not in recovered
     after = await ce.get_goal(goal.id)
     assert after is not None
-    assert after.status == "suspended"
+    assert after.status == "failed"
     assert after.attempts_after_crash == 1

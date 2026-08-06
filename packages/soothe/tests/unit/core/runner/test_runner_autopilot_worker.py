@@ -67,7 +67,7 @@ class _BareMixin(AutopilotWorkerMixin):
 
 class TestDeriveOutcome:
     def test_none_plan_result_is_needs_replan(self) -> None:
-        # IG-680: empty/clarification terminal → needs_replan (suspend), not fail
+        # IG-680 / IG-707: empty/clarification terminal → needs_replan (host send_back)
         assert AutopilotWorkerMixin._derive_outcome(None) == "needs_replan"
 
     def test_status_continue_is_needs_replan(self) -> None:

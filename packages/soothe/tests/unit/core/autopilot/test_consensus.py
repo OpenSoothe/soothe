@@ -40,7 +40,8 @@ class TestConsensusPrompt:
     def test_prompt_includes_instructions(self) -> None:
         prompt = _build_consensus_prompt("Goal", "Response", "")
         assert "send_back" in prompt.lower()
-        assert "suspend" in prompt.lower()
+        assert "fail" in prompt.lower()
+        assert "suspend" not in prompt.lower()
         assert "accept" in prompt.lower()
         assert "prefer send_back" in prompt.lower()
         assert "fundamentally blocked" in prompt.lower()
@@ -84,21 +85,19 @@ class TestEvaluateGoalCompletion:
         assert decision == "send_back"
         assert "missing key analysis" in reasoning.lower()
 
-    async def test_suspend_with_structured_verdict(self) -> None:
+    async def test_fail_with_structured_verdict(self) -> None:
         mock_model = MagicMock()
         with patch(
             "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
             new_callable=AsyncMock,
-            return_value=ConsensusVerdict(
-                decision="suspend", reasoning="Needs external credentials."
-            ),
+            return_value=ConsensusVerdict(decision="fail", reasoning="Needs external credentials."),
         ):
             decision, reasoning = await evaluate_goal_completion(
                 goal_description="Deploy to prod",
                 response_text="Blocked on secrets.",
                 model=mock_model,
             )
-        assert decision == "suspend"
+        assert decision == "fail"
         assert "credentials" in reasoning.lower()
 
     async def test_missing_model_raises(self) -> None:

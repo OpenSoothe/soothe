@@ -123,7 +123,7 @@ This means the runner no longer manages multi-goal orchestration internally — 
 The runner resolves multiple model instances for different purposes:
 
 - **`fast`** — intent classification (falls back to disabled if unavailable)
-- **`think`** — consensus loop for goal validation (RFC-204); falls back to suspending goals if unavailable
+- **`think`** — consensus loop for goal validation (RFC-204); if unavailable, completed goals fail consensus so host recovery can act (not operator suspend)
 - **`default`** — quiz fallback and planner resolution
 
 Each model is created in a try/except — if a role isn't configured, the runner degrades gracefully rather than failing at startup.
@@ -170,7 +170,7 @@ Custom events are built via `custom_event(data)` from the event system. See [Eve
 
 - **PostgreSQL / SQLite require `cleanup()`** — without `runner.cleanup()`, PostgreSQL leaks pool connections and SQLite leaves an ``aiosqlite`` non-daemon thread that can prevent process exit.
 - **Intent classification needs the `fast` model** — without it, all queries go through the agentic loop, including simple questions that could be answered directly.
-- **The consensus model (`think`) affects goal validation** — if unavailable, goal validation suspends goals rather than validating them. This can cause goals to stall.
+- **The consensus model (`think`) affects goal validation** — if unavailable, consensus fails the goal (host recovery) rather than parking it for an operator.
 - **Thread workspace is per-stream** — `resolve_workspace_for_stream()` resolves a workspace for each stream, not globally. Anonymous users get ephemeral TEMP workspaces.
 
 ---

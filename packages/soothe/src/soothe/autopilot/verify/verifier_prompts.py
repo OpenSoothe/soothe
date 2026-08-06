@@ -68,8 +68,9 @@ Output JSON structure (strict format):
 
 Constraints:
 - reset_goals: Goals stuck in pending/suspended/failed that should retry —
-  NEVER reset goals suspended after consensus send_back budget exhaustion
-  (send_back_count >= max_send_backs); those need operator resume, not auto-reset.
+  NEVER reset goals suspended after legacy consensus send_back budget
+  exhaustion (send_back_count >= max_send_backs); those are terminal for
+  operator-pause paths — new exhaustions fail and use engine recovery.
   Do reset ordinary suspended/blocked goals whose dependencies are satisfied
   and that are not send_back-exhausted.
   DO reset failed non-root workers when all hard deps are completed and a

@@ -97,7 +97,7 @@ Autopilot validates StrangeLoop's completion judgment:
    - Evidence quality and completeness
    - Success criteria satisfaction
    - Finding coherence
-3. Autopilot decides: accept, send back, or suspend
+3. Autopilot decides: accept, send back, or fail
 
 **Send-Back Mechanics**:
 - Separate send-back budget per goal (default: 3 rounds)
@@ -107,12 +107,12 @@ Autopilot validates StrangeLoop's completion judgment:
 **Budget Exhaustion**:
 - Budget is **per subgoal** (`GoalNode.send_back_count` /
   `max_send_backs`), never the job root’s counter.
-- **Non-rail goals**: Suspended goals preserved with current state; continue
-  with other ready goals; operator `resume` reactivates and resets the budget.
-- **Rail-bound goals** (`rail_id` set on the goal or its job root): exhaustion
-  MUST transition the subgoal to **`failed`** and emit `goal_failed` to
-  LoopRail (not silent `suspended`). LoopRail owns recovery (e.g. `retry_maker`).
-  DAG health MUST NOT auto-reset send-back-exhausted goals.
+- Exhaustion MUST transition the subgoal to **`failed`** and emit
+  `goal_failed` so host recovery can act (LoopRail / monitor backoff /
+  engine health). Autopilot MUST NOT park goals in `suspended` awaiting
+  an operator for consensus judgment (IG-707).
+- DAG health MUST NOT auto-reset legacy send-back-exhausted *suspended*
+  goals; failed workers use engine recovery (IG-697) when deps allow.
 - Autopilot MUST NOT encode tool- or VCS-specific “done” gates (git commit,
   cargo, pytest hard-accept) as engine consensus overrides for rail jobs —
   those policies live in rails / host maturity probes (RFC-230), not Layer 3
@@ -124,28 +124,28 @@ Autopilot validates StrangeLoop's completion judgment:
 |----------|------------|---------|
 | **Accept** | Evidence satisfies success criteria; high confidence (>0.8); no unresolved blockers | Goal → `validated` / `completed` state |
 | **Send back** | Evidence incomplete; low confidence (<0.8); minor gaps in findings | Refined instructions → StrangeLoop retry; count toward budget |
-| **Suspend** | Unrecoverable blocker; external dependency required (non-rail) | Goal → `suspended`, await operator |
-| **Fail (rail exhaust)** | Send-back budget exhausted on a rail-bound subgoal | Goal → `failed`; LoopRail `goal_failed` recovery |
+| **Fail** | Unrecoverable blocker; send-back budget exhausted; consensus judge error | Goal → `failed`; host recovery (LoopRail / monitor / engine) |
 
-**Suspension Triggers** (explicit conditions):
-1. Send-back budget exhausted on a **non-rail** goal (3 rounds without acceptable result)
-2. External blocker identified (user input required, resource unavailable)
-3. Dependency on suspended/blocked goal
-4. Unrecoverable error (tool failure, permission denied, timeout exceeded)
+**Failure / park triggers** (explicit conditions):
 
-**Rail-bound exhaustion** uses **fail** (trigger 1 variant), not suspend — see
-LoopRail design draft / IG-693.
+1. Send-back budget exhausted on any goal → **fail** (not suspend)
+2. Consensus judge reports fundamentally blocked / unrecoverable → **fail**
+3. Empty grounded evidence → **send_back** (then fail on budget exhaust)
+4. Dependency on suspended/blocked goal → scheduler **blocked** (not consensus)
+5. Explicit job pause (`pause_job`, rail `pause_for_user`) → **suspend** (job-level only)
 
-> **Implementation Note**: The reflection LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). Reflection prompts include: goal description, success criteria, accumulated evidence, StrangeLoop confidence score, and iteration history. The decision output is structured (`decision: accept | send_back | suspend`, `reasoning: string`, `refined_instructions: string?`).
+> **Implementation Note**: The reflection LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). Reflection prompts include: goal description, success criteria, accumulated evidence, StrangeLoop confidence score, and iteration history. The decision output is structured (`decision: accept | send_back | fail`, `reasoning: string`, `refined_instructions: string?`).
 >
-> **Evidence grounding (normative; IG-680)**: Consensus MUST NOT treat an empty
+> **Evidence grounding (normative; IG-680 / IG-707)**: Consensus MUST NOT treat an empty
 > evidence summary by substituting the goal description as the “agent response”
 > (that path produces false `send_back` loops). Acceptable evidence includes
 > non-empty `PlanResult.evidence_summary`, `GoalDispatchContextContribution`
 > (`files_touched`, findings, tool stats), and/or a workspace artifact probe when
-> `GoalNode.workspace` is set. Headless clarification deferral MUST map to
-> `suspend` / `needs_replan`, not `failed` with narrative `"no narrative"`.
-> See [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) AH-2.
+> `GoalNode.workspace` is set. Headless clarification deferral / empty terminal
+> MUST map to `needs_replan` → host `send_back` (or `fail` on budget), not
+> operator-wait `suspend` and not `failed` with narrative `"no narrative"`.
+> See [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) AH-2,
+> [IG-707](../impl/IG-707-autopilot-automatic-consensus-no-operator-suspend.md).
 
 ### 1.4 Termination → Dreaming Transition
 
@@ -222,20 +222,20 @@ MUST goals queue for user confirmation before creation.
 | active | Being executed | pending → activated |
 | validated | Autopilot accepted completion | active → accepted |
 | completed | Finished successfully | validated → reported |
-| failed | Unrecoverable error | active → error |
-| suspended | Budget exhausted, needs context | active → exhausted |
-| blocked | External input needed | active → blocked |
+| failed | Unrecoverable / budget exhausted | active → error / exhaust |
+| suspended | Explicit job pause (operator / rail) | pause_job / pause_for_user |
+| blocked | Waiting on deps / external gate | active → blocked |
 
 **State Transitions**:
 
 ```
 pending → active           (ready_goals() activates)
 active → validated         (Autopilot accepts completion)
-active → suspended         (send-back budget exhausted)
-active → blocked           (external input needed)
-active → failed            (unrecoverable error)
-suspended → pending        (dependencies resolved)
-blocked → pending          (external input received)
+active → failed            (send-back budget exhausted / consensus fail / unrecoverable)
+active → suspended         (explicit job pause only)
+active → blocked           (dependency / external gate)
+suspended → pending        (resume_job / deps resolved)
+blocked → pending          (deps / gate cleared)
 validated → completed      (reporting done)
 ```
 
@@ -530,7 +530,7 @@ agent:
 | `soothe.autopilot.dreaming_entered` | `timestamp` | Entered dreaming mode |
 | `soothe.autopilot.dreaming_exited` | `timestamp`, `trigger` | Exited dreaming |
 | `soothe.autopilot.goal_validated` | `goal_id`, `confidence` | Autopilot accepted |
-| `soothe.autopilot.goal_suspended` | `goal_id`, `reason` | Budget exhausted |
+| `soothe.autopilot.goal_suspended` | `goal_id`, `reason` | Explicit job pause |
 | `soothe.autopilot.send_back` | `goal_id`, `remaining_budget`, `feedback` | Sent back to StrangeLoop |
 | `soothe.autopilot.relationship_detected` | `from_goal`, `to_goal`, `type`, `confidence` | Auto-detected relationship |
 | `soothe.autopilot.checkpoint.saved` | `thread_id`, `trigger` | Checkpoint persisted |

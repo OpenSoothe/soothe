@@ -615,10 +615,9 @@ class ContextEngine:
     async def send_back_goal(self, goal_id: str, reason: str = "") -> GoalNode:
         """Return goal to pending after consensus rejection.
 
-        Increments send_back_count. When budget is exhausted:
-        - Rail-bound goals (``rail_id`` on goal or job root) → ``failed`` so
-          LoopRail can recover (IG-693).
-        - Otherwise → ``suspended`` for operator resume (RFC-204).
+        Increments send_back_count. When budget is exhausted, transitions to
+        ``failed`` so host recovery (LoopRail / monitor / engine health) can
+        act — never operator-wait ``suspended`` (IG-707; unifies IG-693).
 
         Args:
             goal_id: Goal to send back.
@@ -637,10 +636,7 @@ class ContextEngine:
         goal.send_back_count += 1
         if goal.send_back_count >= goal.max_send_backs:
             exhaust_reason = reason or "send_back budget exhausted"
-            if self._goal_is_rail_bound(goal):
-                await self.fail_goal(goal_id, error=exhaust_reason)
-            else:
-                await self.suspend_goal(goal_id, reason=exhaust_reason)
+            await self.fail_goal(goal_id, error=exhaust_reason)
             return goal
 
         # Validate that the goal can transition back to pending.
@@ -663,23 +659,6 @@ class ContextEngine:
             reason,
         )
         return goal
-
-    def _goal_is_rail_bound(self, goal: Any) -> bool:
-        """True when the goal or its job root has ``rail_id`` set."""
-        cur = goal
-        seen: set[str] = set()
-        while cur is not None:
-            gid = getattr(cur, "id", None)
-            if gid is None or gid in seen:
-                break
-            seen.add(gid)
-            if getattr(cur, "rail_id", None):
-                return True
-            parent_id = getattr(cur, "parent_id", None)
-            if not parent_id:
-                break
-            cur = self._dag.get_goal(parent_id)
-        return False
 
     def _append_goal_guidance(
         self,
@@ -1304,21 +1283,21 @@ class ContextEngine:
         """Reset goals stuck in 'active' to 'pending' after crash.
 
         Goals whose ``attempts_after_crash`` exceeds ``max_retries`` are
-        suspended instead of requeued (IG-678 P1-3).
+        failed so host recovery can act (IG-707; was suspend / operator wait).
         """
         recovered = self._dag.recover_active_goals()
-        suspended: list[str] = []
+        failed: list[str] = []
         for goal_id in list(recovered):
             goal = self._dag.get_goal(goal_id)
             if goal is None:
                 continue
             if goal.attempts_after_crash > goal.max_retries:
-                await self.suspend_goal(
+                await self.fail_goal(
                     goal_id,
-                    reason=(
+                    error=(
                         f"crash recovery budget exhausted "
                         f"({goal.attempts_after_crash}/{goal.max_retries})"
                     ),
                 )
-                suspended.append(goal_id)
-        return [gid for gid in recovered if gid not in suspended]
+                failed.append(goal_id)
+        return [gid for gid in recovered if gid not in failed]

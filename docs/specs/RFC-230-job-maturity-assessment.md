@@ -68,7 +68,7 @@ structured evaluation as a future enhancement; that enhancement is this RFC.
 
 ```text
 goal_completed
-  → per-goal consensus (RFC-204)          # child accept / send_back / suspend
+  → per-goal consensus (RFC-204)          # child accept / send_back / fail
   → CE.complete_goal (if accept)
   → notify_rail(goal_completed)           # only spawner for rail jobs
   → if qa/verify-class: JobMaturityAssessor → CE + rail acceptance_met
@@ -222,7 +222,7 @@ job-scoped restructuring).
 
 ## 10. Consensus relationship (RFC-204)
 
-Unchanged for **non-rail child** goals: accept / send_back / suspend.
+Unchanged for **non-rail child** goals: accept / send_back / fail (IG-707).
 
 Rail-bound children (IG-693):
 
