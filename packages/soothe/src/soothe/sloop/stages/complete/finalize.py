@@ -468,9 +468,9 @@ async def node_goal_completion(
     # so the runner emits the final answer to the wire (RFC-225/RFC-226: the bootstrap
     # path arrives here with PlanResult.status="continue", which would otherwise
     # suppress loop_assistant_messages_chunk emission).
-    # Seed evidence_summary from full_output when empty so autopilot consensus can
-    # ground no-artifact successes (stdout / ledger answers) without falling back
-    # to the goal description.
+    # Seed evidence_summary from full_output when empty so the autopilot wire
+    # carries the StrangeLoop response for consensus (goal text vs response;
+    # IG-710) without substituting the goal description.
     seeded_evidence = (plan_result.evidence_summary or "").strip()
     if not seeded_evidence and (final_output or "").strip():
         seeded_evidence = str(final_output).strip()[:2048]

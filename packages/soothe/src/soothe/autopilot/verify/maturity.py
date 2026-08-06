@@ -13,8 +13,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from soothe.autopilot.verify.evidence_grounding import workspace_pytest_probe
-
 logger = logging.getLogger(__name__)
 
 MaturityLevel = Literal[
@@ -299,6 +297,33 @@ def _probe_cargo(workspace: Path, *, timeout_s: float = 120.0) -> list[MaturityC
             )
         )
     return criteria
+
+
+def workspace_pytest_probe(workspace: str | None, *, timeout_s: float = 60.0) -> str:
+    """Run ``python -m pytest -q`` when ``pyproject.toml`` + ``tests/`` exist.
+
+    Job-maturity structural probe only (RFC-230) — not per-goal consensus input.
+    """
+    if not workspace or not str(workspace).strip():
+        return ""
+    root = Path(workspace).expanduser()
+    if not root.is_dir():
+        return ""
+    if not (root / "pyproject.toml").is_file():
+        return ""
+    tests_dir = root / "tests"
+    if not tests_dir.is_dir():
+        return ""
+    code, summary = _run_cmd(
+        ["python", "-m", "pytest", "-q", "--tb=no"],
+        cwd=root,
+        timeout_s=timeout_s,
+    )
+    if summary.startswith("probe error:"):
+        logger.debug("pytest probe skipped for %s: %s", root, summary)
+        return ""
+    status = "PASS" if code == 0 else "FAIL"
+    return f"pytest -q: {status} ({summary})"
 
 
 def _probe_python(workspace: Path) -> list[MaturityCriterion]:

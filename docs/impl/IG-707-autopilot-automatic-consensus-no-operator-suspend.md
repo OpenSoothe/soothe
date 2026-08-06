@@ -7,7 +7,8 @@
 [IG-690](IG-690-consensus-pass-full-evidence.md),
 [IG-691](IG-691-integrate-thrash-rail-tag-loss.md),
 [IG-693](IG-693-rail-subgoal-consensus-exhaustion-recovery.md),
-[IG-697](IG-697-engine-deadlock-recovery.md)
+[IG-697](IG-697-engine-deadlock-recovery.md),
+[IG-710](IG-710-consensus-trust-sloop-response.md)
 
 ---
 
@@ -27,7 +28,9 @@ not for completion judgment.
 ## Design rules
 
 1. Consensus structured verdict: `accept | send_back | fail` (drop `suspend`).
-2. Empty grounded evidence → `send_back` (not suspend); budget exhaust → fail.
+2. Consensus judge input is goal text + StrangeLoop response (IG-710); no host
+   workspace evidence-grounding gate. Judge may `send_back` on thin response;
+   budget exhaust → fail.
 3. Consensus LLM / missing model → `fail` (not suspend).
 4. Send-back budget exhaust → **always** `fail` (unify non-rail with IG-693 rail).
 5. Worker `needs_replan` → `send_back` / fail on exhaust (not suspend).
@@ -59,7 +62,8 @@ not for completion judgment.
 ## Test plan
 
 - Consensus prompt / structured verdict tests use `fail` not `suspend`
-- Empty evidence → pending (send_back) or failed (exhaust), never suspended
+- Thin/empty sloop response → judge may send_back (pending) or fail on exhaust; never suspended
+- No workspace-marker / pytest grounding required before consensus runs (IG-710)
 - Non-rail send_back exhaust → failed
 - Crash recover over budget → failed
 - Health still skips legacy suspended+send_back-exhausted; ordinary suspend OK

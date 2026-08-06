@@ -23,7 +23,6 @@ from soothe.autopilot.monitor.models import (
     MergeSuggestion,
     WireDependencySuggestion,
 )
-from soothe.autopilot.verify.evidence_grounding import workspace_has_deliverables
 from soothe.autopilot.verify.verifier_reasoner import (
     CompletionVerificationContext,
     DagSnapshot,
@@ -353,22 +352,6 @@ class GoalDAGVerifier:
                 "skip_decompose": True,
             }
 
-        # Skip further decompose when workspace already shows deliverables.
-        if workspace_has_deliverables(getattr(completed, "workspace", None)):
-            logger.info(
-                "Post-completion skip decompose for %s: workspace deliverables present",
-                completed_goal_id,
-            )
-            return {
-                "completed_goal_id": completed_goal_id,
-                "new_goals": [],
-                "redundant_goals": [],
-                "ready_goals": [],
-                "decomposition": None,
-                "reasoning": "Workspace deliverable probe satisfied; no further decompose",
-                "skip_decompose": True,
-            }
-
         pending = self._ce.get_goals_by_status("pending")
         active = self._ce.get_goals_by_status("active")
 
@@ -476,15 +459,6 @@ class GoalDAGVerifier:
             if self._forbid_rail_decompose(decomp.goal_id):
                 logger.info(
                     "Health decompose skipped for %s: rail-bound job (rail exclusivity)",
-                    decomp.goal_id,
-                )
-                continue
-            parent = self._ce.get_goal_sync(decomp.goal_id)
-            if parent is not None and workspace_has_deliverables(
-                getattr(parent, "workspace", None)
-            ):
-                logger.info(
-                    "Health decompose skipped for %s: workspace deliverables present",
                     decomp.goal_id,
                 )
                 continue
@@ -612,15 +586,7 @@ class GoalDAGVerifier:
         decomp = result.get("decomposition")
         if decomp and decomp.get("goal_id"):
             parent_id = decomp["goal_id"]
-            parent = self._ce.get_goal_sync(parent_id)
-            if parent is not None and workspace_has_deliverables(
-                getattr(parent, "workspace", None)
-            ):
-                logger.info(
-                    "Post-completion decompose skipped for %s: deliverables present",
-                    parent_id,
-                )
-            elif self._decompose_allowed(parent_id):
+            if self._decompose_allowed(parent_id):
                 created = goal_planner.apply_llm_subgoals(
                     parent_id,
                     decomp.get("subgoals") or [],

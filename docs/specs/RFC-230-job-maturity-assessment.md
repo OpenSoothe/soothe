@@ -150,7 +150,7 @@ Pluggable probes selected by workspace markers:
 | Marker | Probe examples |
 |--------|----------------|
 | `Cargo.toml` | `cargo build`, `cargo test`; optional GOAL fixtures (compile+run `return N`, printf/stdout) |
-| `pyproject.toml` + `tests/` | Existing pytest probe (`evidence_grounding`) |
+| `pyproject.toml` + `tests/` | Pytest probe in `maturity.py` (job assessor only) |
 | Generic | Named binaries from GOAL; non-trivial artifact size/sections |
 
 Probes return machine `pass|fail|skipped` + evidence string. **No keyword
@@ -222,6 +222,9 @@ job-scoped restructuring).
 
 ## 10. Consensus relationship (RFC-204)
 
+Per-goal consensus (RFC-204 / IG-710): **goal text + StrangeLoop response**
+only. Host workspace probes are **not** consensus inputs.
+
 Unchanged for **non-rail child** goals: accept / send_back / fail (IG-707).
 
 Rail-bound children (IG-693):
@@ -229,10 +232,9 @@ Rail-bound children (IG-693):
 1. Child accept does not complete the job root.
 2. Send-back budget exhaustion → **`failed`** + LoopRail `goal_failed` (not
    silent suspend). Rails may `retry_maker` / equivalent — Autopilot does not
-   invent git/commit/pytest accept overrides for rail jobs.
-3. Soft workspace probes may ground the consensus LLM; **hard** language- or
-   VCS-specific accept overrides are out of scope for rail consensus (host
-   maturity probes remain RFC-230 / registry).
+   invent git/commit/pytest accept overrides for rail or non-rail consensus.
+3. Language- and VCS-specific structural checks belong exclusively in this
+   maturity registry (job latch), never as soft/hard consensus overrides.
 
 ## 11. IPC / observation (RFC-228)
 

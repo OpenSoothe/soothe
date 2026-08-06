@@ -5,12 +5,13 @@
 **Status**: Implemented — runtime architecture refined by RFC-222 (revised 2026-05-28)
 **Kind**: Architecture Design
 **Created**: 2026-04-03
-**Updated**: 2026-08-05
+**Updated**: 2026-08-06
 **Dependencies**: RFC-200, RFC-201, RFC-203, RFC-222, RFC-450, RFC-500
 **Related**: RFC-229 (Cron Service for Autopilot — natural language scheduled jobs),
 RFC-230 (job maturity; host probes ≠ per-goal consensus gates),
-LoopRail design draft, [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
-(consensus evidence grounding), [IG-693](../impl/IG-693-rail-subgoal-consensus-exhaustion-recovery.md)
+LoopRail design draft, [IG-710](../impl/IG-710-consensus-trust-sloop-response.md)
+(consensus = goal + StrangeLoop response),
+[IG-693](../impl/IG-693-rail-subgoal-consensus-exhaustion-recovery.md)
 (rail-bound send-back exhaustion → fail + maker replant)
 
 > **Compatibility note (2026-05-28)**: This RFC defines autopilot's **user-facing surface** — file layout (`SOOTHE_HOME/autopilot/`), CLI commands (`soothe autopilot ...`), HTTP endpoints (`/autopilot/*`), and consensus/dreaming semantics. The **runtime implementation** — daemon-owned `AutopilotService`, subprocess worker dispatch, `GoalDispatchContextBundle`, `WorkspaceReservation`, sticky-affinity `WorkerPool` — is specified in RFC-222 (revised). The two are complementary: RFC-204 owns "what users see and submit," RFC-222 owns "how the daemon executes it."
@@ -92,12 +93,15 @@ implemented):
 Autopilot validates StrangeLoop's completion judgment:
 
 **Process**:
-1. StrangeLoop returns `PlanResult` with `status: "done"` and confidence
-2. Autopilot reflection LLM evaluates holistically:
-   - Evidence quality and completeness
-   - Success criteria satisfaction
-   - Finding coherence
+1. StrangeLoop returns `PlanResult` with `status: "done"` after its internal
+   Plan-Execute-Eval loop (trusted terminal judgment for the worker).
+2. Autopilot reflection LLM compares **goal description** vs **StrangeLoop
+   response** (wire `evidence_summary` / seeded `full_output` narrative).
 3. Autopilot decides: accept, send back, or fail
+
+Host MUST NOT invent separate workspace “evidence grounding” (deliverable
+markers, language-specific test probes, contribution packing) as a consensus
+gate. Job-level structural acceptance remains RFC-230 maturity, not this loop.
 
 **Send-Back Mechanics**:
 - Separate send-back budget per goal (default: 3 rounds)
@@ -114,38 +118,26 @@ Autopilot validates StrangeLoop's completion judgment:
 - DAG health MUST NOT auto-reset legacy send-back-exhausted *suspended*
   goals; failed workers use engine recovery (IG-697) when deps allow.
 - Autopilot MUST NOT encode tool- or VCS-specific “done” gates (git commit,
-  cargo, pytest hard-accept) as engine consensus overrides for rail jobs —
-  those policies live in rails / host maturity probes (RFC-230), not Layer 3
-  consensus.
+  cargo, pytest hard-accept) as consensus overrides — those policies live in
+  rails / host maturity probes (RFC-230), never in the per-goal consensus path.
 
 **Reflection LLM Decision Criteria**:
 
 | Decision | Conditions | Outcome |
 |----------|------------|---------|
-| **Accept** | Evidence satisfies success criteria; high confidence (>0.8); no unresolved blockers | Goal → `validated` / `completed` state |
-| **Send back** | Evidence incomplete; low confidence (<0.8); minor gaps in findings | Refined instructions → StrangeLoop retry; count toward budget |
+| **Accept** | Goal text satisfied by StrangeLoop response; no unresolved blockers | Goal → `validated` / `completed` state |
+| **Send back** | Response incomplete vs goal; minor gaps; judge wants a retry | Refined instructions → StrangeLoop retry; count toward budget |
 | **Fail** | Unrecoverable blocker; send-back budget exhausted; consensus judge error | Goal → `failed`; host recovery (LoopRail / monitor / engine) |
 
 **Failure / park triggers** (explicit conditions):
 
 1. Send-back budget exhausted on any goal → **fail** (not suspend)
 2. Consensus judge reports fundamentally blocked / unrecoverable → **fail**
-3. Empty grounded evidence → **send_back** (then fail on budget exhaust)
+3. Consensus judge chooses `send_back` (including thin/empty response) → retry; fail on budget exhaust
 4. Dependency on suspended/blocked goal → scheduler **blocked** (not consensus)
 5. Explicit job pause (`pause_job`, rail `pause_for_user`) → **suspend** (job-level only)
 
-> **Implementation Note**: The reflection LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). Reflection prompts include: goal description, success criteria, accumulated evidence, StrangeLoop confidence score, and iteration history. The decision output is structured (`decision: accept | send_back | fail`, `reasoning: string`, `refined_instructions: string?`).
->
-> **Evidence grounding (normative; IG-680 / IG-707)**: Consensus MUST NOT treat an empty
-> evidence summary by substituting the goal description as the “agent response”
-> (that path produces false `send_back` loops). Acceptable evidence includes
-> non-empty `PlanResult.evidence_summary`, `GoalDispatchContextContribution`
-> (`files_touched`, findings, tool stats), and/or a workspace artifact probe when
-> `GoalNode.workspace` is set. Headless clarification deferral / empty terminal
-> MUST map to `needs_replan` → host `send_back` (or `fail` on budget), not
-> operator-wait `suspend` and not `failed` with narrative `"no narrative"`.
-> See [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) AH-2,
-> [IG-707](../impl/IG-707-autopilot-automatic-consensus-no-operator-suspend.md).
+> **Implementation Note**: The reflection LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). The judge prompt is **goal description + StrangeLoop response** (structured `decision: accept | send_back | fail`). Do **not** substitute the goal description as the agent response. Do **not** require host workspace probes or contribution packing before invoking the judge. Headless clarification deferral / empty terminal MUST map to `needs_replan` → host `send_back` (or `fail` on budget), not operator-wait `suspend` and not `failed` with narrative `"no narrative"`. See [IG-707](../impl/IG-707-autopilot-automatic-consensus-no-operator-suspend.md), [IG-710](../impl/IG-710-consensus-trust-sloop-response.md).
 
 ### 1.4 Termination → Dreaming Transition
 

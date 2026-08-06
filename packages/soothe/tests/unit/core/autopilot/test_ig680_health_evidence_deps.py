@@ -8,25 +8,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from soothe.autopilot import AutopilotService
-from soothe.autopilot.dispatch.models import (
-    Finding,
-    GoalDispatchContextContribution,
-    StepSummary,
-    ToolCallStats,
-)
+from soothe.autopilot.dispatch.models import GoalDispatchContextContribution
 from soothe.autopilot.monitor.models import (
     DagHealthReport,
     DecomposeSuggestion,
     WireDependencySuggestion,
 )
 from soothe.autopilot.verify.consensus import ConsensusVerdict
-from soothe.autopilot.verify.evidence_grounding import (
-    format_contribution_evidence,
-    synthesize_completion_evidence,
-    workspace_deliverable_probe,
-    workspace_has_deliverables,
-)
 from soothe.autopilot.verify.goal_dag_verifier import GoalDAGVerifier
+from soothe.autopilot.verify.plan_contribution import synthesize_sloop_response
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.context.models import GoalNode
@@ -178,9 +168,10 @@ class TestWireDependencies:
         assert child.id in updated.depends_on
 
 
-class TestConsensusEmptyEvidence:
+class TestConsensusGoalPlusResponse:
     @pytest.mark.asyncio
-    async def test_empty_evidence_send_backs_without_description_fallback(self) -> None:
+    async def test_empty_response_still_invokes_consensus(self) -> None:
+        """IG-710: no host evidence gate — judge runs on goal + (possibly empty) response."""
         bus = InternalEventBus()
         ce = ContextEngine()
         svc = AutopilotService(
@@ -188,8 +179,8 @@ class TestConsensusEmptyEvidence:
             config=AutopilotConfig(max_loops=1, max_parallel_goals=1),
             internal_bus=bus,
             consensus_model=_mock_consensus_model(
-                decision="accept",
-                reasoning="should not be called",
+                decision="send_back",
+                reasoning="response empty vs goal",
             ),
             runner_factory=IdleFakeFactory(),
         )
@@ -204,54 +195,62 @@ class TestConsensusEmptyEvidence:
         assert updated.send_back_count == 1
 
     @pytest.mark.asyncio
-    async def test_workspace_probe_grounds_consensus(self, tmp_path: Path) -> None:
+    async def test_workspace_markers_do_not_ground_consensus(self, tmp_path: Path) -> None:
+        """Markers alone must not substitute for a StrangeLoop response."""
         (tmp_path / "SUMMARY.md").write_text("done\n", encoding="utf-8")
-        bus = InternalEventBus()
-        ce = ContextEngine()
-        svc = AutopilotService(
-            ce=ce,
-            config=AutopilotConfig(max_loops=1, max_parallel_goals=1),
-            internal_bus=bus,
-            consensus_model=_mock_consensus_model(
-                decision="accept",
-                reasoning="artifacts present",
-            ),
-            runner_factory=IdleFakeFactory(),
-        )
-        goal = await svc.submit_task("verify deliverable", workspace=str(tmp_path))
-        ce.claim_goal(goal.id, loop_id="w1")
-
-        await svc._apply_consensus_and_finalize(goal.id, evidence_summary="")
-
-        updated = await ce.get_goal(goal.id)
-        assert updated is not None
-        assert updated.status == "completed"
-
-    @pytest.mark.asyncio
-    async def test_thin_summary_still_appends_workspace_probe(self, tmp_path: Path) -> None:
-        """Thin narrative alone must not hide on-disk deliverable markers."""
-        (tmp_path / "SUMMARY.md").write_text("done\n", encoding="utf-8")
-        (tmp_path / "docs").mkdir()
-        (tmp_path / "docs" / "DESIGN.md").write_text("arch\n", encoding="utf-8")
         seen: dict[str, str] = {}
 
         async def _capture(
             goal_desc: str, agent_response: str, evidence: str, **kwargs: object
         ) -> tuple[str, str]:
-            seen["evidence"] = evidence
             seen["response"] = agent_response
-            return "accept", "probe visible"
+            seen["evidence"] = evidence
+            return "send_back", "empty response"
 
         bus = InternalEventBus()
         ce = ContextEngine()
-        model = MagicMock()
-        # evaluate_goal_completion is imported inside the method; patch via consensus_model
-        # by wrapping AutopilotService path with a monkeypatch at call site below.
         svc = AutopilotService(
             ce=ce,
             config=AutopilotConfig(max_loops=1, max_parallel_goals=1),
             internal_bus=bus,
-            consensus_model=model,
+            consensus_model=MagicMock(),
+            runner_factory=IdleFakeFactory(),
+        )
+        goal = await svc.submit_task("verify deliverable", workspace=str(tmp_path))
+        ce.claim_goal(goal.id, loop_id="w1")
+
+        with patch(
+            "soothe.autopilot.verify.consensus.evaluate_goal_completion",
+            side_effect=_capture,
+        ):
+            await svc._apply_consensus_and_finalize(goal.id, evidence_summary="")
+
+        assert seen.get("response") == ""
+        assert "SUMMARY.md" not in seen.get("evidence", "")
+        updated = await ce.get_goal(goal.id)
+        assert updated is not None
+        assert updated.status == "pending"
+
+    @pytest.mark.asyncio
+    async def test_consensus_uses_goal_and_sloop_response_only(self, tmp_path: Path) -> None:
+        (tmp_path / "SUMMARY.md").write_text("done\n", encoding="utf-8")
+        seen: dict[str, str] = {}
+
+        async def _capture(
+            goal_desc: str, agent_response: str, evidence: str, **kwargs: object
+        ) -> tuple[str, str]:
+            seen["goal"] = goal_desc
+            seen["response"] = agent_response
+            seen["evidence"] = evidence
+            return "accept", "ok"
+
+        bus = InternalEventBus()
+        ce = ContextEngine()
+        svc = AutopilotService(
+            ce=ce,
+            config=AutopilotConfig(max_loops=1, max_parallel_goals=1),
+            internal_bus=bus,
+            consensus_model=MagicMock(),
             runner_factory=IdleFakeFactory(),
         )
         goal = await svc.submit_task("verify deliverable", workspace=str(tmp_path))
@@ -266,15 +265,14 @@ class TestConsensusEmptyEvidence:
                 evidence_summary="wrote a todo list and ran one command",
             )
 
-        assert "SUMMARY.md" in seen.get("evidence", "")
-        assert "DESIGN.md" in seen.get("evidence", "")
+        assert seen.get("response") == "wrote a todo list and ran one command"
+        assert seen.get("evidence") == ""
         updated = await ce.get_goal(goal.id)
         assert updated is not None
         assert updated.status == "completed"
 
     @pytest.mark.asyncio
-    async def test_full_output_finding_grounds_consensus_without_workspace(self) -> None:
-        """No-artifact success: ledger/full_output finding is enough to run consensus."""
+    async def test_sloop_response_accepts_without_workspace(self) -> None:
         bus = InternalEventBus()
         ce = ContextEngine()
         svc = AutopilotService(
@@ -289,47 +287,10 @@ class TestConsensusEmptyEvidence:
         )
         goal = await svc.submit_task("echo hello", workspace=None)
         ce.claim_goal(goal.id, loop_id="w1")
-        contribution = GoalDispatchContextContribution(
-            findings=[Finding(summary="hello", relevance_score=0.8)],
-        )
 
         await svc._apply_consensus_and_finalize(
             goal.id,
             evidence_summary="hello",
-            contribution=contribution,
-        )
-
-        updated = await ce.get_goal(goal.id)
-        assert updated is not None
-        assert updated.status == "completed"
-
-    @pytest.mark.asyncio
-    async def test_plan_steps_alone_ground_consensus(self) -> None:
-        bus = InternalEventBus()
-        ce = ContextEngine()
-        svc = AutopilotService(
-            ce=ce,
-            config=AutopilotConfig(max_loops=1, max_parallel_goals=1),
-            internal_bus=bus,
-            consensus_model=_mock_consensus_model(
-                decision="accept",
-                reasoning="completed steps present",
-            ),
-            runner_factory=IdleFakeFactory(),
-        )
-        goal = await svc.submit_task("echo hello", workspace=None)
-        ce.claim_goal(goal.id, loop_id="w1")
-        contribution = GoalDispatchContextContribution(
-            plan_steps_executed=[
-                StepSummary(id="S1", action="echo hello", outcome="completed"),
-            ],
-            tool_call_stats=ToolCallStats(counts_by_name={"shell": 1}),
-        )
-
-        await svc._apply_consensus_and_finalize(
-            goal.id,
-            evidence_summary="",
-            contribution=contribution,
         )
 
         updated = await ce.get_goal(goal.id)
@@ -337,75 +298,52 @@ class TestConsensusEmptyEvidence:
         assert updated.status == "completed"
 
 
-class TestEvidenceHelpers:
-    def test_workspace_probe(self, tmp_path: Path) -> None:
-        assert workspace_has_deliverables(str(tmp_path)) is False
-        (tmp_path / "SUMMARY.md").write_text("ok", encoding="utf-8")
-        assert workspace_has_deliverables(str(tmp_path)) is True
-        assert "SUMMARY.md" in workspace_deliverable_probe(str(tmp_path))
-
-    def test_format_contribution_evidence(self) -> None:
-        text = format_contribution_evidence(
-            evidence_summary="",
-            files_touched=None,
-            findings=[Finding(summary="wrote util.py")],
-        )
-        assert "wrote util.py" in text
-        assert (
-            format_contribution_evidence(evidence_summary="", files_touched=None, findings=None)
-            == ""
-        )
-
-    def test_format_contribution_includes_plan_steps_and_tools(self) -> None:
-        text = format_contribution_evidence(
-            evidence_summary="",
-            files_touched=None,
-            findings=None,
-            plan_steps=[StepSummary(id="S1", action="echo hello", outcome="completed")],
-            tool_call_stats=ToolCallStats(counts_by_name={"shell": 1}),
-        )
-        assert "plan_steps_completed" in text
-        assert "echo hello" in text
-        assert "tool_calls: shell=1" in text
-
-    def test_synthesize_completion_evidence_prefers_summary(self) -> None:
+class TestSloopResponseHelpers:
+    def test_synthesize_sloop_response_prefers_summary(self) -> None:
         pr = MagicMock()
         pr.evidence_summary = "explicit summary"
         pr.full_output = "ignored full"
         pr.decision = None
-        assert synthesize_completion_evidence(pr) == "explicit summary"
+        assert synthesize_sloop_response(pr) == "explicit summary"
 
-    def test_synthesize_completion_evidence_uses_full_output(self) -> None:
+    def test_synthesize_sloop_response_uses_full_output(self) -> None:
         pr = MagicMock()
         pr.evidence_summary = ""
         pr.full_output = "hello from ledger"
         pr.decision = None
-        assert synthesize_completion_evidence(pr) == "hello from ledger"
+        assert synthesize_sloop_response(pr) == "hello from ledger"
 
-    def test_synthesize_completion_evidence_uses_completed_steps(self) -> None:
+    def test_synthesize_sloop_response_uses_completed_steps(self) -> None:
         pr = MagicMock()
         pr.evidence_summary = ""
         pr.full_output = None
         decision = MagicMock()
         decision.steps = [{"description": "run echo hello"}]
         pr.decision = decision
-        assert "run echo hello" in synthesize_completion_evidence(pr)
+        assert "run echo hello" in synthesize_sloop_response(pr)
 
 
-class TestPostCompletionSkip:
+class TestPostCompletionNoDeliverableSkip:
     @pytest.mark.asyncio
-    async def test_skip_decompose_when_deliverables_present(
+    async def test_markers_do_not_skip_post_completion_decompose(
         self, mock_config: MagicMock, tmp_path: Path
     ) -> None:
+        """IG-710: deliverable markers are not a host decompose short-circuit."""
         (tmp_path / "SUMMARY.md").write_text("ok", encoding="utf-8")
         ce = ContextEngine()
         goal = await ce.create_goal("design", workspace=str(tmp_path))
         await ce.complete_goal(goal.id)
 
         verifier = GoalDAGVerifier(ce, mock_config)
-        result = await verifier.verify_dag_post_completion(goal.id)
-        assert result.get("skip_decompose") is True
-        assert result.get("decomposition") is None
+        with patch.object(
+            verifier._reasoner,
+            "verify_post_completion",
+            new_callable=AsyncMock,
+            return_value=MagicMock(new_goals=[], redundant_goals=[], decomposition=None),
+        ) as mock_verify:
+            result = await verifier.verify_dag_post_completion(goal.id)
+            mock_verify.assert_awaited()
+        assert result.get("skip_decompose") is not True
 
 
 class TestDecomposeCooldown:

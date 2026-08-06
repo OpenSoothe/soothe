@@ -145,9 +145,9 @@ def _build_consensus_prompt(
         "retry with a different approach\n"
         "- fail: the goal appears fundamentally blocked or unrecoverable by "
         "further agent retries (host recovery will decide next steps)\n"
-        "Do not choose fail solely because the narrative is short when evidence "
-        "lists commits, files, tool results, or workspace probe hits. Prefer "
-        "send_back when more verification detail is needed.\n"
+        "Judge from the Goal and Agent Response (StrangeLoop Plan-Execute-Eval "
+        "output). Prefer send_back when the response is thin relative to the "
+        "goal; do not choose fail solely because the narrative is short.\n"
         "Provide a brief reasoning string."
     )
     return "\n".join(parts)

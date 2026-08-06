@@ -84,7 +84,7 @@ scheduling / after finalize
 | Area | Path |
 |------|------|
 | Assessor | `packages/soothe/src/soothe/autopilot/maturity.py` |
-| Probes | Cargo/GOAL fixture in maturity; pytest via `evidence_grounding` |
+| Probes | Cargo/GOAL fixture + pytest in `maturity.py` (consensus probes removed in IG-710) |
 | Service hooks | `autopilot/service.py` |
 | Rail guards | `autopilot/rail/guards.py` |
 | QA builtin text | `autopilot/rail/builtins_exec.py` |

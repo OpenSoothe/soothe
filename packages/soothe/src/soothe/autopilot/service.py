@@ -1684,51 +1684,21 @@ class AutopilotService:
         loop_id: str | None = None,
         contribution: Any | None = None,
     ) -> None:
-        """RFC-204 / IG-680 / IG-707: validate worker completion before accepting.
+        """RFC-204 / IG-707 / IG-710: validate worker completion before accepting.
 
-        Never falls back to ``goal.description`` as the agent response when
-        evidence is empty — that path caused false send_backs in eval.
+        StrangeLoop Plan-Execute-Eval owns terminal done. Consensus compares
+        ``goal.description`` to the worker StrangeLoop response
+        (``evidence_summary`` on the wire) — never substitutes the goal text as
+        the response, and never gates on host workspace probes.
         Decisions are accept / send_back / fail only (automatic; no operator park).
         """
         from soothe.autopilot.verify.consensus import evaluate_goal_completion
-        from soothe.autopilot.verify.evidence_grounding import (
-            enrich_workspace_evidence,
-            format_contribution_evidence,
-        )
 
         goal = await self._ce.get_goal(goal_id)
         if goal is None:
             return
 
-        files = getattr(contribution, "files_touched", None) if contribution else None
         findings = getattr(contribution, "findings", None) if contribution else None
-        plan_steps = getattr(contribution, "plan_steps_executed", None) if contribution else None
-        tool_stats = getattr(contribution, "tool_call_stats", None) if contribution else None
-        grounded = format_contribution_evidence(
-            evidence_summary=evidence_summary,
-            files_touched=files,
-            findings=findings,
-            plan_steps=plan_steps,
-            tool_call_stats=tool_stats,
-        )
-        # Always attach structural workspace evidence when present — a thin
-        # evidence_summary alone previously skipped the probe and caused
-        # false send_backs despite on-disk deliverables.
-        probe = enrich_workspace_evidence(goal.workspace)
-        if probe:
-            grounded = f"{grounded}\n{probe}".strip() if grounded else probe
-        if not grounded:
-            reason = "insufficient evidence for consensus (empty summary and workspace probe)"
-            logger.warning("Consensus send_back for %s: %s", goal_id, reason)
-            try:
-                await self._apply_send_back_or_fail(goal_id, reason=reason, loop_id=loop_id)
-            except Exception:
-                logger.exception(
-                    "send_back/fail raised after empty consensus evidence for %s",
-                    goal_id,
-                )
-            return
-
         # Persist findings onto the goal for post-completion context (IG-680 P1-7).
         # WavePlan-shaped JSON keeps a higher cap so host ingest can re-read it
         # from goal.findings if contribution is gone (IG-704).
@@ -1763,33 +1733,17 @@ class AutopilotService:
                 reasoning[:160],
             )
         else:
-            response_text = grounded
+            response_text = (evidence_summary or "").strip()
             try:
                 decision, reasoning = await evaluate_goal_completion(
                     goal.description,
                     response_text,
-                    grounded,
+                    "",
                     model=self._consensus_model,
                 )
             except Exception:
                 logger.exception("Consensus evaluation failed for goal %s", goal_id)
                 decision, reasoning = "fail", "Consensus evaluation failed"
-
-            # Soft probes may ground the LLM; do not hard-accept via language-
-            # specific tools for rail-bound goals (policy lives in rails / maturity).
-            rail_bound = bool(getattr(goal, "rail_id", None))
-            if not rail_bound and decision != "accept" and "pytest -q: PASS" in probe:
-                prior = decision
-                logger.info(
-                    "Consensus override accept for %s: workspace pytest PASS (llm decision was %s)",
-                    goal_id,
-                    prior,
-                )
-                decision = "accept"
-                reasoning = (
-                    "Accepted via workspace verification (pytest PASS + deliverable "
-                    f"markers). Prior LLM decision was {prior}: {reasoning}"
-                )
 
         rail_bound = bool(getattr(goal, "rail_id", None))
         logger.info(
