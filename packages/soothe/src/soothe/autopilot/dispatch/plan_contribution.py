@@ -1,8 +1,9 @@
 """Build worker contribution / wire response from a completed PlanResult.
 
-StrangeLoop Plan-Execute-Eval owns goal-done judgment. Autopilot consensus
-compares goal text to the wire response synthesized here — not host workspace
-probes (IG-710 / RFC-204).
+Lives under ``dispatch`` (wire contribution packing), not ``verify``
+(judgment). StrangeLoop Plan-Execute-Eval owns goal-done judgment; autopilot
+consensus compares goal text to the wire response synthesized here — not
+host workspace probes (IG-710 / RFC-204).
 """
 
 from __future__ import annotations

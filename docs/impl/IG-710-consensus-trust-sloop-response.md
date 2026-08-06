@@ -34,7 +34,8 @@ IG-711) — not by cargo/pytest host runners.
 5. Historical: moved `workspace_pytest_probe` into maturity (superseded by
    IG-711 LLM maturity — coding probes no longer latch job accept).
 6. Keep worker helpers that synthesize the **wire response** / contribution
-   from `PlanResult` (rename module to `plan_contribution.py`).
+   from `PlanResult` (`autopilot.dispatch.plan_contribution` — not under
+   `verify/`, which is judgment-only).
 
 ---
 

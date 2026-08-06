@@ -9,6 +9,7 @@ import pytest
 
 from soothe.autopilot import AutopilotService
 from soothe.autopilot.dispatch.models import GoalDispatchContextContribution
+from soothe.autopilot.dispatch.plan_contribution import synthesize_sloop_response
 from soothe.autopilot.monitor.models import (
     DagHealthReport,
     DecomposeSuggestion,
@@ -16,7 +17,6 @@ from soothe.autopilot.monitor.models import (
 )
 from soothe.autopilot.verify.consensus import ConsensusVerdict
 from soothe.autopilot.verify.goal_dag_verifier import GoalDAGVerifier
-from soothe.autopilot.verify.plan_contribution import synthesize_sloop_response
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.context.models import GoalNode

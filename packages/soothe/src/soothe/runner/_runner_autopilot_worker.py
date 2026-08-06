@@ -36,7 +36,7 @@ from soothe.autopilot.dispatch.models import (
     StepSummary,
     ToolCallStats,
 )
-from soothe.autopilot.verify.plan_contribution import (
+from soothe.autopilot.dispatch.plan_contribution import (
     build_files_touched,
     decision_step_actions,
     synthesize_sloop_response,

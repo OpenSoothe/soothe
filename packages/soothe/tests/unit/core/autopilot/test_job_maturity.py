@@ -293,7 +293,7 @@ class TestTopMaturityField:
 
 class TestPathTokens:
     def test_extracts_non_coding_extensions(self) -> None:
-        from soothe.autopilot.verify.plan_contribution import extract_path_tokens
+        from soothe.autopilot.dispatch.plan_contribution import extract_path_tokens
 
         tokens = extract_path_tokens("wrote docs/paper.tex and plan/itinerary.pdf")
         assert any(t.endswith("paper.tex") for t in tokens)
