@@ -74,20 +74,26 @@ def test_render_top_all_goals_done_uses_progress_green() -> None:
     }
     state = TopViewState(include_terminal=True)
     header = _format_top_header(snapshot, state=state, width=80)
-    goals = next(line for line in header if line.plain.startswith("Goals"))
-    steps = next(line for line in header if line.plain.startswith("Steps"))
+    goals = next(line for line in header if "Goals" in line.plain)
+    assert "Steps" in goals.plain
     assert "done=1" in goals.plain
-    assert "2/2 done" in steps.plain
+    assert "2/2 done" in goals.plain
+    goals_idx = goals.plain.index("Goals")
+    steps_idx = goals.plain.index("Steps")
     goals_fill = {
-        str(span.style) for span in goals.spans if "█" in goals.plain[span.start : span.end]
+        str(span.style)
+        for span in goals.spans
+        if "█" in goals.plain[span.start : span.end] and span.start < steps_idx
     }
     steps_fill = {
-        str(span.style) for span in steps.spans if "█" in steps.plain[span.start : span.end]
+        str(span.style)
+        for span in goals.spans
+        if "█" in goals.plain[span.start : span.end] and span.start >= steps_idx
     }
+    assert goals_idx < steps_idx
     assert goals_fill == {_STYLE_ACTIVE}
     assert steps_fill == {_STYLE_ACTIVE}
     assert _STYLE_HOT not in {str(span.style) for span in goals.spans}
-    assert _STYLE_HOT not in {str(span.style) for span in steps.spans}
 
 
 def test_format_elapsed_hhmmss() -> None:
@@ -132,6 +138,12 @@ def test_render_top_empty() -> None:
     assert "0/0/4" in text
     assert "(active/idle/max)" in text
     assert "0 assigned" in text
+    # Stats are paired: Jobs|Loops on one row (Goals alone when no steps).
+    jobs_line = next(ln for ln in text.splitlines() if "Jobs" in ln and "total" in ln)
+    assert "Loops" in jobs_line
+    goals_line = next(ln for ln in text.splitlines() if ln.startswith("Goals"))
+    assert "Loops" not in goals_line
+    assert "Steps" not in goals_line
     assert "mode=active" in text
     assert "(live)" in text
     assert "q Quit" in text
@@ -236,15 +248,15 @@ def test_apply_top_key_vim_scroll() -> None:
 
 def test_render_top_sets_page_size() -> None:
     state = TopViewState()
-    # Empty forest header: title + Jobs + Goals + Loops + flags + rule = 6
-    # (+ footer 2) → max_body = height - 8; page_size = max_body - 1
+    # Empty forest header: title + Jobs|Loops + Goals + flags + rule = 5
+    # (+ footer 2) → max_body = height - 7; page_size = max_body - 1
     render_top_snapshot(
         {"running": True, "loop_pool": {"active": 0, "idle": 0, "max": 1}, "jobs": []},
         height=20,
         width=80,
         state=state,
     )
-    assert state.page_size == max(1, 20 - 6 - 2 - 1)
+    assert state.page_size == max(1, 20 - 5 - 2 - 1)
 
 
 def test_apply_top_key_toggles() -> None:
@@ -365,11 +377,15 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
     assert "bright_cyan" in rendered.markup
     assert "mode=active" in text
     assert "(live)" in text
-    # htop-style header aggregates from the forest
+    # htop-style header aggregates from the forest (Jobs|Loops, Goals|Steps)
     assert "Jobs" in text and "active=1" in text
     assert "Goals" in text and "pending=1" in text
     assert "Loops" in text and "1/0/4" in text and "1 assigned" in text
     assert "Steps" in text and "1/2 done" in text
+    jobs_line = next(ln for ln in text.splitlines() if "Jobs" in ln and "total" in ln)
+    goals_line = next(ln for ln in text.splitlines() if "Goals" in ln and "total" in ln)
+    assert "Loops" in jobs_line
+    assert "Steps" in goals_line
     assert "up " in text  # oldest-job uptime on title line
 
 

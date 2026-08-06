@@ -949,13 +949,29 @@ def aggregate_top_stats(snapshot: dict) -> dict[str, Any]:
     }
 
 
+def _pair_stat_columns(left: Text, right: Text | None, *, width: int) -> Text:
+    """Place two stat blocks on one row (left | right), padded to half width."""
+    if right is None:
+        return left
+    col = max(24, width // 2)
+    pad = max(2, col - left.cell_len)
+    out = Text()
+    out.append_text(left)
+    out.append(" " * pad)
+    out.append_text(right)
+    return out
+
+
 def _format_top_header(
     snapshot: dict,
     *,
     state: TopViewState,
     width: int = 72,
 ) -> list[Text]:
-    """Build htop-style header lines for autopilot top (Rich Text rows)."""
+    """Build htop-style header lines for autopilot top (Rich Text rows).
+
+    Statistics are two paired rows: Jobs|Loops, then Goals|Steps.
+    """
     from datetime import datetime
 
     stats = aggregate_top_stats(snapshot)
@@ -968,7 +984,8 @@ def _format_top_header(
     steps_flag = "on" if state.show_steps else "off"
     loops_flag = "on" if state.show_loops else "off"
     rule = "─" * max(8, width)
-    meter_w = 10 if width >= 60 else 6
+    # Half-width columns: slightly tighter meters than single-column layout.
+    meter_w = 8 if width >= 80 else (6 if width >= 60 else 4)
 
     title = Text()
     title.append("Autopilot", style=_STYLE_HEADER)
@@ -982,30 +999,13 @@ def _format_top_header(
         title.append(" · up ", style=_STYLE_TREE)
         title.append(uptime, style=_STYLE_META)
 
-    jobs_line = Text()
-    jobs_line.append("Jobs   ", style=_STYLE_JOB)
-    jobs_line.append_text(
+    jobs_block = Text()
+    jobs_block.append("Jobs   ", style=_STYLE_JOB)
+    jobs_block.append_text(
         _meter_bar(stats["jobs_active"], max(stats["jobs_total"], 1), width=meter_w)
     )
-    jobs_line.append(f"  {stats['jobs_total']} total", style=_STYLE_META)
-    _append_status_counts(jobs_line, stats["jobs_by_status"])
-
-    goals_line = Text()
-    goals_line.append("Goals  ", style=_STYLE_GOAL)
-    # Prefer completion progress when any done; else active utilization.
-    g_total = max(int(stats["goals_total"]), 1)
-    goals_use_progress = int(stats["goals_completed"]) > 0
-    g_meter_used = stats["goals_completed"] if goals_use_progress else stats["goals_active"]
-    goals_line.append_text(
-        _meter_bar(
-            g_meter_used,
-            g_total,
-            width=meter_w,
-            kind="progress" if goals_use_progress else "util",
-        )
-    )
-    goals_line.append(f"  {stats['goals_total']} total", style=_STYLE_META)
-    _append_status_counts(goals_line, stats["goals_by_status"])
+    jobs_block.append(f"  {stats['jobs_total']} total", style=_STYLE_META)
+    _append_status_counts(jobs_block, stats["jobs_by_status"])
 
     pool_active = int(stats["loop_pool_active"])
     pool_idle = int(stats["loop_pool_idle"])
@@ -1014,26 +1014,47 @@ def _format_top_header(
         pool_max_n = int(pool_max)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         pool_max_n = 0
-    loops_line = Text()
-    loops_line.append("Loops  ", style=_STYLE_LOOP)
-    loops_line.append_text(_meter_bar(pool_active, max(pool_max_n, 1), width=meter_w))
-    loops_line.append(
+    loops_block = Text()
+    loops_block.append("Loops  ", style=_STYLE_LOOP)
+    loops_block.append_text(_meter_bar(pool_active, max(pool_max_n, 1), width=meter_w))
+    loops_block.append(
         f"  {pool_active}/{pool_idle}/{pool_max}",
         style=_STYLE_META,
     )
-    loops_line.append(" (active/idle/max)", style=_STYLE_DIM)
-    loops_line.append(f"  · {stats['loops_assigned']} assigned", style=_STYLE_META)
+    loops_block.append(" (active/idle/max)", style=_STYLE_DIM)
+    loops_block.append(f"  · {stats['loops_assigned']} assigned", style=_STYLE_META)
 
-    lines: list[Text] = [title, jobs_line, goals_line, loops_line]
+    goals_block = Text()
+    goals_block.append("Goals  ", style=_STYLE_GOAL)
+    # Prefer completion progress when any done; else active utilization.
+    g_total = max(int(stats["goals_total"]), 1)
+    goals_use_progress = int(stats["goals_completed"]) > 0
+    g_meter_used = stats["goals_completed"] if goals_use_progress else stats["goals_active"]
+    goals_block.append_text(
+        _meter_bar(
+            g_meter_used,
+            g_total,
+            width=meter_w,
+            kind="progress" if goals_use_progress else "util",
+        )
+    )
+    goals_block.append(f"  {stats['goals_total']} total", style=_STYLE_META)
+    _append_status_counts(goals_block, stats["goals_by_status"])
 
     steps_c = int(stats["steps_completed"])
     steps_t = int(stats["steps_total"])
+    steps_block: Text | None = None
     if steps_t > 0:
-        steps_line = Text()
-        steps_line.append("Steps  ", style=_STYLE_STEP)
-        steps_line.append_text(_meter_bar(steps_c, steps_t, width=meter_w, kind="progress"))
-        steps_line.append(f"  {steps_c}/{steps_t} done", style=_STYLE_META)
-        lines.append(steps_line)
+        steps_block = Text()
+        steps_block.append("Steps  ", style=_STYLE_STEP)
+        steps_block.append_text(_meter_bar(steps_c, steps_t, width=meter_w, kind="progress"))
+        steps_block.append(f"  {steps_c}/{steps_t} done", style=_STYLE_META)
+
+    lines: list[Text] = [
+        title,
+        _pair_stat_columns(jobs_block, loops_block, width=width),
+        _pair_stat_columns(goals_block, steps_block, width=width),
+    ]
 
     flags = Text()
     flags.append("mode=", style=_STYLE_DIM)
@@ -1285,29 +1306,21 @@ def render_top_snapshot(
         )
     view.body_line_count = len(body)
     rule = "─" * cols
+    tip = " · ".join(
+        (
+            "q Quit",
+            "h Help",
+            f"a {'All' if not view.include_terminal else 'Active'}",
+            "s Steps",
+            "l Loops",
+            "d Density",
+            "+/- Delay",
+            f"refresh {view.interval:g}s",
+        )
+    )
     footer = [
-        Text(rule, style=_STYLE_TREE),
-        _text_line(
-            ("q Quit", _STYLE_DIM),
-            (" · ", _STYLE_TREE),
-            ("h Help", _STYLE_DIM),
-            (" · ", _STYLE_TREE),
-            ("a ", _STYLE_DIM),
-            (
-                "All" if not view.include_terminal else "Active",
-                _STYLE_ACTIVE if view.include_terminal else _STYLE_META,
-            ),
-            (" · ", _STYLE_TREE),
-            ("s Steps", _STYLE_STEP if view.show_steps else _STYLE_DIM),
-            (" · ", _STYLE_TREE),
-            ("l Loops", _STYLE_LOOP if view.show_loops else _STYLE_DIM),
-            (" · ", _STYLE_TREE),
-            ("d Density", _STYLE_DIM),
-            (" · ", _STYLE_TREE),
-            ("+/- Delay", _STYLE_DIM),
-            (" · ", _STYLE_TREE),
-            (f"refresh {view.interval:g}s", _STYLE_META),
-        ),
+        Text(rule, style=_STYLE_DIM),
+        Text(tip, style=_STYLE_DIM),
     ]
     if height is not None and height > 0:
         max_body = max(1, height - len(header) - len(footer))
