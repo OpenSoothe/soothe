@@ -23,6 +23,8 @@ without host redesign.
 2. Chat RFC-620 `Channel` stays for conversations; notify does not require
    inbound chat loops. IM sinks may reuse platform send helpers later.
 3. Job-root only — never spam on every child goal completion.
+   Email/HTML progress uses status counts + capped attention highlights
+   (failed/cancelled/active/suspended); never dump the full goal list.
 4. Delivery is fail-soft; never blocks Autopilot scheduling.
 5. `soothe` must not import `soothe_daemon` — daemon injects `dispatch` callback.
 
@@ -36,7 +38,9 @@ without host redesign.
 ## Deliverables
 
 - [x] Host: `NotifyIntent`, `NotificationRouter`, suspend timer, dedup
+- [x] Host: compact DAG progress (`build_job_notify_progress`) on intents
 - [x] Daemon: `NotifySink`, `NotifyDispatcher`, email + webhook sinks
+- [x] Daemon: structured HTML email render (progress bar + highlights)
 - [x] Feishu sink stub + config schema (`enabled: false`)
 - [x] Config templates synced
 - [x] Unit tests + verify
@@ -47,3 +51,4 @@ without host redesign.
 - Live Feishu production send (stub only in Phase 1)
 - IMAP agent turns for alerts
 - Dreaming-mode notify spam
+- Full per-goal DAG dump in email bodies

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soothe.autopilot.notify.dedup import NotifyDedupStore
 from soothe.autopilot.notify.models import (
@@ -14,6 +14,7 @@ from soothe.autopilot.notify.models import (
     NotifyKind,
     NotifySeverity,
 )
+from soothe.autopilot.notify.progress import format_progress_plain
 
 if TYPE_CHECKING:
     from soothe_sdk.protocols.persistence import AsyncPersistStore
@@ -34,13 +35,24 @@ def _severity_for(kind: NotifyKind) -> NotifySeverity:
     return "info"
 
 
-def _title_for(kind: NotifyKind, job_id: str) -> str:
+def _title_for(
+    kind: NotifyKind,
+    job_id: str,
+    *,
+    progress: dict[str, Any] | None = None,
+) -> str:
     labels = {
         "job.completed": "completed",
         "job.failed": "failed",
         "job.suspended_timeout": "suspended (timeout)",
     }
-    return f"[Soothe] Job {job_id} {labels.get(kind, kind)}"
+    short = job_id[:8]
+    title = f"[Soothe] Job {short} {labels.get(kind, kind)}"
+    if progress and int(progress.get("total_goals") or 0) > 0:
+        completed = int(progress.get("completed_goals") or 0)
+        total = int(progress.get("total_goals") or 0)
+        title = f"{title} ({completed}/{total})"
+    return title
 
 
 def _body_for(
@@ -48,6 +60,7 @@ def _body_for(
     goal: GoalNode,
     *,
     suspended_for_seconds: float | None = None,
+    progress: dict[str, Any] | None = None,
 ) -> str:
     lines = [
         f"Job: {goal.id}",
@@ -72,6 +85,10 @@ def _body_for(
         blockers = maturity.get("blockers") or []
         if blockers:
             lines.append(f"Blockers: {', '.join(str(b) for b in blockers[:5])}")
+    progress_lines = format_progress_plain(progress)
+    if progress_lines:
+        lines.append("")
+        lines.extend(progress_lines)
     lines.append("")
     lines.append(f"Inspect: soothe autopilot job {goal.id}")
     return "\n".join(lines)
@@ -99,10 +116,6 @@ class NotificationRouter:
         """Inject or replace the daemon dispatcher callback."""
         self._dispatch_fn = dispatch_fn
 
-    def update_config(self, notify_config: AutopilotNotifyConfig) -> None:
-        """Refresh notify config (e.g. after reload)."""
-        self._config = notify_config
-
     def _event_enabled(self, kind: NotifyKind) -> bool:
         flag = KIND_TO_EVENT_FLAG.get(kind)
         if flag is None:
@@ -117,6 +130,7 @@ class NotificationRouter:
         *,
         generation: str | None = None,
         suspended_for_seconds: float | None = None,
+        progress: dict[str, Any] | None = None,
     ) -> NotifyIntent | None:
         """Build, dedup, and dispatch one job-root intent.
 
@@ -140,8 +154,13 @@ class NotificationRouter:
         intent = NotifyIntent(
             kind=kind,
             job_id=goal.id,
-            title=_title_for(kind, goal.id),
-            body=_body_for(kind, goal, suspended_for_seconds=suspended_for_seconds),
+            title=_title_for(kind, goal.id, progress=progress),
+            body=_body_for(
+                kind,
+                goal,
+                suspended_for_seconds=suspended_for_seconds,
+                progress=progress,
+            ),
             severity=_severity_for(kind),
             status=goal.status,
             description=(goal.description or "")[:500] or None,
@@ -149,6 +168,7 @@ class NotificationRouter:
             error=str(goal.error)[:500] if goal.error else None,
             suspended_for_seconds=suspended_for_seconds,
             maturity=dict(goal.maturity) if isinstance(goal.maturity, dict) else None,
+            progress=progress,
             generation=gen,
         )
         key = intent.dedup_key()
@@ -178,16 +198,15 @@ class NotificationRouter:
         self,
         goal: GoalNode,
         *,
-        previous_status: str | None = None,
+        progress: dict[str, Any] | None = None,
     ) -> NotifyIntent | None:
         """Map a job-root status to completed/failed intents when applicable."""
-        del previous_status  # reserved for richer transitions
         if goal.parent_id is not None:
             return None
         if goal.status == "completed":
-            return await self.emit_job_intent("job.completed", goal)
+            return await self.emit_job_intent("job.completed", goal, progress=progress)
         if goal.status in ("failed", "cancelled"):
-            return await self.emit_job_intent("job.failed", goal)
+            return await self.emit_job_intent("job.failed", goal, progress=progress)
         return None
 
     async def scan_suspended_timeouts(
@@ -195,12 +214,14 @@ class NotificationRouter:
         roots: list[GoalNode],
         *,
         now: datetime | None = None,
+        progress_by_job: dict[str, dict[str, Any] | None] | None = None,
     ) -> list[NotifyIntent]:
         """Emit suspended_timeout for roots past ``suspend_after_seconds``."""
         if not self._config.enabled or not self._event_enabled("job.suspended_timeout"):
             return []
         threshold = float(self._config.suspend_after_seconds)
         clock = now or datetime.now(UTC)
+        progress_map = progress_by_job or {}
         emitted: list[NotifyIntent] = []
         for goal in roots:
             if goal.parent_id is not None or goal.status != "suspended":
@@ -215,6 +236,7 @@ class NotificationRouter:
                 "job.suspended_timeout",
                 goal,
                 suspended_for_seconds=age,
+                progress=progress_map.get(goal.id),
             )
             if intent is not None:
                 emitted.append(intent)

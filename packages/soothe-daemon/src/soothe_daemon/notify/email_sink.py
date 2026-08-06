@@ -45,7 +45,8 @@ class EmailNotifySink:
         del intent
         addrs: list[str] = []
         seen: set[str] = set()
-        for t in list(targets) + list(self._config.targets):
+        extras = [NotifyTarget(kind=t.kind, to_address=t.to_address) for t in self._config.targets]
+        for t in list(targets) + extras:
             if t.kind != "email":
                 continue
             addr = (t.to_address or "").strip()

@@ -43,7 +43,6 @@ agent:
         enabled: true
         max_episodes: 10
         min_success_rate: 0.8
-    webhooks: {}
     notify:
       enabled: true
       suspend_after_seconds: 2700
@@ -64,7 +63,6 @@ agent:
           smtp_use_tls: false
           smtp_use_ssl: true
           from_address: "413245279@qq.com"
-          targets: []
     max_loops: 16
     loop_idle_timeout: 300
     poll_interval: 5

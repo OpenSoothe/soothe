@@ -42,6 +42,13 @@ class NotifyIntent(BaseModel):
     error: str | None = None
     suspended_for_seconds: float | None = None
     maturity: dict[str, Any] | None = None
+    progress: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Compact DAG progress: status counts + capped attention highlights "
+            "(never a full goal list)"
+        ),
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
     generation: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -30,9 +30,25 @@ async def test_router_emits_job_completed_for_root() -> None:
 
     router = NotificationRouter(_notify_cfg(), dispatch_fn=_dispatch)
     root = GoalNode(id="jobroot01", description="Ship feature", status="completed")
-    intent = await router.on_job_root_status(root)
+    progress = {
+        "total_goals": 3,
+        "completed_goals": 3,
+        "failed_goals": 0,
+        "active_goals": 0,
+        "pending_goals": 0,
+        "suspended_goals": 0,
+        "cancelled_goals": 0,
+        "pct_complete": 100,
+        "highlights": [],
+        "highlights_omitted": 0,
+    }
+    intent = await router.on_job_root_status(root, progress=progress)
     assert intent is not None
     assert intent.kind == "job.completed"
+    assert intent.progress is not None
+    assert intent.progress["total_goals"] == 3
+    assert "(3/3)" in intent.title
+    assert "Progress: 3/3 goals" in intent.body
     assert seen and seen[0].job_id == "jobroot01"
 
 

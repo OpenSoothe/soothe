@@ -76,7 +76,7 @@ class InternalGoalStateChangedEvent(SootheEvent):
     """Goal state changed by ContextEngine.
 
     Emitted by GE when goal status transitions. Received by AP
-    to re-evaluate scheduling and trigger webhooks.
+    to re-evaluate scheduling and emit job lifecycle notify.
     """
 
     type: str = "soothe.internal.goal.state_changed"

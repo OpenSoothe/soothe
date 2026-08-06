@@ -7,7 +7,7 @@ Manages:
 - Dreaming mode transitions
 
 Roles:
-- AutopilotService: Loop management, scheduling, webhooks
+- AutopilotService: Loop management, scheduling, job lifecycle notify
 - ContextEngine: Goal lifecycle, DAG (sole source of truth per RFC-625)
 - AutopilotMonitor: DAG verification, dreaming coordination
 
@@ -64,7 +64,7 @@ class AutopilotService:
     - Spawn and manage StrangeLoop workers (loop pool)
     - Schedule ready goals to available loops
     - Lineage-aware loop assignment (reuse parent's loop)
-    - Send webhook notifications
+    - Emit job lifecycle notify intents (email / webhook / …)
     - Enter dreaming mode when no goals active
 
     NOT responsible for:
@@ -175,13 +175,8 @@ class AutopilotService:
         try:
             from soothe.autopilot.notify import NotificationRouter
 
-            notify_cfg = getattr(self._config, "notify", None)
-            if notify_cfg is None:
-                from soothe.config.models import AutopilotNotifyConfig
-
-                notify_cfg = AutopilotNotifyConfig()
             self._notification_router = NotificationRouter(
-                notify_cfg,
+                self._config.notify,
                 persist_store=self._goal_persist_store,
             )
         except Exception:
@@ -202,10 +197,22 @@ class AutopilotService:
         goal = await self._ce.get_goal(goal_id)
         if goal is None or goal.parent_id is not None:
             return
+        progress = await self._notify_progress_for_job(goal_id)
         try:
-            await router.on_job_root_status(goal)
+            await router.on_job_root_status(goal, progress=progress)
         except Exception:
             logger.debug("Job notify failed for %s", goal_id, exc_info=True)
+
+    async def _notify_progress_for_job(self, job_id: str) -> dict[str, Any] | None:
+        """Load compact DAG progress for notify (fail-soft; never a full goal dump)."""
+        try:
+            from soothe.autopilot.notify.progress import build_job_notify_progress
+
+            dag = await self.dag_snapshot(job_id)
+            return build_job_notify_progress(dag)
+        except Exception:
+            logger.debug("Notify progress snapshot failed for %s", job_id, exc_info=True)
+            return None
 
     async def scan_notify_suspend_timeouts(self) -> None:
         """Scan suspended job roots for notify.suspend_after_seconds (IG-713)."""
@@ -215,9 +222,12 @@ class AutopilotService:
         try:
             goals = await self._ce.list_goals(status="suspended")
             roots = [g for g in goals if g.parent_id is None]
-            await router.scan_suspended_timeouts(roots)
+            progress_by_job: dict[str, dict[str, Any] | None] = {}
+            for root in roots:
+                progress_by_job[root.id] = await self._notify_progress_for_job(root.id)
+            await router.scan_suspended_timeouts(roots, progress_by_job=progress_by_job)
         except Exception:
-            logger.debug("Suspend-timeout notify scan failed", exc_info=True)
+            logger.debug("Notify suspend scan failed", exc_info=True)
 
     def _init_rail_interpreter(self) -> None:
         """Construct LoopRail interpreter with job-scoped JSONL traces (IG-708)."""
@@ -2329,6 +2339,7 @@ class AutopilotService:
                 "depends_on": list(g.depends_on or []),
                 "parent_id": g.parent_id,
                 "assigned_loop_id": g.assigned_loop_id,
+                "role": g.role,
                 "steps_completed": step_payload["steps_completed"],
                 "steps_total": step_payload["steps_total"],
                 "tool_calls": 0,

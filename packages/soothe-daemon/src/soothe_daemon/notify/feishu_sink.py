@@ -34,9 +34,19 @@ class FeishuNotifySink:
         targets: list[NotifyTarget],
     ) -> list[NotifyTarget]:
         out: list[NotifyTarget] = []
-        for t in list(targets) + list(self._config.targets):
-            if t.kind in {"feishu_chat_id", "feishu_open_id"} and t.to_address.strip():
-                out.append(t)
+        seen: set[tuple[str, str]] = set()
+        extras = [NotifyTarget(kind=t.kind, to_address=t.to_address) for t in self._config.targets]
+        for t in list(targets) + extras:
+            if t.kind not in {"feishu_chat_id", "feishu_open_id"}:
+                continue
+            addr = (t.to_address or "").strip()
+            if not addr:
+                continue
+            key = (t.kind, addr)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(NotifyTarget(kind=t.kind, to_address=addr))
         return out
 
     async def deliver(
