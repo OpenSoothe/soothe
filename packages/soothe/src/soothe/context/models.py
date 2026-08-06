@@ -298,6 +298,8 @@ class GoalNode(BaseModel):
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # Set when entering suspended; cleared on reactivate (IG-713 notify timer)
+    suspended_at: datetime | None = None
 
     # Plan-assess audit (IG-557; not replayed into assess prompts except Phase C inline)
     last_assessment: dict[str, Any] | None = None
@@ -357,7 +359,11 @@ class GoalStepDAG(BaseModel):
         if goal is not None:
             goal.status = "suspended"
             goal.assigned_loop_id = None
-            goal.updated_at = datetime.now(UTC)
+            now = datetime.now(UTC)
+            goal.updated_at = now
+            if goal.suspended_at is None:
+                goal.suspended_at = now
+            _ = reason  # API parity / future audit
 
     def cancel_goal(self, goal_id: str) -> None:
         """Transition goal to cancelled (terminal state)."""

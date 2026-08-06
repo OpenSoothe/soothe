@@ -41,6 +41,7 @@ from soothe.config.env import (
 from soothe.config.models import (
     AgentConfig,
     AutopilotConfig,
+    AutopilotNotifyConfig,
     ConsoleLoggingConfig,
     DurabilityProtocolConfig,
     EmbeddingProfile,
@@ -104,6 +105,7 @@ __all__ = [
     "_TOOL_ORCHESTRATION_GUIDE",
     "AgentConfig",
     "AutopilotConfig",
+    "AutopilotNotifyConfig",
     "ConfigReloadCallback",
     "ConfigReloadEvent",
     "ConfigWatcher",

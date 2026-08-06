@@ -44,6 +44,36 @@ agent:
         max_episodes: 10
         min_success_rate: 0.8
     webhooks: {}
+    notify:
+      enabled: false
+      suspend_after_seconds: 2700
+      events:
+        job_completed: true
+        job_failed: true
+        job_suspended_timeout: true
+      targets: []
+      sinks:
+        email:
+          enabled: false
+          smtp_host: ""
+          smtp_port: 587
+          smtp_username: ""
+          smtp_password: ""
+          smtp_use_tls: true
+          smtp_use_ssl: false
+          from_address: ""
+          targets: []
+        webhook:
+          enabled: false
+          urls:
+            job_completed: null
+            job_failed: null
+            job_suspended_timeout: null
+        feishu:
+          enabled: false
+          app_id: ""
+          app_secret: ""
+          targets: []
     max_loops: 16
     loop_idle_timeout: 300
     poll_interval: 5

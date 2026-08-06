@@ -833,6 +833,7 @@ class ContextEngine:
         goal.send_back_count = 0  # Reset send-back budget
         if old == "cancelled":
             goal.error = None
+        goal.suspended_at = None
         goal.updated_at = datetime.now(UTC)
         logger.info("Reactivated goal %s (was %s)", goal_id, old)
         return goal

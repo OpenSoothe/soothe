@@ -138,6 +138,7 @@ class AutopilotService:
         # IG-680: health removals cascade through service cancel when monitor is wired.
         if self._monitor is not None:
             self._monitor.bind_service_cancel(self.cancel_goal)
+            self._monitor.bind_suspend_notify_scan(self.scan_notify_suspend_timeouts)
 
         # RFC-222 revised (Phase C): WorkerPool-driven dispatch.
         # Capacity: ``max_loops`` (pool size) and ``max_parallel_goals``
@@ -161,11 +162,62 @@ class AutopilotService:
         self._persist_fail_count = 0
         self._jobs_root: Path | None = None
         self._rail_interpreter: Any = None
+        self._notification_router: Any = None
         self._init_rail_interpreter()
+        self._init_notification_router()
 
         if subscribe_to_bus:
             self._setup_subscriptions()
             self._subscribed = True
+
+    def _init_notification_router(self) -> None:
+        """Construct host NotificationRouter (daemon injects dispatch later)."""
+        try:
+            from soothe.autopilot.notify import NotificationRouter
+
+            notify_cfg = getattr(self._config, "notify", None)
+            if notify_cfg is None:
+                from soothe.config.models import AutopilotNotifyConfig
+
+                notify_cfg = AutopilotNotifyConfig()
+            self._notification_router = NotificationRouter(
+                notify_cfg,
+                persist_store=self._goal_persist_store,
+            )
+        except Exception:
+            logger.warning("NotificationRouter unavailable", exc_info=True)
+            self._notification_router = None
+
+    def set_notify_dispatch(self, dispatch_fn: Any) -> None:
+        """Inject daemon NotifyDispatcher.dispatch (avoids host→daemon import)."""
+        if self._notification_router is None:
+            return
+        self._notification_router.set_dispatch_fn(dispatch_fn)
+
+    async def _maybe_notify_job_root(self, goal_id: str) -> None:
+        """Emit job.completed / job.failed when ``goal_id`` is a job root."""
+        router = self._notification_router
+        if router is None:
+            return
+        goal = await self._ce.get_goal(goal_id)
+        if goal is None or goal.parent_id is not None:
+            return
+        try:
+            await router.on_job_root_status(goal)
+        except Exception:
+            logger.debug("Job notify failed for %s", goal_id, exc_info=True)
+
+    async def scan_notify_suspend_timeouts(self) -> None:
+        """Scan suspended job roots for notify.suspend_after_seconds (IG-713)."""
+        router = self._notification_router
+        if router is None:
+            return
+        try:
+            goals = await self._ce.list_goals(status="suspended")
+            roots = [g for g in goals if g.parent_id is None]
+            await router.scan_suspended_timeouts(roots)
+        except Exception:
+            logger.debug("Suspend-timeout notify scan failed", exc_info=True)
 
     def _init_rail_interpreter(self) -> None:
         """Construct LoopRail interpreter with job-scoped JSONL traces (IG-708)."""
@@ -749,6 +801,8 @@ class AutopilotService:
                 job_id,
                 goal_id,
             )
+            # Rail builtins may complete/fail the job root without a worker emit.
+            await self._maybe_notify_job_root(job_id)
         except Exception:
             logger.warning("Rail handle %s failed for goal %s", event_name, goal_id, exc_info=True)
 
@@ -864,6 +918,7 @@ class AutopilotService:
             await self._cancel_open_goal_node(node, reason=reason)
 
         await self._persist_goals()
+        await self._maybe_notify_job_root(goal_id)
         return await self._ce.get_goal(goal_id)
 
     async def cancel_all_open_goals(self, *, reason: str = "user_cancelled") -> dict[str, Any]:
@@ -965,6 +1020,7 @@ class AutopilotService:
         if self._workspace_reservation is not None:
             self._workspace_reservation.release(goal.id)
         await self._release_worker_after_cancel(goal.id, loop_id)
+        await self._maybe_notify_job_root(goal.id)
 
     # ---- Internals ----------------------------------------------------
 
@@ -1232,6 +1288,7 @@ class AutopilotService:
             InternalGoalCompletedEvent(goal_id=goal_id, loop_id=lid, plan_result={})
         )
         await self._notify_rail("goal_completed", goal_id)
+        await self._maybe_notify_job_root(goal_id)
 
     async def _emit_goal_failed(
         self,
@@ -1261,6 +1318,7 @@ class AutopilotService:
             )
         )
         await self._notify_rail("goal_failed", goal_id, error=error_message)
+        await self._maybe_notify_job_root(goal_id)
 
     async def _mirror_plan_decision(self, goal_id: str, payload: dict[str, Any]) -> None:
         """Apply worker ``plan_decision`` steps onto the Autopilot CE goal (IG-689).

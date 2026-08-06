@@ -739,6 +739,17 @@ class SootheDaemon(DaemonHandlersMixin):
                     self._autopilot_service._context_store,
                     self._config.agent.autopilot.context_projection,
                 )
+                # IG-713: job lifecycle notify (email / webhook / Feishu sinks)
+                try:
+                    from soothe_daemon.notify import build_notify_dispatcher_from_autopilot
+
+                    self._notify_dispatcher = build_notify_dispatcher_from_autopilot(
+                        self._config.agent.autopilot
+                    )
+                    self._autopilot_service.set_notify_dispatch(self._notify_dispatcher.dispatch)
+                except Exception:
+                    logger.exception("[Notify] failed to wire NotifyDispatcher")
+                    self._notify_dispatcher = None
                 logger.info(
                     "[Autopilot] daemon-owned AutopilotService constructed "
                     "(real dispatch enabled; scheduling loop will start)"

@@ -304,6 +304,16 @@ class AutopilotMonitor:
                     logger.info("DAG health report: %s", report.reasoning)
             except Exception:
                 logger.exception("DAG verification failed")
+            try:
+                scan = getattr(self, "_suspend_notify_scan", None)
+                if scan is not None:
+                    await scan()
+            except Exception:
+                logger.debug("Suspend notify scan failed", exc_info=True)
+
+    def bind_suspend_notify_scan(self, scan_fn: Any) -> None:
+        """Wire AutopilotService.scan_notify_suspend_timeouts into the verify loop."""
+        self._suspend_notify_scan = scan_fn
 
     async def _dreaming_timer_loop(self) -> None:
         """Background dreaming timer."""

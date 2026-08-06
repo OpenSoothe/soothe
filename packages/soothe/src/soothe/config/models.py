@@ -133,6 +133,87 @@ class DreamingModesConfig(BaseModel):
     profile: DreamingModeConfig = Field(default_factory=DreamingModeConfig)
 
 
+class NotifyTargetConfig(BaseModel):
+    """One delivery address for job lifecycle notify (IG-713).
+
+    ``kind`` selects the sink address space (``email``, ``feishu_chat_id``,
+    ``feishu_open_id``, ``webhook_url``, …).
+    """
+
+    kind: str = Field(description="Address space / sink target kind")
+    address: str = Field(description="Recipient address in that space")
+
+
+class NotifyEventsConfig(BaseModel):
+    """Which job-root lifecycle intents to emit."""
+
+    job_completed: bool = True
+    job_failed: bool = True
+    job_suspended_timeout: bool = True
+
+
+class EmailNotifySinkConfig(BaseModel):
+    """Outbound SMTP settings for ``EmailNotifySink`` (not IMAP chat)."""
+
+    enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    from_address: str = ""
+    connect_timeout_seconds: float = Field(default=30.0, gt=0)
+    max_retries: int = Field(default=2, ge=0, le=5)
+    targets: list[NotifyTargetConfig] = Field(default_factory=list)
+
+
+class WebhookNotifySinkConfig(BaseModel):
+    """HTTP POST URLs keyed by intent kind (``job_completed``, …)."""
+
+    enabled: bool = False
+    urls: dict[str, str | None] = Field(default_factory=dict)
+    timeout_seconds: float = Field(default=15.0, gt=0)
+
+
+class FeishuNotifySinkConfig(BaseModel):
+    """Feishu/Lark IM notify sink (Phase 1 stub; live send follow-up)."""
+
+    enabled: bool = False
+    app_id: str = ""
+    app_secret: str = ""
+    targets: list[NotifyTargetConfig] = Field(default_factory=list)
+
+
+class NotifySinksConfig(BaseModel):
+    """Pluggable delivery sinks registered by the daemon NotifyDispatcher."""
+
+    email: EmailNotifySinkConfig = Field(default_factory=EmailNotifySinkConfig)
+    webhook: WebhookNotifySinkConfig = Field(default_factory=WebhookNotifySinkConfig)
+    feishu: FeishuNotifySinkConfig = Field(default_factory=FeishuNotifySinkConfig)
+
+
+class AutopilotNotifyConfig(BaseModel):
+    """Job lifecycle notify push (IG-713).
+
+    Host router emits channel-agnostic intents; daemon sinks deliver
+    (email, webhook, Feishu, …).
+    """
+
+    enabled: bool = False
+    suspend_after_seconds: int = Field(
+        default=2700,
+        ge=60,
+        description="Emit job.suspended_timeout after this many seconds suspended",
+    )
+    events: NotifyEventsConfig = Field(default_factory=NotifyEventsConfig)
+    targets: list[NotifyTargetConfig] = Field(
+        default_factory=list,
+        description="Global default targets; sinks may add their own",
+    )
+    sinks: NotifySinksConfig = Field(default_factory=NotifySinksConfig)
+
+
 class AutopilotConfig(BaseModel):
     """Autopilot scheduling and self-running configuration.
 
@@ -159,7 +240,8 @@ class AutopilotConfig(BaseModel):
         consensus_model_role: Router role for RFC-204 goal consensus validation.
             Defaults to ``think``; daemon uses ``create_chat_model`` with automatic
             fallback to ``default`` on instantiation failure.
-        webhooks: Webhook URLs by event type (e.g., on_goal_completed).
+        webhooks: Webhook URLs by event type (legacy; prefer ``notify.sinks.webhook``).
+        notify: Job lifecycle multi-channel notify (IG-713).
 
     Note:
         StrangeLoop iteration budget is shared via ``agent.loop.max_iterations`` —
@@ -255,6 +337,10 @@ class AutopilotConfig(BaseModel):
     """Configuration for each dreaming distillation mode."""
 
     webhooks: dict[str, str | None] = Field(default_factory=dict)
+    notify: AutopilotNotifyConfig = Field(
+        default_factory=AutopilotNotifyConfig,
+        description="Job lifecycle multi-channel notify push (IG-713)",
+    )
 
     # === Loop pool (RFC-222) ===
     # Distinct from `max_parallel_goals`: `max_loops` caps worker capacity in
