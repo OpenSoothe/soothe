@@ -52,7 +52,8 @@ Use autonomous mode for tasks that:
 soothe autopilot run "Research quantum error correction advances"
 
 # The --max-iterations flag is accepted but ignored.
-# Configure the iteration limit via daemon config: agent.autopilot.max_iterations
+# Configure the iteration limit via daemon config: agent.loop.max_iterations
+# (shared StrangeLoop budget; Autopilot does not redefine it)
 soothe autopilot run "Build a web scraper"
 ```
 
@@ -72,12 +73,13 @@ Set defaults in your configuration file:
 
 ```yaml
 agent:
+  loop:
+    # Shared StrangeLoop iteration budget (interactive + Autopilot workers)
+    max_iterations: 99
+
   autopilot:
     # Enable autopilot scheduling loop (default true; starts on daemon startup)
     enabled: true
-
-    # Maximum iterations per autopilot thread (default: 10)
-    max_iterations: 10
 
     # Maximum retries per goal on failure (default: 2)
     max_retries: 2
@@ -92,7 +94,7 @@ Set `goal_deadline_seconds: null` to disable autopilot deadline enforcement (not
 
 ```bash
 export SOOTHE_AGENT_AUTOPILOT_ENABLED=true
-export SOOTHE_AGENT_AUTOPILOT_MAX_ITERATIONS=15
+export SOOTHE_AGENT__LOOP__MAX_ITERATIONS=99
 export SOOTHE_AGENT_AUTOPILOT_MAX_RETRIES=3
 export SOOTHE_AGENT__AUTOPILOT__GOAL_DEADLINE_SECONDS=1209600
 ```

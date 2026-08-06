@@ -263,7 +263,7 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
     test_config.agent.loop.concurrency.max_parallel_goals = 1
     test_config.agent.loop.concurrency.max_parallel_steps = 1
     test_config.agent.loop.concurrency.global_max_llm_calls = 3
-    test_config.agent.autopilot.max_iterations = 5
+    test_config.agent.loop.max_iterations = 5
     if os.getenv("ANTHROPIC_API_KEY") and not (
         os.getenv("DASHSCOPE_CP_API_KEY") and os.getenv("DASHSCOPE_CP_BASE_URL")
     ):

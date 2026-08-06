@@ -9,7 +9,7 @@ agent:
 
   autopilot:
     enabled: true
-    max_iterations: 10
+    # StrangeLoop iteration budget: agent.loop.max_iterations (shared; do not redefine here)
     max_retries: 2
     max_total_goals: 50
     max_goal_depth: 5

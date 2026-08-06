@@ -116,7 +116,7 @@ Configuration surfaces audited:
 | `stale_worker_reap.enabled` | `true` | Correct — dead worker cleanup |
 | `auto_cancel_on_startup` | `true` | Correct — prevents orphaned processes |
 | `cancel_retry_count` | `3` | Reasonable — 3 cooperative cancel attempts before force kill |
-| `agent.autopilot.max_iterations` | `10` | Correct — bounded autopilot |
+| `agent.loop.max_iterations` | `99` | Shared StrangeLoop budget (Autopilot uses the same) |
 | `agent.loop.max_iterations` | `99` | Acceptable — upper bound on loop iterations |
 | `tool_timeout.enabled` | `true` | Correct — tool-level timeout enforcement |
 | `tool_timeout.default_seconds` | `60.0` | Reasonable — 60s default per tool |

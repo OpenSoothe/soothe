@@ -143,7 +143,6 @@ class AutopilotConfig(BaseModel):
             When False, the daemon constructs the service but does not start
             the scheduling loop. HTTP /autopilot/submit endpoints are available
             but goals won't be dispatched automatically. Default is True.
-        max_iterations: Maximum iterations per autopilot thread (goal-level).
         max_retries: Maximum retries per goal on failure.
         max_total_goals: Maximum goals allowed (RFC-0007 §5.6).
         max_goal_depth: Maximum hierarchy depth (RFC-0007 §5.6).
@@ -162,6 +161,11 @@ class AutopilotConfig(BaseModel):
             Defaults to ``think``; daemon uses ``create_chat_model`` with automatic
             fallback to ``default`` on instantiation failure.
         webhooks: Webhook URLs by event type (e.g., on_goal_completed).
+
+    Note:
+        StrangeLoop iteration budget is shared via ``agent.loop.max_iterations`` —
+        Autopilot does not redefine it. Workers fall back to that value when
+        ``LoopRunRequest.max_iterations`` is unset.
     """
 
     # === Autopilot scheduling (daemon-level) ===
@@ -174,7 +178,6 @@ class AutopilotConfig(BaseModel):
             "loop does not start automatically; goals must be dispatched manually."
         ),
     )
-    max_iterations: int = 10
     max_retries: int = 2
     max_total_goals: int = Field(default=50, ge=1, le=500)
     max_goal_depth: int = Field(default=5, ge=1, le=10)

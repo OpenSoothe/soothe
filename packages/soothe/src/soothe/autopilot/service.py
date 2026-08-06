@@ -1002,7 +1002,8 @@ class AutopilotService:
                 attempt=goal.retry_count + 1,
             ),
             autonomous=True,
-            max_iterations=self._config.max_iterations,
+            # StrangeLoop budget is shared: worker uses agent.loop.max_iterations.
+            max_iterations=None,
         )
 
         task = asyncio.create_task(self._consume_worker_stream(goal.id, worker, request))

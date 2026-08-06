@@ -102,7 +102,7 @@ def agent_config_file(config_workspace: Path) -> Path:
     config_path = config_workspace / "config.yml"
     # Use base config and export it
     base_config = get_base_config().model_copy(deep=True)
-    base_config.agent.autopilot.max_iterations = 5
+    base_config.agent.loop.max_iterations = 5
     base_config.agent.loop.concurrency.max_parallel_goals = 1
     base_config.agent.loop.concurrency.max_parallel_steps = 1
     base_config.agent.loop.concurrency.global_max_llm_calls = 10
@@ -205,7 +205,7 @@ async def test_file_modification_triggers_reload_via_eventbus(
 
     # Modify the agent config file
     config_data = yaml.safe_load(agent_config_file.read_text())
-    config_data["agent"]["autopilot"]["max_iterations"] = 10
+    config_data["agent"]["loop"]["max_iterations"] = 10
     with agent_config_file.open("w") as f:
         yaml.dump(config_data, f)
 
@@ -237,7 +237,7 @@ async def test_file_modification_multiple_configs(
 
     # Modify agent config
     config_data = yaml.safe_load(agent_config_file.read_text())
-    config_data["agent"]["autopilot"]["max_iterations"] = 15
+    config_data["agent"]["loop"]["max_iterations"] = 15
     with agent_config_file.open("w") as f:
         yaml.dump(config_data, f)
 
@@ -489,7 +489,7 @@ async def test_validation_success_allows_swap(
 
     # Modify config in a valid way
     config_data = yaml.safe_load(agent_config_file.read_text())
-    config_data["agent"]["autopilot"]["max_iterations"] = 20
+    config_data["agent"]["loop"]["max_iterations"] = 20
 
     with agent_config_file.open("w") as f:
         yaml.dump(config_data, f)
@@ -609,7 +609,7 @@ async def test_rapid_saves_are_debounced(
     # Make multiple rapid modifications
     for i in range(5):
         config_data = yaml.safe_load(agent_config_file.read_text())
-        config_data["agent"]["autopilot"]["max_iterations"] = 5 + i
+        config_data["agent"]["loop"]["max_iterations"] = 5 + i
         with agent_config_file.open("w") as f:
             yaml.dump(config_data, f)
         await asyncio.sleep(0.1)  # Very rapid saves
@@ -653,7 +653,7 @@ async def test_real_daemon_process_reload(
     # Write minimal agent config
     agent_config = config_dir / "config.yml"
     base_config = get_base_config().model_copy(deep=True)
-    base_config.agent.autopilot.max_iterations = 5
+    base_config.agent.loop.max_iterations = 5
     agent_data = base_config.model_dump(mode="json", exclude_none=True)
     with agent_config.open("w") as f:
         yaml.dump(agent_data, f)

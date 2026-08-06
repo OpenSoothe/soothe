@@ -314,8 +314,9 @@ def build_daemon_config(
                     "persist_dir": str(tmp_path / "durability"),
                 },
             },
-            "autopilot": {"max_iterations": 3},
+            "autopilot": {"enabled": True},
             "loop": {
+                "max_iterations": 3,
                 "limits": {
                     "max_parallel_goals": 1,
                     "max_parallel_steps": 1,
@@ -551,7 +552,7 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
     test_config.agent.loop.concurrency.max_parallel_goals = 1
     test_config.agent.loop.concurrency.max_parallel_steps = 1
     test_config.agent.loop.concurrency.global_max_llm_calls = 3
-    test_config.agent.autopilot.max_iterations = 5
+    test_config.agent.loop.max_iterations = 5
 
     return test_config
 
