@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from soothe.autopilot.scheduled_tasks import ScheduleSpec, _parse_cron_field, _parse_duration
+from soothe.autopilot.schedule.tasks import ScheduleSpec, _parse_cron_field, _parse_duration
 
 
 class TestScheduleSpec:

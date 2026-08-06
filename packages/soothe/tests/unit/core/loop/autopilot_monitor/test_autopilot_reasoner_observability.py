@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.autopilot.backoff_reasoner import GoalBackoffReasoner
-from soothe.autopilot.engine_models import EvidenceBundle
+from soothe.autopilot.dispatch.models import EvidenceBundle
+from soothe.autopilot.verify.backoff_reasoner import GoalBackoffReasoner
 from soothe.context.models import GoalNode
 
 _BACKOFF_JSON = """```json

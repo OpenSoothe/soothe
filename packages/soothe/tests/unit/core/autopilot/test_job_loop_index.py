@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.autopilot.job_loop_index import JobLoopIndex
+from soothe.autopilot.workers.job_loop_index import JobLoopIndex
 
 
 class _MemStore:

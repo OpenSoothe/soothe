@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.autopilot.top_snapshot import (
+from soothe.autopilot.jobs.top_snapshot import (
     build_top_job_entry,
     filter_active_dag,
     filter_active_loops,
@@ -214,7 +214,7 @@ def test_build_top_job_keeps_job_when_root_terminal_but_child_active() -> None:
 
 
 def test_dag_goal_counts() -> None:
-    from soothe.autopilot.top_snapshot import dag_goal_counts
+    from soothe.autopilot.jobs.top_snapshot import dag_goal_counts
 
     counts = dag_goal_counts(
         {
@@ -273,7 +273,7 @@ def test_build_top_job_include_terminal_keeps_completed() -> None:
 
 
 def test_sort_top_jobs_newest_first() -> None:
-    from soothe.autopilot.top_snapshot import sort_top_jobs
+    from soothe.autopilot.jobs.top_snapshot import sort_top_jobs
 
     jobs = [
         {"id": "old", "created_at": "2026-08-01T00:00:00+00:00"},

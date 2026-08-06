@@ -441,7 +441,7 @@ class RailBuiltinExecutor:
 
     def _acceptance_brief_for_job(self, job_id: str) -> str:
         """Acceptance contract blurb for QA/verify goal descriptions."""
-        from soothe.autopilot.maturity import acceptance_contract_brief
+        from soothe.autopilot.verify.maturity import acceptance_contract_brief
 
         root = self._ce._dag.get_goal(job_id)
         ws = _job_workspace(self._ce, job_id)
@@ -1036,7 +1036,7 @@ class RailBuiltinExecutor:
                 detail=f"max_feedback_rounds={state.max_feedback_rounds} reached",
             )
         root = self._ce._dag.get_goal(job_id)
-        from soothe.autopilot.maturity import latch_acceptance_met
+        from soothe.autopilot.verify.maturity import latch_acceptance_met
 
         if latch_acceptance_met(
             rail_acceptance_met=state.acceptance_met,

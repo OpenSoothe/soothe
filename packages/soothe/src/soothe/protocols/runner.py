@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from soothe.autopilot.engine_models import GoalDispatchContextBundle
+    from soothe.autopilot.dispatch.models import GoalDispatchContextBundle
 
 from soothe.events import StreamChunk
 

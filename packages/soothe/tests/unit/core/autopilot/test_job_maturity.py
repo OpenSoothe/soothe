@@ -7,15 +7,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.autopilot.goal_dag_verifier import GoalDAGVerifier
-from soothe.autopilot.maturity import (
+from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.autopilot.rail.interpreter import RailEvent
+from soothe.autopilot.verify.goal_dag_verifier import GoalDAGVerifier
+from soothe.autopilot.verify.maturity import (
     JobMaturityAssessor,
     MaturityCriterion,
     is_verify_class_goal,
     latch_acceptance_met,
 )
-from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
-from soothe.autopilot.rail.interpreter import RailEvent
 from soothe.context import ContextEngine
 
 
@@ -75,7 +75,7 @@ class TestJobMaturityAssessor:
                 return MagicMock(returncode=0, stdout="", stderr="")
             return MagicMock(returncode=126, stdout="", stderr="exec format error")
 
-        with patch("soothe.autopilot.maturity.subprocess.run", side_effect=fake_run):
+        with patch("soothe.autopilot.verify.maturity.subprocess.run", side_effect=fake_run):
             snap = JobMaturityAssessor().assess_workspace(tmp_path)
         assert snap.acceptance_met is False
         ids = {c.id: c.status for c in snap.criteria}
@@ -88,7 +88,7 @@ class TestJobMaturityAssessor:
         def fake_run(argv, **kwargs):  # type: ignore[no-untyped-def]
             return MagicMock(returncode=0, stdout="ok\n", stderr="")
 
-        with patch("soothe.autopilot.maturity.subprocess.run", side_effect=fake_run):
+        with patch("soothe.autopilot.verify.maturity.subprocess.run", side_effect=fake_run):
             snap = JobMaturityAssessor(cargo_timeout_s=5.0).assess_workspace(tmp_path)
         assert snap.acceptance_met is True
         assert snap.level == "accepted"
@@ -97,7 +97,7 @@ class TestJobMaturityAssessor:
     def test_snapshot_roundtrip(self) -> None:
         from datetime import UTC, datetime
 
-        from soothe.autopilot.maturity import JobMaturitySnapshot
+        from soothe.autopilot.verify.maturity import JobMaturitySnapshot
 
         snap = JobMaturitySnapshot(
             assessed_at=datetime.now(UTC),
@@ -135,7 +135,7 @@ class TestRailExclusivity:
 
     @pytest.mark.asyncio
     async def test_health_decompose_skipped_for_rail(self) -> None:
-        from soothe.autopilot.monitor_models import DagHealthReport, DecomposeSuggestion
+        from soothe.autopilot.monitor.models import DagHealthReport, DecomposeSuggestion
 
         ce = ContextEngine()
         root = await ce.create_goal("job", priority=80)
@@ -173,7 +173,7 @@ class TestAcceptanceMetPersist:
 
 class TestAcceptanceContractBrief:
     def test_includes_goal_md(self, tmp_path: Path) -> None:
-        from soothe.autopilot.maturity import acceptance_contract_brief
+        from soothe.autopilot.verify.maturity import acceptance_contract_brief
 
         (tmp_path / "GOAL.md").write_text("Task: pass return N\n", encoding="utf-8")
         brief = acceptance_contract_brief(workspace=tmp_path)
@@ -181,7 +181,7 @@ class TestAcceptanceContractBrief:
         assert "return N" in brief
 
     def test_includes_verification_rules(self) -> None:
-        from soothe.autopilot.maturity import acceptance_contract_brief
+        from soothe.autopilot.verify.maturity import acceptance_contract_brief
 
         brief = acceptance_contract_brief(verification_rules="cargo test must pass")
         assert "cargo test must pass" in brief
@@ -210,7 +210,7 @@ class TestEnsureTriggerTags:
 
 class TestTopMaturityField:
     def test_build_top_includes_maturity(self) -> None:
-        from soothe.autopilot.top_snapshot import build_top_job_entry
+        from soothe.autopilot.jobs.top_snapshot import build_top_job_entry
 
         entry = build_top_job_entry(
             job_id="j1",

@@ -20,19 +20,19 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from soothe.autopilot.engine_models import (
+from soothe.autopilot.dispatch.models import (
     GoalDispatchContextBundle,
     ParentFinding,
 )
 
 if TYPE_CHECKING:
-    from soothe.autopilot.context_store import GoalDispatchContextStoreProtocol
-    from soothe.autopilot.engine_models import (
+    from soothe.autopilot.dispatch.models import (
         FileTouchSummary,
         GoalDispatchContextContribution,
         PriorStepSummary,
         ToolCallStats,
     )
+    from soothe.autopilot.dispatch.store import GoalDispatchContextStoreProtocol
     from soothe.config.models import ContextProjectionConfig
     from soothe.context.models import GoalNode
 
@@ -118,7 +118,7 @@ class ContextProjector:
         self,
         ordered_pairs: list[tuple[str, GoalDispatchContextContribution]],
     ) -> list[PriorStepSummary]:
-        from soothe.autopilot.engine_models import PriorStepSummary
+        from soothe.autopilot.dispatch.models import PriorStepSummary
 
         merged: list[PriorStepSummary] = []
         for parent_id, contribution in ordered_pairs:
@@ -182,7 +182,7 @@ class ContextProjector:
     def _merge_tool_stats(
         ordered_pairs: list[tuple[str, GoalDispatchContextContribution]],
     ) -> ToolCallStats:
-        from soothe.autopilot.engine_models import ToolCallStats
+        from soothe.autopilot.dispatch.models import ToolCallStats
 
         counts: dict[str, int] = {}
         failures: dict[str, int] = {}

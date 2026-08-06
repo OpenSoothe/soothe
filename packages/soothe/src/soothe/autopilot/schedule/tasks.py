@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, tzinfo
 
-from soothe.autopilot.schedule_timezone import (
+from soothe.autopilot.schedule.timezone import (
     normalize_schedule_datetime,
     resolve_schedule_timezone,
 )

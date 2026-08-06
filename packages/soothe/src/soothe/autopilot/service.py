@@ -1,18 +1,18 @@
-"""AutopilotService for Layer 3 orchestration (RFC-222, RFC-625).
+"""AutopilotService orchestration (RFC-222, RFC-625).
 
-This module provides the AutopilotService class that manages:
+Manages:
 - Loop pool (StrangeLoop worker creation, assignment, release)
 - Scheduling loop (goal → loop assignment with lineage reuse)
 - Internal EventBus integration (AL ↔ CE ↔ AP coordination)
 - Dreaming mode transitions
 
-Architecture Position: Layer 3 orchestrator using ContextEngine.
+Roles:
 - AutopilotService: Loop management, scheduling, webhooks
 - ContextEngine: Goal lifecycle, DAG (sole source of truth per RFC-625)
 - AutopilotMonitor: DAG verification, dreaming coordination
 
-Key Principle: Solo mode preserved - AutopilotService only active
-when autopilot.enabled is true.
+Solo mode preserved — AutopilotService only active when autopilot.enabled
+is true.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 
 class AutopilotService:
-    """Layer 3 Autopilot orchestration service (RFC-222, RFC-625).
+    """Autopilot orchestration service (RFC-222, RFC-625).
 
     Manages StrangeLoop worker pool and goal scheduling with
     lineage-aware loop reuse. Uses ContextEngine as the sole
@@ -143,8 +143,8 @@ class AutopilotService:
         # (schedule cap in ``_schedule_via_worker_pool``). Assignment locking
         # lives on ``WorkerPool``.
         self._runner_factory = runner_factory
-        from soothe.autopilot.job_loop_index import JobLoopIndex
-        from soothe.autopilot.worker_pool import WorkerPool
+        from soothe.autopilot.workers.job_loop_index import JobLoopIndex
+        from soothe.autopilot.workers.pool import WorkerPool
 
         self._worker_pool = WorkerPool(factory=runner_factory, max_loops=self._config.max_loops)
         self._workspace_reservation = workspace_reservation
@@ -228,11 +228,18 @@ class AutopilotService:
         Args:
             event: Goal state change event.
         """
-        logger.debug(
-            "Goal %s state changed: %s → %s",
+        terminal = {"completed", "failed", "cancelled"}
+        log = (
+            logger.info
+            if event.new_status in terminal or event.old_status in terminal
+            else logger.debug
+        )
+        log(
+            "Goal state changed goal_id=%s %s → %s loop_id=%s",
             event.goal_id,
             event.old_status,
             event.new_status,
+            event.loop_id or "-",
         )
 
         # Release loop if goal completed
@@ -503,7 +510,7 @@ class AutopilotService:
         if goal.parent_id is None:
             await self._job_loop_index.ensure_job(goal.id)
             # IG-702: durable submit contract under jobs/{job_id}/GOAL.md.
-            from soothe.autopilot.job_goal_md import write_job_goal_md
+            from soothe.autopilot.jobs.goal_md import write_job_goal_md
 
             write_job_goal_md(
                 jobs_root=self._jobs_root,
@@ -514,6 +521,14 @@ class AutopilotService:
         if self._dreaming:
             await self.wake_from_dreaming(trigger="new_task")
         await self._persist_goals()
+        logger.info(
+            "Goal submitted goal_id=%s parent_id=%s rail_id=%s priority=%s workspace=%s",
+            goal.id,
+            goal.parent_id or "-",
+            getattr(goal, "rail_id", None) or "-",
+            goal.priority,
+            (goal.workspace or "-")[:80],
+        )
         return goal
 
     async def _bind_rail_for_job(self, goal: GoalNode) -> None:
@@ -538,6 +553,11 @@ class AutopilotService:
             )
             await self._rail_interpreter.handle(
                 RailEvent(name="job_start", job_id=goal.id, goal_id=goal.id)
+            )
+            logger.info(
+                "Rail bound job_id=%s rail_id=%s event=job_start",
+                goal.id,
+                goal.rail_id,
             )
         except Exception:
             logger.warning(
@@ -674,12 +694,28 @@ class AutopilotService:
 
     async def _notify_rail(self, event_name: str, goal_id: str, **payload: Any) -> None:
         if self._rail_interpreter is None:
+            logger.debug(
+                "Rail notify skipped event=%s goal_id=%s reason=no_interpreter",
+                event_name,
+                goal_id,
+            )
             return
         job_id = self._job_id_for_goal(goal_id)
         if job_id is None:
+            logger.debug(
+                "Rail notify skipped event=%s goal_id=%s reason=no_job",
+                event_name,
+                goal_id,
+            )
             return
         root = self._ce._dag.get_goal(job_id)
         if root is None or not root.rail_id:
+            logger.debug(
+                "Rail notify skipped event=%s goal_id=%s job_id=%s reason=no_rail",
+                event_name,
+                goal_id,
+                job_id,
+            )
             return
         # Rebind after restore if needed
         if job_id not in getattr(self._rail_interpreter, "_rails", {}):
@@ -705,6 +741,12 @@ class AutopilotService:
                     goal_id=goal_id,
                     payload=dict(payload),
                 )
+            )
+            logger.info(
+                "Rail event handled event=%s job_id=%s goal_id=%s",
+                event_name,
+                job_id,
+                goal_id,
             )
         except Exception:
             logger.warning("Rail handle %s failed for goal %s", event_name, goal_id, exc_info=True)
@@ -1153,7 +1195,7 @@ class AutopilotService:
         Hooks the ``ContextProjector`` if one was wired, then attaches
         operator guidance accumulated on the goal (and job-scoped root).
         """
-        from soothe.autopilot.engine_models import GoalDispatchContextBundle
+        from soothe.autopilot.dispatch.models import GoalDispatchContextBundle
 
         projector = getattr(self, "_context_projector", None)
         if projector is None:
@@ -1180,6 +1222,11 @@ class AutopilotService:
         if not lid:
             goal = await self._ce.get_goal(goal_id)
             lid = (goal.assigned_loop_id if goal else None) or ""
+        logger.info(
+            "Goal completed event goal_id=%s loop_id=%s",
+            goal_id,
+            lid or "-",
+        )
         await self._internal_bus.emit(
             InternalGoalCompletedEvent(goal_id=goal_id, loop_id=lid, plan_result={})
         )
@@ -1198,6 +1245,12 @@ class AutopilotService:
         if not lid:
             goal = await self._ce.get_goal(goal_id)
             lid = (goal.assigned_loop_id if goal else None) or ""
+        logger.info(
+            "Goal failed event goal_id=%s loop_id=%s error=%s",
+            goal_id,
+            lid or "-",
+            (error_message or "-")[:160],
+        )
         await self._internal_bus.emit(
             InternalGoalFailedEvent(
                 goal_id=goal_id,
@@ -1249,6 +1302,19 @@ class AutopilotService:
         if added or steps:
             goal.touch()
             await self._persist_goals()
+        if added:
+            logger.info(
+                "Plan mirrored goal_id=%s iteration=%s added_steps=%d total_payload=%d",
+                goal_id,
+                iteration,
+                added,
+                len(steps),
+            )
+            logger.debug(
+                "Plan mirrored step_ids goal_id=%s ids=%s",
+                goal_id,
+                [str(s.get("id") or "") for s in steps if isinstance(s, dict)][:40],
+            )
 
     async def _mirror_step_started(self, goal_id: str, payload: dict[str, Any]) -> None:
         """Mark a step ``active`` on the Autopilot CE goal when execution begins."""
@@ -1262,6 +1328,7 @@ class AutopilotService:
             desc = str(payload.get("description") or sid).strip() or sid
             goal.steps.add_step(StepNode(id=sid, description=desc))
         await self._ce.activate_step(goal_id, sid)
+        logger.debug("Step started mirrored goal_id=%s step_id=%s", goal_id, sid)
 
     def _step_token_delta(self, goal_id: str, payload: dict[str, Any]) -> int:
         """Derive tokens for one mirrored step from worker progress (IG-701).
@@ -1320,8 +1387,17 @@ class AutopilotService:
         )
         if payload.get("success", True):
             await self._ce.complete_step(goal_id, sid, execution)
+            outcome = "completed"
         else:
             await self._ce.fail_step(goal_id, sid, execution)
+            outcome = "failed"
+        logger.debug(
+            "Step completed mirrored goal_id=%s step_id=%s outcome=%s tokens=%d",
+            goal_id,
+            sid,
+            outcome,
+            execution.tokens_used,
+        )
 
     async def _mirror_contribution_steps(self, goal_id: str, contribution: Any) -> None:
         """Backfill StepDAG from completion contribution when progress was missed."""
@@ -1387,7 +1463,7 @@ class AutopilotService:
 
         On exception or non-completion termination: mark goal failed.
         """
-        from soothe.autopilot.engine_models import (
+        from soothe.autopilot.dispatch.models import (
             EvidenceBundle,
             GoalDispatchContextContribution,
         )
@@ -1523,7 +1599,7 @@ class AutopilotService:
 
         if not completion_seen:
             # Worker stream ended without a completion chunk — treat as failed.
-            from soothe.autopilot.engine_models import EvidenceBundle as _EvBundle
+            from soothe.autopilot.dispatch.models import EvidenceBundle as _EvBundle
 
             try:
                 await self._ce.fail_goal(
@@ -1585,8 +1661,8 @@ class AutopilotService:
         Never falls back to ``goal.description`` as the agent response when
         evidence is empty — that path caused false send_backs in eval.
         """
-        from soothe.autopilot.consensus import evaluate_goal_completion
-        from soothe.autopilot.evidence_grounding import (
+        from soothe.autopilot.verify.consensus import evaluate_goal_completion
+        from soothe.autopilot.verify.evidence_grounding import (
             enrich_workspace_evidence,
             format_contribution_evidence,
         )
@@ -1686,6 +1762,13 @@ class AutopilotService:
                 )
 
         rail_bound = bool(getattr(goal, "rail_id", None))
+        logger.info(
+            "Consensus finalize goal_id=%s decision=%s rail_bound=%s reasoning=%s",
+            goal_id,
+            decision,
+            rail_bound,
+            (reasoning or "")[:160],
+        )
         try:
             if decision == "accept":
                 await self._ce.complete_goal(goal_id)
@@ -1720,7 +1803,7 @@ class AutopilotService:
 
     async def _maybe_assess_job_maturity(self, goal_id: str) -> None:
         """Run job maturity assessor after verify-class goals (RFC-230 / IG-692)."""
-        from soothe.autopilot.maturity import (
+        from soothe.autopilot.verify.maturity import (
             JobMaturityAssessor,
             is_verify_class_goal,
             load_goal_md_excerpt,
@@ -1848,7 +1931,7 @@ class AutopilotService:
         if not deadline or deadline <= 0:
             return
 
-        from soothe.autopilot.engine_models import EvidenceBundle
+        from soothe.autopilot.dispatch.models import EvidenceBundle
 
         now = datetime.now(UTC)
         for worker in self._worker_pool.active_workers():
@@ -2001,7 +2084,7 @@ class AutopilotService:
         Returns:
             Status dict with running, dreaming, loop pool stats.
         """
-        return {
+        snapshot = {
             "running": self._running,
             "dreaming": self._dreaming,
             "loop_pool": {
@@ -2019,6 +2102,15 @@ class AutopilotService:
                 "poll_interval": self._config.poll_interval,
             },
         }
+        logger.debug(
+            "Autopilot status report running=%s dreaming=%s active=%d idle=%d completed=%d",
+            snapshot["running"],
+            snapshot["dreaming"],
+            snapshot["loop_pool"]["active"],
+            snapshot["loop_pool"]["idle"],
+            snapshot["goals"]["completed"],
+        )
+        return snapshot
 
     async def list_job_loops(self, job_id: str) -> list[dict[str, Any]]:
         """Return durable loop membership history for a job (IG-677)."""
@@ -2072,8 +2164,8 @@ class AutopilotService:
             Dict with ``running``, ``dreaming``, ``loop_pool``, ``generated_at``,
             and ``jobs`` (each with filtered ``dag`` and active ``loops``).
         """
-        from soothe.autopilot.maturity import maturity_wire_fields
-        from soothe.autopilot.top_snapshot import build_top_job_entry, sort_top_jobs
+        from soothe.autopilot.jobs.top_snapshot import build_top_job_entry, sort_top_jobs
+        from soothe.autopilot.verify.maturity import maturity_wire_fields
 
         status = self.status()
         goals = await self.list_goals()
@@ -2104,13 +2196,21 @@ class AutopilotService:
             )
             if entry is not None:
                 jobs.append(entry)
-        return {
+        snapshot = {
             "running": status.get("running", False),
             "dreaming": status.get("dreaming", False),
             "loop_pool": status.get("loop_pool", {}),
             "generated_at": datetime.now(UTC).isoformat(),
             "jobs": sort_top_jobs(jobs),
         }
+        logger.debug(
+            "Top snapshot built jobs=%d include_terminal=%s running=%s dreaming=%s",
+            len(snapshot["jobs"]),
+            include_terminal,
+            snapshot["running"],
+            snapshot["dreaming"],
+        )
+        return snapshot
 
     async def dag_snapshot(self, root_goal_id: str) -> dict[str, Any]:
         """Export job subtree for visualization (RFC-228 / CLI top).

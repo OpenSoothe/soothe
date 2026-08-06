@@ -6,10 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.autopilot.engine_models import BackoffDecision
-from soothe.autopilot.goal_dag_verifier import GoalDAGVerifier
+from soothe.autopilot.dispatch.models import BackoffDecision
 from soothe.autopilot.monitor import AutopilotMonitor
-from soothe.autopilot.monitor_models import DagHealthReport
+from soothe.autopilot.monitor.models import DagHealthReport
+from soothe.autopilot.verify.goal_dag_verifier import GoalDAGVerifier
 from soothe.context import ContextEngine
 from soothe.events.internal_bus import InternalEventBus
 

@@ -34,12 +34,12 @@ TERMINAL_STATES: frozenset[str] = frozenset({"completed", "failed", "cancelled"}
 BLOCKED_STATES: frozenset[str] = frozenset({"awaiting_clarification", "suspended"})
 
 
-# RFC-200 §14-22: Canonical evidence bundle for Layer 2 → Layer 3 integration
+# Canonical evidence bundle for StrangeLoop → AutopilotMonitor integration
 class EvidenceBundle(BaseModel):
-    """Canonical evidence payload exchanged across Layer 2 and Layer 3.
+    """Canonical evidence payload exchanged across StrangeLoop and Autopilot.
 
-    RFC-200 §14-22: This is the authoritative schema for evidence exchange.
-    Layer 2 StrangeLoop MUST construct this structure from execution context.
+    This is the authoritative schema for evidence exchange.
+    StrangeLoop MUST construct this structure from execution context.
     ContextEngine (via AutopilotMonitor) MUST receive this in fail_goal() signature.
 
     Args:

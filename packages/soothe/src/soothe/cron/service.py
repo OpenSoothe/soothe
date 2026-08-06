@@ -11,8 +11,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from soothe.autopilot.schedule_timezone import schedule_timezone_label
-from soothe.autopilot.scheduled_tasks import ScheduleSpec
+from soothe.autopilot.schedule.tasks import ScheduleSpec
+from soothe.autopilot.schedule.timezone import schedule_timezone_label
 from soothe.cron.extraction import AutopilotDisabledError, CronExtractionService
 from soothe.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
 from soothe.cron.models import CronJob, DuplicateCronJobError, JobStatus

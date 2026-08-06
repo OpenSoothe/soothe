@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from soothe.autopilot.worker_pool import (
+from soothe.autopilot.workers.pool import (
     WorkerPool,
     WorkerSlot,
     allocate_assignment_loop_id,

@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.autopilot import AutopilotService
-from soothe.autopilot.consensus import ConsensusVerdict
-from soothe.autopilot.context_store import InMemoryGoalDispatchContextStore
+from soothe.autopilot.dispatch.store import InMemoryGoalDispatchContextStore
+from soothe.autopilot.verify.consensus import ConsensusVerdict
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.events.internal_bus import InternalEventBus

@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.autopilot.engine_models import GoalDispatchContextBundle
+from soothe.autopilot.dispatch.models import GoalDispatchContextBundle
 from soothe.protocols.runner import GoalDispatchEnvelope
 from soothe.runner._runner_autopilot_worker import AutopilotWorkerMixin
 from soothe.sloop.state.schemas import PlanResult

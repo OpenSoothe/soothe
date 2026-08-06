@@ -8,25 +8,25 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from soothe.autopilot import AutopilotService
-from soothe.autopilot.consensus import ConsensusVerdict
-from soothe.autopilot.engine_models import (
+from soothe.autopilot.dispatch.models import (
     Finding,
     GoalDispatchContextContribution,
     StepSummary,
     ToolCallStats,
 )
-from soothe.autopilot.evidence_grounding import (
+from soothe.autopilot.monitor.models import (
+    DagHealthReport,
+    DecomposeSuggestion,
+    WireDependencySuggestion,
+)
+from soothe.autopilot.verify.consensus import ConsensusVerdict
+from soothe.autopilot.verify.evidence_grounding import (
     format_contribution_evidence,
     synthesize_completion_evidence,
     workspace_deliverable_probe,
     workspace_has_deliverables,
 )
-from soothe.autopilot.goal_dag_verifier import GoalDAGVerifier
-from soothe.autopilot.monitor_models import (
-    DagHealthReport,
-    DecomposeSuggestion,
-    WireDependencySuggestion,
-)
+from soothe.autopilot.verify.goal_dag_verifier import GoalDAGVerifier
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.context.models import GoalNode
@@ -260,7 +260,7 @@ class TestConsensusEmptyEvidence:
         ce.claim_goal(goal.id, loop_id="w1")
 
         with patch(
-            "soothe.autopilot.consensus.evaluate_goal_completion",
+            "soothe.autopilot.verify.consensus.evaluate_goal_completion",
             side_effect=_capture,
         ):
             await svc._apply_consensus_and_finalize(

@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.autopilot.goal_dag_verifier import GoalDAGVerifier
-from soothe.autopilot.monitor_models import DagHealthReport, GoalPlacement
+from soothe.autopilot.monitor.models import DagHealthReport, GoalPlacement
+from soothe.autopilot.verify.goal_dag_verifier import GoalDAGVerifier
 from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode
 

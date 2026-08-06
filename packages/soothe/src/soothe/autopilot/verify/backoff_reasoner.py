@@ -16,7 +16,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from soothe_nano.utils.text_preview import preview_first
 
-from soothe.autopilot.engine_models import BackoffDecision, EvidenceBundle
+from soothe.autopilot.dispatch.models import BackoffDecision, EvidenceBundle
 from soothe.context.models import GoalNode
 
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ class GoalBackoffReasoner:
         Args:
             goal_id: Failed goal identifier.
             goals: Snapshot of all goals in current DAG (goal_id → GoalNode mapping).
-            failed_evidence: Evidence from Layer 2 execution.
+            failed_evidence: Evidence from StrangeLoop execution.
 
         Returns:
             BackoffDecision with backoff target goal ID, reasoning, and directives.

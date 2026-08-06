@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from soothe.autopilot.schedule_timezone import resolve_schedule_timezone
-from soothe.autopilot.scheduled_tasks import ScheduleSpec
+from soothe.autopilot.schedule.tasks import ScheduleSpec
+from soothe.autopilot.schedule.timezone import resolve_schedule_timezone
 
 
 def test_cron_uses_local_timezone_not_utc() -> None:

@@ -25,7 +25,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from soothe.autopilot.engine_models import GoalDispatchContextContribution
+    from soothe.autopilot.dispatch.models import GoalDispatchContextContribution
 
 logger = logging.getLogger(__name__)
 

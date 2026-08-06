@@ -16,15 +16,15 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
-from soothe.autopilot.evidence_grounding import workspace_has_deliverables
-from soothe.autopilot.monitor_models import (
+from soothe.autopilot.monitor.models import (
     DagHealthReport,
     DecomposeSuggestion,
     GoalPlacement,
     MergeSuggestion,
     WireDependencySuggestion,
 )
-from soothe.autopilot.verifier_reasoner import (
+from soothe.autopilot.verify.evidence_grounding import workspace_has_deliverables
+from soothe.autopilot.verify.verifier_reasoner import (
     CompletionVerificationContext,
     DagSnapshot,
     DagVerificationReasoner,

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from soothe.autopilot.backoff_reasoner import GoalBackoffReasoner
-from soothe.autopilot.verifier_reasoner import DagVerificationReasoner
+from soothe.autopilot.verify.backoff_reasoner import GoalBackoffReasoner
+from soothe.autopilot.verify.verifier_reasoner import DagVerificationReasoner
 from soothe.config import SootheConfig
 
 

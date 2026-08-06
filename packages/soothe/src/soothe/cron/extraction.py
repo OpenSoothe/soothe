@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from soothe.autopilot.schedule_timezone import (
+from soothe.autopilot.schedule.timezone import (
     resolve_schedule_timezone,
     schedule_timezone_label,
 )

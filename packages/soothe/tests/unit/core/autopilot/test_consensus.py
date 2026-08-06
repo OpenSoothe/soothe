@@ -1,10 +1,10 @@
-"""Tests for the consensus loop (soothe.autopilot.consensus) — IG-678 / IG-690."""
+"""Tests for the consensus loop (soothe.autopilot.verify.consensus) — IG-678 / IG-690."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.autopilot.consensus import (
+from soothe.autopilot.verify.consensus import (
     ConsensusEvaluationError,
     ConsensusVerdict,
     _build_consensus_prompt,

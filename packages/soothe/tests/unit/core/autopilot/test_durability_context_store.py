@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 from soothe_nano.backends.persistence.sqlite_store import SQLitePersistStore
 
-from soothe.autopilot.durability_context_store import (
+from soothe.autopilot.dispatch.durability_store import (
     DurabilityGoalDispatchContextStore,
 )
-from soothe.autopilot.engine_models import GoalDispatchContextContribution
+from soothe.autopilot.dispatch.models import GoalDispatchContextContribution
 
 
 @pytest.mark.asyncio

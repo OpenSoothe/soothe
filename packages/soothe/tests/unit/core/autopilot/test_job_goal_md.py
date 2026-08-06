@@ -7,13 +7,13 @@ from pathlib import Path
 import pytest
 
 from soothe.autopilot import AutopilotService
-from soothe.autopilot.job_goal_md import (
+from soothe.autopilot.jobs.goal_md import (
     GOAL_MD_FILENAME,
     load_job_goal_md,
     resolve_job_goal_md_path,
     write_job_goal_md,
 )
-from soothe.autopilot.maturity import acceptance_contract_brief, load_goal_md_excerpt
+from soothe.autopilot.verify.maturity import acceptance_contract_brief, load_goal_md_excerpt
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.events.internal_bus import InternalEventBus

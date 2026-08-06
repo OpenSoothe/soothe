@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from soothe_sdk.protocols.persistence import AsyncPersistStore
 
-    from soothe.autopilot.engine_models import GoalDispatchContextContribution
+    from soothe.autopilot.dispatch.models import GoalDispatchContextContribution
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class DurabilityGoalDispatchContextStore:
         await self._store.save(self._key(goal_id), payload)
 
     async def get(self, goal_id: str) -> GoalDispatchContextContribution | None:
-        from soothe.autopilot.engine_models import GoalDispatchContextContribution
+        from soothe.autopilot.dispatch.models import GoalDispatchContextContribution
 
         raw = await self._store.load(self._key(goal_id))
         if not raw or not isinstance(raw, dict):

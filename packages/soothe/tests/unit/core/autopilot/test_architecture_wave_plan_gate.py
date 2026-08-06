@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.autopilot import AutopilotService
-from soothe.autopilot.engine_models import Finding, GoalDispatchContextContribution
+from soothe.autopilot.dispatch.models import Finding, GoalDispatchContextContribution
 from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
 from soothe.autopilot.rail.wave_plan import DEFAULT_WAVE_PLAN_ARTIFACT, resolve_wave_plan_path
 from soothe.config.models import AutopilotConfig
@@ -19,7 +19,7 @@ from .fakes import IdleFakeFactory
 
 
 def _mock_consensus_model(*, decision: str, reasoning: str) -> MagicMock:
-    from soothe.autopilot.consensus import ConsensusVerdict
+    from soothe.autopilot.verify.consensus import ConsensusVerdict
 
     verdict = ConsensusVerdict(decision=decision, reasoning=reasoning)  # type: ignore[arg-type]
     structured = MagicMock()

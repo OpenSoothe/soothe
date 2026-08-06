@@ -218,6 +218,23 @@ class LoopRailInterpreter:
                     )
             self._trace.append(job_id, record)
             fired.append(record)
+            if matched:
+                logger.info(
+                    "Rail rule fired job_id=%s event=%s rule_id=%s builtin=%s result=%s goal_id=%s",
+                    job_id,
+                    event.name,
+                    rule.rule_id,
+                    rule.then,
+                    getattr(record, "builtin_result", None) or "-",
+                    event.goal_id or "-",
+                )
+            else:
+                logger.debug(
+                    "Rail rule unmatched job_id=%s event=%s rule_id=%s",
+                    job_id,
+                    event.name,
+                    rule.rule_id,
+                )
             if matched and not rule.allow_multiple:
                 break
             if matched and rule.allow_multiple:
@@ -324,7 +341,7 @@ class LoopRailInterpreter:
                     event.job_id,
                 )
 
-        from soothe.autopilot.maturity import latch_acceptance_met
+        from soothe.autopilot.verify.maturity import latch_acceptance_met
         from soothe.context.models import TERMINAL_STATES
 
         job_state = await self._builtins.job_state(event.job_id)

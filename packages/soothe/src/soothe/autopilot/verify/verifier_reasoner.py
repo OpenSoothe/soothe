@@ -19,7 +19,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 from soothe_nano.utils.text_preview import preview_first
 
-from soothe.autopilot.verifier_prompts import (
+from soothe.autopilot.verify.verifier_prompts import (
     DAG_HEALTH_VERIFICATION_PROMPT,
     GOAL_PLACEMENT_PROMPT,
     POST_COMPLETION_VERIFICATION_PROMPT,

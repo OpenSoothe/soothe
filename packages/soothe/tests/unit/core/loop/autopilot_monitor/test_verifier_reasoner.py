@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.autopilot.verifier_reasoner import (
+from soothe.autopilot.verify.verifier_reasoner import (
     DagSnapshot,
     DagVerificationReasoner,
 )

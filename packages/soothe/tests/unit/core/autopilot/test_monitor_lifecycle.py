@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from soothe.autopilot import AutopilotService
-from soothe.autopilot.monitor_models import GoalIntakeResult
+from soothe.autopilot.monitor.models import GoalIntakeResult
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.events.internal_bus import InternalEventBus

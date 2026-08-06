@@ -7,13 +7,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from soothe.autopilot.context_store import (
-    GoalDispatchContextStoreProtocol,
-    InMemoryGoalDispatchContextStore,
-)
-from soothe.autopilot.engine_models import (
+from soothe.autopilot.dispatch.models import (
     Finding,
     GoalDispatchContextContribution,
+)
+from soothe.autopilot.dispatch.store import (
+    GoalDispatchContextStoreProtocol,
+    InMemoryGoalDispatchContextStore,
 )
 
 

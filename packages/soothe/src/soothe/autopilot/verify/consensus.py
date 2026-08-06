@@ -1,7 +1,7 @@
-"""RFC-204: Consensus Loop for Layer 3 validation of StrangeLoop completions.
+"""RFC-204: Consensus loop for Autopilot validation of StrangeLoop completions.
 
-Layer 3 validates StrangeLoop's "done" judgment before accepting goal completion.
-If not satisfied, Layer 3 can send the goal back with refined instructions.
+Autopilot validates StrangeLoop's "done" judgment before accepting goal completion.
+If not satisfied, Autopilot can send the goal back with refined instructions.
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def _build_consensus_prompt(
 
     Args:
         goal: Goal description.
-        response: Layer 2 response text.
+        response: StrangeLoop response text.
         evidence: Evidence summary.
 
     Returns:

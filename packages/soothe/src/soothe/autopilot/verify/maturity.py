@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from soothe.autopilot.evidence_grounding import workspace_pytest_probe
+from soothe.autopilot.verify.evidence_grounding import workspace_pytest_probe
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +149,7 @@ def load_goal_md_excerpt(
             except OSError:
                 pass
     if jobs_root is not None and job_id:
-        from soothe.autopilot.job_goal_md import load_job_goal_md
+        from soothe.autopilot.jobs.goal_md import load_job_goal_md
 
         return load_job_goal_md(
             jobs_root=jobs_root,

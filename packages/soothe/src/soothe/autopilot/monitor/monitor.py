@@ -14,12 +14,12 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.autopilot.backoff_reasoner import GoalBackoffReasoner
-from soothe.autopilot.goal_dag_verifier import GoalDAGVerifier
-from soothe.autopilot.monitor_models import (
+from soothe.autopilot.monitor.models import (
     GoalIntakeResult,
     GoalPlacement,
 )
+from soothe.autopilot.verify.backoff_reasoner import GoalBackoffReasoner
+from soothe.autopilot.verify.goal_dag_verifier import GoalDAGVerifier
 from soothe.context.engine import ContextEngine
 from soothe.events.internal_events import (
     INTERNAL_GOAL_COMPLETED,
@@ -166,6 +166,14 @@ class AutopilotMonitor:
             source=source,
         )
 
+        logger.info(
+            "Goal intake accepted goal_id=%s source=%s priority=%s parent_id=%s deps=%d",
+            goal.id,
+            source,
+            placement.adjusted_priority,
+            parent_id or "-",
+            len(final_deps),
+        )
         return GoalIntakeResult(
             status="accepted",
             goal_id=goal.id,
@@ -208,7 +216,7 @@ class AutopilotMonitor:
 
         goals = {g.id: g for g in self._ce.get_goals_by_status(None)}
         if evidence_raw is not None:
-            from soothe.autopilot.engine_models import EvidenceBundle
+            from soothe.autopilot.dispatch.models import EvidenceBundle
 
             if isinstance(evidence_raw, EvidenceBundle):
                 evidence = evidence_raw

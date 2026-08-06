@@ -30,13 +30,13 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.protocols.planner import GoalDirective
 
-from soothe.autopilot.engine_models import (
+from soothe.autopilot.dispatch.models import (
     Finding,
     GoalDispatchContextContribution,
     StepSummary,
     ToolCallStats,
 )
-from soothe.autopilot.evidence_grounding import (
+from soothe.autopilot.verify.evidence_grounding import (
     build_files_touched,
     decision_step_actions,
     synthesize_completion_evidence,

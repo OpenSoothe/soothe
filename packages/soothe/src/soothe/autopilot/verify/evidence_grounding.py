@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from soothe.autopilot.engine_models import FileTouchSummary
+from soothe.autopilot.dispatch.models import FileTouchSummary
 
 logger = logging.getLogger(__name__)
 
