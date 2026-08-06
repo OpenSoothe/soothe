@@ -48,7 +48,6 @@ def test_build_loop_graph_invoke_config_sets_strange_loop_thread() -> None:
     ctx.state_manager = MagicMock(loop_id="loop-abc")
     ctx.loop_state = MagicMock(thread_id="thread-xyz", workspace=None)
     ctx.goal_trace = None
-    ctx.proposal_queue = None
 
     out = build_loop_graph_invoke_config(ctx)
     assert out["configurable"]["thread_id"] == strange_loop_thread_id("loop-abc")

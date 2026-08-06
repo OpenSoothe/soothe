@@ -237,7 +237,6 @@ class Executor:
         clarification_capture: ClarificationCapture | None = None,
         clarification_loop_state_view: LoopStateView | None = None,
         clarification_resume_answer_payload: dict[str, Any] | None = None,
-        proposal_queue: Any | None = None,  # RFC-204 Group C
         context_engine: Any | None = None,  # RFC-624 Phase 4
         step_brief_hydrator: Any | None = None,
         checkpoint: Any | None = None,
@@ -267,8 +266,6 @@ class Executor:
                 (built from ``state.pending_clarification_answer``) injected as
                 the first ``Command(resume=...)`` to resume after a prior
                 clarification was answered.
-            proposal_queue: Optional ProposalQueue for autopilot proposals (report_progress,
-                flag_blocker, etc.) during execution.
             context_engine: Optional ContextEngine instance for dual-write
                 ledger recording (RFC-624 Phase 4).
             step_brief_hydrator: Optional :class:`StepBriefHydrator` for between-wave
@@ -284,7 +281,6 @@ class Executor:
         self._clarification_capture = clarification_capture
         self._clarification_loop_state_view = clarification_loop_state_view
         self._clarification_resume_answer_payload = clarification_resume_answer_payload
-        self._proposal_queue = proposal_queue
         self._context_engine = context_engine
         self._step_brief_hydrator = step_brief_hydrator
         self._checkpoint = checkpoint
@@ -1882,9 +1878,6 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
-            # RFC-204 Group C: propagate proposal_queue for Layer 2 tools
-            if self._proposal_queue is not None:
-                configurable["proposal_queue"] = self._proposal_queue
             # RFC-217: Inject goal briefing on thread switch (for single-step execution)
             if self._goal_context_manager:
                 goal_briefing = await self._goal_context_manager.get_execute_briefing()

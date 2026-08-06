@@ -71,8 +71,6 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     extra: dict[str, Any] = {}
     if ctx.loop_state.workspace:
         extra["workspace"] = ctx.loop_state.workspace
-    if ctx.proposal_queue is not None:
-        extra["proposal_queue"] = ctx.proposal_queue
     configurable = strange_loop_configurable(loop_id, **extra)
 
     cfg = ctx.strange_loop.config

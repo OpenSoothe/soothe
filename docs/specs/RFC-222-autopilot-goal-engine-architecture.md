@@ -754,7 +754,6 @@ Pydantic default for `enabled` is **`true`** — set `agent.autopilot.enabled: f
 
 - Full dreaming distillation persistence (procedure / semantic / profile modes)
 - Backoff decision application in AutopilotMonitor
-- StrangeLoop proposal tools (`suggest_goal`, `add_finding`)
 - Webhook notifications
 - Token-budget enforcement (gap H3)
 - Per-loop solo/autopilot toggle (removed; use `/autopilot` job submit + `agent.autopilot.enabled`)

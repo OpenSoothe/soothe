@@ -19,7 +19,7 @@ LoopRail design draft, [IG-680](../impl/IG-680-autopilot-dag-health-evidence-dep
 
 ## Abstract
 
-This RFC defines Autopilot Mode, an autonomous extension that enables Soothe to operate as a long-running agent. Autopilot introduces: (1) a consensus loop for validating StrangeLoop completions, (2) dreaming mode for continuous operation without termination, (3) a channel protocol for user communication, (4) a scheduler service for time-based task execution, and (5) comprehensive UX surfaces for monitoring and control. Autopilot treats StrangeLoop as a black-box ReAct engine while maintaining bidirectional communication through query and proposal tools.
+This RFC defines Autopilot Mode, an autonomous extension that enables Soothe to operate as a long-running agent. Autopilot introduces: (1) a consensus loop for validating StrangeLoop completions, (2) dreaming mode for continuous operation without termination, (3) a channel protocol for user communication, (4) a scheduler service for time-based task execution, and (5) comprehensive UX surfaces for monitoring and control. Autopilot treats StrangeLoop as a black-box ReAct engine; DAG mutations after a goal completes flow through `GoalCompletionChunk.goal_directives` (reflection) and host-side spawners (LoopRail / AutopilotMonitor), not mid-run proposal tools.
 
 ## Position in Architecture
 
@@ -70,7 +70,8 @@ Autopilot treats StrangeLoop as a black-box Plan-and-Execute engine:
 
 ### 1.2 Bidirectional StrangeLoop ↔ Autopilot Communication
 
-StrangeLoop can query and propose updates through tools:
+StrangeLoop can query Autopilot-owned state through read-only tools (when
+implemented):
 
 **Query Operations** (read-only):
 - `get_related_goals()` — Goals that might inform current work
@@ -78,13 +79,13 @@ StrangeLoop can query and propose updates through tools:
 - `get_world_info()` — Current world state snapshot
 - `search_memory(query)` — Cross-thread memory lookup
 
-**Proposal Operations** (queued, applied after iteration):
-- `report_progress(status, findings)` — Update current goal progress
-- `add_finding(content, tags)` — Contribute to context ledger
-- `suggest_goal(description, priority)` — Propose new goal
-- `flag_blocker(reason, dependencies)` — Signal goal is blocked
-
-**Queuing Semantics**: Proposals collected during StrangeLoop execution, applied by Autopilot after iteration completes. Preserves black-box abstraction while enabling dynamic adaptation.
+**DAG mutation (host-owned, not mid-run tools):**
+- Reflection may attach `GoalDirective`s on the completion chunk; the daemon
+  applies them via `ContextEngine.apply_directives`.
+- Follow-up / decompose goals are created by LoopRail builtins (rail-bound jobs)
+  or AutopilotMonitor health / post-completion verification (non-rail).
+- A former proactive path (`suggest_goal` / `ProposalQueue` mid-execution) was
+  removed — see Group C errata and [IG-703](../impl/IG-703-remove-suggest-goal-proposal-queue.md).
 
 ### 1.3 Consensus Loop
 
@@ -186,8 +187,8 @@ Autopilot does not terminate—it transitions to dreaming mode:
 - `SOOTHE_HOME/autopilot/goals/*/GOAL.md` — Per-goal subdirectories
 
 **Autopilot-Created**:
-- StrangeLoop proposals via `suggest_goal()`
-- Autopilot reflection findings
+- Reflection `GoalDirective`s on `GoalCompletionChunk` (applied by CE)
+- LoopRail builtins / AutopilotMonitor decompose (non-rail)
 - Scheduled tasks from SchedulerService
 
 ### 2.2 MUST Goal Confirmation
@@ -576,10 +577,10 @@ After initial Phases 1-4 implementation, 12 gaps remain. These are organized int
 | 1 | `_send_autopilot_webhook()` called but undefined | Bug | A | 4 | — |
 | 2 | `get_world_info()` tool missing | Missing | B | 1 | — |
 | 3 | `search_memory()` tool missing | Missing | B | 1 | — |
-| 4 | `add_finding()` and `suggest_goal()` tools missing | Missing | B | 1 | See Group C |
-| 5 | ProposalQueue not wired to GoalEngine | Missing | C | 1 | See Group C |
-| 5a | GoalCompletionChunk.goal_directives field missing | Missing | C | 1 | See Group C |
-| 5b | GoalEngine.apply_directives() not implemented | Missing | C | 1 | See Group C |
+| 4 | ~~`add_finding()` / `suggest_goal()` tools~~ | Retired | C | — | Removed (IG-703); use host spawners |
+| 5 | ~~ProposalQueue → GoalEngine~~ | Retired | C | — | Removed (IG-703) |
+| 5a | GoalCompletionChunk.goal_directives field | Done | C | 1 | Reflection path retained |
+| 5b | GoalEngine / CE.apply_directives() | Done | C | 1 | Reflection path retained |
 | 6 | LLM-judged criticality is placeholder only | Partial | D | 2 | — |
 | 7 | MUST confirmation not wired into execution loop | Missing | D | 2 | — |
 | 8 | Relationship auto-detection entirely missing | Missing | D | 2 | — |
@@ -612,121 +613,25 @@ After initial Phases 1-4 implementation, 12 gaps remain. These are organized int
 
 **Gap 4 — StrangeLoop proposal tools**
 
-- `add_finding()` and `suggest_goal()` tools in `tools/proposal/` (see Group C for full specification)
-- Both write to `ProposalQueue` attached to `LoopRuntimeContext`
-- Signature: `add_finding(summary, relevance_score?, tags?)`, `suggest_goal(description, priority?, depends_on?, rationale?)`
+~~Retired.~~ Mid-run `suggest_goal` / `add_finding` / `ProposalQueue` tools were
+never shipped as agent tools and are removed from the architecture
+([IG-703](../impl/IG-703-remove-suggest-goal-proposal-queue.md)). Dynamic goals
+are created by LoopRail, AutopilotMonitor, intake, or reflection directives.
 
-All StrangeLoop proposal tools added to `create_strangeloop_tools()` return confirmation string.
+### Group C: Goal Directives (Updated 2026-08-06)
 
-### Group C: Proposal Queuing (Updated 2026-06-07)
+**Errata (2026-08-06):** The proactive path (StrangeLoop tools → `ProposalQueue`
+→ `_proposals_to_directives`) is **removed**. Only the reactive path remains:
 
-**Gap 5 — ProposalQueue exists but not wired**
+`Reflection.goal_directives` → `GoalCompletionChunk.goal_directives` →
+`ContextEngine.apply_directives()`.
 
-**Status (2026-06-07):**
-| Component | Status |
-|-----------|--------|
-| `ProposalQueue` class | ✅ Implemented (`proposal_queue.py`) |
-| Unit tests | ✅ Passing (`test_proposal_queue.py`) |
-| StrangeLoop tools (`suggest_goal`, `add_finding`) | ❌ Not implemented |
-| Runner drains proposals | ❌ Not connected |
-| GoalDirective application | ❌ Not connected |
+**Gap 5 / ProposalQueue** — ~~Obsolete~~ (deleted with IG-703).
 
-**Implementation design (RFC-229 integration):**
+#### Reactive Path: Reflection → GoalCompletionChunk → CE.apply_directives()
 
-The proposal queue provides **proactive path** for StrangeLoop → Autopilot communication. A **reactive path** via `GoalDirective` is also required. Both paths unify at `GoalCompletionChunk.goal_directives`.
+**Gap 5a — GoalCompletionChunk extension** — Implemented.
 
-#### Proactive Path: StrangeLoop Tools → ProposalQueue → GoalDirective
-
-**New tools in `tools/proposal/`:**
-
-| Tool | Proposal Type | Purpose |
-|------|---------------|---------|
-| `suggest_goal` | `suggest_goal` | Proactively request a subgoal mid-execution |
-| `add_finding` | `add_finding` | Record discoverable insight for context projection |
-
-```python
-@tool
-def suggest_goal(
-    description: str,
-    priority: int = 50,
-    depends_on: list[str] = [],
-    rationale: str = "",
-) -> str:
-    """Suggest a new subgoal for the current goal's DAG.
-
-    Use when you identify a prerequisite or subtask that should be
-    handled separately before continuing the current goal.
-
-    Args:
-        description: What the suggested goal should accomplish.
-        priority: 0-100, higher = more urgent. Default 50.
-        depends_on: Goal IDs this suggestion depends on (optional).
-        rationale: Why this goal is needed.
-
-    Returns:
-        Confirmation string that suggestion was queued.
-    """
-```
-
-```python
-@tool
-def add_finding(
-    summary: str,
-    relevance_score: float = 0.7,
-    tags: list[str] = [],
-) -> str:
-    """Record a finding for context projection to child goals.
-
-    Args:
-        summary: Brief description of the finding (max 2000 chars).
-        relevance_score: 0.0-1.0, how relevant to the overall goal.
-        tags: Optional categorization tags.
-
-    Returns:
-        Confirmation string that finding was queued.
-    """
-```
-
-**ProposalQueue access pattern:**
-- Runner creates `ProposalQueue` per `_run_single_autopilot_goal` dispatch
-- Queue injected into `LoopRuntimeContext.proposal_queue`
-- Tools access via CoreAgent execution context
-
-**Runner wiring (`_runner_autopilot_worker.py`):**
-
-```python
-async def _run_single_autopilot_goal(...):
-    proposal_queue = ProposalQueue()
-
-    async for event in strange_loop.run_with_progress(..., proposal_queue=proposal_queue):
-        # ... handle events ...
-
-    # Drain and convert proposals after StrangeLoop completes
-    proposals = proposal_queue.drain()
-    proposal_directives = _proposals_to_directives(proposals, source_goal_id=job.goal_id)
-
-    # Merge with reflection directives (see reactive path below)
-    all_directives = reflection_directives + proposal_directives
-
-    yield _goal_completion_chunk(..., directives=all_directives)
-```
-
-#### Reactive Path: Reflection → GoalCompletionChunk → GoalEngine.apply_directives()
-
-**Gap 5a — GoalCompletionChunk extension**
-
-Current `GoalCompletionChunk` (RFC-222 §"Stream Contract"):
-```python
-class GoalCompletionChunk(BaseModel):
-    type: Literal["soothe.internal.autopilot.goal_completion"] = ...
-    goal_id: str
-    outcome: Literal["completed", "failed", "needs_replan"]
-    goal_result: GoalResult
-    context_contribution: GoalDispatchContextContribution
-    evidence: EvidenceBundle | None
-```
-
-**Extension:**
 ```python
 payload = {
     "type": "soothe.internal.autopilot.goal_completion",
@@ -734,13 +639,11 @@ payload = {
     "outcome": outcome,
     "attempt": job.attempt,
     "context_contribution": contribution.model_dump(mode="json"),
-    "goal_directives": [d.model_dump(mode="json") for d in directives],  # NEW
+    "goal_directives": [d.model_dump(mode="json") for d in directives],
 }
 ```
 
-**Gap 5b — GoalEngine.apply_directives()**
-
-Location: `engine.py:1243` (TODO comment)
+**Gap 5b — ContextEngine.apply_directives()** — Implemented.
 
 ```python
 async def apply_directives(
@@ -748,15 +651,7 @@ async def apply_directives(
     directives: list[GoalDirective],
     source_goal_id: str,
 ) -> list[str]:
-    """Apply goal directives from GoalCompletionChunk.
-
-    Args:
-        directives: List of GoalDirective to apply.
-        source_goal_id: Goal that emitted these directives (for parent_id default).
-
-    Returns:
-        List of newly created goal IDs.
-    """
+    """Apply goal directives from GoalCompletionChunk."""
 ```
 
 **Action handlers:**
@@ -780,48 +675,31 @@ async def apply_directives(
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    AGENTLOOP WORKER (Subprocess)                    │
 ├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  Mid-iteration (Proactive Path):                                    │
-│    suggest_goal tool ──► ProposalQueue.enqueue()                    │
-│    add_finding tool ──► ProposalQueue.enqueue()                     │
-│                                                                     │
-│  End-of-goal (Reactive Path):                                       │
+│  End-of-goal:                                                       │
 │    Planner.reflect() ──► Reflection.goal_directives                 │
-│                                                                     │
-│  Runner merges both:                                                │
-│    proposals = ProposalQueue.drain()                                │
-│    proposal_directives = _proposals_to_directives(proposals)        │
-│    all_directives = reflection_directives + proposal_directives     │
-│                                                                     │
-│  Emit:                                                              │
-│    GoalCompletionChunk(goal_directives=all_directives)              │
-│                                                                     │
+│    Emit GoalCompletionChunk(goal_directives=…)                      │
 └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    DAEMON AUTOPILOTSERVICE                          │
 ├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  _route_chunk(GoalCompletionChunk):                                 │
-│    goal_engine.apply_directives(chunk.goal_directives)              │
+│  On goal_completion:                                                │
+│    ce.apply_directives(chunk.goal_directives, source_goal_id)       │
 │      ──► create_goal() for "create" actions                         │
 │      ──► DAG now has subgoals → scheduling loop picks them up       │
-│                                                                     │
+│  Host spawners (independent of directives):                         │
+│    LoopRail builtins / AutopilotMonitor decompose (non-rail)        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Deferred tools:**
-- `report_progress`: Lower priority, observability use case
-- `flag_blocker`: Lower priority, maps to existing backoff mechanism
-
 **Implementation phases for Group C:**
 
-| Phase | Scope | Files |
-|-------|-------|-------|
-| C.1 | GoalCompletionChunk extension + apply_directives | `engine.py`, `_runner_autopilot_worker.py`, `daemon/autopilot/service.py` |
-| C.2 | Reflection directive extraction | `_runner_autopilot_worker.py` |
-| C.3 | StrangeLoop tools + ProposalQueue wiring | `tools/proposal/`, `core/loop/__init__.py`, `core/loop/state/schemas.py` |
+| Phase | Scope | Status |
+|-------|-------|--------|
+| C.1 | GoalCompletionChunk + apply_directives | Done |
+| C.2 | Reflection directive extraction | Done (worker) |
+| C.3 | StrangeLoop proposal tools + ProposalQueue | **Cancelled** (IG-703) |
 
 ### Group D: Goal Management
 
@@ -836,13 +714,14 @@ async def apply_directives(
 
 **Gap 7 — MUST confirmation wired into execution loop**
 
-- When `suggest_goal` proposals are dequeued in runner:
-  - Call `evaluate_criticality(description, priority, use_llm=True, model=self._model)`
+- When host-side goal creation would add a high-criticality goal
+  (intake / directive `create` / scheduled submit):
+  - Call `evaluate_criticality(description, priority, use_llm=True, model=…)`
   - If "must": store in pending confirmations file, send `must_goal_confirmation` via channel outbox
-  - If "should"/"nice": create goal immediately via `goal_engine.create_goal()`
+  - If "should"/"nice": create goal immediately via `ce.create_goal()`
 - Pending confirmations stored as JSON at `SOOTHE_HOME/autopilot/pending_confirmations.json`
 - CLI `approve/reject` commands read/write this file directly
-- Runner polls the file during execution loop to pick up user decisions
+- Scheduling loop / monitor picks up user decisions (not mid-run proposal drain)
 
 **Gap 8 — Relationship auto-detection**
 
@@ -863,7 +742,7 @@ async def apply_directives(
 - Add `_append_goal_progress(goal_id, entry: str)`:
   - Opens goal's GOAL.md, finds `## Progress` section (creates if missing)
   - Appends `[{timestamp}] {entry}` line
-- Called when `ReportProgressTool` is used and when proposals are processed
+- Called when goal progress is recorded (operator / monitor) and when directives are applied
 - Ensure `runs/{thread_id}/goals/{goal_id}/` directory created on goal execution start
 
 ### Group F: Integration
@@ -907,8 +786,8 @@ async def apply_directives(
 ### Implementation Order
 
 1. **Fix bugs first**: Gap 1 (webhook method) + Gap 12 (config schema) — unblocks webhook wiring
-2. **Wire up existing pieces**: Gap 5 (proposal queue), Gap 10 (WebSocket events)
-3. **Add missing tools**: Gaps 2, 3, 4 (new tools)
+2. **Wire up existing pieces**: Gap 5a/5b (goal_directives + apply_directives — done), Gap 10 (WebSocket events)
+3. **Add missing query tools**: Gaps 2, 3 (read-only StrangeLoop tools; Gap 4 cancelled)
 4. **Add missing logic**: Gap 6 (LLM criticality), Gap 7 (MUST confirmation), Gap 9 (progress tracking)
 5. **Add new features**: Gap 8 (relationship detection), Gap 11 (goal anticipation)
 
@@ -931,6 +810,12 @@ async def apply_directives(
 - [RFC-500](./RFC-500-cli-tui-architecture.md) — CLI/TUI Architecture
 
 ## Changelog
+
+### 2026-08-06
+- **Retire proactive ProposalQueue path** ([IG-703](../impl/IG-703-remove-suggest-goal-proposal-queue.md)):
+  remove `suggest_goal` / `add_finding` / `ProposalQueue` from the architecture.
+- Group C is now reflection `GoalDirective`s + host spawners (LoopRail / monitor) only.
+- Gap inventory: Gaps 4–5 marked retired; 5a/5b retained as done.
 
 ### 2026-06-07
 - **Major update to Group C (Proposal Queuing):** Expanded Gap 5 with full integration design for ProposalQueue → GoalDirective → GoalEngine pathway.

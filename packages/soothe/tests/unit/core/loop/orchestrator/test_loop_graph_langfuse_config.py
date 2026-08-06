@@ -32,7 +32,6 @@ def test_build_loop_graph_invoke_config_keeps_isolated_strange_loop_thread() -> 
     ctx.state_manager = mock_sm
     ctx.loop_state = mock_ls
     ctx.goal_trace = None
-    ctx.proposal_queue = None
 
     out = build_loop_graph_invoke_config(ctx)
 
@@ -65,7 +64,6 @@ def test_build_loop_graph_invoke_config_passes_conversation_thread_to_langfuse_m
     ctx.state_manager = mock_sm
     ctx.loop_state = mock_ls
     ctx.goal_trace = None
-    ctx.proposal_queue = None
 
     with patch(
         "soothe.sloop.orchestrator.runner.merge_langfuse_runnable_config",
@@ -116,7 +114,6 @@ def test_build_loop_graph_invoke_config_uses_goal_trace_pinned_id() -> None:
     ctx.state_manager = mock_sm
     ctx.loop_state = mock_ls
     ctx.goal_trace = goal_trace
-    ctx.proposal_queue = None
 
     out = build_loop_graph_invoke_config(ctx)
 

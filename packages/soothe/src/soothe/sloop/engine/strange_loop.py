@@ -48,7 +48,6 @@ if TYPE_CHECKING:
 
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
-    from soothe.autopilot.proposal_queue import ProposalQueue
     from soothe.config import SootheConfig
     from soothe.protocols.loop_planner import LoopPlannerProtocol
 
@@ -182,7 +181,6 @@ class StrangeLoop:
         clarification_answer: bool = False,  # RFC-622: hint that goal is a resume answer
         clarification_answers: list[str] | None = None,  # RFC-622: per-question answer list
         resume_interrupted: bool = False,  # IG-670: daemon crash recovery admission
-        proposal_queue: ProposalQueue | None = None,  # RFC-204 Group C: Layer 2 proposals
         goal_trace: Any | None = None,  # GoalLoopTrace when Langfuse enabled
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
@@ -207,8 +205,6 @@ class StrangeLoop:
                 requests are deferred via the legacy no-policy path.
             resume_interrupted: When True, skip Pass 1 social fast-path and recover
                 the in-flight ``status=running`` goal without continue-keyword cancel.
-            proposal_queue: Optional ``ProposalQueue`` (RFC-204 Group C) for Layer 2
-                tools to enqueue goal suggestions and findings during execution.
             goal_trace: Optional pre-allocated ``GoalLoopTrace``; when omitted and Langfuse
                 is enabled, one is opened before pre-graph intake (Pass 1) so Pass 1,
                 Pass 2, and ``strange-loop-graph`` share one pinned trace.
@@ -1002,7 +998,6 @@ class StrangeLoop:
                     if clarification_answer and clarification_answers
                     else None
                 ),
-                proposal_queue=proposal_queue,  # RFC-204 Group C
                 ce=ce_instance,
                 ce_goal_id=ce_goal.id,
                 goal_trace=active_goal_trace,

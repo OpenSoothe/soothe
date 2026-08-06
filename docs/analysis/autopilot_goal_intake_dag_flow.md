@@ -102,11 +102,12 @@ AutopilotMonitor.intake_goal()
     └─► InternalEventBus.emit("goal_created")
 ```
 
-#### 1.3 GoalDirective from Completed Goal (RFC-204 Group C)
+#### 1.3 GoalDirective from Completed Goal (RFC-204)
 
 ```
 GoalCompletionChunk (from worker)
     │  goal_directives: [{action: "create", ...}]
+    │  (from Reflection — not mid-run proposal tools)
     │
     ▼
 AutopilotService._consume_worker_stream()
@@ -119,6 +120,10 @@ AutopilotService._consume_worker_stream()
     │
     └─► Log created goal IDs
 ```
+
+Host-side spawners (LoopRail builtins, AutopilotMonitor decompose on non-rail
+jobs) create goals independently of worker directives. A former
+`suggest_goal` / `ProposalQueue` mid-run path was removed (IG-703).
 
 ### GoalNode Model (RFC-624)
 

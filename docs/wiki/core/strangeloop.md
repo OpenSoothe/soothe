@@ -154,7 +154,7 @@ async for event_type, event_data in loop.run_with_progress(
         result = event_data["result"]  # PlanResult
 ```
 
-In practice, you rarely instantiate StrangeLoop directly — the runner handles it. The runner passes `intent`, `routing_classification`, `workspace`, `clarification_policy`, and `proposal_queue` (RFC-204 Group C for tool proposals).
+In practice, you rarely instantiate StrangeLoop directly — the runner handles it. The runner passes `intent`, `routing_classification`, `workspace`, and `clarification_policy`.
 
 ---
 

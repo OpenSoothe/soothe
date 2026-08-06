@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Raise `soothe-client-python` floor to `>=1.0.11` (120s `autopilot_submit` timeout).
+- Remove unused `suggest_goal` / `ProposalQueue` mechanism; DAG growth stays
+  via LoopRail, monitor, intake, and reflection `GoalDirective`s (IG-703).
 
 ## [v0.10.0] - 2026-08-06
 

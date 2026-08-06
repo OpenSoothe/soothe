@@ -21,7 +21,6 @@ from .phase_scratch import LoopPhaseScratch
 if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
-    from soothe.autopilot.proposal_queue import ProposalQueue
     from soothe.sloop.clarification.protocol import ClarificationPolicy
     from soothe.sloop.engine.strange_loop import StrangeLoop
     from soothe.utils.observability.langfuse import GoalLoopTrace
@@ -64,8 +63,6 @@ class LoopRuntimeContext:
     # broadcasting ``clarification_resume_text``. Cleared with
     # ``clarification_resume_text`` after successful consume.
     clarification_resume_answers: list[str] | None = None
-    # ProposalQueue for autopilot proposals (report_progress, flag_blocker, etc.)
-    proposal_queue: ProposalQueue | None = None
     # RFC-624 Phase 4: ContextEngine is always active
     ce: Any | None = None  # ContextEngine instance
     ce_goal_id: str | None = None  # Active goal ID in CE
