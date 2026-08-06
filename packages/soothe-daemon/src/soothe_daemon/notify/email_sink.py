@@ -48,7 +48,7 @@ class EmailNotifySink:
         for t in list(targets) + list(self._config.targets):
             if t.kind != "email":
                 continue
-            addr = (t.address or "").strip()
+            addr = (t.to_address or "").strip()
             if not addr or addr in seen:
                 continue
             seen.add(addr)

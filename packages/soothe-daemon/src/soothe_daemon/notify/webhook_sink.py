@@ -72,8 +72,8 @@ class WebhookNotifySink:
         if primary:
             urls.append(primary)
         for t in targets:
-            if t.kind == "webhook_url" and t.address.strip():
-                urls.append(t.address.strip())
+            if t.kind == "webhook_url" and t.to_address.strip():
+                urls.append(t.to_address.strip())
         seen: set[str] = set()
         unique: list[str] = []
         for u in urls:

@@ -26,7 +26,7 @@ def build_notify_dispatcher(
     """Construct dispatcher with email, webhook, and Feishu sinks."""
     dispatcher = NotifyDispatcher()
     dispatcher.set_global_targets(
-        [NotifyTarget(kind=t.kind, address=t.address) for t in notify.targets]
+        [NotifyTarget(kind=t.kind, to_address=t.to_address) for t in notify.targets]
     )
     dispatcher.register(EmailNotifySink(notify.sinks.email))
     legacy = dict(legacy_webhooks or {})

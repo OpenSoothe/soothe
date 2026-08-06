@@ -35,7 +35,7 @@ class FeishuNotifySink:
     ) -> list[NotifyTarget]:
         out: list[NotifyTarget] = []
         for t in list(targets) + list(self._config.targets):
-            if t.kind in {"feishu_chat_id", "feishu_open_id"} and t.address.strip():
+            if t.kind in {"feishu_chat_id", "feishu_open_id"} and t.to_address.strip():
                 out.append(t)
         return out
 
@@ -73,5 +73,5 @@ class FeishuNotifySink:
             sink=self.name,
             ok=True,
             detail="stub: live Feishu send deferred",
-            delivered_to=[t.address for t in resolved],
+            delivered_to=[t.to_address for t in resolved],
         )

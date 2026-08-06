@@ -22,10 +22,10 @@ KIND_TO_EVENT_FLAG: dict[str, str] = {
 
 
 class NotifyTarget(BaseModel):
-    """Resolved delivery address for one sink."""
+    """Resolved delivery destination for one sink."""
 
     kind: str
-    address: str
+    to_address: str
 
 
 class NotifyIntent(BaseModel):

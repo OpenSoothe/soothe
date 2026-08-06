@@ -81,7 +81,7 @@ async def test_email_sink_smtp(monkeypatch: pytest.MonkeyPatch) -> None:
         smtp_username="user",
         smtp_password="pass",
         from_address="soothe@example.com",
-        targets=[NotifyTargetConfig(kind="email", address="ops@example.com")],
+        targets=[NotifyTargetConfig(kind="email", to_address="ops@example.com")],
     )
     sink = EmailNotifySink(cfg)
 
@@ -129,7 +129,7 @@ async def test_feishu_stub_when_enabled() -> None:
             enabled=True,
             app_id="cli_x",
             app_secret="sec",
-            targets=[NotifyTargetConfig(kind="feishu_chat_id", address="oc_1")],
+            targets=[NotifyTargetConfig(kind="feishu_chat_id", to_address="oc_1")],
         )
     )
     assert sink.enabled() is True

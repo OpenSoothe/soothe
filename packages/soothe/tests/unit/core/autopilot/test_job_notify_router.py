@@ -16,7 +16,7 @@ def _notify_cfg(**kwargs: object) -> AutopilotNotifyConfig:
         enabled=True,
         suspend_after_seconds=2700,
         events=NotifyEventsConfig(),
-        targets=[NotifyTargetConfig(kind="email", address="ops@example.com")],
+        targets=[NotifyTargetConfig(kind="email", to_address="ops@example.com")],
     )
     return base.model_copy(update=kwargs)
 

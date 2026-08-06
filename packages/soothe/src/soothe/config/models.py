@@ -134,14 +134,14 @@ class DreamingModesConfig(BaseModel):
 
 
 class NotifyTargetConfig(BaseModel):
-    """One delivery address for job lifecycle notify (IG-713).
+    """One delivery destination for job lifecycle notify (IG-713).
 
     ``kind`` selects the sink address space (``email``, ``feishu_chat_id``,
     ``feishu_open_id``, ``webhook_url``, …).
     """
 
     kind: str = Field(description="Address space / sink target kind")
-    address: str = Field(description="Recipient address in that space")
+    to_address: str = Field(description="Recipient address in that space")
 
 
 class NotifyEventsConfig(BaseModel):
