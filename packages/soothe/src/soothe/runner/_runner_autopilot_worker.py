@@ -295,7 +295,7 @@ class AutopilotWorkerMixin:
         *,
         outcome: str,
         plan_result: PlanResult | None,
-                directives: list[GoalDirective] = [],
+        directives: list[GoalDirective] = [],
         error_text: str | None = None,
         workspace: str | None = None,
     ) -> StreamChunk:

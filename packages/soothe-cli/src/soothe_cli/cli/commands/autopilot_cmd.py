@@ -56,6 +56,16 @@ _STYLE_DONE = "bold green"
 _STYLE_WARN = "bold bright_yellow"
 _STYLE_HOT = "bold bright_red"
 _STYLE_LIVE_HINT = "dim green"
+# Forest row metric accents (label dim + value colored).
+_STYLE_METRIC_TIME = "bold bright_blue"
+_STYLE_METRIC_TOKENS = "bold bright_magenta"
+_STYLE_METRIC_PRI = "bold bright_yellow"
+_STYLE_METRIC_SEQ = "bold bright_magenta"
+_STYLE_METRIC_DEPS = "cyan"
+# Compact description previews so metrics stay visible on narrow terminals.
+_TOP_DESC_JOB = 32
+_TOP_DESC_GOAL = 32
+_TOP_DESC_STEP = 28
 _STATUS_STYLE: dict[str, str] = {
     "active": _STYLE_ACTIVE,
     "pending": "yellow",
@@ -808,6 +818,100 @@ def _text_line(*parts: tuple[str, str | None]) -> Text:
     return line
 
 
+def _append_metric(line: Text, metric: Text) -> None:
+    """Append a spaced metric segment built by ``_metric_*`` helpers."""
+    if not metric.plain:
+        return
+    line.append("  ")
+    line.append_text(metric)
+
+
+def _metric_progress(kind: str, done: int, total: int) -> Text:
+    """Colored progress metric, e.g. ``goals 2/5`` / ``steps 1/2``."""
+    ratio = (float(done) / float(total)) if total > 0 else 0.0
+    value_style = _meter_fill_style(ratio, kind="progress")
+    out = Text()
+    out.append(f"{kind} ", style=_STYLE_DIM)
+    out.append(str(done), style=value_style)
+    out.append("/", style=_STYLE_DIM)
+    out.append(str(total), style=_STYLE_META)
+    return out
+
+
+def _metric_kv(key: str, value: str, value_style: str) -> Text:
+    """Colored key=value metric (``tok=12K``, ``pri=50``)."""
+    out = Text()
+    out.append(f"{key}=", style=_STYLE_DIM)
+    out.append(value, style=value_style)
+    return out
+
+
+def _metric_elapsed(elapsed: str) -> Text:
+    """Wall-clock elapsed accent."""
+    return Text(elapsed, style=_STYLE_METRIC_TIME)
+
+
+def _metric_seq(seq: object) -> Text:
+    """Loop attempt sequence ``#N``."""
+    out = Text()
+    out.append("#", style=_STYLE_DIM)
+    out.append(str(seq), style=_STYLE_METRIC_SEQ)
+    return out
+
+
+def _metric_deps(deps: list[str]) -> Text:
+    """Step dependency hint ``←a,b,c``."""
+    return Text(f"←{','.join(deps[:3])}", style=_STYLE_METRIC_DEPS)
+
+
+def _format_entity_row(
+    *,
+    kind: str,
+    kind_style: str,
+    entity_id: str,
+    status: str,
+    description: str | None = None,
+    metrics: list[Text] | None = None,
+    prefix: list[tuple[str, str | None]] | None = None,
+    bracket_id: bool = True,
+) -> Text:
+    """Unified forest row: ``KIND [id] status  "desc"  <metrics…>``.
+
+    JOB / GOAL / STEP share this order so description always precedes metrics
+    (elapsed, progress counts, tokens, priority, deps). LOOP omits description
+    and may skip id brackets (assignment ids are already long).
+    """
+    parts: list[tuple[str, str | None]] = list(prefix or [])
+    # Pad kind label to 4 chars so columns align (JOB / GOAL / STEP / LOOP).
+    label = f"{kind:<4s}"
+    parts.append((f"{label} ", kind_style))
+    id_seg = f"[{entity_id}] " if bracket_id else f"{entity_id}  "
+    parts.append((id_seg, kind_style))
+    parts.append((f"{status:10s}", _status_style(status)))
+    if description is not None:
+        parts.append((f'  "{description}"', _STYLE_DIM))
+    line = _text_line(*parts)
+    for metric in metrics or []:
+        _append_metric(line, metric)
+    return line
+
+
+def _job_goal_progress(job: dict) -> tuple[int, int]:
+    """Return ``(completed, total)`` goals for a top job row.
+
+    Prefers wire fields from the full DAG; falls back to counting visible nodes.
+    """
+    total = job.get("total_goals")
+    completed = job.get("completed_goals")
+    if isinstance(total, int) and total >= 0:
+        done = int(completed) if isinstance(completed, int) and completed >= 0 else 0
+        return done, total
+    dag = job.get("dag") if isinstance(job.get("dag"), dict) else {}
+    nodes = [n for n in (dag.get("nodes") or []) if isinstance(n, dict) and n.get("id")]
+    done = sum(1 for n in nodes if str(n.get("status") or "").lower() == "completed")
+    return done, len(nodes)
+
+
 # Preferred status order in htop-style count breakdowns.
 _TOP_STATUS_ORDER: tuple[str, ...] = (
     "active",
@@ -1110,21 +1214,24 @@ def _format_step_list(
         is_last = (i == len(ordered_nodes) - 1) and trailing_siblings == 0
         branch = "└─ " if is_last else "├─ "
         status = str(node.get("status", "pending"))
-        desc = _preview_desc(node.get("description", ""), 40)
+        desc = _preview_desc(node.get("description", ""), _TOP_DESC_STEP)
         step_id = str(node["id"])
         sid = step_id if len(step_id) <= 12 else step_id[:12] + "…"
         deps = [str(d) for d in (node.get("dependencies") or []) if d]
-        parts: list[tuple[str, str | None]] = [
-            (indent, _STYLE_TREE),
-            (branch, _STYLE_TREE),
-            ("STEP ", _STYLE_STEP),
-            (f"[{sid}] ", _STYLE_STEP),
-            (f"{status:10s}", _status_style(status)),
-            (f'  "{desc}"', _STYLE_DIM),
-        ]
+        metrics: list[Text] = []
         if deps:
-            parts.append((f"  ←{','.join(deps[:3])}", _STYLE_META))
-        lines.append(_text_line(*parts))
+            metrics.append(_metric_deps(deps))
+        lines.append(
+            _format_entity_row(
+                kind="STEP",
+                kind_style=_STYLE_STEP,
+                entity_id=sid,
+                status=status,
+                description=desc,
+                metrics=metrics,
+                prefix=[(indent, _STYLE_TREE), (branch, _STYLE_TREE)],
+            )
+        )
 
 
 def _format_top_forest(
@@ -1139,6 +1246,12 @@ def _format_top_forest(
     Jobs are shown newest-first (by ``created_at``) so the latest job sits at
     the top of the forest. ``steps_mode=on`` lists each goal's full StepDAG;
     ``active`` lists only active and pending steps.
+
+    Entity rows share a unified layout::
+
+        KIND [id] status  "desc"  <metrics…>
+
+    Metrics order: elapsed, progress (goals/steps), tokens, priority, deps.
     """
     raw_jobs = [j for j in (snapshot.get("jobs") or []) if isinstance(j, dict)]
     jobs = _sort_jobs_newest_first(raw_jobs)
@@ -1153,17 +1266,26 @@ def _format_top_forest(
         jid = str(job.get("id", "?"))
         jstat = str(job.get("status", "pending"))
         jpri = job.get("priority", 50)
-        jdesc = _preview_desc(job.get("description", ""), 50)
+        jdesc = _preview_desc(job.get("description", ""), _TOP_DESC_JOB)
         jelapsed = format_elapsed(job.get("created_at"))
-        jelapsed_s = f"  {jelapsed}" if jelapsed else ""
-        jtok = format_tokens(job.get("total_tokens_used", 0))
+        jtok = int(job.get("total_tokens_used") or 0)
+        goals_done, goals_total = _job_goal_progress(job)
+        job_metrics: list[Text] = []
+        if jelapsed:
+            job_metrics.append(_metric_elapsed(jelapsed))
+        if goals_total > 0:
+            job_metrics.append(_metric_progress("goals", goals_done, goals_total))
+        if jtok:
+            job_metrics.append(_metric_kv("tok", format_tokens(jtok), _STYLE_METRIC_TOKENS))
+        job_metrics.append(_metric_kv("pri", str(jpri), _STYLE_METRIC_PRI))
         lines.append(
-            _text_line(
-                ("JOB  ", _STYLE_JOB),
-                (f"[{jid[:8]}] ", _STYLE_JOB),
-                (f"{jstat:10s}", _status_style(jstat)),
-                (f"  pri={jpri}{jelapsed_s}  tok={jtok}", _STYLE_META),
-                (f'  "{jdesc}"', _STYLE_DIM),
+            _format_entity_row(
+                kind="JOB",
+                kind_style=_STYLE_JOB,
+                entity_id=jid[:8],
+                status=jstat,
+                description=jdesc,
+                metrics=job_metrics,
             )
         )
 
@@ -1191,25 +1313,29 @@ def _format_top_forest(
             branch = "└─ " if is_last else "├─ "
             child_indent = indent + ("    " if is_last else "│   ")
             status = str(node.get("status", "pending"))
-            desc = _preview_desc(node.get("description", ""), 50)
-            steps_c = node.get("steps_completed", 0) or 0
-            steps_t = node.get("steps_total", 0) or 0
-            steps_s = f"  steps {steps_c}/{steps_t}" if steps_t else ""
+            desc = _preview_desc(node.get("description", ""), _TOP_DESC_GOAL)
+            steps_c = int(node.get("steps_completed") or 0)
+            steps_t = int(node.get("steps_total") or 0)
             gtok = int(node.get("total_tokens_used") or 0)
-            tok_s = f"  tok={format_tokens(gtok)}" if gtok else ""
-            goal_line = _text_line(
-                (indent, _STYLE_TREE),
-                (branch, _STYLE_TREE),
-                ("GOAL ", _STYLE_GOAL),
-                (f"[{goal_id[:8]}] ", _STYLE_GOAL),
-                (f"{status:10s}", _status_style(status)),
-                (f'  "{desc}"', _STYLE_DIM),
+            gelapsed = format_elapsed(node.get("created_at"))
+            goal_metrics: list[Text] = []
+            if gelapsed:
+                goal_metrics.append(_metric_elapsed(gelapsed))
+            if steps_t:
+                goal_metrics.append(_metric_progress("steps", steps_c, steps_t))
+            if gtok:
+                goal_metrics.append(_metric_kv("tok", format_tokens(gtok), _STYLE_METRIC_TOKENS))
+            lines.append(
+                _format_entity_row(
+                    kind="GOAL",
+                    kind_style=_STYLE_GOAL,
+                    entity_id=goal_id[:8],
+                    status=status,
+                    description=desc,
+                    metrics=goal_metrics,
+                    prefix=[(indent, _STYLE_TREE), (branch, _STYLE_TREE)],
+                )
             )
-            if steps_s:
-                goal_line.append(steps_s, style=_STYLE_STEP)
-            if tok_s:
-                goal_line.append(tok_s, style=_STYLE_META)
-            lines.append(goal_line)
 
             goal_loops = loops_by_goal.get(goal_id, [])
             child_ids = children.get(goal_id, [])
@@ -1235,15 +1361,20 @@ def _format_top_forest(
                 seq = entry.get("seq", "?")
                 lstat = str(entry.get("status", "active"))
                 elapsed = format_elapsed(entry.get("started_at"))
-                elapsed_s = f"  {elapsed}" if elapsed else ""
+                loop_metrics: list[Text] = [_metric_seq(seq)]
+                if elapsed:
+                    loop_metrics.append(_metric_elapsed(elapsed))
+                # LOOP has no description; keep id + status + metrics order.
                 lines.append(
-                    _text_line(
-                        (child_indent, _STYLE_TREE),
-                        (lb, _STYLE_TREE),
-                        ("LOOP ", _STYLE_LOOP),
-                        (f"{lid}  ", _STYLE_LOOP),
-                        (lstat, _status_style(lstat)),
-                        (f"  #{seq}{elapsed_s}", _STYLE_META),
+                    _format_entity_row(
+                        kind="LOOP",
+                        kind_style=_STYLE_LOOP,
+                        entity_id=lid,
+                        status=lstat,
+                        description=None,
+                        metrics=loop_metrics,
+                        prefix=[(child_indent, _STYLE_TREE), (lb, _STYLE_TREE)],
+                        bracket_id=False,
                     )
                 )
             for i, child_id in enumerate(child_ids):
@@ -1268,15 +1399,20 @@ def _format_top_forest(
             gid = str(entry.get("goal_id") or "?")[:8]
             lstat = str(entry.get("status", "active"))
             elapsed = format_elapsed(entry.get("started_at"))
-            elapsed_s = f"  {elapsed}" if elapsed else ""
+            orphan_metrics: list[Text] = [_metric_seq(seq)]
+            if elapsed:
+                orphan_metrics.append(_metric_elapsed(elapsed))
+            orphan_metrics.append(Text(f"?goal={gid}", style="bright_yellow"))
             lines.append(
-                _text_line(
-                    (branch, _STYLE_TREE),
-                    ("LOOP ", _STYLE_LOOP),
-                    (f"{lid}  ", _STYLE_LOOP),
-                    (lstat, _status_style(lstat)),
-                    (f"  #{seq}{elapsed_s}", _STYLE_META),
-                    (f"  ?goal={gid}", "bright_yellow"),
+                _format_entity_row(
+                    kind="LOOP",
+                    kind_style=_STYLE_LOOP,
+                    entity_id=lid,
+                    status=lstat,
+                    description=None,
+                    metrics=orphan_metrics,
+                    prefix=[(branch, _STYLE_TREE)],
+                    bracket_id=False,
                 )
             )
 

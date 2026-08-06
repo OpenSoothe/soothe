@@ -102,17 +102,23 @@ load path for spawn.
 |---------|----------|
 | CLI / TUI / submit | No artifact path |
 | Architecture goal **user-visible** description | Opaque: “define independent ownership units for wave 1”; **no** `jobs/…` path |
-| Agent write API | Prefer **`record_wave_plan(...)`** (or structured completion fields) — agent fills modules, runtime persists |
+| Agent write API | **Host-owned** (IG-704): nano emits opaque WavePlan JSON in findings;
+  AutopilotService ingests and persists. Do **not** inject `record_wave_plan`
+  as a nano/CoreAgent tool (StrangeLoop never mutates Autopilot/CE). |
 | Rail YAML / debug / inspect skill | Path OK (operator forensics) |
 
 Preferred agent contract:
 
 ```text
 User/TUI:  Architecture: define wave-1 ownership units
-Agent:     record_wave_plan(modules=[...], rationale=...)  OR structured fields
+Agent:     opaque deliverable — findings entry = WavePlan JSON (no Autopilot tools)
+Autopilot: parse contribution → record_wave_plan on rail executor
 Rail:      persist → jobs/{job_id}/wave-plan.json
 Spawn:     load from jobs_root (internal)
 ```
+
+See [IG-704](IG-704-autopilot-wave-plan-host-ingest.md) for the boundary fix
+(remove agent-facing tool; host ingest + accept gate).
 
 Do **not** instruct the agent to `write_file` a user-visible path in the goal
 card text.

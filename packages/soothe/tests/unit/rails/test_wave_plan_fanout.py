@@ -147,7 +147,7 @@ async def test_plan_milestones_description_hides_artifact_path(tmp_path: Path) -
         RailJobState(
             job_id=root.id,
             rail_id="greenfield-system",
-            rail_version="1.3",
+            rail_version="1.4",
             wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
             require_plan=True,
         )
@@ -157,15 +157,15 @@ async def test_plan_milestones_description_hides_artifact_path(tmp_path: Path) -
     assert arch is not None
     assert "jobs/" not in arch.description
     assert ".soothe/wave-plan" not in arch.description
-    assert "record_wave_plan" in arch.description
+    assert "record_wave_plan" not in arch.description
+    assert "WavePlan JSON" in arch.description
     assert "ownership units" in arch.description.lower()
     assert "fixed default" in arch.description.lower() or "never substitutes" in arch.description
 
 
 @pytest.mark.asyncio
-async def test_record_wave_plan_tool_factory(tmp_path: Path) -> None:
-    from soothe.autopilot.rail.wave_plan_tools import make_record_wave_plan_tool
-
+async def test_record_wave_plan_host_api(tmp_path: Path) -> None:
+    """Host/executor API persists the plan — not a nano agent tool (IG-704)."""
     ce = ContextEngine()
     root = await ce.create_goal("Build", workspace=str(tmp_path), priority=70)
     ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
@@ -173,16 +173,17 @@ async def test_record_wave_plan_tool_factory(tmp_path: Path) -> None:
         RailJobState(
             job_id=root.id,
             rail_id="greenfield-system",
-            rail_version="1.3",
+            rail_version="1.4",
             require_plan=True,
         )
     )
-    tool = make_record_wave_plan_tool(ex, root.id)
-    assert tool.name == "record_wave_plan"
-    result = await tool.ainvoke(
-        {"wave_modules": ["core", "tests"], "rationale": "mvp"},
+    plan = await ex.record_wave_plan(
+        root.id,
+        wave_modules=["core", "tests"],
+        rationale="mvp",
     )
-    assert "2 modules" in result
+    assert plan is not None
+    assert plan.resolved_module_names() == ["core", "tests"]
     assert resolve_wave_plan_path(jobs_root=tmp_path, job_id=root.id).is_file()
 
 
@@ -195,7 +196,7 @@ async def test_spawn_wave_makers_from_record_wave_plan(tmp_path: Path) -> None:
         RailJobState(
             job_id=root.id,
             rail_id="greenfield-system",
-            rail_version="1.3",
+            rail_version="1.4",
             worktrees_enabled=False,
             engine_max_parallel_goals=16,
             require_plan=True,
@@ -234,6 +235,73 @@ async def test_spawn_wave_makers_from_record_wave_plan(tmp_path: Path) -> None:
     result = await ex.invoke("spawn_wave_makers", job_id=root.id, trigger_goal_id=arch.id)
     assert result.status == "success"
     assert len(result.created_goal_ids) == 6
+
+
+@pytest.mark.asyncio
+async def test_retry_architecture_replants_planner(tmp_path: Path) -> None:
+    ce = ContextEngine()
+    root = await ce.create_goal("Build system", workspace=str(tmp_path), priority=70)
+    ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
+    await ex.bind_job(
+        RailJobState(
+            job_id=root.id,
+            rail_id="greenfield-system",
+            rail_version="1.4",
+            require_plan=True,
+            wave_modules=["stale"],
+        )
+    )
+    first = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = first.created_goal_ids[0]
+    await ce.fail_goal(arch_id, error="no wave plan")
+
+    result = await ex.invoke("retry_architecture", job_id=root.id, trigger_goal_id=arch_id)
+    assert result.status == "success"
+    assert len(result.created_goal_ids) == 1
+    new_id = result.created_goal_ids[0]
+    assert new_id != arch_id
+    root2 = await ce.get_goal(root.id)
+    assert root2 is not None
+    assert arch_id not in (root2.depends_on or [])
+    assert new_id in (root2.depends_on or [])
+    state = await ex.job_state(root.id)
+    assert state is not None
+    assert state.wave_modules is None
+    pruned = state.annotations.get(arch_id)
+    assert pruned is not None and pruned.branch_status == "pruned"
+
+
+def test_architecture_failed_guard() -> None:
+    matched = _structural_short_circuit(
+        condition_name="architecture_failed",
+        event="goal_failed",
+        trigger_tags=["architecture", "planning", "milestones"],
+        structural={"architecture_goal_ids": ["a1"], "pending_or_active_count": 0},
+    )
+    assert matched is not None and matched.matched is True
+
+    skip_maker = _structural_short_circuit(
+        condition_name="architecture_failed",
+        event="goal_failed",
+        trigger_tags=["implementation", "maker"],
+        structural={"architecture_goal_ids": ["a1"], "pending_or_active_count": 0},
+    )
+    assert skip_maker is not None and skip_maker.matched is False
+
+
+def test_parse_wave_plan_from_nested_embed() -> None:
+    from soothe.autopilot.rail.wave_plan import parse_wave_plan_from_findings
+
+    text = (
+        "Here is the plan:\n"
+        '{"wave_modules":["frontend","ir","passes"],'
+        '"independence":"disjoint",'
+        '"rationale":"crate map",'
+        '"modules":[{"module":"frontend","description":"UI layer"}]}'
+    )
+    plan = parse_wave_plan_from_findings([text])
+    assert plan is not None
+    assert "frontend" in plan.resolved_module_names()
 
 
 @pytest.mark.asyncio

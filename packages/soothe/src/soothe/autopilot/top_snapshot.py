@@ -151,6 +151,34 @@ def _copy_dag(dag: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def dag_goal_counts(dag: dict[str, Any]) -> dict[str, int]:
+    """Count goals in a job DAG (pre-filter totals for ``autopilot_top``).
+
+    Args:
+        dag: Snapshot with ``nodes`` (each may have ``id`` / ``status``).
+
+    Returns:
+        Dict with ``total_goals``, ``completed_goals``, ``active_goals``.
+    """
+    total = 0
+    completed = 0
+    active = 0
+    for node in dag.get("nodes") or []:
+        if not isinstance(node, dict) or not node.get("id"):
+            continue
+        total += 1
+        status = str(node.get("status") or "pending").lower()
+        if status == "completed":
+            completed += 1
+        elif status == "active":
+            active += 1
+    return {
+        "total_goals": total,
+        "completed_goals": completed,
+        "active_goals": active,
+    }
+
+
 def build_top_job_entry(
     *,
     job_id: str,
@@ -184,7 +212,10 @@ def build_top_job_entry(
 
     Returns:
         Job dict with filtered ``dag`` and active ``loops``, or ``None``.
+        ``total_goals`` / ``completed_goals`` / ``active_goals`` always reflect
+        the full (pre-filter) DAG so ``mode=active`` still shows job progress.
     """
+    counts = dag_goal_counts(dag)
     if include_terminal:
         if not any(isinstance(n, dict) and n.get("id") for n in (dag.get("nodes") or [])):
             return None
@@ -203,6 +234,7 @@ def build_top_job_entry(
         "dag": filtered,
         "loops": filter_active_loops(loops),
         "total_tokens_used": int(total_tokens_used or 0),
+        **counts,
     }
     if workspace:
         entry["workspace"] = workspace

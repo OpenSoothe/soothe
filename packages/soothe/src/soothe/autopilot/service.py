@@ -520,8 +520,8 @@ class AutopilotService:
         """Bind LoopRail for a root job; engine only injects spawn budget.
 
         Fan-out module lists / scout counts come from the rail YAML ``fanout:``
-        block and job-scoped ``record_wave_plan`` artifact — not from Autopilot
-        submit fields or the project workspace tree.
+        block and job-scoped wave-plan artifact (host ingest) — not from Autopilot
+        submit fields, nano tools, or the project workspace tree.
         """
         if self._rail_interpreter is None or not goal.rail_id:
             return
@@ -546,6 +546,117 @@ class AutopilotService:
                 goal.id,
                 exc_info=True,
             )
+
+    @staticmethod
+    def _is_architecture_planner_goal(goal: GoalNode) -> bool:
+        """True when the goal is the rail architecture / planner deliverable."""
+        tags = list(goal.rail_tags or [])
+        if "architecture" in tags or "planning" in tags:
+            return True
+        return (goal.role or "") == "planner"
+
+    async def _try_ingest_architecture_wave_plan(
+        self,
+        goal: GoalNode,
+        *,
+        evidence_summary: str,
+        contribution: Any | None,
+    ) -> bool:
+        """Parse WavePlan from worker contribution and persist via rail executor.
+
+        Nano/StrangeLoop never call Autopilot APIs — the host interprets opaque
+        findings/evidence and records the job-scoped artifact (IG-704).
+
+        Returns:
+            True when a usable wave plan is ready after ingest attempts.
+        """
+        from soothe.autopilot.rail.wave_plan import parse_wave_plan_from_findings
+
+        if self._rail_interpreter is None:
+            return False
+        job_id = self._job_id_for_goal(goal.id)
+        if job_id is None:
+            return False
+        builtins = self._rail_interpreter.builtins
+        state = await builtins.job_state(job_id)
+        if state is None or not state.require_plan:
+            return False
+
+        candidates: list[Any] = []
+        if evidence_summary and evidence_summary.strip():
+            candidates.append(evidence_summary.strip())
+        findings = getattr(contribution, "findings", None) if contribution else None
+        if findings:
+            for item in findings:
+                summary = getattr(item, "summary", None)
+                if summary:
+                    candidates.append(str(summary))
+                elif isinstance(item, dict):
+                    candidates.append(item)
+                else:
+                    candidates.append(str(item))
+        if goal.findings:
+            candidates.extend(list(goal.findings))
+
+        plan = parse_wave_plan_from_findings(candidates)
+        if plan is not None:
+            recorded = await builtins.record_wave_plan(job_id, plan=plan)
+            if recorded is not None:
+                names = recorded.resolved_module_names()
+                note = f"WavePlan recorded by host ({len(names)} modules): {', '.join(names)}"
+                if note not in goal.findings:
+                    goal.findings.append(note[:500])
+                logger.info(
+                    "Host ingested wave plan for architecture goal %s job=%s modules=%s",
+                    goal.id,
+                    job_id[:8],
+                    names,
+                )
+
+        # Also reload from disk / findings via standard ingest path.
+        await builtins.ingest_wave_plan(job_id)
+        return builtins.is_wave_plan_ready(job_id)
+
+    async def _architecture_wave_plan_consensus_gate(
+        self,
+        goal: GoalNode,
+        *,
+        evidence_summary: str,
+        contribution: Any | None,
+    ) -> tuple[str, str] | None:
+        """Deterministic accept/send_back for require_plan architecture goals.
+
+        Returns:
+            ``(decision, reasoning)`` when this goal is under the architecture
+            fan-out gate; ``None`` to fall through to LLM consensus.
+        """
+        if not self._is_architecture_planner_goal(goal):
+            return None
+        if self._rail_interpreter is None:
+            return None
+        job_id = self._job_id_for_goal(goal.id)
+        if job_id is None:
+            return None
+        state = await self._rail_interpreter.builtins.job_state(job_id)
+        if state is None or not state.require_plan:
+            return None
+
+        ready = await self._try_ingest_architecture_wave_plan(
+            goal,
+            evidence_summary=evidence_summary,
+            contribution=contribution,
+        )
+        if ready:
+            return (
+                "accept",
+                "Host recorded a valid WavePlan from the architecture deliverable",
+            )
+        return (
+            "send_back",
+            "Architecture requires one findings entry that is exactly a WavePlan "
+            "JSON object with wave_modules (host persists fan-out; do not write "
+            "fan-out policy into the project workspace tree).",
+        )
 
     def _job_id_for_goal(self, goal_id: str) -> str | None:
         """Walk parents to the root job id."""
@@ -1513,43 +1624,68 @@ class AutopilotService:
             return
 
         # Persist findings onto the goal for post-completion context (IG-680 P1-7).
+        # WavePlan-shaped JSON keeps a higher cap so host ingest can re-read it
+        # from goal.findings if contribution is gone (IG-704).
         if findings:
             try:
+                from soothe.autopilot.rail.wave_plan import parse_wave_plan_payload
+
                 for finding in findings[:20]:
                     summary = getattr(finding, "summary", None) or str(finding)
-                    if summary and summary not in goal.findings:
-                        goal.findings.append(str(summary)[:500])
+                    if not summary or summary in goal.findings:
+                        continue
+                    cap = 500
+                    if parse_wave_plan_payload(str(summary).strip()) is not None:
+                        cap = 8000
+                    goal.findings.append(str(summary)[:cap])
             except Exception:
                 logger.debug("Failed to attach findings to goal %s", goal_id, exc_info=True)
 
-        response_text = grounded
-        try:
-            decision, reasoning = await evaluate_goal_completion(
-                goal.description,
-                response_text,
-                grounded,
-                model=self._consensus_model,
-            )
-        except Exception:
-            logger.exception("Consensus evaluation failed for goal %s", goal_id)
-            decision, reasoning = "suspend", "Consensus evaluation failed"
-
-        # Soft probes may ground the LLM; do not hard-accept via language-
-        # specific tools for rail-bound goals (policy lives in rails / maturity).
-        rail_bound = bool(getattr(goal, "rail_id", None))
-        if not rail_bound and decision != "accept" and "pytest -q: PASS" in probe:
-            prior = decision
+        # Architecture + require_plan: host owns WavePlan ingest / accept gate
+        # (nano must not call Autopilot tools — IG-704 / RFC-222 boundary).
+        arch_gate = await self._architecture_wave_plan_consensus_gate(
+            goal,
+            evidence_summary=evidence_summary,
+            contribution=contribution,
+        )
+        if arch_gate is not None:
+            decision, reasoning = arch_gate
             logger.info(
-                "Consensus override accept for %s: workspace pytest PASS (llm decision was %s)",
+                "Architecture wave-plan gate for %s: decision=%s reasoning=%s",
                 goal_id,
-                prior,
+                decision,
+                reasoning[:160],
             )
-            decision = "accept"
-            reasoning = (
-                "Accepted via workspace verification (pytest PASS + deliverable "
-                f"markers). Prior LLM decision was {prior}: {reasoning}"
-            )
+        else:
+            response_text = grounded
+            try:
+                decision, reasoning = await evaluate_goal_completion(
+                    goal.description,
+                    response_text,
+                    grounded,
+                    model=self._consensus_model,
+                )
+            except Exception:
+                logger.exception("Consensus evaluation failed for goal %s", goal_id)
+                decision, reasoning = "suspend", "Consensus evaluation failed"
 
+            # Soft probes may ground the LLM; do not hard-accept via language-
+            # specific tools for rail-bound goals (policy lives in rails / maturity).
+            rail_bound = bool(getattr(goal, "rail_id", None))
+            if not rail_bound and decision != "accept" and "pytest -q: PASS" in probe:
+                prior = decision
+                logger.info(
+                    "Consensus override accept for %s: workspace pytest PASS (llm decision was %s)",
+                    goal_id,
+                    prior,
+                )
+                decision = "accept"
+                reasoning = (
+                    "Accepted via workspace verification (pytest PASS + deliverable "
+                    f"markers). Prior LLM decision was {prior}: {reasoning}"
+                )
+
+        rail_bound = bool(getattr(goal, "rail_id", None))
         try:
             if decision == "accept":
                 await self._ce.complete_goal(goal_id)

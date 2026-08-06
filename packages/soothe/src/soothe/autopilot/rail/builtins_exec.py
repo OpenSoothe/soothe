@@ -567,20 +567,19 @@ class RailBuiltinExecutor:
                 "Define module boundaries, wave-1 independent ownership units, "
                 "wave acceptance criteria, and git commit milestones. "
                 "Do not implement product code here.\n\n"
-                "REQUIRED fan-out policy: call `record_wave_plan` with your "
-                "module list (names, count, and rationale are yours), or append "
-                "one structured findings entry that is exactly a WavePlan JSON "
-                "object. Schema example:\n"
+                "REQUIRED deliverable: append one findings entry that is exactly "
+                "a WavePlan JSON object (host persists fan-out for this job — do "
+                "not write fan-out policy into the project workspace tree). "
+                "Schema example:\n"
                 '{"wave_modules":["frontend","ir","passes","backend","driver","tests"],'
                 '"independence":"disjoint write-sets per module",'
                 '"rationale":"why this partition"}\n'
                 "Optionally use rich `modules` entries "
                 '({"module","description","priority","tags"}) and/or `max_waves`. '
-                "The host persists the plan for this job — do not write fan-out "
-                "policy into the project workspace tree. Prose alone is not enough "
-                "(never scrapes markdown, never substitutes a fixed default module "
-                "list). Modules must be independent (no overlapping primary write "
-                "sets). Autopilot only clamps spawn width to max_parallel_goals."
+                "Prose alone is not enough (never scrapes markdown, never substitutes "
+                "a fixed default module list). Modules must be independent (no "
+                "overlapping primary write sets). Autopilot only clamps spawn width "
+                "to max_parallel_goals."
             ),
             parent_id=job_id,
             source="decomposition",
@@ -641,7 +640,8 @@ class RailBuiltinExecutor:
     ) -> WavePlan | None:
         """Persist an LLM wave plan under jobs_root and apply it to rail state.
 
-        Preferred agent/host API (IG-700): callers never need the filesystem path.
+        Preferred host API (IG-700 / IG-704): Autopilot/rail persist the plan;
+        callers never need the filesystem path. Not a nano agent tool.
         """
         async with self._lock:
             state = self._jobs.get(job_id)
@@ -1222,6 +1222,53 @@ class RailBuiltinExecutor:
             status="success",
             detail=f"retried maker {slug} → {replacement.id}",
             created_goal_ids=[replacement.id],
+        )
+
+    async def _do_retry_architecture(
+        self, *, job_id: str, trigger_goal_id: str | None
+    ) -> BuiltinResult:
+        """Replace a failed architecture/planner goal; clear stale wave plan."""
+        if not trigger_goal_id:
+            return BuiltinResult(status="skipped", detail="no trigger architecture")
+        state = await self._require(job_id)
+        failed = self._ce._dag.get_goal(trigger_goal_id)
+        if failed is None:
+            return BuiltinResult(status="error", detail="trigger architecture missing")
+        ann = state.annotations.get(trigger_goal_id, GoalAnnotation())
+        tags = list(ann.tags or failed.rail_tags or [])
+        role = ann.role or failed.role
+        if "architecture" not in tags and role != "planner":
+            return BuiltinResult(status="skipped", detail="trigger is not architecture")
+
+        if failed.status not in TERMINAL_STATES:
+            await self._ce.cancel_goal(trigger_goal_id, reason="rail:retry_architecture_replace")
+        await self.annotate_goal(trigger_goal_id, job_id, branch_status="pruned")
+
+        # Stale modules must not unlock spawn_wave_makers without a new plan.
+        async with self._lock:
+            state = self._jobs.get(job_id)
+            if state is not None:
+                state.wave_modules = None
+                state.decompose_plan = None
+                self._persist_rail_state_unlocked(state)
+
+        # Reuse plan_milestones spawn copy (opaque deliverable; host ingests).
+        result = await self._do_plan_milestones(job_id=job_id, trigger_goal_id=trigger_goal_id)
+        if result.status != "success" or not result.created_goal_ids:
+            return result
+
+        new_arch_id = result.created_goal_ids[0]
+        root = await self._ce.get_goal(job_id)
+        if root is not None:
+            deps = [d for d in (root.depends_on or []) if d != trigger_goal_id]
+            if new_arch_id not in deps:
+                deps.append(new_arch_id)
+            await self._ce.update_dependencies(job_id, deps)
+
+        return BuiltinResult(
+            status="success",
+            detail=f"retried architecture → {new_arch_id}",
+            created_goal_ids=[new_arch_id],
         )
 
     async def _do_retry_branch(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:

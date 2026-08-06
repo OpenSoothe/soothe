@@ -1,5 +1,5 @@
 id: greenfield-system
-version: "1.3"
+version: "1.4"
 
 summary: |
   Greenfield multi-module system build: architecture milestones, parallel
@@ -15,8 +15,9 @@ applies_when: |
   mature codebase, hotfix, bugfix, or research spike.
 
 # Fan-out is LoopRail policy — not AutopilotService / submit API.
-# Module list is LLM-authored via record_wave_plan (job-scoped under
-# $SOOTHE_DATA_DIR/jobs/{job_id}/). Rail only declares the contract path
+# Module list is LLM-authored (WavePlan JSON in architecture findings);
+# host ingests via record_wave_plan into job-scoped artifact under
+# $SOOTHE_DATA_DIR/jobs/{job_id}/. Rail only declares the contract path
 # template + require_plan. Engine clamps to max_parallel_goals.
 fanout:
   artifact: "{job_id}/wave-plan.json"
@@ -51,6 +52,9 @@ conditions:
   branch_is_stuck: |
     A maker, integrate, review, or QA goal failed twice or evidence shows
     the approach conflicts with the architecture.
+  architecture_failed: |
+    The architecture / milestone map goal failed (no usable WavePlan for
+    fan-out), and a fresh planner attempt should replace it.
   job_complete: |
     Declared system acceptance holds (required binaries / golden tests /
     milestone commits) and the DAG is idle with no pending children.
@@ -99,6 +103,10 @@ flow:
   - event: goal_failed
     when: branch_is_stuck
     then: retry_maker
+
+  - event: goal_failed
+    when: architecture_failed
+    then: retry_architecture
 
   # Recover when makers finished but integrate never spawned (e.g. pruned
   # retries previously blocked wave_makers_done on the last maker completion).

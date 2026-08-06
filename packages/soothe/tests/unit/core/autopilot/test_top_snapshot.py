@@ -172,6 +172,9 @@ def test_build_top_job_entry_includes_active_loops_and_workspace() -> None:
     assert entry["workspace"] == "/ws"
     assert entry["created_at"] == "2026-08-05T00:00:00+00:00"
     assert entry["priority"] == 80
+    assert entry["total_goals"] == 2
+    assert entry["completed_goals"] == 0
+    assert entry["active_goals"] == 1
     assert len(entry["dag"]["nodes"]) == 2
     assert entry["dag"]["nodes"][0]["steps"]["nodes"][0]["id"] == "s1"
     assert entry["loops"] == [
@@ -204,7 +207,26 @@ def test_build_top_job_keeps_job_when_root_terminal_but_child_active() -> None:
     assert entry is not None
     assert {n["id"] for n in entry["dag"]["nodes"]} == {"g2"}
     assert entry["dag"]["edges"] == []
+    assert entry["total_goals"] == 2
+    assert entry["completed_goals"] == 1
+    assert entry["active_goals"] == 1
     assert "workspace" not in entry
+
+
+def test_dag_goal_counts() -> None:
+    from soothe.autopilot.top_snapshot import dag_goal_counts
+
+    counts = dag_goal_counts(
+        {
+            "nodes": [
+                {"id": "a", "status": "completed"},
+                {"id": "b", "status": "active"},
+                {"id": "c", "status": "pending"},
+                {"status": "active"},  # missing id — ignored
+            ]
+        }
+    )
+    assert counts == {"total_goals": 3, "completed_goals": 1, "active_goals": 1}
 
 
 def test_build_top_job_include_terminal_keeps_completed() -> None:

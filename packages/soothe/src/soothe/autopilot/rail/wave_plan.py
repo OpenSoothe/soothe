@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -25,7 +24,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_WAVE_PLAN_ARTIFACT = "{job_id}/wave-plan.json"
 
 _JOB_ID_TOKEN = "{job_id}"
-_JSON_OBJECT_RE = re.compile(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", re.DOTALL)
 # Pre-IG-700 workspace singleton — never load; rewrite to job-scoped default.
 _LEGACY_WORKSPACE_WAVE_PLAN_ARTIFACTS = frozenset(
     {
@@ -198,11 +196,44 @@ def parse_wave_plan_payload(raw: Any, *, source: str = "payload") -> WavePlan | 
     return plan
 
 
+def iter_embedded_json_objects(text: str) -> list[Any]:
+    """Yield top-level JSON values decoded from ``text`` via ``raw_decode``.
+
+    Finds each ``{`` / ``[`` and attempts structured decode — nested objects
+    are supported. Does not scrape free-form prose for module names.
+    """
+    if not text or not text.strip():
+        return []
+    decoder = json.JSONDecoder()
+    out: list[Any] = []
+    idx = 0
+    n = len(text)
+    while idx < n:
+        start_obj = text.find("{", idx)
+        start_arr = text.find("[", idx)
+        if start_obj < 0 and start_arr < 0:
+            break
+        if start_obj < 0:
+            start = start_arr
+        elif start_arr < 0:
+            start = start_obj
+        else:
+            start = min(start_obj, start_arr)
+        try:
+            obj, end = decoder.raw_decode(text, start)
+        except json.JSONDecodeError:
+            idx = start + 1
+            continue
+        out.append(obj)
+        idx = end
+    return out
+
+
 def parse_wave_plan_from_findings(findings: list[Any] | None) -> WavePlan | None:
     """Extract a WavePlan from structured goal findings (not prose scrapes).
 
     Accepts a findings entry that is a dict, a JSON object string, or a string
-    containing a single JSON object that validates as ``WavePlan``.
+    containing an embedded JSON object that validates as ``WavePlan``.
     """
     if not findings:
         return None
@@ -218,10 +249,10 @@ def parse_wave_plan_from_findings(findings: list[Any] | None) -> WavePlan | None
         plan = parse_wave_plan_payload(text, source=f"findings[{idx}]")
         if plan is not None:
             return plan
-        # Single embedded JSON object (e.g. "Wave plan:\\n{...}") — still
-        # structured JSON, not keyword/module-name heuristics.
-        for match in _JSON_OBJECT_RE.finditer(text):
-            plan = parse_wave_plan_payload(match.group(0), source=f"findings[{idx}].embed")
+        # Embedded JSON object/array (e.g. "Wave plan:\\n{...}") — structured
+        # JSON only, not keyword/module-name heuristics.
+        for embed_i, obj in enumerate(iter_embedded_json_objects(text)):
+            plan = parse_wave_plan_payload(obj, source=f"findings[{idx}].embed[{embed_i}]")
             if plan is not None and plan.resolved_module_names():
                 return plan
     return None
@@ -297,8 +328,8 @@ def resolve_fanout_modules(
     else:
         detail = (
             "LLM wave plan required but missing or empty; "
-            "architecture must record_wave_plan (or emit structured WavePlan "
-            "findings) before makers spawn"
+            "architecture must emit structured WavePlan findings "
+            "(host persists via record_wave_plan) before makers spawn"
         )
         logger.warning("%s", detail)
         return FanoutResolution(

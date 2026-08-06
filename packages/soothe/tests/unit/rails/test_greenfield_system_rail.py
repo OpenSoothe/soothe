@@ -23,6 +23,7 @@ def test_greenfield_system_rail_loads() -> None:
     assert "commit_milestone" in thens
     assert "review" in thens
     assert "spawn_feedback_cycle" in thens
+    assert "retry_architecture" in thens
     dag_idle = [e for e in rail.flow if e.get("event") == "dag_idle"]
     assert any(e.get("when") == "wave_makers_done" for e in dag_idle)
     assert any(e.get("when") == "needs_feedback" for e in dag_idle)

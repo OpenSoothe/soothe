@@ -628,6 +628,10 @@ interval (CLI default 2.0s) and redraw. Existing `job_status` / `job_dag` /
       "description": "Implement auth",
       "workspace": "/path/to/ws",
       "created_at": "2026-08-04T00:50:00+00:00",
+      "total_tokens_used": 12500,
+      "total_goals": 2,
+      "completed_goals": 0,
+      "active_goals": 1,
       "dag": {
         "root_id": "a1b2c3d4",
         "nodes": [
@@ -690,6 +694,9 @@ interval (CLI default 2.0s) and redraw. Existing `job_status` / `job_dag` /
    rail descendants). Tree `edges` are `parent → child`. Per-node
    `depends_on` is scheduling metadata only — do not invert it into tree
    edges (rails often make the root depend on a child planner).
+   Job rows also carry `total_goals` / `completed_goals` / `active_goals` and
+   `total_tokens_used` from the **full** (pre-filter) DAG so `mode=active`
+   still shows job progress.
 4. Apply **active filters** (server SoT) unless `include_terminal=true`:
    - Goal / job visibility uses CE `TERMINAL_STATES`
      (`completed`, `failed`, `cancelled`). Non-terminal includes
@@ -717,8 +724,10 @@ interval (CLI default 2.0s) and redraw. Existing `job_status` / `job_dag` /
   `d` density, `+/-` delay, `Space` refresh, vim scroll (`j`/`k`, `Ctrl-d/u`,
   `Ctrl-f/b`, `g`/`G`, PgUp/PgDn, Home/End), `h` help.
 - Render ASCII tree: job → goal DAG → flat planned step list → loops under
-  `JobLoopEntry.goal_id`. Show execution elapsed as `HH:MM:SS` from job
-  `created_at` and loop `started_at`.
+  `JobLoopEntry.goal_id`. Entity rows share order
+  `KIND [id] status  "desc"  <metrics>` (progress, elapsed, tokens, priority).
+  JOB shows `goals done/total` from wire counts. Show execution elapsed as
+  `HH:MM:SS` from job `created_at` and loop `started_at`.
 - Empty `jobs` → header + “No active jobs” (or “No jobs” in all mode).
 - Daemon not live / mid-session RPC failure → error + non-zero exit (same as
   other autopilot CLI commands).

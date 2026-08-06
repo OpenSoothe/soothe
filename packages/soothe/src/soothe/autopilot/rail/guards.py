@@ -279,6 +279,19 @@ def _structural_short_circuit(
             ),
         )
 
+    if name == "architecture_failed":
+        # Failed planner/architecture → host replants (IG-704); not a maker retry.
+        ok = event == "goal_failed" and (
+            "architecture" in trigger_tags or "planning" in trigger_tags
+        )
+        return GuardResult(
+            matched=ok,
+            confidence=1.0,
+            reasoning=(
+                f"structural short-circuit: architecture_failed tags={trigger_tags} event={event}"
+            ),
+        )
+
     if name in {"needs_feedback"}:
         # Find→optimize→verify after wave QA / verify. dag_idle recovers only
         # when a completed QA/verify already exists — never right after makers
