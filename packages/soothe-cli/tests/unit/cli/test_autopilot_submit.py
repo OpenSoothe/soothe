@@ -44,12 +44,12 @@ def test_submit_help_documents_async_and_wait() -> None:
     assert "async" in output
     assert "wait" in output
     assert "--wait" in output
-    assert "--no-wait" not in result.output
-    assert "--workspace" in result.output or "-workspace" in result.output
-    assert "-w" in result.output
-    assert "--file" in result.output
-    assert "-f" in result.output
-    assert "max-iterations" not in result.output
+    assert "--no-wait" not in output
+    assert "--workspace" in output
+    assert "-w" in output
+    assert "--file" in output
+    assert "-f" in output
+    assert "max-iterations" not in output
 
 
 def test_run_help_is_submit_wait_alias() -> None:
@@ -60,8 +60,8 @@ def test_run_help_is_submit_wait_alias() -> None:
     assert "submit" in output
     assert "wait" in output
     assert "sync" in output
-    assert "--file" in result.output
-    assert "max-iterations" not in result.output
+    assert "--file" in output
+    assert "max-iterations" not in output
 
 
 def test_list_command_replaced_by_jobs(mock_autopilot_client: MagicMock) -> None:
