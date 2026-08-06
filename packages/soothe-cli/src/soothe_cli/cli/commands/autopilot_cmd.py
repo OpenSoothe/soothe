@@ -971,7 +971,7 @@ def _format_top_header(
     meter_w = 10 if width >= 60 else 6
 
     title = Text()
-    title.append("Autopilot top", style=_STYLE_HEADER)
+    title.append("Autopilot", style=_STYLE_HEADER)
     title.append(" · ", style=_STYLE_TREE)
     title.append(running, style=_status_style(running))
     if dreaming:
