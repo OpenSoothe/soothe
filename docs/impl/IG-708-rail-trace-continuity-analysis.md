@@ -1,7 +1,7 @@
-# Rail Trace Continuity Across Loop Boundaries — Analysis
+# IG-708: Rail Trace Continuity Across Loop Boundaries
 
-**Status**: Clarification memo (design review of `docs/drafts/2026-07-11-loop-rail-design.md`)
-**Date**: 2026-08-03 (updated 2026-08-04 for IG-677)
+**Status**: Clarification memo (design review of `docs/drafts/2026-07-11-loop-rail-design.md`)  
+**Date**: 2026-08-03 (updated 2026-08-04 for IG-677; renumbered from IG-RQJ-02)  
 **Related**: LoopRail design draft §7, [IG-677](IG-677-autopilot-job-loop-index.md),
 RFC-222 / RFC-228
 

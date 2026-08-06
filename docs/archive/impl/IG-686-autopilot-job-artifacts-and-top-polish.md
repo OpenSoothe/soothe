@@ -5,7 +5,7 @@
 **Related**: [RFC-228 §autopilot_top](../specs/RFC-228-autopilot-job-ipc.md),
 [IG-679](IG-679-autopilot-top-command.md),
 [IG-677](IG-677-autopilot-job-loop-index.md),
-[IG-RQJ-02](IG-RQJ-02-rail-trace-continuity-analysis.md)
+[IG-708](../../impl/IG-708-rail-trace-continuity-analysis.md)
 
 ---
 
@@ -122,7 +122,7 @@ schema changes. Interactive keys / `--all` / scroll → [IG-688](IG-688-autopilo
    `top_snapshot` / `build_top_job_entry` pass `created_at`.
 2. **CLI** — fullscreen Live; elapsed helper; nest step tree in
    `_format_top_forest`; width/height from `Console.size`.
-3. **Docs** — this IG; note path change vs IG-RQJ-02 / IG-679.
+3. **Docs** — this IG; note path change vs IG-708 / IG-679.
 4. **Tests** — rail path + migrate; snapshot steps; CLI render nest + elapsed;
    fullscreen flag smoke if useful.
 5. **Verify** — cleanse → `./scripts/verify_finally.sh` → fix.

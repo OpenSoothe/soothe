@@ -10,7 +10,7 @@
 [RFC-630](../specs/RFC-630-no-keyword-heuristics.md),
 [IG-677](IG-677-autopilot-job-loop-index.md),
 [IG-680](IG-680-autopilot-dag-health-evidence-deps.md),
-[IG-RQJ-02](IG-RQJ-02-rail-trace-continuity-analysis.md),
+[IG-708](../../impl/IG-708-rail-trace-continuity-analysis.md),
 [IG-670](IG-670-daemon-auto-resume-interrupted-goals.md),
 [LoopRail draft](../drafts/2026-07-11-loop-rail-design.md)
 
@@ -75,7 +75,7 @@ phased so each phase leaves the system shippable at a higher trust tier:
 | RL-4 | Tags / branch / `rail_id` live in in-memory `RailJobState`, not `GoalNode` | Lost on restart; not CE SoT |
 | RL-5 | `pause_for_user` sets memory flag only — no IPC / TUI gate / `user_intervention` wire | Human gates fake |
 | RL-6 | Decompose builtins use generic scout templates, not LLM/CE decompose | Policy DSL ≠ real planning |
-| RL-7 | Trace defaults to memory; JSONL unused; Postgres `rail_trace` absent ([IG-RQJ-02](IG-RQJ-02-rail-trace-continuity-analysis.md)) | No durable job-scoped audit |
+| RL-7 | Trace defaults to memory; JSONL unused; Postgres `rail_trace` absent ([IG-708](../../impl/IG-708-rail-trace-continuity-analysis.md)) | No durable job-scoped audit |
 | RL-8 | `merge_branches` noop; no CE `branch_manager` | Design §5 incomplete |
 | RL-9 | No bugfix / hotfix / migration scenario tests; no product-binding tests | Catalog-only confidence |
 | RL-10 | Design still Draft; no LoopRail RFC | Cannot treat as shipped protocol |
@@ -100,7 +100,7 @@ phased so each phase leaves the system shippable at a higher trust tier:
 1. **One honesty bar**: if a path is stubbed, docs/config/tests must say so —
    or the path must work.
 2. **CE remains SoT for goal/step entities**; JobLoopIndex for membership;
-   rail trace keyed by `job_id` (IG-RQJ-02 / IG-677).
+   rail trace keyed by `job_id` (IG-708 / IG-677).
 3. **Events over polls for monitor reactivity**; scheduling may stay poll-based.
 4. **RFC-630**: consensus and rail guards use structured LLM output, not
    keyword/substring heuristics.
@@ -195,7 +195,7 @@ policy shapes the DAG; StrangeLoop still executes single goals.
 | P2-3 | Wire `LoopRailInterpreter` into AutopilotService/Monitor: bind on submit; forward lifecycle events (`job_start`, `goal_completed`, `goal_failed`, `dag_idle`, `user_intervention`) | RL-1 |
 | P2-4 | Submit surface: `rail_id` on WS / SDK / CLI (`--rail`) / TUI; config `agent.autopilot.default_rail` + workspace `.rail-default` fallback (no invented `default.yml`) | RL-2, RL-3 |
 | P2-5 | `RailSelector` (explicit id → workspace default → config default → no rail) | RL-3 |
-| P2-6 | Durable trace: JSONL under job artifact dir keyed by `job_id` (IG-RQJ-02); Postgres rows when `default_backend: postgresql` | RL-7 |
+| P2-6 | Durable trace: JSONL under job artifact dir keyed by `job_id` (IG-708); Postgres rows when `default_backend: postgresql` | RL-7 |
 | P2-7 | Human gate: `pause_for_user` → CE suspend + system event; CLI/TUI resume emits `user_intervention` | RL-5 |
 | P2-8 | Decompose: LLM/CE plan for scout/impl/review goals (structured); retire hard-coded “Explore facet N” as production default (keep as test fixture) | RL-6 |
 | P2-9 | CE `branch_manager` (or equivalent) for `retry_branch` prune+replant; `merge_branches` either implement or remove from catalog verbs | RL-8 |

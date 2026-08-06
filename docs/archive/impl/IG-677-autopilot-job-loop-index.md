@@ -5,7 +5,7 @@
 **Related**: [RFC-222](../specs/RFC-222-autopilot-goal-engine-architecture.md),
 [RFC-228](../specs/RFC-228-autopilot-job-ipc.md),
 [RFC-626](../specs/RFC-626-entity-model-state-consolidation.md),
-[IG-RQJ-02](IG-RQJ-02-rail-trace-continuity-analysis.md),
+[IG-708](../../impl/IG-708-rail-trace-continuity-analysis.md),
 [LoopRail draft](../drafts/2026-07-11-loop-rail-design.md)
 
 ---

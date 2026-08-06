@@ -9,7 +9,7 @@ rail-exclusive spawn), RFC-625 (AutopilotMonitor / ContextEngine),
 RFC-626 (Entity Model), RFC-630 (No Keyword Heuristics),
 RFC-105 (Skills — distillation source), IG-677 (Job↔Loop Index),
 IG-687 (greenfield-system), IG-692 (maturity implementation),
-IG-RQJ-02 (rail trace continuity)
+IG-708 (rail trace continuity)
 
 ---
 

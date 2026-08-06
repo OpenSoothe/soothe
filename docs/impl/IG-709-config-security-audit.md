@@ -1,9 +1,8 @@
-# SOJ-05: Configuration Security Audit Report
+# IG-709: Configuration Security Audit
 
 > Audit of security-relevant defaults and threshold tuning across all Soothe configuration surfaces.
 
-**Date:** 2026-08-04
-**Step:** SOJ-05
+**Date:** 2026-08-04 (renumbered from SOJ-05)  
 **Status:** Complete — all patches applied, `./scripts/verify_finally.sh` green
 
 ---

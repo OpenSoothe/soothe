@@ -168,7 +168,7 @@ class AutopilotService:
             self._subscribed = True
 
     def _init_rail_interpreter(self) -> None:
-        """Construct LoopRail interpreter with job-scoped JSONL traces (IG-RQJ-02)."""
+        """Construct LoopRail interpreter with job-scoped JSONL traces (IG-708)."""
         try:
             from pathlib import Path
 
