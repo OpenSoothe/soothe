@@ -14,7 +14,7 @@ from langchain.agents.middleware.types import (
 )
 from langchain_core.messages import ToolMessage
 
-from soothe.sloop.subagent_catalog import is_intake_only_wire_subagent
+from soothe.sloop.utils.subagent_catalog import is_intake_only_wire_subagent
 
 logger = logging.getLogger(__name__)
 

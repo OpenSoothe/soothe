@@ -4,19 +4,19 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from soothe.sloop.goal_text import (
-    apply_clarification_resume_goal_text,
-    resolve_clarification_resume_ce_goal,
-    resolve_interrupt_resume_ce_goal,
-    resolve_planning_goal,
-    resolve_user_request,
-)
 from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
     TaskComplexity,
 )
 from soothe.sloop.state.schemas import LoopState
+from soothe.sloop.utils.goal_text import (
+    apply_clarification_resume_goal_text,
+    resolve_clarification_resume_ce_goal,
+    resolve_interrupt_resume_ce_goal,
+    resolve_planning_goal,
+    resolve_user_request,
+)
 
 
 def test_resolve_planning_goal_prefers_goal_user_submission() -> None:

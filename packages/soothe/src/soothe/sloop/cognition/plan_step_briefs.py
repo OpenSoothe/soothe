@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from soothe.sloop.vision_context import (
+from soothe.sloop.utils.vision_context import (
     extract_vision_summary,
     format_image_facts_for_brief,
 )

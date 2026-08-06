@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import BaseMessage
 
-from soothe.sloop.chitchat_fallbacks import pick_generic_chitchat_fallback
+from soothe.sloop.intention.chitchat_fallbacks import pick_generic_chitchat_fallback
 from soothe.sloop.prompts.plan_ledger_projection import (
     project_last_goal_completion_for_intake,
 )

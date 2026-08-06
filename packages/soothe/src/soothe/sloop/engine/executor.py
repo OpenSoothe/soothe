@@ -128,7 +128,6 @@ from soothe.sloop.engine.tool_call_id import (
     _rewrite_tool_message_tool_call_id,
     _SubgraphNamespaceTaskBinder,
 )
-from soothe.sloop.goal_text import resolve_planning_goal, resolve_user_request
 from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -138,6 +137,7 @@ from soothe.sloop.state.schemas import (
     ToolCallHead,
     WaveStepProgress,
 )
+from soothe.sloop.utils.goal_text import resolve_planning_goal, resolve_user_request
 from soothe.sloop.utils.messages import (
     LoopAIMessage,
     LoopHumanMessage,
@@ -149,7 +149,7 @@ from soothe.sloop.utils.network_errors import (
 from soothe.sloop.utils.network_errors import (
     is_recoverable_tool_network_error as _is_recoverable_tool_network_error,
 )
-from soothe.sloop.vision_context import extract_vision_summary
+from soothe.sloop.utils.vision_context import extract_vision_summary
 
 if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol

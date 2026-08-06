@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any
 from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 from soothe_nano.agent import builder as nano_builder
 
-from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
-from soothe.sloop.intake_task_guard import IntakeOnlyTaskGuardMiddleware
-from soothe.sloop.subagent_catalog import partition_subagent_specs
+from soothe.sloop.utils.goal_step_guard import GoalStepGuardMiddleware
+from soothe.sloop.utils.intake_task_guard import IntakeOnlyTaskGuardMiddleware
+from soothe.sloop.utils.subagent_catalog import partition_subagent_specs
 
 if TYPE_CHECKING:
     from soothe.identity.runtime import IdentityRuntime

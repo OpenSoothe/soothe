@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.context.projection import PriorGoalSummary
 from soothe.sloop.state.schemas import PlanGapAnalysis
-from soothe.sloop.vision_context import merge_vision_instructions
+from soothe.sloop.utils.vision_context import merge_vision_instructions
 
 if TYPE_CHECKING:
     from soothe.context.projection import ContextBundle

@@ -7,7 +7,7 @@ from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest
 
-from soothe.sloop.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
+from soothe.sloop.utils.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
 
 logger = logging.getLogger(__name__)
 

@@ -143,7 +143,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         and not is_continue_keyword(ctx.loop_state.goal)
     ):
         from soothe.sloop.cognition.trivial_plan import build_trivial_plan
-        from soothe.sloop.goal_text import resolve_user_request
+        from soothe.sloop.utils.goal_text import resolve_user_request
 
         goal_text = resolve_user_request(ctx.loop_state)
         if not goal_text:

@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock
 import pytest
 from langchain_core.messages import ToolMessage
 
-from soothe.sloop.intake_task_guard import IntakeOnlyTaskGuardMiddleware
 from soothe.sloop.state.schemas import (
     INTAKE_ONLY_WIRE_SUBAGENTS,
     StepAction,
@@ -18,6 +17,7 @@ from soothe.sloop.state.schemas import (
     resolve_wire_subagent,
     strip_unrequested_step_delegates,
 )
+from soothe.sloop.utils.intake_task_guard import IntakeOnlyTaskGuardMiddleware
 
 
 def test_intake_only_set_includes_planner() -> None:

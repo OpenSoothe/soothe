@@ -34,7 +34,6 @@ from soothe.sloop.clarification.protocol import (
 )
 from soothe.sloop.cognition.trivial_plan import build_trivial_plan
 from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
-from soothe.sloop.goal_text import resolve_user_request
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.plans.artifact import (
     parse_planner_subagent_review_answers,
@@ -43,6 +42,7 @@ from soothe.sloop.plans.artifact import (
     write_plan_artifact,
 )
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
+from soothe.sloop.utils.goal_text import resolve_user_request
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
 
@@ -646,6 +646,11 @@ async def node_invoke_wired_subagent(
         )
         return {"last_outcome": "fatal"}
 
+    logger.info(
+        "[WiredSubagent] invoke start loop_id=%s wire=%s",
+        getattr(getattr(ctx, "state_manager", None), "loop_id", None) or "-",
+        wire,
+    )
     label = WIRED_SUBAGENT_STATUS_LABEL.format(subagent=wire)
     await emit_plan_phase_status(ctx, label=label)
     return await _invoke_intake_only_direct(ctx, wire=wire, goal_text=goal_text)

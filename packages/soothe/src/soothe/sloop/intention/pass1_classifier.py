@@ -16,7 +16,7 @@ from soothe_nano.utils.llm.invoke_policy import (
 )
 from soothe_nano.utils.llm.structured import invoke_structured_chat
 
-from soothe.sloop.chitchat_fallbacks import pick_generic_chitchat_fallback
+from soothe.sloop.intention.chitchat_fallbacks import pick_generic_chitchat_fallback
 
 from .models import (
     IntakePass1Confidence,

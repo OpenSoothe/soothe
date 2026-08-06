@@ -19,7 +19,7 @@ def test_build_response_language_hint_fallback_for_other() -> None:
 
 
 def test_pick_generic_chitchat_fallback_uses_structured_language() -> None:
-    from soothe.sloop.chitchat_fallbacks import (
+    from soothe.sloop.intention.chitchat_fallbacks import (
         GENERIC_CHITCHAT_FALLBACKS_ZH,
         pick_generic_chitchat_fallback,
     )

@@ -70,6 +70,11 @@ async def node_bounded_evidence_gather(
 
     Fresh complex skips evaluate. Mid-loop always continues to evaluate (IG-676).
     """
+    logger.info(
+        "[EvidenceGather] start loop_id=%s iteration=%s",
+        ctx.state_manager.loop_id,
+        ctx.loop_state.iteration,
+    )
     keep_route = _try_structural_keep(ctx)
     if keep_route is not None:
         plan_result = ctx.scratch.plan_result

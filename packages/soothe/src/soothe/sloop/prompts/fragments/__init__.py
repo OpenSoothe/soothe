@@ -6,6 +6,8 @@ Cache Strategy (RFC-104, IG-183):
 - Module constants reused across all StrangeLoop invocations
 - Estimated cache hit rate: >95% for static content
 
+Asset layout (IG-706): ``intake/``, ``plan/``, ``execute/`` data dirs.
+
 Jinja2 templates (e.g. ``synthesis_report_system.xml``) are loaded on demand via
 ``soothe.prompts.loader.load_prompt_fragment`` (shared systemwide loader).
 """
@@ -21,43 +23,35 @@ def _read(relative: str, *, strip: bool = False) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Plan / execution instructions
+# Plan-phase instructions (``plan/``)
 # ---------------------------------------------------------------------------
 
 # Plan-assess only: matches StatusAssessment schema (IG-372)
-PLAN_ASSESS_INSTRUCTIONS_FRAGMENT = _read("instructions/plan_assess_instructions.xml", strip=True)
+PLAN_ASSESS_INSTRUCTIONS_FRAGMENT = _read("plan/assess_instructions.xml", strip=True)
 
-PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT = _read(
-    "instructions/plan_gap_analysis_instructions.xml", strip=True
-)
+PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT = _read("plan/gap_analysis_instructions.xml", strip=True)
 
 # Plan-generate only: matches PlanGenerationWire schema (IG-568)
-PLAN_GENERATE_INSTRUCTIONS_FRAGMENT = _read(
-    "instructions/plan_generate_instructions.xml", strip=True
-)
+PLAN_GENERATE_INSTRUCTIONS_FRAGMENT = _read("plan/generate_instructions.xml", strip=True)
 
 # Continuation discriminator (RFC-226, RFC-214 §4, IG-538)
-PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT = _read(
-    "instructions/plan_continuation_discriminate.xml", strip=True
-)
+PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT = _read("plan/continuation_discriminate.xml", strip=True)
 
-# Prefetch static policy fragments (IG-183 merged policies)
-EXECUTION_POLICIES_FRAGMENT = _read("system/execution_policies.xml", strip=True)
+STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT = _read("plan/structured_plan_parse.xml")
 
 # ---------------------------------------------------------------------------
-# Intake classifier prompts (StrangeLoop intake two-pass classification)
+# Execute-phase policies (``execute/``)
 # ---------------------------------------------------------------------------
 
-INTAKE_PASS1_SYSTEM_FRAGMENT = _read("classifiers/intake_pass1_system.xml", strip=True)
-INTAKE_PASS2_SYSTEM_FRAGMENT = _read("classifiers/intake_pass2_system.xml", strip=True)
-INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT = _read("classifiers/intake_pass1_social_reply.xml", strip=True)
-
+EXECUTION_POLICIES_FRAGMENT = _read("execute/execution_policies.xml", strip=True)
 
 # ---------------------------------------------------------------------------
-# Planning prompts
+# Intake classifier prompts (``intake/``)
 # ---------------------------------------------------------------------------
 
-STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT = _read("planning/structured_plan_parse.xml")
+INTAKE_PASS1_SYSTEM_FRAGMENT = _read("intake/pass1_system.xml", strip=True)
+INTAKE_PASS2_SYSTEM_FRAGMENT = _read("intake/pass2_system.xml", strip=True)
+INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT = _read("intake/pass1_social_reply.xml", strip=True)
 
 
 __all__ = [

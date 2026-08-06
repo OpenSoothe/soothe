@@ -195,13 +195,18 @@ async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
                 loop_id,
             )
 
-    logger.debug("[runner] Starting graph invocation for loop=%s", loop_id)
+    logger.info(
+        "[runner] Graph invoke start loop_id=%s thread_id=%s resume=%s",
+        loop_id,
+        ctx.loop_state.thread_id,
+        isinstance(graph_input, Command),
+    )
     from soothe.sloop.utils.token_usage import loop_token_accumulation_scope
 
     try:
         with loop_token_accumulation_scope(ctx.loop_state):
             await compiled.ainvoke(graph_input, config=config)
-        logger.debug("[runner] Graph invocation completed for loop=%s", loop_id)
+        logger.info("[runner] Graph invoke complete loop_id=%s", loop_id)
     except Exception as e:
         logger.error(
             "[runner] Graph invocation failed for loop=%s: %s\n%s",

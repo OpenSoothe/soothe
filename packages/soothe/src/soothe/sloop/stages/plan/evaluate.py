@@ -16,7 +16,6 @@ import re
 import time
 from typing import Any, Literal
 
-from soothe.sloop.goal_text import resolve_planning_goal
 from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.mid_loop_intake import mid_loop_allow_inventory
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
@@ -27,6 +26,7 @@ from soothe.sloop.prompts.plan_ledger_projection import (
 from soothe.sloop.stages.plan.assess import node_plan_assess
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 from soothe.sloop.state.schemas import GoalComponentStatus, PlanGapAnalysis
+from soothe.sloop.utils.goal_text import resolve_planning_goal
 
 logger = logging.getLogger(__name__)
 

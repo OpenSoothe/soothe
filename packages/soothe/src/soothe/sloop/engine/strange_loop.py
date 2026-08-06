@@ -83,7 +83,7 @@ class StrangeLoop:
     Plan combines assessment and planning; Execute runs steps via CoreAgent (``thread_id``).
 
     Attributes:
-        core_agent: Layer 1 CoreAgent for step execution
+        core_agent: CoreAgent for step execution
         loop_planner: Plan phase (RFC-604: assessment + conditional plan generation per iteration)
         config: Soothe configuration
     """
@@ -97,7 +97,7 @@ class StrangeLoop:
         """Initialize StrangeLoop.
 
         Args:
-            core_agent: Layer 1 CoreAgent runtime
+            core_agent: CoreAgent runtime
             loop_planner: Plan-phase implementation (planning + assessment)
             config: Soothe configuration
         """
@@ -684,8 +684,8 @@ class StrangeLoop:
                     continue_loop_mode,
                 )
 
-            from soothe.sloop.goal_text import resolve_user_request
             from soothe.sloop.state.resume_topic import schedule_resume_topic_persistence
+            from soothe.sloop.utils.goal_text import resolve_user_request
 
             if not clarification_answer:
                 # Fail-safe prose describes the fallback, not the goal — let the
@@ -859,7 +859,7 @@ class StrangeLoop:
                         await ce_instance.cancel_goal(prior.id, reason="continue_keyword")
                 await ce_instance.save()
 
-            from soothe.sloop.goal_text import (
+            from soothe.sloop.utils.goal_text import (
                 apply_clarification_resume_goal_text,
                 resolve_clarification_resume_ce_goal,
                 resolve_interrupt_resume_ce_goal,

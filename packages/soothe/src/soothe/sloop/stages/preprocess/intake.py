@@ -167,7 +167,8 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     await emit_plan_phase_status(ctx, label=INTENT_CLASSIFY_STATUS_LABEL)
 
     logger.info(
-        "[Intent] Two-pass: intake=%s - %s",
+        "[Intent] Two-pass: loop_id=%s intake=%s query=%s",
+        ctx.state_manager.loop_id,
         intent.intake_label,
         query[:50],
     )

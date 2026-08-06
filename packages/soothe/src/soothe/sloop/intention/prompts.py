@@ -10,11 +10,11 @@ from pathlib import Path
 
 import soothe.sloop.prompts.fragments as _sloop_fragments
 
-_CLASSIFIER_FRAGMENTS_DIR = Path(_sloop_fragments.__file__).resolve().parent / "classifiers"
+_INTAKE_FRAGMENTS_DIR = Path(_sloop_fragments.__file__).resolve().parent / "intake"
 
 
-def _read_classifier_fragment(name: str) -> str:
-    return (_CLASSIFIER_FRAGMENTS_DIR / name).read_text(encoding="utf-8")
+def _read_intake_fragment(name: str) -> str:
+    return (_INTAKE_FRAGMENTS_DIR / name).read_text(encoding="utf-8")
 
 
 def build_prompt_timestamp_block() -> str:
@@ -25,9 +25,9 @@ def build_prompt_timestamp_block() -> str:
     return PROMPT_TIMESTAMP_FRAGMENT.format(**prompt_datetime_context()).strip()
 
 
-INTAKE_PASS1_SYSTEM_PROMPT = _read_classifier_fragment("intake_pass1_system.xml")
-INTAKE_PASS2_SYSTEM_PROMPT = _read_classifier_fragment("intake_pass2_system.xml")
-INTAKE_PASS1_SOCIAL_REPLY_PROMPT = _read_classifier_fragment("intake_pass1_social_reply.xml")
+INTAKE_PASS1_SYSTEM_PROMPT = _read_intake_fragment("pass1_system.xml")
+INTAKE_PASS2_SYSTEM_PROMPT = _read_intake_fragment("pass2_system.xml")
+INTAKE_PASS1_SOCIAL_REPLY_PROMPT = _read_intake_fragment("pass1_social_reply.xml")
 
 INTAKE_PASS1_HUMAN_TASK = "Classify the user message above. JSON only."
 INTAKE_PASS1_PRIOR_LANGUAGE_PREFIX = "PRIOR_RESPONSE_LANGUAGE: {language}"

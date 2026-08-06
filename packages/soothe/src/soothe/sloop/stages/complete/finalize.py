@@ -302,6 +302,12 @@ async def node_goal_completion(
     goal_record = ctx.goal_record
     plan_manager = ctx.plan_manager
 
+    logger.info(
+        "[finalize] goal_completion start loop_id=%s iteration=%s",
+        state_manager.loop_id,
+        state.iteration,
+    )
+
     plan_result = ctx.scratch.plan_result
     if plan_result is None:
         logger.error("[goal_completion] missing scratch.plan_result")

@@ -14,7 +14,8 @@ from pydantic import BaseModel, BeforeValidator, Field, PrivateAttr, model_valid
 from soothe_sdk.protocols.planner import planner_outcome_text_preview
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
-from soothe.sloop.subagent_catalog import (  # noqa: F401
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.sloop.utils.subagent_catalog import (  # noqa: F401
     INTAKE_ONLY_WIRE_SUBAGENTS,
     filter_task_catalog_subagent_names,
     is_intake_only_wire_subagent,
@@ -22,7 +23,6 @@ from soothe.sloop.subagent_catalog import (  # noqa: F401
     resolve_wire_subagent,
     spec_subagent_name,
 )
-from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 logger = logging.getLogger(__name__)
 

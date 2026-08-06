@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from soothe.protocols.loop_working_memory import LoopWorkingMemoryProtocol
-from soothe.sloop import LoopWorkingMemory
+from soothe.sloop.state.working_memory import LoopWorkingMemory
 
 
 def test_render_empty() -> None:

@@ -28,7 +28,6 @@ from soothe.sloop.engine.continuation_context import (
     build_prior_goal_summaries,
     polish_continuation_assess_reasoning,
 )
-from soothe.sloop.goal_text import resolve_planning_goal
 from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.continuation_routing import (
     bootstrap_terminal_after_execute,
@@ -48,6 +47,7 @@ from soothe.sloop.state.schemas import (
     derive_plan_action,
 )
 from soothe.sloop.utils.continue_keyword import is_continue_keyword
+from soothe.sloop.utils.goal_text import resolve_planning_goal
 from soothe.sloop.utils.messages import last_ledger_ai_content
 
 logger = logging.getLogger(__name__)
@@ -457,6 +457,11 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     """Run assess phase and decide whether generation is needed."""
     strange_loop = ctx.strange_loop
     state = ctx.loop_state
+    logger.info(
+        "[Plan] assess start loop_id=%s iteration=%s",
+        ctx.state_manager.loop_id,
+        state.iteration,
+    )
     context = strange_loop._build_plan_context(state)
 
     continuation_result = await _handle_continuation_first_plan(
@@ -556,4 +561,10 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         )
         return {"assess_route": "skip_generate"}
 
+    logger.info(
+        "[Plan] assess → continue_generate loop_id=%s iteration=%s status=%s",
+        ctx.state_manager.loop_id,
+        state.iteration,
+        assessment.status,
+    )
     return {"assess_route": "continue_generate"}

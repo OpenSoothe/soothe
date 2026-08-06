@@ -10,12 +10,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.sloop.goal_text import resolve_planning_goal
 from soothe.sloop.orchestrator.continuation_routing import FRESH_LOOP_BYPASS_PREFIX
 from soothe.sloop.orchestrator.mid_loop_intake import mid_loop_use_lightweight_generate
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
+from soothe.sloop.utils.goal_text import resolve_planning_goal
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,11 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     """
     strange_loop = ctx.strange_loop
     state = ctx.loop_state
+    logger.info(
+        "[PlanGenerate] start loop_id=%s iteration=%s",
+        ctx.state_manager.loop_id,
+        state.iteration,
+    )
     plan_manager = ctx.plan_manager
     assessment = ctx.scratch.plan_assessment
     if assessment is None:
@@ -115,6 +120,14 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     state.approved_plan_path = None
 
     plan_route: PlanRoute = PLAN_ROUTE_GOAL_DONE if plan_result.is_done() else PLAN_ROUTE_EXECUTE
+    step_n = len(plan_result.decision.steps) if plan_result.decision is not None else 0
+    logger.info(
+        "[PlanGenerate] complete loop_id=%s iteration=%s plan_route=%s steps=%d",
+        ctx.state_manager.loop_id,
+        state.iteration,
+        plan_route,
+        step_n,
+    )
     return {
         "plan_route": plan_route,
         "assess_route": None,

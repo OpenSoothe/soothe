@@ -50,7 +50,7 @@ def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
         plan_summary = getattr(plan_result, "next_action", None)
     # goal_user_submission holds the original user line (set by strange_loop.continue_goal).
     # Fall back to goal when goal_user_submission is None (e.g. autopilot or legacy paths).
-    from soothe.sloop.goal_text import resolve_user_request
+    from soothe.sloop.utils.goal_text import resolve_user_request
 
     user_request = resolve_user_request(state)
     return LoopStateView(
@@ -258,6 +258,14 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     checkpoint = ctx.checkpoint
     decision = ctx.scratch.decision
     plan_result = ctx.scratch.plan_result
+
+    ready_n = len(decision.steps) if decision is not None else 0
+    logger.info(
+        "[execute] start loop_id=%s iteration=%s ready_steps=%d",
+        state_manager.loop_id,
+        state.iteration,
+        ready_n,
+    )
 
     # RFC-622: consume any answer left by a prior await_clarification visit.
     resume_answer_payload: dict[str, Any] | None = None
