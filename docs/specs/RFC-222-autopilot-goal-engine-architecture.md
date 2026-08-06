@@ -605,7 +605,7 @@ agent:
     # Goal execution
     max_iterations: 10
     max_retries: 2
-    max_parallel_goals: 3
+    max_parallel_goals: 16
     enable_dynamic_goals: true
 
     # Orchestration
@@ -621,7 +621,7 @@ agent:
     webhooks: {}
 
     # Loop pool (RFC-222) — AutopilotService worker management.
-    max_loops: 4
+    max_loops: 16
     loop_idle_timeout: 300
     poll_interval: 5
     dreaming_poll_interval: 60

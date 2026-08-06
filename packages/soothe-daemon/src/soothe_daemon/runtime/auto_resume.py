@@ -200,7 +200,7 @@ async def recover_incomplete_loops(daemon: Any) -> list[AutoResumeClassification
 
     cp_cfg = daemon._config.agent.loop.checkpoint
     auto_resume = bool(getattr(cp_cfg, "auto_resume_on_start", False))
-    max_loops = int(getattr(cp_cfg, "auto_resume_max_loops", 4) or 4)
+    max_loops = int(getattr(cp_cfg, "auto_resume_max_loops", 16) or 16)
     resume_max_age = float(getattr(cp_cfg, "auto_resume_max_age_hours", 24.0) or 24.0)
     clar_policy: Literal["skip", "reannounce"] = getattr(
         cp_cfg, "auto_resume_clarifications", "skip"

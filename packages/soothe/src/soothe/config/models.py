@@ -178,7 +178,7 @@ class AutopilotConfig(BaseModel):
     max_retries: int = 2
     max_total_goals: int = Field(default=50, ge=1, le=500)
     max_goal_depth: int = Field(default=5, ge=1, le=10)
-    max_parallel_goals: int = Field(default=3, ge=1, le=32)
+    max_parallel_goals: int = Field(default=16, ge=1, le=32)
     enable_dynamic_goals: bool = Field(default=True)
     # Cap on goals scheduled at once (``AutopilotService._schedule_via_worker_pool``).
     # Independent of ``max_loops`` (WorkerPool capacity). Runner-side
@@ -258,9 +258,9 @@ class AutopilotConfig(BaseModel):
     # Distinct from `max_parallel_goals`: `max_loops` caps worker capacity in
     # the StrangeLoop pool (loops can be reused for parent→child lineage), while
     # `max_parallel_goals` caps the number of goals actively scheduled at once.
-    # They can differ — e.g. max_loops=8 for lineage reuse, max_parallel_goals=4.
+    # They can differ — e.g. max_loops=16 (pool) with max_parallel_goals=8 (schedule).
     max_loops: int = Field(
-        default=4,
+        default=16,
         ge=1,
         le=32,
         description="Maximum concurrent StrangeLoop workers in the autopilot pool",
@@ -500,7 +500,7 @@ class LoopCheckpointConfig(BaseModel):
 
     progressive: bool = True
     auto_resume_on_start: bool = False
-    auto_resume_max_loops: int = Field(default=4, ge=1, le=64)
+    auto_resume_max_loops: int = Field(default=16, ge=1, le=64)
     auto_resume_max_age_hours: float = Field(default=24.0, ge=0.0, le=720.0)
     auto_resume_clarifications: Literal["skip", "reannounce"] = "skip"
 
@@ -550,7 +550,7 @@ class LoopConcurrencyConfig(BaseModel):
     """
 
     max_parallel_goals: int = Field(
-        default=4, ge=0, description="Maximum parallel goals (0=unlimited)"
+        default=16, ge=0, description="Maximum parallel goals (0=unlimited)"
     )
     max_parallel_steps: int = Field(
         default=4,
@@ -561,7 +561,7 @@ class LoopConcurrencyConfig(BaseModel):
         default=4, ge=0, description="Maximum parallel subagents (0=unlimited)"
     )
     global_max_llm_calls: int = Field(
-        default=10, ge=0, description="Global LLM call cap (0=unlimited)"
+        default=48, ge=0, description="Global LLM call cap (0=unlimited)"
     )
     step_parallelism: Literal["sequential", "dependency", "max"] = Field(
         default="dependency", description="Step scheduling strategy"

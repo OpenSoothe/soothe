@@ -508,7 +508,7 @@ class AutopilotService:
                 rail_id=goal.rail_id,
                 workspace=goal.workspace,
                 engine_max_parallel_goals=int(
-                    getattr(self._config, "max_parallel_goals", 32) or 32
+                    getattr(self._config, "max_parallel_goals", 16) or 16
                 ),
             )
             await self._rail_interpreter.handle(
@@ -553,7 +553,7 @@ class AutopilotService:
                     rail_id=root.rail_id,
                     workspace=root.workspace,
                     engine_max_parallel_goals=int(
-                        getattr(self._config, "max_parallel_goals", 32) or 32
+                        getattr(self._config, "max_parallel_goals", 16) or 16
                     ),
                 )
             except Exception:

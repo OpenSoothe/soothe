@@ -269,7 +269,7 @@ agent:
     checkpoint:
       progressive: true        # Incremental checkpoint writes
       auto_resume_on_start: false  # true = resume incomplete solo loops on daemon start
-      auto_resume_max_loops: 4
+      auto_resume_max_loops: 16
       auto_resume_max_age_hours: 24
       auto_resume_clarifications: skip  # skip | reannounce
   protocols:
