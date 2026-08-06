@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Raise `soothe-client-python` floor to `>=1.0.11` (120s `autopilot_submit` timeout).
+
 ## [v0.10.0] - 2026-08-06
 
 ### Added
