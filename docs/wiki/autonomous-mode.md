@@ -51,9 +51,7 @@ Use autonomous mode for tasks that:
 # Dedicated autopilot command
 soothe autopilot run "Research quantum error correction advances"
 
-# The --max-iterations flag is accepted but ignored.
-# Configure the iteration limit via daemon config: agent.loop.max_iterations
-# (shared StrangeLoop budget; Autopilot does not redefine it)
+# Iteration budget is agent.loop.max_iterations (shared StrangeLoop config)
 soothe autopilot run "Build a web scraper"
 ```
 

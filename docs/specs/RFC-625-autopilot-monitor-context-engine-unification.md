@@ -600,7 +600,7 @@ class ContextEngine:
 |---------|----------|
 | **Interactive loop** (TUI chat, `loop_input`) | Always solo StrangeLoop — one conversational turn stream per `loop_id` |
 | **Autopilot job** (`/autopilot <task>`, `job_create`, CLI `soothe autopilot run`, cron) | Daemon-owned `AutopilotService` — cross-loop goal DAG, worker pool, monitor intake |
-| **`agent.autonomous.enabled`** | Starts the daemon 24/7 scheduling loop (master switch) |
+| **`agent.autopilot.enabled`** | Starts the daemon 24/7 scheduling loop (master switch) |
 
 Wire field `autopilot_mode` on `loop_new` / `loop_subscribe` responses is **deprecated**:
 always `"solo"`. Clients must not interpret it as a runtime mode switch.

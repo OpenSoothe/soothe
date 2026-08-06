@@ -492,30 +492,34 @@ SOOTHE_HOME/
 ## 8. Configuration
 
 ```yaml
-autopilot:
-  # Execution
-  max_iterations: 50
-  max_send_backs: 3
-  max_parallel_goals: 3
+agent:
+  loop:
+    # Shared StrangeLoop iteration budget (interactive + Autopilot)
+    max_iterations: 99
 
-  # Dreaming
-  dreaming_enabled: true
-  dreaming_consolidation_interval: 300
-  dreaming_health_check_interval: 60
+  autopilot:
+    # Lifecycle / scheduling (not StrangeLoop knobs)
+    max_send_backs: 3
+    max_parallel_goals: 3
 
-  # Persistence
-  checkpoint_interval: 10
+    # Dreaming
+    dreaming_enabled: true
+    dreaming_consolidation_interval: 300
+    dreaming_health_check_interval: 60
 
-  # Scheduling
-  scheduler_enabled: true
-  max_scheduled_tasks: 100
+    # Persistence
+    checkpoint_interval: 10
 
-  # Webhooks
-  webhooks:
-    on_goal_completed: null
-    on_goal_failed: null
-    on_dreaming_entered: null
-    on_dreaming_exited: null
+    # Scheduling
+    scheduler_enabled: true
+    max_scheduled_tasks: 100
+
+    # Webhooks
+    webhooks:
+      on_goal_completed: null
+      on_goal_failed: null
+      on_dreaming_entered: null
+      on_dreaming_exited: null
 ```
 
 ## 9. Stream Events

@@ -672,9 +672,10 @@ security:
     - .credentials
 
 agent:
-  autonomous:
-    enabled_by_default: false
-    max_iterations: 15
+  loop:
+    max_iterations: 15   # shared StrangeLoop budget (interactive + Autopilot)
+  autopilot:
+    enabled: false
     max_parallel_goals: 2
 ```
 

@@ -122,7 +122,7 @@ This context is injected into the Plan phase prompts, giving the LLM awareness o
 
 ## Convergence and Iteration Bounds
 
-The loop is bounded by `max_iterations` (default 8, from `DEFAULT_STRANGE_LOOP_MAX_ITERATIONS`). Convergence is detected by the Plan-Assess phase returning `status="done"`.
+The loop is bounded by `agent.loop.max_iterations` (default **99**, from `DEFAULT_STRANGE_LOOP_MAX_ITERATIONS`). The same budget applies to Autopilot workers. Convergence is detected by the Plan-Assess phase returning `status="done"`.
 
 There's no separate convergence threshold — the LLM decides when the goal is achieved based on evidence and progress. The `terminal_after_execute` flag (RFC-226) provides an optimization: when the plan asserts a single step completes the goal, the graph skips the next assessment.
 

@@ -262,7 +262,10 @@ components:
         max_iterations:
           type: integer
           exclusiveMinimum: 0
-          description: Maximum iterations for autonomous mode
+          description: >
+            Optional StrangeLoop iteration override for this request.
+            When omitted, the worker uses agent.loop.max_iterations
+            (shared with Autopilot).
         model:
           type: string
           description: Optional model override
@@ -439,7 +442,9 @@ components:
         max_iterations:
           type: integer
           exclusiveMinimum: 0
-          description: Max iterations limit
+          description: >
+            Optional StrangeLoop iteration override. When omitted, uses
+            agent.loop.max_iterations (shared with Autopilot).
         guidance:
           type: string
           description: Initial guidance text

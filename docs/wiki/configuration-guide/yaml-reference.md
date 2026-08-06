@@ -87,15 +87,15 @@ The largest section. `AgentConfig` consolidates identity (`name`, `system_prompt
 
 ### Autopilot (`agent.autopilot`)
 
-Controls 24/7 self-running. All fields are ceilings to bound cost and prevent runaway loops. Key ones: `enabled`, `max_iterations` (per goal), `max_parallel_goals`, `max_loops`, `goal_deadline_seconds` (wall-clock budget per dispatched goal, default **14 days** / `1209600`), `monitor_model_role` (AutopilotMonitor LLM reasoners), `consensus_model_role` (RFC-204 goal acceptance), `dreaming_enabled`, `scheduler_enabled`, `max_scheduled_tasks`, `webhooks`. See [Autonomous Mode](../autonomous-mode.md) for detail.
+Controls 24/7 self-running. Fields are scheduling / lifecycle ceilings (not StrangeLoop knobs). Key ones: `enabled`, `max_retries`, `max_parallel_goals`, `max_loops`, `goal_deadline_seconds` (wall-clock budget per dispatched goal, default **14 days** / `1209600`), `monitor_model_role` (AutopilotMonitor LLM reasoners), `consensus_model_role` (RFC-204 goal acceptance), `dreaming_enabled`, `scheduler_enabled`, `max_scheduled_tasks`, `webhooks`. Iteration budget is **`agent.loop.max_iterations`** (shared). See [Autonomous Mode](../autonomous-mode.md) for detail.
 
 ### Loop (`agent.loop`)
 
-CoreAgent internal tuning. Notable sub-sections:
+CoreAgent / StrangeLoop tuning. Notable sub-sections:
 
 | Sub-section | Purpose |
 |-------------|---------|
-| `max_iterations`, `context_window_limit` | Hard stops for the agent loop |
+| `max_iterations`, `context_window_limit` | Hard stops for the agent loop (also used by Autopilot workers) |
 | `concurrency` | `max_parallel_steps`, `max_parallel_subagents`, `global_max_llm_calls`, `step_parallelism` |
 | `llm_rate_limit` | RPM, concurrency, timeouts, 429/timeout retry policy |
 | `tool_call_limit` | Per-thread and per-run tool call caps |
@@ -177,7 +177,7 @@ Interactive CLI/TUI goals and autopilot dispatches share the thread-pool request
 
 **Production** needs only a provider with an interpolated key, a `router.default`, and `embedding_profile` set to the embedding model + matching dimensions.
 
-**Dev with reasoning + tracing** adds a `think` role, enables autonomous with a low `max_iterations`, bumps `loop.max_iterations`, and turns on `langfuse` with interpolated keys. See [Common Patterns](common-patterns.md) for the full recipes.
+**Dev with reasoning + tracing** adds a `think` role, lowers `agent.loop.max_iterations` for a hard stop during experiments, and turns on `langfuse` with interpolated keys. See [Common Patterns](common-patterns.md) for the full recipes.
 
 ## Where to Look Next
 

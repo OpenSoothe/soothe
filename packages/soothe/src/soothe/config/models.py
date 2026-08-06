@@ -147,7 +147,6 @@ class AutopilotConfig(BaseModel):
         max_total_goals: Maximum goals allowed (RFC-0007 §5.6).
         max_goal_depth: Maximum hierarchy depth (RFC-0007 §5.6).
         max_parallel_goals: Maximum goals running simultaneously.
-        enable_dynamic_goals: Enable/disable dynamic creation (RFC-0007 §5.4).
 
         max_send_backs: Per-goal send-back budget for consensus validation (daemon-level).
         max_engine_recoveries: Max engine-driven recoveries per failed goal (deadlock backstop).
@@ -165,7 +164,8 @@ class AutopilotConfig(BaseModel):
     Note:
         StrangeLoop iteration budget is shared via ``agent.loop.max_iterations`` —
         Autopilot does not redefine it. Workers fall back to that value when
-        ``LoopRunRequest.max_iterations`` is unset.
+        ``LoopRunRequest.max_iterations`` is unset. Dynamic goal creation
+        (decomposition, rails, directives) is always enabled.
     """
 
     # === Autopilot scheduling (daemon-level) ===
@@ -179,10 +179,9 @@ class AutopilotConfig(BaseModel):
         ),
     )
     max_retries: int = 2
-    max_total_goals: int = Field(default=50, ge=1, le=500)
+    max_total_goals: int = Field(default=99, ge=1, le=500)
     max_goal_depth: int = Field(default=5, ge=1, le=10)
     max_parallel_goals: int = Field(default=16, ge=1, le=32)
-    enable_dynamic_goals: bool = Field(default=True)
     # Cap on goals scheduled at once (``AutopilotService._schedule_via_worker_pool``).
     # Independent of ``max_loops`` (WorkerPool capacity). Runner-side
     # ``ConcurrencyController`` uses ``agent.loop.concurrency.max_parallel_goals``.
@@ -884,7 +883,9 @@ class StrangeLoopConfig(BaseModel):
 
     Args:
         enabled: Enable agent loop mode.
-        max_iterations: Maximum agent loop iterations.
+        max_iterations: Maximum StrangeLoop iterations per run (shared with Autopilot
+            workers; default ``DEFAULT_MAX_ITERATIONS`` / 99). Autopilot does not
+            define a separate budget.
         max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
         general_purpose_subagent: When false (default), hide/block deepagents ``general-purpose``
             on CoreAgent ``task`` even if nano ``agent.runtime.general_purpose_subagent`` is true.
@@ -934,7 +935,10 @@ class StrangeLoopConfig(BaseModel):
 
     max_iterations: int = Field(
         default=DEFAULT_MAX_ITERATIONS,
-        description="Maximum agent loop iterations",
+        description=(
+            "Maximum StrangeLoop iterations per run. Shared by interactive loops and "
+            "Autopilot workers (Autopilot has no separate max_iterations)."
+        ),
         ge=1,
         le=500,
     )

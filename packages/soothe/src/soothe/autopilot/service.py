@@ -97,7 +97,8 @@ class AutopilotService:
             ce: ContextEngine instance for goal management (RFC-625).
             config: Project-level AutopilotConfig carrying RFC-222 loop pool
                 fields (``max_loops``, ``loop_idle_timeout``, ``poll_interval``,
-                ``dreaming_poll_interval``).
+                ``dreaming_poll_interval``). StrangeLoop iteration budget lives
+                on ``agent.loop.max_iterations`` (not AutopilotConfig).
             internal_bus: Internal EventBus (uses singleton if None).
             monitor: Optional AutopilotMonitor for proactive DAG monitoring.
                 When provided (daemon mode), handles goal intake, verification,
@@ -1002,8 +1003,6 @@ class AutopilotService:
                 attempt=goal.retry_count + 1,
             ),
             autonomous=True,
-            # StrangeLoop budget is shared: worker uses agent.loop.max_iterations.
-            max_iterations=None,
         )
 
         task = asyncio.create_task(self._consume_worker_stream(goal.id, worker, request))

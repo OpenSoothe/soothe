@@ -8,12 +8,10 @@ agent:
 
   autopilot:
     enabled: true
-    # StrangeLoop iteration budget: agent.loop.max_iterations (shared; do not redefine here)
     max_retries: 2
-    max_total_goals: 50
+    max_total_goals: 99
     max_goal_depth: 5
     max_parallel_goals: 16
-    enable_dynamic_goals: true
     max_send_backs: 3
     max_engine_recoveries: 2
     checkpoint_interval: 10
@@ -63,6 +61,7 @@ agent:
 
   loop:
     enabled: true
+    # Shared StrangeLoop budget (interactive + Autopilot workers). Do not redefine under autopilot.
     max_iterations: 99
     max_plan_steps_per_wave: 10
     max_tool_calls_per_step: 100

@@ -461,7 +461,6 @@ Run autonomous agent loop for complex tasks.
 - `prompt` - Task for autonomous execution
 
 **Options**:
-- `--max-iterations <n>` - Maximum autonomous iterations (default: 10)
 - `--format <fmt>` - Output format: text or jsonl (default: text)
 - `--config <file>` - Use custom configuration file
 
@@ -470,14 +469,11 @@ Run autonomous agent loop for complex tasks.
 # Basic autonomous execution
 soothe autopilot run "Research AI safety and summarize findings"
 
-# Limit iterations for complex tasks
-soothe autopilot run "Build a web scraper" --max-iterations 10
-
 # Use custom config with JSON output
 soothe autopilot run "Analyze codebase" --config custom.yml --format jsonl
 
-# Long-running research task
-soothe autopilot run "Investigate performance bottlenecks" --max-iterations 20
+# Long-running research task (iteration budget: agent.loop.max_iterations)
+soothe autopilot run "Investigate performance bottlenecks"
 ```
 
 **Use Cases**:
@@ -505,7 +501,7 @@ soothe -p "Analyze the performance bottlenecks in this codebase"
 ### Autonomous Optimization
 
 ```bash
-soothe autopilot run "Optimize the database queries" --max-iterations 20
+soothe autopilot run "Optimize the database queries"
 ```
 
 ### Resume Previous Work

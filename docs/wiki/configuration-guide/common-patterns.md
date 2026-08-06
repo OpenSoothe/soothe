@@ -58,7 +58,7 @@ embedding_profile:
 
 agent:
   loop:
-    max_iterations: 10        # hard stop during dev
+    max_iterations: 10        # hard stop during dev (shared with Autopilot)
 
 observability:
   verbosity: debug

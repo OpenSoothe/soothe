@@ -599,14 +599,16 @@ RFC-222 historically said `agent.autonomous:` — that key is obsolete; use
 
 ```yaml
 agent:
+  loop:
+    # Shared StrangeLoop iteration budget (interactive + Autopilot workers)
+    max_iterations: 99
+
   autopilot:
     enabled: true
 
-    # Goal execution
-    max_iterations: 10
+    # Goal lifecycle / scheduling (not StrangeLoop knobs)
     max_retries: 2
     max_parallel_goals: 16
-    enable_dynamic_goals: true
 
     # Orchestration
     max_send_backs: 3

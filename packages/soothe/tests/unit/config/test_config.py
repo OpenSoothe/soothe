@@ -45,12 +45,32 @@ class TestSootheConfig:
         assert cfg.embedding_model == "openai:text-embedding-3-small"
         assert cfg.embedding_dims == 1536
         assert cfg.agent.autopilot.enabled is True
+        assert "max_iterations" not in type(cfg.agent.autopilot).model_fields
+        assert cfg.agent.loop.max_iterations == 99
         assert cfg.agent.loop.dispatch_idle_seconds == 300.0
         assert cfg.agent.loop.dispatch_tool_timeout_seconds == 0.0
         assert cfg.agent.middleware.llm_rate_limit.enabled is True
         assert len(cfg.vector_stores) == 1
         assert cfg.vector_stores[0].name == "sqlite_vec_default"
         assert cfg.vector_store_router.default == "sqlite_vec_default:soothe_default"
+
+    def test_legacy_autopilot_max_iterations_is_ignored(self) -> None:
+        """agent.autopilot.max_iterations is not a config field; loop owns the budget."""
+        from soothe.config.models import AutopilotConfig, StrangeLoopConfig
+
+        ap = AutopilotConfig.model_validate({"enabled": True, "max_iterations": 10})
+        assert "max_iterations" not in type(ap).model_fields
+        assert not hasattr(ap, "max_iterations")
+        loop = StrangeLoopConfig.model_validate({"max_iterations": 42})
+        assert loop.max_iterations == 42
+
+    def test_dynamic_goals_always_on_no_config_knob(self) -> None:
+        """Dynamic goal creation is always on; enable_dynamic_goals was removed."""
+        from soothe.config.models import AutopilotConfig
+
+        ap = AutopilotConfig.model_validate({"enable_dynamic_goals": False})
+        assert "enable_dynamic_goals" not in type(ap).model_fields
+        assert not hasattr(ap, "enable_dynamic_goals")
 
     def test_yaml_with_daemon_top_level_block_is_rejected(self, tmp_path: Path) -> None:
         """Agent config rejects daemon-only top-level keys."""

@@ -53,7 +53,7 @@ Key fields and their purposes:
 - **`loop_id` / `thread_id`** — bind the run to a durable thread (DurabilityProtocol) and a unique loop instance.
 - **`user_input`** — the user's query or instruction.
 - **`client_workspace` / `user_id` / `client_workspace_id`** — workspace resolution. If `client_workspace` is set, it's used directly; otherwise the runner computes `$SOOTHE_HOME/workspaces/<normalized_user_id>/ws_<hash>`.
-- **`autonomous` / `max_iterations`** — control autonomous goal management and loop iteration limits.
+- **`autonomous` / `max_iterations`** — `autonomous` enables Autopilot-style headless runs; `max_iterations` optionally overrides `agent.loop.max_iterations` for this request (Autopilot dispatches leave it unset and use the shared loop budget).
 - **`timeout_seconds`** — worker pool timeout for cancellation.
 - **`intent_hint`** — daemon-only non-agent turns (``text_completion``, ``image_to_text``, ``ocr``, ``embed``).
 - **`clarification_mode` / `clarification_answer` / `clarification_answers`** (RFC-622) — when `clarification_answer=True`, the runner treats `user_input` as the answer to a pending clarification interrupt and resumes the graph via `Command(resume=...)` rather than starting a new turn. The runner verifies against the loop's persisted `pending_clarification` state.

@@ -26,8 +26,7 @@ Type these commands in the interactive prompt:
 |---------|-------------|
 | `/help` | Show all commands and available subagents |
 | `/keymaps` | Show keyboard shortcuts |
-| `/autopilot <prompt>` | Run one prompt in autonomous mode |
-| `/autopilot <max_iterations> <prompt>` | Same; numeric prefix is accepted but ignored (use `agent.loop.max_iterations`) |
+| `/autopilot <prompt>` | Submit an Autopilot job |
 | `/cancel` | Cancel the current running job |
 | `/plan` | Show the current task plan |
 | `/memory` | Show memory statistics |

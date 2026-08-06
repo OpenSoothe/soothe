@@ -225,9 +225,10 @@ Autonomous mode allows multi-step autonomous execution:
 
 ```yaml
 agent:
-  autonomous:
-    enabled_by_default: true
-    max_iterations: 10
+  loop:
+    max_iterations: 99   # shared StrangeLoop budget (interactive + Autopilot)
+  autopilot:
+    enabled: true
     max_retries: 2
 ```
 
