@@ -83,7 +83,8 @@ class GoalDAGVerifier:
     async def verify_dag_health(self) -> DagHealthReport:
         """LLM-driven periodic background verification.
 
-        Falls back to heuristics on LLM failure.
+        Falls back to heuristics on LLM failure. Always merges structural
+        deadlock recoveries (IG-697) into ``suggest_reset``.
 
         Returns:
             DagHealthReport with restructuring suggestions.
@@ -93,10 +94,68 @@ class GoalDAGVerifier:
 
         try:
             response = await self._reasoner.verify_health(snapshot)
-            return self._convert_health_response(response)
+            report = self._convert_health_response(response)
         except Exception:
             logger.exception("LLM health verification failed, using heuristics")
-            return self._heuristic_health_check(goals)
+            report = self._heuristic_health_check(goals)
+
+        self._merge_deadlock_resets(report, goals)
+        return report
+
+    def _max_engine_recoveries(self) -> int:
+        """Cap for engine-driven failed-goal recovery from AutopilotConfig."""
+        ap = getattr(getattr(self._config, "agent", None), "autopilot", None)
+        if ap is None:
+            return 2
+        return int(getattr(ap, "max_engine_recoveries", 2))
+
+    def _deps_all_completed(self, goal: Any, goals_by_id: dict[str, Any]) -> bool:
+        """True when every hard dep exists and status is completed."""
+        for dep_id in getattr(goal, "depends_on", None) or []:
+            dep = goals_by_id.get(dep_id) or self._ce.get_goal_sync(dep_id)
+            if dep is None or getattr(dep, "status", None) != "completed":
+                return False
+        return True
+
+    def find_deadlocked_failed_goals(self, goals: list[Any] | None = None) -> list[str]:
+        """Find failed workers that block pending dependents (IG-697).
+
+        Structural only: no active goals, failed non-root with all deps
+        completed, at least one pending dependent, recovery budget remaining.
+        """
+        if goals is None:
+            goals = self._ce.get_goals_by_status(None)
+        goals_by_id = {g.id: g for g in goals}
+        if any(g.status == "active" for g in goals):
+            return []
+
+        max_rec = self._max_engine_recoveries()
+        deadlocked: list[str] = []
+        for goal in goals:
+            if goal.status != "failed":
+                continue
+            if goal.parent_id is None and goal.rail_id:
+                continue
+            if goal.engine_recovery_count >= max_rec:
+                continue
+            if not self._deps_all_completed(goal, goals_by_id):
+                continue
+            has_pending_dependent = any(
+                goal.id in (d.depends_on or []) and d.status == "pending" for d in goals
+            )
+            if not has_pending_dependent:
+                continue
+            deadlocked.append(goal.id)
+        return deadlocked
+
+    def _merge_deadlock_resets(self, report: DagHealthReport, goals: list[Any]) -> None:
+        """Ensure structural deadlocks appear in suggest_reset."""
+        for gid in self.find_deadlocked_failed_goals(goals):
+            if gid not in report.suggest_reset:
+                report.suggest_reset.append(gid)
+                logger.info("Health deadlock detector queued recovery for %s", gid)
+        if report.suggest_reset and not report.reasoning:
+            report.reasoning = "Structural deadlock recovery for failed blockers"
 
     def _convert_health_response(self, response: Any) -> DagHealthReport:
         """Convert DagHealthResponse to DagHealthReport."""
@@ -192,6 +251,7 @@ class GoalDAGVerifier:
                 # Suggest reset rather than remove for orphaned pending (safer).
                 report.suggest_reset.append(goal.id)
 
+        # Deadlock merge happens in verify_dag_health (single call site).
         return report
 
     def may_auto_remove(self, goal_id: str) -> bool:
@@ -471,6 +531,9 @@ class GoalDAGVerifier:
                     goal_id,
                 )
                 continue
+            if goal.status == "failed":
+                await self._recover_failed_from_health(goal, reason=report.reasoning)
+                continue
             if goal.status not in ("blocked", "suspended"):
                 continue
             # IG-691: do not undo consensus send-back budget exhaustion.
@@ -498,6 +561,26 @@ class GoalDAGVerifier:
                 merge.goal_ids,
                 merge.merged_description[:80],
             )
+
+    async def _recover_failed_from_health(self, goal: Any, *, reason: str) -> None:
+        """Apply engine recovery for a failed worker suggested by health (IG-697)."""
+        goals = self._ce.get_goals_by_status(None)
+        goals_by_id = {g.id: g for g in goals}
+        if not self._deps_all_completed(goal, goals_by_id):
+            logger.info(
+                "Health recovery skipped for %s: hard deps not all completed",
+                goal.id,
+            )
+            return
+        max_rec = self._max_engine_recoveries()
+        try:
+            await self._ce.recover_failed_goal(
+                goal.id,
+                reason=reason or "dag_health_failed_worker_recovery",
+                max_engine_recoveries=max_rec,
+            )
+        except ValueError as exc:
+            logger.info("Health recovery skipped for %s: %s", goal.id, exc)
 
     async def apply_post_completion(self, result: dict[str, Any]) -> None:
         """Apply post-completion verification suggestions to the CE DAG."""

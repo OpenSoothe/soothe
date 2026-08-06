@@ -56,7 +56,7 @@ phased so each phase leaves the system shippable at a higher trust tier:
 |----|-----|--------|
 | AP-1 | Default `enabled: true` (was `false`); RFC-222 historically mentioned `agent.autonomous.enabled` | Config drift |
 | AP-2 | Monitor subscribes to `"goal_completed"` / `"goal_failed"`; CE never emits those; bus uses `soothe.internal.*` | Reactive monitor paths dead |
-| AP-3 | `_apply_backoff_decision` logs only — no DAG mutation; `max_retries` unused | Failed goals stay failed forever |
+| AP-3 | ~~`_apply_backoff_decision` logs only~~ → closed by P1-2 / [IG-697](IG-697-engine-deadlock-recovery.md) (retry or leave failed for engine recovery) | Was: failed goals stuck forever |
 | AP-4 | Worker `error` slots never return to idle → pool capacity leak | Throughput death under crashes |
 | AP-5 | `job_pause` suspends root only — does not cancel in-flight child workers | “Stop now” unsafe |
 | AP-6 | Consensus decision parsing uses substring match, not structured output (RFC-630) | Fragile accept/send_back/suspend |
@@ -150,7 +150,7 @@ with `agent.autopilot.enabled: true`.
 | ID | Work | Closes |
 |----|------|--------|
 | P1-1 | **Pause**: cascade suspend + cancel in-flight child workers; resume reactivates eligible pending goals | AP-5 |
-| P1-2 | **Backoff apply**: `_apply_backoff_decision` mutates CE (retry→pending with budget, or suspend); honor `max_retries` / `retry_count` | AP-3 |
+| P1-2 | **Backoff apply**: `_apply_backoff_decision` mutates CE (retry→pending with budget; leave failed when exhausted — engine health recovers, never `failed→suspended`); honor `max_retries` / `retry_count`. Superseded further by [IG-697](IG-697-engine-deadlock-recovery.md) | AP-3 |
 | P1-3 | **Crash budget**: on `recover()`, increment `attempts_after_crash` (or equivalent); respect config cap → suspend/fail | CE-5 |
 | P1-4 | **Daemon CE durability model** (choose one, document in RFC-625 errata): (A) give daemon CE real persistence backend matching `default_backend`, or (B) keep snapshot sidecar but also persist minimal ledger/guidance fields and assert ledger SoT remains loop CE. Prefer (A) for “sole SoT” honesty on the DAG | CE-1 |
 | P1-5 | RFC-228: implement or explicitly reject `verification_rules`; add ownership checks or document single-tenant assumption | AP-9 |

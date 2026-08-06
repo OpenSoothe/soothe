@@ -151,6 +151,7 @@ class AutopilotConfig(BaseModel):
         enable_dynamic_goals: Enable/disable dynamic creation (RFC-0007 §5.4).
 
         max_send_backs: Per-goal send-back budget for consensus validation (daemon-level).
+        max_engine_recoveries: Max engine-driven recoveries per failed goal (deadlock backstop).
         checkpoint_interval: Iterations between periodic checkpoints.
         dreaming_enabled: Enter dreaming mode when all goals complete.
         dreaming_consolidation_interval: Seconds between memory consolidation during dreaming.
@@ -185,6 +186,15 @@ class AutopilotConfig(BaseModel):
 
     # === Orchestration (from old autopilot) ===
     max_send_backs: int = Field(default=3, ge=1, le=10)
+    max_engine_recoveries: int = Field(
+        default=2,
+        ge=0,
+        le=10,
+        description=(
+            "Max engine-driven recoveries per failed goal (deadlock/health "
+            "backstop). Separate from max_retries and max_send_backs."
+        ),
+    )
     checkpoint_interval: int = Field(default=10, ge=1, le=100)
 
     # === Dreaming ===

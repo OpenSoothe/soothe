@@ -236,11 +236,12 @@ class AutopilotMonitor:
             await self._apply_backoff_decision(decision, failed_goal_id=goal_id)
 
     async def _apply_backoff_decision(self, decision: Any, *, failed_goal_id: str) -> None:
-        """Apply backoff decision to the CE DAG (IG-678 P1-2).
+        """Apply backoff decision to the CE DAG (IG-678 P1-2, IG-697).
 
         Prefer retrying the failed goal while ``retry_count < max_retries``.
-        Otherwise suspend the failed goal (backoff target is logged for
-        operators; full DAG replant remains a later phase).
+        Never transition ``failed → suspended`` (illegal in CE). When retry
+        budget is exhausted, leave the goal failed for engine deadlock
+        recovery on the next health cycle.
         """
         logger.info(
             "Applying backoff decision for %s → %s: %s",
@@ -252,20 +253,21 @@ class AutopilotMonitor:
         if failed is None:
             return
 
-        if failed.status == "failed" and failed.retry_count < failed.max_retries:
-            try:
-                await self._ce.retry_failed_goal(failed_goal_id, reason=decision.reason)
-                return
-            except ValueError:
-                logger.warning(
-                    "Retry rejected for %s despite budget check; suspending",
-                    failed_goal_id,
-                )
-
         if failed.status == "failed":
-            await self._ce.suspend_goal(
+            if failed.retry_count < failed.max_retries:
+                try:
+                    await self._ce.retry_failed_goal(failed_goal_id, reason=decision.reason)
+                    return
+                except ValueError:
+                    logger.warning(
+                        "Retry rejected for %s despite budget check; deferring to engine recovery",
+                        failed_goal_id,
+                    )
+            logger.warning(
+                "Backoff: leaving goal %s failed for engine recovery (retry %d/%d)",
                 failed_goal_id,
-                reason=decision.reason or "backoff: retry budget exhausted",
+                failed.retry_count,
+                failed.max_retries,
             )
             return
 

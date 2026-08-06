@@ -258,6 +258,8 @@ class GoalNode(BaseModel):
     send_back_count: int = 0  # Consensus send-backs
     max_send_backs: int = 3
     attempts_after_crash: int = 0  # RFC-222 H4
+    # Engine liveness recovery after retry/send_back budgets (IG-697)
+    engine_recovery_count: int = 0
 
     # Workspace/source (from Goal, RFC-222)
     source_file: str | None = None  # GOAL.md path if file-sourced

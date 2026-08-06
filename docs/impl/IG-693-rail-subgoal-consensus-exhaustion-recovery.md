@@ -8,6 +8,7 @@
 [IG-680](IG-680-autopilot-dag-health-evidence-deps.md),
 [IG-687](IG-687-greenfield-system-rail.md),
 [IG-692](IG-692-job-maturity-assessment.md),
+[IG-697](IG-697-engine-deadlock-recovery.md),
 LoopRail design draft
 
 ---
@@ -31,7 +32,9 @@ rail never saw `goal_failed`; integrate never spawned.
    hard-accept overrides for rail-bound goals.
 3. **Rail-bound exhaustion → `failed` + `goal_failed`** (not silent
    `suspended`).
-4. **LoopRail owns recovery** (e.g. `retry_maker` replaces one maker).
+4. **LoopRail owns first-chance recovery** (e.g. `retry_maker` replaces one maker).
+   Engine health is the liveness backstop when rail does not fire
+   ([IG-697](IG-697-engine-deadlock-recovery.md)).
 5. **Wave “makers done”** requires makers **completed**, not merely
    terminal (failed/cancelled must not unlock integrate).
 
@@ -68,7 +71,10 @@ consensus send_back on rail subgoal
 
 ## Out of scope
 
-- Auto-reset of send_back-exhausted goals in DAG health
+- ~~Auto-reset of send_back-exhausted goals in DAG health~~ — superseded by
+  [IG-697](IG-697-engine-deadlock-recovery.md) (engine recovers **failed**
+  rail workers that block pending dependents; still does not auto-reset
+  **suspended** non-rail send-back exhaust)
 - Git probes inside Autopilot consensus
 - Changing StrangeLoop iteration budgets
 - Reviving already-suspended goals without operator resume/cancel
@@ -90,5 +96,6 @@ consensus send_back on rail subgoal
 ## References
 
 - Diagnosis: job `921c6d32` maker hang (2026-08-05)
+- Follow-on: [IG-697](IG-697-engine-deadlock-recovery.md) engine deadlock recovery
 - RFC-204 budget exhaustion amendment
 - LoopRail §11 / §12 error handling

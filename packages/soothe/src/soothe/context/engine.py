@@ -645,6 +645,13 @@ class ContextEngine:
 
         # Validate that the goal can transition back to pending.
         _validate_transition(goal_id, goal.status, "pending")
+        # Preserve consensus rejection as guidance for the rework attempt.
+        if reason.strip():
+            self._append_goal_guidance(
+                goal,
+                f"Consensus send-back: {reason.strip()}",
+                source="consensus_send_back",
+            )
         goal.status = "pending"
         goal.assigned_loop_id = None
         goal.updated_at = datetime.now(UTC)
@@ -674,11 +681,59 @@ class ContextEngine:
             cur = self._dag.get_goal(parent_id)
         return False
 
+    def _append_goal_guidance(
+        self,
+        goal: GoalNode,
+        text: str,
+        *,
+        source: str,
+        scope: str = "goal",
+    ) -> None:
+        """Append guidance if non-empty and not identical to the last entry."""
+        cleaned = (text or "").strip()
+        if not cleaned:
+            return
+        if goal.guidance_accumulated:
+            last = goal.guidance_accumulated[-1]
+            if str(last.get("text") or "").strip() == cleaned:
+                return
+        goal.guidance_accumulated.append(
+            {
+                "text": cleaned,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "scope": scope,
+                "source": source,
+            }
+        )
+
+    def _append_failure_guidance(self, goal: GoalNode, *, reason: str = "") -> None:
+        """Record prior failure / recovery note as operator guidance (next dispatch).
+
+        Used by ``retry_failed_goal`` / ``recover_failed_goal`` so the worker
+        sees why the previous attempt failed.
+        """
+        parts: list[str] = []
+        prev_error = (goal.error or "").strip()
+        if prev_error:
+            parts.append(f"Previous failure: {prev_error}")
+        note = (reason or "").strip()
+        if note and note != prev_error:
+            parts.append(f"Recovery note: {note}")
+        if not parts:
+            return
+        self._append_goal_guidance(
+            goal,
+            "\n".join(parts),
+            source="failure_recovery",
+        )
+
     async def retry_failed_goal(self, goal_id: str, *, reason: str = "") -> GoalNode:
         """Re-queue a failed goal when retry budget remains (IG-678 P1-2).
 
         Increments ``retry_count``. When budget is exhausted, leaves the goal
-        failed and raises ``ValueError``.
+        failed and raises ``ValueError``. Prior ``error`` (and optional
+        ``reason``) are appended to ``guidance_accumulated`` before clear so
+        the next dispatch receives them as operator guidance.
 
         Args:
             goal_id: Failed goal to retry.
@@ -702,6 +757,7 @@ class ContextEngine:
             )
 
         _validate_transition(goal_id, goal.status, "pending")
+        self._append_failure_guidance(goal, reason=reason)
         goal.retry_count += 1
         goal.status = "pending"
         goal.assigned_loop_id = None
@@ -712,6 +768,64 @@ class ContextEngine:
             goal_id,
             goal.retry_count,
             goal.max_retries,
+            reason,
+        )
+        return goal
+
+    async def recover_failed_goal(
+        self,
+        goal_id: str,
+        *,
+        reason: str = "",
+        max_engine_recoveries: int = 2,
+    ) -> GoalNode:
+        """Engine liveness recovery: failed → pending after budgets (IG-697).
+
+        Used when backoff retry budget is exhausted or rail recovery did not
+        fire, but the DAG is deadlocked (pending dependents blocked by this
+        failed worker). Increments ``engine_recovery_count`` and resets
+        ``send_back_count`` so consensus can accept fresh evidence. Prior
+        failure text is kept as operator guidance for the next dispatch.
+
+        Args:
+            goal_id: Failed worker goal to recover.
+            reason: Health / deadlock reason for the recovery.
+            max_engine_recoveries: Cap from AutopilotConfig.
+
+        Returns:
+            The updated GoalNode in ``pending`` status.
+
+        Raises:
+            KeyError: If goal not found.
+            ValueError: If not failed, is a rail job root, or recovery
+                budget is exhausted.
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            raise KeyError(f"Goal {goal_id} not found")
+        if goal.status != "failed":
+            raise ValueError(f"Goal {goal_id} is {goal.status}, not failed")
+        if goal.parent_id is None and goal.rail_id:
+            raise ValueError(f"Goal {goal_id} is a rail job root; refuse engine recovery")
+        if goal.engine_recovery_count >= max_engine_recoveries:
+            raise ValueError(
+                f"Goal {goal_id} engine recovery budget exhausted "
+                f"({goal.engine_recovery_count}/{max_engine_recoveries})"
+            )
+
+        _validate_transition(goal_id, goal.status, "pending")
+        self._append_failure_guidance(goal, reason=reason)
+        goal.engine_recovery_count += 1
+        goal.send_back_count = 0
+        goal.status = "pending"
+        goal.assigned_loop_id = None
+        goal.error = None
+        goal.updated_at = datetime.now(UTC)
+        logger.info(
+            "Engine recovering failed goal %s (recovery %d/%d): %s",
+            goal_id,
+            goal.engine_recovery_count,
+            max_engine_recoveries,
             reason,
         )
         return goal
