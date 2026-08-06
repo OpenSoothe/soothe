@@ -22,6 +22,10 @@ from soothe.autopilot.rail.trace_store import (
     RailTraceStore,
     RuleFireRecord,
 )
+from soothe.autopilot.rail.wave_plan import (
+    DEFAULT_WAVE_PLAN_ARTIFACT,
+    normalize_wave_plan_artifact,
+)
 from soothe.context.engine import ContextEngine, InvalidGoalTransitionError
 from soothe.rails.catalog import LoopRailCatalog, RailDefinition
 
@@ -99,25 +103,64 @@ class LoopRailInterpreter:
         job_id: str,
         *,
         rail_id: str,
-        scout_count: int = 2,
-        decompose_plan: list[dict[str, Any]] | None = None,
         workspace: str | None = None,
+        engine_max_parallel_goals: int | None = None,
     ) -> RailDefinition:
-        """Resolve rail and bind job state."""
+        """Resolve rail YAML, bind job state from optional ``fanout:``, fire-ready.
+
+        Engine concerns (only):
+          - ``engine_max_parallel_goals`` — spawn budget from
+            ``autopilot.max_parallel_goals`` (capacity clamp).
+
+        LoopRail concerns (from YAML / job artifact, never submit kwargs):
+          - When ``fanout:`` is present: artifact template, ``require_plan``,
+            scout/max_waves. Absent ``fanout:`` → no wave-plan pollution.
+          - flow ``then:`` builtins decide *when* to fan out
+
+        Args:
+            job_id: Root goal id.
+            rail_id: LoopRail catalog id.
+            workspace: Job workspace for catalog resolution.
+            engine_max_parallel_goals: Autopilot pool schedule cap mirrored into
+                rail spawn clamp.
+        """
         catalog = LoopRailCatalog(workspace=workspace) if workspace else self._catalog
         rail = catalog.resolve(rail_id)
         async with self._lock:
             self._rails[job_id] = rail
             self._rules[job_id] = _normalize_rules(rail)
-        await self._builtins.bind_job(
-            RailJobState(
+
+        fanout = dict(rail.fanout or {})
+        budget = int(engine_max_parallel_goals) if engine_max_parallel_goals is not None else 32
+        # Fan-out / wave fields only when the rail declares ``fanout:`` (IG-700).
+        if fanout:
+            artifact = normalize_wave_plan_artifact(
+                str(fanout.get("artifact") or DEFAULT_WAVE_PLAN_ARTIFACT)
+            )
+            scout = int(fanout["scout_count"]) if "scout_count" in fanout else 2
+            max_waves = int(fanout["max_waves"]) if "max_waves" in fanout else 3
+            require_plan = bool(fanout.get("require_plan", False))
+            state = RailJobState(
                 job_id=job_id,
                 rail_id=rail.id,
                 rail_version=rail.version,
-                scout_count=scout_count,
-                decompose_plan=decompose_plan,
+                scout_count=scout,
+                wave_plan_artifact=artifact,
+                require_plan=require_plan,
+                max_waves=max_waves,
+                engine_max_parallel_goals=budget,
             )
-        )
+        else:
+            state = RailJobState(
+                job_id=job_id,
+                rail_id=rail.id,
+                rail_version=rail.version,
+                engine_max_parallel_goals=budget,
+                require_plan=False,
+            )
+        await self._builtins.bind_job(state)
+        if fanout:
+            await self._builtins.ingest_wave_plan(job_id)
         return rail
 
     async def handle(self, event: RailEvent) -> list[RuleFireRecord]:
@@ -342,6 +385,13 @@ class LoopRailInterpreter:
 
         feedback_inflight = any(siblings.get(gid) in {"pending", "active"} for gid in feedback_ids)
 
+        require_plan = False
+        wave_plan_ready = True
+        if job_state is not None:
+            require_plan = bool(job_state.require_plan)
+            if require_plan:
+                wave_plan_ready = self._builtins.is_wave_plan_ready(event.job_id)
+
         structural = {
             "exploration_goal_ids": exploration_ids,
             "planning_goal_ids": planning_ids,
@@ -368,6 +418,8 @@ class LoopRailInterpreter:
             "max_feedback_rounds": max_feedback_rounds,
             "acceptance_met": acceptance_met,
             "wave_below_max": wave_below_max,
+            "require_plan": require_plan,
+            "wave_plan_ready": wave_plan_ready,
             "pending_or_active_count": sum(
                 1
                 for gid, st in siblings.items()

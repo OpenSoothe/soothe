@@ -9,6 +9,10 @@ job artifact dir so guards survive daemon restart.
 IG-687 adds greenfield-system builtins: plan_milestones, spawn_wave_makers
 (with optional git worktrees), spawn_integrate, commit_milestone,
 spawn_feedback_cycle (find → optimize → verify).
+
+IG-699 / IG-700: LLM-determined fan-out via job-scoped ``wave-plan.json``
+under ``jobs_root`` (``record_wave_plan`` / structured findings), ingested
+before ``spawn_wave_makers`` (no markdown scraping, no workspace singleton).
 """
 
 from __future__ import annotations
@@ -21,15 +25,25 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from soothe.autopilot.rail.wave_plan import (
+    DEFAULT_WAVE_PLAN_ARTIFACT,
+    WavePlan,
+    apply_wave_plan_to_state_fields,
+    build_wave_plan,
+    dump_wave_plan,
+    load_wave_plan,
+    normalize_wave_plan_artifact,
+    parse_wave_plan_from_findings,
+    parse_wave_plan_payload,
+    resolve_fanout_modules,
+    resolve_wave_plan_path,
+)
 from soothe.context.engine import ContextEngine
 from soothe.context.models import TERMINAL_STATES, GoalNode
 
 logger = logging.getLogger(__name__)
 
 _RAIL_STATE_FILENAME = "rail_state.json"
-
-# Default parallel maker modules when greenfield has no custom plan.
-_DEFAULT_WAVE_MODULES: tuple[str, ...] = ("core", "api", "cli", "tests")
 
 
 @dataclass
@@ -60,6 +74,12 @@ class RailJobState:
     max_waves: int = 3
     wave_modules: list[str] | None = None
     worktrees_enabled: bool = True
+    # Rail YAML ``fanout`` declaration (IG-699/700) — LLM fills job-scoped plan.
+    # Defaults are inert unless the rail declares ``fanout:`` at bind.
+    wave_plan_artifact: str = DEFAULT_WAVE_PLAN_ARTIFACT
+    require_plan: bool = False
+    # Engine spawn budget mirrored at bind (``autopilot.max_parallel_goals``).
+    engine_max_parallel_goals: int = 32
     # find→optimize→verify feedback rounds (greenfield)
     feedback_round: int = 0
     max_feedback_rounds: int = 8
@@ -272,6 +292,11 @@ class RailBuiltinExecutor:
             max_waves=max(base.max_waves, donor.max_waves),
             wave_modules=base.wave_modules if base.wave_modules is not None else donor.wave_modules,
             worktrees_enabled=donor.worktrees_enabled,
+            wave_plan_artifact=base.wave_plan_artifact,
+            require_plan=base.require_plan,
+            engine_max_parallel_goals=base.engine_max_parallel_goals
+            if base.engine_max_parallel_goals != 32
+            else donor.engine_max_parallel_goals,
             feedback_round=max(base.feedback_round, donor.feedback_round),
             max_feedback_rounds=max(base.max_feedback_rounds, donor.max_feedback_rounds),
             acceptance_met=base.acceptance_met or donor.acceptance_met,
@@ -307,6 +332,9 @@ class RailBuiltinExecutor:
                 "max_waves": state.max_waves,
                 "wave_modules": state.wave_modules,
                 "worktrees_enabled": state.worktrees_enabled,
+                "wave_plan_artifact": state.wave_plan_artifact,
+                "require_plan": state.require_plan,
+                "engine_max_parallel_goals": state.engine_max_parallel_goals,
                 "feedback_round": state.feedback_round,
                 "max_feedback_rounds": state.max_feedback_rounds,
                 "acceptance_met": state.acceptance_met,
@@ -350,6 +378,11 @@ class RailBuiltinExecutor:
             max_waves=int(raw.get("max_waves") or 3),
             wave_modules=raw.get("wave_modules"),
             worktrees_enabled=bool(raw.get("worktrees_enabled", True)),
+            wave_plan_artifact=normalize_wave_plan_artifact(
+                str(raw.get("wave_plan_artifact") or DEFAULT_WAVE_PLAN_ARTIFACT)
+            ),
+            require_plan=bool(raw.get("require_plan", False)),
+            engine_max_parallel_goals=int(raw.get("engine_max_parallel_goals") or 32),
             feedback_round=int(raw.get("feedback_round") or 0),
             max_feedback_rounds=int(raw.get("max_feedback_rounds") or 8),
             acceptance_met=bool(raw.get("acceptance_met")),
@@ -525,12 +558,27 @@ class RailBuiltinExecutor:
         del trigger_goal_id
         state = await self._require(job_id)
         ws = _job_workspace(self._ce, job_id)
+        # Opaque user/TUI-facing copy: no filesystem path (IG-700).
         arch = await self._ce.create_goal(
             (
                 f"Architecture and milestone map for job {job_id}. "
-                "Define module boundaries, wave acceptance criteria, and "
-                "git commit milestones. Do not implement product code here; "
-                "produce a checkable milestone plan only."
+                "Define module boundaries, wave-1 independent ownership units, "
+                "wave acceptance criteria, and git commit milestones. "
+                "Do not implement product code here.\n\n"
+                "REQUIRED fan-out policy: call `record_wave_plan` with your "
+                "module list (names, count, and rationale are yours), or append "
+                "one structured findings entry that is exactly a WavePlan JSON "
+                "object. Schema example:\n"
+                '{"wave_modules":["frontend","ir","passes","backend","driver","tests"],'
+                '"independence":"disjoint write-sets per module",'
+                '"rationale":"why this partition"}\n'
+                "Optionally use rich `modules` entries "
+                '({"module","description","priority","tags"}) and/or `max_waves`. '
+                "The host persists the plan for this job — do not write fan-out "
+                "policy into the project workspace tree. Prose alone is not enough "
+                "(never scrapes markdown, never substitutes a fixed default module "
+                "list). Modules must be independent (no overlapping primary write "
+                "sets). Autopilot only clamps spawn width to max_parallel_goals."
             ),
             parent_id=job_id,
             source="decomposition",
@@ -557,6 +605,155 @@ class RailBuiltinExecutor:
             created_goal_ids=[arch.id],
         )
 
+    def _wave_plan_file(self, state: RailJobState) -> Path | None:
+        """Job-scoped wave-plan path under jobs_root, or None if unavailable."""
+        if self._jobs_root is None:
+            return None
+        try:
+            return resolve_wave_plan_path(
+                jobs_root=self._jobs_root,
+                job_id=state.job_id,
+                artifact=normalize_wave_plan_artifact(
+                    state.wave_plan_artifact or DEFAULT_WAVE_PLAN_ARTIFACT
+                ),
+            )
+        except ValueError:
+            logger.warning(
+                "Invalid wave-plan artifact for job %s: %s",
+                state.job_id[:8],
+                state.wave_plan_artifact,
+            )
+            return None
+
+    async def record_wave_plan(
+        self,
+        job_id: str,
+        plan: WavePlan | dict[str, Any] | None = None,
+        *,
+        wave_modules: list[str] | None = None,
+        modules: list[dict[str, Any]] | None = None,
+        rationale: str | None = None,
+        independence: str | None = None,
+        max_waves: int | None = None,
+        scout_count: int | None = None,
+    ) -> WavePlan | None:
+        """Persist an LLM wave plan under jobs_root and apply it to rail state.
+
+        Preferred agent/host API (IG-700): callers never need the filesystem path.
+        """
+        async with self._lock:
+            state = self._jobs.get(job_id)
+            if state is None:
+                return None
+            if plan is None:
+                built = build_wave_plan(
+                    wave_modules=wave_modules,
+                    modules=modules,
+                    rationale=rationale,
+                    independence=independence,
+                    max_waves=max_waves,
+                    scout_count=scout_count,
+                )
+            elif isinstance(plan, WavePlan):
+                built = plan
+            else:
+                parsed = parse_wave_plan_payload(plan, source="record_wave_plan")
+                if parsed is None:
+                    return None
+                built = parsed
+            if not built.resolved_module_names() and built.scout_count is None:
+                return None
+            path = self._wave_plan_file(state)
+            if path is None:
+                logger.warning(
+                    "record_wave_plan: jobs_root unset; applying in-memory only job=%s",
+                    job_id[:8],
+                )
+            else:
+                try:
+                    dump_wave_plan(built, path)
+                except OSError:
+                    logger.warning("record_wave_plan: failed to write %s", path, exc_info=True)
+            self._apply_wave_plan_unlocked(state, built)
+            self._persist_rail_state_unlocked(state)
+            return built
+
+    async def ingest_wave_plan(self, job_id: str) -> RailJobState | None:
+        """Load job-scoped wave-plan into bound job state (IG-700)."""
+        async with self._lock:
+            state = self._jobs.get(job_id)
+            if state is None:
+                return None
+            self._ingest_job_wave_plan(state)
+            self._persist_rail_state_unlocked(state)
+            return state
+
+    def is_wave_plan_ready(self, job_id: str) -> bool:
+        """Whether a usable LLM wave plan is available for spawn guards."""
+        state = self._jobs.get(job_id)
+        if state is None:
+            return False
+        if state.wave_modules:
+            return True
+        path = self._wave_plan_file(state)
+        if path is not None:
+            plan = load_wave_plan(path)
+            if plan is not None and plan.resolved_module_names():
+                return True
+        return self._wave_plan_from_architecture_findings(state) is not None
+
+    def _apply_wave_plan_unlocked(self, state: RailJobState, plan: WavePlan) -> None:
+        updates = apply_wave_plan_to_state_fields(plan)
+        names = updates.get("wave_modules")
+        if names:
+            state.wave_modules = list(names)
+        if updates.get("decompose_plan") is not None:
+            state.decompose_plan = updates["decompose_plan"]
+        if updates.get("scout_count") is not None:
+            state.scout_count = int(updates["scout_count"])
+        if updates.get("max_waves") is not None:
+            state.max_waves = max(state.wave_index, int(updates["max_waves"]))
+        logger.info(
+            "Applied wave plan for job %s modules=%s scout_count=%s max_waves=%s",
+            state.job_id[:8],
+            state.wave_modules,
+            state.scout_count,
+            state.max_waves,
+        )
+
+    def _wave_plan_from_architecture_findings(self, state: RailJobState) -> WavePlan | None:
+        for gid, ann in state.annotations.items():
+            if "architecture" not in ann.tags:
+                continue
+            goal = self._ce._dag.get_goal(gid)
+            if goal is None:
+                continue
+            plan = parse_wave_plan_from_findings(list(goal.findings or []))
+            if plan is not None:
+                return plan
+        return None
+
+    def _ingest_job_wave_plan(self, state: RailJobState) -> None:
+        """Load job-scoped wave-plan artifact (or architecture findings) into state.
+
+        ``record_wave_plan`` / job artifact is authoritative for the upcoming wave
+        when present (overwrites prior ``wave_modules`` / ``decompose_plan``).
+        """
+        plan: WavePlan | None = None
+        path = self._wave_plan_file(state)
+        if path is not None:
+            plan = load_wave_plan(path)
+        if plan is None:
+            plan = self._wave_plan_from_architecture_findings(state)
+            if plan is not None and path is not None:
+                try:
+                    dump_wave_plan(plan, path)
+                except OSError:
+                    logger.debug("Could not mirror findings wave plan to %s", path)
+        if plan is None:
+            return
+        self._apply_wave_plan_unlocked(state, plan)
+
     async def _do_spawn_wave_makers(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
@@ -567,6 +764,9 @@ class RailBuiltinExecutor:
                 status="skipped",
                 detail=f"max_waves={state.max_waves} reached",
             )
+
+        # Rail policy: ingest structured plan before resolving fan-out width.
+        self._ingest_job_wave_plan(state)
 
         arch_ids = [
             gid
@@ -582,17 +782,41 @@ class RailBuiltinExecutor:
             if tg is not None and tg.id != job_id:
                 depends.append(trigger_goal_id)
 
-        modules = list(state.wave_modules or _DEFAULT_WAVE_MODULES)
-        if state.decompose_plan:
-            modules = [
-                str(spec.get("module") or spec.get("description") or f"m{i}")
-                for i, spec in enumerate(state.decompose_plan)
-            ]
+        repo = _job_workspace(self._ce, job_id)
+        resolution = resolve_fanout_modules(
+            wave_modules=state.wave_modules,
+            decompose_plan=state.decompose_plan,
+            plan=None,  # already ingested into state above
+            max_modules=state.engine_max_parallel_goals,
+            require_plan=state.require_plan,
+        )
+        if resolution.source == "missing_plan" or not resolution.modules:
+            detail = resolution.detail or "LLM wave plan missing; refusing rigid defaults"
+            logger.warning(
+                "spawn_wave_makers skipped job=%s require_plan=%s detail=%s",
+                job_id[:8],
+                state.require_plan,
+                detail,
+            )
+            return BuiltinResult(status="skipped", detail=detail)
+
+        modules = list(resolution.modules)
+        state.wave_modules = modules
+        await self._persist_job(state)
+
+        logger.info(
+            "spawn_wave_makers job=%s modules=%s source=%s clamped_from=%s "
+            "engine_max_parallel_goals=%s",
+            job_id[:8],
+            modules,
+            resolution.source,
+            resolution.clamped_from,
+            state.engine_max_parallel_goals,
+        )
 
         state.wave_index += 1
         wave = state.wave_index
         await self._persist_job(state)
-        repo = _job_workspace(self._ce, job_id)
         created: list[str] = []
 
         for module in modules:
@@ -640,9 +864,12 @@ class RailBuiltinExecutor:
                     deps.append(gid)
             await self._ce.update_dependencies(job_id, deps)
 
+        detail = f"spawned {len(created)} makers modules={modules} source={resolution.source}"
+        if resolution.clamped_from is not None:
+            detail += f" clamped_from={resolution.clamped_from}"
         return BuiltinResult(
             status="success",
-            detail=f"spawned wave {wave} makers={len(created)}",
+            detail=detail,
             created_goal_ids=created,
         )
 

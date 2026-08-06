@@ -1,5 +1,5 @@
 id: greenfield-system
-version: "1.1"
+version: "1.3"
 
 summary: |
   Greenfield multi-module system build: architecture milestones, parallel
@@ -13,6 +13,15 @@ applies_when: |
   Building a new multi-module system or large scaffold from scratch
   (compiler, platform, multi-crate product), not a feature in an existing
   mature codebase, hotfix, bugfix, or research spike.
+
+# Fan-out is LoopRail policy — not AutopilotService / submit API.
+# Module list is LLM-authored via record_wave_plan (job-scoped under
+# $SOOTHE_DATA_DIR/jobs/{job_id}/). Rail only declares the contract path
+# template + require_plan. Engine clamps to max_parallel_goals.
+fanout:
+  artifact: "{job_id}/wave-plan.json"
+  require_plan: true
+  max_waves: 3
 
 conditions:
   architecture_ready: |
@@ -51,6 +60,11 @@ flow:
     then: plan_milestones
 
   - event: goal_completed
+    when: architecture_ready
+    then: spawn_wave_makers
+
+  # Recover when architecture completed and LLM later wrote the wave plan.
+  - event: dag_idle
     when: architecture_ready
     then: spawn_wave_makers
 

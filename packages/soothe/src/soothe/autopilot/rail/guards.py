@@ -117,18 +117,28 @@ def _structural_short_circuit(
     wave_below_max = bool(structural.get("wave_below_max", True))
 
     if name == "architecture_ready":
-        ok = (
-            event == "goal_completed"
-            and "architecture" in trigger_tags
-            and architecture_done
-            and not has_makers
-        )
+        # LLM fan-out: when require_plan, wave-plan artifact must exist before
+        # spawn_wave_makers (no rigid default modules).
+        require_plan = bool(structural.get("require_plan", False))
+        wave_plan_ready = bool(structural.get("wave_plan_ready", False))
+        plan_ok = (not require_plan) or wave_plan_ready
+        if event == "dag_idle":
+            ok = architecture_done and not has_makers and plan_ok
+        else:
+            ok = (
+                event == "goal_completed"
+                and "architecture" in trigger_tags
+                and architecture_done
+                and not has_makers
+                and plan_ok
+            )
         return GuardResult(
             matched=ok,
             confidence=1.0,
             reasoning=(
                 f"structural short-circuit: architecture_done={architecture_done} "
-                f"has_makers={has_makers}"
+                f"has_makers={has_makers} require_plan={require_plan} "
+                f"wave_plan_ready={wave_plan_ready} event={event}"
             ),
         )
 

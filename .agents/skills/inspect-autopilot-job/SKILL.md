@@ -263,6 +263,8 @@ Pointers to diagnose-loop Workflow B for `autopilot__{job}__*`.
 - Do not call early single-goal execution a parallelism bug during serial rail gates.
 - Distinguish **ready but not dispatched** (scheduler/reservation) vs **not ready** (deps).
 - Prefer `jobs/{id}/rail_trace.jsonl` over legacy `loops/{id}/`.
+- Greenfield fan-out plan (operator forensics only): `jobs/{id}/wave-plan.json`
+  under `$SOOTHE_DATA_DIR` (same dir as `rail_state.json`). Not a user workflow.
 - Live CLI beats stale `goals:snapshot` when they disagree.
 - Never cite IG-/RFC- ids in user-facing report text.
 - Skipping schedule for rail job root is expected.

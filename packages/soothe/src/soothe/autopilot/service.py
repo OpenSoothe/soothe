@@ -492,7 +492,12 @@ class AutopilotService:
         return goal
 
     async def _bind_rail_for_job(self, goal: GoalNode) -> None:
-        """Bind LoopRail interpreter for a root job and fire ``job_start``."""
+        """Bind LoopRail for a root job; engine only injects spawn budget.
+
+        Fan-out module lists / scout counts come from the rail YAML ``fanout:``
+        block and job-scoped ``record_wave_plan`` artifact — not from Autopilot
+        submit fields or the project workspace tree.
+        """
         if self._rail_interpreter is None or not goal.rail_id:
             return
         try:
@@ -502,6 +507,9 @@ class AutopilotService:
                 goal.id,
                 rail_id=goal.rail_id,
                 workspace=goal.workspace,
+                engine_max_parallel_goals=int(
+                    getattr(self._config, "max_parallel_goals", 32) or 32
+                ),
             )
             await self._rail_interpreter.handle(
                 RailEvent(name="job_start", job_id=goal.id, goal_id=goal.id)
@@ -544,6 +552,9 @@ class AutopilotService:
                     job_id,
                     rail_id=root.rail_id,
                     workspace=root.workspace,
+                    engine_max_parallel_goals=int(
+                        getattr(self._config, "max_parallel_goals", 32) or 32
+                    ),
                 )
             except Exception:
                 logger.debug("Rail rebind failed for %s", job_id, exc_info=True)

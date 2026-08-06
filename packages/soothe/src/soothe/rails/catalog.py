@@ -76,7 +76,12 @@ class RailDefinition:
         conditions: Named NL guards.
         flow: NL-first event hooks (list of mappings).
         rules: Explicit rule list (list of mappings).
+        fanout: Optional rail-declared fan-out policy (IG-699/700). Keys may include
+            ``artifact`` (jobs_root-relative wave-plan template with optional
+            ``{job_id}``), ``require_plan``, ``scout_count``, ``max_waves``.
+            Engine must not invent these — they live in the rail YAML.
         source_path: Absolute path to the YAML file that won resolution.
+        integrity_hash: SHA-256 of the raw YAML text.
     """
 
     id: str
@@ -86,8 +91,53 @@ class RailDefinition:
     conditions: dict[str, str] = field(default_factory=dict)
     flow: list[dict[str, Any]] = field(default_factory=list)
     rules: list[dict[str, Any]] = field(default_factory=list)
+    fanout: dict[str, Any] = field(default_factory=dict)
     source_path: Path | None = None
     integrity_hash: str = ""
+
+
+def _normalize_fanout(raw: Any, *, path: Path) -> dict[str, Any]:
+    """Validate optional ``fanout:`` mapping from rail YAML (IG-699/700)."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise RailCatalogError(f"{path}: 'fanout' must be a mapping when present")
+    out: dict[str, Any] = {}
+    artifact = raw.get("artifact")
+    if artifact is not None:
+        if not isinstance(artifact, str) or not artifact.strip():
+            raise RailCatalogError(f"{path}: fanout.artifact must be a non-empty string")
+        # Reject absolute / traversal paths — jobs_root-relative templates only.
+        art = artifact.strip().replace("\\", "/")
+        if art.startswith("/") or ".." in art.split("/"):
+            raise RailCatalogError(f"{path}: fanout.artifact must be a relative path without '..'")
+        out["artifact"] = art
+    if "default_modules" in raw and raw["default_modules"] is not None:
+        raise RailCatalogError(
+            f"{path}: fanout.default_modules is not supported; "
+            "fan-out modules must come from the LLM wave plan (require_plan)"
+        )
+    if "require_plan" in raw and raw["require_plan"] is not None:
+        if not isinstance(raw["require_plan"], bool):
+            raise RailCatalogError(f"{path}: fanout.require_plan must be a bool")
+        out["require_plan"] = bool(raw["require_plan"])
+    if "scout_count" in raw and raw["scout_count"] is not None:
+        try:
+            sc = int(raw["scout_count"])
+        except (TypeError, ValueError) as exc:
+            raise RailCatalogError(f"{path}: fanout.scout_count must be an int") from exc
+        if sc < 1 or sc > 32:
+            raise RailCatalogError(f"{path}: fanout.scout_count out of range 1..32")
+        out["scout_count"] = sc
+    if "max_waves" in raw and raw["max_waves"] is not None:
+        try:
+            mw = int(raw["max_waves"])
+        except (TypeError, ValueError) as exc:
+            raise RailCatalogError(f"{path}: fanout.max_waves must be an int") from exc
+        if mw < 1 or mw > 32:
+            raise RailCatalogError(f"{path}: fanout.max_waves out of range 1..32")
+        out["max_waves"] = mw
+    return out
 
 
 def _require_str(data: dict[str, Any], key: str, *, path: Path) -> str:
@@ -198,6 +248,7 @@ def load_rail_file(path: Path) -> RailDefinition:
     conditions = _normalize_conditions(data.get("conditions"), path=path)
     flow = _normalize_list_of_maps(data.get("flow"), field_name="flow", path=path)
     rules = _normalize_list_of_maps(data.get("rules"), field_name="rules", path=path)
+    fanout = _normalize_fanout(data.get("fanout"), path=path)
 
     if not flow and not rules:
         raise RailCatalogError(f"{path}: rail must define 'flow' and/or 'rules'")
@@ -216,6 +267,7 @@ def load_rail_file(path: Path) -> RailDefinition:
         conditions=conditions,
         flow=flow,
         rules=rules,
+        fanout=fanout,
         source_path=path,
         integrity_hash=compute_rail_hash(text),
     )

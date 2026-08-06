@@ -34,6 +34,8 @@ def test_architecture_ready_short_circuit() -> None:
         "all_architecture_terminal": True,
         "implementation_goal_ids": [],
         "pending_or_active_count": 0,
+        "require_plan": True,
+        "wave_plan_ready": True,
     }
     r = _structural_short_circuit(
         condition_name="architecture_ready",

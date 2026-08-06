@@ -22,10 +22,18 @@ from soothe.autopilot.rail.trace_store import (
     RuleFireRecord,
     export_trace_evaluation,
 )
+from soothe.autopilot.rail.wave_plan import (
+    DEFAULT_WAVE_PLAN_ARTIFACT,
+    WavePlan,
+    load_wave_plan,
+    resolve_fanout_modules,
+    resolve_wave_plan_path,
+)
 
 __all__ = [
     "AlwaysMatchGuardEvaluator",
     "BuiltinResult",
+    "DEFAULT_WAVE_PLAN_ARTIFACT",
     "GoalAnnotation",
     "GuardContext",
     "GuardEvaluator",
@@ -39,6 +47,10 @@ __all__ = [
     "RailJobState",
     "RailTraceStore",
     "RuleFireRecord",
-    "ScriptedGuardEvaluator",
+    "WavePlan",
     "export_trace_evaluation",
+    "load_wave_plan",
+    "resolve_fanout_modules",
+    "resolve_wave_plan_path",
+    "ScriptedGuardEvaluator",
 ]

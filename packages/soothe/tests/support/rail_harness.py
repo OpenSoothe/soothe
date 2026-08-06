@@ -54,9 +54,14 @@ class RailHarness:
         await self.interpreter.bind_job(
             root.id,
             rail_id=rail_id,
-            scout_count=scout_count,
-            decompose_plan=decompose_plan,
         )
+        # Test harness may override rail-declared fanout (not an engine API).
+        if scout_count != 2 or decompose_plan is not None:
+            state = await self.interpreter.builtins.job_state(root.id)
+            if state is not None:
+                state.scout_count = scout_count
+                if decompose_plan is not None:
+                    state.decompose_plan = decompose_plan
         if guard_evaluator is not None:
             self.interpreter.set_guard_evaluator(guard_evaluator)
         elif guard_scripts is not None:
