@@ -31,7 +31,7 @@ Soothe organizes tools into domain-specific **toolkits** — modules of related 
 |---------|--------|-----------|
 | **execution** | Shell & Python execution | `run_command`, `run_python`, `run_background`, `tail_background_log`, `kill_process` |
 | **file_ops** | File I/O & editing | `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `ls` |
-| **wizsearch** | Web search | `wizsearch_search`, `wizsearch_crawl` |
+| **wizsearch** | Web search (tarzi backend) | `wizsearch_search`, `wizsearch_crawl` |
 | **deepxiv** | Academic papers | `deepxiv_search`, `deepxiv_paper_brief`, `deepxiv_read_section` |
 | **audio/video/image** | Media analysis | `transcribe_audio`, `analyze_video`, `analyze_image` |
 | **data** | Data inspection | `inspect_data`, `summarize_data`, `check_data_quality` |
@@ -49,7 +49,7 @@ A defining design decision: **Soothe only builds tools that the langchain ecosys
 | `run_command` | custom `BaseTool` (subprocess + workspace security) |
 | `run_python` | custom persistent in-process REPL (`BaseTool`) |
 | `read_file`, `write_file`, `glob`, `grep`, `ls` | from `deepagents.FilesystemMiddleware` |
-| `wizsearch_search` | from `wizsearch` library |
+| `wizsearch_search` | from `tarzi` library (tool name kept for config/wire compat) |
 | `transcribe_audio` | OpenAI Whisper |
 
 Soothe's custom additions — `edit_lines`, `insert_lines`, `delete_lines`, `apply_diff` — extend langchain's file tools with **surgical editing** capabilities that don't exist in the ecosystem. These enable precise line-range edits instead of full-file rewrites, which is critical for large files where token efficiency matters.

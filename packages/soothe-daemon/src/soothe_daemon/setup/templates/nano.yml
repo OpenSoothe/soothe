@@ -160,9 +160,14 @@ tools:
   data:
     enabled: true
   wizsearch:
+    # Tarzi-backed; default_engines is ordered failover (first success wins).
     enabled: true
     default_engines:
       - tavily
+      - google_serper
+      - duckduckgo
+      - bing
+      - brave
     max_results_per_engine: 10
     timeout: 30
     proxy: null

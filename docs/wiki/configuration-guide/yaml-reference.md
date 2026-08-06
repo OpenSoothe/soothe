@@ -132,7 +132,7 @@ For `deep_research` and `academic_research`, nested `config` merges into the eng
 
 ## Tools
 
-`ToolsConfig` holds independently toggleable groups: `execution` (`run_command`, `run_python`, `run_background`, `tail_background_log`, `kill_process`; optional `background_log_dir`, `background_log_retention_days`), `file_ops`, `datetime`, `data`, `wizsearch` (with `default_engines`, `max_results_per_engine`, `timeout`), `image`, `audio`, `video`, `http_requests` (with `allow_dangerous_requests`, `verify_ssl`), `deepxiv` (with `token`, `timeout`, `max_retries`). Disabling a group removes its tools from the model's array entirely (saves context tokens). See [Common Patterns](common-patterns.md) for use-case scoping.
+`ToolsConfig` holds independently toggleable groups: `execution` (`run_command`, `run_python`, `run_background`, `tail_background_log`, `kill_process`; optional `background_log_dir`, `background_log_retention_days`), `file_ops`, `datetime`, `data`, `wizsearch` (tarzi-backed; `default_engines` as ordered failover, `max_results_per_engine`, `timeout`), `image`, `audio`, `video`, `http_requests` (with `allow_dangerous_requests`, `verify_ssl`), `deepxiv` (with `token`, `timeout`, `max_retries`). Disabling a group removes its tools from the model's array entirely (saves context tokens). See [Common Patterns](common-patterns.md) for use-case scoping.
 
 ## MCP Servers
 
