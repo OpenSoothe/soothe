@@ -16,7 +16,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import typer
 from rich.text import Text
@@ -32,12 +32,12 @@ _TOP_INTERVAL_MAX = 10.0
 _TOP_HELP_LINES = (
     "Keys:",
     "  q Quit          h/? Help          Space Refresh",
-    "  a All/active    s Steps           l Loops       d Density",
+    "  a All/active    s Steps mode      l Loops       d Density",
     "  +/- Delay       j/k/^E/^Y line    ^D/^U half    ^F/^B page",
     "  g/G or Home/End Top/bottom        PgUp/PgDn page",
     "",
     "mode=active hides completed/failed/cancelled goals;",
-    "steps=on lists the StepDAG under remaining live goals.",
+    "steps=on lists the full StepDAG; active lists active/pending steps.",
     "mode=all shows the full forest including terminal goals.",
 )
 
@@ -602,7 +602,7 @@ class TopViewState:
     """Interactive view flags for autopilot top (IG-688 / IG-694 / IG-698)."""
 
     include_terminal: bool = False
-    show_steps: bool = True
+    steps_mode: Literal["on", "off", "active"] = "active"
     show_loops: bool = True
     interval: float = 2.0
     scroll: int = 0
@@ -643,21 +643,22 @@ def apply_top_key(state: TopViewState, key: str) -> None:
         state.scroll = 0
         return
     if key == "s":
-        state.show_steps = not state.show_steps
+        modes: tuple[Literal["on", "off", "active"], ...] = ("on", "off", "active")
+        state.steps_mode = modes[(modes.index(state.steps_mode) + 1) % len(modes)]
         return
     if key == "l":
         state.show_loops = not state.show_loops
         return
     if key == "d":
-        # full → compact → steps → full (default is full)
-        if state.show_steps and state.show_loops:
-            state.show_steps = False
+        # visible steps + loops → compact → steps-only → full
+        if state.steps_mode != "off" and state.show_loops:
+            state.steps_mode = "off"
             state.show_loops = False
-        elif not state.show_steps and not state.show_loops:
-            state.show_steps = True
+        elif state.steps_mode == "off" and not state.show_loops:
+            state.steps_mode = "on"
             state.show_loops = False
         else:
-            state.show_steps = True
+            state.steps_mode = "on"
             state.show_loops = True
         return
     if key in {"+", "="}:
@@ -981,7 +982,7 @@ def _format_top_header(
     uptime = format_elapsed(stats.get("oldest_created_at"))
     mode = "all" if state.include_terminal else "active"
     mode_style = _STYLE_META if state.include_terminal else _STYLE_ACTIVE
-    steps_flag = "on" if state.show_steps else "off"
+    steps_flag = state.steps_mode
     loops_flag = "on" if state.show_loops else "off"
     rule = "─" * max(8, width)
     # Half-width columns: slightly tighter meters than single-column layout.
@@ -1063,7 +1064,7 @@ def _format_top_header(
         flags.append(" (live)", style=_STYLE_LIVE_HINT)
     flags.append("  ")
     flags.append("steps=", style=_STYLE_DIM)
-    flags.append(steps_flag, style=_STYLE_STEP if state.show_steps else _STYLE_DIM)
+    flags.append(steps_flag, style=_STYLE_STEP if state.steps_mode != "off" else _STYLE_DIM)
     flags.append("  ")
     flags.append("loops=", style=_STYLE_DIM)
     flags.append(loops_flag, style=_STYLE_LOOP if state.show_loops else _STYLE_DIM)
@@ -1078,6 +1079,7 @@ def _format_top_header(
 def _format_step_list(
     steps: dict,
     *,
+    mode: Literal["on", "active"],
     indent: str,
     lines: list[Text],
     trailing_siblings: int,
@@ -1097,6 +1099,11 @@ def _format_step_list(
         if sid in seen:
             continue
         seen.add(sid)
+        if mode == "active" and str(raw.get("status", "pending")).lower() not in {
+            "active",
+            "pending",
+        }:
+            continue
         ordered_nodes.append(raw)
 
     for i, node in enumerate(ordered_nodes):
@@ -1123,15 +1130,15 @@ def _format_step_list(
 def _format_top_forest(
     snapshot: dict,
     *,
-    show_steps: bool = True,
+    steps_mode: Literal["on", "off", "active"] = "active",
     show_loops: bool = True,
     include_terminal: bool = False,
 ) -> list[Text]:
     """Render jobs → goal DAG → step DAG → loops as colored Rich Text rows.
 
     Jobs are shown newest-first (by ``created_at``) so the latest job sits at
-    the top of the forest. When ``show_steps`` is on, each goal's StepDAG is
-    listed in full (server already filtered which goals appear in mode=active).
+    the top of the forest. ``steps_mode=on`` lists each goal's full StepDAG;
+    ``active`` lists only active and pending steps.
     """
     raw_jobs = [j for j in (snapshot.get("jobs") or []) if isinstance(j, dict)]
     jobs = _sort_jobs_newest_first(raw_jobs)
@@ -1207,12 +1214,15 @@ def _format_top_forest(
             goal_loops = loops_by_goal.get(goal_id, [])
             child_ids = children.get(goal_id, [])
             steps_blob = (
-                node.get("steps") if show_steps and isinstance(node.get("steps"), dict) else None
+                node.get("steps")
+                if steps_mode != "off" and isinstance(node.get("steps"), dict)
+                else None
             )
             trailing = len(goal_loops) + len(child_ids)
             if steps_blob:
                 _format_step_list(
                     steps_blob,
+                    mode="active" if steps_mode == "active" else "on",
                     indent=child_indent,
                     lines=lines,
                     trailing_siblings=trailing,
@@ -1300,7 +1310,7 @@ def render_top_snapshot(
     else:
         body = _format_top_forest(
             snapshot,
-            show_steps=view.show_steps,
+            steps_mode=view.steps_mode,
             show_loops=view.show_loops,
             include_terminal=view.include_terminal,
         )
@@ -1311,7 +1321,7 @@ def render_top_snapshot(
             "q Quit",
             "h Help",
             f"a {'All' if not view.include_terminal else 'Active'}",
-            "s Steps",
+            "s Steps mode",
             "l Loops",
             "d Density",
             "+/- Delay",

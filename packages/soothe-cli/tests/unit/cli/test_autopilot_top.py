@@ -114,7 +114,7 @@ def test_format_tokens() -> None:
 
 def test_top_view_state_defaults() -> None:
     state = TopViewState()
-    assert state.show_steps is True
+    assert state.steps_mode == "active"
     assert state.show_loops is True
     assert state.interval == 2.0
     assert state.include_terminal is False
@@ -148,7 +148,7 @@ def test_render_top_empty() -> None:
     assert "(live)" in text
     assert "q Quit" in text
     assert "refresh 2s" in text
-    assert "steps=on" in text
+    assert "steps=active" in text
     assert "loops=on" in text
     assert "legend" not in text
     # Empty forest: no Steps row (only when steps_total > 0).
@@ -261,22 +261,27 @@ def test_render_top_sets_page_size() -> None:
 
 def test_apply_top_key_toggles() -> None:
     state = TopViewState()
-    assert state.show_steps is True and state.show_loops is True
+    assert state.steps_mode == "active" and state.show_loops is True
     assert state.interval == 2.0
     apply_top_key(state, "a")
     assert state.include_terminal is True
     assert state.force_refresh is True
     apply_top_key(state, "s")
-    assert state.show_steps is False
+    assert state.steps_mode == "on"
+    apply_top_key(state, "s")
+    assert state.steps_mode == "off"
+    apply_top_key(state, "s")
+    assert state.steps_mode == "active"
     apply_top_key(state, "l")
     assert state.show_loops is False
+    state.steps_mode = "off"
     # density from compact: steps-only → full → compact → steps-only
     apply_top_key(state, "d")
-    assert state.show_steps is True and state.show_loops is False
+    assert state.steps_mode == "on" and state.show_loops is False
     apply_top_key(state, "d")
-    assert state.show_steps is True and state.show_loops is True
+    assert state.steps_mode == "on" and state.show_loops is True
     apply_top_key(state, "d")
-    assert state.show_steps is False and state.show_loops is False
+    assert state.steps_mode == "off" and state.show_loops is False
     apply_top_key(state, "+")
     assert state.interval == 1.5
     apply_top_key(state, "q")
@@ -350,7 +355,7 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
                 }
             ],
         },
-        state=TopViewState(show_steps=True, show_loops=True, interval=2.5),
+        state=TopViewState(steps_mode="on", show_loops=True, interval=2.5),
     )
     text = rendered.plain
     # Patch elapsed by checking format with known now via direct helper
@@ -390,7 +395,7 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
 
 
 def test_render_top_hides_steps_and_loops() -> None:
-    state = TopViewState(show_steps=False, show_loops=False, interval=1.0)
+    state = TopViewState(steps_mode="off", show_loops=False, interval=1.0)
     text = _plain(
         {
             "running": True,
@@ -587,19 +592,59 @@ def test_render_top_steps_on_shows_full_stepdag_for_live_goals() -> None:
             }
         ],
     }
-    active = _plain(snap, state=TopViewState(include_terminal=False, show_steps=True))
+    active = _plain(snap, state=TopViewState(include_terminal=False, steps_mode="on"))
     assert "STEP [UZH-01]" in active
     assert "STEP [UZH-02]" in active
     assert "STEP [UZH-03]" in active
     assert "mode=active" in active
     assert "(live)" in active
 
-    all_mode = _plain(snap, state=TopViewState(include_terminal=True, show_steps=True))
+    all_mode = _plain(snap, state=TopViewState(include_terminal=True, steps_mode="on"))
     assert "STEP [UZH-01]" in all_mode
     assert "STEP [UZH-02]" in all_mode
     assert "STEP [UZH-03]" in all_mode
     assert "mode=all" in all_mode
     assert "(live)" not in all_mode
+
+
+def test_render_top_steps_active_shows_only_active_and_pending() -> None:
+    snap = {
+        "running": True,
+        "loop_pool": {"active": 1, "idle": 0, "max": 4},
+        "jobs": [
+            {
+                "id": "a1b2c3d4",
+                "status": "active",
+                "dag": {
+                    "root_id": "a1b2c3d4",
+                    "nodes": [
+                        {
+                            "id": "a1b2c3d4",
+                            "status": "active",
+                            "steps": {
+                                "nodes": [
+                                    {"id": "S-01", "status": "completed"},
+                                    {"id": "S-02", "status": "active"},
+                                    {"id": "S-03", "status": "pending"},
+                                    {"id": "S-04", "status": "failed"},
+                                ]
+                            },
+                        }
+                    ],
+                    "edges": [],
+                },
+                "loops": [],
+            }
+        ],
+    }
+
+    text = _plain(snap, state=TopViewState(steps_mode="active"))
+
+    assert "steps=active" in text
+    assert "STEP [S-02]" in text
+    assert "STEP [S-03]" in text
+    assert "STEP [S-01]" not in text
+    assert "STEP [S-04]" not in text
 
 
 def test_render_top_active_goal_all_completed_steps_still_listed() -> None:
@@ -655,7 +700,7 @@ def test_render_top_active_goal_all_completed_steps_still_listed() -> None:
                 }
             ],
         },
-        state=TopViewState(include_terminal=False, show_steps=True, show_loops=True),
+        state=TopViewState(include_terminal=False, steps_mode="on", show_loops=True),
     )
     assert "steps 2/2" in text
     assert "STEP [JNC-01] completed" in text
@@ -710,7 +755,7 @@ def test_render_top_shows_active_not_pending_for_running_work() -> None:
                 }
             ],
         },
-        state=TopViewState(show_steps=True, show_loops=True, interval=1.0),
+        state=TopViewState(steps_mode="on", show_loops=True, interval=1.0),
     )
     assert "JOB  [jobjobj1] active" in text
     assert "GOAL [jobjobj1] active" in text

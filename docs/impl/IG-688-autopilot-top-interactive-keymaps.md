@@ -39,7 +39,7 @@ remain out of scope.
 | Flag | Default | Key |
 |------|---------|-----|
 | `include_terminal` | `false` | `a` (also `--all`) |
-| `show_steps` | `false` | `s` (superseded default: IG-694 → `true`) |
+| `steps_mode` | `active` | `s` cycles on → off → active |
 | `show_loops` | `true` | `l` |
 | `interval` | `2.0` | `+` / `-` (also `--interval` / `-n`) |
 | `scroll` | `0` | `j`/`k`, arrows, `g`/`G` |
@@ -70,8 +70,9 @@ timeouts (cbreak/raw). Keys update view state and redraw immediately when
 possible; `Space` forces an RPC refresh.
 
 Footer shows live bindings + mode badges (`mode=active (live)|all`,
-`steps=on|off`, `loops=on|off`, `delay=Ns`). Active mode badge is emphasized
-green; `a` footer hint flips between All ↔ Active.
+`steps=on|off|active`, `loops=on|off`, `delay=Ns`). `s` cycles those step
+modes in order; `active` shows active and pending step rows only. Active goal
+mode is emphasized green; `a` footer hint flips between All ↔ Active.
 
 ### Keymap
 
@@ -80,7 +81,7 @@ green; `a` footer hint flips between All ↔ Active.
 | `q` / `Q` | Quit (Ctrl+C still works) |
 | `h` / `?` | Help overlay; any key dismisses |
 | `a` | Toggle all goals ↔ active-only |
-| `s` | Toggle StepDAG |
+| `s` | Cycle StepDAG: on → off → active |
 | `l` | Toggle loops |
 | `d` | Cycle density compact → steps → full |
 | `+` / `-` | Faster / slower refresh (clamp 0.2–10s) |
@@ -117,8 +118,8 @@ inactive loop history, Textual rewrite.
 
 - [x] `a` / `--all` shows terminal goals; default remains active-only
 - [x] `s` / `l` / `d` control StepDAG and loops without wire changes
-- [x] Default view: `show_steps=false`, `interval=2.0` (`--interval` / `-n`)
-  _(IG-694 flips default to `show_steps=true`)_
+- [x] Default view: `steps_mode=active`, `interval=2.0`
+  (`--interval` / `-n`)
 - [x] `q`/`h`/`+/-`/`Space`/scroll work in fullscreen Live
 - [x] Footer/help document bindings; no IG/RFC ids in user-visible strings
 - [x] Unit tests green; `./scripts/verify_finally.sh` green

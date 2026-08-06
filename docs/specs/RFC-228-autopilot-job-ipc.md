@@ -710,9 +710,10 @@ interval (CLI default 2.0s) and redraw. Existing `job_status` / `job_dag` /
 - Rich `Live` with alternate screen (`screen=True`) — full terminal like linux
   `top`; quit restores prior buffer (`q` or Ctrl+C).
 - Flag `--interval` / `-n` (default `2.0`); `--all` / `-a` seeds
-  `include_terminal`. Default view: StepDAG on, loops on (`s` / `l` / `d`);
-  `mode=active` unless `--all`.
-- Interactive keys (IG-688 / IG-694): `a` all/active, `s` steps, `l` loops,
+  `include_terminal`. Default view: active/pending StepDAG rows, loops on
+  (`s` / `l` / `d`); `mode=active` unless `--all`.
+- Interactive keys (IG-688 / IG-694): `a` all/active; `s` cycles StepDAG
+  visibility `on` → `off` → `active` (active/pending rows only); `l` loops,
   `d` density, `+/-` delay, `Space` refresh, vim scroll (`j`/`k`, `Ctrl-d/u`,
   `Ctrl-f/b`, `g`/`G`, PgUp/PgDn, Home/End), `h` help.
 - Render ASCII tree: job → goal DAG → flat planned step list → loops under
@@ -723,7 +724,7 @@ interval (CLI default 2.0s) and redraw. Existing `job_status` / `job_dag` /
   other autopilot CLI commands).
 
 See also IG-686 (job artifact dir `data/jobs/{job_id}/` vs assignment loops),
-IG-688 (interactive keymaps), and IG-694 (vim scroll + `steps=on` default).
+IG-688 (interactive keymaps), and IG-694 (vim scroll + visible-steps default).
 **Authz**: read-only; same as `job_status` / `job_dag` (any authenticated client).
 
 ## Security and Authorization

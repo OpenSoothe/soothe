@@ -11,8 +11,9 @@
 ## Executive Summary
 
 Polish `soothe autopilot top` scrolling to vim **view-mode** motions (page /
-half-page / Home / End), and flip the default StepDAG visibility to
-`steps=on` while keeping `mode=active`.
+half-page / Home / End), and keep StepDAG progress visible by default while
+keeping `mode=active`. The current default is `steps=active`, showing active
+and pending rows; `s` can select the full StepDAG.
 
 Stay on Rich `Live` (no Textual). Letter toggles from IG-688 stay as-is —
 paging uses Ctrl chords and physical keys so they do not fight `d` density
@@ -37,12 +38,12 @@ or `Space` refresh.
 | Flag | Default | Notes |
 |------|---------|-------|
 | `include_terminal` | `false` | `mode=active` (unchanged) |
-| `show_steps` | **`true`** | was `false` |
+| `steps_mode` | **`active`** | active and pending rows |
 | `show_loops` | `true` | unchanged |
 | `interval` | `2.0` | unchanged |
 | `page_size` | derived | visible body rows minus truncation line |
 
-`d` density still cycles: **full** (new default) → compact → steps-only → full.
+`d` density still cycles full → compact → steps-only → full.
 
 ### Scroll keymap (vim view-mode subset)
 
@@ -87,7 +88,7 @@ Pause/cancel, cursor expand, `gg` pending-state, Textual rewrite, wire changes.
 
 ## Acceptance
 
-- [x] Default header: `mode=active (live)`, `steps=on`, `loops=on`
+- [x] Default header: `mode=active (live)`, `steps=active`, `loops=on`
 - [x] `Ctrl-d/u/f/b`, `Ctrl-e/y`, PgUp/PgDn, Home/End scroll as above
 - [x] `d`/`s`/`l`/`Space` unchanged in meaning
 - [x] Help documents vim scroll bindings; no IG/RFC ids in UI strings
