@@ -1,7 +1,7 @@
 # IG-698: Autopilot `top` htop-Style Header Stats
 
 **Created**: 2026-08-06  
-**Status**: Implemented  
+**Status**: Implemented (header meter/status color polish: progress green vs util load)  
 **Related**: [IG-679](IG-679-autopilot-top-command.md),
 [IG-686](IG-686-autopilot-job-artifacts-and-top-polish.md),
 [IG-688](IG-688-autopilot-top-interactive-keymaps.md),
@@ -23,7 +23,10 @@ Goals, and Loops (plus Steps when present), plus oldest-job uptime.
   change). Counts match what the body shows (`mode=active` vs `mode=all`).
 - Header rows: title (state + clock + `up HH:MM:SS`) → Jobs / Goals / Loops
   meters → optional Steps → view flags → rule. Drop the separate legend line.
-- Meter fill color by utilization (green → yellow → red).
+- Meter fill: **util** (Jobs active, Loops pool) green → yellow → red under
+  load; **progress** (Goals when metering completed, Steps) yellow → green,
+  with full completion **bright green** (not util red).
+- Status counts: `done=` / `completed` uses bold green (readable success).
 - Pool line keeps `active/idle/max` and adds forest `assigned` loop count.
 
 ### Out of scope

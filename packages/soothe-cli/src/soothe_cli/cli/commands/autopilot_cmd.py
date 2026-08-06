@@ -50,17 +50,23 @@ _STYLE_TREE = "bright_black"
 _STYLE_META = "cyan"
 _STYLE_HEADER = "bold"
 _STYLE_DIM = "dim"
+# Shared status / meter accents (util load vs progress completion).
+_STYLE_ACTIVE = "bold bright_green"
+_STYLE_DONE = "bold green"
+_STYLE_WARN = "bold bright_yellow"
+_STYLE_HOT = "bold bright_red"
+_STYLE_LIVE_HINT = "dim green"
 _STATUS_STYLE: dict[str, str] = {
-    "active": "bold bright_green",
+    "active": _STYLE_ACTIVE,
     "pending": "yellow",
-    "completed": "dim green",
-    "failed": "bold bright_red",
+    "completed": _STYLE_DONE,
+    "failed": _STYLE_HOT,
     "cancelled": "dim red",
     "suspended": "bright_yellow",
     "blocked": "bright_yellow",
     "awaiting_clarification": "bright_yellow",
-    "skipped": "dim",
-    "running": "bold bright_green",
+    "skipped": _STYLE_DIM,
+    "running": _STYLE_ACTIVE,
     "stopped": "dim red",
 }
 
@@ -819,24 +825,39 @@ _TOP_STATUS_SHORT: dict[str, str] = {
 }
 
 
-def _meter_fill_style(ratio: float) -> str:
-    """htop-like meter color by utilization ratio."""
+def _meter_fill_style(ratio: float, *, kind: str = "util") -> str:
+    """Meter fill color: ``util`` (load pressure) or ``progress`` (completion)."""
+    if kind == "progress":
+        # High completion is success — opposite of util pressure coloring.
+        if ratio >= 1.0:
+            return _STYLE_ACTIVE
+        if ratio >= 0.55:
+            return _STYLE_DONE
+        if ratio > 0:
+            return _STYLE_WARN
+        return _STYLE_DIM
     if ratio >= 0.85:
-        return "bold bright_red"
+        return _STYLE_HOT
     if ratio >= 0.55:
-        return "bold bright_yellow"
-    return "bold bright_green"
+        return _STYLE_WARN
+    return _STYLE_ACTIVE
 
 
-def _meter_bar(used: int | float, total: int | float, *, width: int = 10) -> Text:
-    """Render a compact ``[████░░░░░░]`` utilization meter."""
+def _meter_bar(
+    used: int | float,
+    total: int | float,
+    *,
+    width: int = 10,
+    kind: str = "util",
+) -> Text:
+    """Render a compact ``[████░░░░░░]`` meter (util or progress semantics)."""
     bar_w = max(4, width)
     tot = float(total) if total else 0.0
     use = max(0.0, float(used))
     ratio = min(1.0, use / tot) if tot > 0 else 0.0
     filled = int(round(ratio * bar_w))
     filled = min(bar_w, max(0, filled))
-    style = _meter_fill_style(ratio)
+    style = _meter_fill_style(ratio, kind=kind)
     out = Text()
     out.append("[", style=_STYLE_DIM)
     if filled:
@@ -943,7 +964,7 @@ def _format_top_header(
     clock = datetime.now().strftime("%H:%M:%S")
     uptime = format_elapsed(stats.get("oldest_created_at"))
     mode = "all" if state.include_terminal else "active"
-    mode_style = _STYLE_META if state.include_terminal else "bold bright_green"
+    mode_style = _STYLE_META if state.include_terminal else _STYLE_ACTIVE
     steps_flag = "on" if state.show_steps else "off"
     loops_flag = "on" if state.show_loops else "off"
     rule = "─" * max(8, width)
@@ -973,10 +994,16 @@ def _format_top_header(
     goals_line.append("Goals  ", style=_STYLE_GOAL)
     # Prefer completion progress when any done; else active utilization.
     g_total = max(int(stats["goals_total"]), 1)
-    g_meter_used = (
-        stats["goals_completed"] if stats["goals_completed"] > 0 else stats["goals_active"]
+    goals_use_progress = int(stats["goals_completed"]) > 0
+    g_meter_used = stats["goals_completed"] if goals_use_progress else stats["goals_active"]
+    goals_line.append_text(
+        _meter_bar(
+            g_meter_used,
+            g_total,
+            width=meter_w,
+            kind="progress" if goals_use_progress else "util",
+        )
     )
-    goals_line.append_text(_meter_bar(g_meter_used, g_total, width=meter_w))
     goals_line.append(f"  {stats['goals_total']} total", style=_STYLE_META)
     _append_status_counts(goals_line, stats["goals_by_status"])
 
@@ -1004,7 +1031,7 @@ def _format_top_header(
     if steps_t > 0:
         steps_line = Text()
         steps_line.append("Steps  ", style=_STYLE_STEP)
-        steps_line.append_text(_meter_bar(steps_c, steps_t, width=meter_w))
+        steps_line.append_text(_meter_bar(steps_c, steps_t, width=meter_w, kind="progress"))
         steps_line.append(f"  {steps_c}/{steps_t} done", style=_STYLE_META)
         lines.append(steps_line)
 
@@ -1012,7 +1039,7 @@ def _format_top_header(
     flags.append("mode=", style=_STYLE_DIM)
     flags.append(mode, style=mode_style)
     if not state.include_terminal:
-        flags.append(" (live)", style="dim green")
+        flags.append(" (live)", style=_STYLE_LIVE_HINT)
     flags.append("  ")
     flags.append("steps=", style=_STYLE_DIM)
     flags.append(steps_flag, style=_STYLE_STEP if state.show_steps else _STYLE_DIM)
@@ -1268,7 +1295,7 @@ def render_top_snapshot(
             ("a ", _STYLE_DIM),
             (
                 "All" if not view.include_terminal else "Active",
-                "bold bright_green" if view.include_terminal else _STYLE_META,
+                _STYLE_ACTIVE if view.include_terminal else _STYLE_META,
             ),
             (" · ", _STYLE_TREE),
             ("s Steps", _STYLE_STEP if view.show_steps else _STYLE_DIM),

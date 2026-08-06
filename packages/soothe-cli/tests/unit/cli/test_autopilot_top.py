@@ -1,11 +1,19 @@
-"""Unit tests for autopilot top CLI rendering (IG-679 / IG-686 / IG-688 / IG-694)."""
+"""Unit tests for autopilot top CLI rendering (IG-679 / IG-686 / IG-688 / IG-694 / IG-698)."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
 from soothe_cli.cli.commands.autopilot_cmd import (
+    _STYLE_ACTIVE,
+    _STYLE_DIM,
+    _STYLE_DONE,
+    _STYLE_HOT,
+    _STYLE_WARN,
     TopViewState,
+    _format_top_header,
+    _meter_fill_style,
+    _status_style,
     aggregate_top_stats,
     apply_top_key,
     decode_top_csi,
@@ -17,6 +25,69 @@ from soothe_cli.cli.commands.autopilot_cmd import (
 
 def _plain(snapshot: dict, **kwargs: object) -> str:
     return render_top_snapshot(snapshot, **kwargs).plain  # type: ignore[arg-type]
+
+
+def test_meter_fill_style_util_vs_progress() -> None:
+    """Util meters redden under load; progress meters go green when complete."""
+    assert _meter_fill_style(1.0, kind="util") == _STYLE_HOT
+    assert _meter_fill_style(0.9, kind="util") == _STYLE_HOT
+    assert _meter_fill_style(0.6, kind="util") == _STYLE_WARN
+    assert _meter_fill_style(0.2, kind="util") == _STYLE_ACTIVE
+
+    assert _meter_fill_style(1.0, kind="progress") == _STYLE_ACTIVE
+    assert _meter_fill_style(0.9, kind="progress") == _STYLE_DONE
+    assert _meter_fill_style(0.6, kind="progress") == _STYLE_DONE
+    assert _meter_fill_style(0.2, kind="progress") == _STYLE_WARN
+    assert _meter_fill_style(0.0, kind="progress") == _STYLE_DIM
+
+
+def test_status_style_completed_is_green() -> None:
+    assert _status_style("completed") == _STYLE_DONE
+    assert _status_style("active") == _STYLE_ACTIVE
+    assert _status_style("failed") == _STYLE_HOT
+
+
+def test_render_top_all_goals_done_uses_progress_green() -> None:
+    """All-done Goals/Steps meters use progress green (not util red)."""
+    snapshot = {
+        "running": True,
+        "dreaming": False,
+        "loop_pool": {"active": 0, "idle": 4, "max": 4},
+        "jobs": [
+            {
+                "id": "donejob01",
+                "status": "completed",
+                "created_at": "2026-08-05T12:00:00+00:00",
+                "dag": {
+                    "nodes": [
+                        {
+                            "id": "g1",
+                            "status": "completed",
+                            "steps_completed": 2,
+                            "steps_total": 2,
+                        }
+                    ]
+                },
+                "loops": [],
+            }
+        ],
+    }
+    state = TopViewState(include_terminal=True)
+    header = _format_top_header(snapshot, state=state, width=80)
+    goals = next(line for line in header if line.plain.startswith("Goals"))
+    steps = next(line for line in header if line.plain.startswith("Steps"))
+    assert "done=1" in goals.plain
+    assert "2/2 done" in steps.plain
+    goals_fill = {
+        str(span.style) for span in goals.spans if "█" in goals.plain[span.start : span.end]
+    }
+    steps_fill = {
+        str(span.style) for span in steps.spans if "█" in steps.plain[span.start : span.end]
+    }
+    assert goals_fill == {_STYLE_ACTIVE}
+    assert steps_fill == {_STYLE_ACTIVE}
+    assert _STYLE_HOT not in {str(span.style) for span in goals.spans}
+    assert _STYLE_HOT not in {str(span.style) for span in steps.spans}
 
 
 def test_format_elapsed_hhmmss() -> None:
