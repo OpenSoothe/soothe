@@ -13,6 +13,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, BeforeValidator, Field, PrivateAttr, model_validator
 from soothe_sdk.protocols.planner import planner_outcome_text_preview
 
+from soothe.autopilot.dispatch.models import GoalEffect
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.sloop.utils.subagent_catalog import (  # noqa: F401
@@ -677,6 +678,12 @@ class PlanResult(BaseModel):
     decision: AgentDecision | None = None
     full_output: str | None = None
 
+    effects: list[GoalEffect] = Field(
+        default_factory=list,
+        max_length=50,
+        description="Domain-agnostic side-effect claims when status is done (IG-712)",
+    )
+
     require_goal_completion: bool = Field(default=False)
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
 
@@ -739,6 +746,14 @@ class StatusAssessment(BaseModel):
     """IG-589: explicit terminal readiness when status may be done."""
     gap_alignment: bool = True
     """IG-589: assess agrees with latest PlanGapAnalysis (structured self-report)."""
+    effects: list[GoalEffect] = Field(
+        default_factory=list,
+        max_length=8,
+        description=(
+            "When status=done: claimed side-effects (produce/mutate/observe/"
+            "communicate/decide). Empty when not done. Opaque refs — not host FS probes."
+        ),
+    )
 
 
 class GoalComponentStatus(BaseModel):

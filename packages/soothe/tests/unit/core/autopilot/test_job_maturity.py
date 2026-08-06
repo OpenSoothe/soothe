@@ -291,13 +291,31 @@ class TestTopMaturityField:
         assert entry["maturity"]["level"] == "scaffold"
 
 
-class TestPathTokens:
-    def test_extracts_non_coding_extensions(self) -> None:
-        from soothe.autopilot.dispatch.plan_contribution import extract_path_tokens
+class TestGoalEffectsHydration:
+    def test_bundle_appends_prior_effects(self) -> None:
+        from soothe.autopilot.dispatch.models import GoalDispatchContextBundle, GoalEffect
+        from soothe.protocols.runner import GoalDispatchEnvelope
+        from soothe.runner._runner_autopilot_worker import _goal_text_with_bundle
 
-        tokens = extract_path_tokens("wrote docs/paper.tex and plan/itinerary.pdf")
-        assert any(t.endswith("paper.tex") for t in tokens)
-        assert any(t.endswith("itinerary.pdf") for t in tokens)
+        job = GoalDispatchEnvelope(
+            goal_id="g1",
+            goal_description="do next step",
+            attempt=1,
+            merged_context=GoalDispatchContextBundle(
+                prior_effects=[
+                    GoalEffect(
+                        kind="decide",
+                        ref="answer",
+                        statement="Parent concluded X",
+                        goal_id_origin="p1",
+                    )
+                ]
+            ),
+        )
+        text = _goal_text_with_bundle(job)
+        assert "## Prior effects" in text
+        assert "Parent concluded X" in text
+        assert "[decide] answer:" in text
 
 
 class TestDagIdleEmission:

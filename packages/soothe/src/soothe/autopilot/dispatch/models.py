@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # RFC-204: Extended lifecycle states; RFC-622: + awaiting_clarification
 GoalStatus = Literal[
@@ -96,9 +96,11 @@ class BackoffDecision(BaseModel):
 
 
 _BUNDLE_DEFAULT_MAX_FINDINGS = 20
-_BUNDLE_DEFAULT_MAX_FILES = 50
+_BUNDLE_DEFAULT_MAX_EFFECTS = 50
 _BUNDLE_DEFAULT_MAX_PLAN_STEPS = 30
 _BUNDLE_DEFAULT_MAX_FINDING_CHARS = 2000
+
+GoalEffectKind = Literal["produce", "mutate", "observe", "communicate", "decide"]
 
 
 class PriorStepSummary(BaseModel):
@@ -111,13 +113,27 @@ class PriorStepSummary(BaseModel):
     goal_id_origin: str = Field(description="Goal that originally produced this step")
 
 
-class FileTouchSummary(BaseModel):
-    """One file touched by a parent goal — path + hash, never raw contents."""
+class GoalEffect(BaseModel):
+    """One claimed side-effect of a completed goal — domain-agnostic (IG-712).
 
-    content_hash: str = Field(description="Hash of the file contents at last touch")
-    last_op: Literal["read", "write", "edit", "delete"]
-    goal_id_origin: str
-    last_touched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    Opaque to the host: ``ref`` may be a path, URL, ticket id, channel, or
+    ``answer`` for narrative-only work. Never inferred from prose or the
+    filesystem; StrangeLoop emits these via structured assess output.
+    """
+
+    kind: GoalEffectKind
+    ref: str = Field(max_length=512, description="Opaque handle for the affected subject")
+    statement: str = Field(max_length=500, description="One-line claim about what happened")
+    digest: str | None = Field(
+        default=None,
+        max_length=128,
+        description="Optional version/hash when the domain has one",
+    )
+    confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+    goal_id_origin: str | None = Field(
+        default=None,
+        description="Parent goal id when projected into a successor bundle",
+    )
 
 
 class ParentFinding(BaseModel):
@@ -167,7 +183,7 @@ class GoalDispatchContextBundle(BaseModel):
     """
 
     prior_plan_steps: list[PriorStepSummary] = Field(default_factory=list)
-    files_touched: dict[str, FileTouchSummary] = Field(default_factory=dict)
+    prior_effects: list[GoalEffect] = Field(default_factory=list)
     findings: list[ParentFinding] = Field(default_factory=list)
     tool_call_summary: ToolCallStats = Field(default_factory=ToolCallStats)
     operator_guidance: list[str] = Field(
@@ -188,10 +204,10 @@ class GoalDispatchContextBundle(BaseModel):
                 f"max {_BUNDLE_DEFAULT_MAX_FINDINGS}"
             )
             raise ValueError(msg)
-        if len(self.files_touched) > _BUNDLE_DEFAULT_MAX_FILES:
+        if len(self.prior_effects) > _BUNDLE_DEFAULT_MAX_EFFECTS:
             msg = (
-                f"GoalDispatchContextBundle.files_touched ({len(self.files_touched)}) exceeds "
-                f"max {_BUNDLE_DEFAULT_MAX_FILES}"
+                f"GoalDispatchContextBundle.prior_effects ({len(self.prior_effects)}) exceeds "
+                f"max {_BUNDLE_DEFAULT_MAX_EFFECTS}"
             )
             raise ValueError(msg)
         if len(self.prior_plan_steps) > _BUNDLE_DEFAULT_MAX_PLAN_STEPS:
@@ -212,8 +228,10 @@ class GoalDispatchContextContribution(BaseModel):
     parents' contributions to build a successor's bundle.
     """
 
+    model_config = ConfigDict(extra="ignore")
+
     plan_steps_executed: list[StepSummary] = Field(default_factory=list)
-    files_touched: dict[str, FileTouchSummary] = Field(default_factory=dict)
+    effects: list[GoalEffect] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     tool_call_stats: ToolCallStats = Field(default_factory=ToolCallStats)
 
@@ -225,10 +243,10 @@ class GoalDispatchContextContribution(BaseModel):
                 f"max {_BUNDLE_DEFAULT_MAX_FINDINGS}"
             )
             raise ValueError(msg)
-        if len(self.files_touched) > _BUNDLE_DEFAULT_MAX_FILES:
+        if len(self.effects) > _BUNDLE_DEFAULT_MAX_EFFECTS:
             msg = (
-                f"GoalDispatchContextContribution.files_touched ({len(self.files_touched)}) "
-                f"exceeds max {_BUNDLE_DEFAULT_MAX_FILES}"
+                f"GoalDispatchContextContribution.effects ({len(self.effects)}) "
+                f"exceeds max {_BUNDLE_DEFAULT_MAX_EFFECTS}"
             )
             raise ValueError(msg)
         if len(self.plan_steps_executed) > _BUNDLE_DEFAULT_MAX_PLAN_STEPS:

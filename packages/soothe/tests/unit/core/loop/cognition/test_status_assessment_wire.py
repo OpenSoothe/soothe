@@ -71,6 +71,30 @@ def test_parses_tag_wrapped_yaml() -> None:
     assert assessment.goal_progress == "low"
 
 
+def test_coerces_effects_and_drops_invalid_items() -> None:
+    coerced = coerce_status_assessment_wire_dict(
+        {
+            "status": "done",
+            "goal_progress": "complete",
+            "effects": [
+                {
+                    "kind": "Decide",
+                    "ref": "answer",
+                    "statement": "Reached a conclusion",
+                    "confidence": 0.9,
+                },
+                {"kind": "bogus", "ref": "x", "statement": "nope"},
+                "not-a-dict",
+                {"kind": "mutate", "ref": "", "statement": "empty ref"},
+            ],
+        }
+    )
+    assessment = StatusAssessment(**coerced)
+    assert len(assessment.effects) == 1
+    assert assessment.effects[0].kind == "decide"
+    assert assessment.effects[0].ref == "answer"
+
+
 def test_parses_plain_json() -> None:
     parsed = parse_status_assessment_payload('{"status": "replan"}')
     assert parsed == {"status": "replan"}

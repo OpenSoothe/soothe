@@ -21,6 +21,13 @@ _MARKER_KEY = "status"
 _STATUS_VALUES: tuple[str, ...] = ("continue", "replan", "done")
 _PROGRESS_VALUES: tuple[str, ...] = ("none", "low", "medium", "high", "complete")
 _READINESS_VALUES: tuple[str, ...] = ("not_ready", "ready_with_gaps", "ready")
+_EFFECT_KINDS: tuple[str, ...] = (
+    "produce",
+    "mutate",
+    "observe",
+    "communicate",
+    "decide",
+)
 
 
 def _normalized_enum(value: Any, allowed: tuple[str, ...]) -> str | None:
@@ -61,6 +68,36 @@ def coerce_status_assessment_wire_dict(data: dict[str, Any]) -> dict[str, Any]:
 
     if "assessment_reasoning" in out and not isinstance(out["assessment_reasoning"], str):
         out["assessment_reasoning"] = str(out["assessment_reasoning"])
+
+    if "effects" in out:
+        raw_effects = out["effects"]
+        if not isinstance(raw_effects, list):
+            out.pop("effects")
+        else:
+            cleaned: list[dict[str, Any]] = []
+            for item in raw_effects[:8]:
+                if not isinstance(item, dict):
+                    continue
+                kind = _normalized_enum(item.get("kind"), _EFFECT_KINDS)
+                ref = item.get("ref")
+                statement = item.get("statement")
+                if kind is None or not isinstance(ref, str) or not isinstance(statement, str):
+                    continue
+                entry: dict[str, Any] = {
+                    "kind": kind,
+                    "ref": ref.strip()[:512],
+                    "statement": statement.strip()[:500],
+                }
+                if not entry["ref"] or not entry["statement"]:
+                    continue
+                digest = item.get("digest")
+                if isinstance(digest, str) and digest.strip():
+                    entry["digest"] = digest.strip()[:128]
+                conf = item.get("confidence")
+                if isinstance(conf, (int, float)) and 0.0 <= float(conf) <= 1.0:
+                    entry["confidence"] = float(conf)
+                cleaned.append(entry)
+            out["effects"] = cleaned
 
     return out
 

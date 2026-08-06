@@ -318,7 +318,7 @@ class ContextProjectionConfig(BaseModel):
 
     Args:
         max_findings: Max LLM-synthesized findings per bundle.
-        max_files: Max file touchpoints per bundle.
+        max_effects: Max GoalEffect claims per bundle (IG-712).
         max_plan_steps: Max prior plan steps per bundle.
         context_retention_hours: After a root goal reaches a terminal state,
             its DAG's contributions become evictable from the store this many
@@ -330,7 +330,7 @@ class ContextProjectionConfig(BaseModel):
     """
 
     max_findings: int = Field(default=20, ge=1, le=200)
-    max_files: int = Field(default=50, ge=1, le=500)
+    max_effects: int = Field(default=50, ge=1, le=500)
     max_plan_steps: int = Field(default=30, ge=1, le=300)
     context_retention_hours: int = Field(default=168, ge=1)
     max_context_entries: int = Field(default=1000, ge=0)

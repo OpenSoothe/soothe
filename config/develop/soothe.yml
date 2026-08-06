@@ -51,7 +51,7 @@ agent:
     goal_deadline_seconds: 1209600
     context_projection:
       max_findings: 20
-      max_files: 50
+      max_effects: 50
       max_plan_steps: 30
       context_retention_hours: 168
       max_context_entries: 1000

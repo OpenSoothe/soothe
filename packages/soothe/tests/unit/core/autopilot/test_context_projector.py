@@ -1,4 +1,4 @@
-"""Tests for ContextProjector (RFC-222 revised, RFC-625).
+"""Tests for ContextProjector (RFC-222 revised, RFC-625, IG-712).
 
 Covers linear chain, diamond join, fan-out, soft (informs) parents,
 recency-ordering, bound enforcement, and graceful handling of missing
@@ -12,9 +12,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from soothe.autopilot.dispatch.models import (
-    FileTouchSummary,
     Finding,
     GoalDispatchContextContribution,
+    GoalEffect,
+    GoalEffectKind,
     StepSummary,
     ToolCallStats,
 )
@@ -45,7 +46,7 @@ def _goal(
 
 def _contribution(
     *,
-    files: dict[str, str] | None = None,  # path → hash
+    effects: list[tuple[GoalEffectKind, str, str]] | None = None,  # (kind, ref, statement)
     findings: list[tuple[str, float]] | None = None,  # (summary, relevance)
     steps: list[tuple[str, str]] | None = None,  # (id, action)
     tool_counts: dict[str, int] | None = None,
@@ -55,10 +56,10 @@ def _contribution(
         plan_steps_executed=[
             StepSummary(id=sid, action=action, outcome="completed") for sid, action in (steps or [])
         ],
-        files_touched={
-            path: FileTouchSummary(content_hash=h, last_op="edit", goal_id_origin=origin)
-            for path, h in (files or {}).items()
-        },
+        effects=[
+            GoalEffect(kind=kind, ref=ref, statement=statement, goal_id_origin=origin)
+            for kind, ref, statement in (effects or [])
+        ],
         findings=[Finding(summary=s, relevance_score=r) for s, r in (findings or [])],
         tool_call_stats=ToolCallStats(counts_by_name=tool_counts or {}),
     )
@@ -79,7 +80,7 @@ class TestDegenerate:
         goal = _goal("g1")
         out = await proj.project(goal, {"g1": goal})
         assert out.findings == []
-        assert out.files_touched == {}
+        assert out.prior_effects == []
         assert out.prior_plan_steps == []
 
     @pytest.mark.asyncio
@@ -91,7 +92,7 @@ class TestDegenerate:
         goal = _goal("g1", depends_on=["p1"])
         out = await proj.project(goal, {"p1": parent, "g1": goal})
         assert out.findings == []
-        assert out.files_touched == {}
+        assert out.prior_effects == []
 
 
 # ---- DAG shapes --------------------------------------------------------
@@ -105,7 +106,7 @@ class TestLinearChain:
             "A",
             _contribution(
                 findings=[("a-finding", 0.9)],
-                files={"/x": "h1"},
+                effects=[("mutate", "/x", "edited /x")],
                 steps=[("S1", "do A")],
                 origin="A",
             ),
@@ -118,7 +119,9 @@ class TestLinearChain:
         assert len(out.findings) == 1
         assert out.findings[0].summary == "a-finding"
         assert out.findings[0].goal_id_origin == "A"
-        assert out.files_touched["/x"].content_hash == "h1"
+        assert len(out.prior_effects) == 1
+        assert out.prior_effects[0].ref == "/x"
+        assert out.prior_effects[0].goal_id_origin == "A"
         assert out.prior_plan_steps[0].id == "S1"
         assert out.prior_plan_steps[0].goal_id_origin == "A"
 
@@ -129,11 +132,19 @@ class TestDiamondJoin:
         store = InMemoryGoalDispatchContextStore()
         await store.put(
             "A",
-            _contribution(findings=[("from-A", 0.5)], files={"/a": "h-a"}, origin="A"),
+            _contribution(
+                findings=[("from-A", 0.5)],
+                effects=[("mutate", "/a", "touched a")],
+                origin="A",
+            ),
         )
         await store.put(
             "B",
-            _contribution(findings=[("from-B", 0.5)], files={"/b": "h-b"}, origin="B"),
+            _contribution(
+                findings=[("from-B", 0.5)],
+                effects=[("produce", "/b", "created b")],
+                origin="B",
+            ),
         )
         a = _goal("A", updated_offset_sec=10)
         b = _goal("B", updated_offset_sec=0)  # more recent
@@ -146,15 +157,20 @@ class TestDiamondJoin:
         summaries = {f.summary for f in out.findings}
         assert summaries == {"from-A", "from-B"}
 
-        # Both files appear (different paths, no conflict).
-        assert "/a" in out.files_touched
-        assert "/b" in out.files_touched
+        refs = {e.ref for e in out.prior_effects}
+        assert refs == {"/a", "/b"}
 
     @pytest.mark.asyncio
-    async def test_diamond_with_same_file_recency_wins(self) -> None:
+    async def test_diamond_with_same_ref_recency_wins(self) -> None:
         store = InMemoryGoalDispatchContextStore()
-        await store.put("OLD", _contribution(files={"/x": "old-h"}, origin="OLD"))
-        await store.put("NEW", _contribution(files={"/x": "new-h"}, origin="NEW"))
+        await store.put(
+            "OLD",
+            _contribution(effects=[("mutate", "/x", "old digest")], origin="OLD"),
+        )
+        await store.put(
+            "NEW",
+            _contribution(effects=[("mutate", "/x", "new digest")], origin="NEW"),
+        )
         old = _goal("OLD", updated_offset_sec=100)
         new = _goal("NEW", updated_offset_sec=0)
         g = _goal("G", depends_on=["OLD", "NEW"])
@@ -163,7 +179,9 @@ class TestDiamondJoin:
         out = await proj.project(g, {"OLD": old, "NEW": new, "G": g})
 
         # Most-recent parent wins.
-        assert out.files_touched["/x"].content_hash == "new-h"
+        assert len(out.prior_effects) == 1
+        assert out.prior_effects[0].statement == "new digest"
+        assert out.prior_effects[0].goal_id_origin == "NEW"
 
 
 class TestFanOut:
@@ -176,7 +194,7 @@ class TestFanOut:
             "P",
             _contribution(
                 findings=[("p-finding", 1.0)],
-                files={"/shared": "p-h"},
+                effects=[("mutate", "/shared", "shared edit")],
                 origin="P",
             ),
         )
@@ -191,7 +209,7 @@ class TestFanOut:
         for b in bundles:
             assert len(b.findings) == 1
             assert b.findings[0].summary == "p-finding"
-            assert b.files_touched["/shared"].content_hash == "p-h"
+            assert b.prior_effects[0].ref == "/shared"
 
 
 class TestSoftDeps:
@@ -250,18 +268,21 @@ class TestBounds:
         assert any(f.summary == most_recent_top for f in out.findings)
 
     @pytest.mark.asyncio
-    async def test_max_files_caps_dict(self) -> None:
+    async def test_max_effects_caps_list(self) -> None:
         store = InMemoryGoalDispatchContextStore()
         await store.put(
             "P",
-            _contribution(files={f"/p{i}": f"h{i}" for i in range(20)}, origin="P"),
+            _contribution(
+                effects=[("decide", f"ref-{i}", f"claim {i}") for i in range(20)],
+                origin="P",
+            ),
         )
         p = _goal("P")
         g = _goal("G", depends_on=["P"])
-        proj = ContextProjector(store, ContextProjectionConfig(max_files=5))
+        proj = ContextProjector(store, ContextProjectionConfig(max_effects=5))
         out = await proj.project(g, {"P": p, "G": g})
 
-        assert len(out.files_touched) == 5
+        assert len(out.prior_effects) == 5
 
     @pytest.mark.asyncio
     async def test_max_plan_steps_caps_list(self) -> None:

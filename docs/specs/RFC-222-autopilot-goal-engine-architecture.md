@@ -265,7 +265,7 @@ class GoalDispatchContextBundle(BaseModel):
     Bounded size — summaries, not raw transcripts.
     """
     prior_plan_steps: list[PriorStepSummary] = []
-    files_touched: dict[str, FileTouchSummary] = {}  # path → hash + last op
+    prior_effects: list[GoalEffect] = []  # domain-agnostic side-effect claims
     findings: list[ParentFinding] = []               # LLM-synthesized
     tool_call_summary: ToolCallStats = ToolCallStats()
     cached_system_prompt_hash: str | None = None     # for provider cache hit
@@ -284,10 +284,16 @@ What this goal's execution adds to the DAG's context pool:
 ```python
 class GoalDispatchContextContribution(BaseModel):
     plan_steps_executed: list[StepSummary]
-    files_touched: dict[str, FileTouchSummary]
+    effects: list[GoalEffect]  # StrangeLoop-emitted; opaque refs, not host FS probes
     findings: list[Finding]
     tool_call_stats: ToolCallStats
 ```
+
+`GoalEffect` (`kind`, `ref`, `statement`, optional `digest` / `confidence`) is
+domain-agnostic: coding paths, URLs, ticket ids, or `"answer"` for narrative-only
+goals. Host never infers effects from prose or the filesystem (IG-712). Effects
+are hydration/observability metadata only — never a consensus or maturity latch
+(IG-710 / IG-711 / RFC-230).
 
 Daemon stores it keyed by `goal_id` in `GoalDispatchContextStore` and feeds it to children via `ContextProjector`.
 
@@ -298,7 +304,7 @@ class ContextProjector:
     """Builds a GoalDispatchContextBundle from a goal's parents.
 
     Bounded — picks the K most relevant context elements rather than
-    blindly unioning. Relevance is heuristic (recency + files overlap
+    blindly unioning. Relevance is heuristic (recency + effect-ref overlap
     with the new goal's description) for v1; pluggable for future
     LLM-scored projection.
     """
@@ -307,7 +313,7 @@ class ContextProjector:
 ```
 
 Merge rules:
-- **Files**: dedup by path, latest hash wins
+- **Effects**: dedup by `ref`, latest parent wins (cap `max_effects`)
 - **Findings**: concatenate, truncate to top-K by relevance
 - **Plan steps**: union, prefer recent N
 - **Tool stats**: aggregate
@@ -631,7 +637,7 @@ agent:
     # Context projection (RFC-222 revised) — bounds GoalDispatchContextBundle size.
     context_projection:
       max_findings: 20
-      max_files: 50
+      max_effects: 50
       max_plan_steps: 30
       context_retention_hours: 168   # 1 week; per-root-goal eviction (Q3)
 
@@ -766,7 +772,7 @@ optional soak — these break job-status honesty):
 | Gap | Impact | Fix home |
 |-----|--------|----------|
 | Subgoals omit `parent.workspace` | Workers write under `~/.soothe/data/workspaces/anonymous/ws_*` while the job workspace is the client path; consensus rejects “wrong” paths | IG-680 P0-3; RFC-625 errata |
-| `GoalDispatchContextContribution.files_touched` empty | Consensus sees restated goal text → false `send_back` | IG-680 P0-4/P0-5; RFC-204 note |
+| `GoalDispatchContextContribution.effects` empty | Child hydration lacks prior side-effect claims (consensus still uses sloop response — IG-710) | IG-712; StrangeLoop assess emits effects when done |
 | DAG health auto-cancels umbrella roots | Job status `cancelled` despite workspace success | IG-680 P0-1; RFC-625 remove policy |
 | Flat `depends_on` after decompose | Test/review race implement | IG-680 P1; RFC-625 `wire_dependencies` |
 

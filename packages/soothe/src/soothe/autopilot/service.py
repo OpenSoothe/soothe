@@ -1492,7 +1492,9 @@ class AutopilotService:
                 completion_seen = True
                 self._goal_loop_token_cursor.pop(goal_id, None)
                 outcome = data.get("outcome", "failed")
-                contribution_dict = data.get("context_contribution") or {}
+                contribution_dict = dict(data.get("context_contribution") or {})
+                # Drop pre-IG-712 wire keys ignored by the current schema.
+                contribution_dict.pop("files_touched", None)
                 try:
                     contribution = GoalDispatchContextContribution.model_validate(contribution_dict)
                 except Exception:

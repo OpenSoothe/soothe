@@ -157,8 +157,11 @@ Host gathers **facts**; the LLM judges the contract:
 | Shallow workspace inventory | File/dir names only (capped) — no `cargo`/`pytest`/shell |
 | Latest QA/verify response | Optional StrangeLoop narrative from the trigger goal |
 
-Contribution helpers such as `plan_contribution.build_files_touched` remain
-**wire metadata only** — never a consensus or maturity latch (IG-710 / IG-711).
+Structured `GoalEffect` claims on the dispatch contribution / bundle
+(`PlanResult.effects` → contribution → projector `prior_effects`) remain
+**wire / hydration metadata only** — never a consensus or maturity latch
+(IG-710 / IG-711 / IG-712). Host must not infer effects from prose or the
+filesystem.
 
 ### 7.3 Structured LLM latch
 
@@ -295,3 +298,4 @@ Implementation tracking: **IG-692** (P0–P2), **IG-711** (LLM-primary latch).
   engine git/pytest hard-accept for rail jobs |
 | 2026-08-06 | Flip latch to LLM contract judgment (IG-711); remove coding probe registry
   as accept mechanism; domain-agnostic workspaces |
+| 2026-08-06 | Note GoalEffect wire metadata (IG-712); drop `build_files_touched` latch wording |

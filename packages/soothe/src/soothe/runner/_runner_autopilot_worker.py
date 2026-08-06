@@ -17,10 +17,10 @@ Phase B (this file) ships a minimal working implementation:
   ``PlanResult`` (no full context extraction yet — that's later phase work).
 - Maps ``PlanResult`` status to ``completed`` / ``failed`` / ``needs_replan``.
 
-IG-680 enriches contribution synthesis with files_touched extracted from
-PlanResult evidence / action text (hashed when present on disk).
 Wire ``evidence_summary`` is the StrangeLoop response for host consensus
 (IG-710) — prefer evidence_summary → full_output → completed steps.
+``PlanResult.effects`` are copied into the contribution as domain-agnostic
+side-effect claims (IG-712); the host never infers effects from prose/FS.
 """
 
 from __future__ import annotations
@@ -33,11 +33,11 @@ from soothe_sdk.protocols.planner import GoalDirective
 from soothe.autopilot.dispatch.models import (
     Finding,
     GoalDispatchContextContribution,
+    GoalEffect,
     StepSummary,
     ToolCallStats,
 )
 from soothe.autopilot.dispatch.plan_contribution import (
-    build_files_touched,
     decision_step_actions,
     synthesize_sloop_response,
 )
@@ -55,6 +55,7 @@ logger = logging.getLogger(__name__)
 
 
 _GOAL_COMPLETION_TYPE = "soothe.internal.autopilot.goal_completion"
+_MAX_PRIOR_EFFECTS_IN_GOAL_TEXT = 12
 
 
 class AutopilotWorkerMixin:
@@ -143,7 +144,7 @@ class AutopilotWorkerMixin:
 
         plan_result: PlanResult | None = None
         try:
-            goal_text = _goal_text_with_guidance(job)
+            goal_text = _goal_text_with_bundle(job)
             async for event_type, event_data in strange_loop.run_with_progress(
                 goal=goal_text,
                 thread_id=tid,
@@ -176,7 +177,6 @@ class AutopilotWorkerMixin:
                 plan_result=None,
                 directives=[],  # No directives on exception
                 error_text=f"{type(exc).__name__}: {exc}",
-                workspace=workspace,
             )
             return
 
@@ -191,7 +191,6 @@ class AutopilotWorkerMixin:
             outcome=outcome,
             plan_result=plan_result,
             directives=reflection_directives,
-            workspace=workspace,
         )
 
     # ---- helpers --------------------------------------------------------
@@ -235,13 +234,12 @@ class AutopilotWorkerMixin:
         plan_result: PlanResult | None,
         *,
         goal_id: str = "",
-        workspace: str | None = None,
     ) -> GoalDispatchContextContribution:
-        """Synthesize a contribution from the final ``PlanResult`` (IG-680).
+        """Synthesize a contribution from the final ``PlanResult``.
 
-        Extracts evidence summary as a finding, best-effort plan steps from
-        ``decision.steps``, and ``files_touched`` from path tokens in evidence
-        (hashed when the file exists under workspace).
+        Extracts evidence summary as a finding, plan steps from
+        ``decision.steps``, and passes through StrangeLoop ``effects``
+        (IG-712).
         """
         if plan_result is None:
             return GoalDispatchContextContribution()
@@ -275,17 +273,12 @@ class AutopilotWorkerMixin:
                 )
             )
 
-        files_touched = build_files_touched(
-            goal_id=goal_id or "unknown",
-            workspace=workspace,
-            evidence_summary=summary,
-            plan_result=plan_result,
-        )
+        effects = _effects_from_plan_result(plan_result, goal_id=goal_id or "unknown")
 
         return GoalDispatchContextContribution(
             plan_steps_executed=plan_steps,
             findings=findings,
-            files_touched=files_touched,
+            effects=effects,
             tool_call_stats=ToolCallStats(counts_by_name=tool_counts),
         )
 
@@ -297,7 +290,6 @@ class AutopilotWorkerMixin:
         plan_result: PlanResult | None,
         directives: list[GoalDirective] = [],
         error_text: str | None = None,
-        workspace: str | None = None,
     ) -> StreamChunk:
         """Build the single terminal ``GoalCompletionChunk`` for ``job``.
 
@@ -308,7 +300,6 @@ class AutopilotWorkerMixin:
         contribution = self._build_contribution(
             plan_result,
             goal_id=job.goal_id,
-            workspace=workspace,
         )
         payload: dict[str, Any] = {
             "type": _GOAL_COMPLETION_TYPE,
@@ -324,6 +315,27 @@ class AutopilotWorkerMixin:
         if error_text is not None:
             payload["error_text"] = error_text
         return _custom(payload)
+
+
+def _effects_from_plan_result(plan_result: PlanResult, *, goal_id: str) -> list[GoalEffect]:
+    """Copy StrangeLoop effects onto the contribution, tagging origin."""
+    raw = getattr(plan_result, "effects", None)
+    if not isinstance(raw, list):
+        return []
+    out: list[GoalEffect] = []
+    for item in raw[:50]:
+        if isinstance(item, GoalEffect):
+            out.append(item.model_copy(update={"goal_id_origin": item.goal_id_origin or goal_id}))
+            continue
+        if isinstance(item, dict):
+            try:
+                effect = GoalEffect.model_validate(item)
+            except Exception:
+                continue
+            out.append(
+                effect.model_copy(update={"goal_id_origin": effect.goal_id_origin or goal_id})
+            )
+    return out
 
 
 def _extract_reflection_directives(plan_result: PlanResult | None) -> list[GoalDirective]:
@@ -355,11 +367,26 @@ def _extract_reflection_directives(plan_result: PlanResult | None) -> list[GoalD
     return []
 
 
-def _goal_text_with_guidance(job: GoalDispatchEnvelope) -> str:
-    """Append operator guidance from the dispatch bundle onto the goal text."""
+def _goal_text_with_bundle(job: GoalDispatchEnvelope) -> str:
+    """Append operator guidance and prior effects from the dispatch bundle."""
     base = job.goal_description
+    sections: list[str] = []
+
     guidance = list(getattr(job.merged_context, "operator_guidance", None) or [])
-    if not guidance:
+    if guidance:
+        lines = "\n".join(f"- {g}" for g in guidance)
+        sections.append(f"## Operator guidance\n{lines}")
+
+    effects = list(getattr(job.merged_context, "prior_effects", None) or [])
+    if effects:
+        lines_e: list[str] = []
+        for effect in effects[:_MAX_PRIOR_EFFECTS_IN_GOAL_TEXT]:
+            kind = getattr(effect, "kind", "decide")
+            ref = getattr(effect, "ref", "")
+            statement = getattr(effect, "statement", "")
+            lines_e.append(f"- [{kind}] {ref}: {statement}")
+        sections.append("## Prior effects\n" + "\n".join(lines_e))
+
+    if not sections:
         return base
-    lines = "\n".join(f"- {g}" for g in guidance)
-    return f"{base}\n\n## Operator guidance\n{lines}"
+    return base + "\n\n" + "\n\n".join(sections)

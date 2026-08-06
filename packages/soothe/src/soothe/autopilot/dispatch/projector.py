@@ -8,7 +8,7 @@ configured in ``ContextProjectionConfig``.
 Relevance heuristic (v1, per RFC-222 Q2):
 - Findings: rank by ``relevance_score * recency_weight`` where recency_weight
   decays the older the parent goal was. Take top-K.
-- Files: dedup by path; latest hash wins.
+- Effects: dedup by ``ref``; latest parent wins (IG-712).
 - Plan steps: union, prefer most recent N by parent ``updated_at``.
 - Tool stats: simple counter union.
 
@@ -22,12 +22,12 @@ from typing import TYPE_CHECKING
 
 from soothe.autopilot.dispatch.models import (
     GoalDispatchContextBundle,
+    GoalEffect,
     ParentFinding,
 )
 
 if TYPE_CHECKING:
     from soothe.autopilot.dispatch.models import (
-        FileTouchSummary,
         GoalDispatchContextContribution,
         PriorStepSummary,
         ToolCallStats,
@@ -47,7 +47,7 @@ class ContextProjector:
 
     Args:
         store: Store of per-goal contributions.
-        config: Limits on bundle size (max_findings / max_files / max_plan_steps).
+        config: Limits on bundle size (max_findings / max_effects / max_plan_steps).
     """
 
     def __init__(
@@ -89,7 +89,7 @@ class ContextProjector:
 
         return GoalDispatchContextBundle(
             prior_plan_steps=self._merge_plan_steps(ordered_pairs),
-            files_touched=self._merge_files(ordered_pairs),
+            prior_effects=self._merge_effects(ordered_pairs),
             findings=self._merge_findings(ordered_pairs),
             tool_call_summary=self._merge_tool_stats(ordered_pairs),
         )
@@ -136,18 +136,30 @@ class ContextProjector:
                 break
         return merged[: self._config.max_plan_steps]
 
-    def _merge_files(
+    def _merge_effects(
         self,
         ordered_pairs: list[tuple[str, GoalDispatchContextContribution]],
-    ) -> dict[str, FileTouchSummary]:
-        """Dedup files by path. Latest contribution wins (recency-ordered)."""
-        merged: dict[str, FileTouchSummary] = {}
-        for _, contribution in ordered_pairs:
-            for path, summary in contribution.files_touched.items():
-                if path in merged:
-                    continue  # already taken by a more-recent parent
-                merged[path] = summary
-                if len(merged) >= self._config.max_files:
+    ) -> list[GoalEffect]:
+        """Dedup effects by ref. Latest contribution wins (recency-ordered)."""
+        merged: list[GoalEffect] = []
+        seen_refs: set[str] = set()
+        for parent_id, contribution in ordered_pairs:
+            for effect in contribution.effects:
+                ref = (effect.ref or "").strip()
+                if not ref or ref in seen_refs:
+                    continue
+                seen_refs.add(ref)
+                merged.append(
+                    GoalEffect(
+                        kind=effect.kind,
+                        ref=ref,
+                        statement=effect.statement,
+                        digest=effect.digest,
+                        confidence=effect.confidence,
+                        goal_id_origin=parent_id,
+                    )
+                )
+                if len(merged) >= self._config.max_effects:
                     return merged
         return merged
 

@@ -427,6 +427,7 @@ async def _route_goal_completion_if_terminal(
         next_action=next_action,
         require_goal_completion=require_completion,
         full_output=last_ledger_ai_content(state) or None,
+        effects=list(assessment.effects or [])[:50],
     )
     plan_result = strange_loop.plan_phase.finalize_plan_result(
         state=state,

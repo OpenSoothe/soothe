@@ -430,23 +430,29 @@ class TestNeedsReplanOutcome:
 
         assert AutopilotWorkerMixin._derive_outcome(None) == "needs_replan"
 
-    def test_build_contribution_with_files(self, tmp_path: Path) -> None:
+    def test_build_contribution_passes_effects(self) -> None:
+        from soothe.autopilot.dispatch.models import GoalEffect
         from soothe.runner._runner_autopilot_worker import AutopilotWorkerMixin
         from soothe.sloop.state.schemas import PlanResult
 
-        target = tmp_path / "util.py"
-        target.write_text("x=1\n", encoding="utf-8")
         pr = PlanResult(
             status="done",
-            evidence_summary=f"wrote {target}",
+            evidence_summary="answered the research question",
             goal_progress="complete",
+            effects=[
+                GoalEffect(
+                    kind="decide",
+                    ref="answer",
+                    statement="Synthesized a domain-agnostic answer",
+                )
+            ],
         )
-        contrib = AutopilotWorkerMixin._build_contribution(
-            pr, goal_id="g1", workspace=str(tmp_path)
-        )
+        contrib = AutopilotWorkerMixin._build_contribution(pr, goal_id="g1")
         assert isinstance(contrib, GoalDispatchContextContribution)
         assert contrib.findings
-        assert any(str(target) in k or "util.py" in k for k in contrib.files_touched)
+        assert len(contrib.effects) == 1
+        assert contrib.effects[0].ref == "answer"
+        assert contrib.effects[0].goal_id_origin == "g1"
 
 
 class TestFollowUpSource:

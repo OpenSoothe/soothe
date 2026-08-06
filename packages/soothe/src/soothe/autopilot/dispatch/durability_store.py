@@ -49,8 +49,10 @@ class DurabilityGoalDispatchContextStore:
         contrib = raw.get("contribution")
         if not isinstance(contrib, dict):
             return None
+        payload = dict(contrib)
+        payload.pop("files_touched", None)
         try:
-            return GoalDispatchContextContribution.model_validate(contrib)
+            return GoalDispatchContextContribution.model_validate(payload)
         except Exception:
             logger.debug("Invalid stored contribution for goal %s", goal_id, exc_info=True)
             return None

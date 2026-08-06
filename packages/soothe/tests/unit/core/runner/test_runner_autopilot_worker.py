@@ -43,6 +43,7 @@ def _plan_result(*, is_done: bool, status: str = "complete") -> PlanResult:
     pr.evidence_summary = "summary text"
     pr.full_output = None
     pr.decision = None
+    pr.effects = []
     return pr
 
 

@@ -7,6 +7,8 @@ from soothe.autopilot.dispatch.models import (
     Finding,
     GoalDispatchContextBundle,
     GoalDispatchContextContribution,
+    GoalEffect,
+    GoalEffectKind,
 )
 from soothe.autopilot.dispatch.projector import ContextProjector
 from soothe.autopilot.dispatch.store import (
@@ -23,5 +25,7 @@ __all__ = [
     "GoalDispatchContextBundle",
     "GoalDispatchContextContribution",
     "GoalDispatchContextStoreProtocol",
+    "GoalEffect",
+    "GoalEffectKind",
     "InMemoryGoalDispatchContextStore",
 ]

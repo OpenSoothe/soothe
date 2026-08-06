@@ -3,7 +3,7 @@ Judge **current** goal (GOAL:) progress via execute ledger and optional PRIOR PR
 GOAL: completely — do not mark done/complete until every part is resolved in the ledger.
 
 Output: status, goal_progress, assessment_reasoning, require_goal_completion,
-terminal_readiness, gap_alignment.
+terminal_readiness, gap_alignment, effects.
 
 **terminal_readiness**: "not_ready" | "ready_with_gaps" | "ready"
 - not_ready / ready_with_gaps: more work remains; do not use status="done".
@@ -23,6 +23,13 @@ done/complete while gap shows open components or distance not at_goal.
 
 **require_goal_completion**: true only when status="done" but the user still needs a separate
 synthesis pass; else false.
+
+**effects** (only when status="done"; else empty list): up to 8 claimed side-effects.
+Each item: kind, ref, statement; optional digest/confidence.
+- kind: "produce" | "mutate" | "observe" | "communicate" | "decide"
+- ref: opaque handle (path, URL, ticket id, channel, or "answer" for narrative-only)
+- statement: one-line claim about what happened to ref
+Do not invent filesystem probes; only claim effects supported by ledger evidence.
 
 **assessment_reasoning** (≤2 sentences, ≤500 chars): First-person plan-reason card
 ("I see…", "I'll continue because…"). No third-person or schema jargon.

@@ -47,7 +47,7 @@ class _FakeRunner:
                 "attempt": request.autopilot_job.attempt,
                 "context_contribution": {
                     "plan_steps_executed": [],
-                    "files_touched": {},
+                    "effects": [],
                     "findings": [],
                     "tool_call_stats": {"counts_by_name": {}, "failures_by_name": {}},
                 },

@@ -24,7 +24,7 @@ LLM contract judgment over an evidence pack.
       optional QA response
 - [x] Wire `_consensus_model` from `AutopilotService._maybe_assess_job_maturity`
 - [x] Fail closed when model missing or LLM fails (no invent-accept)
-- [x] Broaden `plan_contribution` path tokens (metadata only; not a latch)
+- [x] Structured `GoalEffect` claims supersede path-token file heuristics (IG-712)
 - [x] Revise RFC-230 (LLM-primary); note IG-710 probe wording superseded
 - [x] Unit tests for LLM mock accept/reject/missing model
 
@@ -33,7 +33,7 @@ LLM contract judgment over an evidence pack.
 1. Per-goal consensus stays goal text + sloop response (IG-710) — unchanged.
 2. Job latch is **only** `MaturityAssessmentVerdict.acceptance_met`.
 3. No language toolchain runners in the maturity module.
-4. `plan_contribution.build_files_touched` remains wire contribution metadata.
+4. Structured `GoalEffect` claims (IG-712) remain wire / hydration metadata only.
 
 ## Out of scope
 
