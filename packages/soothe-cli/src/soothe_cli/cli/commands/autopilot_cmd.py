@@ -541,23 +541,29 @@ def format_elapsed(started_at: Any, *, now: Any | None = None) -> str:
     return f"{hours:02d}:{mins:02d}:{secs:02d}"
 
 
-def _job_created_sort_key(job: dict) -> tuple[float, str]:
-    """Newest ``created_at`` first; missing timestamps sort last."""
+def _created_at_timestamp(raw: Any) -> float | None:
+    """Parse a job ``created_at`` to epoch seconds, or ``None`` if invalid."""
     from datetime import UTC, datetime
 
-    raw = job.get("created_at")
-    ts = float("-inf")
+    if raw in (None, ""):
+        return None
     if isinstance(raw, datetime):
         start = raw if raw.tzinfo is not None else raw.replace(tzinfo=UTC)
-        ts = start.timestamp()
-    elif raw not in (None, ""):
-        try:
-            start = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-            if start.tzinfo is None:
-                start = start.replace(tzinfo=UTC)
-            ts = start.timestamp()
-        except (TypeError, ValueError):
-            ts = float("-inf")
+        return start.timestamp()
+    try:
+        start = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=UTC)
+    return start.timestamp()
+
+
+def _job_created_sort_key(job: dict) -> tuple[float, str]:
+    """Newest ``created_at`` first; missing timestamps sort last."""
+    ts = _created_at_timestamp(job.get("created_at"))
+    if ts is None:
+        ts = float("-inf")
     return (-ts, str(job.get("id") or ""))
 
 
@@ -568,7 +574,7 @@ def _sort_jobs_newest_first(jobs: list[dict]) -> list[dict]:
 
 @dataclass
 class TopViewState:
-    """Interactive view flags for autopilot top (IG-688 / IG-694)."""
+    """Interactive view flags for autopilot top (IG-688 / IG-694 / IG-698)."""
 
     include_terminal: bool = False
     show_steps: bool = True
@@ -776,28 +782,153 @@ def _text_line(*parts: tuple[str, str | None]) -> Text:
     return line
 
 
+# Preferred status order in htop-style count breakdowns.
+_TOP_STATUS_ORDER: tuple[str, ...] = (
+    "active",
+    "pending",
+    "blocked",
+    "awaiting_clarification",
+    "suspended",
+    "completed",
+    "failed",
+    "cancelled",
+    "skipped",
+)
+_TOP_STATUS_SHORT: dict[str, str] = {
+    "awaiting_clarification": "await",
+    "completed": "done",
+}
+
+
+def _meter_fill_style(ratio: float) -> str:
+    """htop-like meter color by utilization ratio."""
+    if ratio >= 0.85:
+        return "bold bright_red"
+    if ratio >= 0.55:
+        return "bold bright_yellow"
+    return "bold bright_green"
+
+
+def _meter_bar(used: int | float, total: int | float, *, width: int = 10) -> Text:
+    """Render a compact ``[████░░░░░░]`` utilization meter."""
+    bar_w = max(4, width)
+    tot = float(total) if total else 0.0
+    use = max(0.0, float(used))
+    ratio = min(1.0, use / tot) if tot > 0 else 0.0
+    filled = int(round(ratio * bar_w))
+    filled = min(bar_w, max(0, filled))
+    style = _meter_fill_style(ratio)
+    out = Text()
+    out.append("[", style=_STYLE_DIM)
+    if filled:
+        out.append("█" * filled, style=style)
+    empty = bar_w - filled
+    if empty:
+        out.append("░" * empty, style=_STYLE_DIM)
+    out.append("]", style=_STYLE_DIM)
+    return out
+
+
+def _short_status_label(status: str) -> str:
+    """Compact status label for header count rows."""
+    key = str(status).lower()
+    return _TOP_STATUS_SHORT.get(key, key)
+
+
+def _append_status_counts(line: Text, counts: Counter[str]) -> None:
+    """Append ``status=N`` segments in preferred order, then leftovers."""
+    seen: set[str] = set()
+    for key in _TOP_STATUS_ORDER:
+        n = int(counts.get(key, 0))
+        if n <= 0:
+            continue
+        seen.add(key)
+        line.append("  ")
+        line.append(f"{_short_status_label(key)}=", style=_STYLE_DIM)
+        line.append(str(n), style=_status_style(key))
+    for key, n in sorted(counts.items()):
+        if key in seen or int(n) <= 0:
+            continue
+        line.append("  ")
+        line.append(f"{_short_status_label(key)}=", style=_STYLE_DIM)
+        line.append(str(n), style=_status_style(key))
+
+
+def aggregate_top_stats(snapshot: dict) -> dict[str, Any]:
+    """Aggregate Jobs/Goals/Loops/Steps counts from an ``autopilot_top`` snapshot.
+
+    Counts reflect the forest currently in the payload (filtered when
+    ``mode=active``). Pool fields come from ``loop_pool``.
+    """
+    jobs_raw = [j for j in (snapshot.get("jobs") or []) if isinstance(j, dict)]
+    job_counts: Counter[str] = Counter()
+    goal_counts: Counter[str] = Counter()
+    loop_assigned = 0
+    steps_completed = 0
+    steps_total = 0
+    oldest_created: Any = None
+    oldest_ts: float | None = None
+
+    for job in jobs_raw:
+        jstat = str(job.get("status") or "pending").lower()
+        job_counts[jstat] += 1
+        created = job.get("created_at")
+        ts = _created_at_timestamp(created)
+        if ts is not None and (oldest_ts is None or ts < oldest_ts):
+            oldest_ts = ts
+            oldest_created = created
+
+        dag = job.get("dag") if isinstance(job.get("dag"), dict) else {}
+        for node in dag.get("nodes") or []:
+            if not isinstance(node, dict):
+                continue
+            goal_counts[str(node.get("status") or "pending").lower()] += 1
+            steps_completed += int(node.get("steps_completed") or 0)
+            steps_total += int(node.get("steps_total") or 0)
+
+        for entry in job.get("loops") or []:
+            if isinstance(entry, dict):
+                loop_assigned += 1
+
+    pool = snapshot.get("loop_pool") if isinstance(snapshot.get("loop_pool"), dict) else {}
+    return {
+        "jobs_total": sum(job_counts.values()),
+        "jobs_by_status": job_counts,
+        "jobs_active": int(job_counts.get("active", 0)),
+        "goals_total": sum(goal_counts.values()),
+        "goals_by_status": goal_counts,
+        "goals_active": int(goal_counts.get("active", 0)),
+        "goals_completed": int(goal_counts.get("completed", 0)),
+        "loop_pool_active": int(pool.get("active") or 0),
+        "loop_pool_idle": int(pool.get("idle") or 0),
+        "loop_pool_max": pool.get("max", "?"),
+        "loops_assigned": loop_assigned,
+        "steps_completed": steps_completed,
+        "steps_total": steps_total,
+        "oldest_created_at": oldest_created,
+    }
+
+
 def _format_top_header(
     snapshot: dict,
     *,
     state: TopViewState,
     width: int = 72,
 ) -> list[Text]:
-    """Build header lines for autopilot top (Rich Text rows)."""
+    """Build htop-style header lines for autopilot top (Rich Text rows)."""
     from datetime import datetime
 
+    stats = aggregate_top_stats(snapshot)
     running = "running" if snapshot.get("running") else "stopped"
     dreaming = bool(snapshot.get("dreaming"))
-    pool = snapshot.get("loop_pool") if isinstance(snapshot.get("loop_pool"), dict) else {}
-    active = pool.get("active", 0)
-    idle = pool.get("idle", 0)
-    max_loops = pool.get("max", "?")
-    jobs = snapshot.get("jobs") or []
     clock = datetime.now().strftime("%H:%M:%S")
+    uptime = format_elapsed(stats.get("oldest_created_at"))
     mode = "all" if state.include_terminal else "active"
     mode_style = _STYLE_META if state.include_terminal else "bold bright_green"
-    steps = "on" if state.show_steps else "off"
-    loops = "on" if state.show_loops else "off"
+    steps_flag = "on" if state.show_steps else "off"
+    loops_flag = "on" if state.show_loops else "off"
     rule = "─" * max(8, width)
+    meter_w = 10 if width >= 60 else 6
 
     title = Text()
     title.append("Autopilot top", style=_STYLE_HEADER)
@@ -806,11 +937,57 @@ def _format_top_header(
     if dreaming:
         title.append(" · ", style=_STYLE_TREE)
         title.append("dreaming", style="bright_yellow")
-    title.append(" · ", style=_STYLE_TREE)
-    title.append(f"pool {active}/{idle}/{max_loops}", style=_STYLE_META)
-    title.append(" (active/idle/max) · ", style=_STYLE_TREE)
-    title.append(f"{len(jobs)} job(s)", style=_STYLE_JOB)
     title.append(f" · {clock}", style=_STYLE_TREE)
+    if uptime:
+        title.append(" · up ", style=_STYLE_TREE)
+        title.append(uptime, style=_STYLE_META)
+
+    jobs_line = Text()
+    jobs_line.append("Jobs   ", style=_STYLE_JOB)
+    jobs_line.append_text(
+        _meter_bar(stats["jobs_active"], max(stats["jobs_total"], 1), width=meter_w)
+    )
+    jobs_line.append(f"  {stats['jobs_total']} total", style=_STYLE_META)
+    _append_status_counts(jobs_line, stats["jobs_by_status"])
+
+    goals_line = Text()
+    goals_line.append("Goals  ", style=_STYLE_GOAL)
+    # Prefer completion progress when any done; else active utilization.
+    g_total = max(int(stats["goals_total"]), 1)
+    g_meter_used = (
+        stats["goals_completed"] if stats["goals_completed"] > 0 else stats["goals_active"]
+    )
+    goals_line.append_text(_meter_bar(g_meter_used, g_total, width=meter_w))
+    goals_line.append(f"  {stats['goals_total']} total", style=_STYLE_META)
+    _append_status_counts(goals_line, stats["goals_by_status"])
+
+    pool_active = int(stats["loop_pool_active"])
+    pool_idle = int(stats["loop_pool_idle"])
+    pool_max = stats["loop_pool_max"]
+    try:
+        pool_max_n = int(pool_max)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        pool_max_n = 0
+    loops_line = Text()
+    loops_line.append("Loops  ", style=_STYLE_LOOP)
+    loops_line.append_text(_meter_bar(pool_active, max(pool_max_n, 1), width=meter_w))
+    loops_line.append(
+        f"  {pool_active}/{pool_idle}/{pool_max}",
+        style=_STYLE_META,
+    )
+    loops_line.append(" (active/idle/max)", style=_STYLE_DIM)
+    loops_line.append(f"  · {stats['loops_assigned']} assigned", style=_STYLE_META)
+
+    lines: list[Text] = [title, jobs_line, goals_line, loops_line]
+
+    steps_c = int(stats["steps_completed"])
+    steps_t = int(stats["steps_total"])
+    if steps_t > 0:
+        steps_line = Text()
+        steps_line.append("Steps  ", style=_STYLE_STEP)
+        steps_line.append_text(_meter_bar(steps_c, steps_t, width=meter_w))
+        steps_line.append(f"  {steps_c}/{steps_t} done", style=_STYLE_META)
+        lines.append(steps_line)
 
     flags = Text()
     flags.append("mode=", style=_STYLE_DIM)
@@ -819,25 +996,16 @@ def _format_top_header(
         flags.append(" (live)", style="dim green")
     flags.append("  ")
     flags.append("steps=", style=_STYLE_DIM)
-    flags.append(steps, style=_STYLE_STEP if state.show_steps else _STYLE_DIM)
+    flags.append(steps_flag, style=_STYLE_STEP if state.show_steps else _STYLE_DIM)
     flags.append("  ")
     flags.append("loops=", style=_STYLE_DIM)
-    flags.append(loops, style=_STYLE_LOOP if state.show_loops else _STYLE_DIM)
+    flags.append(loops_flag, style=_STYLE_LOOP if state.show_loops else _STYLE_DIM)
     flags.append("  ")
     flags.append("delay=", style=_STYLE_DIM)
     flags.append(f"{state.interval:g}s", style=_STYLE_META)
-
-    legend = Text()
-    legend.append("legend  ", style=_STYLE_DIM)
-    legend.append("JOB", style=_STYLE_JOB)
-    legend.append("  ")
-    legend.append("GOAL", style=_STYLE_GOAL)
-    legend.append("  ")
-    legend.append("STEP", style=_STYLE_STEP)
-    legend.append("  ")
-    legend.append("LOOP", style=_STYLE_LOOP)
-
-    return [title, flags, legend, Text(rule, style=_STYLE_TREE)]
+    lines.append(flags)
+    lines.append(Text(rule, style=_STYLE_TREE))
+    return lines
 
 
 def _format_step_list(

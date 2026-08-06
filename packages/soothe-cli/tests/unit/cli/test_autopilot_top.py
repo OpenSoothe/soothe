@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from soothe_cli.cli.commands.autopilot_cmd import (
     TopViewState,
+    aggregate_top_stats,
     apply_top_key,
     decode_top_csi,
     format_elapsed,
@@ -45,15 +46,72 @@ def test_render_top_empty() -> None:
         interval=2.0,
     )
     assert "No active jobs." in text
-    assert "pool 0/0/4" in text
+    assert "Jobs" in text and "0 total" in text
+    assert "Goals" in text
+    assert "Loops" in text
+    assert "0/0/4" in text
+    assert "(active/idle/max)" in text
+    assert "0 assigned" in text
     assert "mode=active" in text
     assert "(live)" in text
     assert "q Quit" in text
     assert "refresh 2s" in text
     assert "steps=on" in text
     assert "loops=on" in text
-    assert "legend" in text
-    assert "JOB" in text and "GOAL" in text and "STEP" in text and "LOOP" in text
+    assert "legend" not in text
+    # Empty forest: no Steps row (only when steps_total > 0).
+    assert "Steps" not in text.split("mode=")[0]
+
+
+def test_aggregate_top_stats_counts() -> None:
+    stats = aggregate_top_stats(
+        {
+            "loop_pool": {"active": 1, "idle": 0, "max": 4},
+            "jobs": [
+                {
+                    "id": "job-a",
+                    "status": "active",
+                    "created_at": "2026-08-05T12:00:00+00:00",
+                    "dag": {
+                        "nodes": [
+                            {
+                                "id": "job-a",
+                                "status": "active",
+                                "steps_completed": 1,
+                                "steps_total": 3,
+                            },
+                            {
+                                "id": "g2",
+                                "status": "pending",
+                                "steps_completed": 0,
+                                "steps_total": 2,
+                            },
+                            {"id": "g3", "status": "completed"},
+                        ]
+                    },
+                    "loops": [{"loop_id": "L1", "status": "active"}],
+                },
+                {
+                    "id": "job-b",
+                    "status": "pending",
+                    "created_at": "2026-08-05T11:00:00+00:00",
+                    "dag": {"nodes": [{"id": "job-b", "status": "pending"}]},
+                    "loops": [],
+                },
+            ],
+        }
+    )
+    assert stats["jobs_total"] == 2
+    assert stats["jobs_active"] == 1
+    assert stats["jobs_by_status"]["pending"] == 1
+    assert stats["goals_total"] == 4
+    assert stats["goals_active"] == 1
+    assert stats["goals_completed"] == 1
+    assert stats["loops_assigned"] == 1
+    assert stats["loop_pool_active"] == 1
+    assert stats["steps_completed"] == 1
+    assert stats["steps_total"] == 5
+    assert stats["oldest_created_at"] == "2026-08-05T11:00:00+00:00"
 
 
 def test_decode_top_csi() -> None:
@@ -98,14 +156,15 @@ def test_apply_top_key_vim_scroll() -> None:
 
 def test_render_top_sets_page_size() -> None:
     state = TopViewState()
-    # header(4) + footer(2) → max_body = height - 6; page_size = max_body - 1
+    # Empty forest header: title + Jobs + Goals + Loops + flags + rule = 6
+    # (+ footer 2) → max_body = height - 8; page_size = max_body - 1
     render_top_snapshot(
         {"running": True, "loop_pool": {"active": 0, "idle": 0, "max": 1}, "jobs": []},
         height=20,
         width=80,
         state=state,
     )
-    assert state.page_size == max(1, 20 - 4 - 2 - 1)
+    assert state.page_size == max(1, 20 - 6 - 2 - 1)
 
 
 def test_apply_top_key_toggles() -> None:
@@ -224,6 +283,12 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
     assert "bright_cyan" in rendered.markup
     assert "mode=active" in text
     assert "(live)" in text
+    # htop-style header aggregates from the forest
+    assert "Jobs" in text and "active=1" in text
+    assert "Goals" in text and "pending=1" in text
+    assert "Loops" in text and "1/0/4" in text and "1 assigned" in text
+    assert "Steps" in text and "1/2 done" in text
+    assert "up " in text  # oldest-job uptime on title line
 
 
 def test_render_top_hides_steps_and_loops() -> None:
