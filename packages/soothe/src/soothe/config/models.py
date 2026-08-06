@@ -153,13 +153,23 @@ class NotifyEventsConfig(BaseModel):
 
 
 class EmailNotifySinkConfig(BaseModel):
-    """Outbound SMTP settings for ``EmailNotifySink`` (not IMAP chat)."""
+    """Outbound SMTP settings for ``EmailNotifySink`` (not IMAP chat).
+
+    Sensitive fields (``smtp_username``, ``smtp_password``) accept a plain string
+    or ``${ENV_VAR}`` (same dual rule as ``providers[].api_key``).
+    """
 
     enabled: bool = False
     smtp_host: str = ""
     smtp_port: int = Field(default=587, ge=1, le=65535)
-    smtp_username: str = ""
-    smtp_password: str = ""
+    smtp_username: str = Field(
+        default="",
+        description="SMTP username; plain string or ${ENV_VAR}",
+    )
+    smtp_password: str = Field(
+        default="",
+        description="SMTP password; plain string or ${ENV_VAR}",
+    )
     smtp_use_tls: bool = True
     smtp_use_ssl: bool = False
     from_address: str = ""
@@ -177,11 +187,20 @@ class WebhookNotifySinkConfig(BaseModel):
 
 
 class FeishuNotifySinkConfig(BaseModel):
-    """Feishu/Lark IM notify sink (Phase 1 stub; live send follow-up)."""
+    """Feishu/Lark IM notify sink (Phase 1 stub; live send follow-up).
+
+    ``app_id`` and ``app_secret`` accept a plain string or ``${ENV_VAR}``.
+    """
 
     enabled: bool = False
-    app_id: str = ""
-    app_secret: str = ""
+    app_id: str = Field(
+        default="",
+        description="Feishu app id; plain string or ${ENV_VAR}",
+    )
+    app_secret: str = Field(
+        default="",
+        description="Feishu app secret; plain string or ${ENV_VAR}",
+    )
     targets: list[NotifyTargetConfig] = Field(default_factory=list)
 
 

@@ -319,9 +319,35 @@ export SOOTHE_PERSISTENCE='{"default_backend":"sqlite"}'
 
 ## Secret Hygiene
 
-- Never commit resolved secrets — use `${VAR}` in YAML.
+- Never commit resolved secrets — use `${VAR}` in YAML, or keep plain values only in local untracked overlays / `$SOOTHE_HOME/.env`.
 - Rotate by updating env and restarting; no config edit needed for interpolated keys.
 - Verify: `env | grep -E 'SOOTHE|OPENAI|ANTHROPIC'`.
+
+## Sensitive values
+
+Sensitive YAML fields accept **either** a plain string **or** `${ENV_VAR}` (expanded at load via `_expand_env_in_config`). Templates ship with conventional placeholders; operators may replace them with literals in a private config copy.
+
+| YAML path | Conventional env | Notes |
+|-----------|------------------|-------|
+| `providers[].api_key` | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, … | Also zero-config when `providers` is empty |
+| `persistence.postgres_base_dsn` | `SOOTHE_POSTGRES_BASE_DSN` | Unresolved placeholder treated as unset at DSN resolve |
+| `persistence.soothe_postgres_dsn` | `SOOTHE_POSTGRES_DSN` | Used when base DSN is unset/unresolved |
+| `observability.langfuse.public_key` / `secret_key` / `host` | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` | Unresolved/`null` also reads env at Langfuse init |
+| `tools.deepxiv.token` | `DEEPXIV_API_KEY` / `DEEPXIV_TOKEN` | Unresolved/`null` falls back to env |
+| `vector_stores[].dsn` / `api_key` / `url` | (operator-chosen) | Plain or `${ENV}` |
+| `agent.autopilot.notify.sinks.email.smtp_username` | `SMTP_USERNAME` | Host overlay (`soothe.yml`) |
+| `agent.autopilot.notify.sinks.email.smtp_password` | `SMTP_PASSWORD` | Host overlay |
+| `agent.autopilot.notify.sinks.feishu.app_id` | `FEISHU_APP_ID` | Host overlay |
+| `agent.autopilot.notify.sinks.feishu.app_secret` | `FEISHU_APP_SECRET` | Host overlay |
+| `identity.tokens.jwt_signing_key` | `SOOTHE_JWT_KEY` | Daemon; dedicated env fallback when YAML is null |
+
+```yaml
+# Env (recommended for shared templates)
+smtp_password: "${SMTP_PASSWORD}"
+
+# Or plain (private/local config only)
+smtp_password: "hunter2"
+```
 
 ## Troubleshooting
 

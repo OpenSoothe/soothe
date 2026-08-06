@@ -58,8 +58,9 @@ agent:
           enabled: false
           smtp_host: ""
           smtp_port: 587
-          smtp_username: ""
-          smtp_password: ""
+          # Plain string or ${ENV_VAR} (same dual rule as providers[].api_key).
+          smtp_username: "${SMTP_USERNAME}"
+          smtp_password: "${SMTP_PASSWORD}"
           smtp_use_tls: true
           smtp_use_ssl: false
           from_address: ""
@@ -72,8 +73,9 @@ agent:
             job_suspended_timeout: null
         feishu:
           enabled: false
-          app_id: ""
-          app_secret: ""
+          # Plain string or ${ENV_VAR}.
+          app_id: "${FEISHU_APP_ID}"
+          app_secret: "${FEISHU_APP_SECRET}"
           targets: []
     max_loops: 16
     loop_idle_timeout: 300

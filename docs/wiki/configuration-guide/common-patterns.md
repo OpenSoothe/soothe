@@ -167,7 +167,7 @@ For integration tests, point at a real provider but cap `global_max_llm_calls` t
 - **Mismatched `embedding_profile.embedding_dims`** — the most common silent failure. Verify against your embedding model's spec.
 - **Forgetting `think`/`fast`** — leaving them null makes *everything* use `default`, which is often the most expensive model.
 - **SQLite under parallel autonomous goals** — works for one goal, deadlocks under concurrency. Switch to Postgres.
-- **Hardcoding keys in YAML** — use `${VAR}`. See [Environment Variables](environment-variables.md).
+- **Hardcoding keys in YAML** — prefer `${VAR}` (or `$SOOTHE_HOME/.env`). Plain values also work for private local configs. See [Sensitive values](environment-variables.md#sensitive-values).
 - **Setting `rpm_limit` above provider tier** — you'll hit 429s; Soothe retries, but latency compounds.
 
 ## See Also

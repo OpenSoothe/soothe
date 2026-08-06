@@ -832,6 +832,72 @@ class TestYamlEnvExpansion:
         assert cfg.providers[0].api_key == "sk-test-123"
         assert cfg.providers[0].api_base_url == "https://proxy.example.com/v1"
 
+    def test_yaml_notify_smtp_password_env_and_plain(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Notify sink secrets accept ${ENV} or a plain string (host overlay)."""
+        monkeypatch.setenv("SMTP_PASSWORD", "from-env-secret")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+        nano = tmp_path / "nano.yml"
+        nano.write_text(
+            "providers:\n"
+            "  - name: openai\n"
+            "    provider_type: openai\n"
+            "    api_key: sk-test\n"
+            "    models: [gpt-4o-mini]\n",
+            encoding="utf-8",
+        )
+        soothe_env = tmp_path / "soothe_env.yml"
+        soothe_env.write_text(
+            "agent:\n"
+            "  autopilot:\n"
+            "    notify:\n"
+            "      sinks:\n"
+            "        email:\n"
+            "          smtp_password: ${SMTP_PASSWORD}\n",
+            encoding="utf-8",
+        )
+        cfg_env = SootheConfig.from_split_yaml_files(
+            nano_path=str(nano),
+            soothe_path=str(soothe_env),
+        )
+        assert cfg_env.agent.autopilot.notify.sinks.email.smtp_password == "from-env-secret"
+
+        soothe_plain = tmp_path / "soothe_plain.yml"
+        soothe_plain.write_text(
+            "agent:\n"
+            "  autopilot:\n"
+            "    notify:\n"
+            "      sinks:\n"
+            "        email:\n"
+            "          smtp_password: plain-secret\n",
+            encoding="utf-8",
+        )
+        cfg_plain = SootheConfig.from_split_yaml_files(
+            nano_path=str(nano),
+            soothe_path=str(soothe_plain),
+        )
+        assert cfg_plain.agent.autopilot.notify.sinks.email.smtp_password == "plain-secret"
+
+    def test_unresolved_postgres_base_dsn_falls_through(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Template ``${SOOTHE_POSTGRES_BASE_DSN}`` must not block soothe_postgres_dsn."""
+        monkeypatch.delenv("SOOTHE_POSTGRES_BASE_DSN", raising=False)
+        cfg = SootheConfig(
+            persistence={
+                "postgres_base_dsn": "${SOOTHE_POSTGRES_BASE_DSN}",
+                "soothe_postgres_dsn": "postgresql://localhost/soothe_fallback",
+            }
+        )
+        assert cfg.resolve_persistence_postgres_dsn() == "postgresql://localhost/soothe_fallback"
+        assert (
+            cfg.resolve_postgres_dsn_for_database("checkpoints")
+            == "postgresql://localhost/soothe_fallback"
+        )
+
 
 class TestPropagateEnv:
     def test_propagate_openai_provider_standard_endpoint(self, monkeypatch) -> None:

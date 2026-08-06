@@ -28,10 +28,18 @@ def test_nano_template_loads_as_single_file(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("SOOTHE_POSTGRES_BASE_DSN", raising=False)
+    monkeypatch.delenv("SOOTHE_POSTGRES_DSN", raising=False)
+    monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+    monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
+    monkeypatch.delenv("LANGFUSE_HOST", raising=False)
+    monkeypatch.delenv("DEEPXIV_API_KEY", raising=False)
 
     loaded = SootheConfig.from_yaml_file(str(_nano_template_path()))
     assert len(loaded.providers) >= 1
     assert loaded.vector_store_router.default == "sqlite_vec_default:soothe_default"
+    assert loaded.persistence.postgres_base_dsn == "${SOOTHE_POSTGRES_BASE_DSN}"
+    assert loaded.tools.deepxiv.token == "${DEEPXIV_API_KEY}"
 
 
 @pytest.mark.skipif(
@@ -43,6 +51,8 @@ def test_split_templates_compose(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("SMTP_PASSWORD", raising=False)
+    monkeypatch.delenv("FEISHU_APP_SECRET", raising=False)
 
     loaded = SootheConfig.from_split_yaml_files(
         nano_path=str(_nano_template_path()),
@@ -52,3 +62,5 @@ def test_split_templates_compose(monkeypatch: pytest.MonkeyPatch) -> None:
     assert loaded.agent.loop.enabled is True
     assert loaded.cron.max_jobs == 100
     assert loaded.vector_store_router.default == "sqlite_vec_default:soothe_default"
+    assert loaded.agent.autopilot.notify.sinks.email.smtp_password == "${SMTP_PASSWORD}"
+    assert loaded.agent.autopilot.notify.sinks.feishu.app_secret == "${FEISHU_APP_SECRET}"
