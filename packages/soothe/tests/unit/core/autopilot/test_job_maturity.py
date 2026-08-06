@@ -1,20 +1,25 @@
-"""IG-692 / RFC-230: job maturity assessor + rail exclusivity."""
+"""RFC-230: job maturity assessor (LLM) + rail exclusivity."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
 from soothe.autopilot.rail.interpreter import RailEvent
 from soothe.autopilot.verify.goal_dag_verifier import GoalDAGVerifier
-from soothe.autopilot.verify.maturity import (
+from soothe.autopilot.verify.job_maturity import (
     JobMaturityAssessor,
+    JobMaturitySnapshot,
+    MaturityAssessmentVerdict,
     MaturityCriterion,
+    MaturityCriterionOut,
     is_verify_class_goal,
     latch_acceptance_met,
+    shallow_workspace_inventory,
 )
 from soothe.context import ContextEngine
 
@@ -47,71 +52,118 @@ class TestLatchAcceptanceMet:
         )
 
 
+class TestShallowInventory:
+    def test_lists_non_coding_files(self, tmp_path: Path) -> None:
+        (tmp_path / "itinerary.md").write_text("day 1\n", encoding="utf-8")
+        (tmp_path / "notes").mkdir()
+        (tmp_path / "notes" / "draft.tex").write_text("% tex\n", encoding="utf-8")
+        text = shallow_workspace_inventory(tmp_path)
+        assert "itinerary.md" in text
+        assert "notes/" in text
+        assert "draft.tex" in text
+
+
 class TestJobMaturityAssessor:
-    def test_empty_workspace_no_accept(self, tmp_path: Path) -> None:
-        snap = JobMaturityAssessor().assess_workspace(tmp_path)
+    @pytest.mark.asyncio
+    async def test_missing_model_fail_closed(self, tmp_path: Path) -> None:
+        snap = await JobMaturityAssessor(model=None).assess(tmp_path)
         assert snap.acceptance_met is False
         assert snap.suggested_rail_signal == "needs_feedback"
+        assert any("model unavailable" in b for b in snap.blockers)
 
-    def test_stub_elf_fails_goal_probe(self, tmp_path: Path) -> None:
-        (tmp_path / "Cargo.toml").write_text("[workspace]\nmembers=[]\n", encoding="utf-8")
-        fix = tmp_path / "tests" / "fixtures"
-        fix.mkdir(parents=True)
-        (fix / "simple_return.c").write_text("int main(){return 42;}\n", encoding="utf-8")
-        ccc = tmp_path / "target" / "debug"
-        ccc.mkdir(parents=True)
-        bin_path = ccc / "ccc"
-        bin_path.write_bytes(
-            b'#!/bin/sh\ncp /dev/null "$3" 2>/dev/null; printf \'\\x7fELF\' > "$3"; dd if=/dev/zero bs=1 count=60 >> "$3" 2>/dev/null\n'
+    @pytest.mark.asyncio
+    async def test_llm_accept_latches(self, tmp_path: Path) -> None:
+        (tmp_path / "GOAL.md").write_text("Deliver a travel itinerary.\n", encoding="utf-8")
+        (tmp_path / "itinerary.md").write_text("Day 1: museum\n", encoding="utf-8")
+        verdict = MaturityAssessmentVerdict(
+            acceptance_met=True,
+            level="accepted",
+            criteria=[
+                MaturityCriterionOut(
+                    id="itinerary",
+                    description="Travel itinerary present",
+                    status="pass",
+                    evidence="itinerary.md",
+                )
+            ],
+            blockers=[],
+            suggested_rail_signal="job_complete",
+            reasoning="Contract satisfied",
         )
-        bin_path.chmod(0o755)
-
-        def fake_run(argv, **kwargs):  # type: ignore[no-untyped-def]
-            if argv and argv[0] == "cargo":
-                return MagicMock(returncode=0, stdout="ok\n", stderr="")
-            if argv and str(argv[0]).endswith("ccc"):
-                out = Path(argv[3])
-                out.write_bytes(b"\x7fELF" + b"\x00" * 60)
-                return MagicMock(returncode=0, stdout="", stderr="")
-            return MagicMock(returncode=126, stdout="", stderr="exec format error")
-
-        with patch("soothe.autopilot.verify.maturity.subprocess.run", side_effect=fake_run):
-            snap = JobMaturityAssessor().assess_workspace(tmp_path)
-        assert snap.acceptance_met is False
-        ids = {c.id: c.status for c in snap.criteria}
-        assert ids.get("cargo_build") == "pass"
-        assert ids.get("goal_simple_return") == "fail"
-
-    def test_all_probes_pass_latches(self, tmp_path: Path) -> None:
-        (tmp_path / "Cargo.toml").write_text("[workspace]\nmembers=[]\n", encoding="utf-8")
-
-        def fake_run(argv, **kwargs):  # type: ignore[no-untyped-def]
-            return MagicMock(returncode=0, stdout="ok\n", stderr="")
-
-        with patch("soothe.autopilot.verify.maturity.subprocess.run", side_effect=fake_run):
-            snap = JobMaturityAssessor(cargo_timeout_s=5.0).assess_workspace(tmp_path)
+        model = MagicMock()
+        with patch(
+            "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
+            new_callable=AsyncMock,
+            return_value=verdict,
+        ):
+            snap = await JobMaturityAssessor(model=model).assess(
+                tmp_path,
+                goal_md="Deliver a travel itinerary.",
+            )
         assert snap.acceptance_met is True
         assert snap.level == "accepted"
         assert snap.suggested_rail_signal == "job_complete"
 
+    @pytest.mark.asyncio
+    async def test_llm_reject_with_blockers(self, tmp_path: Path) -> None:
+        verdict = MaturityAssessmentVerdict(
+            acceptance_met=False,
+            level="acceptance_candidate",
+            criteria=[
+                MaturityCriterionOut(
+                    id="paper",
+                    description="Draft paper",
+                    status="fail",
+                    evidence="missing sections",
+                )
+            ],
+            blockers=["missing abstract"],
+            suggested_rail_signal="needs_feedback",
+            reasoning="Incomplete draft",
+        )
+        model = MagicMock()
+        with patch(
+            "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
+            new_callable=AsyncMock,
+            return_value=verdict,
+        ):
+            snap = await JobMaturityAssessor(model=model).assess(
+                tmp_path,
+                verification_rules="Paper must include abstract and conclusion",
+            )
+        assert snap.acceptance_met is False
+        assert "missing abstract" in snap.blockers
+        assert snap.suggested_rail_signal == "needs_feedback"
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_raises(self, tmp_path: Path) -> None:
+        from soothe.autopilot.verify.job_maturity import MaturityAssessmentError
+
+        model = MagicMock()
+        with (
+            patch(
+                "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("boom"),
+            ),
+            pytest.raises(MaturityAssessmentError, match="failed"),
+        ):
+            await JobMaturityAssessor(model=model).assess(tmp_path)
+
     def test_snapshot_roundtrip(self) -> None:
-        from datetime import UTC, datetime
-
-        from soothe.autopilot.verify.maturity import JobMaturitySnapshot
-
         snap = JobMaturitySnapshot(
             assessed_at=datetime.now(UTC),
             level="accepted",
             acceptance_met=True,
-            criteria=[MaturityCriterion("cargo_build", "build", "pass", "ok")],
+            criteria=[MaturityCriterion("contract", "met", "pass", "ok")],
             blockers=[],
             suggested_rail_signal="job_complete",
-            probe_summary="cargo_build=pass",
+            probe_summary="contract=pass",
         )
         restored = JobMaturitySnapshot.from_dict(snap.to_dict())
         assert restored is not None
         assert restored.acceptance_met is True
-        assert restored.criteria[0].id == "cargo_build"
+        assert restored.criteria[0].id == "contract"
 
 
 class TestRailExclusivity:
@@ -173,7 +225,7 @@ class TestAcceptanceMetPersist:
 
 class TestAcceptanceContractBrief:
     def test_includes_goal_md(self, tmp_path: Path) -> None:
-        from soothe.autopilot.verify.maturity import acceptance_contract_brief
+        from soothe.autopilot.verify.job_maturity import acceptance_contract_brief
 
         (tmp_path / "GOAL.md").write_text("Task: pass return N\n", encoding="utf-8")
         brief = acceptance_contract_brief(workspace=tmp_path)
@@ -181,10 +233,17 @@ class TestAcceptanceContractBrief:
         assert "return N" in brief
 
     def test_includes_verification_rules(self) -> None:
-        from soothe.autopilot.verify.maturity import acceptance_contract_brief
+        from soothe.autopilot.verify.job_maturity import acceptance_contract_brief
 
         brief = acceptance_contract_brief(verification_rules="cargo test must pass")
         assert "cargo test must pass" in brief
+
+    def test_default_is_domain_agnostic(self) -> None:
+        from soothe.autopilot.verify.job_maturity import acceptance_contract_brief
+
+        brief = acceptance_contract_brief()
+        assert "acceptance contract" in brief.lower()
+        assert "printf" not in brief.lower()
 
 
 class TestEnsureTriggerTags:
@@ -230,6 +289,15 @@ class TestTopMaturityField:
         assert entry is not None
         assert entry["maturity"]["acceptance_met"] is False
         assert entry["maturity"]["level"] == "scaffold"
+
+
+class TestPathTokens:
+    def test_extracts_non_coding_extensions(self) -> None:
+        from soothe.autopilot.verify.plan_contribution import extract_path_tokens
+
+        tokens = extract_path_tokens("wrote docs/paper.tex and plan/itinerary.pdf")
+        assert any(t.endswith("paper.tex") for t in tokens)
+        assert any(t.endswith("itinerary.pdf") for t in tokens)
 
 
 class TestDagIdleEmission:

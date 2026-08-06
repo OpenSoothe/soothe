@@ -15,10 +15,11 @@ from typing import Any
 
 from soothe.autopilot.dispatch.models import FileTouchSummary
 
-# Path-like tokens in evidence / action text (extensions constrain false positives).
+# Path-like tokens in evidence / action text (any name.ext; not a latch probe).
 _PATH_TOKEN = re.compile(
-    r"(?:/(?:[\w.-]+/)*[\w.-]+\.\w{1,10}"
-    r"|(?:[\w.-]+/)+[\w.-]+\.(?:py|md|toml|yml|yaml|json|txt|cfg|ini|rs|go|ts|tsx|js|c|h))"
+    r"(?:/(?:[\w.-]+/)*[\w.-]+\.\w{1,16}"
+    r"|(?:[\w.-]+/)+[\w.-]+\.\w{1,16}"
+    r"|(?<![\w/])[\w.-]+\.\w{1,16}(?![\w.]))"
 )
 
 

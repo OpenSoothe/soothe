@@ -24,12 +24,12 @@ _LAZY: dict[str, tuple[str, str]] = {
     "evaluate_goal_completion": (".consensus", "evaluate_goal_completion"),
     "GoalBackoffReasoner": (".backoff_reasoner", "GoalBackoffReasoner"),
     "GoalDAGVerifier": (".goal_dag_verifier", "GoalDAGVerifier"),
-    "JobMaturityAssessor": (".maturity", "JobMaturityAssessor"),
-    "JobMaturitySnapshot": (".maturity", "JobMaturitySnapshot"),
-    "acceptance_contract_brief": (".maturity", "acceptance_contract_brief"),
-    "latch_acceptance_met": (".maturity", "latch_acceptance_met"),
-    "load_goal_md_excerpt": (".maturity", "load_goal_md_excerpt"),
-    "maturity_wire_fields": (".maturity", "maturity_wire_fields"),
+    "JobMaturityAssessor": (".job_maturity", "JobMaturityAssessor"),
+    "JobMaturitySnapshot": (".job_maturity", "JobMaturitySnapshot"),
+    "acceptance_contract_brief": (".job_maturity", "acceptance_contract_brief"),
+    "latch_acceptance_met": (".job_maturity", "latch_acceptance_met"),
+    "load_goal_md_excerpt": (".job_maturity", "load_goal_md_excerpt"),
+    "maturity_wire_fields": (".job_maturity", "maturity_wire_fields"),
 }
 
 

@@ -13,7 +13,7 @@ from soothe.autopilot.jobs.goal_md import (
     resolve_job_goal_md_path,
     write_job_goal_md,
 )
-from soothe.autopilot.verify.maturity import acceptance_contract_brief, load_goal_md_excerpt
+from soothe.autopilot.verify.job_maturity import acceptance_contract_brief, load_goal_md_excerpt
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.events.internal_bus import InternalEventBus

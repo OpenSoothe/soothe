@@ -341,7 +341,7 @@ class LoopRailInterpreter:
                     event.job_id,
                 )
 
-        from soothe.autopilot.verify.maturity import latch_acceptance_met
+        from soothe.autopilot.verify.job_maturity import latch_acceptance_met
         from soothe.context.models import TERMINAL_STATES
 
         job_state = await self._builtins.job_state(event.job_id)

@@ -48,15 +48,16 @@ structured evaluation as a future enhancement; that enhancement is this RFC.
 4. **Rail exclusivity** for rail-bound jobs: verifier/monitor must not create
    goals; at most forward events / health without decompose-spawn.
 5. Production **`dag_idle`** when a rail job has no runnable descendants.
-6. Prefer **structural / executable probes** (RFC-630); LLM only for residual
-   non-machine criteria — never alone to set `acceptance_met=true`.
+6. Prefer **structured LLM contract judgment** (RFC-630) over language-specific
+   executable probes. Workspaces may be coding, writing, planning, research, or
+   other domains — `acceptance_met` is latched only from structured maturity
+   verdicts, never from cargo/pytest/fixture exit codes alone.
 
 ## 3. Non-goals
 
 - StrangeLoop learning DAG shape, siblings, or rail policy (RFC-222 invariant).
 - Replacing LoopRail with more verifier LLM decompose.
-- Fully parsing arbitrary natural-language GOAL into a complete test suite in v1
-  (probe registry + optional fixture conventions; LLM residual OK).
+- Hardcoding language toolchains (cargo/pytest/npm/…) as the job accept latch.
 - Promoting the LoopRail draft to an RFC in this document (referenced as draft;
   maturity hooks are specified here so rails can consume them).
 
@@ -81,15 +82,16 @@ without the assessor.
 
 ## 5. Acceptance contract sources
 
-Resolved in order (first non-empty wins for criteria text; all available
-sources may contribute probes):
+Resolved in order for contract text (all available sources feed the assessor
+evidence pack):
 
 | Priority | Source | Notes |
 |----------|--------|-------|
 | 1 | `GoalNode.verification_rules` | From `job_create` (RFC-228) |
 | 2 | Workspace `GOAL.md` (or submit text when it *is* GOAL body) | Common operator pattern |
-| 3 | Architecture / milestone artifacts | e.g. plan acceptance tables under `docs/` |
-| 4 | Rail defaults | e.g. greenfield: build + tests + wave QA semantics |
+| 3 | Job DAG outcomes | Child statuses / roles / tags / descriptions |
+| 4 | Shallow workspace inventory | Presence/absence signal only — no command runners |
+| 5 | Latest QA/verify StrangeLoop response | Optional narrative from the trigger goal |
 
 Assessor stores the resolved criteria list inside the snapshot (not only the
 raw string).
@@ -108,12 +110,12 @@ JobMaturitySnapshot {
     id: str
     description: str
     status: pass | fail | unknown | skipped
-    evidence: str          # probe output excerpt / path
+    evidence: str          # criterion evidence excerpt
   }]
   blockers: list[str]
   suggested_rail_signal: needs_feedback | ready_for_next_wave
                        | job_complete | none
-  probe_summary: str
+  probe_summary: str       # assessment summary (legacy field name)
 }
 ```
 
@@ -125,12 +127,12 @@ guard short-circuits / restart (IG-691 `rail_state.json` pattern).
 
 | Level | Meaning |
 |-------|---------|
-| `scaffold` | Workspace / crates / stubs; demos fail or absent |
+| `scaffold` | Little contract evidence; early DAG / empty workspace |
 | `wave_partial` | Some makers done; integrate incomplete |
 | `wave_integrated` | Integrate (+ commit) done; acceptance not met |
-| `acceptance_candidate` | Verify-class goal completed; probes mixed/unknown |
+| `acceptance_candidate` | Verify-class goal completed; contract not yet met |
 | `accepted` | `acceptance_met=true` |
-| `blocked` | Hard probe failure / budget / operator suspend |
+| `blocked` | Hard contract failure / budget / operator suspend |
 
 Levels are derived; **`acceptance_met` is the latch rails trust**.
 
@@ -138,29 +140,36 @@ Levels are derived; **`acceptance_met` is the latch rails trust**.
 
 ### 7.1 Placement
 
-- Package: `soothe` (host), under `autopilot/` (e.g. `maturity.py`).
+- Package: `soothe` (host), under `autopilot/verify/job_maturity.py`.
 - Invoked by `AutopilotService` (not StrangeLoop, not rail interpreter).
-- Reads CE DAG + workspace; writes CE snapshot + rail state via existing
-  rail executor annotate/persist APIs.
+- Reads CE DAG + workspace inventory + contract text; writes CE snapshot + rail
+  state via existing rail executor annotate/persist APIs.
+- Uses the Autopilot consensus / light model (`_consensus_model`).
 
-### 7.2 Probe registry (structural first)
+### 7.2 Evidence pack (deterministic gather)
 
-Pluggable probes selected by workspace markers:
+Host gathers **facts**; the LLM judges the contract:
 
-| Marker | Probe examples |
-|--------|----------------|
-| `Cargo.toml` | `cargo build`, `cargo test`; optional GOAL fixtures (compile+run `return N`, printf/stdout) |
-| `pyproject.toml` + `tests/` | Pytest probe in `maturity.py` (job assessor only) |
-| Generic | Named binaries from GOAL; non-trivial artifact size/sections |
+| Source | Role |
+|--------|------|
+| `verification_rules` / `GOAL.md` | Acceptance contract text |
+| Job DAG child one-liners | Status / role / tags / descriptions |
+| Shallow workspace inventory | File/dir names only (capped) — no `cargo`/`pytest`/shell |
+| Latest QA/verify response | Optional StrangeLoop narrative from the trigger goal |
 
-Probes return machine `pass|fail|skipped` + evidence string. **No keyword
-judgment of agent prose** for latching acceptance (RFC-630).
+Contribution helpers such as `plan_contribution.build_files_touched` remain
+**wire metadata only** — never a consensus or maturity latch (IG-710 / IG-711).
 
-### 7.3 LLM residual
+### 7.3 Structured LLM latch
 
-Only for criteria that remain `unknown` after probes. Structured output:
-per-criterion status + short reasoning. If any required criterion is still
-`fail` or `unknown`, `acceptance_met` stays **false**.
+`JobMaturityAssessor.assess` calls structured output
+(`MaturityAssessmentVerdict`: `acceptance_met`, `level`, `criteria`,
+`blockers`, `suggested_rail_signal`, `reasoning`). **No keyword judgment of
+agent prose** for free-text decision parsing (RFC-630).
+
+Fail closed: missing model or LLM failure → leave `acceptance_met=false`
+(do not invent accept). Language-specific command runners are **out of scope**
+for the host latch.
 
 ### 7.4 When to run
 
@@ -233,8 +242,8 @@ Rail-bound children (IG-693):
 2. Send-back budget exhaustion → **`failed`** + LoopRail `goal_failed` (not
    silent suspend). Rails may `retry_maker` / equivalent — Autopilot does not
    invent git/commit/pytest accept overrides for rail or non-rail consensus.
-3. Language- and VCS-specific structural checks belong exclusively in this
-   maturity registry (job latch), never as soft/hard consensus overrides.
+3. Job acceptance is latched only by the maturity LLM assessor (job latch),
+   never as soft/hard consensus overrides (no git/pytest consensus hard-accept).
 
 ## 11. IPC / observation (RFC-228)
 
@@ -250,8 +259,8 @@ Rail-bound children (IG-693):
 
 | Failure | Behavior |
 |---------|----------|
-| Probe timeout / tool missing | Criterion `unknown` or `skipped`; do not latch accept |
-| Assessor exception | Log; leave prior snapshot; do not set `acceptance_met=true` |
+| Maturity model missing | Fail closed: `acceptance_met=false`; surface blocker |
+| Assessor / LLM exception | Log; leave prior snapshot; do not set `acceptance_met=true` |
 | `dag_idle` but not accepted | Rail may `spawn_feedback_cycle` or suspend with blockers |
 | Max feedback rounds | Snapshot `blocked` or policy-complete without accept; surface in status |
 | Tag loss | Hydrate from CE (IG-691); refuse silent phase skip |
@@ -260,19 +269,18 @@ Rail-bound children (IG-693):
 
 | Phase | Scope |
 |-------|--------|
-| **P0** | Emit `dag_idle`; assessor stub (Cargo build/test + fixture runner if present); write `acceptance_met`; ban verifier spawn on rail jobs |
-| **P1** | Wire `verification_rules` into assessor; enrich QA goal text; tag repair hard-fail path |
+| **P0** | Emit `dag_idle`; write `acceptance_met`; ban verifier spawn on rail jobs |
+| **P1** | Wire `verification_rules` / GOAL.md into assessor; enrich QA goal text; tag repair |
 | **P2** | Maturity levels in CE + top/CLI; feedback driven by snapshot |
-| **P3** | Broader probe registry; golden contracts from architecture plans |
+| **P3** | LLM-primary contract judgment for all domains (IG-711); drop coding probe latch |
 
-Implementation tracking: **IG-692**.
+Implementation tracking: **IG-692** (P0–P2), **IG-711** (LLM-primary latch).
 
 ## 14. Acceptance criteria (spec)
 
 - [ ] Rail job with all children complete and `acceptance_met=false` does not
       leave root pending forever without `dag_idle` / feedback / blocked status
-- [ ] `acceptance_met=true` only after assessor probes (or residual LLM with no
-      required fails/unknowns)
+- [ ] `acceptance_met=true` only after structured LLM maturity verdict
 - [ ] Verifier cannot create review/QA goals under a `rail_id` job
 - [ ] Greenfield `needs_feedback` / `job_complete` short-circuits observe the latch
 - [ ] Unit tests for assessor + rail guard + idle emission; no user-facing
@@ -285,3 +293,5 @@ Implementation tracking: **IG-692**.
 | 2026-08-05 | Initial draft from job `20999e64` hang + GOAL maturity gap analysis |
 | 2026-08-05 | Clarify consensus: rail exhaust → fail+rail recovery (IG-693); no
   engine git/pytest hard-accept for rail jobs |
+| 2026-08-06 | Flip latch to LLM contract judgment (IG-711); remove coding probe registry
+  as accept mechanism; domain-agnostic workspaces |

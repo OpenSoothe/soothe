@@ -1757,7 +1757,10 @@ class AutopilotService:
             if decision == "accept":
                 await self._ce.complete_goal(goal_id)
                 await self._emit_goal_completed(goal_id, loop_id=loop_id)
-                await self._maybe_assess_job_maturity(goal_id)
+                await self._maybe_assess_job_maturity(
+                    goal_id,
+                    qa_response=evidence_summary,
+                )
                 await self._maybe_emit_dag_idle(goal_id)
             elif decision == "send_back":
                 await self._apply_send_back_or_fail(goal_id, reason=reasoning, loop_id=loop_id)
@@ -1773,10 +1776,16 @@ class AutopilotService:
         except Exception:
             logger.exception("Goal transition failed after consensus for %s", goal_id)
 
-    async def _maybe_assess_job_maturity(self, goal_id: str) -> None:
-        """Run job maturity assessor after verify-class goals (RFC-230 / IG-692)."""
-        from soothe.autopilot.verify.maturity import (
+    async def _maybe_assess_job_maturity(
+        self,
+        goal_id: str,
+        *,
+        qa_response: str | None = None,
+    ) -> None:
+        """Run LLM job maturity assessor after verify-class goals (RFC-230)."""
+        from soothe.autopilot.verify.job_maturity import (
             JobMaturityAssessor,
+            MaturityAssessmentError,
             is_verify_class_goal,
             load_goal_md_excerpt,
         )
@@ -1793,8 +1802,17 @@ class AutopilotService:
         if root is None or not root.rail_id:
             return
         workspace = root.workspace or goal.workspace
+        children = [
+            g
+            for g in self._ce._dag.goals.values()
+            if g.id != job_id and self._is_descendant_of(g.id, job_id)
+        ]
+        qa_text = (qa_response or "").strip()
+        if not qa_text and goal.findings:
+            qa_text = "\n".join(str(f) for f in goal.findings[-5:])[:2000]
+
         try:
-            snapshot = JobMaturityAssessor().assess_workspace(
+            snapshot = await JobMaturityAssessor(model=self._consensus_model).assess(
                 workspace,
                 verification_rules=root.verification_rules,
                 goal_md=load_goal_md_excerpt(
@@ -1802,6 +1820,9 @@ class AutopilotService:
                     jobs_root=self._jobs_root,
                     job_id=job_id,
                 ),
+                root=root,
+                children=children,
+                qa_response=qa_text or None,
             )
             root.maturity = snapshot.to_dict()
             root.touch()
@@ -1814,6 +1835,11 @@ class AutopilotService:
                 snapshot.acceptance_met,
                 snapshot.level,
                 snapshot.suggested_rail_signal,
+            )
+        except MaturityAssessmentError:
+            logger.exception(
+                "Job maturity assessment failed for job %s (acceptance not latched)",
+                job_id,
             )
         except Exception:
             logger.exception("Job maturity assessment failed for job %s", job_id)
@@ -2137,7 +2163,7 @@ class AutopilotService:
             and ``jobs`` (each with filtered ``dag`` and active ``loops``).
         """
         from soothe.autopilot.jobs.top_snapshot import build_top_job_entry, sort_top_jobs
-        from soothe.autopilot.verify.maturity import maturity_wire_fields
+        from soothe.autopilot.verify.job_maturity import maturity_wire_fields
 
         status = self.status()
         goals = await self.list_goals()

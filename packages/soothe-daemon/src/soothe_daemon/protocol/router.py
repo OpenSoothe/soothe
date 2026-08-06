@@ -2750,7 +2750,7 @@ class MessageRouter:
                     last_error = g.error
                     break
 
-        from soothe.autopilot.verify.maturity import maturity_wire_fields
+        from soothe.autopilot.verify.job_maturity import maturity_wire_fields
 
         payload: dict[str, Any] = {
             "job_id": job_id,

@@ -18,7 +18,9 @@ as a gate). StrangeLoop’s Plan-Execute-Eval already decides when a goal is
 done; the host consensus LLM compares **goal text** vs **StrangeLoop response**
 (`PlanResult` evidence / full output seeded on the wire).
 
-Structural probes remain **job maturity only** (RFC-230), not Layer-3 consensus.
+Structural / language probes must **not** gate per-goal consensus (this IG).
+Job-level `acceptance_met` is latched by the LLM maturity assessor (RFC-230 /
+IG-711) — not by cargo/pytest host runners.
 
 ---
 
@@ -29,9 +31,8 @@ Structural probes remain **job maturity only** (RFC-230), not Layer-3 consensus.
 2. No empty-grounded pre-gate that send_backs before the judge runs.
 3. No workspace artifact probe append; no pytest PASS hard-accept override.
 4. Remove deliverable-marker skip-decompose gates from `GoalDAGVerifier`.
-5. Move `workspace_pytest_probe` into `maturity.py`; delete consensus-oriented
-   helpers (`enrich_workspace_evidence`, `format_contribution_evidence`,
-   `_DELIVERABLE_MARKERS`, …).
+5. Historical: moved `workspace_pytest_probe` into maturity (superseded by
+   IG-711 LLM maturity — coding probes no longer latch job accept).
 6. Keep worker helpers that synthesize the **wire response** / contribution
    from `PlanResult` (rename module to `plan_contribution.py`).
 
@@ -50,7 +51,7 @@ Structural probes remain **job maturity only** (RFC-230), not Layer-3 consensus.
 - [x] Empty `evidence_summary` still invokes consensus (mock accept → completed)
 - [x] Workspace markers alone do not complete / do not skip decompose
 - [x] Non-empty sloop response + mock accept → completed
-- [x] Maturity pytest probe still works from `maturity.py`
+- [x] Maturity latch is LLM-primary (`job_maturity.py`; IG-711) — not pytest probe
 - [x] `./scripts/verify_finally.sh` green
 
 ---
@@ -59,4 +60,5 @@ Structural probes remain **job maturity only** (RFC-230), not Layer-3 consensus.
 
 - Changing StrangeLoop Plan-Exec-Eval internals
 - Expanding maturity probe registry beyond relocating pytest
+  (**superseded**: IG-711 replaces probe latch with LLM contract judgment)
 - Architecture WavePlan host gate (IG-704)
