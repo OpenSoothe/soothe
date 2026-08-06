@@ -288,7 +288,8 @@ def status() -> None:
             sid = jid[:8]
             sstat = j.get("status", "pending")
             sdesc = _preview_desc(j.get("description", ""), 50)
-            typer.echo(f"  [{sid}] {sstat:10s}  {sdesc}")
+            stok = format_tokens(j.get("total_tokens_used", 0))
+            typer.echo(f"  [{sid}] {sstat:10s}  tok={stok:>5s}  {sdesc}")
 
 
 @app.command("jobs")
@@ -310,7 +311,8 @@ def list_jobs(
         sdesc = _preview_desc(j.get("description", ""), 60)
         sstat = j.get("status", "pending")
         spri = j.get("priority", 50)
-        typer.echo(f"  [{sid}] {sstat:10s} pri={spri:3d}  {sdesc}")
+        stok = format_tokens(j.get("total_tokens_used", 0))
+        typer.echo(f"  [{sid}] {sstat:10s} pri={spri:3d}  tok={stok:>5s}  {sdesc}")
 
 
 @app.command("goals")
@@ -397,6 +399,8 @@ def show_job(
     typer.echo(f"Job ID:          {job.get('id')}")
     typer.echo(f"Status:          {job.get('status', 'pending')}")
     typer.echo(f"Priority:        {job.get('priority', 50)}")
+    tokens = payload.get("total_tokens_used", job.get("total_tokens_used", 0))
+    typer.echo(f"Tokens used:     {format_tokens(tokens)}")
     if job.get("workspace"):
         typer.echo(f"Workspace:       {job['workspace']}")
     created = job.get("created_at", "")
@@ -507,6 +511,21 @@ def _short_loop_id(loop_id: str, *, keep: int = 8) -> str:
         short_suffix = suffix[:keep] if len(suffix) > keep else suffix
         return f"{prefix}__{short_suffix}…"
     return loop_id[:keep] + "…"
+
+
+def format_tokens(tokens: Any) -> str:
+    """Format a token count for autopilot job UI (e.g. ``12K``)."""
+    try:
+        n = int(tokens or 0)
+    except (TypeError, ValueError):
+        n = 0
+    if n < 0:
+        n = 0
+    if n < 1000:
+        return str(n)
+    if n < 1_000_000:
+        return f"{n // 1000}K"
+    return f"{n // 1_000_000}M"
 
 
 def format_elapsed(started_at: Any, *, now: Any | None = None) -> str:
@@ -1082,12 +1101,13 @@ def _format_top_forest(
         jdesc = _preview_desc(job.get("description", ""), 50)
         jelapsed = format_elapsed(job.get("created_at"))
         jelapsed_s = f"  {jelapsed}" if jelapsed else ""
+        jtok = format_tokens(job.get("total_tokens_used", 0))
         lines.append(
             _text_line(
                 ("JOB  ", _STYLE_JOB),
                 (f"[{jid[:8]}] ", _STYLE_JOB),
                 (f"{jstat:10s}", _status_style(jstat)),
-                (f"  pri={jpri}{jelapsed_s}", _STYLE_META),
+                (f"  pri={jpri}{jelapsed_s}  tok={jtok}", _STYLE_META),
                 (f'  "{jdesc}"', _STYLE_DIM),
             )
         )
@@ -1120,6 +1140,8 @@ def _format_top_forest(
             steps_c = node.get("steps_completed", 0) or 0
             steps_t = node.get("steps_total", 0) or 0
             steps_s = f"  steps {steps_c}/{steps_t}" if steps_t else ""
+            gtok = int(node.get("total_tokens_used") or 0)
+            tok_s = f"  tok={format_tokens(gtok)}" if gtok else ""
             goal_line = _text_line(
                 (indent, _STYLE_TREE),
                 (branch, _STYLE_TREE),
@@ -1130,6 +1152,8 @@ def _format_top_forest(
             )
             if steps_s:
                 goal_line.append(steps_s, style=_STYLE_STEP)
+            if tok_s:
+                goal_line.append(tok_s, style=_STYLE_META)
             lines.append(goal_line)
 
             goal_loops = loops_by_goal.get(goal_id, [])

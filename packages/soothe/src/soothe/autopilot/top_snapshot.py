@@ -163,6 +163,7 @@ def build_top_job_entry(
     created_at: str | None = None,
     include_terminal: bool = False,
     maturity: dict[str, Any] | None = None,
+    total_tokens_used: int = 0,
 ) -> dict[str, Any] | None:
     """Assemble one job row for ``autopilot_top``, or ``None`` if omitted.
 
@@ -179,6 +180,7 @@ def build_top_job_entry(
             fully terminal jobs. StepDAG under remaining goals is kept intact.
             When ``True``, keep the full DAG.
         maturity: Optional compact maturity wire fields (RFC-230).
+        total_tokens_used: Sum of goal tokens in the (pre-filter) job subtree.
 
     Returns:
         Job dict with filtered ``dag`` and active ``loops``, or ``None``.
@@ -200,6 +202,7 @@ def build_top_job_entry(
         "description": description,
         "dag": filtered,
         "loops": filter_active_loops(loops),
+        "total_tokens_used": int(total_tokens_used or 0),
     }
     if workspace:
         entry["workspace"] = workspace

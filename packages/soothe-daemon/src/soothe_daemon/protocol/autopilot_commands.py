@@ -115,8 +115,15 @@ async def run_autopilot_action(
     if action == "list_jobs":
         goals = await service.list_goals()
         jobs = [g for g in goals if g.parent_id is None]
+        payloads: list[dict[str, Any]] = []
+        for j in jobs:
+            row = j.model_dump(mode="json")
+            # Subtree sum (root alone may be a coordinator with zero self tokens).
+            if hasattr(service, "subtree_total_tokens"):
+                row["total_tokens_used"] = await service.subtree_total_tokens(j.id)
+            payloads.append(row)
         return {
-            "jobs": [j.model_dump(mode="json") for j in jobs],
+            "jobs": payloads,
             "source": "autopilot_service",
         }
 
@@ -131,12 +138,21 @@ async def run_autopilot_action(
         nodes = dag.get("nodes", [])
         active = sum(1 for n in nodes if n.get("status") == "active")
         completed = sum(1 for n in nodes if n.get("status") in ("completed", "validated"))
+        job_row = job.model_dump(mode="json")
+        if hasattr(service, "subtree_total_tokens"):
+            job_tokens = await service.subtree_total_tokens(job_id)
+        else:
+            job_tokens = sum(
+                int(n.get("total_tokens_used") or 0) for n in nodes if isinstance(n, dict)
+            )
+        job_row["total_tokens_used"] = job_tokens
         return {
-            "job": job.model_dump(mode="json"),
+            "job": job_row,
             "dag": dag,
             "active_goals": active,
             "completed_goals": completed,
             "total_goals": len(nodes),
+            "total_tokens_used": job_tokens,
             "source": "autopilot_service",
         }
 

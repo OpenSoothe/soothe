@@ -152,6 +152,9 @@ class AutopilotService:
         self._context_store: Any = None
         self._context_projector: Any = None
         self._dispatch_tasks: dict[str, asyncio.Task] = {}  # goal_id → consumer task
+        # Per-goal cursor for LoopState cumulative tokens on step_completed
+        # progress (IG-701). Reset to 0 on each goal_started / attempt.
+        self._goal_loop_token_cursor: dict[str, int] = {}
         self._persist_fail_count = 0
         self._rail_interpreter: Any = None
         self._init_rail_interpreter()
@@ -1128,6 +1131,44 @@ class AutopilotService:
             goal.steps.add_step(StepNode(id=sid, description=desc))
         await self._ce.activate_step(goal_id, sid)
 
+    def _step_token_delta(self, goal_id: str, payload: dict[str, Any]) -> int:
+        """Derive tokens for one mirrored step from worker progress (IG-701).
+
+        Prefers an explicit non-negative ``tokens_used`` delta. Otherwise
+        diffs cumulative ``total_tokens_used`` against the per-goal cursor
+        (aligned with LoopState, reset on each attempt via ``goal_started``).
+        """
+        if "tokens_used" in payload and payload.get("tokens_used") is not None:
+            try:
+                delta = int(payload["tokens_used"])
+            except (TypeError, ValueError):
+                delta = 0
+            if delta < 0:
+                delta = 0
+            if "total_tokens_used" in payload:
+                try:
+                    cumulative = int(payload.get("total_tokens_used") or 0)
+                except (TypeError, ValueError):
+                    cumulative = -1
+                if cumulative >= 0:
+                    self._goal_loop_token_cursor[goal_id] = cumulative
+            return delta
+        if "total_tokens_used" not in payload:
+            return 0
+        try:
+            cumulative = int(payload.get("total_tokens_used") or 0)
+        except (TypeError, ValueError):
+            return 0
+        if cumulative < 0:
+            cumulative = 0
+        prev = self._goal_loop_token_cursor.get(goal_id, 0)
+        delta = cumulative - prev
+        if delta < 0:
+            # New attempt or counter reset without goal_started — treat as absolute.
+            delta = cumulative
+        self._goal_loop_token_cursor[goal_id] = cumulative
+        return delta
+
     async def _mirror_step_completed(self, goal_id: str, payload: dict[str, Any]) -> None:
         """Apply worker ``step_completed`` onto the Autopilot CE goal (IG-689)."""
         sid = str(payload.get("step_id") or "").strip()
@@ -1142,6 +1183,7 @@ class AutopilotService:
         execution = StepExecution(
             duration_ms=int(payload.get("duration_ms") or 0),
             tool_call_count=int(payload.get("tool_call_count") or 0),
+            tokens_used=self._step_token_delta(goal_id, payload),
             error=str(payload["error"]) if payload.get("error") else None,
         )
         if payload.get("success", True):
@@ -1226,6 +1268,10 @@ class AutopilotService:
                 if mode != "custom" or not isinstance(data, dict):
                     continue
                 ctype = data.get("type", "")
+                if ctype == "soothe.internal.autopilot.goal_started":
+                    # New loop attempt: LoopState tokens restart at 0 (IG-701).
+                    self._goal_loop_token_cursor[goal_id] = 0
+                    continue
                 if isinstance(ctype, str) and ctype.startswith(
                     "soothe.internal.autopilot.progress."
                 ):
@@ -1235,6 +1281,7 @@ class AutopilotService:
                     continue
 
                 completion_seen = True
+                self._goal_loop_token_cursor.pop(goal_id, None)
                 outcome = data.get("outcome", "failed")
                 contribution_dict = data.get("context_contribution") or {}
                 try:
@@ -1817,6 +1864,37 @@ class AutopilotService:
         entries = await self._job_loop_index.list_loops(job_id)
         return [e.model_dump(mode="json") for e in entries]
 
+    async def subtree_total_tokens(self, root_goal_id: str) -> int:
+        """Sum ``GoalNode.total_tokens_used`` over the job ``parent_id`` subtree.
+
+        Args:
+            root_goal_id: Root goal id (job id).
+
+        Returns:
+            Non-negative token total for the root and all descendants.
+        """
+        goals = await self._ce.list_goals()
+        children_map: dict[str, list[str]] = {}
+        by_id = {g.id: g for g in goals}
+        for g in goals:
+            if g.parent_id:
+                children_map.setdefault(g.parent_id, []).append(g.id)
+        total = 0
+        visited: set[str] = set()
+        queue = [root_goal_id]
+        while queue:
+            current_id = queue.pop(0)
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+            goal = by_id.get(current_id)
+            if goal is not None:
+                total += int(goal.total_tokens_used or 0)
+            for child_id in children_map.get(current_id, []):
+                if child_id not in visited:
+                    queue.append(child_id)
+        return total
+
     async def top_snapshot(self, *, include_terminal: bool = False) -> dict[str, Any]:
         """Build jobs → goals → loops snapshot for CLI top (IG-679 / IG-688).
 
@@ -1845,6 +1923,11 @@ class AutopilotService:
             loops = await self.list_job_loops(root.id)
             created = root.created_at
             created_at = created.isoformat() if hasattr(created, "isoformat") else str(created)
+            job_tokens = sum(
+                int(n.get("total_tokens_used") or 0)
+                for n in (dag.get("nodes") or [])
+                if isinstance(n, dict)
+            )
             entry = build_top_job_entry(
                 job_id=root.id,
                 status=str(root.status),
@@ -1856,6 +1939,7 @@ class AutopilotService:
                 created_at=created_at,
                 include_terminal=include_terminal,
                 maturity=maturity_wire_fields(root.maturity),
+                total_tokens_used=job_tokens,
             )
             if entry is not None:
                 jobs.append(entry)
@@ -1883,8 +1967,8 @@ class AutopilotService:
             Dict with ``nodes``, ``edges``, and ``root_id``.
             Nodes contain: id, description, status, priority, depends_on,
             parent_id, assigned_loop_id, steps_completed, steps_total,
-            tool_calls, optional ``steps`` StepDAG, summary/findings when
-            completed.
+            tool_calls, total_tokens_used, optional ``steps`` StepDAG,
+            summary/findings when completed.
             Edges contain: source=parent_id, target=child id.
         """
         goals = await self._ce.list_goals()
@@ -1929,6 +2013,7 @@ class AutopilotService:
                 "steps_completed": step_payload["steps_completed"],
                 "steps_total": step_payload["steps_total"],
                 "tool_calls": 0,
+                "total_tokens_used": int(g.total_tokens_used or 0),
                 "created_at": (
                     g.created_at.isoformat()
                     if hasattr(g.created_at, "isoformat")

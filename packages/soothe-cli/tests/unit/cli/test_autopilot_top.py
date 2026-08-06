@@ -10,6 +10,7 @@ from soothe_cli.cli.commands.autopilot_cmd import (
     apply_top_key,
     decode_top_csi,
     format_elapsed,
+    format_tokens,
     render_top_snapshot,
 )
 
@@ -24,6 +25,14 @@ def test_format_elapsed_hhmmss() -> None:
     assert format_elapsed(started.isoformat(), now=now) == "01:02:03"
     assert format_elapsed(None) == ""
     assert format_elapsed("") == ""
+
+
+def test_format_tokens() -> None:
+    assert format_tokens(0) == "0"
+    assert format_tokens(999) == "999"
+    assert format_tokens(1500) == "1K"
+    assert format_tokens(2_500_000) == "2M"
+    assert format_tokens(None) == "0"
 
 
 def test_top_view_state_defaults() -> None:
@@ -210,6 +219,7 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
                     "priority": 50,
                     "description": "Implement auth",
                     "created_at": created,
+                    "total_tokens_used": 12500,
                     "dag": {
                         "root_id": "a1b2c3d4",
                         "nodes": [
@@ -264,6 +274,7 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
     assert format_elapsed(created, now=now) == "00:12:34"
     assert format_elapsed(started, now=now) == "00:03:21"
     assert "pri=50" in text
+    assert "tok=12K" in text
     assert "Implement auth" in text
     assert "steps 1/2" in text
     assert "JOB  [a1b2c3d4]" in text

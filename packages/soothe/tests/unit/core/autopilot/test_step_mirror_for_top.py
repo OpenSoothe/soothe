@@ -69,6 +69,7 @@ class _ProgressRunner:
                     "success": True,
                     "duration_ms": 12,
                     "tool_call_count": 2,
+                    "total_tokens_used": 1500,
                 },
             },
         )
@@ -148,6 +149,9 @@ async def test_worker_progress_mirrors_steps_onto_autopilot_ce() -> None:
     assert "XLT-01" in node.steps.nodes
     assert "XLT-02" in node.steps.nodes
     assert node.steps.nodes["XLT-01"].status == "completed"
+    assert node.steps.nodes["XLT-01"].execution is not None
+    assert node.steps.nodes["XLT-01"].execution.tokens_used == 1500
+    assert node.total_tokens_used == 1500
     # step_started fired before XLT-01 completed; XLT-02 remains active
     assert node.steps.nodes["XLT-02"].status == "active"
     assert node.steps.nodes["XLT-02"].dependencies == ["XLT-01"]
@@ -156,10 +160,12 @@ async def test_worker_progress_mirrors_steps_onto_autopilot_ce() -> None:
     by_id = {n["id"]: n for n in dag["nodes"]}
     assert by_id[goal.id]["steps_total"] == 2
     assert by_id[goal.id]["steps_completed"] == 1
+    assert by_id[goal.id]["total_tokens_used"] == 1500
     assert by_id[goal.id]["steps"]["nodes"][0]["id"] in {"XLT-01", "XLT-02"}
 
     top = await svc.top_snapshot(include_terminal=True)
     job = next(j for j in top["jobs"] if j["id"] == goal.id)
+    assert job["total_tokens_used"] == 1500
     top_node = next(n for n in job["dag"]["nodes"] if n["id"] == goal.id)
     assert top_node["steps"]["nodes"]
     step_by_id = {s["id"]: s for s in top_node["steps"]["nodes"]}

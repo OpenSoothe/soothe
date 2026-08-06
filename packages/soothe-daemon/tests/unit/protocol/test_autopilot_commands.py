@@ -62,6 +62,17 @@ async def test_run_autopilot_list_jobs_roots_only() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_autopilot_list_jobs_subtree_tokens() -> None:
+    class _TokenService(_FakeService):
+        async def subtree_total_tokens(self, root_goal_id: str) -> int:
+            assert root_goal_id == "g1"
+            return 4200
+
+    result = await run_autopilot_action(_TokenService(), "list_jobs", {})
+    assert result["jobs"][0]["total_tokens_used"] == 4200
+
+
+@pytest.mark.asyncio
 async def test_run_autopilot_submit_requires_description() -> None:
     with pytest.raises(RuntimeError, match="description"):
         await run_autopilot_action(_FakeService(), "submit", {})
