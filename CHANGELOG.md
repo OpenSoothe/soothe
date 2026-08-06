@@ -7,10 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.0] - 2026-08-06
+
+### Added
+- Autopilot live top dashboard with htop-style Jobs/Goals/Loops stats,
+  interactive keymaps (`a` all/active, `s`/`l` steps/loops, `d` density,
+  `+/-` delay, vim-style scroll), and pair-column layout (IG-688 / IG-677).
+- Greenfield rails with LLM-determined fanout width, consensus pass with full
+  evidence, thrash rail tag loss detection, and subgoal consensus exhaustion
+  recovery (IG-690 / IG-691 / IG-695 / IG-699 / IG-700).
+- Autopilot job maturity assessment system, scheduling loop enabled by default,
+  and deadlocked failed goal recovery (RFC-230 / IG-685).
+- Job token usage tracking in Context Engine and display in CLI autopilot.
+- `--file` flag for `autopilot submit` to load GOAL.md from a file.
+- Diagnose tools split: `diagnose-loop` and `inspect-autopilot-job` workflows.
+- Web search/crawl backend migration from wizsearch to tarzi via `soothe-nano>=1.1.4`.
+
+### Fixed
+- Autopilot greenfield rail feedback cycle, guards, and wave idle deadlock resolution.
+- Autopilot top preserves StepDAG under live goals when `steps=on`.
+- Autopilot mirrors worker steps onto Context Engine for top display.
+- Autopilot top progress meters colored as success green.
+- CLI autopilot help flags validated on ANSI-stripped output.
+- Rails prevent premature `job_complete` on greenfield without acceptance latch.
+
 ### Changed
-- Require `soothe-nano>=1.1.4` / `tarzi>=0.2.3` for web search/crawl (replaces
-  `wizsearch`). Tool names and `tools.wizsearch` config keys unchanged. Default
-  engines: `tavily` → `google_serper` → `duckduckgo` → `bing` → `brave`.
+- Align Autopilot config with shared StrangeLoop budgets and always-on dynamic goals.
+- Share `max_iterations` between StrangeLoop and Autopilot instead of duplicate budget.
+- Shorten autopilot top header title to "Autopilot".
+- Remove soothe-desktop submodule and archive desktop docs.
+- Increase default autopilot concurrency limits for better throughput.
+- Require `soothe-nano>=1.1.4` / `tarzi>=0.2.3` for web search/crawl.
+  Tool names and `tools.wizsearch` config keys unchanged. Default engines:
+  `tavily` → `google_serper` → `duckduckgo` → `bing` → `brave`.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.16...v0.10.0
 
 ## [v0.9.16] - 2026-08-05
 
