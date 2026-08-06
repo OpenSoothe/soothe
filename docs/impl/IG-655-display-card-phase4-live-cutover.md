@@ -65,7 +65,7 @@ Phases 1–3 shipped ledger + resume hydrate, but live TUI still binds from raw 
 
 - Remove TUI live structural binders and any dual-path flags.
 - Confirm deprecated RFC-411 frames remain gone.
-- Update RFC-413 status / change history; note desktop/appkit consumer contract.
+- Update RFC-413 status / change history; note appkit consumer contract.
 
 ### Consumer contract (language clients)
 

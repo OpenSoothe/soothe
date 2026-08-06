@@ -592,7 +592,7 @@ After reclassification, the segment structure will be:
 | 4xx | Daemon | Event processing, IPC, MCP | ~7 |
 | 5xx | CLI & TUI | Presentation, UX | 6 |
 | 6xx | Agents & Extensions | Plugins, subagents | ~18 (after consolidation) |
-| 7xx | Product | Applications, desktop | 1 |
+| 7xx | Product | Applications (band reserved; desktop app archived) | 1 |
 | 8xx | Persistence | Backends, storage | ~2 |
 | 9xx | Security | Policy, permissions | ~1 |
 

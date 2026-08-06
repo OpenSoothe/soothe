@@ -7,7 +7,7 @@
 **Created**: 2026-06-04
 **Updated**: 2026-07-27
 **Authors**: xiaming (with Claude)
-**Dependencies**: RFC-225 (Goal Record Enrichment), RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-505 (Soothe Desktop Client), RFC-631 (Goal Display Snapshots)
+**Dependencies**: RFC-225 (Goal Record Enrichment), RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-631 (Goal Display Snapshots)
 **Supersedes**: RFC-411 (history reconstruction model)
 **Amended by**: [RFC-631](RFC-631-goal-display-snapshots.md) (goal-bound display snapshots; live-only ledger scope); 2026-07-19 persistence backend follows `persistence.default_backend` (PostgreSQL `soothe_metadata` when configured); 2026-07-27 Phase 4 completion (live `soothe.card.*` cutover, append-oriented ledger, DisplayCardStore as SoT — see §11 / §16 and [design draft](../drafts/2026-07-27-tui-card-replay-source-of-truth-design.md))
 **Implemented by**: IG-655 (Phase 4 cutover)
@@ -16,7 +16,7 @@
 
 ## 1. Abstract
 
-This RFC defines a server-owned **display card** model for rendering loop transcripts in Soothe clients (TUI, desktop, future web). The daemon hosts a `CardBinder` that converts raw execution events into bound card mutations, and a per-loop `DisplayCardLedger` that persists them via the configured persistence backend: SQLite (`display.db`) by default, or PostgreSQL (`soothe_metadata` tables) when `persistence.default_backend: postgresql`. Clients become passive renderers consuming a stable `soothe.card.*` wire schema.
+This RFC defines a server-owned **display card** model for rendering loop transcripts in Soothe clients (TUI, future web). The daemon hosts a `CardBinder` that converts raw execution events into bound card mutations, and a per-loop `DisplayCardLedger` that persists them via the configured persistence backend: SQLite (`display.db`) by default, or PostgreSQL (`soothe_metadata` tables) when `persistence.default_backend: postgresql`. Clients become passive renderers consuming a stable `soothe.card.*` wire schema.
 
 The design eliminates the live/replay drift class by construction: live rendering and historical resume both flow through the same binding logic. It supersedes the checkpoint-tree reconstruction model in RFC-411 with a forward-write ledger that is recorded as the loop runs.
 
@@ -82,7 +82,7 @@ The two paths have drifted. Coverage holes in persistence make some cards unreco
 
 ### 3.4 Why a New Architecture, Not a Patch
 
-A patch (wire `/loops` switch to existing `_load_loop_history`, audit persistence holes, delete dead daemon code) closes today's symptoms but preserves the architectural split: two stores, two code paths, future card types still need plumbing in both. The desktop client (RFC-505) would need to duplicate the TUI's binding logic.
+A patch (wire `/loops` switch to existing `_load_loop_history`, audit persistence holes, delete dead daemon code) closes today's symptoms but preserves the architectural split: two stores, two code paths, future card types still need plumbing in both. Other protocol-1 clients would need to duplicate the TUI's binding logic without a server-owned ledger.
 
 The fix here is to **collapse live and replay onto one binding source**, owned by the daemon, with a wire schema designed for replay.
 
@@ -387,7 +387,7 @@ Wire switch/resume paths to load history after successful loop switch.
 5. **Disk cost** stays under ~1 MB per 100-turn loop (mutation store).
 6. **Replay latency** under 100 ms first-paint, under 500 ms full hydrate for 100-turn loops.
 7. **Phase 4:** Live TUI structural cards come only from daemon-bound payloads; two subscribers on one loop observe the same card ids and ordered segment `seq`.
-8. **Desktop / appkit** (RFC-505 / RFC-629) can consume `soothe.card.*` with zero CLI-specific binding code.
+8. **Appkit / protocol-1 clients** (RFC-629) can consume `soothe.card.*` with zero CLI-specific binding code.
 9. **Persistence** remains unified — no SQLite display writes when `default_backend: postgresql`.
 
 ---
@@ -440,7 +440,7 @@ Design draft: [`docs/drafts/2026-07-27-tui-card-replay-source-of-truth-design.md
 * RFC-411 — Event Stream Replay & History Reconstruction (superseded by this RFC)
 * RFC-450 — Daemon Communication Protocol
 * RFC-503 — Loop-First User Experience
-* RFC-505 — Soothe Desktop Client
+* RFC-631 — Goal Display Snapshots
 * RFC-612 / RFC-801 — Persistence backends (DisplayCardStore placement)
 * RFC-631 — Goal Display Snapshots
 * Design draft (2026-06-04): `docs/archive/drafts/2026-06-04-resume-loop-display-design.md`

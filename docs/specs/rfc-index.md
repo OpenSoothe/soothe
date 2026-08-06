@@ -335,7 +335,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Supersedes: RFC-411 (history reconstruction model)
   - Amended by: RFC-631 (live-only ledger scope); 2026-07-19 PostgreSQL when `persistence.default_backend: postgresql`; 2026-07-27 Phase 4 live `card.*` cutover
   - Implemented by: IG-655 (Phase 4)
-  - Depends on: RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-505 (Soothe Desktop Client), RFC-631
+  - Depends on: RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-631
   - Authors: xiaming (with Claude)
 
 - **RFC-631**: [Goal-Bound Display Snapshots](RFC-631-goal-display-snapshots.md)
@@ -410,9 +410,9 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-04-22
 
-- **RFC-505**: [Soothe Desktop Client Architecture](RFC-505-soothe-desktop-client.md)
+- **RFC-505**: [Soothe Desktop Client Architecture](../archive/specs/RFC-505-soothe-desktop-client.md) *(archived — desktop app removed from monorepo)*
   - Kind: Architecture Design
-  - Status: Draft
+  - Status: Archived
   - Created: 2026-06-04
 
 ---
@@ -610,9 +610,12 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 ### Product & Applications (7xx)
 
-- **RFC-700**: [Desktop App Product Redesign](RFC-700-desktop-app-product-redesign.md)
+> Band reserved. Desktop app RFCs archived 2026-08-06
+> (`docs/archive/notes/2026-08-06-desktop-app-removed.md`).
+
+- **RFC-700**: [Desktop App Product Redesign](../archive/specs/RFC-700-desktop-app-product-redesign.md) *(archived — desktop app removed from monorepo)*
   - Kind: Product Specification
-  - Status: Proposed
+  - Status: Archived
   - Created: 2026-06-04
 
 ---
@@ -731,8 +734,8 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 | RFC-624 | Context Engine — Unified Context Management | Draft | 2026-06-12 |
 | RFC-228 | Autopilot Job IPC Commands | Proposed | 2026-06-04 |
 | RFC-413 | Server-Owned Display Card Ledger | Draft (Phases 1–4 / IG-655) | 2026-06-04 |
-| RFC-505 | Soothe Desktop Client Architecture | Draft | 2026-06-04 |
-| RFC-700 | Desktop App Product Redesign | Proposed | 2026-06-04 |
+| RFC-505 | Soothe Desktop Client Architecture | Archived | 2026-06-04 |
+| RFC-700 | Desktop App Product Redesign | Archived | 2026-06-04 |
 
 ### Supersede Relationships
 
@@ -780,10 +783,10 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 - **RFC-626**: Entity Model and State Management Consolidation — LoopState Elimination (2026-06-16)
 - **RFC-625**: AutopilotMonitor as ContextEngine Monitor Submodule — GoalEngine Deletion (2026-06-15)
 - **RFC-624**: Context Engine — Unified Context Management for Goals, Steps, and Projection (2026-06-12)
-- **RFC-228**: Autopilot Job IPC Commands for Desktop Integration (2026-06-04)
+- **RFC-228**: Autopilot Job IPC Commands (2026-06-04)
 - **RFC-413**: Server-Owned Display Card Ledger (2026-06-04)
-- **RFC-505**: Soothe Desktop Client Architecture (2026-06-04)
-- **RFC-700**: Desktop App Product Redesign (2026-06-04)
+- **RFC-505**: Soothe Desktop Client Architecture (2026-06-04, Archived — removed from monorepo)
+- **RFC-700**: Desktop App Product Redesign (2026-06-04, Archived — removed from monorepo)
 - **RFC-623**: Veritas Auto-Mode Robustness (2026-06-03)
 - **RFC-621**: Workspace Host Convention: Path Mapping for Containerized Daemon (2026-06-02)
 - **RFC-622**: CoreAgent Clarification Relay (2026-06-02)

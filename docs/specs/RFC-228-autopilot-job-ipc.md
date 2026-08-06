@@ -1,17 +1,17 @@
 # RFC-228: Autopilot Job IPC Commands
 
 **RFC**: 228
-**Title**: Autopilot Job IPC Commands for Desktop Integration
+**Title**: Autopilot Job IPC Commands
 **Status**: Proposed
 **Kind**: Protocol Specification
 **Created**: 2026-06-04
-**Updated**: 2026-08-05
+**Updated**: 2026-08-06
 **Dependencies**: RFC-222 (Autopilot and Goal Engine Architecture), RFC-450 (Daemon Communication Protocol)
 **Related**: RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands), RFC-230 (Job Maturity Assessment), IG-677 (Job↔Loop Index), IG-613 (protocol-1 `autopilot_*` RPCs), IG-692
 
 ## Abstract
 
-This RFC defines WebSocket IPC commands for desktop client interaction with the daemon's AutopilotService. Commands cover job lifecycle (create, status, pause, resume, cancel), DAG visualization data retrieval, user guidance absorption, and autopilot worker event subscription. These commands enable the Desktop app (RFC-700) to monitor and influence autopilot sessions through the singleton AutopilotService.
+This RFC defines WebSocket IPC commands for client interaction with the daemon's AutopilotService. Commands cover job lifecycle (create, status, pause, resume, cancel), DAG visualization data retrieval, user guidance absorption, and autopilot worker event subscription. These commands enable CLI and other protocol-1 clients to monitor and influence autopilot sessions through the singleton AutopilotService.
 
 It also defines the protocol-1 aggregate snapshot RPC `autopilot_top` for the CLI live dashboard (`soothe autopilot top`): active-only jobs → goal DAG → JobLoopIndex loops in one round-trip.
 
@@ -19,7 +19,7 @@ It also defines the protocol-1 aggregate snapshot RPC `autopilot_top` for the CL
 
 ### Problem Statement
 
-RFC-700 (Desktop App Product Redesign) requires IPC commands to:
+Autopilot job management requires IPC commands to:
 1. Create and manage autopilot jobs (root goals submitted to AutopilotService)
 2. Query job status and DAG structure for visualization
 3. Send user guidance comments to ContextEngine
@@ -32,13 +32,13 @@ Current RFC-450 IPC commands support loop-centric interactions (`input`, `comman
 Extend the daemon IPC protocol with a new command category: **Autopilot Job Commands**. These commands:
 - Operate on the singleton AutopilotService (RFC-222 §86-89)
 - Target root Goals (jobs) managed by ContextEngine
-- Support desktop DAG visualization and Loop Observation Room (LOR)
+- Support DAG visualization and live job dashboards (CLI `autopilot top`, protocol-1 clients)
 
 ### Scope
 
 | In Scope | Out of Scope |
 |----------|--------------|
-| Job creation/status/cancel IPC | Job persistence (SQLite in desktop app) |
+| Job creation/status/cancel IPC | Client-side job UI persistence |
 | DAG snapshot for visualization | Real-time DAG diff streaming (push) |
 | Active-only aggregate top snapshot (`autopilot_top`) | Push/diff streaming; inactive loop history |
 | User guidance absorption | Guidance result feedback |
@@ -184,15 +184,15 @@ Event emission unified through CE callbacks:
 | `soothe.goal.created` | `ce.on("goal_created", ...)` | `goal_id`, `description` from GoalNode |
 | `soothe.goal.completed` | `ce.on("goal_completed", ...)` | `goal_id`, `summary` from GoalNode.report |
 
-**Implementation**: AutopilotService subscribes to CE callbacks and emits IPC events to subscribed desktop clients.
+**Implementation**: AutopilotService subscribes to CE callbacks and emits IPC events to subscribed clients (`autopilot_subscribe`).
 
 ### Data Flow (RFC-626 Unified)
 
 ```
-Desktop app → WebSocket IPC → AutopilotService
+Protocol-1 client → WebSocket IPC → AutopilotService
   → AutopilotMonitor → ContextEngine API calls
   → CE callbacks → InternalEventBus → IPC event stream
-  → Desktop app receives goal/status/progress events
+  → Client receives goal/status/progress events
 ```
 
 No intermediate GoalEngine, no dual state containers, no checkpoint fallbacks.
@@ -210,7 +210,7 @@ When subscribed via `autopilot_subscribe`, client receives these events:
 | `soothe.worker.assigned` | `goal_id` (req), `loop_id` (req) | Worker assigned to goal |
 | `soothe.worker.unassigned` | `goal_id` (req), `loop_id` (opt) | Worker released from goal |
 
-> **Note**: Internal events like `soothe.internal.backoff` are filtered from client streams (RFC-222 §308-315). Desktop receives goal-level status events only.
+> **Note**: Internal events like `soothe.internal.backoff` are filtered from client streams (RFC-222 §308-315). Subscribed clients receive goal-level status events only.
 
 ## Command Details
 
@@ -750,7 +750,7 @@ All IPC commands require an authenticated WebSocket session (RFC-450 §30-38). T
 
 ### Multi-Client Contention
 
-Multiple desktop clients may be connected simultaneously and issue conflicting lifecycle commands. The daemon resolves contention using **last-writer-wins** semantics with optimistic concurrency:
+Multiple protocol-1 clients may be connected simultaneously and issue conflicting lifecycle commands. The daemon resolves contention using **last-writer-wins** semantics with optimistic concurrency:
 
 | Scenario | Resolution |
 |----------|-----------|
@@ -789,7 +789,7 @@ Future enhancement: scoped subscriptions (`autopilot_subscribe` with optional `j
 5. job_status → job_status_response (periodic polling)
 ```
 
-**Loop Observation Room**:
+**Worker loop observation** (after `autopilot_subscribe`):
 ```
 1. autopilot_subscribe (already subscribed from job view)
 2. job_dag → get goal's assigned_loop_id
@@ -841,13 +841,11 @@ Future enhancement: scoped subscriptions (`autopilot_subscribe` with optional `j
 - [ ] Client stubs: `autopilot_top` in soothe-client / sdk params registry
 - [ ] `soothe autopilot top` Rich Live renderer
 
-### Desktop Client Side (RFC-700)
-
-- [ ] IPC bridge extension for job commands
-- [ ] Event handler for goal/worker events
-- [ ] DAG data transformation for React Flow
-
 ## Changelog
+
+### 2026-08-06
+- Dropped desktop-app framing; IPC is for CLI and protocol-1 clients
+  (desktop submodule removed from monorepo; RFC-505 / RFC-700 archived)
 
 ### 2026-08-05
 - `verification_rules` lifecycle: host maturity assessment via RFC-230 / IG-692;
@@ -889,4 +887,3 @@ Future enhancement: scoped subscriptions (`autopilot_subscribe` with optional `j
 - RFC-624: ContextEngine (AutopilotMonitor Unification)
 - RFC-625: AutopilotMonitor and ContextEngine Unification
 - RFC-626: Entity Model and State Management Consolidation — LoopState Elimination
-- RFC-700: Desktop App Product Redesign

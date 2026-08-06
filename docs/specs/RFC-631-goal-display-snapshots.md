@@ -84,7 +84,7 @@ LangGraph stream ──► CardBinder ──► LiveCardLedger (current goal onl
                     GoalDisplaySnapshot ──► display.db
                                │
                                ▼
-              loop_history_fetch ──► clients (TUI, desktop, appkit)
+              loop_history_fetch ──► clients (TUI, appkit)
 ```
 
 | Component | Package (target) | Role |

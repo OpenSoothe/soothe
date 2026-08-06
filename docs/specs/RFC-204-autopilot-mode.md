@@ -331,7 +331,7 @@ class ChannelMessage:
 **API Specifications**:
 - **HTTP REST endpoints**: See `docs/specs/rest-api-spec.md` for thread management, configuration, and file operation endpoints. Autopilot-specific HTTP endpoints (`/api/v1/autopilot/*`) are defined in RFC-228 (Autopilot Job IPC Commands) §3.3.
 - **WebSocket protocol**: See `docs/specs/asyncapi.yaml` for the full WebSocket message schema, including job creation/status/cancel commands and autopilot event subscriptions.
-- **IPC commands**: RFC-228 defines WebSocket IPC commands for desktop client integration (`job_create`, `job_status`, `job_pause`, `job_resume`, `job_cancel`, `job_dag`, `job_guidance`, `autopilot_subscribe`).
+- **IPC commands**: RFC-228 defines WebSocket IPC commands for autopilot job control (`job_create`, `job_status`, `job_pause`, `job_resume`, `job_cancel`, `job_dag`, `job_guidance`, `autopilot_subscribe`).
 
 **Removed**: File-based inbox/outbox directories (`autopilot/inbox/`, `autopilot/outbox/`).
 

@@ -9,7 +9,7 @@
 
 ## Scope
 
-`client/typescript/` only — no desktop/CLI rewiring, no npm publish in this guide.
+`client/typescript/` only — no CLI rewiring, no npm publish in this guide.
 
 | Phase | Deliverable |
 |-------|-------------|

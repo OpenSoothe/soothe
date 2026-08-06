@@ -3,7 +3,7 @@
 **Status:** Draft — Platonic Coding Phase 0 (Brainstorming output)
 **Date:** 2026-07-27
 **Authors:** xiaming (with Composer)
-**Related:** RFC-413 (Server-Owned Display Card Ledger), RFC-631 (Goal Display Snapshots), RFC-450 (Daemon Protocol), RFC-505 (Desktop Client), IG-577 (Resume Transcript Hardening)
+**Related:** RFC-413 (Server-Owned Display Card Ledger), RFC-631 (Goal Display Snapshots), RFC-450 (Daemon Protocol), IG-577 (Resume Transcript Hardening)
 **Supersedes / refines:** Completes the unfinished Phase 4 end state of RFC-413; does not replace RFC-413 or RFC-631
 
 **Formalized:** 2026-07-27 — decisions merged into [RFC-413](../specs/RFC-413-server-owned-display-card-ledger.md) (§11 Phase 4, §16); implementation tracked in [IG-655](../impl/IG-655-display-card-phase4-live-cutover.md).
@@ -42,7 +42,7 @@ The product goal is **structural parity** between live and resume/attach — not
 2. Live wire and resume hydrate the same card kinds with the same structural fields.
 3. Detached loops keep writing the ledger; attach/resume replays SoT then continues on the same live frame stream.
 4. Multiple subscribers to one loop see identical card sequences (`seq`-ordered).
-5. TUI (then desktop / appkit) delete local stream→card construction for the catalogue in scope.
+5. TUI (then appkit) delete local stream→card construction for the catalogue in scope.
 
 ### 3.2 Non-Goals
 
@@ -185,7 +185,7 @@ Mount/update widgets from bound `MessageData` (or wire dict). Resume path alread
 ### Stage 4 — Decommission
 
 - Remove TUI live stream→card binders for the structural catalogue.
-- Document wire contract for desktop (RFC-505) and appkit consumers.
+- Document wire contract for appkit consumers.
 - Mark RFC-413 Phase 4 complete; update change history.
 
 ---

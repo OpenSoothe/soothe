@@ -1097,7 +1097,7 @@ class ContextEngine:
         guidance_text: str,
         scope: str = "goal",
     ) -> bool:
-        """Absorb user guidance from desktop / job IPC (RFC-228).
+        """Absorb user guidance from job IPC (RFC-228).
 
         Accumulates guidance for the next worker dispatch (see Autopilot
         ``GoalDispatchContextBundle.operator_guidance``).

@@ -40,7 +40,7 @@ Job (root goal) → Goal DAG → Loops (IG-677 assignments)
 - Interactive keys (cancel, focus, expand/collapse) in v1  
 - `--all` / recent-terminal retention window (may follow later)  
 - Event-push via `autopilot_subscribe` instead of polling  
-- TUI `/autopilot` panel changes or desktop surfaces  
+- TUI `/autopilot` panel changes
 - Changing GoalEngine / WorkerPool scheduling behavior  
 
 ---

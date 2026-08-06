@@ -370,9 +370,9 @@ def is_internal_event_type(event_type: str) -> bool:
 
 
 class GoalStatusEvent(SootheEvent):
-    """Goal status transition visible to desktop clients (RFC-228).
+    """Goal status transition for autopilot subscribers (RFC-228).
 
-    Emitted when goal status changes. Desktop uses this for DAG node updates.
+    Emitted when goal status changes. Clients use this for DAG node updates.
     """
 
     type: str = "soothe.autopilot.goal.status"
@@ -384,10 +384,9 @@ class GoalStatusEvent(SootheEvent):
 
 
 class GoalProgressEvent(SootheEvent):
-    """Goal progress update visible to desktop clients (RFC-228).
+    """Goal progress update for autopilot subscribers (RFC-228).
 
     Emitted when goal step count or tool call count changes.
-    Desktop uses this for progress bar and badge updates.
     """
 
     type: str = "soothe.autopilot.goal.progress"
@@ -399,9 +398,9 @@ class GoalProgressEvent(SootheEvent):
 
 
 class GoalCreatedEvent(SootheEvent):
-    """Goal added to DAG visible to desktop clients (RFC-228).
+    """Goal added to DAG for autopilot subscribers (RFC-228).
 
-    Emitted when new goal is created. Desktop uses this to add DAG nodes.
+    Emitted when a new goal is created.
     """
 
     type: str = "soothe.autopilot.goal.created"
@@ -412,10 +411,9 @@ class GoalCreatedEvent(SootheEvent):
 
 
 class GoalCompletedEvent(SootheEvent):
-    """Goal completed with summary visible to desktop clients (RFC-228).
+    """Goal completed with summary for autopilot subscribers (RFC-228).
 
-    Emitted when goal finishes successfully with result summary.
-    Desktop uses this for completion display.
+    Emitted when a goal finishes successfully with a result summary.
     """
 
     type: str = "soothe.autopilot.goal.completed"
@@ -426,10 +424,9 @@ class GoalCompletedEvent(SootheEvent):
 
 
 class WorkerAssignedEvent(SootheEvent):
-    """Worker assigned to goal visible to desktop clients (RFC-228).
+    """Worker assigned to goal for autopilot subscribers (RFC-228).
 
-    Emitted when autopilot worker is assigned to a goal.
-    Desktop uses this for loop navigation from DAG nodes.
+    Emitted when an autopilot worker is assigned to a goal.
     """
 
     type: str = "soothe.autopilot.worker.assigned"
@@ -439,9 +436,9 @@ class WorkerAssignedEvent(SootheEvent):
 
 
 class WorkerUnassignedEvent(SootheEvent):
-    """Worker released from goal visible to desktop clients (RFC-228).
+    """Worker released from goal for autopilot subscribers (RFC-228).
 
-    Emitted when autopilot worker finishes or is reassigned.
+    Emitted when an autopilot worker finishes or is reassigned.
     """
 
     type: str = "soothe.autopilot.worker.unassigned"
@@ -474,8 +471,8 @@ CLIENT_AUTOPILOT_EVENT_TYPES: frozenset[str] = frozenset(
 def internal_to_client_event(internal_event: SootheEvent) -> SootheEvent | None:
     """Convert internal event to client-visible event (RFC-228).
 
-    Used by daemon to bridge internal events for desktop clients
-    with autopilot_subscribed=True.
+    Used by daemon to bridge internal events for sessions with
+    ``autopilot_subscribed=True``.
 
     Args:
         internal_event: Internal event to convert.

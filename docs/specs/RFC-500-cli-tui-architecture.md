@@ -141,7 +141,7 @@ See **RFC-302: Unified Daemon Communication Protocol**.
 
 ### Transports
 
-1. **WebSocket** (primary) — Default port `8765` (localhost), WebSocket text frames, all clients (CLI/TUI/web/desktop), real-time streaming.
+1. **WebSocket** (primary) — Default port `8765` (localhost), WebSocket text frames, all clients (CLI/TUI/web), real-time streaming.
 
 2. **HTTP REST API** — Default port `8766` (localhost), HTTP/1.1 with JSON bodies, health checks, CRUD operations, management endpoints.
 

@@ -764,8 +764,8 @@ class SootheDaemon(DaemonHandlersMixin):
                     logger.exception("[Cron] failed to construct daemon-owned CronService")
                     self._cron_service = None
 
-                # RFC-228: Bridge internal autopilot events to client-visible events
-                # for desktop clients with autopilot_subscribed=True
+                # RFC-228: Bridge internal autopilot events to client-visible
+                # events for sessions with autopilot_subscribed=True
                 from soothe.events.internal_events import internal_to_client_event
 
                 async def _bridge_internal_to_client(event: Any) -> None:

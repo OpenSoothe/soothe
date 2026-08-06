@@ -343,7 +343,8 @@ class ClientSessionManager:
         never be exposed as user-facing sessions.
 
         RFC-228: If client has ``autopilot_subscribed=True``, bypass the
-        worker filter to allow Loop Observation Room (LOR) access.
+        worker filter so subscribed clients can observe autopilot assignment
+        loops (``subscribe_thread`` on ``autopilot__*`` ids).
         """
         try:
             from soothe.autopilot.worker_pool import is_autopilot_worker_loop_id

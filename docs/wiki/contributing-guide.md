@@ -80,7 +80,6 @@ Submodules are **consumed only** (do not format, lint, test, or release them her
 - `packages/soothe-sdk` — [mirasoth/soothe-sdk](https://github.com/mirasoth/soothe-sdk)
 - `packages/soothe-nano` — [mirasoth/soothe-nano](https://github.com/mirasoth/soothe-nano)
 - `client/{python,go,typescript,rust}` — language clients
-- `apps/soothe-desktop`
 
 Community plugins ship from [mirasoth/soothe-plugins](https://github.com/mirasoth/soothe-plugins).
 

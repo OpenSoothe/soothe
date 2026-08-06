@@ -51,7 +51,7 @@ Enforcement for owned packages: `scripts/check_module_import_boundaries.sh`
 (wired into `./scripts/verify_finally.sh`).
 
 **This monorepo owns** `soothe`, `soothe-daemon`, and `soothe-cli` only.
-Submodules (`soothe-sdk`, `soothe-nano`, `client/*`, desktop) are **consumed as
+Submodules (`soothe-sdk`, `soothe-nano`, `client/*`) are **consumed as
 code** — do **not** format, lint, test, or release them from this repo. Maintain
 those packages in their own repositories.
 
@@ -140,7 +140,6 @@ packages/
 #   packages/soothe-sdk      mirasoth/soothe-sdk
 #   packages/soothe-nano     mirasoth/soothe-nano
 #   client/{python,go,typescript,rust}
-#   apps/soothe-desktop
 ```
 
 Do **not** run monorepo format/lint/test/publish against submodule trees. Bump

@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed - Desktop app submodule (2026-08-06)
+
+- Removed `apps/soothe-desktop` git submodule and `scripts/build-desktop-macos.sh`
+- Archived RFC-505 / RFC-700 and related IGs under `docs/archive/`
+- Scrubbed desktop / LOR product framing from active RFCs; job IPC (RFC-228) kept for CLI / protocol-1 clients
+- See `docs/archive/notes/2026-08-06-desktop-app-removed.md`
+
 ### Changed - Deep Research subagents (RFC-619, 2026-07-07)
 
 - Replaced the monolithic research subagent with **`deep_research`** (public web) and **`academic_research`** (academic literature)

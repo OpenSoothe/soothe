@@ -246,11 +246,11 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Authors: xiaming (with Claude)
 
 - **2026-06-04**: RFC-505 - Soothe Desktop Client Architecture
-  - Status: Draft
+  - Status: Archived (2026-08-06 — desktop submodule removed; see `docs/archive/notes/2026-08-06-desktop-app-removed.md`)
   - Kind: Architecture Design
 
 - **2026-06-04**: RFC-700 - Desktop App Product Redesign
-  - Status: Proposed
+  - Status: Archived (2026-08-06 — desktop submodule removed)
   - Kind: Product Specification
 
 - **2026-06-04**: RFC-413 supersedes RFC-411
@@ -713,7 +713,7 @@ RFCs are organized into numbered series by category:
 - RFC-502: Unified Presentation Engine
 - RFC-503: Loop-First User Experience Architecture
 - RFC-504: Loop Management CLI Commands
-- RFC-505: Soothe Desktop Client Architecture
+- RFC-505: Soothe Desktop Client Architecture *(archived 2026-08-06)*
 
 ### 6xx - Plugin System & Extensions
 
@@ -740,7 +740,7 @@ RFCs are organized into numbered series by category:
 
 ### 7xx - Product & Applications
 
-- RFC-700: Desktop App Product Redesign
+- RFC-700: Desktop App Product Redesign *(archived 2026-08-06)*
 
 ---
 

@@ -93,7 +93,6 @@ Multi-user HTTP backend      → ConnectionPool + TurnRunner
 ## Out of scope follow-ups
 
 - IG-608 remaining airway thin-down (product Layer 2)
-- Desktop rewire to new TS export tiers (IG-607 successor)
 
 ---
 

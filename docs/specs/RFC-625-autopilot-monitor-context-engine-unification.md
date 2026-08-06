@@ -132,7 +132,7 @@ Fields migrated from Goal model (`autopilot/models.py:Goal`):
 | `report` | `None` | `GoalReport` on completion |
 | `attempts_after_crash` | `0` | Crash recovery count (RFC-222) |
 | `pending_clarification` | `None` | RFC-622 clarification state |
-| `guidance_accumulated` | `[]` | RFC-228 LOR guidance |
+| `guidance_accumulated` | `[]` | RFC-228 operator guidance |
 
 Fields deferred (not migrated):
 - `lock_status`, `locked_files`, `lock_acquired_at` — fine-grained locking (RFC-222 Q1, deferred)
