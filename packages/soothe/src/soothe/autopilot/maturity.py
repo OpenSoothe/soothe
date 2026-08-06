@@ -123,23 +123,48 @@ def maturity_wire_fields(maturity: dict[str, Any] | None) -> dict[str, Any] | No
     }
 
 
-def load_goal_md_excerpt(workspace: str | Path | None, *, max_chars: int = 800) -> str:
-    """Read workspace GOAL.md body excerpt, or empty string."""
-    if not workspace or not str(workspace).strip():
-        return ""
-    path = Path(workspace).expanduser() / "GOAL.md"
-    if not path.is_file():
-        return ""
-    try:
-        return path.read_text(encoding="utf-8")[:max_chars].strip()
-    except OSError:
-        return ""
+def load_goal_md_excerpt(
+    workspace: str | Path | None,
+    *,
+    jobs_root: Path | None = None,
+    job_id: str | None = None,
+    max_chars: int = 800,
+) -> str:
+    """Read GOAL.md excerpt: workspace first, else job artifact (IG-702).
+
+    Args:
+        workspace: Project workspace that may contain ``GOAL.md``.
+        jobs_root: Optional ``$SOOTHE_DATA_DIR/jobs`` root for job fallback.
+        job_id: Root job id when falling back to ``jobs/{job_id}/GOAL.md``.
+        max_chars: Truncation limit.
+
+    Returns:
+        Excerpt text, or empty string when neither source is readable.
+    """
+    if workspace and str(workspace).strip():
+        path = Path(workspace).expanduser() / "GOAL.md"
+        if path.is_file():
+            try:
+                return path.read_text(encoding="utf-8")[:max_chars].strip()
+            except OSError:
+                pass
+    if jobs_root is not None and job_id:
+        from soothe.autopilot.job_goal_md import load_job_goal_md
+
+        return load_job_goal_md(
+            jobs_root=jobs_root,
+            job_id=job_id,
+            max_chars=max_chars,
+        )
+    return ""
 
 
 def acceptance_contract_brief(
     *,
     verification_rules: str | None = None,
     workspace: str | Path | None = None,
+    jobs_root: Path | None = None,
+    job_id: str | None = None,
     maturity: dict[str, Any] | None = None,
     max_chars: int = 600,
 ) -> str:
@@ -147,7 +172,12 @@ def acceptance_contract_brief(
     parts: list[str] = []
     if verification_rules and verification_rules.strip():
         parts.append(f"verification_rules: {verification_rules.strip()[:400]}")
-    goal_excerpt = load_goal_md_excerpt(workspace, max_chars=400)
+    goal_excerpt = load_goal_md_excerpt(
+        workspace,
+        jobs_root=jobs_root,
+        job_id=job_id,
+        max_chars=400,
+    )
     if goal_excerpt:
         parts.append(f"GOAL.md:\n{goal_excerpt}")
     wire = maturity_wire_fields(maturity)

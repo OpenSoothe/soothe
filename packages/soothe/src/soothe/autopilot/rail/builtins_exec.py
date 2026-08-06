@@ -448,6 +448,8 @@ class RailBuiltinExecutor:
         return acceptance_contract_brief(
             verification_rules=root.verification_rules if root else None,
             workspace=str(ws) if ws else (root.workspace if root else None),
+            jobs_root=self._jobs_root,
+            job_id=job_id,
             maturity=root.maturity if root else None,
         )
 

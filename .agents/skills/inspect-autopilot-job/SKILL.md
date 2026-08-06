@@ -30,6 +30,7 @@ Prefer `.venv/bin/soothe` when available.
 | Source | Path / command | Use |
 |--------|----------------|-----|
 | Live DAG | `soothe autopilot job\|goal\|status\|top` | Current status (authoritative when daemon up) |
+| Job contract | `~/.soothe/data/jobs/{job}/GOAL.md` | Submit description snapshot (IG-702) |
 | Rail state | `~/.soothe/data/jobs/{job}/rail_state.json` | `rail_id`, wave/feedback rounds, annotations (role/tags/branch) |
 | Rail trace | `…/jobs/{job}/rail_trace.jsonl` (legacy: `loops/{job}/`) | Builtin fires + guards; phase timeline |
 | Job↔loops | `persist.db` `autopilot:job_loops:{job}` (ns `autopilot_goals`) | Per-goal attempt history + wall times |

@@ -21,6 +21,7 @@ import asyncio
 import contextlib
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.context.engine import ContextEngine
@@ -157,6 +158,7 @@ class AutopilotService:
         # progress (IG-701). Reset to 0 on each goal_started / attempt.
         self._goal_loop_token_cursor: dict[str, int] = {}
         self._persist_fail_count = 0
+        self._jobs_root: Path | None = None
         self._rail_interpreter: Any = None
         self._init_rail_interpreter()
 
@@ -182,6 +184,7 @@ class AutopilotService:
             trace_root = data_dir / "jobs"
             legacy_root = data_dir / "loops"
             trace_root.mkdir(parents=True, exist_ok=True)
+            self._jobs_root = trace_root
             self._rail_interpreter = LoopRailInterpreter(
                 self._ce,
                 guards=guards,
@@ -191,6 +194,16 @@ class AutopilotService:
         except Exception:
             logger.warning("LoopRail interpreter unavailable", exc_info=True)
             self._rail_interpreter = None
+            if self._jobs_root is None:
+                try:
+                    from pathlib import Path
+
+                    from soothe_sdk.paths import SOOTHE_DATA_DIR
+
+                    self._jobs_root = Path(SOOTHE_DATA_DIR) / "jobs"
+                    self._jobs_root.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    logger.warning("Job artifact root unavailable", exc_info=True)
 
     def _setup_subscriptions(self) -> None:
         """Subscribe to InternalEventBus events."""
@@ -489,6 +502,14 @@ class AutopilotService:
         # IG-677: root goals are jobs — ensure membership record exists.
         if goal.parent_id is None:
             await self._job_loop_index.ensure_job(goal.id)
+            # IG-702: durable submit contract under jobs/{job_id}/GOAL.md.
+            from soothe.autopilot.job_goal_md import write_job_goal_md
+
+            write_job_goal_md(
+                jobs_root=self._jobs_root,
+                job_id=goal.id,
+                description=goal.description,
+            )
             await self._bind_rail_for_job(goal)
         if self._dreaming:
             await self.wake_from_dreaming(trigger="new_task")
@@ -1585,7 +1606,11 @@ class AutopilotService:
             snapshot = JobMaturityAssessor().assess_workspace(
                 workspace,
                 verification_rules=root.verification_rules,
-                goal_md=load_goal_md_excerpt(workspace),
+                goal_md=load_goal_md_excerpt(
+                    workspace,
+                    jobs_root=self._jobs_root,
+                    job_id=job_id,
+                ),
             )
             root.maturity = snapshot.to_dict()
             root.touch()
