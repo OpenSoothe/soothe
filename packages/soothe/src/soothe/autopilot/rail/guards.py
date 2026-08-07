@@ -126,7 +126,7 @@ def _structural_short_circuit(
 
     if name == "architecture_ready":
         # LLM fan-out: when require_plan, wave-plan artifact must exist before
-        # spawn_wave_makers (no rigid default modules).
+        # spawn_wave_makers (no rigid default slice list).
         require_plan = bool(structural.get("require_plan", False))
         wave_plan_ready = bool(structural.get("wave_plan_ready", False))
         plan_ok = (not require_plan) or wave_plan_ready

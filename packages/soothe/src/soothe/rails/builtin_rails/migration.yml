@@ -1,9 +1,9 @@
 id: migration
-version: "2.2"
+version: "2.3"
 
 summary: |
   Multi-step migration or upgrade as a goal loop: architecture milestones
-  with WavePlan module/wave partitions (schema batches, dual-write slices,
+  with WavePlan slice/wave partitions (schema batches, dual-write slices,
   cutover-prep), parallel makers, integrate, commit gate, review, wave QA,
   feedback cycles, and pause on irreversible cutover. Differs from
   feature-dev by partitioning work into independent migration slices and
@@ -12,10 +12,10 @@ summary: |
 applies_when: |
   Framework upgrade, schema migration, API version bump, or multi-file
   mechanical migration with a clear done condition — not a single hot
-  fix, research spike, or greenfield multi-module product from scratch.
+  fix, research spike, or greenfield multi-part product from scratch.
 
 # Fan-out is LoopRail policy — not AutopilotService / submit API.
-# Module list is LLM-authored (WavePlan JSON in architecture findings);
+# Slice list is LLM-authored (WavePlan JSON in architecture findings);
 # host ingests findings into a job-scoped artifact under
 # $SOOTHE_DATA_DIR/jobs/{job_id}/. Rail only declares the contract path
 # template + require_plan. Engine clamps to max_parallel_goals.
@@ -35,7 +35,7 @@ verbs:
           priority: 80
           brief: |
             Migration architecture and milestone map for job {job_id}. Partition
-            the migration into independent WavePlan modules (migration slices
+            the migration into independent WavePlan slices (migration stages
             such as schema batches, dual-write paths, cutover-prep, or backfill
             stages). Define wave-1 independent slices, wave acceptance /
             invariant checks, and git commit milestones. Do not implement
@@ -46,13 +46,13 @@ verbs:
             write fan-out policy into the project workspace tree; never write
             docs/wave-plan.json or .soothe/wave-plan.json as the plan). Schema
             example:
-            {"wave_modules":["schema","dual-write","cutover-prep","verify"],
+            {"wave_slices":["schema","dual-write","cutover-prep","verify"],
             "independence":"disjoint write-sets per migration slice",
             "rationale":"why this partition"}
-            Optionally use rich `modules` entries
-            ({"module","description","priority","tags"}) and/or `max_waves`.
+            Optionally use rich `slices` entries
+            ({"slice","description","priority","tags"}) and/or `max_waves`.
             Prose alone is not enough (never scrapes markdown, never substitutes
-            a fixed default module list). Modules must be independent (no
+            a fixed default slice list). Slices must be independent (no
             overlapping primary write sets). Autopilot only clamps spawn width
             to max_parallel_goals.
           wire:

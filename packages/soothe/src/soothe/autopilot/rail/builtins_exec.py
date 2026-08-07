@@ -31,8 +31,9 @@ from soothe.autopilot.rail.wave_plan import (
     normalize_wave_plan_artifact,
     parse_wave_plan_from_findings,
     parse_wave_plan_payload,
-    resolve_fanout_modules,
+    resolve_fanout_slices,
     resolve_wave_plan_path,
+    sort_decompose_plan_by_priority,
 )
 from soothe.context.engine import ContextEngine
 from soothe.context.models import TERMINAL_STATES, GoalNode
@@ -100,7 +101,7 @@ class RailJobState:
     # greenfield-system wave state
     wave_index: int = 0
     max_waves: int = 3
-    wave_modules: list[str] | None = None
+    wave_slices: list[str] | None = None
     worktrees_enabled: bool = True
     # Rail YAML ``fanout`` declaration — LLM fills job-scoped plan.
     # Defaults are inert unless the rail declares ``fanout:`` at bind.
@@ -320,7 +321,7 @@ class RailBuiltinExecutor:
             else donor.decompose_plan,
             wave_index=max(base.wave_index, donor.wave_index),
             max_waves=max(base.max_waves, donor.max_waves),
-            wave_modules=base.wave_modules if base.wave_modules is not None else donor.wave_modules,
+            wave_slices=base.wave_slices if base.wave_slices is not None else donor.wave_slices,
             worktrees_enabled=donor.worktrees_enabled,
             wave_plan_artifact=base.wave_plan_artifact,
             require_plan=base.require_plan,
@@ -363,7 +364,7 @@ class RailBuiltinExecutor:
                 "decompose_plan": state.decompose_plan,
                 "wave_index": state.wave_index,
                 "max_waves": state.max_waves,
-                "wave_modules": state.wave_modules,
+                "wave_slices": state.wave_slices,
                 "worktrees_enabled": state.worktrees_enabled,
                 "wave_plan_artifact": state.wave_plan_artifact,
                 "require_plan": state.require_plan,
@@ -410,7 +411,7 @@ class RailBuiltinExecutor:
             decompose_plan=raw.get("decompose_plan"),
             wave_index=int(raw.get("wave_index") or 0),
             max_waves=int(raw.get("max_waves") or 3),
-            wave_modules=raw.get("wave_modules"),
+            wave_slices=raw.get("wave_slices"),
             worktrees_enabled=bool(raw.get("worktrees_enabled", True)),
             wave_plan_artifact=normalize_wave_plan_artifact(
                 str(raw.get("wave_plan_artifact") or DEFAULT_WAVE_PLAN_ARTIFACT)
@@ -686,8 +687,8 @@ class RailBuiltinExecutor:
         job_id: str,
         plan: WavePlan | dict[str, Any] | None = None,
         *,
-        wave_modules: list[str] | None = None,
-        modules: list[dict[str, Any]] | None = None,
+        wave_slices: list[str] | None = None,
+        slices: list[dict[str, Any]] | None = None,
         rationale: str | None = None,
         independence: str | None = None,
         max_waves: int | None = None,
@@ -704,8 +705,8 @@ class RailBuiltinExecutor:
                 return None
             if plan is None:
                 built = build_wave_plan(
-                    wave_modules=wave_modules,
-                    modules=modules,
+                    wave_slices=wave_slices,
+                    slices=slices,
                     rationale=rationale,
                     independence=independence,
                     max_waves=max_waves,
@@ -718,7 +719,7 @@ class RailBuiltinExecutor:
                 if parsed is None:
                     return None
                 built = parsed
-            if not built.resolved_module_names() and built.scout_count is None:
+            if not built.resolved_slice_ids() and built.scout_count is None:
                 return None
             path = self._wave_plan_file(state)
             if path is None:
@@ -750,20 +751,20 @@ class RailBuiltinExecutor:
         state = self._jobs.get(job_id)
         if state is None:
             return False
-        if state.wave_modules:
+        if state.wave_slices:
             return True
         path = self._wave_plan_file(state)
         if path is not None:
             plan = load_wave_plan(path)
-            if plan is not None and plan.resolved_module_names():
+            if plan is not None and plan.resolved_slice_ids():
                 return True
         return self._wave_plan_from_architecture_findings(state) is not None
 
     def _apply_wave_plan_unlocked(self, state: RailJobState, plan: WavePlan) -> None:
         updates = apply_wave_plan_to_state_fields(plan)
-        names = updates.get("wave_modules")
+        names = updates.get("wave_slices")
         if names:
-            state.wave_modules = list(names)
+            state.wave_slices = list(names)
         if updates.get("decompose_plan") is not None:
             state.decompose_plan = updates["decompose_plan"]
         if updates.get("scout_count") is not None:
@@ -771,9 +772,9 @@ class RailBuiltinExecutor:
         if updates.get("max_waves") is not None:
             state.max_waves = max(state.wave_index, int(updates["max_waves"]))
         logger.info(
-            "Applied wave plan for job %s modules=%s scout_count=%s max_waves=%s",
+            "Applied wave plan for job %s slices=%s scout_count=%s max_waves=%s",
             state.job_id[:8],
-            state.wave_modules,
+            state.wave_slices,
             state.scout_count,
             state.max_waves,
         )
@@ -794,7 +795,7 @@ class RailBuiltinExecutor:
         """Load job-scoped wave-plan artifact (or architecture findings) into state.
 
         ``record_wave_plan`` / job artifact is authoritative for the upcoming wave
-        when present (overwrites prior ``wave_modules`` / ``decompose_plan``).
+        when present (overwrites prior ``wave_slices`` / ``decompose_plan``).
         """
         plan: WavePlan | None = None
         path = self._wave_plan_file(state)
@@ -840,14 +841,16 @@ class RailBuiltinExecutor:
                 depends.append(trigger_goal_id)
 
         repo = _job_workspace(self._ce, job_id)
-        resolution = resolve_fanout_modules(
-            wave_modules=state.wave_modules,
+        if state.decompose_plan:
+            state.decompose_plan = sort_decompose_plan_by_priority(state.decompose_plan)
+        resolution = resolve_fanout_slices(
+            wave_slices=state.wave_slices,
             decompose_plan=state.decompose_plan,
             plan=None,  # already ingested into state above
-            max_modules=state.engine_max_parallel_goals,
+            max_slices=state.engine_max_parallel_goals,
             require_plan=state.require_plan,
         )
-        if resolution.source == "missing_plan" or not resolution.modules:
+        if resolution.source == "missing_plan" or not resolution.slices:
             detail = resolution.detail or "LLM wave plan missing; refusing rigid defaults"
             logger.warning(
                 "spawn_wave_makers skipped job=%s require_plan=%s detail=%s",
@@ -857,15 +860,15 @@ class RailBuiltinExecutor:
             )
             return BuiltinResult(status="skipped", detail=detail)
 
-        modules = list(resolution.modules)
-        state.wave_modules = modules
+        slices = list(resolution.slices)
+        state.wave_slices = slices
         await self._persist_job(state)
 
         logger.info(
-            "spawn_wave_makers job=%s modules=%s source=%s clamped_from=%s "
+            "spawn_wave_makers job=%s slices=%s source=%s clamped_from=%s "
             "engine_max_parallel_goals=%s",
             job_id[:8],
-            modules,
+            slices,
             resolution.source,
             resolution.clamped_from,
             state.engine_max_parallel_goals,
@@ -875,10 +878,15 @@ class RailBuiltinExecutor:
         wave = state.wave_index
         await self._persist_job(state)
         created: list[str] = []
+        spec_by_slice: dict[str, dict[str, Any]] = {}
+        for spec in state.decompose_plan or []:
+            key = str(spec.get("slice") or "").strip()
+            if key:
+                spec_by_slice[key] = spec
 
-        for module in modules:
-            slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in module)[:48]
-            slug = slug.strip("-") or f"mod-{len(created) + 1}"
+        for slice_id in slices:
+            slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in slice_id)[:48]
+            slug = slug.strip("-") or f"slice-{len(created) + 1}"
             maker_ws: str | None = str(repo) if repo else None
             branch = f"job/{job_id[:8]}/w{wave}/{slug}"
             if state.worktrees_enabled and repo is not None and _is_git_repo(repo):
@@ -887,11 +895,21 @@ class RailBuiltinExecutor:
                 if ensured is not None:
                     maker_ws = str(ensured)
 
+            spec = spec_by_slice.get(slice_id) or spec_by_slice.get(slug) or {}
+            ownership = str(spec.get("description") or "").strip()
+            if not ownership:
+                ownership = f"Implement only the '{slug}' slice ownership."
+            priority = int(spec.get("priority") or 75)
+            extra_tags = [
+                str(t).strip()
+                for t in (spec.get("tags") or [])
+                if str(t).strip() and str(t).strip() not in {"implementation", "maker"}
+            ]
             desc = (
                 f"Wave {wave} maker [{slug}] for job {job_id}. "
-                f"Implement only the '{slug}' module ownership. "
+                f"{ownership} "
                 f"Work in workspace isolation (branch {branch}). "
-                "Do not modify unrelated modules. Leave atomic commits on this "
+                "Do not modify unrelated slices. Leave atomic commits on this "
                 "branch for later integrate/commit gates."
             )
             goal = await self._ce.create_goal(
@@ -899,14 +917,17 @@ class RailBuiltinExecutor:
                 parent_id=job_id,
                 depends_on=depends or None,
                 source="decomposition",
-                priority=75,
+                priority=priority,
                 workspace=maker_ws,
                 rail_id=state.rail_id,
             )
+            maker_tags = ["implementation", "maker", f"wave-{wave}", slug, *extra_tags]
+            seen_tags: set[str] = set()
+            maker_tags = [t for t in maker_tags if not (t in seen_tags or seen_tags.add(t))]
             await self.annotate_goal(
                 goal.id,
                 job_id,
-                tags=["implementation", "maker", f"wave-{wave}", slug],
+                tags=maker_tags,
                 role="maker",
                 branch_id=branch,
             )
@@ -921,7 +942,7 @@ class RailBuiltinExecutor:
                     deps.append(gid)
             await self._ce.update_dependencies(job_id, deps)
 
-        detail = f"spawned {len(created)} makers modules={modules} source={resolution.source}"
+        detail = f"spawned {len(created)} makers slices={slices} source={resolution.source}"
         if resolution.clamped_from is not None:
             detail += f" clamped_from={resolution.clamped_from}"
         return BuiltinResult(
@@ -997,8 +1018,8 @@ class RailBuiltinExecutor:
             (
                 f"Commit milestone for wave {wave} of job {job_id}. "
                 "Create one or more atomic git commits on the job branch covering "
-                "this wave's modules. Commit messages must name the wave and "
-                "modules. Do not push unless asked. Leave `git log` / `git show` "
+                "this wave's slices. Commit messages must name the wave and "
+                "slices. Do not push unless asked. Leave `git log` / `git show` "
                 "evidence for the following review goal."
             ),
             parent_id=job_id,
@@ -1214,7 +1235,7 @@ class RailBuiltinExecutor:
                 for t in tags
                 if t not in {"implementation", "maker", "replant"} and not t.startswith("wave-")
             ),
-            "module",
+            "slice",
         )
         wave_tag = next((t for t in tags if t.startswith("wave-")), f"wave-{state.wave_index}")
         try:
@@ -1244,9 +1265,9 @@ class RailBuiltinExecutor:
 
         desc = (
             f"Wave {wave} maker [{slug}] retry for job {job_id}. "
-            f"Implement only the '{slug}' module ownership. "
+            f"Implement only the '{slug}' slice ownership. "
             f"Work in workspace isolation (branch {branch}). "
-            "Do not modify unrelated modules. Leave atomic commits on this "
+            "Do not modify unrelated slices. Leave atomic commits on this "
             "branch for later integrate/commit gates."
         )
         replacement = await self._ce.create_goal(
@@ -1301,11 +1322,11 @@ class RailBuiltinExecutor:
             await self._ce.cancel_goal(trigger_goal_id, reason="rail:retry_architecture_replace")
         await self.annotate_goal(trigger_goal_id, job_id, branch_status="pruned")
 
-        # Stale modules must not unlock spawn_wave_makers without a new plan.
+        # Stale slices must not unlock spawn_wave_makers without a new plan.
         async with self._lock:
             state = self._jobs.get(job_id)
             if state is not None:
-                state.wave_modules = None
+                state.wave_slices = None
                 state.decompose_plan = None
                 self._persist_rail_state_unlocked(state)
 

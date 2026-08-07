@@ -17,7 +17,7 @@ from soothe.rails import LoopRailCatalog
 
 def test_migration_rail_declares_fanout_and_human_gate() -> None:
     rail = LoopRailCatalog().resolve("migration")
-    assert rail.version == "2.2"
+    assert rail.version == "2.3"
     assert rail.fanout.get("artifact") == "{job_id}/wave-plan.json"
     assert rail.fanout.get("require_plan") is True
     assert "default_modules" not in rail.fanout
@@ -177,7 +177,7 @@ async def test_migration_spawn_makers_from_architecture_findings(tmp_path: Path)
     arch.findings = [
         json.dumps(
             {
-                "wave_modules": ["schema", "dual-write", "cutover-prep"],
+                "wave_slices": ["schema", "dual-write", "cutover-prep"],
                 "rationale": "migration slices",
             }
         ),

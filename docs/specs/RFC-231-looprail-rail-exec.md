@@ -59,7 +59,7 @@ alone.
 
 - Arbitrary Python, shell, or unconstrained scripts inside rail YAML.
 - StrangeLoop learning DAG shape, siblings, or rail recipes (RFC-222).
-- Engine-level wave API or submit kwargs for module lists (IG-715 boundary).
+- Engine-level wave API or submit kwargs for slice lists (IG-715 boundary).
 - Replacing AutopilotMonitor dreaming / backoff for **no-rail** jobs.
 - Visual rail editor.
 - Per-rail prune-policy overrides beyond composing L0 `prune` / `replant`.
@@ -106,17 +106,17 @@ bodies.
 |-----------|----------|
 | `spawn_goal` | `create_goal` + annotate tags/role/branch; optional workspace |
 | `wire_deps` | Update `depends_on` / root-waits-on children (never child→root) |
-| `foreach` | Iterate WavePlan modules or an explicit list; bind loop vars |
+| `foreach` | Iterate WavePlan slices or an explicit list; bind loop vars |
 | `ensure_worktree` | Optional git worktree under job policy |
-| `ingest_wave_plan` | Host findings / artifact → `RailJobState` modules |
+| `ingest_wave_plan` | Host findings / artifact → `RailJobState` slices |
 | `gate` | Skip recipe when counter/acceptance/inflight predicates fail |
 | `bump` | Increment `wave_index` / `feedback_round` (etc.) |
 | `prune` / `replant` | Branch salvage with `informs` (RFC-204 recovery) |
 | `pause_job` | Suspend for human (`pause_for_user`) |
 | `complete_job` | Mark job root complete when maturity allows (RFC-230) |
 
-WavePlan **module lists** come from the job-scoped artifact / structured
-findings ingest — never from NL inventing modules at exec time, and never from
+WavePlan **slice lists** come from the job-scoped artifact / structured
+findings ingest — never from NL inventing slices at exec time, and never from
 rigid rail `default_modules` (already rejected by catalog).
 
 ### 5.2 L1 catalog verbs
@@ -297,9 +297,9 @@ RFC-230 maturity fields (`acceptance_met`, snapshot) continue to feed
 
 | Layer | Owns | Must not |
 |-------|------|----------|
-| Autopilot engine | Pool, deps, consensus, `max_parallel_goals` clamp | Module names, `wave_index`, phase order |
-| Rail YAML | `flow` / conditions / `fanout` / `verbs` | Submit kwargs for modules |
-| LLM + job artifact | WavePlan modules for this job | Workspace tree as SoT for fan-out |
+| Autopilot engine | Pool, deps, consensus, `max_parallel_goals` clamp | Slice ids, `wave_index`, phase order |
+| Rail YAML | `flow` / conditions / `fanout` / `verbs` | Submit kwargs for slices |
+| LLM + job artifact | WavePlan slices for this job | Workspace tree as SoT for fan-out |
 
 `fanout:` keys: `artifact`, `require_plan`, `scout_count`, `max_waves` (as
 validated today). Rails without `fanout:` must not pollute job state with wave
@@ -406,7 +406,9 @@ worktree / feedback macro extract; **M4** intent expand.
    → **IG-716** (implemented: briefs/tags/role; full recipe extract deferred).
 2. Follow-on IG for **M3** multi-step `do:` → **IG-717** (implemented L0 subset;
    wave/feedback macros still Python). **M4** intent expand still open.
-3. Update `looprail-protocol.md` and builtin rail README to document `verbs:`.
+3. **IG-718** Slice terminology hard cut (`wave_slices` / `slices`; no module
+   wire keys).
+4. Update `looprail-protocol.md` and builtin rail README to document `verbs:`.
 
 ## Appendix A: relation to prior docs
 

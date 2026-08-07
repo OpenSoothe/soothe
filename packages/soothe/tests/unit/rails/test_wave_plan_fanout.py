@@ -14,9 +14,9 @@ from soothe.autopilot.rail.interpreter import LoopRailInterpreter
 from soothe.autopilot.rail.wave_plan import (
     DEFAULT_WAVE_PLAN_ARTIFACT,
     WavePlan,
-    clamp_module_list,
+    clamp_slice_list,
     load_wave_plan,
-    resolve_fanout_modules,
+    resolve_fanout_slices,
     resolve_wave_plan_path,
 )
 from soothe.context import ContextEngine
@@ -71,37 +71,37 @@ def test_architecture_ready_requires_wave_plan_when_flagged() -> None:
 def test_wave_plan_schema_and_resolve() -> None:
     plan = WavePlan.model_validate(
         {
-            "wave_modules": ["frontend", "ir", "passes", "backend", "driver", "tests"],
+            "wave_slices": ["frontend", "ir", "passes", "backend", "driver", "tests"],
             "independence": "disjoint",
             "rationale": "crate boundaries",
         }
     )
-    assert len(plan.resolved_module_names()) == 6
-    r = resolve_fanout_modules(
-        wave_modules=None,
+    assert len(plan.resolved_slice_ids()) == 6
+    r = resolve_fanout_slices(
+        wave_slices=None,
         decompose_plan=None,
         plan=plan,
-        max_modules=16,
+        max_slices=16,
         require_plan=True,
     )
     assert r.source == "wave_plan"
-    assert r.modules == plan.resolved_module_names()
+    assert r.slices == plan.resolved_slice_ids()
 
 
 def test_missing_plan_fails_closed() -> None:
-    mods, from_n = clamp_module_list(["a", "b", "a", "c"], max_modules=2)
-    assert mods == ["a", "b"]
+    slices, from_n = clamp_slice_list(["a", "b", "a", "c"], max_slices=2)
+    assert slices == ["a", "b"]
     assert from_n == 3
 
-    r = resolve_fanout_modules(
-        wave_modules=None,
+    r = resolve_fanout_slices(
+        wave_slices=None,
         decompose_plan=None,
         plan=None,
-        max_modules=8,
+        max_slices=8,
         require_plan=True,
     )
     assert r.source == "missing_plan"
-    assert r.modules == []
+    assert r.slices == []
 
 
 def test_load_wave_plan_file(tmp_path: Path) -> None:
@@ -112,9 +112,9 @@ def test_load_wave_plan_file(tmp_path: Path) -> None:
     path.write_text(
         json.dumps(
             {
-                "modules": [
-                    {"module": "frontend", "description": "UI"},
-                    {"module": "api", "priority": 70},
+                "slices": [
+                    {"slice": "frontend", "description": "UI"},
+                    {"slice": "api", "priority": 70},
                 ]
             }
         ),
@@ -122,7 +122,19 @@ def test_load_wave_plan_file(tmp_path: Path) -> None:
     )
     plan = load_wave_plan(path)
     assert plan is not None
-    assert plan.resolved_module_names() == ["frontend", "api"]
+    assert plan.resolved_slice_ids() == ["frontend", "api"]
+
+
+def test_legacy_module_keys_rejected(tmp_path: Path) -> None:
+    path = resolve_wave_plan_path(
+        jobs_root=tmp_path, job_id="job-legacy", artifact=DEFAULT_WAVE_PLAN_ARTIFACT
+    )
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps({"wave_modules": ["frontend", "api"], "rationale": "legacy"}),
+        encoding="utf-8",
+    )
+    assert load_wave_plan(path) is None
 
 
 def test_catalog_rejects_default_modules(tmp_path: Path) -> None:
@@ -182,11 +194,11 @@ async def test_record_wave_plan_host_api(tmp_path: Path) -> None:
     )
     plan = await ex.record_wave_plan(
         root.id,
-        wave_modules=["core", "tests"],
+        wave_slices=["core", "tests"],
         rationale="mvp",
     )
     assert plan is not None
-    assert plan.resolved_module_names() == ["core", "tests"]
+    assert plan.resolved_slice_ids() == ["core", "tests"]
     assert resolve_wave_plan_path(jobs_root=tmp_path, job_id=root.id).is_file()
 
 
@@ -208,7 +220,7 @@ async def test_spawn_wave_makers_from_record_wave_plan(tmp_path: Path) -> None:
     )
     recorded = await ex.record_wave_plan(
         root.id,
-        wave_modules=[
+        wave_slices=[
             "frontend",
             "ir",
             "passes",
@@ -249,7 +261,7 @@ async def test_retry_architecture_replants_planner(tmp_path: Path) -> None:
         catalog_rail_job_state(
             root.id,
             require_plan=True,
-            wave_modules=["stale"],
+            wave_slices=["stale"],
         )
     )
     first = await ex.invoke("plan_milestones", job_id=root.id)
@@ -267,7 +279,7 @@ async def test_retry_architecture_replants_planner(tmp_path: Path) -> None:
     assert new_id in (root2.depends_on or [])
     state = await ex.job_state(root.id)
     assert state is not None
-    assert state.wave_modules is None
+    assert state.wave_slices is None
     pruned = state.annotations.get(arch_id)
     assert pruned is not None and pruned.branch_status == "pruned"
 
@@ -295,14 +307,14 @@ def test_parse_wave_plan_from_nested_embed() -> None:
 
     text = (
         "Here is the plan:\n"
-        '{"wave_modules":["frontend","ir","passes"],'
+        '{"wave_slices":["frontend","ir","passes"],'
         '"independence":"disjoint",'
         '"rationale":"crate map",'
-        '"modules":[{"module":"frontend","description":"UI layer"}]}'
+        '"slices":[{"slice":"frontend","description":"UI layer"}]}'
     )
     plan = parse_wave_plan_from_findings([text])
     assert plan is not None
-    assert "frontend" in plan.resolved_module_names()
+    assert "frontend" in plan.resolved_slice_ids()
 
 
 @pytest.mark.asyncio
@@ -315,7 +327,7 @@ async def test_two_jobs_same_workspace_isolated_wave_plans(tmp_path: Path) -> No
     job_b = await ce.create_goal("Job B", workspace=str(workspace), priority=70)
     ex = RailBuiltinExecutor(ce, jobs_root=jobs_root)
 
-    for job, modules in (
+    for job, slices in (
         (job_a, ["alpha", "beta"]),
         (job_b, ["gamma", "delta", "epsilon"]),
     ):
@@ -330,7 +342,7 @@ async def test_two_jobs_same_workspace_isolated_wave_plans(tmp_path: Path) -> No
                 wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
             )
         )
-        await ex.record_wave_plan(job.id, wave_modules=modules)
+        await ex.record_wave_plan(job.id, wave_slices=slices)
         arch = await ce.create_goal("Arch", parent_id=job.id, source="decomposition")
         await ce.complete_goal(arch.id)
         await ex.annotate_goal(arch.id, job.id, tags=["architecture"], role="planner")
@@ -385,7 +397,7 @@ async def test_spawn_clamps_llm_plan_to_engine_budget(tmp_path: Path) -> None:
             wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
         )
     )
-    await ex.record_wave_plan(root.id, wave_modules=[f"m{i}" for i in range(10)])
+    await ex.record_wave_plan(root.id, wave_slices=[f"m{i}" for i in range(10)])
     arch = await ce.create_goal("Arch", parent_id=root.id, source="decomposition")
     await ce.complete_goal(arch.id)
     await ex.annotate_goal(arch.id, root.id, tags=["architecture"], role="planner")
@@ -405,7 +417,7 @@ async def test_bind_feature_dev_skips_fanout_state(tmp_path: Path) -> None:
     state = await interp.builtins.job_state(root.id)
     assert state is not None
     assert state.require_plan is False
-    assert state.wave_modules is None
+    assert state.wave_slices is None
     # No wave-plan file created for non-fanout rails.
     assert not any(tmp_path.rglob("wave-plan.json"))
 
@@ -427,7 +439,7 @@ async def test_spawn_from_architecture_findings(tmp_path: Path) -> None:
     )
     arch = await ce.create_goal("Arch", parent_id=root.id, source="decomposition")
     arch.findings = [
-        json.dumps({"wave_modules": ["core", "cli", "tests"], "rationale": "mvp"}),
+        json.dumps({"wave_slices": ["core", "cli", "tests"], "rationale": "mvp"}),
     ]
     await ce.complete_goal(arch.id)
     await ex.annotate_goal(arch.id, root.id, tags=["architecture"], role="planner")
@@ -435,3 +447,58 @@ async def test_spawn_from_architecture_findings(tmp_path: Path) -> None:
     result = await ex.invoke("spawn_wave_makers", job_id=root.id, trigger_goal_id=arch.id)
     assert result.status == "success"
     assert len(result.created_goal_ids) == 3
+
+
+@pytest.mark.asyncio
+async def test_spawn_rich_slices_use_description_and_priority(tmp_path: Path) -> None:
+    ce = ContextEngine()
+    root = await ce.create_goal("Build", workspace=str(tmp_path), priority=70)
+    ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
+    await ex.bind_job(
+        RailJobState(
+            job_id=root.id,
+            rail_id="greenfield-system",
+            rail_version="1.7",
+            worktrees_enabled=False,
+            require_plan=True,
+            engine_max_parallel_goals=2,
+        )
+    )
+    await ex.record_wave_plan(
+        root.id,
+        slices=[
+            {
+                "slice": "low-prio",
+                "description": "Low slice write-set: apps/low/**",
+                "priority": 40,
+                "tags": ["feature"],
+            },
+            {
+                "slice": "high-prio",
+                "description": "High slice write-set: apps/high/**",
+                "priority": 90,
+                "tags": ["feature"],
+            },
+            {
+                "slice": "mid-prio",
+                "description": "Mid slice write-set: apps/mid/**",
+                "priority": 60,
+            },
+        ],
+        rationale="priority clamp",
+    )
+    arch = await ce.create_goal("Arch", parent_id=root.id, source="decomposition")
+    await ce.complete_goal(arch.id)
+    await ex.annotate_goal(arch.id, root.id, tags=["architecture"], role="planner")
+
+    result = await ex.invoke("spawn_wave_makers", job_id=root.id, trigger_goal_id=arch.id)
+    assert result.status == "success"
+    assert len(result.created_goal_ids) == 2
+    makers = [await ce.get_goal(gid) for gid in result.created_goal_ids]
+    assert makers[0] is not None and makers[1] is not None
+    assert makers[0].priority == 90
+    assert makers[1].priority == 60
+    assert "High slice write-set" in (makers[0].description or "")
+    assert "Mid slice write-set" in (makers[1].description or "")
+    assert "module ownership" not in (makers[0].description or "").lower()
+    assert "clamped_from=3" in result.detail

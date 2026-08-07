@@ -41,7 +41,8 @@ Ensure:
 | Root | Skipped for schedule (rail job root); job appears “stuck pending” |
 
 Workspace multi-wave product docs do **not** validate as host `WavePlan`
-(`wave_modules` / `modules` schema). Copying them into
+(`wave_slices` / `slices` schema; pre-Slice `wave_modules` / `modules` keys
+are rejected). Copying them into
 `$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json` without conversion fails closed.
 
 ---
@@ -88,7 +89,7 @@ Workspace multi-wave product docs do **not** validate as host `WavePlan`
       rail interpreter / job state is temporarily unbound (rebind or fail closed)
       — `_ensure_rail_bound_for_job` + fail-closed send_back.
 - [x] On successful ingest, always persist job-scoped file + update
-      `rail_state.wave_modules` / `decompose_plan` before `complete_goal`
+      `rail_state.wave_slices` / `decompose_plan` before `complete_goal`
       (existing `record_wave_plan` path; covered by gate accept test).
 - [x] On `dag_idle` + `architecture_ready` with missing plan: rate-limited
       warning in `guards.py` (job id + WavePlan missing; no IG/RFC in string).
@@ -110,7 +111,7 @@ makers, rail_trace only `plan_milestones`):
 - [x] Document recovery in debug wiki / inspect-autopilot-job skill.
 - [ ] Optional: admin/RPC or CLI helper to **record** a WavePlan for a job
       (deferred — seed file is sufficient).
-- [x] Job `4a0d82f2`: already recovered via manual seed (auth/session modules).
+- [x] Job `4a0d82f2`: already recovered via manual seed (auth/session slices).
 
 ### D. Tests
 
@@ -128,7 +129,7 @@ makers, rail_trace only `plan_milestones`):
 
 - Scraping or promoting `docs/wave-plan.json` (or any project tree path) to
   fan-out SoT.
-- Keyword/regex judgment of planner prose for module names (RFC-630).
+- Keyword/regex judgment of planner prose for slice ids (RFC-630).
 - Changing StrangeLoop Plan-Exec-Eval or injecting Autopilot tools into nano.
 - Auto-reset of rail job roots by DAG health (separate from this IG).
 

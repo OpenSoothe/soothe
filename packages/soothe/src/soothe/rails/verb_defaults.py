@@ -14,7 +14,8 @@ from typing import Any
 DEFAULT_VERB_BRIEFS: dict[str, str] = {
     "plan_milestones": (
         "Architecture and milestone map for job {job_id}. "
-        "Define module boundaries, wave-1 independent ownership units, "
+        "Define Slice boundaries (independent parallel ownership units — "
+        "features, tasks, packages, or stages), wave-1 independent slices, "
         "wave acceptance criteria, and git commit milestones. "
         "Do not implement product code here.\n\n"
         "REQUIRED deliverable: append one findings entry that is exactly "
@@ -22,13 +23,13 @@ DEFAULT_VERB_BRIEFS: dict[str, str] = {
         "not write fan-out policy into the project workspace tree; never "
         "write docs/wave-plan.json or .soothe/wave-plan.json as the plan). "
         "Schema example:\n"
-        '{"wave_modules":["frontend","ir","passes","backend","driver","tests"],'
-        '"independence":"disjoint write-sets per module",'
+        '{"wave_slices":["frontend","ir","passes","backend","driver","tests"],'
+        '"independence":"disjoint write-sets per slice",'
         '"rationale":"why this partition"}\n'
-        "Optionally use rich `modules` entries "
-        '({"module","description","priority","tags"}) and/or `max_waves`. '
+        "Optionally use rich `slices` entries "
+        '({"slice","description","priority","tags"}) and/or `max_waves`. '
         "Prose alone is not enough (never scrapes markdown, never substitutes "
-        "a fixed default module list). Modules must be independent (no "
+        "a fixed default slice list). Slices must be independent (no "
         "overlapping primary write sets). Autopilot only clamps spawn width "
         "to max_parallel_goals."
     ),

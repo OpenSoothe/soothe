@@ -170,7 +170,7 @@ async def test_spawn_wave_makers_worktrees_and_no_root_dep(tmp_path: Path) -> No
         job_id=root.id,
         rail_id="greenfield-system",
         rail_version="1.0",
-        wave_modules=["frontend", "backend"],
+        wave_slices=["frontend", "backend"],
         worktrees_enabled=True,
     )
     await ex.bind_job(state)
@@ -213,7 +213,7 @@ async def test_integrate_commit_review_chain() -> None:
             job_id=root.id,
             rail_id="greenfield-system",
             rail_version="1.0",
-            wave_modules=["a"],
+            wave_slices=["a"],
             worktrees_enabled=False,
         )
     )
@@ -581,7 +581,7 @@ async def test_needs_commit_via_ce_tags_after_cleared_memory(tmp_path: Path) -> 
             job_id=root.id,
             rail_id="greenfield-system",
             rail_version="1.1",
-            wave_modules=["a"],
+            wave_slices=["a"],
             worktrees_enabled=False,
         )
     )

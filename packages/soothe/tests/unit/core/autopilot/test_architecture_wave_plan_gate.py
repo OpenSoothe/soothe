@@ -76,7 +76,7 @@ async def test_architecture_gate_accepts_when_wave_plan_in_findings(
     ce.claim_goal(arch_id, loop_id="w1")
 
     wave_json = (
-        '{"wave_modules":["frontend","ir","passes","backend","driver","tests"],'
+        '{"wave_slices":["frontend","ir","passes","backend","driver","tests"],'
         '"independence":"disjoint write-sets",'
         '"rationale":"crate boundaries"}'
     )
@@ -243,16 +243,16 @@ async def test_workspace_wave_plan_file_not_authoritative(
     ws = tmp_path / "ws"
     (ws / "docs").mkdir(parents=True)
     (ws / "docs" / "wave-plan.json").write_text(
-        '{"wave_modules":["from-workspace"],"rationale":"legacy"}',
+        '{"wave_slices":["from-workspace"],"rationale":"legacy"}',
         encoding="utf-8",
     )
     (ws / "wave-plan.json").write_text(
-        '{"wave_modules":["also-workspace"],"rationale":"legacy"}',
+        '{"wave_slices":["also-workspace"],"rationale":"legacy"}',
         encoding="utf-8",
     )
     (ws / ".soothe").mkdir(parents=True)
     (ws / ".soothe" / "wave-plan.json").write_text(
-        '{"wave_modules":["dot-soothe"],"rationale":"legacy"}',
+        '{"wave_slices":["dot-soothe"],"rationale":"legacy"}',
         encoding="utf-8",
     )
 

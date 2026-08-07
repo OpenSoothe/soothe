@@ -597,7 +597,7 @@ class AutopilotService:
     async def _bind_rail_for_job(self, goal: GoalNode) -> None:
         """Bind LoopRail for a root job; engine only injects spawn budget.
 
-        Fan-out module lists / scout counts come from the rail YAML ``fanout:``
+        Fan-out slice lists / scout counts come from the rail YAML ``fanout:``
         block and job-scoped wave-plan artifact (host ingest) — not from Autopilot
         submit fields, nano tools, or the project workspace tree.
         """
@@ -685,12 +685,12 @@ class AutopilotService:
         if plan is not None:
             recorded = await builtins.record_wave_plan(job_id, plan=plan)
             if recorded is not None:
-                names = recorded.resolved_module_names()
-                note = f"WavePlan recorded by host ({len(names)} modules): {', '.join(names)}"
+                names = recorded.resolved_slice_ids()
+                note = f"WavePlan recorded by host ({len(names)} slices): {', '.join(names)}"
                 if note not in goal.findings:
                     goal.findings.append(note[:500])
                 logger.info(
-                    "Host ingested wave plan for architecture goal %s job=%s modules=%s",
+                    "Host ingested wave plan for architecture goal %s job=%s slices=%s",
                     goal.id,
                     job_id[:8],
                     names,
@@ -763,7 +763,7 @@ class AutopilotService:
 
         _send_back_missing = (
             "Architecture requires one findings entry that is exactly a WavePlan "
-            "JSON object with wave_modules (host persists fan-out; do not write "
+            "JSON object with wave_slices (host persists fan-out; do not write "
             "fan-out policy into the project workspace tree)."
         )
 

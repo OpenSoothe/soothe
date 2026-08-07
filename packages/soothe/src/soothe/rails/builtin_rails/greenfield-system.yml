@@ -1,8 +1,8 @@
 id: greenfield-system
-version: "1.6"
+version: "1.7"
 
 summary: |
-  Greenfield multi-module system build: architecture milestones, parallel
+  Greenfield multi-slice system build: architecture milestones, parallel
   makers (git worktrees when available), integrate, commit gate, diff-scoped
   review, wave QA, then find→optimize→verify feedback cycles until system
   acceptance. Differs from feature-dev by rejecting a single maker pass,
@@ -10,12 +10,12 @@ summary: |
   feedback loop before next wave or job completion.
 
 applies_when: |
-  Building a new multi-module system or large scaffold from scratch
+  Building a new multi-part system or large scaffold from scratch
   (compiler, platform, multi-crate product), not a feature in an existing
   mature codebase, hotfix, bugfix, or research spike.
 
 # Fan-out is LoopRail policy — not AutopilotService / submit API.
-# Module list is LLM-authored (WavePlan JSON in architecture findings);
+# Slice list is LLM-authored (WavePlan JSON in architecture findings);
 # host ingests findings into a job-scoped artifact under
 # $SOOTHE_DATA_DIR/jobs/{job_id}/. Rail only declares the contract path
 # template + require_plan. Engine clamps to max_parallel_goals.
@@ -34,23 +34,24 @@ verbs:
           tags: [architecture, planning, milestones]
           priority: 80
           brief: |
-            Architecture and milestone map for job {job_id}. Define module
-            boundaries, wave-1 independent ownership units, wave acceptance
-            criteria, and git commit milestones. Do not implement product code
-            here.
+            Architecture and milestone map for job {job_id}. Define Slice
+            boundaries (independent parallel ownership units — features,
+            tasks, packages, or stages), wave-1 independent slices, wave
+            acceptance criteria, and git commit milestones. Do not implement
+            product code here.
 
             REQUIRED deliverable: append one findings entry that is exactly a
             WavePlan JSON object (host persists fan-out for this job — do not
             write fan-out policy into the project workspace tree; never write
             docs/wave-plan.json or .soothe/wave-plan.json as the plan). Schema
             example:
-            {"wave_modules":["frontend","ir","passes","backend","driver","tests"],
-            "independence":"disjoint write-sets per module",
+            {"wave_slices":["frontend","ir","passes","backend","driver","tests"],
+            "independence":"disjoint write-sets per slice",
             "rationale":"why this partition"}
-            Optionally use rich `modules` entries
-            ({"module","description","priority","tags"}) and/or `max_waves`.
+            Optionally use rich `slices` entries
+            ({"slice","description","priority","tags"}) and/or `max_waves`.
             Prose alone is not enough (never scrapes markdown, never substitutes
-            a fixed default module list). Modules must be independent (no
+            a fixed default slice list). Slices must be independent (no
             overlapping primary write sets). Autopilot only clamps spawn width
             to max_parallel_goals.
           wire:
@@ -63,7 +64,7 @@ conditions:
   wave_makers_done: |
     All maker goals for the current wave completed successfully.
   needs_integrate: |
-    Wave makers finished and cross-module integrate / merge work remains.
+    Wave makers finished and cross-slice integrate / merge work remains.
   needs_commit: |
     Integrate finished (or makers finished when integrate was skipped) and
     a milestone git commit gate should run before review.

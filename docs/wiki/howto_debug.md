@@ -546,12 +546,12 @@ Recovery:
    processes can accept architecture via soft LLM consensus without a plan).
 2. Inspect: `ls ~/.soothe/data/jobs/{job_id}/wave-plan.json` and
    `soothe autopilot job {job_id}`.
-3. Seed a **valid** host plan (schema: `wave_modules` and/or `modules`), e.g.:
+3. Seed a **valid** host plan (schema: `wave_slices` and/or `slices`), e.g.:
 
 ```bash
 cat > ~/.soothe/data/jobs/$JOB/wave-plan.json <<'EOF'
 {
-  "wave_modules": ["module-a", "module-b"],
+  "wave_slices": ["slice-a", "slice-b"],
   "independence": "disjoint write-sets",
   "rationale": "operator recovery seed"
 }

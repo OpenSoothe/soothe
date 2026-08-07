@@ -119,7 +119,7 @@ def _normalize_fanout(raw: Any, *, path: Path) -> dict[str, Any]:
     if "default_modules" in raw and raw["default_modules"] is not None:
         raise RailCatalogError(
             f"{path}: fanout.default_modules is not supported; "
-            "fan-out modules must come from the LLM wave plan (require_plan)"
+            "fan-out slices must come from the LLM wave plan (require_plan)"
         )
     if "require_plan" in raw and raw["require_plan"] is not None:
         if not isinstance(raw["require_plan"], bool):
