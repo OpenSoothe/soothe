@@ -648,7 +648,7 @@ class AutopilotService:
         """Parse WavePlan from worker contribution and persist via rail executor.
 
         Nano/StrangeLoop never call Autopilot APIs — the host interprets opaque
-        findings/evidence and records the job-scoped artifact (IG-704).
+        findings/evidence and records the job-scoped artifact.
 
         Returns:
             True when a usable wave plan is ready after ingest attempts.
@@ -700,6 +700,39 @@ class AutopilotService:
         await builtins.ingest_wave_plan(job_id)
         return builtins.is_wave_plan_ready(job_id)
 
+    async def _ensure_rail_bound_for_job(self, job_id: str) -> bool:
+        """Rebind LoopRail for ``job_id`` when interpreter exists but job unbound.
+
+        Returns:
+            True when the job has rail state available after this call.
+        """
+        if self._rail_interpreter is None:
+            return False
+        builtins = self._rail_interpreter.builtins
+        if await builtins.job_state(job_id) is not None:
+            return True
+        root = self._ce._dag.get_goal(job_id)
+        if root is None or not root.rail_id:
+            return False
+        try:
+            await self._rail_interpreter.bind_job(
+                job_id,
+                rail_id=root.rail_id,
+                workspace=root.workspace,
+                engine_max_parallel_goals=int(
+                    getattr(self._config, "max_parallel_goals", 16) or 16
+                ),
+            )
+        except Exception:
+            logger.warning(
+                "Rail rebind failed for architecture gate job=%s rail_id=%s",
+                job_id[:8],
+                root.rail_id,
+                exc_info=True,
+            )
+            return False
+        return await builtins.job_state(job_id) is not None
+
     async def _architecture_wave_plan_consensus_gate(
         self,
         goal: GoalNode,
@@ -712,16 +745,57 @@ class AutopilotService:
         Returns:
             ``(decision, reasoning)`` when this goal is under the architecture
             fan-out gate; ``None`` to fall through to LLM consensus.
+
+        Fail closed: architecture planners on a rail job with ``require_plan``
+        must never fall through to free-form LLM accept when the rail
+        interpreter is missing or unbound (that completed architecture without
+        a job-scoped WavePlan in production).
         """
         if not self._is_architecture_planner_goal(goal):
             return None
-        if self._rail_interpreter is None:
-            return None
+
         job_id = self._job_id_for_goal(goal.id)
         if job_id is None:
             return None
+        root = self._ce._dag.get_goal(job_id)
+        if root is None or not root.rail_id:
+            return None
+
+        _send_back_missing = (
+            "Architecture requires one findings entry that is exactly a WavePlan "
+            "JSON object with wave_modules (host persists fan-out; do not write "
+            "fan-out policy into the project workspace tree)."
+        )
+
+        if self._rail_interpreter is None:
+            logger.warning(
+                "Architecture wave-plan gate fail-closed: rail interpreter unset job=%s goal=%s",
+                job_id[:8],
+                goal.id,
+            )
+            return (
+                "send_back",
+                "Architecture WavePlan gate unavailable (rail not initialized); "
+                "restart the daemon after upgrading, then retry with a WavePlan "
+                "findings entry.",
+            )
+
+        if not await self._ensure_rail_bound_for_job(job_id):
+            logger.warning(
+                "Architecture wave-plan gate fail-closed: rail unbound job=%s goal=%s",
+                job_id[:8],
+                goal.id,
+            )
+            return (
+                "send_back",
+                "Architecture WavePlan gate unavailable (rail unbound for job); "
+                "retry with a WavePlan findings entry after the job rail is bound.",
+            )
+
         state = await self._rail_interpreter.builtins.job_state(job_id)
-        if state is None or not state.require_plan:
+        if state is None:
+            return ("send_back", _send_back_missing)
+        if not state.require_plan:
             return None
 
         ready = await self._try_ingest_architecture_wave_plan(
@@ -734,12 +808,7 @@ class AutopilotService:
                 "accept",
                 "Host recorded a valid WavePlan from the architecture deliverable",
             )
-        return (
-            "send_back",
-            "Architecture requires one findings entry that is exactly a WavePlan "
-            "JSON object with wave_modules (host persists fan-out; do not write "
-            "fan-out policy into the project workspace tree).",
-        )
+        return ("send_back", _send_back_missing)
 
     def _job_id_for_goal(self, goal_id: str) -> str | None:
         """Walk parents to the root job id."""
@@ -1769,9 +1838,9 @@ class AutopilotService:
             return
 
         findings = getattr(contribution, "findings", None) if contribution else None
-        # Persist findings onto the goal for post-completion context (IG-680 P1-7).
+        # Persist findings onto the goal for post-completion context.
         # WavePlan-shaped JSON keeps a higher cap so host ingest can re-read it
-        # from goal.findings if contribution is gone (IG-704).
+        # from goal.findings if contribution is gone.
         if findings:
             try:
                 from soothe.autopilot.rail.wave_plan import parse_wave_plan_payload
@@ -1788,7 +1857,7 @@ class AutopilotService:
                 logger.debug("Failed to attach findings to goal %s", goal_id, exc_info=True)
 
         # Architecture + require_plan: host owns WavePlan ingest / accept gate
-        # (nano must not call Autopilot tools — IG-704 / RFC-222 boundary).
+        # (nano must not call Autopilot tools).
         arch_gate = await self._architecture_wave_plan_consensus_gate(
             goal,
             evidence_summary=evidence_summary,

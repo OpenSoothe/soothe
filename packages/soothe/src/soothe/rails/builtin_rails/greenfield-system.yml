@@ -16,7 +16,7 @@ applies_when: |
 
 # Fan-out is LoopRail policy — not AutopilotService / submit API.
 # Module list is LLM-authored (WavePlan JSON in architecture findings);
-# host ingests via record_wave_plan into job-scoped artifact under
+# host ingests findings into a job-scoped artifact under
 # $SOOTHE_DATA_DIR/jobs/{job_id}/. Rail only declares the contract path
 # template + require_plan. Engine clamps to max_parallel_goals.
 fanout:

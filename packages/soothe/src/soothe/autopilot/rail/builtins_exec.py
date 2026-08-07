@@ -1,18 +1,18 @@
 """CE-facing LoopRail builtins (v1 test/runtime implementation).
 
 Mutates ContextEngine goal DAG. Goal tags / branch metadata are mirrored onto
-``GoalNode.rail_*`` (IG-678 P2-2) and also kept in ``RailJobState`` for wave
-counters. IG-691: ``tags_by_goal`` falls back to CE ``rail_tags``, hydrates
-annotations on bind, and optionally persists ``rail_state.json`` under the
-job artifact dir so guards survive daemon restart.
+``GoalNode.rail_*`` and also kept in ``RailJobState`` for wave counters.
+``tags_by_goal`` falls back to CE ``rail_tags``, hydrates annotations on bind,
+and optionally persists ``rail_state.json`` under the job artifact dir so
+guards survive daemon restart.
 
-IG-687 adds greenfield-system builtins: plan_milestones, spawn_wave_makers
-(with optional git worktrees), spawn_integrate, commit_milestone,
-spawn_feedback_cycle (find → optimize → verify).
+Greenfield-system builtins: ``plan_milestones``, ``spawn_wave_makers``
+(with optional git worktrees), ``spawn_integrate``, ``commit_milestone``,
+``spawn_feedback_cycle`` (find → optimize → verify).
 
-IG-699 / IG-700: LLM-determined fan-out via job-scoped ``wave-plan.json``
-under ``jobs_root`` (``record_wave_plan`` / structured findings), ingested
-before ``spawn_wave_makers`` (no markdown scraping, no workspace singleton).
+LLM-determined fan-out uses a job-scoped ``wave-plan.json`` under
+``jobs_root`` (host ``record_wave_plan`` / structured findings ingest) before
+``spawn_wave_makers`` — no markdown scraping, no project-workspace plan files.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ class RailJobState:
     max_waves: int = 3
     wave_modules: list[str] | None = None
     worktrees_enabled: bool = True
-    # Rail YAML ``fanout`` declaration (IG-699/700) — LLM fills job-scoped plan.
+    # Rail YAML ``fanout`` declaration — LLM fills job-scoped plan.
     # Defaults are inert unless the rail declares ``fanout:`` at bind.
     wave_plan_artifact: str = DEFAULT_WAVE_PLAN_ARTIFACT
     require_plan: bool = False
@@ -560,7 +560,7 @@ class RailBuiltinExecutor:
         del trigger_goal_id
         state = await self._require(job_id)
         ws = _job_workspace(self._ce, job_id)
-        # Opaque user/TUI-facing copy: no filesystem path (IG-700).
+        # Opaque user/TUI-facing copy: no filesystem path for the plan artifact.
         arch = await self._ce.create_goal(
             (
                 f"Architecture and milestone map for job {job_id}. "
@@ -569,7 +569,8 @@ class RailBuiltinExecutor:
                 "Do not implement product code here.\n\n"
                 "REQUIRED deliverable: append one findings entry that is exactly "
                 "a WavePlan JSON object (host persists fan-out for this job — do "
-                "not write fan-out policy into the project workspace tree). "
+                "not write fan-out policy into the project workspace tree; never "
+                "write docs/wave-plan.json or .soothe/wave-plan.json as the plan). "
                 "Schema example:\n"
                 '{"wave_modules":["frontend","ir","passes","backend","driver","tests"],'
                 '"independence":"disjoint write-sets per module",'
@@ -640,8 +641,8 @@ class RailBuiltinExecutor:
     ) -> WavePlan | None:
         """Persist an LLM wave plan under jobs_root and apply it to rail state.
 
-        Preferred host API (IG-700 / IG-704): Autopilot/rail persist the plan;
-        callers never need the filesystem path. Not a nano agent tool.
+        Preferred host API: Autopilot/rail persist the plan; callers never need
+        the filesystem path. Not a nano agent tool.
         """
         async with self._lock:
             state = self._jobs.get(job_id)
@@ -681,7 +682,7 @@ class RailBuiltinExecutor:
             return built
 
     async def ingest_wave_plan(self, job_id: str) -> RailJobState | None:
-        """Load job-scoped wave-plan into bound job state (IG-700)."""
+        """Load job-scoped wave-plan into bound job state."""
         async with self._lock:
             state = self._jobs.get(job_id)
             if state is None:

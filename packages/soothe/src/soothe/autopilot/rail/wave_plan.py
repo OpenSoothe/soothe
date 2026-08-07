@@ -1,4 +1,4 @@
-"""Structured wave fan-out plan for LoopRail (IG-699 / IG-700).
+"""Structured wave fan-out plan for LoopRail.
 
 LoopRail owns fan-out *contract* (YAML ``fanout.artifact`` / ``require_plan``).
 The **LLM** owns fan-out *policy* (module names + width) via a **job-scoped**
@@ -6,7 +6,8 @@ artifact under ``jobs_root`` (typically ``$SOOTHE_DATA_DIR/jobs/{job_id}/``).
 Autopilot engine only supplies a spawn budget (``max_parallel_goals``).
 
 No rigid default module list for greenfield: missing plan fails closed when
-``require_plan`` is true. Project-workspace singletons are not authoritative.
+``require_plan`` is true. Project-workspace files (including
+``docs/wave-plan.json`` / ``.soothe/wave-plan.json``) are never authoritative.
 """
 
 from __future__ import annotations
@@ -24,11 +25,12 @@ logger = logging.getLogger(__name__)
 DEFAULT_WAVE_PLAN_ARTIFACT = "{job_id}/wave-plan.json"
 
 _JOB_ID_TOKEN = "{job_id}"
-# Pre-IG-700 workspace singleton — never load; rewrite to job-scoped default.
+# Legacy workspace / project paths — never load; rewrite to job-scoped default.
 _LEGACY_WORKSPACE_WAVE_PLAN_ARTIFACTS = frozenset(
     {
         ".soothe/wave-plan.json",
         "wave-plan.json",
+        "docs/wave-plan.json",
     }
 )
 
@@ -122,7 +124,7 @@ def expand_wave_plan_artifact(artifact: str, job_id: str) -> str:
 
 
 def normalize_wave_plan_artifact(artifact: str | None) -> str:
-    """Return a jobs_root-relative template; rewrite pre-IG-700 workspace paths."""
+    """Return a jobs_root-relative template; rewrite legacy workspace paths."""
     raw = (artifact or DEFAULT_WAVE_PLAN_ARTIFACT).strip().replace("\\", "/")
     if not raw or raw in _LEGACY_WORKSPACE_WAVE_PLAN_ARTIFACTS:
         return DEFAULT_WAVE_PLAN_ARTIFACT
@@ -302,7 +304,7 @@ def resolve_fanout_modules(
 ) -> FanoutResolution:
     """Resolve maker module names from LLM artifact only (+ engine clamp).
 
-    Precedence (IG-699 / IG-700):
+    Precedence:
     1. ``decompose_plan`` on rail state (from LLM artifact ingest)
     2. ``wave_modules`` on rail state (from LLM artifact ingest)
     3. In-memory ``WavePlan`` still held by caller
@@ -329,7 +331,7 @@ def resolve_fanout_modules(
         detail = (
             "LLM wave plan required but missing or empty; "
             "architecture must emit structured WavePlan findings "
-            "(host persists via record_wave_plan) before makers spawn"
+            "(host persists the job-scoped plan) before makers spawn"
         )
         logger.warning("%s", detail)
         return FanoutResolution(

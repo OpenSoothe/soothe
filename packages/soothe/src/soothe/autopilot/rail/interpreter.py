@@ -132,7 +132,7 @@ class LoopRailInterpreter:
 
         fanout = dict(rail.fanout or {})
         budget = int(engine_max_parallel_goals) if engine_max_parallel_goals is not None else 32
-        # Fan-out / wave fields only when the rail declares ``fanout:`` (IG-700).
+        # Fan-out / wave fields only when the rail declares ``fanout:``.
         if fanout:
             artifact = normalize_wave_plan_artifact(
                 str(fanout.get("artifact") or DEFAULT_WAVE_PLAN_ARTIFACT)
@@ -410,6 +410,7 @@ class LoopRailInterpreter:
                 wave_plan_ready = self._builtins.is_wave_plan_ready(event.job_id)
 
         structural = {
+            "job_id": event.job_id,
             "exploration_goal_ids": exploration_ids,
             "planning_goal_ids": planning_ids,
             "architecture_goal_ids": architecture_ids,

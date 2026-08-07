@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from soothe.autopilot.rail.trace_store import GuardResult
+
+logger = logging.getLogger(__name__)
+
+# Rate-limit "WavePlan missing" warnings per job.
+_WAVE_PLAN_MISSING_WARN_AT: dict[str, float] = {}
+_WAVE_PLAN_MISSING_WARN_INTERVAL_S = 300.0
 
 
 @dataclass(frozen=True)
@@ -132,6 +140,19 @@ def _structural_short_circuit(
                 and not has_makers
                 and plan_ok
             )
+        if not ok and architecture_done and not has_makers and require_plan and not wave_plan_ready:
+            job_key = str(structural.get("job_id") or "")
+            now = time.monotonic()
+            last = _WAVE_PLAN_MISSING_WARN_AT.get(job_key, 0.0)
+            if job_key and (now - last) >= _WAVE_PLAN_MISSING_WARN_INTERVAL_S:
+                _WAVE_PLAN_MISSING_WARN_AT[job_key] = now
+                logger.warning(
+                    "WavePlan missing for job %s — architecture finished but "
+                    "fan-out plan not recorded under the job data dir; makers "
+                    "will not spawn until a valid plan is recorded (restart "
+                    "daemon after upgrades so the architecture gate is live)",
+                    job_key[:8],
+                )
         return GuardResult(
             matched=ok,
             confidence=1.0,
@@ -280,7 +301,7 @@ def _structural_short_circuit(
         )
 
     if name == "architecture_failed":
-        # Failed planner/architecture → host replants (IG-704); not a maker retry.
+        # Failed planner/architecture → host replants; not a maker retry.
         ok = event == "goal_failed" and (
             "architecture" in trigger_tags or "planning" in trigger_tags
         )

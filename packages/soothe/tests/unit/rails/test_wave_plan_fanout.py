@@ -1,4 +1,4 @@
-"""Unit tests for LLM-determined rail fan-out width (IG-699 / IG-700)."""
+"""Unit tests for LLM-determined rail fan-out width."""
 
 from __future__ import annotations
 
@@ -135,6 +135,8 @@ def test_normalize_rewrites_legacy_workspace_artifact() -> None:
     from soothe.autopilot.rail.wave_plan import normalize_wave_plan_artifact
 
     assert normalize_wave_plan_artifact(".soothe/wave-plan.json") == DEFAULT_WAVE_PLAN_ARTIFACT
+    assert normalize_wave_plan_artifact("wave-plan.json") == DEFAULT_WAVE_PLAN_ARTIFACT
+    assert normalize_wave_plan_artifact("docs/wave-plan.json") == DEFAULT_WAVE_PLAN_ARTIFACT
     assert normalize_wave_plan_artifact("{job_id}/wave-plan.json") == DEFAULT_WAVE_PLAN_ARTIFACT
 
 
@@ -156,8 +158,10 @@ async def test_plan_milestones_description_hides_artifact_path(tmp_path: Path) -
     arch = await ce.get_goal(result.created_goal_ids[0])
     assert arch is not None
     assert "jobs/" not in arch.description
-    assert ".soothe/wave-plan" not in arch.description
+    assert ".soothe/wave-plan" in arch.description  # forbid list, not path SoT
+    assert "docs/wave-plan.json" in arch.description
     assert "record_wave_plan" not in arch.description
+    assert "project workspace tree" in arch.description
     assert "WavePlan JSON" in arch.description
     assert "ownership units" in arch.description.lower()
     assert "fixed default" in arch.description.lower() or "never substitutes" in arch.description
@@ -165,7 +169,7 @@ async def test_plan_milestones_description_hides_artifact_path(tmp_path: Path) -
 
 @pytest.mark.asyncio
 async def test_record_wave_plan_host_api(tmp_path: Path) -> None:
-    """Host/executor API persists the plan — not a nano agent tool (IG-704)."""
+    """Host/executor API persists the plan — not a nano agent tool."""
     ce = ContextEngine()
     root = await ce.create_goal("Build", workspace=str(tmp_path), priority=70)
     ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)

@@ -77,7 +77,7 @@ class RailDefinition:
         conditions: Named NL guards.
         flow: NL-first event hooks (list of mappings).
         rules: Explicit rule list (list of mappings).
-        fanout: Optional rail-declared fan-out policy (IG-699/700). Keys may include
+        fanout: Optional rail-declared fan-out policy. Keys may include
             ``artifact`` (jobs_root-relative wave-plan template with optional
             ``{job_id}``), ``require_plan``, ``scout_count``, ``max_waves``.
             Engine must not invent these — they live in the rail YAML.
@@ -98,7 +98,7 @@ class RailDefinition:
 
 
 def _normalize_fanout(raw: Any, *, path: Path) -> dict[str, Any]:
-    """Validate optional ``fanout:`` mapping from rail YAML (IG-699/700)."""
+    """Validate optional ``fanout:`` mapping from rail YAML."""
     if raw is None:
         return {}
     if not isinstance(raw, dict):
