@@ -7,12 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.1] - 2026-08-07
+
+### Added
+- Rail Exec system with YAML verb bodies and migration waves (IG-692).
+- Structure-driven builtin rails with review closeout workflow.
+- Autopilot top `steps_mode` with active/pending filter for StepDAG view.
+- CLI `ap` alias for `autopilot` command and rail/goal display in commands.
+- Multi-channel job lifecycle notify push (email, WebSocket, webhook).
+- Autopilot job notify emails enriched with compact DAG progress.
+- Job descriptions persisted as `data/jobs/{id}/GOAL.md`.
+- WavePlan persisted via Context Engine findings (no file artifact).
+
+### Fixed
+- Freeze elapsed time for terminal jobs/goals/loops to avoid live drift.
+- Autopilot consensus trust now uses StrangeLoop response signals (IG-710).
+- Consensus suspend replaced with fail for automatic recovery.
+- Rename notify target `address` to `to_address` for clarity.
+
 ### Changed
 - Raise `soothe-client-python` floor to `>=1.0.11` (120s `autopilot_submit` timeout).
 - Remove unused `suggest_goal` / `ProposalQueue` mechanism; DAG growth stays
   via LoopRail, monitor, intake, and reflection `GoalDirective`s (IG-703).
 - Autopilot consensus judges goal text vs StrangeLoop response only; drop host
   workspace evidence grounding / pytest hard-accept (IG-710).
+- Refactor autopilot/rails to one-level subpackages with workflow tracing.
+- Make sensitive config dual-mode: plain YAML or `${ENV_VAR}` placeholders.
+- Replace `files_touched` with domain-agnostic `GoalEffect` for job artifacts.
+- Move `plan_contribution` to dispatch module for cleaner separation.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.0...v0.10.1
 
 ## [v0.10.0] - 2026-08-06
 
