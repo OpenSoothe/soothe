@@ -1,10 +1,10 @@
-"""Structured wave fan-out plan for LoopRail (IG-718 / IG-720).
+"""Structured wave fan-out plan for LoopRail.
 
 LoopRail owns fan-out *contract* (YAML ``fanout.require_plan`` / counters).
 The **LLM** owns fan-out *policy* (slice ids + width) via a **WavePlan JSON
-findings entry** on the architecture goal (Context Engine). Autopilot applies
-the plan into ``RailJobState`` (persisted in ``rail_state.json``). There is
-**no** filesystem ``wave-plan.json`` artifact.
+object in the architecture goal completion report** (contribution findings /
+evidence). Autopilot applies the plan into ``RailJobState`` (persisted in
+``rail_state.json``). There is **no** filesystem ``wave-plan.json`` artifact.
 
 Autopilot engine only supplies a spawn budget (``max_parallel_goals``).
 A **slice** is an independent parallel ownership unit (feature, task, package,
@@ -124,7 +124,11 @@ def _reject_removed_wire_keys(raw: dict[str, Any], *, source: str) -> bool:
 
 
 def parse_wave_plan_payload(raw: Any, *, source: str = "payload") -> WavePlan | None:
-    """Validate a dict (or JSON string) as ``WavePlan`` (slice schema only)."""
+    """Validate a dict (or JSON string) as ``WavePlan`` (slice schema only).
+
+    Unwraps a nested ``wave_plan`` object when the outer dict has no slices
+    (agents often wrap policy under that key).
+    """
     if isinstance(raw, str):
         text = raw.strip()
         if not text:
@@ -142,10 +146,15 @@ def parse_wave_plan_payload(raw: Any, *, source: str = "payload") -> WavePlan | 
     except Exception as exc:
         logger.warning("Wave plan schema validation failed (%s): %s", source, exc)
         return None
-    if not plan.resolved_slice_ids() and plan.scout_count is None:
-        logger.warning("Wave plan (%s) has no slices or scout_count", source)
-        return None
-    return plan
+    if plan.resolved_slice_ids() or plan.scout_count is not None:
+        return plan
+
+    nested = raw.get("wave_plan")
+    if isinstance(nested, dict):
+        return parse_wave_plan_payload(nested, source=f"{source}.wave_plan")
+
+    logger.warning("Wave plan (%s) has no slices or scout_count", source)
+    return None
 
 
 def iter_embedded_json_objects(text: str) -> list[Any]:
@@ -198,6 +207,44 @@ def parse_wave_plan_from_findings(findings: list[Any] | None) -> WavePlan | None
             if plan is not None and plan.resolved_slice_ids():
                 return plan
     return None
+
+
+# Cap for WavePlan JSON on goal-completion contribution findings (host re-attach).
+WAVE_PLAN_FINDING_CAP = 8000
+
+
+def wave_plan_to_findings_json(plan: WavePlan) -> str:
+    """Serialize a validated WavePlan to bare JSON for completion findings."""
+    payload: dict[str, Any] = {}
+    if plan.wave_slices:
+        payload["wave_slices"] = list(plan.wave_slices)
+    if plan.slices:
+        payload["slices"] = [s.model_dump(mode="json") for s in plan.slices]
+    if plan.independence is not None:
+        payload["independence"] = plan.independence
+    if plan.rationale is not None:
+        payload["rationale"] = plan.rationale
+    if plan.scout_count is not None:
+        payload["scout_count"] = plan.scout_count
+    if plan.max_waves is not None:
+        payload["max_waves"] = plan.max_waves
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+def extract_wave_plan_from_plan_result_texts(
+    *,
+    evidence_summary: str | None = None,
+    full_output: str | None = None,
+) -> WavePlan | None:
+    """Parse WavePlan from untruncated PlanResult text fields (completion wire).
+
+    Does not read workspace files.
+    """
+    candidates: list[Any] = []
+    for text in (evidence_summary, full_output):
+        if isinstance(text, str) and text.strip():
+            candidates.append(text)
+    return parse_wave_plan_from_findings(candidates)
 
 
 def clamp_slice_list(

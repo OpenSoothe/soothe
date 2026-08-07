@@ -598,9 +598,9 @@ class AutopilotService:
         """Bind LoopRail for a root job; engine only injects spawn budget.
 
         Fan-out slice lists / scout counts come from the rail YAML ``fanout:``
-        block and WavePlan applied from architecture CE findings (host ingest)
-        — not from Autopilot submit fields, nano tools, filesystem plan files,
-        or the project workspace tree.
+        block and WavePlan applied from the architecture goal completion
+        report (host ingest) — not from Autopilot submit fields, nano tools,
+        filesystem plan files, or the project workspace tree.
         """
         if self._rail_interpreter is None or not goal.rail_id:
             return
@@ -655,7 +655,7 @@ class AutopilotService:
         """Parse WavePlan from worker contribution and apply to rail state.
 
         Nano/StrangeLoop never call Autopilot APIs — the host interprets opaque
-        findings/evidence and applies slices into ``RailJobState`` (IG-720).
+        completion findings/evidence and applies slices into ``RailJobState``.
 
         Returns:
             True when a usable wave plan is ready after ingest attempts.
@@ -768,10 +768,11 @@ class AutopilotService:
             return None
 
         _send_back_missing = (
-            "Architecture requires one findings entry that is exactly a WavePlan "
-            "JSON object with wave_slices (host applies fan-out into job rail "
-            "state from findings; do not write fan-out policy into the project "
-            "workspace)."
+            "Architecture requires one bare WavePlan JSON object with "
+            "wave_slices in the goal completion report (host applies fan-out "
+            "into job rail state from completion findings; do not write "
+            "FINDINGS.md, wave-plan.json, or other project/jobs paths as the "
+            "fan-out deliverable — those files are ignored)."
         )
 
         if self._rail_interpreter is None:
@@ -784,7 +785,7 @@ class AutopilotService:
                 "send_back",
                 "Architecture WavePlan gate unavailable (rail not initialized); "
                 "restart the daemon after upgrading, then retry with a WavePlan "
-                "findings entry.",
+                "JSON object in the goal completion report.",
             )
 
         if not await self._ensure_rail_bound_for_job(job_id):
@@ -796,7 +797,8 @@ class AutopilotService:
             return (
                 "send_back",
                 "Architecture WavePlan gate unavailable (rail unbound for job); "
-                "retry with a WavePlan findings entry after the job rail is bound.",
+                "retry with a WavePlan JSON object in the goal completion "
+                "report after the job rail is bound.",
             )
 
         state = await self._rail_interpreter.builtins.job_state(job_id)
@@ -813,7 +815,7 @@ class AutopilotService:
         if ready:
             return (
                 "accept",
-                "Valid WavePlan recorded from the architecture deliverable",
+                "Valid WavePlan recorded from the goal completion report",
             )
         return ("send_back", _send_back_missing)
 
@@ -1850,7 +1852,10 @@ class AutopilotService:
         # from goal.findings if contribution is gone.
         if findings:
             try:
-                from soothe.autopilot.rail.wave_plan import parse_wave_plan_payload
+                from soothe.autopilot.rail.wave_plan import (
+                    WAVE_PLAN_FINDING_CAP,
+                    parse_wave_plan_payload,
+                )
 
                 for finding in findings[:20]:
                     summary = getattr(finding, "summary", None) or str(finding)
@@ -1858,7 +1863,7 @@ class AutopilotService:
                         continue
                     cap = 500
                     if parse_wave_plan_payload(str(summary).strip()) is not None:
-                        cap = 8000
+                        cap = WAVE_PLAN_FINDING_CAP
                     goal.findings.append(str(summary)[:cap])
             except Exception:
                 logger.debug("Failed to attach findings to goal %s", goal_id, exc_info=True)

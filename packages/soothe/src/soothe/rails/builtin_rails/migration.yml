@@ -30,10 +30,12 @@ verbs:
             invariant checks, and git commit milestones. Do not implement
             migration code here.
 
-            REQUIRED deliverable: append one findings entry that is exactly a
-            WavePlan JSON object. The host persists fan-out from that findings
-            entry into job rail state — do not write fan-out policy into the
-            project workspace. Schema example:
+            REQUIRED deliverable: include one bare WavePlan JSON object in the
+            goal completion report (final evidence / completion findings on the
+            wire). The host applies fan-out from that completion finding into
+            job rail state. Do NOT write FINDINGS.md, wave-plan.json, or any
+            other project/jobs path as the fan-out deliverable — those files
+            are ignored. Schema example:
             {"wave_slices":["schema","dual-write","cutover-prep","verify"],
             "independence":"disjoint write-sets per migration slice",
             "rationale":"why this partition"}

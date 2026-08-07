@@ -108,11 +108,11 @@ class LoopRailInterpreter:
           - ``engine_max_parallel_goals`` — spawn budget from
             ``autopilot.max_parallel_goals`` (capacity clamp).
 
-        LoopRail concerns (from YAML / CE findings, never submit kwargs):
+        LoopRail concerns (from YAML / completion findings, never submit kwargs):
           - When ``fanout:`` is present: ``require_plan``, scout/max_waves.
             Absent ``fanout:`` → no wave-plan pollution.
-          - WavePlan slices applied from architecture goal findings into
-            ``RailJobState`` (IG-720).
+          - WavePlan slices applied from architecture goal completion findings
+            into ``RailJobState``.
           - flow ``then:`` builtins decide *when* to fan out
 
         Args:

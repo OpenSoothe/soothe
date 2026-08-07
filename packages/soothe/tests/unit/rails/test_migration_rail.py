@@ -129,10 +129,12 @@ async def test_plan_milestones_migration_copy(tmp_path: Path) -> None:
     assert "migration" in desc
     assert "slice" in desc or "schema" in desc
     assert "ownership units" not in desc
-    assert "wave-plan.json" not in arch.description
+    assert "FINDINGS.md" in arch.description
+    assert "goal completion" in desc
+    assert "Do NOT write" in arch.description
     assert "WavePlan JSON" in arch.description
     assert "record_wave_plan" not in arch.description
-    assert "project workspace" in arch.description.lower()
+    assert "append one findings entry" not in desc
     assert "max_parallel_goals" not in arch.description
     assert "autopilot" not in arch.description.lower()
 

@@ -144,6 +144,45 @@ class TestBuildContribution:
         assert c.plan_steps_executed[0].action == "step A"
         assert c.plan_steps_executed[1].action == "step B"
 
+    def test_wave_plan_in_long_full_output_becomes_bare_json_finding(self) -> None:
+        """WavePlan buried past the 2k prose truncate must still reach findings."""
+        pr = _plan_result(is_done=True)
+        pr.evidence_summary = ""
+        padding = "x" * 2500
+        wave = (
+            '{"wave_slices":["frontend","api","tests"],'
+            '"independence":"disjoint",'
+            '"rationale":"layers"}'
+        )
+        pr.full_output = padding + "\n" + wave + "\n"
+        c = AutopilotWorkerMixin._build_contribution(pr)
+        assert c.findings
+        bare = c.findings[0].summary
+        assert "wave_slices" in bare
+        assert "frontend" in bare
+        from soothe.autopilot.rail.wave_plan import parse_wave_plan_payload
+
+        plan = parse_wave_plan_payload(bare)
+        assert plan is not None
+        assert plan.resolved_slice_ids() == ["frontend", "api", "tests"]
+        # Prose finding may also exist (truncated); WavePlan finding is first.
+        assert c.findings[0].relevance_score == 1.0
+
+    def test_nested_wave_plan_wrapper_extracted_from_evidence(self) -> None:
+        pr = _plan_result(is_done=True)
+        pr.evidence_summary = (
+            '{"job_id":"abc","wave_plan":{"wave_slices":["a","b"],'
+            '"independence":"disjoint","rationale":"r"}}'
+        )
+        pr.full_output = None
+        c = AutopilotWorkerMixin._build_contribution(pr)
+        assert c.findings
+        from soothe.autopilot.rail.wave_plan import parse_wave_plan_payload
+
+        plan = parse_wave_plan_payload(c.findings[0].summary)
+        assert plan is not None
+        assert plan.resolved_slice_ids() == ["a", "b"]
+
 
 class TestGoalCompletionChunk:
     def test_chunk_format_is_custom_namespace(self) -> None:

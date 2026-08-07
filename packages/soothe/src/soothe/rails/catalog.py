@@ -65,7 +65,7 @@ class RailDefinition:
         rules: Explicit rule list (list of mappings).
         fanout: Optional rail-declared fan-out policy. Keys may include
             ``require_plan``, ``scout_count``, ``max_waves``. WavePlan slices
-            come from CE architecture findings (IG-720); ``artifact`` is
+            come from the architecture goal completion report; ``artifact`` is
             rejected. Engine must not invent fan-out — it lives in rail YAML.
         verbs: Optional catalog-verb body overrides (RFC-231 M2). Keys are
             CE builtin names; values may include ``brief``, ``tags``, ``role``.
@@ -95,8 +95,8 @@ def _normalize_fanout(raw: Any, *, path: Path) -> dict[str, Any]:
     out: dict[str, Any] = {}
     if "artifact" in raw and raw["artifact"] is not None:
         raise RailCatalogError(
-            f"{path}: fanout.artifact is removed; WavePlan persists via CE "
-            "architecture findings and rail_state (no wave-plan.json file)"
+            f"{path}: fanout.artifact is removed; WavePlan persists via goal "
+            "completion findings and rail_state (no wave-plan.json file)"
         )
     if "default_modules" in raw and raw["default_modules"] is not None:
         raise RailCatalogError(

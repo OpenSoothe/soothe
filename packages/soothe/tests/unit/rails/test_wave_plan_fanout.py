@@ -134,15 +134,18 @@ async def test_plan_milestones_description_findings_only(tmp_path: Path) -> None
     result = await ex.invoke("plan_milestones", job_id=root.id)
     arch = await ce.get_goal(result.created_goal_ids[0])
     assert arch is not None
-    assert "jobs/" not in arch.description
-    assert "wave-plan.json" not in arch.description
+    assert "FINDINGS.md" in arch.description
+    assert "goal completion" in arch.description.lower()
+    assert "Do NOT write" in arch.description
     assert "record_wave_plan" not in arch.description
-    assert "project workspace" in arch.description.lower()
     assert "WavePlan JSON" in arch.description
     assert "ownership units" in arch.description.lower()
     assert "fixed default" in arch.description.lower()
     assert "max_parallel_goals" not in arch.description
     assert "autopilot" not in arch.description.lower()
+    # Must not teach workspace-file SoT as the required deliverable.
+    assert "append one findings entry" not in arch.description.lower()
+    assert "docs/FINDINGS" not in arch.description
 
 
 @pytest.mark.asyncio
@@ -287,6 +290,44 @@ def test_parse_wave_plan_from_nested_embed() -> None:
     plan = parse_wave_plan_from_findings([text])
     assert plan is not None
     assert "frontend" in plan.resolved_slice_ids()
+
+
+def test_parse_wave_plan_unwraps_nested_wave_plan_key() -> None:
+    from soothe.autopilot.rail.wave_plan import parse_wave_plan_payload
+
+    wrapped = {
+        "job_id": "85fce19d",
+        "created": "2026-08-07",
+        "wave_plan": {
+            "wave_slices": ["S1-foundation", "S2-session", "S3-chat"],
+            "independence": "disjoint write-sets",
+            "rationale": "feature domains",
+        },
+    }
+    plan = parse_wave_plan_payload(wrapped, source="t")
+    assert plan is not None
+    assert plan.resolved_slice_ids() == ["S1-foundation", "S2-session", "S3-chat"]
+
+
+def test_wave_plan_to_findings_json_roundtrip() -> None:
+    from soothe.autopilot.rail.wave_plan import (
+        parse_wave_plan_payload,
+        wave_plan_to_findings_json,
+    )
+
+    plan = parse_wave_plan_payload(
+        {
+            "wave_slices": ["a", "b"],
+            "independence": "disjoint",
+            "rationale": "r",
+        },
+        source="t",
+    )
+    assert plan is not None
+    bare = wave_plan_to_findings_json(plan)
+    again = parse_wave_plan_payload(bare, source="roundtrip")
+    assert again is not None
+    assert again.resolved_slice_ids() == ["a", "b"]
 
 
 @pytest.mark.asyncio

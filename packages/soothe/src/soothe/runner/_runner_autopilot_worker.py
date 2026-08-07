@@ -19,6 +19,8 @@ Phase B (this file) ships a minimal working implementation:
 
 Wire ``evidence_summary`` is the StrangeLoop response for host consensus
 (IG-710) — prefer evidence_summary → full_output → completed steps.
+When a WavePlan JSON is present in those texts, a dedicated bare-JSON
+finding is attached for host fan-out ingest (completion report SoT).
 ``PlanResult.effects`` are copied into the contribution as domain-agnostic
 side-effect claims (IG-712); the host never infers effects from prose/FS.
 """
@@ -239,15 +241,41 @@ class AutopilotWorkerMixin:
 
         Extracts evidence summary as a finding, plan steps from
         ``decision.steps``, and passes through StrangeLoop ``effects``
-        (IG-712).
+        (IG-712). When a WavePlan is present in untruncated evidence /
+        full_output, also attaches a dedicated bare-JSON finding for host
+        fan-out ingest (completion report SoT — not workspace files).
         """
         if plan_result is None:
             return GoalDispatchContextContribution()
 
+        from soothe.autopilot.rail.wave_plan import (
+            WAVE_PLAN_FINDING_CAP,
+            extract_wave_plan_from_plan_result_texts,
+            wave_plan_to_findings_json,
+        )
+
         findings: list[Finding] = []
+
+        # Prefer WavePlan from untruncated texts before prose truncation loses it.
+        raw_evidence = (getattr(plan_result, "evidence_summary", None) or "").strip()
+        raw_full = (getattr(plan_result, "full_output", None) or "").strip()
+        wave_plan = extract_wave_plan_from_plan_result_texts(
+            evidence_summary=raw_evidence or None,
+            full_output=raw_full or None,
+        )
+        if wave_plan is not None and wave_plan.resolved_slice_ids():
+            findings.append(
+                Finding(
+                    summary=wave_plan_to_findings_json(wave_plan)[:WAVE_PLAN_FINDING_CAP],
+                    relevance_score=1.0,
+                )
+            )
+
         summary = synthesize_sloop_response(plan_result)
         if summary:
-            findings.append(Finding(summary=summary[:2000], relevance_score=0.8))
+            # Avoid duplicating the bare WavePlan JSON as the prose finding.
+            if not (findings and summary.strip() == findings[0].summary.strip()):
+                findings.append(Finding(summary=summary[:2000], relevance_score=0.8))
 
         plan_steps: list[StepSummary] = []
         decision = getattr(plan_result, "decision", None)

@@ -534,11 +534,12 @@ goals, and the job root stays `pending`. Logs show
 `wave_plan_ready=False` / `architecture_ready` unmatched on `dag_idle`, or
 rate-limited warnings that a WavePlan is missing for the job.
 
-Cause: host never applied a WavePlan from architecture **findings** into
-`rail_state` (`wave_slices`). Writing `docs/wave-plan.json` (or
-`.soothe/wave-plan.json`) in the project workspace does **not** count.
+Cause: host never applied a WavePlan from the architecture goal
+**completion report** (contribution findings / evidence) into `rail_state`
+(`wave_slices`). Writing `docs/FINDINGS.md`, `docs/wave-plan.json`, or
+`.soothe/wave-plan.json` in the project workspace does **not** count.
 Leftover `$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json` files are orphans
-and are **not** read (IG-720).
+and are **not** read.
 
 Recovery:
 
@@ -547,15 +548,15 @@ Recovery:
    processes can accept architecture via soft LLM consensus without a plan).
 2. Inspect: `soothe autopilot job {job_id}`, architecture goal findings, and
    `~/.soothe/data/jobs/{job_id}/rail_state.json` (`wave_slices`).
-3. Prefer re-running architecture so findings include a bare WavePlan JSON
-   object (`wave_slices` / `slices`). As a last resort, set `wave_slices` on
-   `rail_state.json` and wait for `dag_idle` (or restart).
+3. Prefer re-running architecture so the **goal completion report** includes
+   a bare WavePlan JSON object (`wave_slices` / `slices`). As a last resort,
+   set `wave_slices` on `rail_state.json` and wait for `dag_idle` (or restart).
 4. Wait for the next `dag_idle` tick (or restart the daemon) so
    `spawn_wave_makers` can fire.
 
-New architecture goals must put a WavePlan JSON object in **findings** (host
-applies into rail state). Do not teach agents to write fan-out policy into
-the project tree.
+New architecture goals must put a WavePlan JSON object in the **goal
+completion report** (host applies into rail state). Do not teach agents to
+write fan-out policy into the project tree.
 
 Forensics: `.agents/skills/inspect-autopilot-job/SKILL.md`.
 

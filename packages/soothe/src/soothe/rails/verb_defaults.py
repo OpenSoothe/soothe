@@ -18,10 +18,12 @@ DEFAULT_VERB_BRIEFS: dict[str, str] = {
         "features, tasks, packages, or stages), wave-1 independent slices, "
         "wave acceptance criteria, and git commit milestones. "
         "Do not implement product code here.\n\n"
-        "REQUIRED deliverable: append one findings entry that is exactly "
-        "a WavePlan JSON object. The host persists fan-out from that findings "
-        "entry into job rail state — do not write fan-out policy into the "
-        "project workspace. Schema example:\n"
+        "REQUIRED deliverable: include one bare WavePlan JSON object in the "
+        "goal completion report (final evidence / completion findings on the "
+        "wire). The host applies fan-out from that completion finding into "
+        "job rail state. Do NOT write FINDINGS.md, wave-plan.json, or any "
+        "other project/jobs path as the fan-out deliverable — those files "
+        "are ignored. Schema example:\n"
         '{"wave_slices":["core","api","tests"],'
         '"independence":"disjoint write-sets per slice",'
         '"rationale":"why this partition"}\n'

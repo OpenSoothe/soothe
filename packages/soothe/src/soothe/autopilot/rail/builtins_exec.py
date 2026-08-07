@@ -6,9 +6,9 @@ Mutates ContextEngine goal DAG. Goal tags / branch metadata are mirrored onto
 and optionally persists ``rail_state.json`` under the job artifact dir so
 guards survive daemon restart.
 
-``invoke`` prefers YAML ``verbs.<name>.do`` recipes (IG-717) over ``_do_*``.
-Wave fan-out applies WavePlan from CE architecture findings into
-``RailJobState`` before ``spawn_wave_makers`` (IG-720) — no filesystem
+``invoke`` prefers YAML ``verbs.<name>.do`` recipes over ``_do_*``.
+Wave fan-out applies WavePlan from the architecture goal completion report
+into ``RailJobState`` before ``spawn_wave_makers`` — no filesystem
 ``wave-plan.json``, no markdown scraping, no project-workspace plan files.
 """
 
@@ -101,7 +101,7 @@ class RailJobState:
     worktrees_enabled: bool = True
     # True when bind declared rail YAML ``fanout:`` (structure signal for guards).
     fanout_enabled: bool = False
-    # When True, makers require WavePlan applied from CE architecture findings.
+    # When True, makers require WavePlan applied from completion findings.
     require_plan: bool = False
     # Engine spawn budget mirrored at bind (None = unset until bind).
     engine_max_parallel_goals: int | None = None
@@ -684,7 +684,7 @@ class RailBuiltinExecutor:
         max_waves: int | None = None,
         scout_count: int | None = None,
     ) -> WavePlan | None:
-        """Apply an LLM wave plan into rail state (CE findings SoT; IG-720).
+        """Apply an LLM wave plan into rail state (completion findings SoT).
 
         Preferred host API: Autopilot/rail apply the plan from architecture
         completion findings. Does not write a filesystem wave-plan JSON.
@@ -717,7 +717,7 @@ class RailBuiltinExecutor:
             return built
 
     async def ingest_wave_plan(self, job_id: str) -> RailJobState | None:
-        """Load WavePlan from CE architecture findings into bound job state."""
+        """Load WavePlan from architecture completion findings into job state."""
         async with self._lock:
             state = self._jobs.get(job_id)
             if state is None:
@@ -769,8 +769,8 @@ class RailBuiltinExecutor:
     def _ingest_job_wave_plan(self, state: RailJobState) -> None:
         """Apply WavePlan from architecture goal findings into rail state.
 
-        Already-applied ``wave_slices`` win; otherwise parse CE findings
-        (IG-720 — no filesystem artifact).
+        Already-applied ``wave_slices`` win; otherwise parse completion
+        findings on architecture-tagged goals (no filesystem artifact).
         """
         if state.wave_slices:
             return
