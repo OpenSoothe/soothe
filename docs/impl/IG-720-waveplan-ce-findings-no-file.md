@@ -3,6 +3,8 @@
 **Created**: 2026-08-07  
 **Status**: Implemented  
 **Related**: [RFC-231](../specs/RFC-231-looprail-rail-exec.md) §9,
+[RFC-232](../specs/RFC-232-waveplan-flat-semistructured-ingest.md)
+(flat wire; nesting reject — follow-on),
 [IG-704](IG-704-autopilot-wave-plan-host-ingest.md),
 [IG-714](IG-714-architecture-wave-plan-accept-without-artifact.md),
 [IG-718](IG-718-fanout-slice-terminology.md)

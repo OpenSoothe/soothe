@@ -3,7 +3,7 @@
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
 **Last Updated**: 2026-08-07
-**Total RFCs**: 84
+**Total RFCs**: 85
 
 ## Summary Statistics
 
@@ -11,8 +11,8 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Draft | 55 | 65.5% |
-| Implemented | 16 | 19.0% |
+| Draft | 56 | 65.9% |
+| Implemented | 16 | 18.8% |
 | Archived | 6 | 7.1% |
 | Proposed | 2 | 2.4% |
 | Accepted | 1 | 1.2% |
@@ -24,7 +24,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 56 |
+| Architecture Design | 57 |
 | Implementation Interface Design | 14 |
 | Architecture Design + Implementation Interface Design | 2 |
 | Architecture Design / Impl Interface | 1 |
@@ -40,6 +40,11 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ### 2026-08-07
 
+- **RFC-232** drafted: Flat WavePlan Wire Ingest (semi-structured markdown+JSON
+  wire allowed; canonical plan is flat leaf `wave_slices` / `slices` only;
+  nested waves/slices rejected with no clever-flatten; SoT remains
+  `RailJobState`; amends RFC-231 §9). Cross-refs on RFC-204, RFC-230, RFC-231,
+  IG-720, and index.
 - **RFC-231** drafted: LoopRail and Rail Exec (composable verb bodies). Promotes
   the LoopRail design draft as normative Autopilot workflow patterns and specifies
   Rail Exec (L0 CE primitives / L1 catalog recipes / L2 flow) so custom rails can
@@ -60,12 +65,20 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ### Major Changes - 2026-08-07
 
+**RFC-232**: Flat WavePlan Wire Ingest (Semi-Structured, No Nesting)
+
+- Completion wire MAY be markdown + flat JSON; SoT remains `RailJobState.wave_slices`
+- Nested waves/slices forbidden (reject, do not flatten)
+- Architecture gate send_backs must include validation/nesting detail
+- Amends RFC-231 §9 fan-out contract
+
 **RFC-231**: LoopRail and Rail Exec (Composable Verb Bodies)
 
 - Normative LoopRail: event → guard → catalog verb → CE DAG
 - Rail Exec: verb bodies as L0 primitive sequences and/or NL briefs/intent
 - Migration phases M1–M4 (recipe extract → overrides → multi-step → intent expand)
 - LoopRail design draft marked promoted; RFC-230/204 related links updated
+- §9 later amended by RFC-232 (flat WavePlan wire)
 
 ### Major Changes - 2026-08-05
 

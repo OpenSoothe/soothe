@@ -273,7 +273,7 @@ class AutopilotWorkerMixin:
 
         summary = synthesize_sloop_response(plan_result)
         if summary:
-            # Avoid duplicating the bare WavePlan JSON as the prose finding.
+            # Avoid duplicating the flat WavePlan JSON as the prose finding.
             if not (findings and summary.strip() == findings[0].summary.strip()):
                 findings.append(Finding(summary=summary[:2000], relevance_score=0.8))
 

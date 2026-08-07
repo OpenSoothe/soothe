@@ -16,7 +16,7 @@ from soothe.rails import LoopRailCatalog
 
 def test_migration_rail_declares_fanout_and_human_gate() -> None:
     rail = LoopRailCatalog().resolve("migration")
-    assert rail.version == "2.6"
+    assert rail.version == "2.7"
     assert "artifact" not in rail.fanout
     assert rail.fanout.get("require_plan") is True
     assert "default_modules" not in rail.fanout
@@ -132,6 +132,7 @@ async def test_plan_milestones_migration_copy(tmp_path: Path) -> None:
     assert "FINDINGS.md" in arch.description
     assert "goal completion" in desc
     assert "Do NOT write" in arch.description
+    assert "nested" in desc
     assert "WavePlan JSON" in arch.description
     assert "record_wave_plan" not in arch.description
     assert "append one findings entry" not in desc

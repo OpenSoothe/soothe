@@ -8,6 +8,7 @@
 **Authors**: Soothe Team  
 **Depends on**: RFC-204, RFC-222, RFC-228, RFC-624, RFC-625, RFC-630  
 **Related**: [RFC-231](RFC-231-looprail-rail-exec.md) (LoopRail + Rail Exec),
+[RFC-232](RFC-232-waveplan-flat-semistructured-ingest.md) (flat WavePlan wire),
 LoopRail design draft (`docs/drafts/2026-07-11-loop-rail-design.md`; promoted by RFC-231),
 IG-678, IG-680, IG-687, IG-691, IG-692
 

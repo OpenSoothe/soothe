@@ -1,0 +1,278 @@
+# RFC-232: Flat WavePlan Wire Ingest (Semi-Structured, No Nesting)
+
+**RFC**: 232  
+**Title**: Flat WavePlan Wire Ingest (Semi-Structured, No Nesting)  
+**Status**: Draft  
+**Kind**: Architecture Design  
+**Created**: 2026-08-07  
+**Authors**: Soothe Team  
+**Depends on**: RFC-231, RFC-204, RFC-222, RFC-625, RFC-630  
+**Related**: RFC-230, IG-704, IG-714, IG-718, IG-720  
+**Amends**: RFC-231 §9 (Fan-out contract)
+
+## Abstract
+
+Architecture goals on `require_plan` rails must deliver a **flat** WavePlan that
+the host applies into `RailJobState` (`wave_slices` / `decompose_plan`). This RFC
+tightens the **wire contract**: completion evidence MAY be semi-structured
+(markdown prose plus one JSON block), but the **canonical plan is always a flat
+list of leaf slice ids** — never nested waves, never nested slices, never a
+filesystem artifact.
+
+It addresses production thrash where planners invent `WAVE-0 → {slices:[…]}`
+trees (or write `docs/architecture/*.json`) and fail the deterministic
+architecture WavePlan gate until send-back budget exhaustion.
+
+## 1. Problem
+
+IG-720 made CE completion findings + `RailJobState` the sole SoT and removed
+`wave-plan.json`. That fixed dual-SoT confusion but left a brittle ingest path:
+
+1. **Strict bare JSON** — host expects `WavePlan` pydantic shape in findings /
+   evidence; agents often emit custom “wave schedule” JSON.
+2. **Nested wave trees** — e.g. `wave_slices` as a dict keyed by `WAVE-*`, or a
+   list of wave objects each containing inner `slices`. These fail validation
+   (`list[str]` / flat `slices[]`) and are the wrong product for fan-out.
+3. **Opaque send-backs** — generic “bare WavePlan required” text omits pydantic
+   field errors, so rework loops bootstrap and re-emit the same invalid shape.
+4. **Ignored files** — agents still write large markdown/JSON under the project
+   tree; the gate correctly ignores them, burning tokens without progress.
+
+Fan-out only needs **independent leaf ownership units** for `spawn_wave_makers`.
+Rail **wave rounds** (`wave_index` / `max_waves`) are job-state counters, not
+nested objects inside the plan.
+
+## 2. Goals
+
+1. **Flat-only canonical plan** — `wave_slices: list[str]` and/or flat
+   `slices: [{slice, description?, priority?, tags?}]`. No hierarchy.
+2. **Semi-structured wire allowed** — markdown rationale + one JSON block (or a
+   dedicated structured completion field) is acceptable input to ingest.
+3. **Reject nesting** — nested waves/slices MUST fail closed (send_back / no
+   apply); do **not** “clever-flatten” WAVE trees into job state.
+4. **SoT unchanged** — applied slices live on `RailJobState`; persist via
+   `rail_state.json` only (IG-720). No project-tree or `jobs/*/wave-plan.json`
+   authority.
+5. **Actionable gate failures** — send_back reasoning MUST include the first
+   validation / nesting reject reason (field path + short message).
+6. **Optional flat coerce** — host MAY normalize *flat* malformations only
+   (see §5.3); never invent slice lists from prose keywords (RFC-630).
+
+## 3. Non-goals
+
+- Restoring filesystem WavePlan SoT (`fanout.artifact`, workspace scrape).
+- Nano/agent tools that call Autopilot `record_wave_plan` (host-owned ingest).
+- Nested wave schedules, milestone DAGs, or multi-level slice trees as machine
+  contract (prose markdown may *describe* phases; job state must not store them).
+- Replacing the deterministic architecture gate with free-form LLM consensus
+  when `require_plan` is true.
+- Changing rail YAML `fanout:` keys (`require_plan`, `scout_count`, `max_waves`).
+
+## 4. Architecture
+
+```text
+Architecture / planner completion
+  │
+  ├─ prose / markdown (optional; ignored for fan-out)
+  └─ wire candidate(s):
+       • Finding.summary / evidence / full_output JSON or fenced block
+       • optional future PlanResult.wave_plan structured field
+              │
+              ▼
+     extract → normalize (flat aliases only) → validate WavePlan
+              │                         │
+              │ nested / invalid        │ ok
+              ▼                         ▼
+         send_back (+ reason)    record_wave_plan
+                                        │
+                                        ▼
+                         RailJobState.wave_slices
+                         (+ decompose_plan from rich slices)
+                                        │
+                                        ▼
+                              is_wave_plan_ready → spawn_wave_makers
+```
+
+### 4.1 Ownership
+
+| Layer | Owns | Must not |
+|-------|------|----------|
+| LLM + CE findings | Flat WavePlan on the **wire** (JSON block / structured field) | Nested wave trees; project-tree fan-out files as SoT |
+| Autopilot gate | Extract, reject nesting, optional flat coerce, validate, send_back text | Accept architecture without slices when `require_plan` |
+| LoopRail | `record_wave_plan` → `wave_slices` / `decompose_plan` | Persist nested wave objects on `RailJobState` |
+| Rail YAML | `fanout.require_plan` and planner briefs (flat examples) | `fanout.artifact`; nested WavePlan examples in briefs |
+
+## 5. Wire and canonical contracts
+
+### 5.1 Canonical `WavePlan` (normative)
+
+```json
+{
+  "wave_slices": ["auth", "desktop-shell", "api-demos", "tests"],
+  "independence": "disjoint primary write-sets per slice",
+  "rationale": "partition by ownership for parallel makers"
+}
+```
+
+Rich flat form (equivalent SoT after apply):
+
+```json
+{
+  "slices": [
+    {"slice": "auth", "description": "identity + login", "priority": 80,
+     "tags": ["implementation", "maker"]},
+    {"slice": "desktop-shell", "description": "portable app shell"}
+  ],
+  "independence": "disjoint write-sets",
+  "rationale": "…"
+}
+```
+
+Optional scalar fields unchanged: `scout_count`, `max_waves`, `independence`,
+`rationale` (strings or null — not objects).
+
+Nested wrapper `{"wave_plan": { …flat… }}` remains allowed when the **inner**
+object is flat (existing unwrap behavior).
+
+### 5.2 Semi-structured completion (allowed)
+
+Any of the following MAY supply the wire candidate (first successful flat
+parse wins; prefer an explicit WavePlan finding over prose scrape):
+
+1. Contribution `Finding.summary` that is (or embeds) flat WavePlan JSON.
+2. `evidence_summary` / `full_output` containing a single fenced JSON block or
+   one top-level flat object.
+3. (Future) Dedicated structured field on the completion contribution /
+   `PlanResult`, schema-constrained to flat `WavePlan`.
+
+Markdown outside the JSON block is documentation only.
+
+### 5.3 Flat coerce (optional, host)
+
+Before `WavePlan.model_validate`, the host MAY apply **flat-only** normalizers:
+
+| Input | Coerce to | Notes |
+|-------|-----------|-------|
+| `slices[].name` / `id` without `slice` | `slice` | Flat leaf alias |
+| `rationale` / `independence` as non-string scalar | `str(...)` | Keep short; objects → **reject** |
+| Empty strings in `wave_slices` | Drop | Existing strip behavior |
+
+### 5.4 Nesting reject (normative — MUST)
+
+Treat as **invalid wire** (no apply, architecture gate `send_back`):
+
+| Pattern | Example |
+|---------|---------|
+| `wave_slices` is a dict (e.g. keyed by `WAVE-*`) | `{"WAVE-0": {"slices":[…]}}` |
+| `wave_slices` items are objects that encode a wave | `[{"wave_id":"WAVE-0","slices":[…]}]` |
+| Any `slices` / `wave_slices` entry contains nested `slices` / `children` / `waves` | Tree nodes |
+| Top-level `waves: […]` schedule object used as the plan | Nested schedule SoT |
+| `rationale` / `independence` as object/array | Non-scalar narrative |
+
+**MUST NOT** flatten nested WAVE trees into `wave_slices` as a recovery path.
+Operators who need emergency unstick set `wave_slices` on `rail_state.json`
+explicitly (debug wiki); that is out-of-band recovery, not ingest.
+
+Removed pre-Slice keys (`wave_modules`, `modules`, `module`) remain rejected
+(IG-718).
+
+### 5.5 Applied job state (unchanged SoT)
+
+After accept:
+
+- `RailJobState.wave_slices: list[str]` — flat leaf ids  
+- `RailJobState.decompose_plan` — optional flat specs from rich `slices`  
+- `is_wave_plan_ready` iff non-empty `wave_slices` (or findings still parse flat)
+
+`RailJobState` MUST NOT grow a nested `waves[]` tree field. Optional future
+`wave_plan` snapshot on state, if added, MUST be the validated **flat** model
+only (forensics), not a second SoT.
+
+## 6. Architecture gate and consensus
+
+When `_is_architecture_planner_goal` and job `require_plan`:
+
+1. Extract candidates from evidence + contribution findings + `goal.findings`.
+2. Reject nesting (§5.4) or fail validate → **`send_back`** with reason that
+   includes the reject/validation detail (truncated).
+3. Else `record_wave_plan` → **`accept`**.
+4. Do **not** fall through to free-form LLM consensus (fail-closed; RFC-231 /
+   IG-714).
+
+Send-back exhaustion and `retry_architecture` behavior remain RFC-204 /
+LoopRail (per-subgoal budget).
+
+### 6.1 Planner briefs
+
+Builtin `plan_milestones` (and rail `verbs:` overrides) MUST:
+
+- Show a **flat** JSON example (`wave_slices` string list or flat `slices`).
+- State explicitly: **no nested waves/slices**; project files are ignored.
+- Forbid teaching `WAVE-0` / schedule trees as the machine deliverable.
+
+## 7. Error handling
+
+| Failure | Behavior |
+|---------|----------|
+| Missing WavePlan when `require_plan` | `send_back` + missing-plan reason |
+| Nested waves/slices detected | `send_back` + nesting reject reason (no apply) |
+| Flat shape invalid after coerce | `send_back` + first pydantic error |
+| Workspace / orphan `wave-plan.json` only | Ignored; same as missing |
+| Send-back budget exhausted | Subgoal `failed` → `retry_architecture` (rail) |
+
+## 8. Testing strategy
+
+| Layer | Coverage |
+|-------|----------|
+| Parse | Flat string list + rich `slices` accept |
+| Nesting | Dict `wave_slices`, WAVE object list, nested `slices` → None / reject |
+| Coerce | Flat aliases only; object `rationale` still rejects |
+| Gate | Architecture accept applies `rail_state.wave_slices`; send_back text contains field error |
+| Negative | Project-tree JSON does not accept; nested wrapper with nested inner rejects |
+| Fan-out | `spawn_wave_makers` uses flat ids only |
+
+## 9. Migration / rollout
+
+1. Document contract (this RFC); amend RFC-231 §9.
+2. Implementation IG: nesting detector + send_back detail; optional flat coerce;
+   brief copy updates on greenfield/migration `plan_milestones`.
+3. Update debug wiki WavePlan stall section: flat example; nesting is not
+   recoverable via flatten.
+4. No on-disk migration of old nested artifacts (already non-SoT).
+
+## 10. Decision log
+
+| Topic | Decision |
+|-------|----------|
+| Nested waves/slices on wire | **Forbidden** — reject, do not flatten |
+| Semi-structured markdown + JSON | **Allowed** as wire; SoT remains flat job state |
+| Filesystem WavePlan | Still non-SoT (IG-720 / RFC-231) |
+| Gate vs LLM consensus | Deterministic gate when `require_plan` |
+| Coerce scope | Flat aliases only; no keyword slice invention (RFC-630) |
+| Job state shape | Flat `wave_slices` / `decompose_plan` only |
+
+## 11. Open questions
+
+- Whether to add a first-class `PlanResult.wave_plan` / contribution field
+  (schema-constrained) in the same IG or a follow-on.
+- Max length / slice-count caps surfaced in send_back vs silent clamp only.
+- Operator CLI (`soothe autopilot wave-plan set`) vs rail_state edit for recovery.
+
+## 12. Suggested implementation routing
+
+1. **IG-721** (implemented): `parse_wave_plan_payload` nesting guards + send_back
+   reason plumbing in `_architecture_wave_plan_consensus_gate`; flat coerce;
+   brief / wiki / skill updates.
+2. Optional follow-on: dedicated `PlanResult.wave_plan` structured field;
+   operator CLI `wave-plan set`.
+
+## Appendix A: relation to prior docs
+
+| Document | Relation |
+|----------|----------|
+| RFC-231 §9 | Amended: wire MAY be semi-structured; canonical plan flat-only; nesting forbidden |
+| IG-720 | Persistence SoT unchanged; this RFC refines **wire shape** and reject rules |
+| IG-718 | Slice terminology; nesting reject complements module-key hard cut |
+| IG-704 / IG-714 | Host ingest + architecture gate; add nesting + error detail |
+| RFC-630 | No keyword heuristics for inventing slices from prose |
+| RFC-204 | Send-back / fail / `retry_architecture` unchanged |

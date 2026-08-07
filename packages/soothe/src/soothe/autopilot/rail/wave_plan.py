@@ -1,14 +1,14 @@
 """Structured wave fan-out plan for LoopRail.
 
 LoopRail owns fan-out *contract* (YAML ``fanout.require_plan`` / counters).
-The **LLM** owns fan-out *policy* (slice ids + width) via a **WavePlan JSON
-object in the architecture goal completion report** (contribution findings /
-evidence). Autopilot applies the plan into ``RailJobState`` (persisted in
+The **LLM** owns fan-out *policy* (flat leaf slice ids) via WavePlan JSON on
+the architecture goal completion wire (findings / evidence; markdown prose
+optional). Autopilot applies the plan into ``RailJobState`` (persisted in
 ``rail_state.json``). There is **no** filesystem ``wave-plan.json`` artifact.
 
+Nested waves/slices are forbidden (RFC-232): reject, do not flatten.
 Autopilot engine only supplies a spawn budget (``max_parallel_goals``).
-A **slice** is an independent parallel ownership unit (feature, task, package,
-migration stage, …). Missing plan fails closed when ``require_plan`` is true.
+Missing plan fails closed when ``require_plan`` is true.
 Project-workspace files are never authoritative.
 """
 
@@ -16,14 +16,18 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 logger = logging.getLogger(__name__)
 
 # Hard cut: removed pre-Slice fan-out wire keys (no dual-read).
 _REMOVED_WIRE_KEYS = frozenset({"wave_modules", "modules", "module"})
+
+# Keys that mark a nested ownership tree (forbidden on wire).
+_NESTED_CHILD_KEYS = frozenset({"slices", "children", "waves", "wave_slices"})
 
 
 class WavePlanSlice(BaseModel):
@@ -88,6 +92,14 @@ class WavePlan(BaseModel):
         ]
 
 
+@dataclass(frozen=True)
+class WavePlanIngestResult:
+    """Outcome of parsing a WavePlan candidate from the completion wire."""
+
+    plan: WavePlan | None = None
+    detail: str = ""
+
+
 class FanoutResolution(BaseModel):
     """Result of resolving slices for ``spawn_wave_makers``."""
 
@@ -103,8 +115,8 @@ class FanoutResolution(BaseModel):
     detail: str = ""
 
 
-def _reject_removed_wire_keys(raw: dict[str, Any], *, source: str) -> bool:
-    """Return True if payload uses removed pre-Slice fan-out keys."""
+def _reject_removed_wire_keys(raw: dict[str, Any], *, source: str) -> str | None:
+    """Return a reject reason if payload uses removed pre-Slice fan-out keys."""
     found = sorted(k for k in raw if k in _REMOVED_WIRE_KEYS)
     if not found:
         nested = raw.get("slices")
@@ -114,47 +126,192 @@ def _reject_removed_wire_keys(raw: dict[str, Any], *, source: str) -> bool:
                     found = ["slices[].module"]
                     break
     if found:
-        logger.warning(
-            "Wave plan (%s) uses removed keys %s; use wave_slices / slices / slice",
-            source,
-            found,
-        )
-        return True
+        msg = f"uses removed keys {found}; use flat wave_slices / slices / slice (source={source})"
+        logger.warning("Wave plan (%s) %s", source, msg)
+        return msg
+    return None
+
+
+def _entry_has_nested_children(item: dict[str, Any]) -> bool:
+    """True when a list entry encodes a nested wave/slice tree."""
+    for key in _NESTED_CHILD_KEYS:
+        val = item.get(key)
+        if isinstance(val, (list, dict)) and val:
+            return True
     return False
 
 
-def parse_wave_plan_payload(raw: Any, *, source: str = "payload") -> WavePlan | None:
-    """Validate a dict (or JSON string) as ``WavePlan`` (slice schema only).
+def _nesting_reject_reason(raw: dict[str, Any], *, source: str) -> str | None:
+    """Return a reason if the payload uses nested waves/slices (RFC-232)."""
+    if "waves" in raw and isinstance(raw.get("waves"), (list, dict)):
+        return (
+            f"nested waves forbidden (top-level waves); emit flat wave_slices "
+            f"string list or flat slices[] (source={source})"
+        )
+
+    ws = raw.get("wave_slices")
+    if isinstance(ws, dict):
+        return (
+            f"nested waves forbidden (wave_slices is an object/dict); emit "
+            f'wave_slices as ["a","b"] — do not key by WAVE-* (source={source})'
+        )
+    if isinstance(ws, list):
+        for i, item in enumerate(ws):
+            if isinstance(item, dict) and _entry_has_nested_children(item):
+                return (
+                    f"nested slices forbidden (wave_slices[{i}] contains "
+                    f"child slices/waves); flat leaf ids only (source={source})"
+                )
+            if isinstance(item, dict) and ("wave_id" in item or "wave" in item):
+                return (
+                    f"nested waves forbidden (wave_slices[{i}] looks like a "
+                    f"wave object); flat leaf ids only (source={source})"
+                )
+
+    slices = raw.get("slices")
+    if isinstance(slices, list):
+        for i, item in enumerate(slices):
+            if isinstance(item, dict) and _entry_has_nested_children(item):
+                return (
+                    f"nested slices forbidden (slices[{i}] contains child "
+                    f"slices/waves); flat leaf entries only (source={source})"
+                )
+
+    for field in ("rationale", "independence"):
+        val = raw.get(field)
+        if isinstance(val, (dict, list)):
+            return (
+                f"{field} must be a string (or omitted), not {type(val).__name__} (source={source})"
+            )
+
+    return None
+
+
+def _coerce_flat_aliases(raw: dict[str, Any]) -> dict[str, Any]:
+    """Return a shallow-copied dict with flat-only wire aliases normalized.
+
+    Does not flatten nested WAVE trees (those are rejected earlier).
+    """
+    out = dict(raw)
+
+    for field in ("rationale", "independence"):
+        val = out.get(field)
+        if val is None or isinstance(val, str) or isinstance(val, (dict, list)):
+            continue
+        out[field] = str(val)
+
+    slices = out.get("slices")
+    if isinstance(slices, list):
+        coerced_slices: list[Any] = []
+        changed = False
+        for item in slices:
+            if not isinstance(item, dict):
+                coerced_slices.append(item)
+                continue
+            entry = dict(item)
+            if "slice" not in entry:
+                for alias in ("name", "id"):
+                    alias_val = entry.get(alias)
+                    if isinstance(alias_val, str) and alias_val.strip():
+                        entry["slice"] = alias_val.strip()
+                        changed = True
+                        break
+            coerced_slices.append(entry)
+        if changed:
+            out["slices"] = coerced_slices
+
+    ws = out.get("wave_slices")
+    if isinstance(ws, list) and ws and all(isinstance(x, dict) for x in ws):
+        # Flat list of leaf objects → promote to rich slices when no nesting.
+        rich: list[dict[str, Any]] = []
+        for item in ws:
+            if not isinstance(item, dict):
+                return out
+            entry = dict(item)
+            if "slice" not in entry:
+                for alias in ("name", "id", "slice_id"):
+                    alias_val = entry.get(alias)
+                    if isinstance(alias_val, str) and alias_val.strip():
+                        entry["slice"] = alias_val.strip()
+                        break
+            if isinstance(entry.get("slice"), str) and entry["slice"].strip():
+                rich.append(entry)
+            else:
+                return out  # cannot coerce safely
+        if rich and not out.get("slices"):
+            out["slices"] = rich
+            out["wave_slices"] = [str(e["slice"]).strip() for e in rich]
+
+    return out
+
+
+def _validation_error_detail(exc: Exception, *, source: str) -> str:
+    if isinstance(exc, ValidationError):
+        errs = exc.errors()
+        if errs:
+            first = errs[0]
+            loc = ".".join(str(p) for p in first.get("loc") or ())
+            msg = first.get("msg") or str(exc)
+            if loc:
+                return f"{loc}: {msg} (source={source})"
+            return f"{msg} (source={source})"
+    return f"{exc} (source={source})"
+
+
+def diagnose_wave_plan_payload(raw: Any, *, source: str = "payload") -> WavePlanIngestResult:
+    """Parse and validate a WavePlan candidate; return plan or reject detail.
 
     Unwraps a nested ``wave_plan`` object when the outer dict has no slices
-    (agents often wrap policy under that key).
+    (agents often wrap policy under that key). Nested waves/slices are
+    rejected without flattening (RFC-232).
     """
     if isinstance(raw, str):
         text = raw.strip()
         if not text:
-            return None
+            return WavePlanIngestResult(detail=f"empty string (source={source})")
         try:
             raw = json.loads(text)
         except json.JSONDecodeError:
-            return None
+            # May still contain embedded objects; caller uses embed scan.
+            return WavePlanIngestResult(detail=f"not a JSON object (source={source})")
     if not isinstance(raw, dict):
-        return None
-    if _reject_removed_wire_keys(raw, source=source):
-        return None
+        return WavePlanIngestResult(
+            detail=f"expected JSON object, got {type(raw).__name__} (source={source})"
+        )
+
+    removed = _reject_removed_wire_keys(raw, source=source)
+    if removed:
+        return WavePlanIngestResult(detail=removed)
+
+    nesting = _nesting_reject_reason(raw, source=source)
+    if nesting:
+        logger.warning("Wave plan nesting rejected (%s): %s", source, nesting)
+        return WavePlanIngestResult(detail=nesting)
+
+    coerced = _coerce_flat_aliases(raw)
+
     try:
-        plan = WavePlan.model_validate(raw)
+        plan = WavePlan.model_validate(coerced)
     except Exception as exc:
-        logger.warning("Wave plan schema validation failed (%s): %s", source, exc)
-        return None
+        detail = _validation_error_detail(exc, source=source)
+        logger.warning("Wave plan schema validation failed (%s): %s", source, detail)
+        return WavePlanIngestResult(detail=detail)
+
     if plan.resolved_slice_ids() or plan.scout_count is not None:
-        return plan
+        return WavePlanIngestResult(plan=plan)
 
-    nested = raw.get("wave_plan")
+    nested = coerced.get("wave_plan")
     if isinstance(nested, dict):
-        return parse_wave_plan_payload(nested, source=f"{source}.wave_plan")
+        return diagnose_wave_plan_payload(nested, source=f"{source}.wave_plan")
 
-    logger.warning("Wave plan (%s) has no slices or scout_count", source)
-    return None
+    detail = f"has no slices or scout_count (source={source})"
+    logger.warning("Wave plan (%s) %s", source, detail)
+    return WavePlanIngestResult(detail=detail)
+
+
+def parse_wave_plan_payload(raw: Any, *, source: str = "payload") -> WavePlan | None:
+    """Validate a dict (or JSON string) as ``WavePlan`` (slice schema only)."""
+    return diagnose_wave_plan_payload(raw, source=source).plan
 
 
 def iter_embedded_json_objects(text: str) -> list[Any]:
@@ -186,31 +343,81 @@ def iter_embedded_json_objects(text: str) -> list[Any]:
     return out
 
 
-def parse_wave_plan_from_findings(findings: list[Any] | None) -> WavePlan | None:
-    """Extract a WavePlan from structured goal findings (not prose scrapes)."""
+def _prefer_ingest_detail(current: str, candidate: str) -> str:
+    """Prefer nesting/schema details over generic missing-JSON messages."""
+    if not candidate:
+        return current
+    if not current:
+        return candidate
+    cand_l = candidate.lower()
+    cur_l = current.lower()
+    if "nested" in cand_l and "nested" not in cur_l:
+        return candidate
+    if "nested" in cur_l:
+        return current
+    if "not a json" in cur_l or "empty string" in cur_l:
+        return candidate
+    if ":" in candidate and ":" not in current:
+        return candidate
+    return candidate
+
+
+def diagnose_wave_plan_from_findings(
+    findings: list[Any] | None,
+) -> WavePlanIngestResult:
+    """Extract a WavePlan from structured goal findings; retain reject detail."""
     if not findings:
-        return None
+        return WavePlanIngestResult(detail="no WavePlan JSON found in completion findings/evidence")
+
+    best_detail = ""
     for idx, item in enumerate(findings):
         if isinstance(item, dict):
-            plan = parse_wave_plan_payload(item, source=f"findings[{idx}]")
-            if plan is not None:
-                return plan
+            result = diagnose_wave_plan_payload(item, source=f"findings[{idx}]")
+            if result.plan is not None:
+                return result
+            best_detail = _prefer_ingest_detail(best_detail, result.detail)
             continue
         if not isinstance(item, str):
             continue
         text = item.strip()
-        plan = parse_wave_plan_payload(text, source=f"findings[{idx}]")
-        if plan is not None:
-            return plan
+        result = diagnose_wave_plan_payload(text, source=f"findings[{idx}]")
+        if result.plan is not None:
+            return result
+        best_detail = _prefer_ingest_detail(best_detail, result.detail)
         for embed_i, obj in enumerate(iter_embedded_json_objects(text)):
-            plan = parse_wave_plan_payload(obj, source=f"findings[{idx}].embed[{embed_i}]")
-            if plan is not None and plan.resolved_slice_ids():
-                return plan
-    return None
+            emb = diagnose_wave_plan_payload(obj, source=f"findings[{idx}].embed[{embed_i}]")
+            if emb.plan is not None and emb.plan.resolved_slice_ids():
+                return emb
+            best_detail = _prefer_ingest_detail(best_detail, emb.detail)
+
+    return WavePlanIngestResult(
+        detail=best_detail or "no usable flat WavePlan in completion findings/evidence"
+    )
+
+
+def parse_wave_plan_from_findings(findings: list[Any] | None) -> WavePlan | None:
+    """Extract a WavePlan from structured goal findings (not prose scrapes)."""
+    return diagnose_wave_plan_from_findings(findings).plan
 
 
 # Cap for WavePlan JSON on goal-completion contribution findings (host re-attach).
 WAVE_PLAN_FINDING_CAP = 8000
+
+_SEND_BACK_BASE = (
+    "Architecture requires a flat WavePlan JSON object with wave_slices "
+    "(string list) or flat slices[{slice,…}] in the goal completion report "
+    "(host applies fan-out into job rail state). Nested waves/slices are not "
+    "allowed. Do not write FINDINGS.md, wave-plan.json, or other project/jobs "
+    "paths as the fan-out deliverable — those files are ignored."
+)
+
+
+def architecture_wave_plan_send_back_reason(detail: str | None = None) -> str:
+    """Build architecture-gate send_back text (base contract + optional detail)."""
+    cleaned = (detail or "").strip()
+    if not cleaned:
+        return _SEND_BACK_BASE
+    return f"{_SEND_BACK_BASE} Detail: {cleaned[:600]}"
 
 
 def wave_plan_to_findings_json(plan: WavePlan) -> str:

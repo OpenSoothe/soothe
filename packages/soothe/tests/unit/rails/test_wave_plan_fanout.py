@@ -137,6 +137,7 @@ async def test_plan_milestones_description_findings_only(tmp_path: Path) -> None
     assert "FINDINGS.md" in arch.description
     assert "goal completion" in arch.description.lower()
     assert "Do NOT write" in arch.description
+    assert "nested" in arch.description.lower()
     assert "record_wave_plan" not in arch.description
     assert "WavePlan JSON" in arch.description
     assert "ownership units" in arch.description.lower()
@@ -513,3 +514,78 @@ async def test_spawn_rich_slices_use_description_and_priority(tmp_path: Path) ->
     assert makers[1].priority == 60
     assert "High slice write-set" in (makers[0].description or "")
     assert "Mid slice write-set" in (makers[1].description or "")
+
+
+def test_diagnose_rejects_wave_slices_dict_nesting() -> None:
+    from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_payload
+
+    result = diagnose_wave_plan_payload(
+        {
+            "wave_slices": {
+                "WAVE-0": {"name": "Foundation", "slices": ["a", "b"]},
+            },
+            "rationale": "nested",
+        },
+        source="t",
+    )
+    assert result.plan is None
+    assert "nested" in result.detail.lower()
+    assert "dict" in result.detail.lower() or "object" in result.detail.lower()
+
+
+def test_diagnose_rejects_wave_object_list_nesting() -> None:
+    from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_payload
+
+    result = diagnose_wave_plan_payload(
+        {
+            "wave_slices": [
+                {
+                    "wave_id": "WAVE-0",
+                    "name": "Foundation",
+                    "slices": ["auth", "shell"],
+                }
+            ],
+        },
+        source="t",
+    )
+    assert result.plan is None
+    assert "nested" in result.detail.lower()
+
+
+def test_diagnose_rejects_object_rationale() -> None:
+    from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_payload
+
+    result = diagnose_wave_plan_payload(
+        {
+            "wave_slices": ["a", "b"],
+            "rationale": {"wave_strategy": "layered"},
+        },
+        source="t",
+    )
+    assert result.plan is None
+    assert "rationale" in result.detail.lower()
+
+
+def test_coerce_flat_slice_name_alias() -> None:
+    from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_payload
+
+    result = diagnose_wave_plan_payload(
+        {
+            "slices": [{"name": "auth", "description": "login"}],
+            "independence": "disjoint",
+        },
+        source="t",
+    )
+    assert result.plan is not None
+    assert result.plan.resolved_slice_ids() == ["auth"]
+
+
+def test_architecture_send_back_reason_includes_detail() -> None:
+    from soothe.autopilot.rail.wave_plan import architecture_wave_plan_send_back_reason
+
+    text = architecture_wave_plan_send_back_reason(
+        "nested waves forbidden (wave_slices is an object/dict)"
+    )
+    assert "flat WavePlan" in text
+    assert "Detail:" in text
+    assert "nested waves forbidden" in text

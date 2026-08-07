@@ -6,6 +6,8 @@
 rail_state SoT; file artifact removed),
 [IG-714](IG-714-architecture-wave-plan-accept-without-artifact.md)
 (fail-closed accept without plan),
+[RFC-232](../specs/RFC-232-waveplan-flat-semistructured-ingest.md)
+(flat wire; nesting reject — follow-on),
 [IG-700](../archive/impl/IG-700-greenfield-fanout-closeout.md),
 [IG-699](../archive/impl/IG-699-llm-determined-rail-fanout-width.md),
 RFC-222 (StrangeLoop never sees GoalEngine)

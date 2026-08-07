@@ -269,10 +269,11 @@ Pointers to diagnose-loop Workflow B for `autopilot__{job}__*`.
   There is no `wave-plan.json` file SoT. Project-tree plan files are ignored.
 - **Stuck after architecture, no makers:** planner completed but
   `wave_plan_ready=False` — see Debug Guide “WavePlan stall”. Recovery: re-run
-  architecture with a bare WavePlan in the goal completion report, or set
-  `wave_slices` on `rail_state.json`, then wait for `dag_idle` (or
-  `soothed restart`). After package upgrades, always restart the daemon so
-  the architecture WavePlan gate is live.
+  architecture with a **flat** WavePlan in the goal completion report
+  (`wave_slices` string list or flat `slices[]`; nested WAVE trees are
+  rejected), or set `wave_slices` on `rail_state.json`, then wait for
+  `dag_idle` (or `soothed restart`). After package upgrades, always restart
+  the daemon so the architecture WavePlan gate is live.
 - Live CLI beats stale `goals:snapshot` when they disagree.
 - Never cite IG-/RFC- ids in user-facing report text.
 - Skipping schedule for rail job root is expected.

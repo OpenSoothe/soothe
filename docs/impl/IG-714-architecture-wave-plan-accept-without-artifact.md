@@ -7,6 +7,8 @@
 **Related**: [IG-704](IG-704-autopilot-wave-plan-host-ingest.md),
 [IG-700](../archive/impl/IG-700-greenfield-fanout-closeout.md),
 [IG-699](../archive/impl/IG-699-llm-determined-rail-fanout-width.md),
+[RFC-232](../specs/RFC-232-waveplan-flat-semistructured-ingest.md)
+(flat wire; nesting reject — follow-on),
 RFC-630 (no keyword heuristics), RFC-222 (nano never sees GoalEngine)
 
 ---
@@ -102,7 +104,9 @@ are rejected). Copying them into
 For jobs already accepted without a plan (pattern: planner completed, zero
 makers, rail_trace only `plan_milestones`):
 
-1. Re-run architecture so findings include a bare WavePlan JSON object, **or**
+1. Re-run architecture so findings include a **flat** WavePlan JSON object
+   (`wave_slices` string list or flat `slices[]`; nested WAVE trees rejected),
+   **or**
    set `wave_slices` on `rail_state.json`.
 2. Wait for next `dag_idle` (or restart daemon) so `spawn_wave_makers` fires.
 3. Or cancel / resubmit the job under a daemon that has the hard gate.

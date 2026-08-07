@@ -420,3 +420,68 @@ async def test_architecture_gate_fail_closed_without_rail_interpreter(
     assert updated is not None
     assert updated.status == "pending"
     assert updated.send_back_count == 1
+
+
+@pytest.mark.asyncio
+async def test_architecture_gate_send_back_includes_nesting_detail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nested WAVE dict must send_back with nesting Detail (RFC-232 / IG-721)."""
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    jobs_root = tmp_path / "jobs"
+    jobs_root.mkdir(parents=True)
+
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(
+            decision="accept",
+            reasoning="should not accept nested WavePlan",
+        ),
+        runner_factory=IdleFakeFactory(),
+    )
+    if svc._rail_interpreter is not None:
+        svc._jobs_root = jobs_root
+        svc._rail_interpreter.builtins._jobs_root = jobs_root
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(tmp_path / "ws"),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    ex = svc._rail_interpreter.builtins
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+        )
+    )
+    spawned = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = spawned.created_goal_ids[0]
+    ce.claim_goal(arch_id, loop_id="w1")
+
+    nested = (
+        '{"wave_slices":{"WAVE-0":{"name":"Foundation","slices":["a","b"]}},'
+        '"rationale":"nested schedule"}'
+    )
+    await svc._apply_consensus_and_finalize(
+        arch_id,
+        evidence_summary="Architecture done with nested waves.",
+        contribution=GoalDispatchContextContribution(
+            findings=[Finding(summary=nested, relevance_score=1.0)],
+        ),
+    )
+
+    arch = await ce.get_goal(arch_id)
+    assert arch is not None
+    assert arch.status == "pending"
+    assert arch.send_back_count == 1
+    assert not ex.is_wave_plan_ready(root.id)
+    guidance = " ".join(str(item.get("text") or "") for item in (arch.guidance_accumulated or []))
+    assert "Detail:" in guidance
+    assert "nested" in guidance.lower()

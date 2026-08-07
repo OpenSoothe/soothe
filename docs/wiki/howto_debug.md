@@ -534,10 +534,16 @@ goals, and the job root stays `pending`. Logs show
 `wave_plan_ready=False` / `architecture_ready` unmatched on `dag_idle`, or
 rate-limited warnings that a WavePlan is missing for the job.
 
-Cause: host never applied a WavePlan from the architecture goal
+Cause: host never applied a **flat** WavePlan from the architecture goal
 **completion report** (contribution findings / evidence) into `rail_state`
-(`wave_slices`). Writing `docs/FINDINGS.md`, `docs/wave-plan.json`, or
-`.soothe/wave-plan.json` in the project workspace does **not** count.
+(`wave_slices`). Common failure modes:
+
+- Missing WavePlan on the wire entirely
+- **Nested** waves/slices (`wave_slices` as a `WAVE-*` dict, or wave objects
+  with child `slices`) — rejected; the host does **not** flatten them
+- Writing `docs/FINDINGS.md`, `docs/wave-plan.json`, or
+  `.soothe/wave-plan.json` in the project workspace (ignored)
+
 Leftover `$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json` files are orphans
 and are **not** read.
 
@@ -547,16 +553,20 @@ Recovery:
    `soothed restart` so the architecture WavePlan gate is live (stale
    processes can accept architecture via soft LLM consensus without a plan).
 2. Inspect: `soothe autopilot job {job_id}`, architecture goal findings, and
-   `~/.soothe/data/jobs/{job_id}/rail_state.json` (`wave_slices`).
+   `~/.soothe/data/jobs/{job_id}/rail_state.json` (`wave_slices`). Send-back
+   text should include a **Detail:** line (nesting or pydantic field error).
 3. Prefer re-running architecture so the **goal completion report** includes
-   a bare WavePlan JSON object (`wave_slices` / `slices`). As a last resort,
-   set `wave_slices` on `rail_state.json` and wait for `dag_idle` (or restart).
+   a **flat** WavePlan, e.g.
+   `{"wave_slices":["core","api","tests"],"independence":"…","rationale":"…"}`
+   (or flat `slices:[{slice,…}]`). Do not emit nested WAVE trees. As a last
+   resort, set `wave_slices` on `rail_state.json` and wait for `dag_idle`
+   (or restart).
 4. Wait for the next `dag_idle` tick (or restart the daemon) so
    `spawn_wave_makers` can fire.
 
-New architecture goals must put a WavePlan JSON object in the **goal
+New architecture goals must put a flat WavePlan JSON object in the **goal
 completion report** (host applies into rail state). Do not teach agents to
-write fan-out policy into the project tree.
+write fan-out policy into the project tree. See RFC-232 / IG-721.
 
 Forensics: `.agents/skills/inspect-autopilot-job/SKILL.md`.
 
