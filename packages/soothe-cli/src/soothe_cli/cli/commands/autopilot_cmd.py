@@ -544,36 +544,66 @@ def format_tokens(tokens: Any) -> str:
     return f"{n // 1_000_000}M"
 
 
-def format_elapsed(started_at: Any, *, now: Any | None = None) -> str:
+def _parse_iso_datetime(raw: Any) -> Any | None:
+    """Parse an ISO timestamp / datetime, or return ``None`` if invalid."""
+    from datetime import UTC, datetime
+
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, datetime):
+        start = raw
+    else:
+        try:
+            start = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return None
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=UTC)
+    return start
+
+
+def format_elapsed(
+    started_at: Any,
+    *,
+    now: Any | None = None,
+    ended_at: Any | None = None,
+) -> str:
     """Format execution elapsed time as ``HH:MM:SS``.
 
     Args:
         started_at: ISO timestamp string or datetime.
-        now: Optional clock override (datetime).
+        now: Optional clock override (datetime) when still running.
+        ended_at: Optional end timestamp; when set, freeze elapsed at end
+            (terminal goals/jobs/loops must not keep ticking).
 
     Returns:
         Elapsed string, or empty when ``started_at`` is missing/invalid.
     """
     from datetime import UTC, datetime
 
-    if started_at is None or started_at == "":
+    start = _parse_iso_datetime(started_at)
+    if start is None:
         return ""
-    if isinstance(started_at, datetime):
-        start = started_at
+    end = _parse_iso_datetime(ended_at)
+    if end is not None:
+        clock = end
+    elif isinstance(now, datetime):
+        clock = now if now.tzinfo is not None else now.replace(tzinfo=UTC)
     else:
-        try:
-            start = datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
-        except (TypeError, ValueError):
-            return ""
-    if start.tzinfo is None:
-        start = start.replace(tzinfo=UTC)
-    clock = now if isinstance(now, datetime) else datetime.now(UTC)
+        clock = datetime.now(UTC)
     if clock.tzinfo is None:
         clock = clock.replace(tzinfo=UTC)
     secs = max(0, int((clock - start).total_seconds()))
     hours, rem = divmod(secs, 3600)
     mins, secs = divmod(rem, 60)
     return f"{hours:02d}:{mins:02d}:{secs:02d}"
+
+
+def _elapsed_end_for_status(status: str, ended_at: Any) -> Any | None:
+    """Return ``ended_at`` when status is terminal/suspended; else ``None``."""
+    if str(status or "").lower() in _TERMINAL_STATUSES:
+        return ended_at
+    return None
 
 
 def _created_at_timestamp(raw: Any) -> float | None:
@@ -1267,7 +1297,10 @@ def _format_top_forest(
         jstat = str(job.get("status", "pending"))
         jpri = job.get("priority", 50)
         jdesc = _preview_desc(job.get("description", ""), _TOP_DESC_JOB)
-        jelapsed = format_elapsed(job.get("created_at"))
+        jelapsed = format_elapsed(
+            job.get("created_at"),
+            ended_at=_elapsed_end_for_status(jstat, job.get("updated_at")),
+        )
         jtok = int(job.get("total_tokens_used") or 0)
         goals_done, goals_total = _job_goal_progress(job)
         job_metrics: list[Text] = []
@@ -1317,7 +1350,10 @@ def _format_top_forest(
             steps_c = int(node.get("steps_completed") or 0)
             steps_t = int(node.get("steps_total") or 0)
             gtok = int(node.get("total_tokens_used") or 0)
-            gelapsed = format_elapsed(node.get("created_at"))
+            gelapsed = format_elapsed(
+                node.get("created_at"),
+                ended_at=_elapsed_end_for_status(status, node.get("updated_at")),
+            )
             goal_metrics: list[Text] = []
             if gelapsed:
                 goal_metrics.append(_metric_elapsed(gelapsed))
@@ -1360,7 +1396,11 @@ def _format_top_forest(
                 lid = _short_loop_id(str(entry.get("loop_id", "?")))
                 seq = entry.get("seq", "?")
                 lstat = str(entry.get("status", "active"))
-                elapsed = format_elapsed(entry.get("started_at"))
+                # ended_at is set only on record_end; always freeze when present.
+                elapsed = format_elapsed(
+                    entry.get("started_at"),
+                    ended_at=entry.get("ended_at"),
+                )
                 loop_metrics: list[Text] = [_metric_seq(seq)]
                 if elapsed:
                     loop_metrics.append(_metric_elapsed(elapsed))
@@ -1398,7 +1438,10 @@ def _format_top_forest(
             seq = entry.get("seq", "?")
             gid = str(entry.get("goal_id") or "?")[:8]
             lstat = str(entry.get("status", "active"))
-            elapsed = format_elapsed(entry.get("started_at"))
+            elapsed = format_elapsed(
+                entry.get("started_at"),
+                ended_at=entry.get("ended_at"),
+            )
             orphan_metrics: list[Text] = [_metric_seq(seq)]
             if elapsed:
                 orphan_metrics.append(_metric_elapsed(elapsed))

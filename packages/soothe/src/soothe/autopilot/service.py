@@ -2244,6 +2244,8 @@ class AutopilotService:
             loops = await self.list_job_loops(root.id)
             created = root.created_at
             created_at = created.isoformat() if hasattr(created, "isoformat") else str(created)
+            updated = root.updated_at
+            updated_at = updated.isoformat() if hasattr(updated, "isoformat") else str(updated)
             job_tokens = sum(
                 int(n.get("total_tokens_used") or 0)
                 for n in (dag.get("nodes") or [])
@@ -2258,6 +2260,7 @@ class AutopilotService:
                 dag=dag,
                 loops=loops,
                 created_at=created_at,
+                updated_at=updated_at,
                 include_terminal=include_terminal,
                 maturity=maturity_wire_fields(root.maturity),
                 total_tokens_used=job_tokens,
@@ -2296,8 +2299,8 @@ class AutopilotService:
             Dict with ``nodes``, ``edges``, and ``root_id``.
             Nodes contain: id, description, status, priority, depends_on,
             parent_id, assigned_loop_id, steps_completed, steps_total,
-            tool_calls, total_tokens_used, optional ``steps`` StepDAG,
-            summary/findings when completed.
+            tool_calls, total_tokens_used, created_at, updated_at,
+            optional ``steps`` StepDAG, summary/findings when completed.
             Edges contain: source=parent_id, target=child id.
         """
         goals = await self._ce.list_goals()
@@ -2348,6 +2351,11 @@ class AutopilotService:
                     g.created_at.isoformat()
                     if hasattr(g.created_at, "isoformat")
                     else str(g.created_at)
+                ),
+                "updated_at": (
+                    g.updated_at.isoformat()
+                    if hasattr(g.updated_at, "isoformat")
+                    else str(g.updated_at)
                 ),
             }
             if step_payload["steps"] is not None:

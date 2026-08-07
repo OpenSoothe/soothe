@@ -189,6 +189,7 @@ def build_top_job_entry(
     dag: dict[str, Any],
     loops: list[dict[str, Any]],
     created_at: str | None = None,
+    updated_at: str | None = None,
     include_terminal: bool = False,
     maturity: dict[str, Any] | None = None,
     total_tokens_used: int = 0,
@@ -204,6 +205,8 @@ def build_top_job_entry(
         dag: Full DAG snapshot for the job.
         loops: JobLoopIndex entries (any status).
         created_at: Optional root ``created_at`` ISO timestamp.
+        updated_at: Optional root ``updated_at`` ISO timestamp (freeze elapsed
+            when the job is terminal).
         include_terminal: When ``False`` (default), drop terminal goals and
             fully terminal jobs. StepDAG under remaining goals is kept intact.
             When ``True``, keep the full DAG.
@@ -240,6 +243,8 @@ def build_top_job_entry(
         entry["workspace"] = workspace
     if created_at:
         entry["created_at"] = created_at
+    if updated_at:
+        entry["updated_at"] = updated_at
     if maturity:
         entry["maturity"] = maturity
     return apply_top_running_status(entry, root_id=job_id)

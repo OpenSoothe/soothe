@@ -105,6 +105,58 @@ def test_format_elapsed_hhmmss() -> None:
     assert format_elapsed("") == ""
 
 
+def test_format_elapsed_freezes_at_ended_at() -> None:
+    started = datetime(2026, 8, 5, 10, 0, 0, tzinfo=UTC)
+    ended = datetime(2026, 8, 5, 10, 5, 0, tzinfo=UTC)
+    later = datetime(2026, 8, 5, 12, 0, 0, tzinfo=UTC)
+    assert format_elapsed(started, now=later, ended_at=ended) == "00:05:00"
+    assert format_elapsed(started.isoformat(), ended_at=ended.isoformat()) == "00:05:00"
+
+
+def test_render_top_completed_goal_elapsed_frozen() -> None:
+    """Terminal goals must not keep ticking on refresh (mode=all)."""
+    created = "2026-08-05T10:00:00+00:00"
+    updated = "2026-08-05T10:05:00+00:00"
+    snapshot = {
+        "running": True,
+        "dreaming": False,
+        "loop_pool": {"active": 0, "idle": 0, "max": 4},
+        "jobs": [
+            {
+                "id": "jobdone01",
+                "status": "completed",
+                "priority": 50,
+                "description": "Done job",
+                "created_at": created,
+                "updated_at": updated,
+                "total_goals": 1,
+                "completed_goals": 1,
+                "active_goals": 0,
+                "dag": {
+                    "root_id": "jobdone01",
+                    "nodes": [
+                        {
+                            "id": "jobdone01",
+                            "status": "completed",
+                            "description": "Done job",
+                            "created_at": created,
+                            "updated_at": updated,
+                        }
+                    ],
+                    "edges": [],
+                },
+                "loops": [],
+            }
+        ],
+    }
+    text = _plain(snapshot, state=TopViewState(include_terminal=True))
+    # Entity ids are truncated to 8 chars in the forest.
+    job_line = next(ln for ln in text.splitlines() if "JOB  [jobdone0]" in ln)
+    goal_line = next(ln for ln in text.splitlines() if "GOAL [jobdone0]" in ln)
+    assert re.search(r"\b00:05:00\b", job_line)
+    assert re.search(r"\b00:05:00\b", goal_line)
+
+
 def test_format_tokens() -> None:
     assert format_tokens(0) == "0"
     assert format_tokens(999) == "999"

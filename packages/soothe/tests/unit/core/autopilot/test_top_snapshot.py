@@ -129,6 +129,7 @@ def test_build_top_job_entry_includes_active_loops_and_workspace() -> None:
         description="Implement auth",
         workspace="/ws",
         created_at="2026-08-05T00:00:00+00:00",
+        updated_at="2026-08-05T01:00:00+00:00",
         dag={
             "root_id": "j1",
             "nodes": [
@@ -171,6 +172,7 @@ def test_build_top_job_entry_includes_active_loops_and_workspace() -> None:
     assert entry["id"] == "j1"
     assert entry["workspace"] == "/ws"
     assert entry["created_at"] == "2026-08-05T00:00:00+00:00"
+    assert entry["updated_at"] == "2026-08-05T01:00:00+00:00"
     assert entry["priority"] == 80
     assert entry["total_goals"] == 2
     assert entry["completed_goals"] == 0
