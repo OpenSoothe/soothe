@@ -39,10 +39,8 @@ async def test_non_rail_send_back_exhaust_fails() -> None:
 
 
 def test_branch_is_stuck_short_circuit() -> None:
-    structural = {
-        "architecture_goal_ids": ["a1"],
-        "pending_or_active_count": 0,
-    }
+    # Matches without architecture / fanout (feature-dev / bugfix / hotfix).
+    structural = {"pending_or_active_count": 0}
     ok = _structural_short_circuit(
         condition_name="branch_is_stuck",
         event="goal_failed",

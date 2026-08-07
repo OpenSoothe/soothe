@@ -1,5 +1,5 @@
 id: feature-dev
-version: "1.1"
+version: "1.2"
 
 summary: |
   Implement or refactor a feature with parallel exploration, planning,
@@ -20,8 +20,8 @@ conditions:
     Review passed or was skipped by policy, and automated verification
     (tests / lint relevant to the change) should run.
   branch_is_stuck: |
-    This approach has failed review or execution twice, or evidence
-    shows it conflicts with the codebase architecture.
+    A maker or implementation goal failed, or evidence shows the approach
+    conflicts with the codebase architecture.
   job_complete: |
     All review and QA goals passed and no pending work remains.
 

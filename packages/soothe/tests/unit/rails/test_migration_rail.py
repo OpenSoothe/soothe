@@ -17,7 +17,7 @@ from soothe.rails import LoopRailCatalog
 
 def test_migration_rail_declares_fanout_and_human_gate() -> None:
     rail = LoopRailCatalog().resolve("migration")
-    assert rail.version == "2.4"
+    assert rail.version == "2.5"
     assert rail.fanout.get("artifact") == "{job_id}/wave-plan.json"
     assert rail.fanout.get("require_plan") is True
     assert "default_modules" not in rail.fanout
@@ -59,6 +59,8 @@ def test_ready_for_next_wave_without_architecture_unmatched() -> None:
         trigger_tags=["exploration"],
         structural={
             "architecture_goal_ids": [],
+            "fanout_enabled": False,
+            "require_plan": False,
             "all_exploration_terminal": True,
             "pending_or_active_count": 0,
             "wave_index": 0,
@@ -67,7 +69,7 @@ def test_ready_for_next_wave_without_architecture_unmatched() -> None:
     )
     assert isinstance(r, GuardResult)
     assert r.matched is False
-    assert "architecture" in r.reasoning.lower()
+    assert "fan-out" in r.reasoning.lower() or "fanout" in r.reasoning.lower()
 
 
 def test_ready_for_next_wave_architecture_path_still_works() -> None:
@@ -77,9 +79,12 @@ def test_ready_for_next_wave_architecture_path_still_works() -> None:
         trigger_tags=["verify", "feedback"],
         structural={
             "architecture_goal_ids": ["a1"],
+            "fanout_enabled": True,
+            "require_plan": True,
             "pending_or_active_count": 0,
             "wave_index": 0,
             "max_waves": 3,
+            "wave_below_max": True,
             "all_qa_terminal": True,
             "feedback_inflight": False,
             "acceptance_met": False,

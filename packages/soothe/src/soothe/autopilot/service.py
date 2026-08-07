@@ -632,10 +632,16 @@ class AutopilotService:
 
     @staticmethod
     def _is_architecture_planner_goal(goal: GoalNode) -> bool:
-        """True when the goal is the rail architecture / planner deliverable."""
+        """True when the goal is the rail architecture / planner deliverable.
+
+        Requires the ``architecture`` tag (not bare ``planning``) so scout/plan
+        rails are not mistaken for fan-out planners.
+        """
         tags = list(goal.rail_tags or [])
-        if "architecture" in tags or "planning" in tags:
+        if "architecture" in tags:
             return True
+        # Role alone is enough for explicitly annotated planners; bare
+        # ``planning`` tags (scout/plan rails) must not trigger the gate.
         return (goal.role or "") == "planner"
 
     async def _try_ingest_architecture_wave_plan(
@@ -686,11 +692,11 @@ class AutopilotService:
             recorded = await builtins.record_wave_plan(job_id, plan=plan)
             if recorded is not None:
                 names = recorded.resolved_slice_ids()
-                note = f"WavePlan recorded by host ({len(names)} slices): {', '.join(names)}"
+                note = f"WavePlan recorded ({len(names)} slices): {', '.join(names)}"
                 if note not in goal.findings:
                     goal.findings.append(note[:500])
                 logger.info(
-                    "Host ingested wave plan for architecture goal %s job=%s slices=%s",
+                    "Ingested wave plan for architecture goal %s job=%s slices=%s",
                     goal.id,
                     job_id[:8],
                     names,
@@ -763,8 +769,8 @@ class AutopilotService:
 
         _send_back_missing = (
             "Architecture requires one findings entry that is exactly a WavePlan "
-            "JSON object with wave_slices (host persists fan-out; do not write "
-            "fan-out policy into the project workspace tree)."
+            "JSON object with wave_slices. Do not write the plan into the project "
+            "workspace tree (never write docs/wave-plan.json or .soothe/wave-plan.json)."
         )
 
         if self._rail_interpreter is None:
@@ -806,7 +812,7 @@ class AutopilotService:
         if ready:
             return (
                 "accept",
-                "Host recorded a valid WavePlan from the architecture deliverable",
+                "Valid WavePlan recorded from the architecture deliverable",
             )
         return ("send_back", _send_back_missing)
 

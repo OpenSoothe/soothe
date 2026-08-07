@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 # Host defaults for Python ``_do_*`` fallback when a rail has no ``do:`` recipe.
-# Builtin greenfield/migration ship ``do:`` for plan_milestones (IG-717).
+# Builtin greenfield/migration ship ``do:`` for plan_milestones.
 
 DEFAULT_VERB_BRIEFS: dict[str, str] = {
     "plan_milestones": (
@@ -22,7 +22,7 @@ DEFAULT_VERB_BRIEFS: dict[str, str] = {
         "a WavePlan JSON object. Do not write the plan into the project "
         "workspace tree (never write docs/wave-plan.json or "
         ".soothe/wave-plan.json). Schema example:\n"
-        '{"wave_slices":["frontend","ir","passes","backend","driver","tests"],'
+        '{"wave_slices":["core","api","tests"],'
         '"independence":"disjoint write-sets per slice",'
         '"rationale":"why this partition"}\n'
         "Optionally use rich `slices` entries "

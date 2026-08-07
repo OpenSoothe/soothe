@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from collections import defaultdict, deque
+from collections import deque
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -106,6 +106,11 @@ class AlwaysMatchGuardEvaluator:
         return GuardResult(matched=True, confidence=1.0, reasoning=self.reasoning)
 
 
+def _fanout_mode(structural: dict[str, Any]) -> bool:
+    """True when the bound rail declared fanout (structure signal)."""
+    return bool(structural.get("fanout_enabled")) or bool(structural.get("require_plan"))
+
+
 def _structural_short_circuit(
     *,
     condition_name: str | None,
@@ -115,18 +120,18 @@ def _structural_short_circuit(
 ) -> GuardResult | None:
     """Resolve unambiguous LoopRail conditions from CE structural facts."""
     name = (condition_name or "").strip()
-    if not name or not structural:
+    if not name:
         return None
+    structural = dict(structural or {})
 
     pending = int(structural.get("pending_or_active_count") or 0)
     architecture_done = bool(structural.get("all_architecture_terminal"))
-    has_architecture = bool(structural.get("architecture_goal_ids"))
     has_makers = bool(structural.get("implementation_goal_ids"))
     wave_below_max = bool(structural.get("wave_below_max", True))
+    fanout_mode = _fanout_mode(structural)
 
     if name == "architecture_ready":
-        # LLM fan-out: when require_plan, wave-plan artifact must exist before
-        # spawn_wave_makers (no rigid default slice list).
+        # When require_plan, wave-plan artifact must exist before makers spawn.
         require_plan = bool(structural.get("require_plan", False))
         wave_plan_ready = bool(structural.get("wave_plan_ready", False))
         plan_ok = (not require_plan) or wave_plan_ready
@@ -187,49 +192,47 @@ def _structural_short_circuit(
             ),
         )
 
-    if name == "needs_integrate":
-        all_makers_completed = bool(structural.get("all_implementation_completed"))
-        no_integrate_yet = not bool(structural.get("integrate_goal_ids"))
-        if event == "dag_idle":
-            ok = all_makers_completed and has_makers and no_integrate_yet
-        else:
-            ok = (
-                event == "goal_completed"
-                and "implementation" in trigger_tags
-                and all_makers_completed
-                and has_makers
-                and no_integrate_yet
-            )
-        return GuardResult(
-            matched=ok,
-            confidence=1.0,
-            reasoning=(
-                f"structural short-circuit: needs_integrate makers_completed={all_makers_completed}"
-            ),
-        )
-
     if name == "needs_commit":
-        # Only after integrate completes (greenfield commit gate).
-        ok = event == "goal_completed" and "integrate" in trigger_tags
+        # After integrate, or after makers when integrate was skipped.
+        integrate_ids = list(structural.get("integrate_goal_ids") or [])
+        commit_ids = list(structural.get("commit_goal_ids") or [])
+        all_makers_completed = bool(structural.get("all_implementation_completed"))
+        if event == "dag_idle":
+            ok = (
+                pending == 0
+                and not commit_ids
+                and (
+                    bool(structural.get("any_integrate_completed"))
+                    or (all_makers_completed and has_makers and not integrate_ids)
+                )
+            )
+        elif event == "goal_completed" and "integrate" in trigger_tags:
+            ok = True
+        elif (
+            event == "goal_completed"
+            and "implementation" in trigger_tags
+            and all_makers_completed
+            and has_makers
+            and not integrate_ids
+            and not commit_ids
+        ):
+            ok = True
+        else:
+            ok = False
         return GuardResult(
             matched=ok,
             confidence=1.0,
-            reasoning=f"structural short-circuit: needs_commit tags={trigger_tags}",
+            reasoning=f"structural short-circuit: needs_commit tags={trigger_tags} event={event}",
         )
 
     if name == "ready_for_next_wave":
-        # Fan-out rails (greenfield-system, migration): after feedback verify
-        # (or exhausted feedback / acceptance), idle DAG, waves remain.
-        # Without architecture annotations, do not match structurally —
-        # never fall back to exploration_done (legacy migration dual-path).
-        if not has_architecture:
+        # Fan-out rails: after feedback verify (or exhausted feedback), idle DAG,
+        # waves remain. Without fanout, do not match structurally.
+        if not fanout_mode:
             return GuardResult(
                 matched=False,
                 confidence=1.0,
-                reasoning=(
-                    "structural short-circuit: ready_for_next_wave requires "
-                    "architecture annotations"
-                ),
+                reasoning=("structural short-circuit: ready_for_next_wave requires fan-out mode"),
             )
         feedback_round = int(structural.get("feedback_round") or 0)
         max_feedback_rounds = int(structural.get("max_feedback_rounds") or 8)
@@ -238,9 +241,17 @@ def _structural_short_circuit(
             ("verify" in trigger_tags and "feedback" in trigger_tags)
             or acceptance_met
             or feedback_round >= max_feedback_rounds
+            or (
+                event == "dag_idle"
+                and (
+                    acceptance_met
+                    or feedback_round >= max_feedback_rounds
+                    or bool(structural.get("any_verify_completed"))
+                )
+            )
         )
         ok = (
-            event == "goal_completed"
+            event in {"goal_completed", "dag_idle"}
             and pending == 0
             and wave_below_max
             and bool(structural.get("all_qa_terminal", True))
@@ -253,7 +264,7 @@ def _structural_short_circuit(
             reasoning=(
                 f"structural short-circuit: ready_for_next_wave "
                 f"pending={pending} wave_below_max={wave_below_max} "
-                f"feedback_done={feedback_done}"
+                f"feedback_done={feedback_done} event={event}"
             ),
         )
 
@@ -276,38 +287,57 @@ def _structural_short_circuit(
             ),
         )
 
-    if name in {"needs_review", "needs_check", "needs_security_review"}:
-        if has_architecture:
-            # greenfield commit gate: only review after commit completes —
-            # never on bare maker implementation (even when commit_ids empty).
-            ok = event == "goal_completed" and "commit" in trigger_tags
+    if name in {"needs_review", "needs_check"}:
+        commit_ids = list(structural.get("commit_goal_ids") or [])
+        review_ids = list(structural.get("review_goal_ids") or [])
+        if fanout_mode:
+            # Commit gate: only review after commit completes.
+            if event == "dag_idle":
+                ok = (
+                    pending == 0
+                    and bool(commit_ids)
+                    and bool(structural.get("all_commit_terminal", True))
+                    and not review_ids
+                )
+            else:
+                ok = event == "goal_completed" and "commit" in trigger_tags
         else:
-            ok = event == "goal_completed" and (
-                "implementation" in trigger_tags or "commit" in trigger_tags
-            )
-            commit_ids = list(structural.get("commit_goal_ids") or [])
-            if commit_ids and not bool(structural.get("all_commit_terminal", True)):
+            if event == "dag_idle":
                 ok = False
+            else:
+                ok = event == "goal_completed" and (
+                    "implementation" in trigger_tags or "commit" in trigger_tags
+                )
+                if commit_ids and not bool(structural.get("all_commit_terminal", True)):
+                    ok = False
         return GuardResult(
             matched=ok,
             confidence=1.0,
-            reasoning=f"structural short-circuit: review_trigger tags={trigger_tags}",
+            reasoning=f"structural short-circuit: review_trigger tags={trigger_tags} event={event}",
         )
 
     if name in {"needs_qa"}:
-        ok = event == "goal_completed" and "review" in trigger_tags
+        qa_ids = list(structural.get("qa_goal_ids") or [])
+        review_ids = list(structural.get("review_goal_ids") or [])
+        if event == "dag_idle":
+            ok = (
+                pending == 0
+                and bool(review_ids)
+                and bool(structural.get("all_review_terminal", True))
+                and not qa_ids
+            )
+        else:
+            ok = event == "goal_completed" and "review" in trigger_tags
         return GuardResult(
             matched=ok,
             confidence=1.0,
-            reasoning=f"structural short-circuit: review_completed={ok}",
+            reasoning=f"structural short-circuit: needs_qa event={event} review_completed={ok}",
         )
 
     if name in {"branch_is_stuck"}:
-        # Failed maker / implementation → rail replants (IG-693).
-        ok = (
-            event == "goal_failed"
-            and has_architecture
-            and ("maker" in trigger_tags or "implementation" in trigger_tags)
+        # Failed maker / implementation → rail replants (any rail).
+        ok = event == "goal_failed" and (
+            "maker" in trigger_tags or "implementation" in trigger_tags
         )
         return GuardResult(
             matched=ok,
@@ -318,10 +348,8 @@ def _structural_short_circuit(
         )
 
     if name == "architecture_failed":
-        # Failed planner/architecture → host replants; not a maker retry.
-        ok = event == "goal_failed" and (
-            "architecture" in trigger_tags or "planning" in trigger_tags
-        )
+        # Failed planner/architecture → replant; not a maker retry.
+        ok = event == "goal_failed" and "architecture" in trigger_tags
         return GuardResult(
             matched=ok,
             confidence=1.0,
@@ -331,9 +359,7 @@ def _structural_short_circuit(
         )
 
     if name in {"needs_feedback"}:
-        # Find→optimize→verify after wave QA / verify. dag_idle recovers only
-        # when a completed QA/verify already exists — never right after makers
-        # finish without integrate (that path is wave_makers_done → integrate).
+        # Find→optimize→verify after wave QA / verify (fan-out only).
         feedback_inflight = bool(structural.get("feedback_inflight"))
         feedback_round = int(structural.get("feedback_round") or 0)
         max_feedback_rounds = int(structural.get("max_feedback_rounds") or 8)
@@ -347,7 +373,7 @@ def _structural_short_circuit(
         else:
             trigger_ok = False
         ok = (
-            has_architecture
+            fanout_mode
             and trigger_ok
             and pending == 0
             and not feedback_inflight
@@ -359,11 +385,37 @@ def _structural_short_circuit(
             confidence=1.0,
             reasoning=(
                 f"structural short-circuit: needs_feedback tags={trigger_tags} "
-                f"event={event} inflight={feedback_inflight} "
+                f"event={event} fanout={fanout_mode} inflight={feedback_inflight} "
                 f"round={feedback_round}/{max_feedback_rounds} "
                 f"qa_or_verify_done={qa_or_verify_done}"
             ),
         )
+
+    if name == "needs_human":
+        # Tag-driven structural match; otherwise fall through to LLM.
+        if "needs_human" in trigger_tags or "cutover" in trigger_tags:
+            if event == "dag_idle":
+                ok = pending == 0
+            else:
+                ok = event in {"goal_completed", "goal_failed"}
+            return GuardResult(
+                matched=ok,
+                confidence=1.0,
+                reasoning=(
+                    f"structural short-circuit: needs_human tags={trigger_tags} event={event}"
+                ),
+            )
+        return None
+
+    if name == "checker_failed_recoverable":
+        # Maker-checker: send_back from an independent review goal.
+        if event == "goal_send_back" and "review" in trigger_tags:
+            return GuardResult(
+                matched=True,
+                confidence=1.0,
+                reasoning="structural short-circuit: checker_failed_recoverable send_back+review",
+            )
+        return None
 
     if name in {"job_complete"}:
         reviews = list(structural.get("review_goal_ids") or [])
@@ -373,13 +425,12 @@ def _structural_short_circuit(
         ok = pending == 0 and (not qas or bool(structural.get("all_qa_terminal", True)))
         if reviews and pending == 0 and not qas:
             ok = True
-        # greenfield: if waves remain, not complete
-        if has_architecture and wave_below_max and qas:
+        # Fan-out: if waves remain, not complete
+        if fanout_mode and wave_below_max and qas:
             ok = False
-        # Host maturity latch required for greenfield (RFC-230). Do not complete
-        # on idle DAG alone when acceptance is unmet — even if rail-tagged QA
-        # is missing (verifier-spawned review/QA left qa_ids empty).
-        if has_architecture and not acceptance_met:
+        # Fan-out: host maturity latch required — do not complete on idle DAG
+        # alone when acceptance is unmet.
+        if fanout_mode and not acceptance_met:
             ok = False
         return GuardResult(
             matched=ok,
@@ -387,7 +438,7 @@ def _structural_short_circuit(
             reasoning=(
                 f"structural short-circuit: pending_or_active_count={pending} "
                 f"qa_ids={qas} reviews={reviews} wave_below_max={wave_below_max} "
-                f"acceptance_met={acceptance_met}"
+                f"acceptance_met={acceptance_met} fanout={fanout_mode}"
             ),
         )
 
@@ -513,8 +564,3 @@ class LLMGuardEvaluator:
             confidence=float(result.confidence),
             reasoning=str(result.reasoning or ""),
         )
-
-
-def empty_script() -> dict[tuple[str, str], deque[GuardResult]]:
-    """Helper for mutable script maps."""
-    return defaultdict(deque)

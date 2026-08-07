@@ -1,5 +1,5 @@
 id: bugfix
-version: "1.1"
+version: "1.2"
 
 summary: |
   Reproduce and diagnose a defect, then fix and verify with a separate QA
@@ -19,7 +19,7 @@ conditions:
     Review passed or was skipped, and automated verification should re-check
     the original failure path plus related tests.
   branch_is_stuck: |
-    Fix attempts failed review or QA twice, or evidence shows the
+    A maker or implementation goal failed, or evidence shows the
     hypothesized root cause is wrong.
   job_complete: |
     QA verified the original failure is resolved and no pending children remain.

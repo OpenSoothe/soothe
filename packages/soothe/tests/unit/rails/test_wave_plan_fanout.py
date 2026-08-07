@@ -304,6 +304,15 @@ def test_architecture_failed_guard() -> None:
     )
     assert skip_maker is not None and skip_maker.matched is False
 
+    # Bare planning (scout/plan rails) must not trigger architecture retry.
+    skip_planning = _structural_short_circuit(
+        condition_name="architecture_failed",
+        event="goal_failed",
+        trigger_tags=["planning"],
+        structural={"pending_or_active_count": 0},
+    )
+    assert skip_planning is not None and skip_planning.matched is False
+
 
 def test_parse_wave_plan_from_nested_embed() -> None:
     from soothe.autopilot.rail.wave_plan import parse_wave_plan_from_findings

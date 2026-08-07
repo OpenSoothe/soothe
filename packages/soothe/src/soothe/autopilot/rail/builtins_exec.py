@@ -95,26 +95,39 @@ class RailJobState:
     annotations: dict[str, GoalAnnotation] = field(default_factory=dict)
     suspended: bool = False
     completed: bool = False
-    # Test knobs / decompose plans
-    scout_count: int = 2
+    # Test knobs / decompose plans (None = unset; coalesce at use sites)
+    scout_count: int | None = None
     decompose_plan: list[dict[str, Any]] | None = None
-    # greenfield-system wave state
+    # Fan-out wave state (active only when fanout_enabled)
     wave_index: int = 0
     max_waves: int = 3
     wave_slices: list[str] | None = None
     worktrees_enabled: bool = True
+    # True when bind declared rail YAML ``fanout:`` (structure signal for guards).
+    fanout_enabled: bool = False
     # Rail YAML ``fanout`` declaration — LLM fills job-scoped plan.
-    # Defaults are inert unless the rail declares ``fanout:`` at bind.
     wave_plan_artifact: str = DEFAULT_WAVE_PLAN_ARTIFACT
     require_plan: bool = False
-    # Engine spawn budget mirrored at bind (``autopilot.max_parallel_goals``).
-    engine_max_parallel_goals: int = 32
-    # find→optimize→verify feedback rounds (greenfield)
+    # Engine spawn budget mirrored at bind (None = unset until bind).
+    engine_max_parallel_goals: int | None = None
+    # find→optimize→verify feedback rounds (fan-out rails)
     feedback_round: int = 0
     max_feedback_rounds: int = 8
     acceptance_met: bool = False
     # RFC-231 M2: rail YAML ``verbs:`` overrides (brief/tags/role per catalog verb)
     verb_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    def effective_scout_count(self) -> int:
+        """Scout fan-out width (default 2 when unset)."""
+        return int(self.scout_count) if self.scout_count is not None else 2
+
+    def effective_engine_max_parallel_goals(self) -> int:
+        """Spawn clamp (default 32 when unset)."""
+        return (
+            int(self.engine_max_parallel_goals)
+            if self.engine_max_parallel_goals is not None
+            else 32
+        )
 
 
 @dataclass
@@ -315,7 +328,7 @@ class RailBuiltinExecutor:
             annotations=annotations,
             suspended=base.suspended or donor.suspended,
             completed=base.completed or donor.completed,
-            scout_count=base.scout_count if base.scout_count != 2 else donor.scout_count,
+            scout_count=base.scout_count if base.scout_count is not None else donor.scout_count,
             decompose_plan=base.decompose_plan
             if base.decompose_plan is not None
             else donor.decompose_plan,
@@ -323,10 +336,11 @@ class RailBuiltinExecutor:
             max_waves=max(base.max_waves, donor.max_waves),
             wave_slices=base.wave_slices if base.wave_slices is not None else donor.wave_slices,
             worktrees_enabled=donor.worktrees_enabled,
+            fanout_enabled=base.fanout_enabled or donor.fanout_enabled,
             wave_plan_artifact=base.wave_plan_artifact,
-            require_plan=base.require_plan,
+            require_plan=base.require_plan or donor.require_plan,
             engine_max_parallel_goals=base.engine_max_parallel_goals
-            if base.engine_max_parallel_goals != 32
+            if base.engine_max_parallel_goals is not None
             else donor.engine_max_parallel_goals,
             feedback_round=max(base.feedback_round, donor.feedback_round),
             max_feedback_rounds=max(base.max_feedback_rounds, donor.max_feedback_rounds),
@@ -366,6 +380,7 @@ class RailBuiltinExecutor:
                 "max_waves": state.max_waves,
                 "wave_slices": state.wave_slices,
                 "worktrees_enabled": state.worktrees_enabled,
+                "fanout_enabled": state.fanout_enabled,
                 "wave_plan_artifact": state.wave_plan_artifact,
                 "require_plan": state.require_plan,
                 "engine_max_parallel_goals": state.engine_max_parallel_goals,
@@ -407,17 +422,22 @@ class RailBuiltinExecutor:
             annotations=annotations,
             suspended=bool(raw.get("suspended")),
             completed=bool(raw.get("completed")),
-            scout_count=int(raw.get("scout_count") or 2),
+            scout_count=int(raw["scout_count"]) if raw.get("scout_count") is not None else None,
             decompose_plan=raw.get("decompose_plan"),
             wave_index=int(raw.get("wave_index") or 0),
             max_waves=int(raw.get("max_waves") or 3),
             wave_slices=raw.get("wave_slices"),
             worktrees_enabled=bool(raw.get("worktrees_enabled", True)),
+            fanout_enabled=bool(raw.get("fanout_enabled", raw.get("require_plan", False))),
             wave_plan_artifact=normalize_wave_plan_artifact(
                 str(raw.get("wave_plan_artifact") or DEFAULT_WAVE_PLAN_ARTIFACT)
             ),
             require_plan=bool(raw.get("require_plan", False)),
-            engine_max_parallel_goals=int(raw.get("engine_max_parallel_goals") or 32),
+            engine_max_parallel_goals=(
+                int(raw["engine_max_parallel_goals"])
+                if raw.get("engine_max_parallel_goals") is not None
+                else None
+            ),
             feedback_round=int(raw.get("feedback_round") or 0),
             max_feedback_rounds=int(raw.get("max_feedback_rounds") or 8),
             acceptance_met=bool(raw.get("acceptance_met")),
@@ -534,7 +554,7 @@ class RailBuiltinExecutor:
                     "tags": ["exploration"],
                     "role": "scout",
                 }
-                for i in range(state.scout_count)
+                for i in range(state.effective_scout_count())
             ]
         created: list[str] = []
         for spec in plan:
@@ -847,7 +867,7 @@ class RailBuiltinExecutor:
             wave_slices=state.wave_slices,
             decompose_plan=state.decompose_plan,
             plan=None,  # already ingested into state above
-            max_slices=state.engine_max_parallel_goals,
+            max_slices=state.effective_engine_max_parallel_goals(),
             require_plan=state.require_plan,
         )
         if resolution.source == "missing_plan" or not resolution.slices:
@@ -871,7 +891,7 @@ class RailBuiltinExecutor:
             slices,
             resolution.source,
             resolution.clamped_from,
-            state.engine_max_parallel_goals,
+            state.effective_engine_max_parallel_goals(),
         )
 
         state.wave_index += 1
@@ -1106,7 +1126,7 @@ class RailBuiltinExecutor:
     async def _do_spawn_feedback_cycle(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        """Spawn find→optimize→verify goals until acceptance (greenfield feedback)."""
+        """Spawn find→optimize→verify goals until acceptance (fan-out feedback)."""
         state = await self._require(job_id)
         if state.feedback_round >= state.max_feedback_rounds:
             return BuiltinResult(
@@ -1393,7 +1413,9 @@ class RailBuiltinExecutor:
     async def _do_merge_branches(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        return BuiltinResult(status="success", detail="merge noop in v1 harness")
+        """Reserved catalog verb — not used by shipped builtins."""
+        del job_id, trigger_goal_id
+        return BuiltinResult(status="skipped", detail="merge_branches not implemented")
 
     async def _do_pause_for_user(
         self, *, job_id: str, trigger_goal_id: str | None

@@ -256,15 +256,34 @@ flow:
 def test_builtin_migration_and_greenfield_declare_plan_milestones_verbs() -> None:
     catalog = LoopRailCatalog()
     gf = catalog.resolve("greenfield-system")
-    assert gf.version == "1.8"
+    assert gf.version == "1.9"
     gf_do = (gf.verbs.get("plan_milestones") or {}).get("do") or []
     assert gf_do and "ownership" in str(gf_do[0].get("spawn_goal", {}).get("brief", "")).lower()
     mig = catalog.resolve("migration")
-    assert mig.version == "2.4"
+    assert mig.version == "2.5"
     mig_do = (mig.verbs.get("plan_milestones") or {}).get("do") or []
     brief = str(mig_do[0].get("spawn_goal", {}).get("brief", ""))
     assert "migration" in brief.lower()
     assert "slice" in brief.lower() or "schema" in brief.lower()
+
+
+def test_load_rail_rejects_list_then(tmp_path: Path) -> None:
+    path = tmp_path / "list-then.yml"
+    path.write_text(
+        """
+id: list-then
+version: "1.0"
+summary: List then not allowed.
+applies_when: x
+flow:
+  - event: job_start
+    then: [review, qa_verify]
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RailCatalogError, match="single verb string"):
+        load_rail_file(path)
 
 
 def test_load_rail_rejects_unknown_l0_op(tmp_path: Path) -> None:

@@ -1,24 +1,23 @@
 id: pr-review
-version: "1.1"
+version: "1.2"
 
 summary: |
   Independent review of an existing change set: read the diff, record
-  findings, optionally run QA. Starts at review; does not open an
-  implementation branch.
+  findings, then run QA. Starts at review; does not open an implementation
+  branch.
 
 applies_when: |
   Review a pull request, patch, or diff the user already produced.
 
 conditions:
   needs_qa: |
-    Review found issues that tests can catch, or the user asked for
-    verification in addition to review.
+    Review completed; automated verification should run after review.
   needs_human: |
     Review found a blocking design or security concern that needs an owner
     decision before the job can close.
   job_complete: |
-    Review (and optional QA / human ack) finished with findings recorded
-    and no pending children remain.
+    Review, QA, and any human ack finished with findings recorded and no
+    pending children remain.
 
 flow:
   - event: job_start
@@ -29,6 +28,10 @@ flow:
     then: qa_verify
 
   - event: goal_completed
+    when: needs_human
+    then: pause_for_user
+
+  - event: dag_idle
     when: needs_human
     then: pause_for_user
 

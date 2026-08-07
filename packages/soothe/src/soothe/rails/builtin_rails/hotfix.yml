@@ -1,5 +1,5 @@
 id: hotfix
-version: "1.1"
+version: "1.2"
 
 summary: |
   Minimal-blast-radius production fix: skip wide exploration, patch, then
@@ -11,14 +11,15 @@ applies_when: |
 
 conditions:
   needs_human: |
-    The change touches auth, payments, data migration, credentials, or
-    irreversible ops — human approval is required before continuing.
+    The change touches auth, payments, credentials, or irreversible ops —
+    human approval is required before continuing.
   needs_review: |
     A patch was produced and must be reviewed before deploy consideration.
   needs_qa: |
     Review passed and the original failure path should be re-verified.
   branch_is_stuck: |
-    Two failed attempts or the fix introduces a worse failure mode.
+    A maker or implementation goal failed, or the fix introduces a worse
+    failure mode.
   job_complete: |
     Review and QA passed for the incident symptom and no pending work remains.
 
@@ -27,6 +28,10 @@ flow:
     then: plan_and_implement
 
   - event: goal_completed
+    when: needs_human
+    then: pause_for_user
+
+  - event: dag_idle
     when: needs_human
     then: pause_for_user
 

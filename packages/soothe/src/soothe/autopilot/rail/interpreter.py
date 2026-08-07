@@ -146,6 +146,7 @@ class LoopRailInterpreter:
                 rail_id=rail.id,
                 rail_version=rail.version,
                 scout_count=scout,
+                fanout_enabled=True,
                 wave_plan_artifact=artifact,
                 require_plan=require_plan,
                 max_waves=max_waves,
@@ -157,6 +158,7 @@ class LoopRailInterpreter:
                 job_id=job_id,
                 rail_id=rail.id,
                 rail_version=rail.version,
+                fanout_enabled=False,
                 engine_max_parallel_goals=budget,
                 require_plan=False,
                 verb_overrides=verb_overrides,
@@ -406,9 +408,11 @@ class LoopRailInterpreter:
         feedback_inflight = any(siblings.get(gid) in {"pending", "active"} for gid in feedback_ids)
 
         require_plan = False
+        fanout_enabled = False
         wave_plan_ready = True
         if job_state is not None:
             require_plan = bool(job_state.require_plan)
+            fanout_enabled = bool(job_state.fanout_enabled) or require_plan
             if require_plan:
                 wave_plan_ready = self._builtins.is_wave_plan_ready(event.job_id)
 
@@ -439,8 +443,10 @@ class LoopRailInterpreter:
             "max_feedback_rounds": max_feedback_rounds,
             "acceptance_met": acceptance_met,
             "wave_below_max": wave_below_max,
+            "fanout_enabled": fanout_enabled,
             "require_plan": require_plan,
             "wave_plan_ready": wave_plan_ready,
+            "retry_count": int(goal.retry_count) if goal else 0,
             "pending_or_active_count": sum(
                 1
                 for gid, st in siblings.items()

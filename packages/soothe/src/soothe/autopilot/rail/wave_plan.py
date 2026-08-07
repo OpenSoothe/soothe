@@ -317,7 +317,7 @@ def resolve_fanout_slices(
         detail = (
             "LLM wave plan required but missing or empty; "
             "architecture must emit structured WavePlan findings "
-            "(host persists the job-scoped plan) before makers spawn"
+            "before makers spawn"
         )
         logger.warning("%s", detail)
         return FanoutResolution(

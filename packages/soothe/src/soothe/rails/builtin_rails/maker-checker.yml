@@ -1,5 +1,5 @@
 id: maker-checker
-version: "1.1"
+version: "1.2"
 
 summary: |
   Implement, then independently check until the checker passes or the branch
@@ -12,8 +12,6 @@ applies_when: |
   maker-checker review requested by the user.
 
 conditions:
-  ready_to_implement: |
-    Scope is clear enough to implement (a plan may already be provided).
   needs_check: |
     Implementation completed; an independent review goal must run with a
     fresh checker identity (not the maker's completion trail).

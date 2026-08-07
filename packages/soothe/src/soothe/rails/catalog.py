@@ -37,20 +37,6 @@ class RailCatalogError(ValueError):
     """Raised when a rail document is missing or invalid."""
 
 
-# --- Integrity verification (SC-01 hardening) ---------------------------
-
-_BUILTIN_RAIL_HASHES: dict[str, str] = {
-    "bugfix": "pending",
-    "feature-dev": "pending",
-    "hotfix": "pending",
-    "maker-checker": "pending",
-    "migration": "pending",
-    "pr-review": "pending",
-    "spike": "pending",
-    "greenfield-system": "pending",
-}
-
-
 def compute_rail_hash(text: str) -> str:
     """Return the SHA-256 integrity hash for raw rail YAML text."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -242,26 +228,31 @@ def _normalize_flow_entry_keys(entry: dict[str, Any]) -> dict[str, Any]:
             fixed.setdefault("event", value)
             continue
         if key is False:
-            fixed["off"] = value
+            # YAML 1.1 bare ``off:`` → boolean False key; ignore (not a trigger).
             continue
         fixed[key] = value
     return fixed
 
 
-def _collect_then_verbs(flow: list[dict[str, Any]], rules: list[dict[str, Any]]) -> list[str]:
+def _collect_then_verbs(
+    flow: list[dict[str, Any]], rules: list[dict[str, Any]], *, path: Path
+) -> list[str]:
+    """Collect ``then:`` verb strings; reject list forms (interpreter is str-only)."""
     verbs: list[str] = []
-    for entry in flow:
-        then = entry.get("then")
-        if isinstance(then, str):
-            verbs.append(then)
-        elif isinstance(then, list):
-            verbs.extend(v for v in then if isinstance(v, str))
-    for entry in rules:
-        then = entry.get("then")
-        if isinstance(then, str):
-            verbs.append(then)
-        elif isinstance(then, list):
-            verbs.extend(v for v in then if isinstance(v, str))
+    for section, entries in (("flow", flow), ("rules", rules)):
+        for i, entry in enumerate(entries):
+            then = entry.get("then")
+            if isinstance(then, str):
+                verbs.append(then)
+            elif isinstance(then, list):
+                raise RailCatalogError(
+                    f"{path}: {section}[{i}].then must be a single verb string "
+                    f"(list then: is not supported)"
+                )
+            elif then is not None:
+                raise RailCatalogError(
+                    f"{path}: {section}[{i}].then must be a verb string, got {type(then).__name__}"
+                )
     return verbs
 
 
@@ -310,7 +301,7 @@ def load_rail_file(path: Path) -> RailDefinition:
     if not flow and not rules:
         raise RailCatalogError(f"{path}: rail must define 'flow' and/or 'rules'")
 
-    unknown = sorted(set(_collect_then_verbs(flow, rules)) - CE_RAIL_BUILTINS)
+    unknown = sorted(set(_collect_then_verbs(flow, rules, path=path)) - CE_RAIL_BUILTINS)
     if unknown:
         raise RailCatalogError(
             f"{path}: unknown then: verb(s) {unknown}; allowed: {sorted(CE_RAIL_BUILTINS)}"

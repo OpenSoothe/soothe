@@ -67,9 +67,11 @@ def test_needs_commit_only_on_integrate() -> None:
 
 
 def test_needs_review_architecture_requires_commit() -> None:
-    """Greenfield: maker complete must not fire review before commit gate."""
+    """Fan-out: maker complete must not fire review before commit gate."""
     arch_structural = {
         "architecture_goal_ids": ["a1"],
+        "fanout_enabled": True,
+        "require_plan": True,
         "commit_goal_ids": [],
         "pending_or_active_count": 0,
     }
@@ -87,6 +89,8 @@ def test_needs_review_architecture_requires_commit() -> None:
         trigger_tags=["implementation"],
         structural={
             "architecture_goal_ids": ["a1"],
+            "fanout_enabled": True,
+            "require_plan": True,
             "commit_goal_ids": [],
             "all_commit_terminal": True,
             "pending_or_active_count": 0,
@@ -100,6 +104,8 @@ def test_needs_review_architecture_requires_commit() -> None:
         trigger_tags=["commit", "milestone"],
         structural={
             "architecture_goal_ids": ["a1"],
+            "fanout_enabled": True,
+            "require_plan": True,
             "commit_goal_ids": ["c1"],
             "all_commit_terminal": True,
             "pending_or_active_count": 0,
@@ -305,6 +311,8 @@ async def test_spawn_feedback_cycle_dag_idle_skips_root_dep() -> None:
 def test_needs_feedback_short_circuit() -> None:
     structural = {
         "architecture_goal_ids": ["a1"],
+        "fanout_enabled": True,
+        "require_plan": True,
         "feedback_inflight": False,
         "feedback_round": 0,
         "max_feedback_rounds": 8,
@@ -334,6 +342,8 @@ def test_dag_idle_needs_feedback_requires_completed_qa() -> None:
     """Maker-only idle must not spawn feedback; completed QA/verify may."""
     base = {
         "architecture_goal_ids": ["a1"],
+        "fanout_enabled": True,
+        "require_plan": True,
         "qa_goal_ids": [],
         "review_goal_ids": [],
         "feedback_goal_ids": [],
@@ -380,6 +390,93 @@ def test_dag_idle_needs_feedback_requires_completed_qa() -> None:
         structural={**base, "acceptance_met": True},
     )
     assert latched is not None and latched.matched is True
+
+
+def test_fanout_gates_ignore_stray_architecture_tags() -> None:
+    """Architecture tags alone must not enable fan-out latches."""
+    stray = {
+        "architecture_goal_ids": ["a1"],
+        "fanout_enabled": False,
+        "require_plan": False,
+        "feedback_inflight": False,
+        "feedback_round": 0,
+        "max_feedback_rounds": 8,
+        "acceptance_met": False,
+        "pending_or_active_count": 0,
+        "any_qa_completed": True,
+        "wave_below_max": True,
+        "qa_goal_ids": ["q1"],
+        "all_qa_terminal": True,
+    }
+    feedback = _structural_short_circuit(
+        condition_name="needs_feedback",
+        event="goal_completed",
+        trigger_tags=["qa"],
+        structural=stray,
+    )
+    assert feedback is not None and feedback.matched is False
+
+    complete = _structural_short_circuit(
+        condition_name="job_complete",
+        event="dag_idle",
+        trigger_tags=[],
+        structural=stray,
+    )
+    # Non-fanout: idle + terminal QA may complete without acceptance latch.
+    assert complete is not None and complete.matched is True
+
+
+def test_needs_commit_when_integrate_skipped() -> None:
+    structural = {
+        "fanout_enabled": True,
+        "implementation_goal_ids": ["m1"],
+        "all_implementation_completed": True,
+        "integrate_goal_ids": [],
+        "commit_goal_ids": [],
+        "pending_or_active_count": 0,
+    }
+    ok = _structural_short_circuit(
+        condition_name="needs_commit",
+        event="goal_completed",
+        trigger_tags=["implementation", "maker"],
+        structural=structural,
+    )
+    assert ok is not None and ok.matched is True
+
+    idle = _structural_short_circuit(
+        condition_name="needs_commit",
+        event="dag_idle",
+        trigger_tags=[],
+        structural=structural,
+    )
+    assert idle is not None and idle.matched is True
+
+
+def test_needs_human_and_checker_tag_short_circuits() -> None:
+    human = _structural_short_circuit(
+        condition_name="needs_human",
+        event="goal_completed",
+        trigger_tags=["cutover"],
+        structural={"pending_or_active_count": 0},
+    )
+    assert human is not None and human.matched is True
+
+    # No tags → fall through to LLM (None).
+    defer = _structural_short_circuit(
+        condition_name="needs_human",
+        event="goal_completed",
+        trigger_tags=["implementation"],
+        structural={"pending_or_active_count": 0},
+    )
+    assert defer is None
+
+    checker = _structural_short_circuit(
+        condition_name="checker_failed_recoverable",
+        event="goal_send_back",
+        trigger_tags=["review"],
+        structural={},
+    )
+    assert checker is not None and checker.matched is True
 
 
 def test_dag_idle_wave_makers_done_spawns_integrate() -> None:
