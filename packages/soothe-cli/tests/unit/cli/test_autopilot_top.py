@@ -453,11 +453,9 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
     assert len(step_lines) == 2
     uzh02 = next(ln for ln in step_lines if "STEP [UZH-02]" in ln)
     assert uzh02.index('"Add JWT"') < uzh02.index("→UZH-01")
-    assert "LOOP [autopilot__a1b2c3d4__deadbeef…]" in text
+    assert "LOOP [auto…beef]" in text
     assert "seq:3" in text
-    loop_line = next(
-        ln for ln in text.splitlines() if "LOOP [autopilot__a1b2c3d4__deadbeef…]" in ln
-    )
+    loop_line = next(ln for ln in text.splitlines() if "LOOP [auto…beef]" in ln)
     assert "seq:3" in loop_line
     assert "active" not in loop_line
     assert "pending" not in loop_line
@@ -848,7 +846,7 @@ def test_render_top_active_goal_all_completed_steps_still_listed() -> None:
     assert "steps:2/2" in text
     assert "STEP [JNC-01] completed" in text
     assert "STEP [JNC-02] completed" in text
-    assert "LOOP [autopilot__a1b2c3d4__deadbeef…]" in text
+    assert "LOOP [auto…beef]" in text
 
 
 def test_render_top_shows_active_not_pending_for_running_work() -> None:
@@ -903,10 +901,8 @@ def test_render_top_shows_active_not_pending_for_running_work() -> None:
     assert "JOB  [jobjobj1] active" in text
     assert "GOAL [jobjobj1] active" in text
     assert "STEP [S-01] active" in text
-    assert "LOOP [autopilot__jobjobj1__deadbeef…]" in text
-    loop_line = next(
-        ln for ln in text.splitlines() if "LOOP [autopilot__jobjobj1__deadbeef…]" in ln
-    )
+    assert "LOOP [auto…beef]" in text
+    loop_line = next(ln for ln in text.splitlines() if "LOOP [auto…beef]" in ln)
     assert "seq:1" in loop_line
     assert "active" not in loop_line
     assert "pending" not in loop_line

@@ -574,16 +574,14 @@ def resume_goal(
     typer.echo(f"Goal resumed: {resumed_id[:8]} → {result.get('new_status', 'pending')}")
 
 
-def _short_loop_id(loop_id: str, *, keep: int = 8) -> str:
-    """Shorten assignment loop ids for display."""
-    if len(loop_id) <= keep + 12:
-        return loop_id
-    # Prefer suffix after last __ for uuid distinction
-    if "__" in loop_id:
-        prefix, _, suffix = loop_id.rpartition("__")
-        short_suffix = suffix[:keep] if len(suffix) > keep else suffix
-        return f"{prefix}__{short_suffix}…"
-    return loop_id[:keep] + "…"
+def _short_loop_id(loop_id: str, *, head: int = 4, tail: int = 4) -> str:
+    """Shorten loop ids as ``prefix…suffix`` (4 chars each by default)."""
+    text = str(loop_id or "")
+    if head < 0 or tail < 0:
+        head, tail = 4, 4
+    if len(text) <= head + tail:
+        return text
+    return f"{text[:head]}…{text[-tail:]}"
 
 
 def format_tokens(tokens: Any) -> str:
@@ -979,7 +977,8 @@ def _format_entity_row(
     id_seg = f"[{entity_id}] " if bracket_id else f"{entity_id}  "
     parts.append((id_seg, kind_style))
     if status is not None:
-        parts.append((f"{status:10s}", _status_style(status)))
+        # No fixed-width pad — keep a tight gap before elapsed / metrics.
+        parts.append((status, _status_style(status)))
     line = _text_line(*parts)
     for metric in metrics or []:
         _append_metric(line, metric)
