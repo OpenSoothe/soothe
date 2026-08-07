@@ -11,7 +11,6 @@ from support.rail_harness import catalog_rail_job_state
 from soothe.autopilot import AutopilotService
 from soothe.autopilot.dispatch.models import Finding, GoalDispatchContextContribution
 from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor
-from soothe.autopilot.rail.wave_plan import DEFAULT_WAVE_PLAN_ARTIFACT, resolve_wave_plan_path
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.events.internal_bus import InternalEventBus
@@ -67,7 +66,6 @@ async def test_architecture_gate_accepts_when_wave_plan_in_findings(
         catalog_rail_job_state(
             root.id,
             require_plan=True,
-            wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
             engine_max_parallel_goals=4,
         )
     )
@@ -93,8 +91,11 @@ async def test_architecture_gate_accepts_when_wave_plan_in_findings(
     arch = await ce.get_goal(arch_id)
     assert arch is not None
     assert arch.status == "completed"
-    assert resolve_wave_plan_path(jobs_root=jobs_root, job_id=root.id).is_file()
+    state = await ex.job_state(root.id)
+    assert state is not None
+    assert state.wave_slices
     assert ex.is_wave_plan_ready(root.id)
+    assert not any(jobs_root.rglob("wave-plan.json"))
 
 
 @pytest.mark.asyncio
@@ -133,7 +134,6 @@ async def test_architecture_gate_send_back_without_wave_plan(
         catalog_rail_job_state(
             root.id,
             require_plan=True,
-            wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
         )
     )
     spawned = await ex.invoke("plan_milestones", job_id=root.id)
@@ -193,7 +193,6 @@ async def test_architecture_gate_never_calls_llm_consensus(
         catalog_rail_job_state(
             root.id,
             require_plan=True,
-            wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
         )
     )
     spawned = await ex.invoke("plan_milestones", job_id=root.id)
@@ -281,12 +280,19 @@ async def test_workspace_wave_plan_file_not_authoritative(
         catalog_rail_job_state(
             root.id,
             require_plan=True,
-            wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
         )
     )
     await ex.ingest_wave_plan(root.id)
     assert not ex.is_wave_plan_ready(root.id)
-    assert not resolve_wave_plan_path(jobs_root=jobs_root, job_id=root.id).is_file()
+    # Orphan host file must also be ignored (IG-720).
+    orphan = jobs_root / root.id / "wave-plan.json"
+    orphan.parent.mkdir(parents=True, exist_ok=True)
+    orphan.write_text(
+        '{"wave_slices":["orphan-file"],"rationale":"ignored"}',
+        encoding="utf-8",
+    )
+    await ex.ingest_wave_plan(root.id)
+    assert not ex.is_wave_plan_ready(root.id)
 
 
 @pytest.mark.asyncio

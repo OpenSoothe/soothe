@@ -1,5 +1,5 @@
 id: greenfield-system
-version: "1.9"
+version: "1.10"
 
 summary: |
   Multi-slice system build from scratch: architecture milestones, parallel
@@ -11,7 +11,6 @@ applies_when: |
   Building a new multi-part system or large scaffold from scratch.
 
 fanout:
-  artifact: "{job_id}/wave-plan.json"
   require_plan: true
   max_waves: 3
 
@@ -31,9 +30,9 @@ verbs:
             product code here.
 
             REQUIRED deliverable: append one findings entry that is exactly a
-            WavePlan JSON object. Do not write the plan into the project workspace tree
-            (never write docs/wave-plan.json or .soothe/wave-plan.json). Schema
-            example:
+            WavePlan JSON object. The host persists fan-out from that findings
+            entry into job rail state — do not write fan-out policy into the
+            project workspace. Schema example:
             {"wave_slices":["core","api","tests"],
             "independence":"disjoint write-sets per slice",
             "rationale":"why this partition"}

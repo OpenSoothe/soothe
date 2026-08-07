@@ -21,7 +21,7 @@ wire schema and from user-facing rail / goal text. No dual-read aliases.
 
 ---
 
-## Wire schema (job-scoped `wave-plan.json`)
+## Wire schema (WavePlan findings / rail_state; IG-720)
 
 | Old | New |
 |-----|-----|
@@ -82,7 +82,7 @@ Prefer rich `slices[]`. Bare `wave_slices` remains valid.
 
 - Soft aliases for old JSON keys (hard cut).
 - Intra-wave maker dependency edges.
-- Renaming `fanout:` rail key or artifact filename `wave-plan.json`.
+- Renaming `fanout:` rail key (filesystem `wave-plan.json` removed in IG-720).
 
 ---
 
@@ -101,5 +101,6 @@ Prefer rich `slices[]`. Bare `wave_slices` remains valid.
 
 ## Migration note
 
-In-flight jobs with old `wave-plan.json` must re-run architecture (or rewrite
-the artifact) after upgrade — host will not accept legacy keys.
+In-flight jobs with legacy module-key plans or orphan `wave-plan.json` files
+must re-run architecture so findings emit Slice-schema WavePlan JSON — host
+will not accept legacy keys and does not load filesystem plan files (IG-720).

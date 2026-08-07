@@ -64,9 +64,9 @@ class RailDefinition:
         flow: NL-first event hooks (list of mappings).
         rules: Explicit rule list (list of mappings).
         fanout: Optional rail-declared fan-out policy. Keys may include
-            ``artifact`` (jobs_root-relative wave-plan template with optional
-            ``{job_id}``), ``require_plan``, ``scout_count``, ``max_waves``.
-            Engine must not invent these — they live in the rail YAML.
+            ``require_plan``, ``scout_count``, ``max_waves``. WavePlan slices
+            come from CE architecture findings (IG-720); ``artifact`` is
+            rejected. Engine must not invent fan-out — it lives in rail YAML.
         verbs: Optional catalog-verb body overrides (RFC-231 M2). Keys are
             CE builtin names; values may include ``brief``, ``tags``, ``role``.
         source_path: Absolute path to the YAML file that won resolution.
@@ -93,15 +93,11 @@ def _normalize_fanout(raw: Any, *, path: Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise RailCatalogError(f"{path}: 'fanout' must be a mapping when present")
     out: dict[str, Any] = {}
-    artifact = raw.get("artifact")
-    if artifact is not None:
-        if not isinstance(artifact, str) or not artifact.strip():
-            raise RailCatalogError(f"{path}: fanout.artifact must be a non-empty string")
-        # Reject absolute / traversal paths — jobs_root-relative templates only.
-        art = artifact.strip().replace("\\", "/")
-        if art.startswith("/") or ".." in art.split("/"):
-            raise RailCatalogError(f"{path}: fanout.artifact must be a relative path without '..'")
-        out["artifact"] = art
+    if "artifact" in raw and raw["artifact"] is not None:
+        raise RailCatalogError(
+            f"{path}: fanout.artifact is removed; WavePlan persists via CE "
+            "architecture findings and rail_state (no wave-plan.json file)"
+        )
     if "default_modules" in raw and raw["default_modules"] is not None:
         raise RailCatalogError(
             f"{path}: fanout.default_modules is not supported; "

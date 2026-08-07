@@ -30,11 +30,6 @@ def catalog_rail_job_state(
     **kwargs: Any,
 ) -> RailJobState:
     """Bind ``RailJobState`` from the catalog (includes ``verbs:`` / ``do:``)."""
-    from soothe.autopilot.rail.wave_plan import (
-        DEFAULT_WAVE_PLAN_ARTIFACT,
-        normalize_wave_plan_artifact,
-    )
-
     rail = LoopRailCatalog().resolve(rail_id)
     verb_overrides = kwargs.pop("verb_overrides", None)
     if verb_overrides is None:
@@ -42,10 +37,6 @@ def catalog_rail_job_state(
     fanout = dict(rail.fanout or {})
     if fanout and "fanout_enabled" not in kwargs:
         kwargs.setdefault("fanout_enabled", True)
-        kwargs.setdefault(
-            "wave_plan_artifact",
-            normalize_wave_plan_artifact(str(fanout.get("artifact") or DEFAULT_WAVE_PLAN_ARTIFACT)),
-        )
         kwargs.setdefault("require_plan", bool(fanout.get("require_plan", False)))
         if "max_waves" in fanout:
             kwargs.setdefault("max_waves", int(fanout["max_waves"]))

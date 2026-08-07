@@ -131,7 +131,7 @@ def _structural_short_circuit(
     fanout_mode = _fanout_mode(structural)
 
     if name == "architecture_ready":
-        # When require_plan, wave-plan artifact must exist before makers spawn.
+        # When require_plan, WavePlan must be applied (CE findings → rail_state).
         require_plan = bool(structural.get("require_plan", False))
         wave_plan_ready = bool(structural.get("wave_plan_ready", False))
         plan_ok = (not require_plan) or wave_plan_ready
@@ -153,9 +153,10 @@ def _structural_short_circuit(
                 _WAVE_PLAN_MISSING_WARN_AT[job_key] = now
                 logger.warning(
                     "WavePlan missing for job %s — architecture finished but "
-                    "fan-out plan not recorded under the job data dir; makers "
-                    "will not spawn until a valid plan is recorded (restart "
-                    "daemon after upgrades so the architecture gate is live)",
+                    "no WavePlan applied from findings into rail state; makers "
+                    "will not spawn until architecture emits a valid WavePlan "
+                    "findings entry (restart daemon after upgrades so the "
+                    "architecture gate is live)",
                     job_key[:8],
                 )
         return GuardResult(

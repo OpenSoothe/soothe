@@ -22,10 +22,6 @@ from soothe.autopilot.rail.trace_store import (
     RailTraceStore,
     RuleFireRecord,
 )
-from soothe.autopilot.rail.wave_plan import (
-    DEFAULT_WAVE_PLAN_ARTIFACT,
-    normalize_wave_plan_artifact,
-)
 from soothe.context.engine import ContextEngine, InvalidGoalTransitionError
 from soothe.rails.catalog import LoopRailCatalog, RailDefinition
 
@@ -112,9 +108,11 @@ class LoopRailInterpreter:
           - ``engine_max_parallel_goals`` — spawn budget from
             ``autopilot.max_parallel_goals`` (capacity clamp).
 
-        LoopRail concerns (from YAML / job artifact, never submit kwargs):
-          - When ``fanout:`` is present: artifact template, ``require_plan``,
-            scout/max_waves. Absent ``fanout:`` → no wave-plan pollution.
+        LoopRail concerns (from YAML / CE findings, never submit kwargs):
+          - When ``fanout:`` is present: ``require_plan``, scout/max_waves.
+            Absent ``fanout:`` → no wave-plan pollution.
+          - WavePlan slices applied from architecture goal findings into
+            ``RailJobState`` (IG-720).
           - flow ``then:`` builtins decide *when* to fan out
 
         Args:
@@ -135,9 +133,6 @@ class LoopRailInterpreter:
         budget = int(engine_max_parallel_goals) if engine_max_parallel_goals is not None else 32
         # Fan-out / wave fields only when the rail declares ``fanout:``.
         if fanout:
-            artifact = normalize_wave_plan_artifact(
-                str(fanout.get("artifact") or DEFAULT_WAVE_PLAN_ARTIFACT)
-            )
             scout = int(fanout["scout_count"]) if "scout_count" in fanout else 2
             max_waves = int(fanout["max_waves"]) if "max_waves" in fanout else 3
             require_plan = bool(fanout.get("require_plan", False))
@@ -147,7 +142,6 @@ class LoopRailInterpreter:
                 rail_version=rail.version,
                 scout_count=scout,
                 fanout_enabled=True,
-                wave_plan_artifact=artifact,
                 require_plan=require_plan,
                 max_waves=max_waves,
                 engine_max_parallel_goals=budget,

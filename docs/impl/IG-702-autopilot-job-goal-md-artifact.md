@@ -13,7 +13,9 @@
 
 Persist each Autopilot **job** (root `GoalNode`) description as
 `$SOOTHE_DATA_DIR/jobs/{job_id}/GOAL.md` so the submit contract is a durable
-job artifact alongside `rail_trace.jsonl` / `rail_state.json` / `wave-plan.json`.
+job artifact alongside `rail_trace.jsonl` / `rail_state.json`
+(WavePlan fan-out lives in CE findings + `rail_state.wave_slices` — see
+[IG-720](IG-720-waveplan-ce-findings-no-file.md); no `wave-plan.json` file).
 
 ## Problem
 
@@ -31,8 +33,7 @@ job artifact alongside `rail_trace.jsonl` / `rail_state.json` / `wave-plan.json`
 ~/.soothe/data/jobs/{job_id}/
   GOAL.md                 # NEW — submit description (UTF-8 markdown body)
   rail_trace.jsonl
-  rail_state.json
-  wave-plan.json          # when fan-out records a plan
+  rail_state.json         # includes wave_slices when fan-out applied
 ```
 
 - Write on **root** job create only (`parent_id is None`) in `submit_task`.

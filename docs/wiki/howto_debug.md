@@ -534,35 +534,27 @@ goals, and the job root stays `pending`. Logs show
 `wave_plan_ready=False` / `architecture_ready` unmatched on `dag_idle`, or
 rate-limited warnings that a WavePlan is missing for the job.
 
-Cause: host never recorded a job-scoped WavePlan under
-`$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json`. Writing
-`docs/wave-plan.json` (or `.soothe/wave-plan.json`) in the **project
-workspace does not count**.
+Cause: host never applied a WavePlan from architecture **findings** into
+`rail_state` (`wave_slices`). Writing `docs/wave-plan.json` (or
+`.soothe/wave-plan.json`) in the project workspace does **not** count.
+Leftover `$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json` files are orphans
+and are **not** read (IG-720).
 
 Recovery:
 
 1. Confirm daemon is current: after upgrading soothe packages, run
    `soothed restart` so the architecture WavePlan gate is live (stale
    processes can accept architecture via soft LLM consensus without a plan).
-2. Inspect: `ls ~/.soothe/data/jobs/{job_id}/wave-plan.json` and
-   `soothe autopilot job {job_id}`.
-3. Seed a **valid** host plan (schema: `wave_slices` and/or `slices`), e.g.:
-
-```bash
-cat > ~/.soothe/data/jobs/$JOB/wave-plan.json <<'EOF'
-{
-  "wave_slices": ["slice-a", "slice-b"],
-  "independence": "disjoint write-sets",
-  "rationale": "operator recovery seed"
-}
-EOF
-```
-
+2. Inspect: `soothe autopilot job {job_id}`, architecture goal findings, and
+   `~/.soothe/data/jobs/{job_id}/rail_state.json` (`wave_slices`).
+3. Prefer re-running architecture so findings include a bare WavePlan JSON
+   object (`wave_slices` / `slices`). As a last resort, set `wave_slices` on
+   `rail_state.json` and wait for `dag_idle` (or restart).
 4. Wait for the next `dag_idle` tick (or restart the daemon) so
    `spawn_wave_makers` can fire.
 
 New architecture goals must put a WavePlan JSON object in **findings** (host
-persists the job artifact). Do not teach agents to write fan-out policy into
+applies into rail state). Do not teach agents to write fan-out policy into
 the project tree.
 
 Forensics: `.agents/skills/inspect-autopilot-job/SKILL.md`.

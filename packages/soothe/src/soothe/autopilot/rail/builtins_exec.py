@@ -7,8 +7,9 @@ and optionally persists ``rail_state.json`` under the job artifact dir so
 guards survive daemon restart.
 
 ``invoke`` prefers YAML ``verbs.<name>.do`` recipes (IG-717) over ``_do_*``.
-Wave fan-out uses a job-scoped ``wave-plan.json`` under ``jobs_root`` before
-``spawn_wave_makers`` — no markdown scraping, no project-workspace plan files.
+Wave fan-out applies WavePlan from CE architecture findings into
+``RailJobState`` before ``spawn_wave_makers`` (IG-720) — no filesystem
+``wave-plan.json``, no markdown scraping, no project-workspace plan files.
 """
 
 from __future__ import annotations
@@ -22,17 +23,12 @@ from pathlib import Path
 from typing import Any
 
 from soothe.autopilot.rail.wave_plan import (
-    DEFAULT_WAVE_PLAN_ARTIFACT,
     WavePlan,
     apply_wave_plan_to_state_fields,
     build_wave_plan,
-    dump_wave_plan,
-    load_wave_plan,
-    normalize_wave_plan_artifact,
     parse_wave_plan_from_findings,
     parse_wave_plan_payload,
     resolve_fanout_slices,
-    resolve_wave_plan_path,
     sort_decompose_plan_by_priority,
 )
 from soothe.context.engine import ContextEngine
@@ -105,8 +101,7 @@ class RailJobState:
     worktrees_enabled: bool = True
     # True when bind declared rail YAML ``fanout:`` (structure signal for guards).
     fanout_enabled: bool = False
-    # Rail YAML ``fanout`` declaration — LLM fills job-scoped plan.
-    wave_plan_artifact: str = DEFAULT_WAVE_PLAN_ARTIFACT
+    # When True, makers require WavePlan applied from CE architecture findings.
     require_plan: bool = False
     # Engine spawn budget mirrored at bind (None = unset until bind).
     engine_max_parallel_goals: int | None = None
@@ -337,7 +332,6 @@ class RailBuiltinExecutor:
             wave_slices=base.wave_slices if base.wave_slices is not None else donor.wave_slices,
             worktrees_enabled=donor.worktrees_enabled,
             fanout_enabled=base.fanout_enabled or donor.fanout_enabled,
-            wave_plan_artifact=base.wave_plan_artifact,
             require_plan=base.require_plan or donor.require_plan,
             engine_max_parallel_goals=base.engine_max_parallel_goals
             if base.engine_max_parallel_goals is not None
@@ -381,7 +375,6 @@ class RailBuiltinExecutor:
                 "wave_slices": state.wave_slices,
                 "worktrees_enabled": state.worktrees_enabled,
                 "fanout_enabled": state.fanout_enabled,
-                "wave_plan_artifact": state.wave_plan_artifact,
                 "require_plan": state.require_plan,
                 "engine_max_parallel_goals": state.engine_max_parallel_goals,
                 "feedback_round": state.feedback_round,
@@ -429,9 +422,6 @@ class RailBuiltinExecutor:
             wave_slices=raw.get("wave_slices"),
             worktrees_enabled=bool(raw.get("worktrees_enabled", True)),
             fanout_enabled=bool(raw.get("fanout_enabled", raw.get("require_plan", False))),
-            wave_plan_artifact=normalize_wave_plan_artifact(
-                str(raw.get("wave_plan_artifact") or DEFAULT_WAVE_PLAN_ARTIFACT)
-            ),
             require_plan=bool(raw.get("require_plan", False)),
             engine_max_parallel_goals=(
                 int(raw["engine_max_parallel_goals"])
@@ -682,26 +672,6 @@ class RailBuiltinExecutor:
             created_goal_ids=[arch.id],
         )
 
-    def _wave_plan_file(self, state: RailJobState) -> Path | None:
-        """Job-scoped wave-plan path under jobs_root, or None if unavailable."""
-        if self._jobs_root is None:
-            return None
-        try:
-            return resolve_wave_plan_path(
-                jobs_root=self._jobs_root,
-                job_id=state.job_id,
-                artifact=normalize_wave_plan_artifact(
-                    state.wave_plan_artifact or DEFAULT_WAVE_PLAN_ARTIFACT
-                ),
-            )
-        except ValueError:
-            logger.warning(
-                "Invalid wave-plan artifact for job %s: %s",
-                state.job_id[:8],
-                state.wave_plan_artifact,
-            )
-            return None
-
     async def record_wave_plan(
         self,
         job_id: str,
@@ -714,10 +684,11 @@ class RailBuiltinExecutor:
         max_waves: int | None = None,
         scout_count: int | None = None,
     ) -> WavePlan | None:
-        """Persist an LLM wave plan under jobs_root and apply it to rail state.
+        """Apply an LLM wave plan into rail state (CE findings SoT; IG-720).
 
-        Preferred host API: Autopilot/rail persist the plan; callers never need
-        the filesystem path. Not a nano agent tool.
+        Preferred host API: Autopilot/rail apply the plan from architecture
+        completion findings. Does not write a filesystem wave-plan JSON.
+        Not a nano agent tool.
         """
         async with self._lock:
             state = self._jobs.get(job_id)
@@ -741,23 +712,12 @@ class RailBuiltinExecutor:
                 built = parsed
             if not built.resolved_slice_ids() and built.scout_count is None:
                 return None
-            path = self._wave_plan_file(state)
-            if path is None:
-                logger.warning(
-                    "record_wave_plan: jobs_root unset; applying in-memory only job=%s",
-                    job_id[:8],
-                )
-            else:
-                try:
-                    dump_wave_plan(built, path)
-                except OSError:
-                    logger.warning("record_wave_plan: failed to write %s", path, exc_info=True)
             self._apply_wave_plan_unlocked(state, built)
             self._persist_rail_state_unlocked(state)
             return built
 
     async def ingest_wave_plan(self, job_id: str) -> RailJobState | None:
-        """Load job-scoped wave-plan into bound job state."""
+        """Load WavePlan from CE architecture findings into bound job state."""
         async with self._lock:
             state = self._jobs.get(job_id)
             if state is None:
@@ -773,11 +733,6 @@ class RailBuiltinExecutor:
             return False
         if state.wave_slices:
             return True
-        path = self._wave_plan_file(state)
-        if path is not None:
-            plan = load_wave_plan(path)
-            if plan is not None and plan.resolved_slice_ids():
-                return True
         return self._wave_plan_from_architecture_findings(state) is not None
 
     def _apply_wave_plan_unlocked(self, state: RailJobState, plan: WavePlan) -> None:
@@ -812,22 +767,14 @@ class RailBuiltinExecutor:
         return None
 
     def _ingest_job_wave_plan(self, state: RailJobState) -> None:
-        """Load job-scoped wave-plan artifact (or architecture findings) into state.
+        """Apply WavePlan from architecture goal findings into rail state.
 
-        ``record_wave_plan`` / job artifact is authoritative for the upcoming wave
-        when present (overwrites prior ``wave_slices`` / ``decompose_plan``).
+        Already-applied ``wave_slices`` win; otherwise parse CE findings
+        (IG-720 — no filesystem artifact).
         """
-        plan: WavePlan | None = None
-        path = self._wave_plan_file(state)
-        if path is not None:
-            plan = load_wave_plan(path)
-        if plan is None:
-            plan = self._wave_plan_from_architecture_findings(state)
-            if plan is not None and path is not None:
-                try:
-                    dump_wave_plan(plan, path)
-                except OSError:
-                    logger.debug("Could not mirror findings wave plan to %s", path)
+        if state.wave_slices:
+            return
+        plan = self._wave_plan_from_architecture_findings(state)
         if plan is None:
             return
         self._apply_wave_plan_unlocked(state, plan)

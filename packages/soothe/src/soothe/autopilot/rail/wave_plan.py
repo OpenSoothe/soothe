@@ -1,10 +1,12 @@
-"""Structured wave fan-out plan for LoopRail (IG-718).
+"""Structured wave fan-out plan for LoopRail (IG-718 / IG-720).
 
-LoopRail owns fan-out *contract* (YAML ``fanout.artifact`` / ``require_plan``).
-The **LLM** owns fan-out *policy* (slice ids + width) via a **job-scoped**
-artifact under ``jobs_root`` (typically ``$SOOTHE_DATA_DIR/jobs/{job_id}/``).
+LoopRail owns fan-out *contract* (YAML ``fanout.require_plan`` / counters).
+The **LLM** owns fan-out *policy* (slice ids + width) via a **WavePlan JSON
+findings entry** on the architecture goal (Context Engine). Autopilot applies
+the plan into ``RailJobState`` (persisted in ``rail_state.json``). There is
+**no** filesystem ``wave-plan.json`` artifact.
+
 Autopilot engine only supplies a spawn budget (``max_parallel_goals``).
-
 A **slice** is an independent parallel ownership unit (feature, task, package,
 migration stage, …). Missing plan fails closed when ``require_plan`` is true.
 Project-workspace files are never authoritative.
@@ -14,23 +16,11 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_WAVE_PLAN_ARTIFACT = "{job_id}/wave-plan.json"
-
-_JOB_ID_TOKEN = "{job_id}"
-_LEGACY_WORKSPACE_WAVE_PLAN_ARTIFACTS = frozenset(
-    {
-        ".soothe/wave-plan.json",
-        "wave-plan.json",
-        "docs/wave-plan.json",
-    }
-)
 
 # Hard cut: removed pre-Slice fan-out wire keys (no dual-read).
 _REMOVED_WIRE_KEYS = frozenset({"wave_modules", "modules", "module"})
@@ -54,7 +44,7 @@ class WavePlanSlice(BaseModel):
 
 
 class WavePlan(BaseModel):
-    """Machine contract for LLM-determined ready-DAG width (rail artifact)."""
+    """Machine contract for LLM-determined ready-DAG width (CE findings)."""
 
     wave_slices: list[str] = Field(default_factory=list)
     slices: list[WavePlanSlice] = Field(default_factory=list)
@@ -111,56 +101,6 @@ class FanoutResolution(BaseModel):
     clamped_from: int | None = None
     plan: WavePlan | None = None
     detail: str = ""
-
-
-def expand_wave_plan_artifact(artifact: str, job_id: str) -> str:
-    """Expand ``{job_id}`` in an artifact template (safe filesystem segment)."""
-    safe = job_id.replace("/", "_").replace("\\", "_").strip()
-    if not safe or ".." in safe:
-        raise ValueError(f"invalid job_id for wave-plan path: {job_id!r}")
-    template = (artifact or DEFAULT_WAVE_PLAN_ARTIFACT).strip().replace("\\", "/")
-    if not template:
-        template = DEFAULT_WAVE_PLAN_ARTIFACT
-    return template.replace(_JOB_ID_TOKEN, safe)
-
-
-def normalize_wave_plan_artifact(artifact: str | None) -> str:
-    """Return a jobs_root-relative template; rewrite legacy workspace paths."""
-    raw = (artifact or DEFAULT_WAVE_PLAN_ARTIFACT).strip().replace("\\", "/")
-    if not raw or raw in _LEGACY_WORKSPACE_WAVE_PLAN_ARTIFACTS:
-        return DEFAULT_WAVE_PLAN_ARTIFACT
-    return raw
-
-
-def resolve_wave_plan_path(
-    *,
-    jobs_root: Path,
-    job_id: str,
-    artifact: str = DEFAULT_WAVE_PLAN_ARTIFACT,
-) -> Path:
-    """Absolute path for the job-scoped wave plan under ``jobs_root``."""
-    root = jobs_root.expanduser().resolve()
-    expanded = expand_wave_plan_artifact(normalize_wave_plan_artifact(artifact), job_id)
-    if expanded.startswith("/") or ".." in expanded.split("/"):
-        raise ValueError(f"wave-plan artifact must be relative without '..': {artifact!r}")
-    path = (root / expanded).resolve()
-    try:
-        path.relative_to(root)
-    except ValueError as exc:
-        raise ValueError(f"wave-plan path escapes jobs_root: {path}") from exc
-    return path
-
-
-def load_wave_plan(path: Path) -> WavePlan | None:
-    """Load and validate a wave plan JSON file."""
-    if not path.is_file():
-        return None
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        logger.warning("Invalid wave plan JSON at %s: %s", path, exc)
-        return None
-    return parse_wave_plan_payload(raw, source=str(path))
 
 
 def _reject_removed_wire_keys(raw: dict[str, Any], *, source: str) -> bool:
@@ -260,15 +200,6 @@ def parse_wave_plan_from_findings(findings: list[Any] | None) -> WavePlan | None
     return None
 
 
-def dump_wave_plan(plan: WavePlan, path: Path) -> None:
-    """Persist a validated plan to ``path`` (creates parents)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(plan.model_dump(mode="json", exclude_none=True), indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-
-
 def clamp_slice_list(
     slices: list[str],
     *,
@@ -297,7 +228,7 @@ def resolve_fanout_slices(
     max_slices: int,
     require_plan: bool = True,
 ) -> FanoutResolution:
-    """Resolve maker slice ids from LLM artifact only (+ engine clamp)."""
+    """Resolve maker slice ids from CE/rail state only (+ engine clamp)."""
     source: Literal["decompose_plan", "wave_slices", "wave_plan", "missing_plan"]
     raw: list[str]
 

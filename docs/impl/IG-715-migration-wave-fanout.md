@@ -32,7 +32,7 @@ Engine remains wave-agnostic: waves exist only on rails that declare `fanout:`.
 |-------|------|----------|
 | Autopilot engine | Pool, deps, consensus, schedule | Module names, `wave_index`, phase order |
 | LoopRail YAML | `flow` / conditions / `fanout` contract | Submit kwargs for modules |
-| LLM + job artifact | WavePlan slices for this job | Workspace `docs/wave-plan.json` SoT |
+| LLM + CE findings | WavePlan slices for this job | Filesystem `wave-plan.json` SoT (IG-720) |
 
 Rails with `fanout:` today: **`greenfield-system`**, **`migration`**.
 

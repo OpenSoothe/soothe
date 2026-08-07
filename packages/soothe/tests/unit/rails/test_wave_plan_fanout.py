@@ -1,4 +1,4 @@
-"""Unit tests for LLM-determined rail fan-out width."""
+"""Unit tests for LLM-determined rail fan-out width (IG-720: CE/rail_state SoT)."""
 
 from __future__ import annotations
 
@@ -12,12 +12,10 @@ from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobStat
 from soothe.autopilot.rail.guards import GuardResult, _structural_short_circuit
 from soothe.autopilot.rail.interpreter import LoopRailInterpreter
 from soothe.autopilot.rail.wave_plan import (
-    DEFAULT_WAVE_PLAN_ARTIFACT,
     WavePlan,
     clamp_slice_list,
-    load_wave_plan,
+    parse_wave_plan_payload,
     resolve_fanout_slices,
-    resolve_wave_plan_path,
 )
 from soothe.context import ContextEngine
 from soothe.rails import LoopRailCatalog
@@ -25,7 +23,7 @@ from soothe.rails import LoopRailCatalog
 
 def test_greenfield_rail_declares_llm_fanout_contract() -> None:
     rail = LoopRailCatalog().resolve("greenfield-system")
-    assert rail.fanout.get("artifact") == "{job_id}/wave-plan.json"
+    assert "artifact" not in rail.fanout
     assert rail.fanout.get("require_plan") is True
     assert "default_modules" not in rail.fanout
     assert rail.fanout.get("max_waves") == 3
@@ -104,37 +102,8 @@ def test_missing_plan_fails_closed() -> None:
     assert r.slices == []
 
 
-def test_load_wave_plan_file(tmp_path: Path) -> None:
-    path = resolve_wave_plan_path(
-        jobs_root=tmp_path, job_id="job-abc", artifact=DEFAULT_WAVE_PLAN_ARTIFACT
-    )
-    path.parent.mkdir(parents=True)
-    path.write_text(
-        json.dumps(
-            {
-                "slices": [
-                    {"slice": "frontend", "description": "UI"},
-                    {"slice": "api", "priority": 70},
-                ]
-            }
-        ),
-        encoding="utf-8",
-    )
-    plan = load_wave_plan(path)
-    assert plan is not None
-    assert plan.resolved_slice_ids() == ["frontend", "api"]
-
-
-def test_legacy_module_keys_rejected(tmp_path: Path) -> None:
-    path = resolve_wave_plan_path(
-        jobs_root=tmp_path, job_id="job-legacy", artifact=DEFAULT_WAVE_PLAN_ARTIFACT
-    )
-    path.parent.mkdir(parents=True)
-    path.write_text(
-        json.dumps({"wave_modules": ["frontend", "api"], "rationale": "legacy"}),
-        encoding="utf-8",
-    )
-    assert load_wave_plan(path) is None
+def test_legacy_module_keys_rejected() -> None:
+    assert parse_wave_plan_payload({"wave_modules": ["frontend", "api"]}, source="t") is None
 
 
 def test_catalog_rejects_default_modules(tmp_path: Path) -> None:
@@ -144,24 +113,21 @@ def test_catalog_rejects_default_modules(tmp_path: Path) -> None:
         _normalize_fanout({"default_modules": ["core", "api"]}, path=tmp_path / "x.yml")
 
 
-def test_normalize_rewrites_legacy_workspace_artifact() -> None:
-    from soothe.autopilot.rail.wave_plan import normalize_wave_plan_artifact
+def test_catalog_rejects_fanout_artifact(tmp_path: Path) -> None:
+    from soothe.rails.catalog import RailCatalogError, _normalize_fanout
 
-    assert normalize_wave_plan_artifact(".soothe/wave-plan.json") == DEFAULT_WAVE_PLAN_ARTIFACT
-    assert normalize_wave_plan_artifact("wave-plan.json") == DEFAULT_WAVE_PLAN_ARTIFACT
-    assert normalize_wave_plan_artifact("docs/wave-plan.json") == DEFAULT_WAVE_PLAN_ARTIFACT
-    assert normalize_wave_plan_artifact("{job_id}/wave-plan.json") == DEFAULT_WAVE_PLAN_ARTIFACT
+    with pytest.raises(RailCatalogError, match="fanout.artifact"):
+        _normalize_fanout({"artifact": "{job_id}/wave-plan.json"}, path=tmp_path / "x.yml")
 
 
 @pytest.mark.asyncio
-async def test_plan_milestones_description_hides_artifact_path(tmp_path: Path) -> None:
+async def test_plan_milestones_description_findings_only(tmp_path: Path) -> None:
     ce = ContextEngine()
     root = await ce.create_goal("Build system", workspace=str(tmp_path), priority=70)
     ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
     await ex.bind_job(
         catalog_rail_job_state(
             root.id,
-            wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
             require_plan=True,
         )
     )
@@ -169,21 +135,19 @@ async def test_plan_milestones_description_hides_artifact_path(tmp_path: Path) -
     arch = await ce.get_goal(result.created_goal_ids[0])
     assert arch is not None
     assert "jobs/" not in arch.description
-    assert ".soothe/wave-plan" in arch.description  # forbid list, not path SoT
-    assert "docs/wave-plan.json" in arch.description
+    assert "wave-plan.json" not in arch.description
     assert "record_wave_plan" not in arch.description
-    assert "project workspace tree" in arch.description
+    assert "project workspace" in arch.description.lower()
     assert "WavePlan JSON" in arch.description
     assert "ownership units" in arch.description.lower()
     assert "fixed default" in arch.description.lower()
-    assert "host persists" not in arch.description.lower()
     assert "max_parallel_goals" not in arch.description
     assert "autopilot" not in arch.description.lower()
 
 
 @pytest.mark.asyncio
 async def test_record_wave_plan_host_api(tmp_path: Path) -> None:
-    """Host/executor API persists the plan — not a nano agent tool."""
+    """Host/executor API applies the plan to rail_state — not a nano tool / file."""
     ce = ContextEngine()
     root = await ce.create_goal("Build", workspace=str(tmp_path), priority=70)
     ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
@@ -202,7 +166,10 @@ async def test_record_wave_plan_host_api(tmp_path: Path) -> None:
     )
     assert plan is not None
     assert plan.resolved_slice_ids() == ["core", "tests"]
-    assert resolve_wave_plan_path(jobs_root=tmp_path, job_id=root.id).is_file()
+    state = await ex.job_state(root.id)
+    assert state is not None
+    assert state.wave_slices == ["core", "tests"]
+    assert not any(tmp_path.rglob("wave-plan.json"))
 
 
 @pytest.mark.asyncio
@@ -218,7 +185,6 @@ async def test_spawn_wave_makers_from_record_wave_plan(tmp_path: Path) -> None:
             worktrees_enabled=False,
             engine_max_parallel_goals=16,
             require_plan=True,
-            wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
         )
     )
     recorded = await ex.record_wave_plan(
@@ -234,12 +200,7 @@ async def test_spawn_wave_makers_from_record_wave_plan(tmp_path: Path) -> None:
         rationale="compiler crate map",
     )
     assert recorded is not None
-    plan_path = resolve_wave_plan_path(
-        jobs_root=tmp_path, job_id=root.id, artifact=DEFAULT_WAVE_PLAN_ARTIFACT
-    )
-    assert plan_path.is_file()
-    # Must not write into the project workspace tree.
-    assert not (tmp_path / ".soothe" / "wave-plan.json").exists()
+    assert not any(tmp_path.rglob("wave-plan.json"))
 
     arch = await ce.create_goal(
         "Architecture",
@@ -304,7 +265,6 @@ def test_architecture_failed_guard() -> None:
     )
     assert skip_maker is not None and skip_maker.matched is False
 
-    # Bare planning (scout/plan rails) must not trigger architecture retry.
     skip_planning = _structural_short_circuit(
         condition_name="architecture_failed",
         event="goal_failed",
@@ -351,7 +311,6 @@ async def test_two_jobs_same_workspace_isolated_wave_plans(tmp_path: Path) -> No
                 worktrees_enabled=False,
                 engine_max_parallel_goals=16,
                 require_plan=True,
-                wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
             )
         )
         await ex.record_wave_plan(job.id, wave_slices=slices)
@@ -363,9 +322,12 @@ async def test_two_jobs_same_workspace_isolated_wave_plans(tmp_path: Path) -> No
     rb = await ex.invoke("spawn_wave_makers", job_id=job_b.id)
     assert ra.status == "success" and len(ra.created_goal_ids) == 2
     assert rb.status == "success" and len(rb.created_goal_ids) == 3
-    assert resolve_wave_plan_path(jobs_root=jobs_root, job_id=job_a.id).read_text(
-        encoding="utf-8"
-    ) != resolve_wave_plan_path(jobs_root=jobs_root, job_id=job_b.id).read_text(encoding="utf-8")
+    sa = await ex.job_state(job_a.id)
+    sb = await ex.job_state(job_b.id)
+    assert sa is not None and sb is not None
+    assert sa.wave_slices == ["alpha", "beta"]
+    assert sb.wave_slices == ["gamma", "delta", "epsilon"]
+    assert not any(jobs_root.rglob("wave-plan.json"))
 
 
 @pytest.mark.asyncio
@@ -406,7 +368,6 @@ async def test_spawn_clamps_llm_plan_to_engine_budget(tmp_path: Path) -> None:
             worktrees_enabled=False,
             engine_max_parallel_goals=3,
             require_plan=True,
-            wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
         )
     )
     await ex.record_wave_plan(root.id, wave_slices=[f"m{i}" for i in range(10)])
@@ -430,7 +391,6 @@ async def test_bind_feature_dev_skips_fanout_state(tmp_path: Path) -> None:
     assert state is not None
     assert state.require_plan is False
     assert state.wave_slices is None
-    # No wave-plan file created for non-fanout rails.
     assert not any(tmp_path.rglob("wave-plan.json"))
 
 
@@ -512,5 +472,3 @@ async def test_spawn_rich_slices_use_description_and_priority(tmp_path: Path) ->
     assert makers[1].priority == 60
     assert "High slice write-set" in (makers[0].description or "")
     assert "Mid slice write-set" in (makers[1].description or "")
-    assert "module ownership" not in (makers[0].description or "").lower()
-    assert "clamped_from=3" in result.detail

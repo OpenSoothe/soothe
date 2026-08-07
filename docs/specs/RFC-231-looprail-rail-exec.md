@@ -8,7 +8,8 @@
 **Authors**: Soothe Team  
 **Depends on**: RFC-204, RFC-222, RFC-228, RFC-230, RFC-625, RFC-626, RFC-630  
 **Related**: LoopRail design draft (`docs/drafts/2026-07-11-loop-rail-design.md`),
-IG-678, IG-687, IG-691, IG-692, IG-693, IG-700, IG-704, IG-714, IG-715  
+IG-678, IG-687, IG-691, IG-692, IG-693, IG-700, IG-704, IG-714, IG-715,
+IG-720  
 **Promotes / extends**: LoopRail design draft (normative architecture for
 job-scoped rails; this RFC adds Rail Exec and user-defined verb bodies)
 
@@ -50,8 +51,8 @@ alone.
    **NL** (brief / intent), or **hybrid** — data in rail YAML, not `rail_id`
    switches in Python.
 4. Keep **CE primitives closed** and framework-owned (atomicity, resume, trace).
-5. Preserve **fan-out as rail policy** (`fanout:` + job-scoped WavePlan); engine
-   remains wave-agnostic (capacity clamp only).
+5. Preserve **fan-out as rail policy** (`fanout:` + WavePlan from CE findings);
+   engine remains wave-agnostic (capacity clamp only).
 6. Enable custom rails to reach **builtin-class power** (waves, feedback chains,
    domain-specific planner/review/QA copy) via YAML overrides.
 
@@ -108,16 +109,17 @@ bodies.
 | `wire_deps` | Update `depends_on` / root-waits-on children (never child→root) |
 | `foreach` | Iterate WavePlan slices or an explicit list; bind loop vars |
 | `ensure_worktree` | Optional git worktree under job policy |
-| `ingest_wave_plan` | Host findings / artifact → `RailJobState` slices |
+| `ingest_wave_plan` | Architecture goal findings (CE) → `RailJobState` slices |
 | `gate` | Skip recipe when counter/acceptance/inflight predicates fail |
 | `bump` | Increment `wave_index` / `feedback_round` (etc.) |
 | `prune` / `replant` | Branch salvage with `informs` (RFC-204 recovery) |
 | `pause_job` | Suspend for human (`pause_for_user`) |
 | `complete_job` | Mark job root complete when maturity allows (RFC-230) |
 
-WavePlan **slice lists** come from the job-scoped artifact / structured
-findings ingest — never from NL inventing slices at exec time, and never from
-rigid rail `default_modules` (already rejected by catalog).
+WavePlan **slice lists** come from structured findings on the architecture
+goal (Context Engine), applied into `RailJobState` — never from filesystem
+JSON artifacts, NL inventing slices at exec time, or rigid rail
+`default_modules` (already rejected by catalog).
 
 ### 5.2 L1 catalog verbs
 
@@ -293,17 +295,33 @@ structural block is the deterministic short-circuit when present.
 RFC-230 maturity fields (`acceptance_met`, snapshot) continue to feed
 `needs_feedback` / `job_complete` predicates.
 
-## 9. Fan-out contract (unchanged boundary)
+## 9. Fan-out contract
 
 | Layer | Owns | Must not |
 |-------|------|----------|
 | Autopilot engine | Pool, deps, consensus, `max_parallel_goals` clamp | Slice ids, `wave_index`, phase order |
-| Rail YAML | `flow` / conditions / `fanout` / `verbs` | Submit kwargs for slices |
-| LLM + job artifact | WavePlan slices for this job | Workspace tree as SoT for fan-out |
+| Rail YAML | `flow` / conditions / `fanout` / `verbs` | Submit kwargs for slices; filesystem WavePlan paths |
+| LLM + CE findings | WavePlan JSON on architecture goal completion | Workspace tree or `jobs/*/wave-plan.json` as SoT |
+| LoopRail | Apply parsed WavePlan into `RailJobState` (`wave_slices` / `decompose_plan`); persist via `rail_state.json` | Dual-write or load a separate wave-plan JSON file |
 
-`fanout:` keys: `artifact`, `require_plan`, `scout_count`, `max_waves` (as
-validated today). Rails without `fanout:` must not pollute job state with wave
-plan requirements.
+**Persistence (normative, IG-720):**
+
+1. Architecture / planner goals emit **one findings entry** that is exactly a
+   WavePlan JSON object (`wave_slices` and/or rich `slices`) on
+   `GoalCompletionChunk` → Autopilot copies onto `GoalNode.findings` in CE.
+2. Host parses findings (evidence + contribution + CE) and calls
+   `record_wave_plan` to **apply** slices into `RailJobState` only (no
+   `wave-plan.json` dump).
+3. `is_wave_plan_ready` is true when `RailJobState.wave_slices` is non-empty
+   (or architecture findings still parse to a WavePlan). Leftover
+   `$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json` files are **orphans** —
+   never read or written.
+4. Project-tree paths (`docs/wave-plan.json`, `.soothe/wave-plan.json`, …) are
+   never authoritative and must not be scraped.
+
+`fanout:` keys: `require_plan`, `scout_count`, `max_waves`. The former
+`fanout.artifact` key is **removed** (catalog reject). Rails without
+`fanout:` must not pollute job state with wave-plan requirements.
 
 ## 10. Catalog storage and selection
 
@@ -390,6 +408,7 @@ worktree / feedback macro extract; **M4** intent expand.
 | NL in bodies | Briefs + optional once-per-fire intent→ActionPlan (RFC-630) |
 | `rail_id` switches in Exec | Forbidden after M2 |
 | Fan-out / engine boundary | Unchanged (IG-715) |
+| WavePlan persistence | CE findings + `RailJobState` only; **no** `wave-plan.json` file (IG-720) |
 | New `then:` without L0 | Forbidden — compose L0 or add framework primitive |
 | Default body style for builtins | Hybrid |
 
@@ -408,7 +427,8 @@ worktree / feedback macro extract; **M4** intent expand.
    wave/feedback macros still Python). **M4** intent expand still open.
 3. **IG-718** Slice terminology hard cut (`wave_slices` / `slices`; no module
    wire keys).
-4. Update `looprail-protocol.md` and builtin rail README to document `verbs:`.
+4. **IG-720** Remove filesystem WavePlan artifact; CE findings + rail_state only.
+5. Update `looprail-protocol.md` and builtin rail README to document `verbs:`.
 
 ## Appendix A: relation to prior docs
 
@@ -419,3 +439,4 @@ worktree / feedback macro extract; **M4** intent expand.
 | RFC-204 | Consensus / send-back; host recovery via catalog verbs |
 | RFC-222 / RFC-625 | Autopilot / CE ownership; StrangeLoop invariant unchanged |
 | IG-715 | Migration wave fan-out; must migrate planner copy into YAML bodies (M2) |
+| IG-720 | WavePlan SoT = CE findings / rail_state; delete `fanout.artifact` + file I/O |

@@ -598,8 +598,9 @@ class AutopilotService:
         """Bind LoopRail for a root job; engine only injects spawn budget.
 
         Fan-out slice lists / scout counts come from the rail YAML ``fanout:``
-        block and job-scoped wave-plan artifact (host ingest) — not from Autopilot
-        submit fields, nano tools, or the project workspace tree.
+        block and WavePlan applied from architecture CE findings (host ingest)
+        — not from Autopilot submit fields, nano tools, filesystem plan files,
+        or the project workspace tree.
         """
         if self._rail_interpreter is None or not goal.rail_id:
             return
@@ -651,10 +652,10 @@ class AutopilotService:
         evidence_summary: str,
         contribution: Any | None,
     ) -> bool:
-        """Parse WavePlan from worker contribution and persist via rail executor.
+        """Parse WavePlan from worker contribution and apply to rail state.
 
         Nano/StrangeLoop never call Autopilot APIs — the host interprets opaque
-        findings/evidence and records the job-scoped artifact.
+        findings/evidence and applies slices into ``RailJobState`` (IG-720).
 
         Returns:
             True when a usable wave plan is ready after ingest attempts.
@@ -702,7 +703,6 @@ class AutopilotService:
                     names,
                 )
 
-        # Also reload from disk / findings via standard ingest path.
         await builtins.ingest_wave_plan(job_id)
         return builtins.is_wave_plan_ready(job_id)
 
@@ -755,7 +755,7 @@ class AutopilotService:
         Fail closed: architecture planners on a rail job with ``require_plan``
         must never fall through to free-form LLM accept when the rail
         interpreter is missing or unbound (that completed architecture without
-        a job-scoped WavePlan in production).
+        applying WavePlan slices into rail state).
         """
         if not self._is_architecture_planner_goal(goal):
             return None
@@ -769,8 +769,9 @@ class AutopilotService:
 
         _send_back_missing = (
             "Architecture requires one findings entry that is exactly a WavePlan "
-            "JSON object with wave_slices. Do not write the plan into the project "
-            "workspace tree (never write docs/wave-plan.json or .soothe/wave-plan.json)."
+            "JSON object with wave_slices (host applies fan-out into job rail "
+            "state from findings; do not write fan-out policy into the project "
+            "workspace)."
         )
 
         if self._rail_interpreter is None:

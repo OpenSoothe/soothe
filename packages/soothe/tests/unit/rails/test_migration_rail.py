@@ -10,15 +10,14 @@ import pytest
 from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
 from soothe.autopilot.rail.guards import GuardResult, _structural_short_circuit
 from soothe.autopilot.rail.interpreter import LoopRailInterpreter
-from soothe.autopilot.rail.wave_plan import DEFAULT_WAVE_PLAN_ARTIFACT
 from soothe.context import ContextEngine
 from soothe.rails import LoopRailCatalog
 
 
 def test_migration_rail_declares_fanout_and_human_gate() -> None:
     rail = LoopRailCatalog().resolve("migration")
-    assert rail.version == "2.5"
-    assert rail.fanout.get("artifact") == "{job_id}/wave-plan.json"
+    assert rail.version == "2.6"
+    assert "artifact" not in rail.fanout
     assert rail.fanout.get("require_plan") is True
     assert "default_modules" not in rail.fanout
     assert rail.fanout.get("max_waves") == 3
@@ -106,7 +105,6 @@ async def test_bind_migration_stamps_fanout_state(tmp_path: Path) -> None:
     assert state is not None
     assert state.require_plan is True
     assert state.max_waves == 3
-    assert state.wave_plan_artifact == DEFAULT_WAVE_PLAN_ARTIFACT
 
 
 @pytest.mark.asyncio
@@ -120,7 +118,6 @@ async def test_plan_milestones_migration_copy(tmp_path: Path) -> None:
             job_id=root.id,
             rail_id="migration",
             rail_version=rail.version,
-            wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
             require_plan=True,
             verb_overrides=dict(rail.verbs),
         )
@@ -132,11 +129,10 @@ async def test_plan_milestones_migration_copy(tmp_path: Path) -> None:
     assert "migration" in desc
     assert "slice" in desc or "schema" in desc
     assert "ownership units" not in desc
-    assert "docs/wave-plan.json" in arch.description
+    assert "wave-plan.json" not in arch.description
     assert "WavePlan JSON" in arch.description
     assert "record_wave_plan" not in arch.description
-    assert "project workspace tree" in arch.description
-    assert "host persists" not in arch.description.lower()
+    assert "project workspace" in arch.description.lower()
     assert "max_parallel_goals" not in arch.description
     assert "autopilot" not in arch.description.lower()
 

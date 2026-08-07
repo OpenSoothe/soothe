@@ -1,7 +1,9 @@
-# IG-714: Architecture accept without job-scoped WavePlan (rail stall)
+# IG-714: Architecture accept without WavePlan (rail stall)
 
 **Created**: 2026-08-07  
 **Status**: Implemented (+ cleanse)  
+**Superseded for persistence SoT**: [IG-720](IG-720-waveplan-ce-findings-no-file.md)
+(CE findings + `rail_state` only; filesystem `wave-plan.json` removed).  
 **Related**: [IG-704](IG-704-autopilot-wave-plan-host-ingest.md),
 [IG-700](../archive/impl/IG-700-greenfield-fanout-closeout.md),
 [IG-699](../archive/impl/IG-699-llm-determined-rail-fanout-width.md),
@@ -17,11 +19,10 @@ Close the production hole where a greenfield `architecture` / planner goal can
 
 Ensure:
 
-1. **Accept path** cannot mark architecture complete without a host-persisted
-   job-scoped WavePlan (or equivalent findings ingest).
-2. **Workspace files** (`docs/wave-plan.json`, `.soothe/wave-plan.json`, bare
-   `wave-plan.json` under the project tree) remain **non-authoritative** and are
-   never loaded as fan-out SoT.
+1. **Accept path** cannot mark architecture complete without host-applied
+   WavePlan slices (from findings ingest into `RailJobState`).
+2. **Filesystem plan files** (project tree or orphan job-dir JSON) remain
+   **non-authoritative** and are never loaded as fan-out SoT.
 3. **Operators** have a clear recovery path when a job is already stuck.
 4. **Agents** are not steered toward writing fan-out policy into the repo.
 
@@ -49,23 +50,21 @@ are rejected). Copying them into
 
 ## Design rules (MUST)
 
-1. **Authoritative artifact only** under
-   `$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json` (template
-   `{job_id}/wave-plan.json` via `jobs_root`). Legacy workspace artifact
-   templates (`.soothe/wave-plan.json`, `wave-plan.json`) are rewritten to the
-   job-scoped default and **never loaded** from the project tree
-   (`wave_plan.py`).
-2. **Host owns persist** — StrangeLoop / nano emit opaque findings; Autopilot
+> Persistence SoT updated by **IG-720**: apply WavePlan into `RailJobState`
+> from CE findings; do **not** write or read `jobs/*/wave-plan.json`.
+
+1. **Authoritative plan** = architecture goal findings → `record_wave_plan`
+   apply into `rail_state.wave_slices` / `decompose_plan`.
+2. **Host owns apply** — StrangeLoop / nano emit opaque findings; Autopilot
    parses structured WavePlan and calls `RailBuiltinExecutor.record_wave_plan`
    (IG-704). No Autopilot tools injected into CoreAgent.
 3. **Deterministic architecture gate** when `require_plan` — on miss →
    `send_back` (or fail after budget); **never** fall through to free-form LLM
    consensus for architecture planner goals.
-4. **No workspace scrape** — do not read `docs/wave-plan.json` (or any project
-   path) to satisfy `wave_plan_ready` (RFC-630 / IG-700).
-5. **Planner copy** — continue to forbid writing fan-out policy into the
-   project workspace tree; required deliverable is a findings WavePlan JSON
-   entry only (`_do_plan_milestones`).
+4. **No filesystem scrape** — project-tree or orphan job-dir JSON must not
+   satisfy `wave_plan_ready` (RFC-630 / IG-720).
+5. **Planner copy** — findings WavePlan JSON entry only; do not write fan-out
+   policy into the project workspace.
 
 ---
 
@@ -88,38 +87,39 @@ are rejected). Copying them into
       gate always returns accept/send_back; no silent `None` fall-through when
       rail interpreter / job state is temporarily unbound (rebind or fail closed)
       — `_ensure_rail_bound_for_job` + fail-closed send_back.
-- [x] On successful ingest, always persist job-scoped file + update
-      `rail_state.wave_slices` / `decompose_plan` before `complete_goal`
-      (existing `record_wave_plan` path; covered by gate accept test).
+- [x] On successful ingest, always update `rail_state.wave_slices` /
+      `decompose_plan` before `complete_goal` (`record_wave_plan` apply path;
+      IG-720 dropped the job-dir JSON file).
 - [x] On `dag_idle` + `architecture_ready` with missing plan: rate-limited
       warning in `guards.py` (job id + WavePlan missing; no IG/RFC in string).
-- [x] Review planner goal text: no callable `record_wave_plan`; explicit
-      forbid `docs/wave-plan.json` / `.soothe/wave-plan.json`.
-- [x] Skill/wiki point at `jobs/{id}/wave-plan.json` only; no product writers
-      for workspace wave-plan files.
+- [x] Review planner goal text: no callable `record_wave_plan`; findings-only
+      WavePlan deliverable (no project-tree fan-out files).
+- [x] Skill/wiki recovery points at CE findings / `rail_state.wave_slices`
+      (IG-720); not filesystem `wave-plan.json`.
 
 ### C. Stuck-job recovery (ops + optional tooling)
 
-For jobs already accepted without artifact (pattern: planner completed, zero
+For jobs already accepted without a plan (pattern: planner completed, zero
 makers, rail_trace only `plan_milestones`):
 
-1. Seed a **valid** host WavePlan at
-   `$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json`.
+1. Re-run architecture so findings include a bare WavePlan JSON object, **or**
+   set `wave_slices` on `rail_state.json`.
 2. Wait for next `dag_idle` (or restart daemon) so `spawn_wave_makers` fires.
 3. Or cancel / resubmit the job under a daemon that has the hard gate.
 
 - [x] Document recovery in debug wiki / inspect-autopilot-job skill.
 - [ ] Optional: admin/RPC or CLI helper to **record** a WavePlan for a job
-      (deferred — seed file is sufficient).
-- [x] Job `4a0d82f2`: already recovered via manual seed (auth/session slices).
+      (deferred).
+- [x] Job `4a0d82f2`: already recovered (auth/session slices).
 
 ### D. Tests
 
 - [x] Architecture contribution with only workspace-style / prose findings →
       gate `send_back`; no `complete_goal`.
-- [x] Valid WavePlan findings → `record_wave_plan` writes under `jobs_root`,
-      accept (`test_architecture_gate_accepts_when_wave_plan_in_findings`).
-- [x] Workspace `docs/wave-plan.json` does not make `is_wave_plan_ready` true.
+- [x] Valid WavePlan findings → `record_wave_plan` applies rail_state + accept
+      (`test_architecture_gate_accepts_when_wave_plan_in_findings`).
+- [x] Workspace / orphan job-dir plan files do not make `is_wave_plan_ready`
+      true.
 - [x] Fail-closed when rail interpreter is unset.
 - [x] `./scripts/verify_finally.sh` green.
 
@@ -127,8 +127,7 @@ makers, rail_trace only `plan_milestones`):
 
 ## Non-goals
 
-- Scraping or promoting `docs/wave-plan.json` (or any project tree path) to
-  fan-out SoT.
+- Scraping or promoting filesystem plan JSON to fan-out SoT.
 - Keyword/regex judgment of planner prose for slice ids (RFC-630).
 - Changing StrangeLoop Plan-Exec-Eval or injecting Autopilot tools into nano.
 - Auto-reset of rail job roots by DAG health (separate from this IG).
@@ -137,12 +136,11 @@ makers, rail_trace only `plan_milestones`):
 
 ## Acceptance
 
-1. New greenfield architecture goals cannot complete without a host-persisted
+1. New greenfield architecture goals cannot complete without host-applied
    WavePlan when `require_plan` is true.
-2. Presence of project-tree `**/wave-plan.json` alone never unblocks
+2. Presence of project-tree or orphan job-dir plan files alone never unblocks
    `spawn_wave_makers`.
-3. Documented recovery for pre-gate stuck jobs; skill/wiki point at
-   `jobs/{id}/wave-plan.json` only.
+3. Documented recovery via findings / `rail_state.wave_slices` (IG-720).
 4. Verify green.
 
 ---
@@ -152,8 +150,8 @@ makers, rail_trace only `plan_milestones`):
 - Host gate / ingest: `soothe.autopilot.service` —
   `_architecture_wave_plan_consensus_gate`, `_try_ingest_architecture_wave_plan`,
   `_ensure_rail_bound_for_job`
-- Persist / ready: `soothe.autopilot.rail.builtins_exec` —
+- Apply / ready: `soothe.autopilot.rail.builtins_exec` —
   `record_wave_plan`, `is_wave_plan_ready`, `_do_plan_milestones`
-- Schema / legacy rewrite: `soothe.autopilot.rail.wave_plan`
+- Schema: `soothe.autopilot.rail.wave_plan` (IG-720: no file I/O helpers)
 - Guard: `architecture_ready` + `wave_plan_ready` in
   `soothe.autopilot.rail.guards`
