@@ -19,8 +19,9 @@ soothe
 # Headless single-prompt mode
 soothe -p "Research AI advances"
 
-# Autopilot job from GOAL.md (greenfield-system rail)
-soothe autopilot submit --file GOAL.md --rail greenfield-system -w /path/to/repo
+# Autopilot job from cwd GOAL.md (greenfield-system rail)
+cd /path/to/repo
+soothe autopilot submit --rail greenfield-system
 soothe autopilot top
 
 # Loop management

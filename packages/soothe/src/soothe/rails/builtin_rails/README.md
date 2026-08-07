@@ -34,10 +34,11 @@ Fallback when auto-pick confidence is low:
 ### Submit with `greenfield-system`
 
 From a repo that has a `GOAL.md` (pass `--rail` explicitly; auto-pick does not
-select greenfield):
+select greenfield). With no TASK / `--file`, submit reads `./GOAL.md`:
 
 ```bash
-soothe autopilot submit --file GOAL.md --rail greenfield-system -w /path/to/repo
+cd /path/to/repo
+soothe autopilot submit --rail greenfield-system
 soothe autopilot top
 ```
 

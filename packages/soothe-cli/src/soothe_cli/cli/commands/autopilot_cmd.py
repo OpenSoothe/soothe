@@ -146,8 +146,14 @@ def _wait_for_goal(client: Any, goal_id: str, *, timeout_s: float = _WAIT_TIMEOU
     sys.exit(1)
 
 
+_DEFAULT_GOAL_FILE = "GOAL.md"
+
+
 def _resolve_submit_task(task: str | None, file: str | None) -> str:
     """Resolve task text from an inline argument or ``--file``.
+
+    When both ``task`` and ``file`` are absent, defaults to ``GOAL.md`` in the
+    current working directory.
 
     Args:
         task: Optional inline task description.
@@ -157,12 +163,12 @@ def _resolve_submit_task(task: str | None, file: str | None) -> str:
         Non-empty task description.
 
     Raises:
-        typer.Exit: When neither/both sources are set, the file is missing,
+        typer.Exit: When both sources are set, or the file is missing,
             unreadable, or empty.
     """
     has_task = bool(task and task.strip())
     has_file = bool(file and file.strip())
-    if has_task == has_file:
+    if has_task and has_file:
         typer.echo(
             "Specify exactly one of: TASK or --file <path>.",
             err=True,
@@ -173,20 +179,28 @@ def _resolve_submit_task(task: str | None, file: str | None) -> str:
         assert task is not None
         return task
 
-    assert file is not None
-    path = file.strip()
+    path = file.strip() if has_file else _DEFAULT_GOAL_FILE
+    used_default = not has_file
     try:
         if path == "-":
             content = sys.stdin.read()
         else:
             content = Path(path).expanduser().read_text(encoding="utf-8")
     except OSError as exc:
-        typer.echo(f"Error reading task file: {exc}", err=True)
+        if used_default:
+            typer.echo(
+                f"Error: no TASK given and default {_DEFAULT_GOAL_FILE} "
+                f"not readable in current directory: {exc}",
+                err=True,
+            )
+        else:
+            typer.echo(f"Error reading task file: {exc}", err=True)
         raise typer.Exit(1) from exc
 
     text = content.strip()
     if not text:
-        typer.echo("Error: task file is empty.", err=True)
+        label = _DEFAULT_GOAL_FILE if used_default else "task file"
+        typer.echo(f"Error: {label} is empty.", err=True)
         raise typer.Exit(1)
     return text
 
@@ -219,13 +233,13 @@ def _submit_impl(
 def submit(
     task: str | None = typer.Argument(
         None,
-        help="Task description (omit when using --file).",
+        help="Task description (omit to use --file or cwd GOAL.md).",
     ),
     file: str | None = typer.Option(
         None,
         "--file",
         "-f",
-        help="Read task description from a UTF-8 file (use - for stdin).",
+        help="Read task from a UTF-8 file (default: GOAL.md in cwd when TASK omitted; - for stdin).",
     ),
     priority: int = typer.Option(50, "--priority", "-p", help="Goal priority (0-100)."),
     workspace: str | None = typer.Option(
@@ -253,13 +267,13 @@ def submit(
 def run(
     prompt: str | None = typer.Argument(
         None,
-        help="Task description (omit when using --file).",
+        help="Task description (omit to use --file or cwd GOAL.md).",
     ),
     file: str | None = typer.Option(
         None,
         "--file",
         "-f",
-        help="Read task description from a UTF-8 file (use - for stdin).",
+        help="Read task from a UTF-8 file (default: GOAL.md in cwd when TASK omitted; - for stdin).",
     ),
     priority: int = typer.Option(50, "--priority", "-p", help="Goal priority (0-100)."),
     workspace: str | None = typer.Option(

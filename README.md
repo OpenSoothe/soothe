@@ -55,7 +55,8 @@ Submit an Autopilot job from a workspace `GOAL.md` on the `greenfield-system` ra
 
 ```bash
 soothed start
-soothe autopilot submit --file GOAL.md --rail greenfield-system -w /path/to/repo
+cd /path/to/repo   # reads ./GOAL.md by default when TASK/--file omitted
+soothe autopilot submit --rail greenfield-system
 soothe autopilot top   # live jobs / goals / loops dashboard
 ```
 

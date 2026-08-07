@@ -347,10 +347,15 @@ print_note() {
 if [[ -n "${UV_PYPI_MIRROR:-}" ]]; then
   export UV_DEFAULT_INDEX="$UV_PYPI_MIRROR"
 else
-  # Force PyPI by clearing any mirror environment variables
-  unset UV_INDEX_URL UV_DEFAULT_INDEX UV_EXTRA_INDEX_URL UV_INDEX UV_FIND_LINKS 2>/dev/null || true
+  # Default to Tsinghua mirror for better connectivity in China.
+  # PyPI's Fastly CDN occasionally resets connections (ECONNRESET / os error 54).
+  # The committed uv.lock stays pinned to PyPI and is restored after mirror runs.
+  UV_PYPI_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple"
+  export UV_DEFAULT_INDEX="$UV_PYPI_MIRROR"
+  # Clear any conflicting index vars that might interfere
+  unset UV_INDEX_URL UV_EXTRA_INDEX_URL UV_INDEX UV_FIND_LINKS 2>/dev/null || true
 fi
-UV_SYNC_CMD=(uv sync --all-packages --all-extras)
+UV_SYNC_CMD=(uv sync --all-packages --all-extras --default-index "$UV_PYPI_MIRROR")
 
 # Verify critical daemon dependencies are importable after sync.
 # Mirrors the `sync-verify` Makefile target so the script catches the same
