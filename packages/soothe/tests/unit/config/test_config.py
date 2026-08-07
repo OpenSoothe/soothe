@@ -46,6 +46,8 @@ class TestSootheConfig:
         assert cfg.embedding_dims == 1536
         assert cfg.agent.autopilot.enabled is True
         assert "max_iterations" not in type(cfg.agent.autopilot).model_fields
+        assert "max_evidence_turns" not in type(cfg.agent.autopilot).model_fields
+        assert "evidence_max_iterations" not in type(cfg.agent.autopilot).model_fields
         assert cfg.agent.loop.max_iterations == 99
         assert cfg.agent.loop.dispatch_idle_seconds == 300.0
         assert cfg.agent.loop.dispatch_tool_timeout_seconds == 0.0

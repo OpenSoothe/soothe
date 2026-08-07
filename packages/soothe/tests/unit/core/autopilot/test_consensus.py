@@ -45,6 +45,7 @@ class TestConsensusPrompt:
         assert "accept" in prompt.lower()
         assert "prefer send_back" in prompt.lower()
         assert "fundamentally blocked" in prompt.lower()
+        assert "evidence_follow_up" in prompt
 
 
 @pytest.mark.asyncio
@@ -60,13 +61,13 @@ class TestEvaluateGoalCompletion:
                 decision="accept", reasoning="Response is comprehensive."
             ),
         ):
-            decision, reasoning = await evaluate_goal_completion(
+            result = await evaluate_goal_completion(
                 goal_description="Write a report",
                 response_text="I completed the report with all required sections.",
                 model=mock_model,
             )
-        assert decision == "accept"
-        assert "comprehensive" in reasoning.lower()
+        assert result.decision == "accept"
+        assert "comprehensive" in result.reasoning.lower()
 
     async def test_send_back_with_structured_verdict(self) -> None:
         mock_model = MagicMock()
@@ -77,13 +78,13 @@ class TestEvaluateGoalCompletion:
                 decision="send_back", reasoning="Missing key analysis section."
             ),
         ):
-            decision, reasoning = await evaluate_goal_completion(
+            result = await evaluate_goal_completion(
                 goal_description="Write a report",
                 response_text="I started the report.",
                 model=mock_model,
             )
-        assert decision == "send_back"
-        assert "missing key analysis" in reasoning.lower()
+        assert result.decision == "send_back"
+        assert "missing key analysis" in result.reasoning.lower()
 
     async def test_fail_with_structured_verdict(self) -> None:
         mock_model = MagicMock()
@@ -92,13 +93,13 @@ class TestEvaluateGoalCompletion:
             new_callable=AsyncMock,
             return_value=ConsensusVerdict(decision="fail", reasoning="Needs external credentials."),
         ):
-            decision, reasoning = await evaluate_goal_completion(
+            result = await evaluate_goal_completion(
                 goal_description="Deploy to prod",
                 response_text="Blocked on secrets.",
                 model=mock_model,
             )
-        assert decision == "fail"
-        assert "credentials" in reasoning.lower()
+        assert result.decision == "fail"
+        assert "credentials" in result.reasoning.lower()
 
     async def test_missing_model_raises(self) -> None:
         with pytest.raises(ConsensusEvaluationError, match="required"):

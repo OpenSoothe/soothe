@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
     from soothe.autopilot.dispatch.models import GoalDispatchContextBundle
@@ -12,6 +12,11 @@ if TYPE_CHECKING:
 from soothe.events import StreamChunk
 
 """Deepagents-canonical stream chunk: ``(namespace, mode, data)``."""
+
+
+# Autopilot dispatch mission (IG-724). ``implement`` is the default product
+# work path; ``collect_evidence`` is a trivial proof turn on the same goal.
+GoalDispatchMission = Literal["implement", "collect_evidence"]
 
 
 @dataclass(frozen=True)
@@ -33,11 +38,16 @@ class GoalDispatchEnvelope:
 
     Attributes:
         goal_id: Daemon's canonical goal id.
-        goal_description: Frozen at dispatch time.
+        goal_description: Frozen at dispatch time (implement text, or evidence
+            brief when ``mission=collect_evidence``).
         merged_context: Pre-projected hydration bundle from the daemon's
             ``ContextProjector``. Worker treats it as opaque.
         deadline_seconds: Wall-clock budget for this attempt; ``None`` = no cap.
         attempt: 1 on first dispatch, N on retry/backoff.
+        mission: ``implement`` (default) or ``collect_evidence`` (IG-724).
+        mission_brief: Consensus proof gaps for evidence turns (may duplicate
+            into ``goal_description`` for the worker).
+        evidence_round: 0 for implement; 1..N for evidence attempts.
     """
 
     goal_id: str
@@ -45,6 +55,9 @@ class GoalDispatchEnvelope:
     merged_context: GoalDispatchContextBundle
     deadline_seconds: float | None = None
     attempt: int = 1
+    mission: GoalDispatchMission = "implement"
+    mission_brief: str = ""
+    evidence_round: int = 0
 
 
 @dataclass
@@ -142,6 +155,7 @@ class LoopRunnerProtocol(Protocol):
 
 __all__ = [
     "GoalDispatchEnvelope",
+    "GoalDispatchMission",
     "LoopRunRequest",
     "LoopRunnerProtocol",
     "StreamChunk",

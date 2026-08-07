@@ -77,16 +77,18 @@ class AutopilotWorkerMixin:
         thread_id: str | None,
         workspace: str,
         max_iterations: int,
+        intake_scope: str | None = None,
     ) -> AsyncGenerator[StreamChunk, None]:
         """Run one autopilot-dispatched goal end-to-end (RFC-222 revised).
 
         Args:
             job: GoalDispatchEnvelope carrying goal_id, goal_description, the
-                pre-merged GoalDispatchContextBundle, deadline, attempt.
+                pre-merged GoalDispatchContextBundle, deadline, attempt, mission.
             thread_id: Thread id for this attempt (autopilot supplies
                 ``autopilot__goal_<id>__attempt_<N>``).
             workspace: Resolved workspace path for StrangeLoop's CoreAgent.
             max_iterations: Upper bound for StrangeLoop iterations.
+            intake_scope: Optional forced scope (``trivial`` for evidence turns).
 
         Yields:
             Stream chunks. The penultimate chunk is always a
@@ -94,11 +96,15 @@ class AutopilotWorkerMixin:
             ``GoalDispatchContextContribution`` synthesized from the run.
         """
         tid = thread_id or f"autopilot__goal_{job.goal_id}__attempt_{job.attempt}"
+        mission = getattr(job, "mission", None) or "implement"
         logger.info(
-            "[Autopilot worker] starting goal %s (attempt %d, max_iter=%d, deadline=%s)",
+            "[Autopilot worker] starting goal %s (attempt %d, mission=%s, "
+            "max_iter=%d, intake_scope=%s, deadline=%s)",
             job.goal_id,
             job.attempt,
+            mission,
             max_iterations,
+            intake_scope,
             f"{job.deadline_seconds}s" if job.deadline_seconds else "none",
         )
 
@@ -136,12 +142,37 @@ class AutopilotWorkerMixin:
             )
             clarification_policy = None
 
+        preclassified_intent = None
+        routing_classification = None
+        if intake_scope:
+            try:
+                from soothe.sloop.intention.models import (
+                    build_loop_routing_classification,
+                    intent_classification_from_intake_scope,
+                    parse_intake_scope,
+                )
+
+                scope = parse_intake_scope(intake_scope)
+                if scope is not None:
+                    preclassified_intent = intent_classification_from_intake_scope(scope)
+                    routing_classification = build_loop_routing_classification(
+                        preclassified_intent,
+                        preferred_subagent=None,
+                    )
+            except Exception:
+                logger.warning(
+                    "[Autopilot worker] invalid intake_scope=%r; using default intake",
+                    intake_scope,
+                    exc_info=True,
+                )
+
         # Pre-iteration hint: tell observers a goal is starting.
         yield _custom(
             {
                 "type": "soothe.internal.autopilot.goal_started",
                 "goal_id": job.goal_id,
                 "attempt": job.attempt,
+                "mission": mission,
                 "loop_thread_id": tid,
             }
         )
@@ -157,6 +188,8 @@ class AutopilotWorkerMixin:
                 if max_iterations
                 else DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
                 loop_id=tid,
+                intent=preclassified_intent,
+                routing_classification=routing_classification,
                 shared_pool=shared_pool,
                 clarification_policy=clarification_policy,
             ):
@@ -238,6 +271,7 @@ class AutopilotWorkerMixin:
         plan_result: PlanResult | None,
         *,
         goal_id: str = "",
+        prefer_full_output: bool = False,
     ) -> GoalDispatchContextContribution:
         """Synthesize a contribution from the final ``PlanResult``.
 
@@ -283,9 +317,14 @@ class AutopilotWorkerMixin:
                 )
             )
 
-        summary = synthesize_sloop_response(plan_result)
+        summary = synthesize_sloop_response(
+            plan_result,
+            prefer_full_output=prefer_full_output,
+        )
         if summary:
             # Avoid duplicating the flat WavePlan JSON as the prose finding.
+            # Finding.summary is schema-capped at 2000; the consensus wire uses
+            # unclipped synthesize_sloop_response on the completion payload.
             if not (findings and summary.strip() == findings[0].summary.strip()):
                 findings.append(Finding(summary=summary[:2000], relevance_score=0.8))
 
@@ -342,6 +381,7 @@ class AutopilotWorkerMixin:
         contribution = self._build_contribution(
             plan_result,
             goal_id=job.goal_id,
+            prefer_full_output=(getattr(job, "mission", None) or "") == "collect_evidence",
         )
         payload: dict[str, Any] = {
             "type": _GOAL_COMPLETION_TYPE,
@@ -353,7 +393,13 @@ class AutopilotWorkerMixin:
         }
         if plan_result is not None:
             payload["plan_result_status"] = getattr(plan_result, "status", None)
-            payload["evidence_summary"] = synthesize_sloop_response(plan_result)
+            prefer_full = (getattr(job, "mission", None) or "") == "collect_evidence"
+            payload["evidence_summary"] = synthesize_sloop_response(
+                plan_result,
+                prefer_full_output=prefer_full,
+            )
+            payload["mission"] = getattr(job, "mission", None) or "implement"
+            payload["evidence_round"] = int(getattr(job, "evidence_round", 0) or 0)
         if error_text is not None:
             payload["error_text"] = error_text
         return _custom(payload)

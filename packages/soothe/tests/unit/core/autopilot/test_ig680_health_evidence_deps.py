@@ -15,7 +15,7 @@ from soothe.autopilot.monitor.models import (
     DecomposeSuggestion,
     WireDependencySuggestion,
 )
-from soothe.autopilot.verify.consensus import ConsensusVerdict
+from soothe.autopilot.verify.consensus import ConsensusResult, ConsensusVerdict
 from soothe.autopilot.verify.goal_dag_verifier import GoalDAGVerifier
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
@@ -202,10 +202,10 @@ class TestConsensusGoalPlusResponse:
 
         async def _capture(
             goal_desc: str, agent_response: str, evidence: str, **kwargs: object
-        ) -> tuple[str, str]:
+        ) -> ConsensusResult:
             seen["response"] = agent_response
             seen["evidence"] = evidence
-            return "send_back", "empty response"
+            return ConsensusResult("send_back", "empty response", False)
 
         bus = InternalEventBus()
         ce = ContextEngine()
@@ -238,11 +238,11 @@ class TestConsensusGoalPlusResponse:
 
         async def _capture(
             goal_desc: str, agent_response: str, evidence: str, **kwargs: object
-        ) -> tuple[str, str]:
+        ) -> ConsensusResult:
             seen["goal"] = goal_desc
             seen["response"] = agent_response
             seen["evidence"] = evidence
-            return "accept", "ok"
+            return ConsensusResult("accept", "ok", False)
 
         bus = InternalEventBus()
         ce = ContextEngine()

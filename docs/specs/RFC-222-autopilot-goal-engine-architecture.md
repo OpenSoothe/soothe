@@ -181,6 +181,10 @@ class AutopilotJob:
     merged_context: GoalDispatchContextBundle      # pre-projected by daemon
     deadline_seconds: float | None         # wall-clock budget; None = no cap
     attempt: int                           # 1 on first dispatch, N on retry
+    # IG-724 (GoalDispatchEnvelope): optional mission for engine-driven turns
+    mission: Literal["implement", "collect_evidence"] = "implement"
+    mission_brief: str = ""                # evidence gaps / what to prove
+    evidence_round: int = 0                # 0 = implement; N = evidence attempt
 ```
 
 Properties:
@@ -188,6 +192,7 @@ Properties:
 - `merged_context` is **pre-computed in the daemon**. Worker never reads `GoalEngine`, never queries parents, never sees the DAG.
 - `deadline_seconds` bounds runaway goals (closes gap H5).
 - `attempt` lets the worker adapt strategy on retries without daemon-side prompt mutation.
+- **IG-724 evidence missions:** when consensus needs workspace/git/file proof (not product rework), Autopilot re-dispatches the **same goal** with `mission=collect_evidence`, forced `LoopRunRequest.intake_scope=trivial` (StrangeLoop trivial defaults; iteration budget remains `agent.loop.max_iterations`), and short `mission_brief` as the turn goal text. Tools run only in StrangeLoop; the host never FS-probes. Prefer sticky worker slot when idle (`prefer` last assignment loop). See [IG-724](../impl/IG-724-engine-driven-trivial-evidence-turns.md).
 
 ### Refined Job Abstraction (RFC-626 Alignment)
 

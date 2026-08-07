@@ -667,7 +667,7 @@ class SootheRunner(
                 resolved.source,
             )
 
-            max_iterations = self._config.agent.loop.max_iterations
+            loop_max = self._config.agent.loop.max_iterations
 
             # RFC-222 revised: autopilot-dispatched job takes priority.
             # StrangeLoop runs the single goal hydrated from the bundle; ignores user_input.
@@ -676,7 +676,8 @@ class SootheRunner(
                     autopilot_job,
                     thread_id=thread_id,
                     workspace=effective_workspace,
-                    max_iterations=max_iterations,
+                    max_iterations=loop_max,
+                    intake_scope=intake_scope,
                 ):
                     yield chunk
                 return
@@ -686,7 +687,7 @@ class SootheRunner(
                 user_input,
                 thread_id=thread_id,
                 workspace=effective_workspace,
-                max_iterations=max_iterations,
+                max_iterations=loop_max,
                 preferred_subagent=preferred_subagent,
                 intake_scope=intake_scope,
                 clarification_mode=clarification_mode,

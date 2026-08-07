@@ -660,6 +660,50 @@ class ContextEngine:
         )
         return goal
 
+    async def queue_evidence_turn(
+        self,
+        goal_id: str,
+        *,
+        implement_response: str,
+        brief: str,
+        prefer_loop_id: str | None = None,
+    ) -> GoalNode:
+        """Queue a collect_evidence StrangeLoop turn without consuming send_back budget.
+
+        IG-724: returns the goal to ``pending`` with ``pending_mission=collect_evidence``
+        so Autopilot can re-dispatch a trivial proof turn on the same workspace.
+        At most one evidence turn per goal (``evidence_turn_count``).
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            raise KeyError(f"Goal {goal_id} not found")
+
+        if int(goal.evidence_turn_count or 0) > 0:
+            exhaust = brief.strip() or "evidence turn already used"
+            await self.fail_goal(goal_id, error=exhaust)
+            return goal
+
+        _validate_transition(goal_id, goal.status, "pending")
+        goal.evidence_turn_count = 1
+        goal.stashed_implement_response = (implement_response or "").strip() or None
+        goal.pending_mission = "collect_evidence"
+        goal.evidence_prefer_loop_id = prefer_loop_id
+        if brief.strip():
+            self._append_goal_guidance(
+                goal,
+                f"Evidence turn requested: {brief.strip()}",
+                source="consensus_evidence_follow_up",
+            )
+        goal.status = "pending"
+        goal.assigned_loop_id = None
+        goal.updated_at = datetime.now(UTC)
+        logger.info(
+            "Queued evidence turn for goal %s: %s",
+            goal_id,
+            brief[:160],
+        )
+        return goal
+
     def _append_goal_guidance(
         self,
         goal: GoalNode,

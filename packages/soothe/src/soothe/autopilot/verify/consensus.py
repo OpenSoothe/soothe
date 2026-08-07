@@ -4,12 +4,16 @@ Autopilot validates StrangeLoop's "done" judgment before accepting goal completi
 If not satisfied, Autopilot send_backs the goal with refined instructions, or fails
 it so host recovery (monitor / LoopRail / engine health) can act — never parks for
 an operator mid-goal.
+
+IG-724: when ``send_back`` is primarily a missing workspace/git/file proof gap,
+``evidence_follow_up`` requests a StrangeLoop ``collect_evidence`` turn instead of
+immediate product rework. The host judge never opens the workspace.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from pydantic import BaseModel, Field
 from soothe_nano.utils.text_preview import preview_first
@@ -33,6 +37,22 @@ class ConsensusVerdict(BaseModel):
         default="",
         description="Brief explanation for the decision",
     )
+    evidence_follow_up: bool = Field(
+        default=False,
+        description=(
+            "When decision is send_back: true if the gap is missing "
+            "workspace/git/file proof that tools could gather; false for "
+            "product rework / wrong approach. Ignored for accept/fail."
+        ),
+    )
+
+
+class ConsensusResult(NamedTuple):
+    """Host-facing consensus outcome (IG-724)."""
+
+    decision: ConsensusDecision
+    reasoning: str
+    evidence_follow_up: bool = False
 
 
 class ConsensusEvaluationError(RuntimeError):
@@ -44,8 +64,8 @@ async def evaluate_goal_completion(
     response_text: str,
     evidence_summary: str = "",
     model: BaseChatModel | None = None,
-) -> tuple[ConsensusDecision, str]:
-    """RFC-204 / IG-707: Holistic evaluation of goal completion via structured LLM.
+) -> ConsensusResult:
+    """RFC-204 / IG-707 / IG-724: Holistic evaluation of goal completion via structured LLM.
 
     Args:
         goal_description: The original goal text.
@@ -54,8 +74,7 @@ async def evaluate_goal_completion(
         model: LLM for evaluation (required).
 
     Returns:
-        Tuple of (decision, reasoning).
-        decision is "accept", "send_back", or "fail".
+        ConsensusResult with decision, reasoning, and evidence_follow_up.
 
     Raises:
         ConsensusEvaluationError: When ``model`` is missing or the LLM call fails.
@@ -96,13 +115,15 @@ async def evaluate_goal_completion(
         )
         decision: ConsensusDecision = verdict.decision
         reasoning = (verdict.reasoning or "").strip() or f"Consensus decided {decision}"
+        evidence_follow_up = bool(verdict.evidence_follow_up) and decision == "send_back"
 
         logger.info(
-            "Consensus evaluation: decision=%s reasoning=%s",
+            "Consensus evaluation: decision=%s evidence_follow_up=%s reasoning=%s",
             decision,
+            evidence_follow_up,
             preview_first(reasoning, 200),
         )
-        return decision, reasoning
+        return ConsensusResult(decision, reasoning, evidence_follow_up)
     except ConsensusEvaluationError:
         raise
     except Exception as exc:
@@ -148,6 +169,11 @@ def _build_consensus_prompt(
         "Judge from the Goal and Agent Response (StrangeLoop Plan-Execute-Eval "
         "output). Prefer send_back when the response is thin relative to the "
         "goal; do not choose fail solely because the narrative is short.\n"
+        "When decision is send_back, set evidence_follow_up=true if the main "
+        "gap is missing workspace proof (branch name, git commits, completion "
+        "report, file paths) that a short tool-using gather pass could supply; "
+        "set evidence_follow_up=false when the approach itself must be reworked "
+        "or product code is clearly incomplete/wrong.\n"
         "Provide a brief reasoning string."
     )
     return "\n".join(parts)

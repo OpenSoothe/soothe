@@ -572,6 +572,29 @@ Forensics: `.agents/skills/inspect-autopilot-job/SKILL.md`.
 
 ---
 
+## Thin consensus / evidence turn
+
+Symptoms: Maker goals have real commits and/or on-disk completion reports,
+but consensus keeps `send_back` with “thin” / “no evidence of branch /
+commits” reasoning while the worktree is rich.
+
+Cause: per-goal consensus judges **goal text vs StrangeLoop wire response
+only** — the host does not read the workspace. Thin `evidence_summary`
+(step/line digests) fails even when git is fine.
+
+Host behavior: when the judge marks a proof gap (`evidence_follow_up`),
+Autopilot may re-dispatch the **same goal** with `mission=collect_evidence`,
+forced `intake_scope=trivial` (RFC-630 trivial defaults; iteration budget is
+`agent.loop.max_iterations`), and a short brief on the maker worktree. Tools
+run in StrangeLoop; a second completion chunk feeds consensus. At most one
+evidence turn per goal (does not consume `max_send_backs`).
+
+Inspect: `soothe autopilot goal {id}`, worker logs for trivial intake, and
+job loops for a short follow-up after implement. Do not expect daemon-side
+file probes in consensus logs.
+
+---
+
 ## 🔗 Related Documentation
 
 - [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions

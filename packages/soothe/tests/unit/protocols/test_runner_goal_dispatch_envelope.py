@@ -51,6 +51,19 @@ class TestGoalDispatchEnvelope:
         with pytest.raises(Exception):  # FrozenInstanceError
             job.attempt = 5  # type: ignore[misc]
 
+    def test_construct_with_mission_fields(self) -> None:
+        job = GoalDispatchEnvelope(
+            goal_id="g1",
+            goal_description="gather proof",
+            merged_context=GoalDispatchContextBundle(),
+            mission="collect_evidence",
+            mission_brief="Need git log",
+            evidence_round=1,
+        )
+        assert job.mission == "collect_evidence"
+        assert job.mission_brief == "Need git log"
+        assert job.evidence_round == 1
+
     def test_dispatch_envelope_fields(self) -> None:
         """GoalDispatchEnvelope is the canonical dispatch envelope type."""
         job = GoalDispatchEnvelope(
