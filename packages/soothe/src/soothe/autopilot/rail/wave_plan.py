@@ -1,15 +1,20 @@
 """Structured wave fan-out plan for LoopRail.
 
 LoopRail owns fan-out *contract* (YAML ``fanout.require_plan`` / counters).
-The **LLM** owns fan-out *policy* (flat leaf slice ids) via WavePlan JSON on
-the architecture goal completion wire (findings / evidence; markdown prose
-optional). Autopilot applies the plan into ``RailJobState`` (persisted in
-``rail_state.json``). There is **no** filesystem ``wave-plan.json`` artifact.
+The **LLM** owns fan-out *policy* (flat leaf slice ids). Autopilot applies the
+plan into ``RailJobState`` (SoT: ``wave_slices`` / ``decompose_plan`` in
+``rail_state.json``).
+
+Transfer forms (any may supply a flat WavePlan):
+
+- Structured completion fields (``wave_plan`` / ``wave_plan_path``)
+- Recommended dumps: ``$SOOTHE_DATA_DIR/jobs/{id}/wave-plan.json`` and
+  ``<workspace>/.soothe/wave-plan.json``
+- Declarative workspace allowlist (``docs/waveplan.json``, …)
+- Completion findings / evidence JSON blob
 
 Nested waves/slices are forbidden (RFC-232): reject, do not flatten.
-Autopilot engine only supplies a spawn budget (``max_parallel_goals``).
 Missing plan fails closed when ``require_plan`` is true.
-Project-workspace files are never authoritative.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
@@ -28,6 +34,16 @@ _REMOVED_WIRE_KEYS = frozenset({"wave_modules", "modules", "module"})
 
 # Keys that mark a nested ownership tree (forbidden on wire).
 _NESTED_CHILD_KEYS = frozenset({"slices", "children", "waves", "wave_slices"})
+
+WAVE_PLAN_FILENAME = "wave-plan.json"
+
+# Declarative convenience paths under the job workspace (not prose scraping).
+WAVE_PLAN_WORKSPACE_ALLOWLIST: tuple[str, ...] = (
+    "docs/waveplan.json",
+    "docs/wave-plan.json",
+    "waveplan.json",
+    "wave-plan.json",
+)
 
 
 class WavePlanSlice(BaseModel):
@@ -94,10 +110,11 @@ class WavePlan(BaseModel):
 
 @dataclass(frozen=True)
 class WavePlanIngestResult:
-    """Outcome of parsing a WavePlan candidate from the completion wire."""
+    """Outcome of parsing a WavePlan candidate from any transfer form."""
 
     plan: WavePlan | None = None
     detail: str = ""
+    source_path: str | None = None
 
 
 class FanoutResolution(BaseModel):
@@ -404,11 +421,14 @@ def parse_wave_plan_from_findings(findings: list[Any] | None) -> WavePlan | None
 WAVE_PLAN_FINDING_CAP = 8000
 
 _SEND_BACK_BASE = (
-    "Architecture requires a flat WavePlan JSON object with wave_slices "
-    "(string list) or flat slices[{slice,…}] in the goal completion report "
-    "(host applies fan-out into job rail state). Nested waves/slices are not "
-    "allowed. Do not write FINDINGS.md, wave-plan.json, or other project/jobs "
-    "paths as the fan-out deliverable — those files are ignored."
+    "Architecture requires a flat WavePlan (wave_slices string list or flat "
+    "slices[{slice,…}]). Host applies it into job rail state. Nested "
+    "waves/slices are not allowed. Transfer via any of: completion "
+    "wave_plan / wave_plan_path fields; recommended "
+    "$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json or "
+    "<workspace>/.soothe/wave-plan.json; allowlisted workspace paths "
+    "(docs/waveplan.json, …); or a flat JSON blob in the goal completion "
+    "report. Custom paths outside the allowlist must set wave_plan_path."
 )
 
 
@@ -420,8 +440,8 @@ def architecture_wave_plan_send_back_reason(detail: str | None = None) -> str:
     return f"{_SEND_BACK_BASE} Detail: {cleaned[:600]}"
 
 
-def wave_plan_to_findings_json(plan: WavePlan) -> str:
-    """Serialize a validated WavePlan to bare JSON for completion findings."""
+def wave_plan_to_dict(plan: WavePlan) -> dict[str, Any]:
+    """Serialize a validated WavePlan to a JSON-ready dict."""
     payload: dict[str, Any] = {}
     if plan.wave_slices:
         payload["wave_slices"] = list(plan.wave_slices)
@@ -435,7 +455,197 @@ def wave_plan_to_findings_json(plan: WavePlan) -> str:
         payload["scout_count"] = plan.scout_count
     if plan.max_waves is not None:
         payload["max_waves"] = plan.max_waves
-    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return payload
+
+
+def wave_plan_to_findings_json(plan: WavePlan) -> str:
+    """Serialize a validated WavePlan to bare JSON for completion findings."""
+    return json.dumps(wave_plan_to_dict(plan), ensure_ascii=False, separators=(",", ":"))
+
+
+def jobs_wave_plan_path(jobs_root: Path, job_id: str) -> Path | None:
+    """Recommended host dump: ``{jobs_root}/{job_id}/wave-plan.json``."""
+    safe = job_id.replace("/", "_").replace("\\", "_").strip()
+    if not safe or ".." in safe:
+        return None
+    return Path(jobs_root).expanduser().resolve() / safe / WAVE_PLAN_FILENAME
+
+
+def workspace_wave_plan_path(workspace: Path) -> Path:
+    """Recommended workspace dump: ``<workspace>/.soothe/wave-plan.json``."""
+    return Path(workspace).expanduser().resolve() / ".soothe" / WAVE_PLAN_FILENAME
+
+
+def dump_wave_plan(path: Path, plan: WavePlan) -> None:
+    """Write flat WavePlan JSON to ``path`` (best-effort caller handles errors)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(wave_plan_to_dict(plan), indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def diagnose_wave_plan_from_file(
+    path: Path,
+    *,
+    source: str | None = None,
+) -> WavePlanIngestResult:
+    """Load and validate a WavePlan JSON file."""
+    path = Path(path)
+    label = source or str(path)
+    if not path.is_file():
+        return WavePlanIngestResult(detail=f"file not found (source={label})")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return WavePlanIngestResult(detail=f"read failed: {exc} (source={label})")
+    result = diagnose_wave_plan_payload(text, source=label)
+    if result.plan is not None:
+        return WavePlanIngestResult(
+            plan=result.plan,
+            detail="",
+            source_path=str(path.resolve()),
+        )
+    return result
+
+
+def _is_under_root(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def resolve_wave_plan_path(
+    raw_path: str,
+    *,
+    workspace: Path | None = None,
+    jobs_root: Path | None = None,
+    job_id: str | None = None,
+) -> Path | None:
+    """Resolve a declared path under workspace or jobs root; reject escape."""
+    cleaned = (raw_path or "").strip()
+    if not cleaned:
+        return None
+    candidate = Path(cleaned).expanduser()
+    roots: list[Path] = []
+    if workspace is not None:
+        roots.append(Path(workspace).expanduser().resolve())
+    if jobs_root is not None and job_id:
+        job_dir = jobs_wave_plan_path(Path(jobs_root), job_id)
+        if job_dir is not None:
+            roots.append(job_dir.parent.resolve())
+        roots.append(Path(jobs_root).expanduser().resolve())
+
+    if candidate.is_absolute():
+        resolved = candidate.resolve()
+        if any(_is_under_root(resolved, root) for root in roots):
+            return resolved
+        return None
+
+    # Relative: try workspace first, then jobs/{id}/.
+    if workspace is not None:
+        ws = Path(workspace).expanduser().resolve()
+        resolved = (ws / candidate).resolve()
+        if _is_under_root(resolved, ws):
+            return resolved
+    if jobs_root is not None and job_id:
+        job_file = jobs_wave_plan_path(Path(jobs_root), job_id)
+        if job_file is not None:
+            job_dir = job_file.parent.resolve()
+            resolved = (job_dir / candidate).resolve()
+            if _is_under_root(resolved, job_dir):
+                return resolved
+    return None
+
+
+def diagnose_wave_plan_from_sources(
+    *,
+    wave_plan: dict[str, Any] | WavePlan | None = None,
+    wave_plan_path: str | None = None,
+    workspace: Path | str | None = None,
+    jobs_root: Path | str | None = None,
+    job_id: str | None = None,
+    findings: list[Any] | None = None,
+) -> WavePlanIngestResult:
+    """Ingest WavePlan from structured wire, dumps, allowlist, then findings.
+
+    Order: inline ``wave_plan`` → ``wave_plan_path`` → jobs dump → workspace
+    ``.soothe/wave-plan.json`` → workspace allowlist → findings/evidence blob.
+    """
+    best_detail = ""
+    ws = Path(workspace).expanduser().resolve() if workspace else None
+    jr = Path(jobs_root).expanduser().resolve() if jobs_root else None
+
+    if isinstance(wave_plan, WavePlan):
+        if wave_plan.resolved_slice_ids() or wave_plan.scout_count is not None:
+            return WavePlanIngestResult(plan=wave_plan)
+        best_detail = _prefer_ingest_detail(
+            best_detail, "contribution.wave_plan has no slices or scout_count"
+        )
+    elif isinstance(wave_plan, dict):
+        result = diagnose_wave_plan_payload(wave_plan, source="contribution.wave_plan")
+        if result.plan is not None:
+            return result
+        best_detail = _prefer_ingest_detail(best_detail, result.detail)
+
+    if wave_plan_path and str(wave_plan_path).strip():
+        resolved = resolve_wave_plan_path(
+            str(wave_plan_path),
+            workspace=ws,
+            jobs_root=jr,
+            job_id=job_id,
+        )
+        if resolved is None:
+            best_detail = _prefer_ingest_detail(
+                best_detail,
+                f"wave_plan_path escapes workspace/jobs root: {wave_plan_path!r}",
+            )
+        else:
+            result = diagnose_wave_plan_from_file(
+                resolved, source=f"contribution.wave_plan_path:{resolved}"
+            )
+            if result.plan is not None:
+                return result
+            best_detail = _prefer_ingest_detail(best_detail, result.detail)
+
+    if jr is not None and job_id:
+        job_path = jobs_wave_plan_path(jr, job_id)
+        if job_path is not None and job_path.is_file():
+            result = diagnose_wave_plan_from_file(job_path, source=f"jobs_dump:{job_path}")
+            if result.plan is not None:
+                return result
+            best_detail = _prefer_ingest_detail(best_detail, result.detail)
+
+    if ws is not None:
+        ws_dump = workspace_wave_plan_path(ws)
+        if ws_dump.is_file():
+            result = diagnose_wave_plan_from_file(ws_dump, source=f"workspace_dump:{ws_dump}")
+            if result.plan is not None:
+                return result
+            best_detail = _prefer_ingest_detail(best_detail, result.detail)
+        for rel in WAVE_PLAN_WORKSPACE_ALLOWLIST:
+            candidate = (ws / rel).resolve()
+            if not candidate.is_file():
+                continue
+            if not _is_under_root(candidate, ws):
+                continue
+            result = diagnose_wave_plan_from_file(candidate, source=f"allowlist:{rel}")
+            if result.plan is not None:
+                return result
+            best_detail = _prefer_ingest_detail(best_detail, result.detail)
+
+    findings_result = diagnose_wave_plan_from_findings(findings)
+    if findings_result.plan is not None:
+        return findings_result
+    best_detail = _prefer_ingest_detail(best_detail, findings_result.detail)
+
+    return WavePlanIngestResult(
+        detail=best_detail
+        or "no usable flat WavePlan from structured fields, dumps, allowlist, or findings"
+    )
 
 
 def extract_wave_plan_from_plan_result_texts(
@@ -443,10 +653,7 @@ def extract_wave_plan_from_plan_result_texts(
     evidence_summary: str | None = None,
     full_output: str | None = None,
 ) -> WavePlan | None:
-    """Parse WavePlan from untruncated PlanResult text fields (completion wire).
-
-    Does not read workspace files.
-    """
+    """Parse WavePlan from untruncated PlanResult text fields (completion wire)."""
     candidates: list[Any] = []
     for text in (evidence_summary, full_output):
         if isinstance(text, str) and text.strip():
@@ -501,7 +708,8 @@ def resolve_fanout_slices(
     else:
         detail = (
             "LLM wave plan required but missing or empty; "
-            "architecture must emit structured WavePlan findings "
+            "architecture must supply a flat WavePlan via structured "
+            "fields, recommended dumps, allowlist path, or completion findings "
             "before makers spawn"
         )
         logger.warning("%s", detail)

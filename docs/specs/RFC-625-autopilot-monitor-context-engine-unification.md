@@ -594,7 +594,7 @@ class ContextEngine:
 | Surface | Behavior |
 |---------|----------|
 | **Interactive loop** (TUI chat, `loop_input`) | Always solo StrangeLoop — one conversational turn stream per `loop_id` |
-| **Autopilot job** (`/autopilot <task>`, `job_create`, CLI `soothe autopilot run`, cron) | Daemon-owned `AutopilotService` — cross-loop goal DAG, worker pool, monitor intake |
+| **Autopilot job** (`/autopilot <task>`, `job_create`, CLI `soothe autopilot submit`, cron) | Daemon-owned `AutopilotService` — cross-loop goal DAG, worker pool, monitor intake |
 | **`agent.autopilot.enabled`** | Starts the daemon 24/7 scheduling loop (master switch) |
 
 Wire field `autopilot_mode` on `loop_new` / `loop_subscribe` responses is **deprecated**:
@@ -736,7 +736,7 @@ Per RFC-626 §2, all entity identity is consolidated under ContextEngine:
 - **LedgerEntry**: Unified message entity (no separate `ContextEntry` vs `LedgerMessage`)
 
 **AutopilotMonitor Impact**:
-- `monitor.intake_goal()` creates `GoalNode` via `ce.create_goal()` (unchanged)
+- `monitor.intake_goal()` creates `GoalNode` via `ce.create_goal()` immediately, then schedules async placement refine
 - `monitor.on_goal_completed()` reads `GoalNode.status` directly (no checkpoint fallback)
 - `verifier.analyze_placement()` queries CE DAG, not `goal_engine.goals` (already aligned)
 

@@ -264,16 +264,18 @@ Pointers to diagnose-loop Workflow B for `autopilot__{job}__*`.
 - Do not call early single-goal execution a parallelism bug during serial rail gates.
 - Distinguish **ready but not dispatched** (scheduler/reservation) vs **not ready** (deps).
 - Prefer `jobs/{id}/rail_trace.jsonl` over legacy `loops/{id}/`.
-- Fan-out WavePlan (operator forensics; greenfield + migration): architecture
-  goal **completion findings** + `jobs/{id}/rail_state.json` (`wave_slices`).
-  There is no `wave-plan.json` file SoT. Project-tree plan files are ignored.
+- Fan-out WavePlan (operator forensics; greenfield + migration): SoT is
+  `jobs/{id}/rail_state.json` (`wave_slices`, optional `wave_plan_source_path`).
+  Transfer candidates: recommended dumps (`jobs/{id}/wave-plan.json`,
+  `<workspace>/.soothe/wave-plan.json`), allowlist paths, structured
+  `wave_plan` / `wave_plan_path`, or completion findings JSON.
 - **Stuck after architecture, no makers:** planner completed but
-  `wave_plan_ready=False` — see Debug Guide “WavePlan stall”. Recovery: re-run
-  architecture with a **flat** WavePlan in the goal completion report
-  (`wave_slices` string list or flat `slices[]`; nested WAVE trees are
-  rejected), or set `wave_slices` on `rail_state.json`, then wait for
-  `dag_idle` (or `soothed restart`). After package upgrades, always restart
-  the daemon so the architecture WavePlan gate is live.
+  `wave_plan_ready=False` — see Debug Guide “WavePlan stall”. Recovery: supply
+  a **flat** WavePlan via dump/path/blob (`wave_slices` string list or flat
+  `slices[]`; nested WAVE trees are rejected), or set `wave_slices` on
+  `rail_state.json`, then wait for `dag_idle` (or `soothed restart`). After
+  package upgrades, always restart the daemon so the architecture WavePlan
+  gate is live.
 - Live CLI beats stale `goals:snapshot` when they disagree.
 - Never cite IG-/RFC- ids in user-facing report text.
 - Skipping schedule for rail job root is expected.
@@ -282,6 +284,6 @@ Pointers to diagnose-loop Workflow B for `autopilot__{job}__*`.
 
 - Loop forensics: [diagnose-loop](../diagnose-loop/SKILL.md)
 - Scripts / long parsers: [reference.md](reference.md)
-- CLI: `soothe autopilot status|jobs|job|goal|goals|top|cancel`
+- CLI: `soothe autopilot status|jobs|job|goal|goals|top|stop`
 - Rails: `packages/soothe/src/soothe/rails/builtin_rails/`
 - Debug wiki: `docs/wiki/howto_debug.md`

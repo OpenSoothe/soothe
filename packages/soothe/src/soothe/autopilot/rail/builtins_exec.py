@@ -7,9 +7,9 @@ and optionally persists ``rail_state.json`` under the job artifact dir so
 guards survive daemon restart.
 
 ``invoke`` prefers YAML ``verbs.<name>.do`` recipes over ``_do_*``.
-Wave fan-out applies WavePlan from the architecture goal completion report
-into ``RailJobState`` before ``spawn_wave_makers`` — no filesystem
-``wave-plan.json``, no markdown scraping, no project-workspace plan files.
+Wave fan-out applies a flat WavePlan into ``RailJobState`` (SoT) from
+structured completion fields, recommended dumps, workspace allowlist, or
+findings JSON — then mirrors recommended dump paths best-effort.
 """
 
 from __future__ import annotations
@@ -26,10 +26,13 @@ from soothe.autopilot.rail.wave_plan import (
     WavePlan,
     apply_wave_plan_to_state_fields,
     build_wave_plan,
-    parse_wave_plan_from_findings,
+    diagnose_wave_plan_from_sources,
+    dump_wave_plan,
+    jobs_wave_plan_path,
     parse_wave_plan_payload,
     resolve_fanout_slices,
     sort_decompose_plan_by_priority,
+    workspace_wave_plan_path,
 )
 from soothe.context.engine import ContextEngine
 from soothe.context.models import TERMINAL_STATES, GoalNode
@@ -98,10 +101,12 @@ class RailJobState:
     wave_index: int = 0
     max_waves: int = 3
     wave_slices: list[str] | None = None
+    # Path that supplied the WavePlan when ingested from a file (optional).
+    wave_plan_source_path: str | None = None
     worktrees_enabled: bool = True
     # True when bind declared rail YAML ``fanout:`` (structure signal for guards).
     fanout_enabled: bool = False
-    # When True, makers require WavePlan applied from completion findings.
+    # When True, makers require WavePlan applied into job state (multi-form ingest).
     require_plan: bool = False
     # Engine spawn budget mirrored at bind (None = unset until bind).
     engine_max_parallel_goals: int | None = None
@@ -330,6 +335,9 @@ class RailBuiltinExecutor:
             wave_index=max(base.wave_index, donor.wave_index),
             max_waves=max(base.max_waves, donor.max_waves),
             wave_slices=base.wave_slices if base.wave_slices is not None else donor.wave_slices,
+            wave_plan_source_path=base.wave_plan_source_path
+            if base.wave_plan_source_path is not None
+            else donor.wave_plan_source_path,
             worktrees_enabled=donor.worktrees_enabled,
             fanout_enabled=base.fanout_enabled or donor.fanout_enabled,
             require_plan=base.require_plan or donor.require_plan,
@@ -373,6 +381,7 @@ class RailBuiltinExecutor:
                 "wave_index": state.wave_index,
                 "max_waves": state.max_waves,
                 "wave_slices": state.wave_slices,
+                "wave_plan_source_path": state.wave_plan_source_path,
                 "worktrees_enabled": state.worktrees_enabled,
                 "fanout_enabled": state.fanout_enabled,
                 "require_plan": state.require_plan,
@@ -420,6 +429,9 @@ class RailBuiltinExecutor:
             wave_index=int(raw.get("wave_index") or 0),
             max_waves=int(raw.get("max_waves") or 3),
             wave_slices=raw.get("wave_slices"),
+            wave_plan_source_path=(
+                str(raw["wave_plan_source_path"]) if raw.get("wave_plan_source_path") else None
+            ),
             worktrees_enabled=bool(raw.get("worktrees_enabled", True)),
             fanout_enabled=bool(raw.get("fanout_enabled", raw.get("require_plan", False))),
             require_plan=bool(raw.get("require_plan", False)),
@@ -683,11 +695,11 @@ class RailBuiltinExecutor:
         independence: str | None = None,
         max_waves: int | None = None,
         scout_count: int | None = None,
+        source_path: str | None = None,
     ) -> WavePlan | None:
-        """Apply an LLM wave plan into rail state (completion findings SoT).
+        """Apply a flat WavePlan into rail state (job-state SoT).
 
-        Preferred host API: Autopilot/rail apply the plan from architecture
-        completion findings. Does not write a filesystem wave-plan JSON.
+        Host API for Autopilot/rail. Mirrors recommended dump paths best-effort.
         Not a nano agent tool.
         """
         async with self._lock:
@@ -712,12 +724,13 @@ class RailBuiltinExecutor:
                 built = parsed
             if not built.resolved_slice_ids() and built.scout_count is None:
                 return None
-            self._apply_wave_plan_unlocked(state, built)
+            self._apply_wave_plan_unlocked(state, built, source_path=source_path)
+            self._mirror_wave_plan_dumps_unlocked(state, built)
             self._persist_rail_state_unlocked(state)
             return built
 
     async def ingest_wave_plan(self, job_id: str) -> RailJobState | None:
-        """Load WavePlan from architecture completion findings into job state."""
+        """Load WavePlan from multi-form sources into job state when unset."""
         async with self._lock:
             state = self._jobs.get(job_id)
             if state is None:
@@ -727,15 +740,21 @@ class RailBuiltinExecutor:
             return state
 
     def is_wave_plan_ready(self, job_id: str) -> bool:
-        """Whether a usable LLM wave plan is available for spawn guards."""
+        """Whether a usable WavePlan is available for spawn guards."""
         state = self._jobs.get(job_id)
         if state is None:
             return False
         if state.wave_slices:
             return True
-        return self._wave_plan_from_architecture_findings(state) is not None
+        return self._diagnose_job_wave_plan(state).plan is not None
 
-    def _apply_wave_plan_unlocked(self, state: RailJobState, plan: WavePlan) -> None:
+    def _apply_wave_plan_unlocked(
+        self,
+        state: RailJobState,
+        plan: WavePlan,
+        *,
+        source_path: str | None = None,
+    ) -> None:
         updates = apply_wave_plan_to_state_fields(plan)
         names = updates.get("wave_slices")
         if names:
@@ -746,38 +765,86 @@ class RailBuiltinExecutor:
             state.scout_count = int(updates["scout_count"])
         if updates.get("max_waves") is not None:
             state.max_waves = max(state.wave_index, int(updates["max_waves"]))
+        if source_path:
+            state.wave_plan_source_path = source_path
         logger.info(
-            "Applied wave plan for job %s slices=%s scout_count=%s max_waves=%s",
+            "Applied wave plan for job %s slices=%s scout_count=%s max_waves=%s source=%s",
             state.job_id[:8],
             state.wave_slices,
             state.scout_count,
             state.max_waves,
+            state.wave_plan_source_path,
         )
 
-    def _wave_plan_from_architecture_findings(self, state: RailJobState) -> WavePlan | None:
-        for gid, ann in state.annotations.items():
-            if "architecture" not in ann.tags:
-                continue
-            goal = self._ce._dag.get_goal(gid)
-            if goal is None:
-                continue
-            plan = parse_wave_plan_from_findings(list(goal.findings or []))
-            if plan is not None:
-                return plan
-        return None
+    def _mirror_wave_plan_dumps_unlocked(self, state: RailJobState, plan: WavePlan) -> None:
+        """Best-effort write recommended dump paths after successful apply."""
+        if self._jobs_root is not None:
+            job_path = jobs_wave_plan_path(self._jobs_root, state.job_id)
+            if job_path is not None:
+                try:
+                    dump_wave_plan(job_path, plan)
+                except OSError:
+                    logger.debug(
+                        "Failed to mirror jobs wave-plan dump for %s",
+                        state.job_id[:8],
+                        exc_info=True,
+                    )
+        ws = _job_workspace(self._ce, state.job_id)
+        if ws is not None:
+            try:
+                dump_wave_plan(workspace_wave_plan_path(ws), plan)
+            except OSError:
+                logger.debug(
+                    "Failed to mirror workspace wave-plan dump for %s",
+                    state.job_id[:8],
+                    exc_info=True,
+                )
+
+    def _diagnose_job_wave_plan(
+        self,
+        state: RailJobState,
+        *,
+        wave_plan: dict[str, Any] | WavePlan | None = None,
+        wave_plan_path: str | None = None,
+        findings: list[Any] | None = None,
+    ):
+        """Multi-source diagnose for a bound job."""
+        ws = _job_workspace(self._ce, state.job_id)
+        finding_candidates: list[Any] = list(findings or [])
+        if not finding_candidates:
+            for gid, ann in state.annotations.items():
+                if "architecture" not in ann.tags:
+                    continue
+                goal = self._ce._dag.get_goal(gid)
+                if goal is None:
+                    continue
+                finding_candidates.extend(list(goal.findings or []))
+        return diagnose_wave_plan_from_sources(
+            wave_plan=wave_plan,
+            wave_plan_path=wave_plan_path,
+            workspace=ws,
+            jobs_root=self._jobs_root,
+            job_id=state.job_id,
+            findings=finding_candidates or None,
+        )
 
     def _ingest_job_wave_plan(self, state: RailJobState) -> None:
-        """Apply WavePlan from architecture goal findings into rail state.
+        """Apply WavePlan from multi-form sources into rail state.
 
-        Already-applied ``wave_slices`` win; otherwise parse completion
-        findings on architecture-tagged goals (no filesystem artifact).
+        Already-applied ``wave_slices`` win; otherwise diagnose dumps /
+        allowlist / architecture findings.
         """
         if state.wave_slices:
             return
-        plan = self._wave_plan_from_architecture_findings(state)
-        if plan is None:
+        diagnosed = self._diagnose_job_wave_plan(state)
+        if diagnosed.plan is None:
             return
-        self._apply_wave_plan_unlocked(state, plan)
+        self._apply_wave_plan_unlocked(
+            state,
+            diagnosed.plan,
+            source_path=diagnosed.source_path,
+        )
+        self._mirror_wave_plan_dumps_unlocked(state, diagnosed.plan)
 
     async def _do_spawn_wave_makers(
         self, *, job_id: str, trigger_goal_id: str | None
@@ -1295,6 +1362,7 @@ class RailBuiltinExecutor:
             if state is not None:
                 state.wave_slices = None
                 state.decompose_plan = None
+                state.wave_plan_source_path = None
                 self._persist_rail_state_unlocked(state)
 
         # Prefer catalog ``do:`` / brief overrides via invoke (not a direct _do_*).

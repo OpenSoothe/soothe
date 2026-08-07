@@ -20,7 +20,7 @@ Implement RFC-232:
 3. Architecture gate `send_back` includes validation/nesting **detail**.
 4. Planner briefs / wiki / skill: flat contract, nesting forbidden.
 
-SoT unchanged: CE wire → `RailJobState.wave_slices` (no files).
+SoT: `RailJobState.wave_slices` (transfer via multi-form ingest — IG-722).
 
 ---
 

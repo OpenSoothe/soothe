@@ -1,4 +1,4 @@
-"""Unit tests for LLM-determined rail fan-out width (IG-720: CE/rail_state SoT)."""
+"""Unit tests for LLM-determined rail fan-out width (SoT = RailJobState)."""
 
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ def test_catalog_rejects_fanout_artifact(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_plan_milestones_description_findings_only(tmp_path: Path) -> None:
+async def test_plan_milestones_description_multiform_transfer(tmp_path: Path) -> None:
     ce = ContextEngine()
     root = await ce.create_goal("Build system", workspace=str(tmp_path), priority=70)
     ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
@@ -134,19 +134,20 @@ async def test_plan_milestones_description_findings_only(tmp_path: Path) -> None
     result = await ex.invoke("plan_milestones", job_id=root.id)
     arch = await ce.get_goal(result.created_goal_ids[0])
     assert arch is not None
-    assert "FINDINGS.md" in arch.description
-    assert "goal completion" in arch.description.lower()
-    assert "Do NOT write" in arch.description
-    assert "nested" in arch.description.lower()
-    assert "record_wave_plan" not in arch.description
-    assert "WavePlan JSON" in arch.description
-    assert "ownership units" in arch.description.lower()
-    assert "fixed default" in arch.description.lower()
-    assert "max_parallel_goals" not in arch.description
-    assert "autopilot" not in arch.description.lower()
-    # Must not teach workspace-file SoT as the required deliverable.
-    assert "append one findings entry" not in arch.description.lower()
-    assert "docs/FINDINGS" not in arch.description
+    desc = arch.description
+    desc_l = desc.lower()
+    assert "wave_plan_path" in desc_l
+    assert ".soothe/wave-plan.json" in desc
+    assert "rail state" in desc_l
+    assert "nested" in desc_l
+    assert "record_wave_plan" not in desc
+    assert "WavePlan JSON" in desc
+    assert "ownership units" in desc_l
+    assert "fixed default" in desc_l
+    assert "max_parallel_goals" not in desc
+    assert "autopilot" not in desc_l
+    assert "those files are ignored" not in desc_l
+    assert "docs/FINDINGS" not in desc
 
 
 @pytest.mark.asyncio
@@ -173,7 +174,8 @@ async def test_record_wave_plan_host_api(tmp_path: Path) -> None:
     state = await ex.job_state(root.id)
     assert state is not None
     assert state.wave_slices == ["core", "tests"]
-    assert not any(tmp_path.rglob("wave-plan.json"))
+    assert (tmp_path / root.id / "wave-plan.json").is_file()
+    assert (tmp_path / ".soothe" / "wave-plan.json").is_file()
 
 
 @pytest.mark.asyncio
@@ -204,7 +206,8 @@ async def test_spawn_wave_makers_from_record_wave_plan(tmp_path: Path) -> None:
         rationale="compiler crate map",
     )
     assert recorded is not None
-    assert not any(tmp_path.rglob("wave-plan.json"))
+    assert (tmp_path / root.id / "wave-plan.json").is_file()
+    assert (tmp_path / ".soothe" / "wave-plan.json").is_file()
 
     arch = await ce.create_goal(
         "Architecture",
@@ -369,7 +372,8 @@ async def test_two_jobs_same_workspace_isolated_wave_plans(tmp_path: Path) -> No
     assert sa is not None and sb is not None
     assert sa.wave_slices == ["alpha", "beta"]
     assert sb.wave_slices == ["gamma", "delta", "epsilon"]
-    assert not any(jobs_root.rglob("wave-plan.json"))
+    assert (jobs_root / job_a.id / "wave-plan.json").is_file()
+    assert (jobs_root / job_b.id / "wave-plan.json").is_file()
 
 
 @pytest.mark.asyncio

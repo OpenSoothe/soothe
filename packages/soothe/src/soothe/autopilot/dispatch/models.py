@@ -234,6 +234,18 @@ class GoalDispatchContextContribution(BaseModel):
     effects: list[GoalEffect] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     tool_call_stats: ToolCallStats = Field(default_factory=ToolCallStats)
+    wave_plan: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional inline flat WavePlan object for architecture fan-out",
+    )
+    wave_plan_path: str | None = Field(
+        default=None,
+        max_length=1024,
+        description=(
+            "Optional path to flat WavePlan JSON (workspace-relative or under "
+            "jobs dir). Required for custom paths outside the declarative allowlist."
+        ),
+    )
 
     @model_validator(mode="after")
     def _enforce_bounds(self) -> GoalDispatchContextContribution:

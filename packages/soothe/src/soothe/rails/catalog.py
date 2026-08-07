@@ -95,8 +95,9 @@ def _normalize_fanout(raw: Any, *, path: Path) -> dict[str, Any]:
     out: dict[str, Any] = {}
     if "artifact" in raw and raw["artifact"] is not None:
         raise RailCatalogError(
-            f"{path}: fanout.artifact is removed; WavePlan persists via goal "
-            "completion findings and rail_state (no wave-plan.json file)"
+            f"{path}: fanout.artifact is removed; WavePlan SoT is job rail "
+            "state (use structured wave_plan_path, recommended dumps, or "
+            "completion JSON — not fanout.artifact)"
         )
     if "default_modules" in raw and raw["default_modules"] is not None:
         raise RailCatalogError(

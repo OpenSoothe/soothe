@@ -52,7 +52,7 @@ alone.
    **NL** (brief / intent), or **hybrid** — data in rail YAML, not `rail_id`
    switches in Python.
 4. Keep **CE primitives closed** and framework-owned (atomicity, resume, trace).
-5. Preserve **fan-out as rail policy** (`fanout:` + WavePlan from CE findings);
+5. Preserve **fan-out as rail policy** (`fanout:` + WavePlan into job state);
    engine remains wave-agnostic (capacity clamp only).
 6. Enable custom rails to reach **builtin-class power** (waves, feedback chains,
    domain-specific planner/review/QA copy) via YAML overrides.
@@ -117,11 +117,11 @@ bodies.
 | `pause_job` | Suspend for human (`pause_for_user`) |
 | `complete_job` | Mark job root complete when maturity allows (RFC-230) |
 
-WavePlan **slice lists** come from architecture-goal completion wire
-(Context Engine findings / evidence), applied into `RailJobState` as a
-**flat** leaf list — never from filesystem JSON artifacts, nested wave
-trees, NL inventing slices at exec time, or rigid rail `default_modules`
-(already rejected by catalog). Wire shape and nesting reject rules:
+WavePlan **slice lists** are applied into `RailJobState` as a **flat** leaf
+list (SoT). Transfer may use structured completion fields, recommended dumps,
+allowlist paths, or findings/evidence JSON — never nested wave trees, NL
+inventing slices at exec time, or rigid rail `default_modules` (already
+rejected by catalog). Wire shape and nesting reject rules:
 [RFC-232](RFC-232-waveplan-flat-semistructured-ingest.md).
 
 ### 5.2 L1 catalog verbs
@@ -168,7 +168,8 @@ verbs:
           brief: |
             Architecture and milestone map for this job.
             REQUIRED: flat WavePlan JSON (wave_slices string list or flat
-            slices[]); no nested waves/slices; files ignored — RFC-232 …
+            slices[]); no nested waves/slices; dumps / wave_plan_path /
+            completion blob OK — RFC-232 …
           wire: { root_waits_on: self }
 ```
 
@@ -304,34 +305,35 @@ RFC-230 maturity fields (`acceptance_met`, snapshot) continue to feed
 | Layer | Owns | Must not |
 |-------|------|----------|
 | Autopilot engine | Pool, deps, consensus, `max_parallel_goals` clamp | Slice ids, `wave_index`, phase order |
-| Rail YAML | `flow` / conditions / `fanout` / `verbs` | Submit kwargs for slices; filesystem WavePlan paths; nested WavePlan examples |
-| LLM + CE findings | Flat WavePlan on architecture completion wire (JSON block and/or structured field; markdown prose optional) | Nested waves/slices; workspace tree or `jobs/*/wave-plan.json` as SoT |
-| LoopRail | Apply parsed **flat** WavePlan into `RailJobState` (`wave_slices` / `decompose_plan`); persist via `rail_state.json` | Dual-write or load a separate wave-plan JSON file; store nested wave trees on job state |
+| Rail YAML | `flow` / conditions / `fanout` / `verbs` | Submit kwargs for slices; nested WavePlan examples; `fanout.artifact` |
+| LLM + transfer | Flat WavePlan via structured `wave_plan` / `wave_plan_path`, recommended dumps, allowlist paths, or completion JSON blob | Nested waves/slices |
+| LoopRail | Apply parsed **flat** WavePlan into `RailJobState` (`wave_slices` / `decompose_plan`); persist via `rail_state.json`; optional `wave_plan_source_path` | Store nested wave trees on job state |
 
-**Persistence (normative, IG-720 + [RFC-232](RFC-232-waveplan-flat-semistructured-ingest.md)):**
+**Persistence (normative; amends IG-720 via multi-form transfer):**
 
-1. Architecture / planner goals emit a **flat** WavePlan on the completion
-   wire: `wave_slices: list[str]` and/or rich flat `slices: [{slice,…}]` —
-   as a findings entry, evidence/full_output JSON (optionally inside
-   markdown), or a future dedicated structured field. Autopilot copies
-   usable findings onto `GoalNode.findings` in CE.
-2. Host extracts candidates, **rejects nested waves/slices** (no
-   clever-flatten), optionally applies flat-only coerce, validates, then
-   calls `record_wave_plan` to **apply** leaf ids into `RailJobState` only
-   (no `wave-plan.json` dump). Gate send_backs MUST include the reject /
-   validation detail (RFC-232).
-3. `is_wave_plan_ready` is true when `RailJobState.wave_slices` is non-empty
-   (or architecture findings still parse to a **flat** WavePlan). Leftover
-   `$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json` files are **orphans** —
-   never read or written.
-4. Project-tree paths (`docs/wave-plan.json`, `.soothe/wave-plan.json`, …) are
-   never authoritative and must not be scraped.
+1. **SoT** after ingest is `RailJobState.wave_slices` / `decompose_plan`
+   (persisted in `rail_state.json`). Optional `wave_plan_source_path` records
+   which file supplied the plan.
+2. Architecture / planner goals supply a **flat** WavePlan via any transfer
+   form: structured contribution fields (`wave_plan`, `wave_plan_path`),
+   recommended dumps (`$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json`,
+   `<workspace>/.soothe/wave-plan.json`), declarative allowlist paths, or a
+   findings/evidence JSON blob. Custom paths outside the allowlist MUST set
+   `wave_plan_path` (no prose path scraping).
+3. Host extracts candidates, **rejects nested waves/slices** (no
+   clever-flatten), validates, then calls `record_wave_plan` to **apply**
+   leaf ids into `RailJobState`. Successful apply mirrors recommended dumps
+   best-effort. Gate send_backs MUST include reject / validation detail
+   (RFC-232).
+4. `is_wave_plan_ready` is true when `RailJobState.wave_slices` is non-empty
+   (or multi-form diagnose still yields a **flat** WavePlan).
 5. Rail **wave rounds** (`wave_index` / `max_waves`) are job counters, not
    nested objects inside the WavePlan payload.
 
 `fanout:` keys: `require_plan`, `scout_count`, `max_waves`. The former
-`fanout.artifact` key is **removed** (catalog reject). Rails without
-`fanout:` must not pollute job state with wave-plan requirements.
+`fanout.artifact` key remains **removed** (catalog reject; use structured
+`wave_plan_path` or recommended dumps). Rails without `fanout:` must not
+pollute job state with wave-plan requirements.
 
 ## 10. Catalog storage and selection
 
@@ -419,7 +421,7 @@ worktree / feedback macro extract; **M4** intent expand.
 | NL in bodies | Briefs + optional once-per-fire intent→ActionPlan (RFC-630) |
 | `rail_id` switches in Exec | Forbidden after M2 |
 | Fan-out / engine boundary | Unchanged (IG-715) |
-| WavePlan persistence | CE findings + `RailJobState` only; **no** `wave-plan.json` file (IG-720) |
+| WavePlan persistence | SoT = `RailJobState`; transfer via structured fields, recommended dumps, allowlist, or findings blob (IG-722 amends IG-720) |
 | WavePlan wire shape | Flat leaf slices only; semi-structured markdown+JSON allowed; **nested waves/slices forbidden** (RFC-232) |
 | New `then:` without L0 | Forbidden — compose L0 or add framework primitive |
 | Default body style for builtins | Hybrid |
@@ -439,10 +441,13 @@ worktree / feedback macro extract; **M4** intent expand.
    wave/feedback macros still Python). **M4** intent expand still open.
 3. **IG-718** Slice terminology hard cut (`wave_slices` / `slices`; no module
    wire keys).
-4. **IG-720** Remove filesystem WavePlan artifact; CE findings + rail_state only.
+4. **IG-720** Remove filesystem WavePlan artifact; CE findings + rail_state only
+   (transfer forms restored/amended by IG-722; SoT remains job rail state).
 5. Update `looprail-protocol.md` and builtin rail README to document `verbs:`.
 6. **RFC-232** + follow-on IG: flat WavePlan wire ingest, nesting reject,
    actionable architecture-gate send_backs; amend §9 briefs.
+7. **IG-722** Multi-form WavePlan transfer (structured path/blob, recommended
+   dumps, allowlist); SoT = `RailJobState`.
 
 ## Appendix A: relation to prior docs
 
@@ -454,4 +459,5 @@ worktree / feedback macro extract; **M4** intent expand.
 | RFC-222 / RFC-625 | Autopilot / CE ownership; StrangeLoop invariant unchanged |
 | RFC-232 | Flat WavePlan wire; semi-structured allowed; nesting forbidden; amends §9 |
 | IG-715 | Migration wave fan-out; must migrate planner copy into YAML bodies (M2) |
-| IG-720 | WavePlan SoT = CE findings / rail_state; delete `fanout.artifact` + file I/O |
+| IG-720 | Historical findings-only file ban; amended by IG-722 (SoT still rail_state) |
+| IG-722 | Multi-form WavePlan transfer; recommended dumps + structured wave_plan_path |

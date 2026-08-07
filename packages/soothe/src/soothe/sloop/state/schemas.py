@@ -684,6 +684,16 @@ class PlanResult(BaseModel):
         description="Domain-agnostic side-effect claims when status is done (IG-712)",
     )
 
+    wave_plan: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional inline flat WavePlan for architecture fan-out ingest",
+    )
+    wave_plan_path: str | None = Field(
+        default=None,
+        max_length=1024,
+        description="Optional path to flat WavePlan JSON for host ingest",
+    )
+
     require_goal_completion: bool = Field(default=False)
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
 

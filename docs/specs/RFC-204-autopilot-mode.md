@@ -371,13 +371,12 @@ CLI is a control surface, not a monitoring interface:
 ```
 soothe autopilot submit "task"      # Submit new task
 soothe autopilot status             # Overall state
-soothe autopilot list               # List goals
+soothe autopilot jobs               # List root jobs
+soothe autopilot goals              # List goals
 soothe autopilot goal <id>          # Goal details
-soothe autopilot cancel <id>        # Cancel goal
-soothe autopilot approve <id>       # Approve MUST goal
-soothe autopilot reject <id>        # Reject proposed goal
-soothe autopilot wake               # Exit dreaming
-soothe autopilot dream              # Force enter dreaming
+soothe autopilot stop <id>          # Stop goal
+soothe autopilot stop --all         # Stop all open goals
+soothe autopilot stop --job <id>    # Stop job and descendants
 ```
 
 **Output Behavior**: No streaming—submit and check status.

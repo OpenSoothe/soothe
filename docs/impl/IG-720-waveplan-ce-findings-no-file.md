@@ -1,26 +1,25 @@
 # IG-720: WavePlan via CE findings only (remove file artifact)
 
 **Created**: 2026-08-07  
-**Status**: Implemented  
+**Status**: Superseded by [IG-722](IG-722-waveplan-multiform-transfer.md)  
 **Related**: [RFC-231](../specs/RFC-231-looprail-rail-exec.md) §9,
-[RFC-232](../specs/RFC-232-waveplan-flat-semistructured-ingest.md)
-(flat wire; nesting reject — follow-on),
+[RFC-232](../specs/RFC-232-waveplan-flat-semistructured-ingest.md),
 [IG-704](IG-704-autopilot-wave-plan-host-ingest.md),
 [IG-714](IG-714-architecture-wave-plan-accept-without-artifact.md),
-[IG-718](IG-718-fanout-slice-terminology.md)
+[IG-718](IG-718-fanout-slice-terminology.md),
+[IG-722](IG-722-waveplan-multiform-transfer.md)
 
 ---
 
 ## Goal
 
-Make the architecture WavePlan **solely** a Context Engine completion artifact
-(findings on the planner goal + applied `RailJobState`), and **delete** all
-filesystem WavePlan JSON paths (`jobs/{id}/wave-plan.json`,
-`fanout.artifact`, load/dump helpers).
+*(Historical.)* Make the architecture WavePlan **solely** a Context Engine
+completion artifact and delete filesystem WavePlan JSON paths.
 
-Motivation: dual SoT (findings gate + host file) taught agents and operators to
-write/seed files; production stalls when findings lack bare WavePlan JSON even
-if workspace or orphan job files exist.
+**Supersession**: IG-722 keeps **SoT** as `RailJobState` / `rail_state.json`,
+but restores multi-form **transfer** (recommended dumps, structured
+`wave_plan_path`, allowlist, findings blob). `fanout.artifact` remains
+catalog-rejected.
 
 ---
 

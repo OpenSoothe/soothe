@@ -1,9 +1,8 @@
-"""Tests for autopilot submit/run CLI surface."""
+"""Tests for autopilot submit/stop CLI surface."""
 
 from __future__ import annotations
 
 import re
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -28,10 +27,12 @@ def test_autopilot_help_is_concise() -> None:
     output = _strip_ansi(result.output)
     assert "Autopilot — autonomous goal control." in output
     assert "submit" in output
-    assert "run" in output
+    assert "stop" in output
+    assert re.search(r"\brun\b", output) is None
+    assert re.search(r"\bcancel\b", output) is None
     # Check for 'jobs' command presence (ANSI codes may split '│' from 'jobs' in CI)
     assert "jobs" in output
-    assert "list" not in output  # 'list' was renamed to 'jobs'
+    assert re.search(r"\blist\b", output) is None  # hidden alias of jobs
     assert "``" not in result.output
     assert "max-iterations" not in result.output
 
@@ -53,26 +54,27 @@ def test_submit_help_documents_async_and_wait() -> None:
     assert "max-iterations" not in output
 
 
-def test_run_help_is_submit_wait_alias() -> None:
+def test_run_command_removed() -> None:
     result = runner.invoke(app, ["autopilot", "run", "--help"])
-    assert result.exit_code == 0
-    output = _strip_ansi(result.output)
-    # Check for alias description
-    assert "submit" in output
-    assert "wait" in output
-    assert "sync" in output
-    assert "--file" in output
-    assert "max-iterations" not in output
+    assert result.exit_code != 0
+    assert "No such command" in result.output
 
 
-def test_list_command_replaced_by_jobs(mock_autopilot_client: MagicMock) -> None:
+def test_cancel_command_removed() -> None:
+    result = runner.invoke(app, ["autopilot", "cancel", "--help"])
+    assert result.exit_code != 0
+    assert "No such command" in result.output
+
+
+def test_list_is_alias_for_jobs(mock_autopilot_client: MagicMock) -> None:
     mock_autopilot_client.autopilot_list_jobs.return_value = {"jobs": []}
-    gone = runner.invoke(app, ["autopilot", "list"])
-    assert gone.exit_code != 0
-    assert "No such command" in gone.output
-    result = runner.invoke(app, ["autopilot", "jobs"])
-    assert result.exit_code == 0, result.output
-    assert "No jobs found." in result.output
+    via_list = runner.invoke(app, ["autopilot", "list"])
+    assert via_list.exit_code == 0, via_list.output
+    assert "No jobs found." in via_list.output
+    via_jobs = runner.invoke(app, ["autopilot", "jobs"])
+    assert via_jobs.exit_code == 0, via_jobs.output
+    assert "No jobs found." in via_jobs.output
+    assert mock_autopilot_client.autopilot_list_jobs.call_count == 2
 
 
 @pytest.fixture
@@ -107,14 +109,6 @@ def test_submit_wait_polls_until_done(mock_autopilot_client: MagicMock) -> None:
     mock_autopilot_client.autopilot_submit.assert_called_once()
     mock_autopilot_client.autopilot_get_goal.assert_called()
     assert "completed" in result.output
-
-
-def test_run_waits_like_submit_wait(mock_autopilot_client: MagicMock) -> None:
-    result = runner.invoke(app, ["autopilot", "run", "do the thing", "-w", "/tmp/proj"])
-    assert result.exit_code == 0, result.output
-    kwargs: dict[str, Any] = mock_autopilot_client.autopilot_submit.call_args.kwargs
-    assert kwargs.get("workspace") == "/tmp/proj"
-    mock_autopilot_client.autopilot_get_goal.assert_called()
 
 
 def test_submit_passes_priority_and_rail(mock_autopilot_client: MagicMock) -> None:
@@ -160,15 +154,31 @@ def test_submit_from_stdin(mock_autopilot_client: MagicMock) -> None:
     assert args[0] == "From stdin task"
 
 
-def test_run_from_file(mock_autopilot_client: MagicMock, tmp_path) -> None:
-    path = tmp_path / "job.txt"
-    path.write_text("Sync file task\n", encoding="utf-8")
-    result = runner.invoke(app, ["autopilot", "run", "-f", str(path), "-w", "/tmp/proj"])
+def test_stop_goal(mock_autopilot_client: MagicMock) -> None:
+    mock_autopilot_client.autopilot_cancel_goal.return_value = {
+        "goal_id": "abcdef12-3456",
+        "new_status": "cancelled",
+    }
+    result = runner.invoke(app, ["autopilot", "stop", "abcdef12-3456"])
     assert result.exit_code == 0, result.output
-    args, kwargs = mock_autopilot_client.autopilot_submit.call_args
-    assert args[0] == "Sync file task"
-    assert kwargs.get("workspace") == "/tmp/proj"
-    mock_autopilot_client.autopilot_get_goal.assert_called()
+    mock_autopilot_client.autopilot_cancel_goal.assert_called_once_with("abcdef12-3456")
+    assert "Stop goal:" in result.output
+
+
+def test_stop_all(mock_autopilot_client: MagicMock) -> None:
+    mock_autopilot_client.autopilot_cancel_all.return_value = {"cancelled_count": 3}
+    result = runner.invoke(app, ["autopilot", "stop", "--all"])
+    assert result.exit_code == 0, result.output
+    mock_autopilot_client.autopilot_cancel_all.assert_called_once()
+    assert "Stopped 3 open goal(s)." in result.output
+
+
+def test_stop_job(mock_autopilot_client: MagicMock) -> None:
+    mock_autopilot_client.job_cancel.return_value = {"status": "cancelled"}
+    result = runner.invoke(app, ["autopilot", "stop", "--job", "abcdef12-3456"])
+    assert result.exit_code == 0, result.output
+    mock_autopilot_client.job_cancel.assert_called_once_with("abcdef12-3456")
+    assert "Stop job:" in result.output
 
 
 def test_submit_defaults_to_cwd_goal_md(

@@ -263,35 +263,6 @@ def submit(
     _submit_impl(task, file=file, priority=priority, workspace=workspace, rail=rail, wait=wait)
 
 
-@app.command("run")
-def run(
-    prompt: str | None = typer.Argument(
-        None,
-        help="Task description (omit to use --file or cwd GOAL.md).",
-    ),
-    file: str | None = typer.Option(
-        None,
-        "--file",
-        "-f",
-        help="Read task from a UTF-8 file (default: GOAL.md in cwd when TASK omitted; - for stdin).",
-    ),
-    priority: int = typer.Option(50, "--priority", "-p", help="Goal priority (0-100)."),
-    workspace: str | None = typer.Option(
-        None,
-        "--workspace",
-        "-w",
-        help="Workspace directory (default: current directory).",
-    ),
-    rail: str | None = typer.Option(
-        None,
-        "--rail",
-        help="LoopRail id (e.g. feature-dev, greenfield-system, spike).",
-    ),
-) -> None:
-    """Alias for submit --wait (sync)."""
-    _submit_impl(prompt, file=file, priority=priority, workspace=workspace, rail=rail, wait=True)
-
-
 @app.command("status")
 def status() -> None:
     """Show autopilot state and job summary."""
@@ -335,6 +306,7 @@ def status() -> None:
             typer.echo(f"  [{sid}] {sstat:10s}  tok:{stok:>5s}{rail_s}  {sdesc}")
 
 
+@app.command("list", hidden=True)
 @app.command("jobs")
 def list_jobs(
     status_filter: str = typer.Option("", "--status", "-s", help="Filter by status."),
@@ -531,25 +503,25 @@ def show_goal(
         typer.echo(f"Error:       {error}")
 
 
-@app.command("cancel")
-def cancel_goal(
+@app.command("stop")
+def stop_goal(
     goal_id: str | None = typer.Argument(
         None,
         help="Goal ID (omit with --all or --job).",
     ),
-    cancel_all: bool = typer.Option(
+    stop_all: bool = typer.Option(
         False,
         "--all",
-        help="Cancel all open goals.",
+        help="Stop all open goals.",
     ),
     job_id: str | None = typer.Option(
         None,
         "--job",
-        help="Cancel a job and its descendants.",
+        help="Stop a job and its descendants.",
     ),
 ) -> None:
-    """Cancel a goal, job subtree, or all open goals."""
-    modes = sum(1 for flag in (bool(goal_id), cancel_all, bool(job_id)) if flag)
+    """Stop a goal, job subtree, or all open goals."""
+    modes = sum(1 for flag in (bool(goal_id), stop_all, bool(job_id)) if flag)
     if modes != 1:
         typer.echo(
             "Specify exactly one of: GOAL_ID, --all, or --job <id>.",
@@ -558,19 +530,19 @@ def cancel_goal(
         raise typer.Exit(1)
 
     client = _require_daemon_ws()
-    if cancel_all:
+    if stop_all:
         result = client.autopilot_cancel_all()
         count = result.get("cancelled_count", 0)
-        typer.echo(f"Cancelled {count} open goal(s).")
+        typer.echo(f"Stopped {count} open goal(s).")
         return
     if job_id:
         result = client.job_cancel(job_id)
-        typer.echo(f"Cancel job: {job_id[:8]} → {result.get('status', result)}")
+        typer.echo(f"Stop job: {job_id[:8]} → {result.get('status', result)}")
         return
     assert goal_id is not None
     result = client.autopilot_cancel_goal(goal_id)
     new_status = result.get("new_status", result.get("status", "cancelled"))
-    typer.echo(f"Cancel goal: {goal_id[:8]} → {new_status}")
+    typer.echo(f"Stop goal: {goal_id[:8]} → {new_status}")
 
 
 @app.command("resume")

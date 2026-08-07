@@ -11,7 +11,7 @@
   🎥 [Watch the demo video on Vimeo](https://player.vimeo.com/video/1185023866?h=72febe1ed2) · 📖 [Documentation Wiki](https://mirasoth.github.io/soothe/)
 </div>
 
-✨ Soothe is a **goal-driven orchestration framework**—an *Agentic OS* for 24/7 autonomous work that keeps humans out of the execution loop. Built on LangChain and DeepAgents, it adds a persistent **agentic loop** and **goal engine**: context carries across sessions, long-running goals keep moving, interdependent objectives coordinate in a typed dependency graph, and complex tasks steer themselves to completion. Move from *human-in-the-loop* to **agent-in-the-loop**—define intent, let Soothe handle execution.
+✨ Soothe is a **goal-driven orchestration framework**—an *Agentic OS* for 24/7 autonomous work that keeps humans out of the execution loop. Built on [soothe-nano](https://github.com/mirasoth/soothe-nano) and [soothe-enhanced deepagents](https://github.com/mirasoth/soothe-deepagents), it adds a persistent **agentic loop** and **goal engine**: context carries across sessions, long-running goals keep moving, interdependent objectives coordinate in a typed dependency graph, and complex tasks steer themselves to completion. Move from *human-in-the-loop* to **agent-in-the-loop**—define intent, let Soothe handle execution.
 
 ---
 

@@ -534,18 +534,15 @@ goals, and the job root stays `pending`. Logs show
 `wave_plan_ready=False` / `architecture_ready` unmatched on `dag_idle`, or
 rate-limited warnings that a WavePlan is missing for the job.
 
-Cause: host never applied a **flat** WavePlan from the architecture goal
-**completion report** (contribution findings / evidence) into `rail_state`
-(`wave_slices`). Common failure modes:
+Cause: host never applied a **flat** WavePlan into job rail state
+(`wave_slices` on `rail_state.json`). Common failure modes:
 
-- Missing WavePlan on the wire entirely
+- Missing WavePlan on all transfer forms (structured fields, dumps, allowlist,
+  completion JSON)
 - **Nested** waves/slices (`wave_slices` as a `WAVE-*` dict, or wave objects
   with child `slices`) — rejected; the host does **not** flatten them
-- Writing `docs/FINDINGS.md`, `docs/wave-plan.json`, or
-  `.soothe/wave-plan.json` in the project workspace (ignored)
-
-Leftover `$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json` files are orphans
-and are **not** read.
+- Custom path written outside the allowlist **without** setting completion
+  `wave_plan_path`
 
 Recovery:
 
@@ -553,20 +550,18 @@ Recovery:
    `soothed restart` so the architecture WavePlan gate is live (stale
    processes can accept architecture via soft LLM consensus without a plan).
 2. Inspect: `soothe autopilot job {job_id}`, architecture goal findings, and
-   `~/.soothe/data/jobs/{job_id}/rail_state.json` (`wave_slices`). Send-back
-   text should include a **Detail:** line (nesting or pydantic field error).
-3. Prefer re-running architecture so the **goal completion report** includes
-   a **flat** WavePlan, e.g.
+   `~/.soothe/data/jobs/{job_id}/rail_state.json` (`wave_slices`,
+   `wave_plan_source_path`). Also check recommended dumps:
+   `jobs/{job_id}/wave-plan.json` and `<workspace>/.soothe/wave-plan.json`.
+   Send-back text should include a **Detail:** line (nesting or field error).
+3. Prefer fixing a **flat** WavePlan via any transfer form, e.g. write
    `{"wave_slices":["core","api","tests"],"independence":"…","rationale":"…"}`
-   (or flat `slices:[{slice,…}]`). Do not emit nested WAVE trees. As a last
-   resort, set `wave_slices` on `rail_state.json` and wait for `dag_idle`
-   (or restart).
+   to `.soothe/wave-plan.json` or the jobs dump, set `wave_plan` /
+   `wave_plan_path` on completion, or put the JSON in the completion report.
+   Do not emit nested WAVE trees. As a last resort, set `wave_slices` on
+   `rail_state.json` and wait for `dag_idle` (or restart).
 4. Wait for the next `dag_idle` tick (or restart the daemon) so
    `spawn_wave_makers` can fire.
-
-New architecture goals must put a flat WavePlan JSON object in the **goal
-completion report** (host applies into rail state). Do not teach agents to
-write fan-out policy into the project tree. See RFC-232 / IG-721.
 
 Forensics: `.agents/skills/inspect-autopilot-job/SKILL.md`.
 

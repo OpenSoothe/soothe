@@ -657,16 +657,18 @@ class AutopilotService:
         evidence_summary: str,
         contribution: Any | None,
     ) -> tuple[bool, str]:
-        """Parse WavePlan from worker contribution and apply to rail state.
+        """Parse WavePlan from multi-form sources and apply to rail state.
 
-        Nano/StrangeLoop never call Autopilot APIs — the host interprets opaque
-        completion findings/evidence and applies slices into ``RailJobState``.
+        Prefers structured contribution fields, then recommended dumps /
+        allowlist / findings. Nano/StrangeLoop never call Autopilot APIs —
+        the host interprets opaque completion payloads and applies slices
+        into ``RailJobState``.
 
         Returns:
             ``(ready, detail)`` — ready when a usable wave plan is applied;
             ``detail`` is a parse/nesting reject reason when not ready.
         """
-        from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_from_findings
+        from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_from_sources
 
         if self._rail_interpreter is None:
             return False, "rail interpreter unset"
@@ -694,19 +696,38 @@ class AutopilotService:
         if goal.findings:
             candidates.extend(list(goal.findings))
 
-        diagnosed = diagnose_wave_plan_from_findings(candidates)
+        wave_plan = getattr(contribution, "wave_plan", None) if contribution else None
+        wave_plan_path = getattr(contribution, "wave_plan_path", None) if contribution else None
+        workspace = goal.workspace or None
+        if not workspace:
+            root = self._ce._dag.get_goal(job_id)
+            workspace = root.workspace if root else None
+
+        diagnosed = diagnose_wave_plan_from_sources(
+            wave_plan=wave_plan if isinstance(wave_plan, dict) else None,
+            wave_plan_path=str(wave_plan_path) if wave_plan_path else None,
+            workspace=workspace,
+            jobs_root=getattr(builtins, "_jobs_root", None) or self._jobs_root,
+            job_id=job_id,
+            findings=candidates or None,
+        )
         if diagnosed.plan is not None:
-            recorded = await builtins.record_wave_plan(job_id, plan=diagnosed.plan)
+            recorded = await builtins.record_wave_plan(
+                job_id,
+                plan=diagnosed.plan,
+                source_path=diagnosed.source_path,
+            )
             if recorded is not None:
                 names = recorded.resolved_slice_ids()
                 note = f"WavePlan recorded ({len(names)} slices): {', '.join(names)}"
                 if note not in goal.findings:
                     goal.findings.append(note[:500])
                 logger.info(
-                    "Ingested wave plan for architecture goal %s job=%s slices=%s",
+                    "Ingested wave plan for architecture goal %s job=%s slices=%s source=%s",
                     goal.id,
                     job_id[:8],
                     names,
+                    diagnosed.source_path,
                 )
 
         await builtins.ingest_wave_plan(job_id)
@@ -787,7 +808,7 @@ class AutopilotService:
                 "send_back",
                 "Architecture WavePlan gate unavailable (rail not initialized); "
                 "restart the daemon after upgrading, then retry with a flat "
-                "WavePlan JSON object in the goal completion report.",
+                "WavePlan (structured fields, recommended dump, or completion JSON).",
             )
 
         if not await self._ensure_rail_bound_for_job(job_id):
@@ -799,8 +820,7 @@ class AutopilotService:
             return (
                 "send_back",
                 "Architecture WavePlan gate unavailable (rail unbound for job); "
-                "retry with a flat WavePlan JSON object in the goal completion "
-                "report after the job rail is bound.",
+                "retry with a flat WavePlan after the job rail is bound.",
             )
 
         state = await self._rail_interpreter.builtins.job_state(job_id)
@@ -817,7 +837,7 @@ class AutopilotService:
         if ready:
             return (
                 "accept",
-                "Valid WavePlan recorded from the goal completion report",
+                "Valid WavePlan recorded into job rail state",
             )
         return ("send_back", architecture_wave_plan_send_back_reason(detail))
 

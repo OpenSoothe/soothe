@@ -18,14 +18,14 @@ DEFAULT_VERB_BRIEFS: dict[str, str] = {
         "features, tasks, packages, or stages), wave-1 independent slices, "
         "wave acceptance criteria, and git commit milestones. "
         "Do not implement product code here.\n\n"
-        "REQUIRED deliverable: one flat WavePlan JSON object in the goal "
-        "completion report (evidence / findings on the wire; markdown prose "
-        "optional). Nested waves/slices are forbidden — do NOT emit WAVE-* "
-        "dicts or wave objects containing child slices. The host applies "
-        "fan-out from that completion finding into job rail state. Do NOT "
-        "write FINDINGS.md, wave-plan.json, or any other project/jobs path "
-        "as the fan-out deliverable — those files are ignored. Schema "
-        "example:\n"
+        "REQUIRED deliverable: one flat WavePlan JSON object "
+        '(wave_slices string list or flat slices[{"slice",…}]; nested '
+        "WAVE trees forbidden). Host SoT is job rail state after ingest.\n"
+        "Recommended dumps: <workspace>/.soothe/wave-plan.json or "
+        "$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json. Also OK: allowlisted "
+        "paths (docs/waveplan.json, …), inline completion wave_plan, or a "
+        "flat JSON blob in the goal completion report. Custom paths outside "
+        "the allowlist must set completion wave_plan_path. Schema example:\n"
         '{"wave_slices":["core","api","tests"],'
         '"independence":"disjoint write-sets per slice",'
         '"rationale":"why this partition"}\n'
