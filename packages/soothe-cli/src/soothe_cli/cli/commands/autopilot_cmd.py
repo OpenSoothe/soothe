@@ -66,7 +66,8 @@ _STYLE_METRIC_RAIL = "bold bright_green"
 # Compact description previews at the row tail so metrics stay visible first.
 _TOP_DESC_JOB = 32
 _TOP_DESC_GOAL = 32
-_TOP_DESC_STEP = 28
+# Steps can show a bit more than job/goal: deps trail after the desc (`→id`).
+_TOP_DESC_STEP = 40
 _STATUS_STYLE: dict[str, str] = {
     "active": _STYLE_ACTIVE,
     "pending": "yellow",
