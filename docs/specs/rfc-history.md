@@ -2,8 +2,8 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-08-05
-**Total RFCs**: 83
+**Last Updated**: 2026-08-07
+**Total RFCs**: 84
 
 ## Summary Statistics
 
@@ -11,9 +11,9 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Draft | 54 | 65.1% |
-| Implemented | 16 | 19.3% |
-| Archived | 6 | 7.2% |
+| Draft | 55 | 65.5% |
+| Implemented | 16 | 19.0% |
+| Archived | 6 | 7.1% |
 | Proposed | 2 | 2.4% |
 | Accepted | 1 | 1.2% |
 | Implemented (Partially Superseded) | 1 | 1.2% |
@@ -24,7 +24,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 55 |
+| Architecture Design | 56 |
 | Implementation Interface Design | 14 |
 | Architecture Design + Implementation Interface Design | 2 |
 | Architecture Design / Impl Interface | 1 |
@@ -38,6 +38,14 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ## Recent Changes
 
+### 2026-08-07
+
+- **RFC-231** drafted: LoopRail and Rail Exec (composable verb bodies). Promotes
+  the LoopRail design draft as normative Autopilot workflow patterns and specifies
+  Rail Exec (L0 CE primitives / L1 catalog recipes / L2 flow) so custom rails can
+  match builtin power via YAML `verbs:` (verbs | NL | hybrid) without `rail_id`
+  forks. Cross-refs updated on RFC-204, RFC-230, draft, and index.
+
 ### 2026-08-05
 
 - **RFC-230** drafted: Job Maturity Assessment for Autopilot Rails (host assessor,
@@ -49,6 +57,15 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **RFC-413** Phase 4 complete (IG-655): append-oriented DisplayCardStore ledger, live `soothe.card.*` via `event`/`custom`, TUI always prefers daemon projection for structural cards; inline tool rows remain live-only on step widgets. Design draft `docs/drafts/2026-07-27-tui-card-replay-source-of-truth-design.md`.
 
 ## Chronological Timeline
+
+### Major Changes - 2026-08-07
+
+**RFC-231**: LoopRail and Rail Exec (Composable Verb Bodies)
+
+- Normative LoopRail: event → guard → catalog verb → CE DAG
+- Rail Exec: verb bodies as L0 primitive sequences and/or NL briefs/intent
+- Migration phases M1–M4 (recipe extract → overrides → multi-step → intent expand)
+- LoopRail design draft marked promoted; RFC-230/204 related links updated
 
 ### Major Changes - 2026-08-05
 

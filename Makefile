@@ -34,12 +34,11 @@ ROOT_LINT_DIRS = examples scripts
 ifdef UV_PYPI_MIRROR
 UV_SYNC = uv sync --all-packages --all-extras --default-index $(UV_PYPI_MIRROR)
 else
-# Default to PyPI. Fastly (pypi.org/files.pythonhosted.org) occasionally resets
-# uv's HTTP client (ECONNRESET / os error 54) while curl succeeds on the same
-# host. Fall back to a mirror if the direct PyPI sync fails; the committed
-# uv.lock stays pinned to PyPI and is restored after the mirror run.
-UV_PYPI_FALLBACK ?= https://pypi.tuna.tsinghua.edu.cn/simple
-UV_SYNC = UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras
+# Default to Tsinghua mirror for better connectivity in China.
+# PyPI's Fastly CDN occasionally resets connections (ECONNRESET / os error 54).
+# The committed uv.lock stays pinned to PyPI and is restored after mirror runs.
+UV_PYPI_MIRROR ?= https://pypi.tuna.tsinghua.edu.cn/simple
+UV_SYNC = UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras --default-index $(UV_PYPI_MIRROR)
 endif
 
 # ============================================================================
@@ -92,18 +91,11 @@ help:
 # Workspace Setup
 # ============================================================================
 
-# Run a uv sync, falling back to UV_PYPI_FALLBACK mirror if the default PyPI
-# endpoint fails (e.g. Fastly ECONNRESET). uv.lock is restored afterward so a
-# mirror run never rewrites the committed PyPI-pinned lockfile.
+# Sync workspace dependencies using the configured mirror.
+# uv.lock is restored after sync to keep it pinned to PyPI.
 define uv_sync_with_fallback
 	$(UV_SYNC) \
-		|| (rc=$$?; \
-			if [ -n "$(UV_PYPI_MIRROR)" ]; then echo "sync failed; UV_PYPI_MIRROR set, no fallback"; exit $$rc; fi; \
-			echo ">> direct PyPI sync failed (rc=$$rc); retrying via mirror $(UV_PYPI_FALLBACK)"; \
-			cp uv.lock uv.lock.bak.$$$$.tmp 2>/dev/null || true; \
-			UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras --default-index $(UV_PYPI_FALLBACK) \
-				&& { git checkout -- uv.lock 2>/dev/null || [ -f uv.lock.bak.$$$$.tmp ] && mv uv.lock.bak.$$$$.tmp uv.lock; } \
-				|| { git checkout -- uv.lock 2>/dev/null || ([ -f uv.lock.bak.$$$$.tmp ] && mv uv.lock.bak.$$$$.tmp uv.lock); exit 1; })
+		&& { git checkout -- uv.lock 2>/dev/null || true; }
 endef
 
 setup:
@@ -214,15 +206,15 @@ reset-the-world:
 format: sync
 	@echo "Formatting all packages..."
 	@for pkg in $(PACKAGES); do \
-		paths="src/"; \
-		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
+		paths="packages/$$pkg/src/"; \
+		test -d "packages/$$pkg/tests" && paths="packages/$$pkg/src/ packages/$$pkg/tests/"; \
 		echo "  $$pkg"; \
-		cd packages/$$pkg && uv run ruff format $$paths && cd ../..; \
+		.venv/bin/ruff format $$paths; \
 	done
 	@echo "Formatting root directories..."
 	@for dir in $(ROOT_LINT_DIRS); do \
 		echo "  $$dir"; \
-		uv run ruff format $$dir; \
+		.venv/bin/ruff format $$dir; \
 	done
 	@echo "Done"
 
@@ -230,13 +222,13 @@ format-check: sync
 	@echo "Checking formatting..."
 	@failed=0; \
 	for pkg in $(PACKAGES); do \
-		paths="src/"; \
-		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
-		cd packages/$$pkg && uv run ruff format --check $$paths || failed=1 && cd ../..; \
+		paths="packages/$$pkg/src/"; \
+		test -d "packages/$$pkg/tests" && paths="packages/$$pkg/src/ packages/$$pkg/tests/"; \
+		.venv/bin/ruff format --check $$paths || failed=1; \
 	done; \
 	for dir in $(ROOT_LINT_DIRS); do \
 		echo "  $$dir"; \
-		uv run ruff format --check $$dir || failed=1; \
+		.venv/bin/ruff format --check $$dir || failed=1; \
 	done; \
 	test $$failed -eq 0 && echo "OK" || exit 1
 
@@ -244,15 +236,15 @@ lint: sync
 	@echo "Linting all packages (src + tests)..."
 	@failed=0; \
 	for pkg in $(PACKAGES); do \
-		paths="src/"; \
-		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
+		paths="packages/$$pkg/src/"; \
+		test -d "packages/$$pkg/tests" && paths="packages/$$pkg/src/ packages/$$pkg/tests/"; \
 		echo "  $$pkg"; \
-		cd packages/$$pkg && uv run ruff format --check $$paths && uv run ruff check $$paths || failed=1 && cd ../..; \
+		.venv/bin/ruff format --check $$paths && .venv/bin/ruff check $$paths || failed=1; \
 	done; \
 	echo "Linting root directories..."; \
 	for dir in $(ROOT_LINT_DIRS); do \
 		echo "  $$dir"; \
-		uv run ruff format --check $$dir && uv run ruff check $$dir || failed=1; \
+		.venv/bin/ruff format --check $$dir && .venv/bin/ruff check $$dir || failed=1; \
 	done; \
 	test $$failed -eq 0 && echo "Done" || exit 1
 
@@ -260,27 +252,27 @@ lint-src: sync
 	@echo "Linting src/ only..."
 	@for pkg in $(PACKAGES); do \
 		echo "  $$pkg"; \
-		cd packages/$$pkg && uv run ruff format --check src/ && uv run ruff check src/ && cd ../..; \
+		.venv/bin/ruff format --check packages/$$pkg/src/ && .venv/bin/ruff check packages/$$pkg/src/; \
 	done
 	@echo "Linting root directories..."
 	@for dir in $(ROOT_LINT_DIRS); do \
 		echo "  $$dir"; \
-		uv run ruff format --check $$dir && uv run ruff check $$dir; \
+		.venv/bin/ruff format --check $$dir && .venv/bin/ruff check $$dir; \
 	done
 	@echo "Done"
 
 lint-fix: sync
 	@echo "Fixing linting and formatting issues..."
 	@for pkg in $(PACKAGES); do \
-		paths="src/"; \
-		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
+		paths="packages/$$pkg/src/"; \
+		test -d "packages/$$pkg/tests" && paths="packages/$$pkg/src/ packages/$$pkg/tests/"; \
 		echo "  $$pkg"; \
-		cd packages/$$pkg && uv run ruff format $$paths && uv run ruff check --fix $$paths && cd ../..; \
+		.venv/bin/ruff format $$paths && .venv/bin/ruff check --fix $$paths; \
 	done
 	@echo "Fixing root directories..."
 	@for dir in $(ROOT_LINT_DIRS); do \
 		echo "  $$dir"; \
-		uv run ruff format $$dir && uv run ruff check --fix $$dir; \
+		.venv/bin/ruff format $$dir && .venv/bin/ruff check --fix $$dir; \
 	done
 	@echo "Done"
 

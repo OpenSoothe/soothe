@@ -1,15 +1,22 @@
 # LoopRail — Autopilot Workflow Patterns
 
-**Status**: Draft (in review)  
+**Status**: Promoted (historical) — normative spec is
+[RFC-231](../specs/RFC-231-looprail-rail-exec.md)  
 **Date**: 2026-07-11  
 **Kind**: Design  
-**Related**: RFC-222 (Autopilot Architecture), RFC-228 (Autopilot Job IPC),
-RFC-230 (Job Maturity Assessment — `acceptance_met`, production `dag_idle`,
-rail-exclusive spawn), RFC-625 (AutopilotMonitor / ContextEngine),
-RFC-626 (Entity Model), RFC-630 (No Keyword Heuristics),
-RFC-105 (Skills — distillation source), IG-677 (Job↔Loop Index),
+**Related**: RFC-231 (LoopRail + Rail Exec — normative), RFC-222 (Autopilot
+Architecture), RFC-228 (Autopilot Job IPC), RFC-230 (Job Maturity Assessment —
+`acceptance_met`, production `dag_idle`, rail-exclusive spawn), RFC-625
+(AutopilotMonitor / ContextEngine), RFC-626 (Entity Model), RFC-630 (No Keyword
+Heuristics), RFC-105 (Skills — distillation source), IG-677 (Job↔Loop Index),
 IG-687 (greenfield-system), IG-692 (maturity implementation),
 IG-708 (rail trace continuity)
+
+> **Promotion note (2026-08-07):** Architecture and user-facing LoopRail
+> contracts are normative in **RFC-231**, which also specifies **Rail Exec**
+> (catalog verb bodies as CE primitives and/or NL). Keep this draft for
+> historical detail (trace DDL sketches, distiller narrative); do not treat
+> conflicting passages here as overriding RFC-231.
 
 ---
 
@@ -844,8 +851,9 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 
 ## 14. Non-goals (v1)
 
-- User-defined custom CE builtins
-- Per-rail prune policy overrides
+- User-defined custom CE **primitives** (L0) outside the framework set —
+  compose L0 via rail `verbs:` (RFC-231); new L0 needs a host change
+- Per-rail prune policy overrides beyond composing `prune` / `replant`
 - Runtime user-submitted rails without catalog promotion
 - Cross-job or workspace-default rails (only `.rail-default` hint)
 - LoopRail driving StrangeLoop prompts directly
@@ -904,9 +912,9 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 
 ## 18. Suggested downstream routing
 
-No existing LoopRail RFC. Closest related: RFC-222, RFC-625, RFC-626.
-
-**Recommended:** create new RFC (`RFC-6xx-loop-rail`) → `specs-refine` → implementation guide.
+**Done (2026-08-07):** promoted/extended as
+[RFC-231](../specs/RFC-231-looprail-rail-exec.md) (LoopRail + Rail Exec).
+Next: implementation guides for RFC-231 migration phases M1–M4.
 
 ---
 

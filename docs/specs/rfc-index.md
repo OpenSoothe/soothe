@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-08-05
-**Total RFCs**: 83 (6 archived, 7 reclassified, 1 process specification)
+**Last Updated**: 2026-08-07
+**Total RFCs**: 84 (6 archived, 7 reclassified, 1 process specification)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -9,7 +9,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Status | Count |
 |--------|-------|
-| Draft | 53 |
+| Draft | 54 |
 | Implemented | 15 |
 | Implemented (Partially Superseded) | 1 |
 | Implemented — runtime architecture refined | 1 |
@@ -21,7 +21,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 54 |
+| Architecture Design | 55 |
 | Implementation Interface Design | 14 |
 | Unknown | 2 |
 | Architecture Design + Implementation Interface Design | 2 |
@@ -227,8 +227,16 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-08-05
   - Depends on: RFC-204, RFC-222, RFC-228, RFC-624, RFC-625, RFC-630
-  - Related: LoopRail design draft, IG-687, IG-691, IG-692, IG-693
+  - Related: RFC-231 (LoopRail + Rail Exec), LoopRail design draft, IG-687, IG-691, IG-692, IG-693
   - Notes: Host maturity latch; rail exclusivity; consensus exhaust recovery in IG-693
+
+- **RFC-231**: [LoopRail and Rail Exec (Composable Verb Bodies)](RFC-231-looprail-rail-exec.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-08-07
+  - Depends on: RFC-204, RFC-222, RFC-228, RFC-230, RFC-625, RFC-626, RFC-630
+  - Related: LoopRail design draft (promoted), IG-678, IG-687, IG-691–IG-715
+  - Notes: Normative LoopRail; Rail Exec L0/L1/L2; verb bodies as verbs | NL | hybrid; no rail_id forks
 
 ---
 
@@ -726,6 +734,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 | RFC | Title | Status | Created |
 |-----|-------|--------|---------|
+| RFC-231 | LoopRail and Rail Exec (Composable Verb Bodies) | Draft | 2026-08-07 |
 | RFC-230 | Job Maturity Assessment for Autopilot Rails | Draft | 2026-08-05 |
 | RFC-450 | Unified Daemon Communication Protocol (rewritten) | Draft | 2026-03-19 |
 | RFC-900 | RFC Deprecation and Reclassification Scheme | Proposed | 2026-06-16 |
@@ -735,7 +744,6 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 | RFC-228 | Autopilot Job IPC Commands | Proposed | 2026-06-04 |
 | RFC-413 | Server-Owned Display Card Ledger | Draft (Phases 1–4 / IG-655) | 2026-06-04 |
 | RFC-505 | Soothe Desktop Client Architecture | Archived | 2026-06-04 |
-| RFC-700 | Desktop App Product Redesign | Archived | 2026-06-04 |
 
 ### Supersede Relationships
 
@@ -760,7 +768,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 |-------|----------|-------|
 | 0xx | Foundation | 2 |
 | 1xx | Core Agent | 6 |
-| 2xx | StrangeLoop & Cognition | 22 |
+| 2xx | StrangeLoop & Cognition | 23 |
 | 3xx | Protocols | 8 |
 | 4xx | Daemon & Transport | 8 |
 | 5xx | CLI & TUI | 6 |
@@ -773,6 +781,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 ## Recently Added
 
+- **RFC-231**: LoopRail and Rail Exec (Composable Verb Bodies) (2026-08-07, Draft)
 - **RFC-230**: Job Maturity Assessment for Autopilot Rails (2026-08-05, Draft)
 - **RFC-632**: Loop-Scoped Router Profile Override (2026-07-14, Draft)
 - **RFC-631**: Goal-Bound Display Snapshots (2026-07-05, Draft)

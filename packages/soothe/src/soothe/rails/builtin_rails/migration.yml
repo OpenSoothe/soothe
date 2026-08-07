@@ -1,26 +1,96 @@
 id: migration
-version: "1.0"
+version: "2.2"
 
 summary: |
-  Multi-step migration or upgrade as a goal loop: decompose into waves,
-  implement, QA after each meaningful chunk, pause on irreversible cutover.
-  Differs from no-rail by continuing until a checkable stop condition holds
-  rather than opportunistic one-shot placement.
+  Multi-step migration or upgrade as a goal loop: architecture milestones
+  with WavePlan module/wave partitions (schema batches, dual-write slices,
+  cutover-prep), parallel makers, integrate, commit gate, review, wave QA,
+  feedback cycles, and pause on irreversible cutover. Differs from
+  feature-dev by partitioning work into independent migration slices and
+  requiring a job-scoped WavePlan before makers spawn.
 
 applies_when: |
   Framework upgrade, schema migration, API version bump, or multi-file
-  mechanical migration with a clear done condition.
+  mechanical migration with a clear done condition — not a single hot
+  fix, research spike, or greenfield multi-module product from scratch.
+
+# Fan-out is LoopRail policy — not AutopilotService / submit API.
+# Module list is LLM-authored (WavePlan JSON in architecture findings);
+# host ingests findings into a job-scoped artifact under
+# $SOOTHE_DATA_DIR/jobs/{job_id}/. Rail only declares the contract path
+# template + require_plan. Engine clamps to max_parallel_goals.
+fanout:
+  artifact: "{job_id}/wave-plan.json"
+  require_plan: true
+  max_waves: 3
+
+# RFC-231 M2/M3: migration planner as ``do:`` recipe (no rail_id fork).
+verbs:
+  plan_milestones:
+    do:
+      - spawn_goal:
+          id: planner
+          role: planner
+          tags: [architecture, planning, milestones]
+          priority: 80
+          brief: |
+            Migration architecture and milestone map for job {job_id}. Partition
+            the migration into independent WavePlan modules (migration slices
+            such as schema batches, dual-write paths, cutover-prep, or backfill
+            stages). Define wave-1 independent slices, wave acceptance /
+            invariant checks, and git commit milestones. Do not implement
+            migration code here.
+
+            REQUIRED deliverable: append one findings entry that is exactly a
+            WavePlan JSON object (host persists fan-out for this job — do not
+            write fan-out policy into the project workspace tree; never write
+            docs/wave-plan.json or .soothe/wave-plan.json as the plan). Schema
+            example:
+            {"wave_modules":["schema","dual-write","cutover-prep","verify"],
+            "independence":"disjoint write-sets per migration slice",
+            "rationale":"why this partition"}
+            Optionally use rich `modules` entries
+            ({"module","description","priority","tags"}) and/or `max_waves`.
+            Prose alone is not enough (never scrapes markdown, never substitutes
+            a fixed default module list). Modules must be independent (no
+            overlapping primary write sets). Autopilot only clamps spawn width
+            to max_parallel_goals.
+          wire:
+            root_waits_on: self
 
 conditions:
-  ready_for_next_wave: |
-    Prior wave completed and it is safe to plan the next batch of remaining
-    migration work.
+  architecture_ready: |
+    The architecture / migration milestone map goal completed, and the
+    first wave of independent maker goals has not been spawned yet.
+  wave_makers_done: |
+    All maker goals for the current wave completed successfully.
+  needs_integrate: |
+    Wave makers finished and cross-slice integrate / merge work remains.
+  needs_commit: |
+    Integrate finished (or makers finished when integrate was skipped) and
+    a milestone git commit gate should run before review.
+  needs_review: |
+    Commit milestone completed; independent diff-scoped code review should
+    run against the job branch / commit range.
   needs_qa: |
-    A wave of changes landed and migration invariants / tests must run.
+    Review passed or was skipped by policy; wave acceptance tests and
+    migration invariant verification should run.
+  needs_feedback: |
+    Wave QA or a prior feedback verify finished, migration acceptance is
+    not yet met, and another find→optimize→verify round should close
+    remaining gaps.
+  ready_for_next_wave: |
+    Feedback verify (or exhausted feedback) shows the wave is ready, the
+    DAG has no pending children, and further migration milestone slices
+    remain in the architecture map.
   needs_human: |
     Next step is irreversible (production migrate, data backfill, or cutover).
   branch_is_stuck: |
-    A wave failed QA twice or rolled-back invariants broke.
+    A maker, integrate, review, or QA goal failed twice or evidence shows
+    the approach conflicts with the migration architecture.
+  architecture_failed: |
+    The architecture / migration milestone map goal failed (no usable
+    WavePlan for fan-out), and a fresh planner attempt should replace it.
   job_complete: |
     Declared migration success condition holds in checkable terms
     (for example: targeted suite green, deprecated path removed, dual-write
@@ -28,15 +98,44 @@ conditions:
 
 flow:
   - event: job_start
-    then: decompose_parallel
+    then: plan_milestones
 
   - event: goal_completed
-    when: ready_for_next_wave
-    then: plan_and_implement
+    when: architecture_ready
+    then: spawn_wave_makers
+
+  # Recover when architecture completed and LLM later wrote the wave plan.
+  - event: dag_idle
+    when: architecture_ready
+    then: spawn_wave_makers
+
+  - event: goal_completed
+    when: wave_makers_done
+    then: spawn_integrate
+
+  - event: goal_completed
+    when: needs_commit
+    then: commit_milestone
+
+  - event: goal_completed
+    when: needs_review
+    then: review
 
   - event: goal_completed
     when: needs_qa
     then: qa_verify
+
+  - event: goal_completed
+    when: needs_feedback
+    then: spawn_feedback_cycle
+
+  - event: goal_failed
+    when: needs_feedback
+    then: spawn_feedback_cycle
+
+  - event: goal_completed
+    when: ready_for_next_wave
+    then: spawn_wave_makers
 
   - event: goal_completed
     when: needs_human
@@ -44,7 +143,20 @@ flow:
 
   - event: goal_failed
     when: branch_is_stuck
-    then: retry_branch
+    then: retry_maker
+
+  - event: goal_failed
+    when: architecture_failed
+    then: retry_architecture
+
+  # Recover when makers finished but integrate never spawned.
+  - event: dag_idle
+    when: wave_makers_done
+    then: spawn_integrate
+
+  - event: dag_idle
+    when: needs_feedback
+    then: spawn_feedback_cycle
 
   - event: dag_idle
     when: job_complete

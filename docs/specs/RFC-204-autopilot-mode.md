@@ -9,6 +9,7 @@
 **Dependencies**: RFC-200, RFC-201, RFC-203, RFC-222, RFC-450, RFC-500
 **Related**: RFC-229 (Cron Service for Autopilot — natural language scheduled jobs),
 RFC-230 (job maturity; host probes ≠ per-goal consensus gates),
+[RFC-231](RFC-231-looprail-rail-exec.md) (LoopRail + Rail Exec),
 LoopRail design draft, [IG-710](../impl/IG-710-consensus-trust-sloop-response.md)
 (consensus = goal + StrangeLoop response),
 [IG-693](../impl/IG-693-rail-subgoal-consensus-exhaustion-recovery.md)

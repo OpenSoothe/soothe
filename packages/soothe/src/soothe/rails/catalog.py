@@ -81,6 +81,8 @@ class RailDefinition:
             ``artifact`` (jobs_root-relative wave-plan template with optional
             ``{job_id}``), ``require_plan``, ``scout_count``, ``max_waves``.
             Engine must not invent these — they live in the rail YAML.
+        verbs: Optional catalog-verb body overrides (RFC-231 M2). Keys are
+            CE builtin names; values may include ``brief``, ``tags``, ``role``.
         source_path: Absolute path to the YAML file that won resolution.
         integrity_hash: SHA-256 of the raw YAML text.
     """
@@ -93,6 +95,7 @@ class RailDefinition:
     flow: list[dict[str, Any]] = field(default_factory=list)
     rules: list[dict[str, Any]] = field(default_factory=list)
     fanout: dict[str, Any] = field(default_factory=dict)
+    verbs: dict[str, dict[str, Any]] = field(default_factory=dict)
     source_path: Path | None = None
     integrity_hash: str = ""
 
@@ -138,6 +141,58 @@ def _normalize_fanout(raw: Any, *, path: Path) -> dict[str, Any]:
         if mw < 1 or mw > 32:
             raise RailCatalogError(f"{path}: fanout.max_waves out of range 1..32")
         out["max_waves"] = mw
+    return out
+
+
+_VERB_BODY_KEYS = frozenset({"brief", "tags", "role", "do"})
+
+
+def _normalize_verbs(raw: Any, *, path: Path) -> dict[str, dict[str, Any]]:
+    """Validate optional ``verbs:`` catalog-verb body overrides (RFC-231 M2/M3)."""
+    from soothe.rails.l0_schema import normalize_do_steps
+
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise RailCatalogError(f"{path}: 'verbs' must be a mapping when present")
+    out: dict[str, dict[str, Any]] = {}
+    for name, body in raw.items():
+        if not isinstance(name, str) or not name.strip():
+            raise RailCatalogError(f"{path}: verbs keys must be non-empty strings")
+        verb = name.strip()
+        if verb not in CE_RAIL_BUILTINS:
+            raise RailCatalogError(
+                f"{path}: verbs.{verb} is not a known catalog verb; "
+                f"allowed: {sorted(CE_RAIL_BUILTINS)}"
+            )
+        if not isinstance(body, dict):
+            raise RailCatalogError(f"{path}: verbs.{verb} must be a mapping")
+        unknown = sorted(set(body) - _VERB_BODY_KEYS)
+        if unknown:
+            raise RailCatalogError(
+                f"{path}: verbs.{verb} unknown key(s) {unknown}; allowed: {sorted(_VERB_BODY_KEYS)}"
+            )
+        entry: dict[str, Any] = {}
+        if "brief" in body and body["brief"] is not None:
+            if not isinstance(body["brief"], str) or not body["brief"].strip():
+                raise RailCatalogError(f"{path}: verbs.{verb}.brief must be a non-empty string")
+            entry["brief"] = body["brief"].strip()
+        if "tags" in body and body["tags"] is not None:
+            tags = body["tags"]
+            if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
+                raise RailCatalogError(f"{path}: verbs.{verb}.tags must be a list of strings")
+            entry["tags"] = [t.strip() for t in tags if t.strip()]
+        if "role" in body and body["role"] is not None:
+            if not isinstance(body["role"], str) or not body["role"].strip():
+                raise RailCatalogError(f"{path}: verbs.{verb}.role must be a non-empty string")
+            entry["role"] = body["role"].strip()
+        if "do" in body and body["do"] is not None:
+            entry["do"] = normalize_do_steps(body["do"], path=path, verb=verb)
+        if not entry:
+            raise RailCatalogError(
+                f"{path}: verbs.{verb} must set at least one of brief/tags/role/do"
+            )
+        out[verb] = entry
     return out
 
 
@@ -250,6 +305,7 @@ def load_rail_file(path: Path) -> RailDefinition:
     flow = _normalize_list_of_maps(data.get("flow"), field_name="flow", path=path)
     rules = _normalize_list_of_maps(data.get("rules"), field_name="rules", path=path)
     fanout = _normalize_fanout(data.get("fanout"), path=path)
+    verbs = _normalize_verbs(data.get("verbs"), path=path)
 
     if not flow and not rules:
         raise RailCatalogError(f"{path}: rail must define 'flow' and/or 'rules'")
@@ -269,6 +325,7 @@ def load_rail_file(path: Path) -> RailDefinition:
         flow=flow,
         rules=rules,
         fanout=fanout,
+        verbs=verbs,
         source_path=path,
         integrity_hash=compute_rail_hash(text),
     )

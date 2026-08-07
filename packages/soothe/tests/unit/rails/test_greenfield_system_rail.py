@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from support.rail_harness import catalog_rail_job_state
 
 from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
 from soothe.autopilot.rail.guards import GuardResult, _structural_short_circuit
@@ -122,7 +123,7 @@ async def test_plan_milestones_wires_root_depends_on(tmp_path: Path) -> None:
     ce = ContextEngine()
     root = await ce.create_goal("Build system", workspace=str(tmp_path), priority=70)
     ex = RailBuiltinExecutor(ce)
-    await ex.bind_job(RailJobState(job_id=root.id, rail_id="greenfield-system", rail_version="1.0"))
+    await ex.bind_job(catalog_rail_job_state(root.id))
     result = await ex.invoke("plan_milestones", job_id=root.id)
     assert result.status == "success"
     assert len(result.created_goal_ids) == 1

@@ -131,6 +131,7 @@ class LoopRailInterpreter:
             self._rules[job_id] = _normalize_rules(rail)
 
         fanout = dict(rail.fanout or {})
+        verb_overrides = dict(rail.verbs or {})
         budget = int(engine_max_parallel_goals) if engine_max_parallel_goals is not None else 32
         # Fan-out / wave fields only when the rail declares ``fanout:``.
         if fanout:
@@ -149,6 +150,7 @@ class LoopRailInterpreter:
                 require_plan=require_plan,
                 max_waves=max_waves,
                 engine_max_parallel_goals=budget,
+                verb_overrides=verb_overrides,
             )
         else:
             state = RailJobState(
@@ -157,6 +159,7 @@ class LoopRailInterpreter:
                 rail_version=rail.version,
                 engine_max_parallel_goals=budget,
                 require_plan=False,
+                verb_overrides=verb_overrides,
             )
         await self._builtins.bind_job(state)
         if fanout:

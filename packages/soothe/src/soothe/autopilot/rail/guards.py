@@ -217,36 +217,53 @@ def _structural_short_circuit(
             reasoning=f"structural short-circuit: needs_commit tags={trigger_tags}",
         )
 
-    if name in {"ready_to_plan", "ready_to_fix", "scouts_done", "ready_for_next_wave"}:
+    if name == "ready_for_next_wave":
+        # Fan-out rails (greenfield-system, migration): after feedback verify
+        # (or exhausted feedback / acceptance), idle DAG, waves remain.
+        # Without architecture annotations, do not match structurally —
+        # never fall back to exploration_done (legacy migration dual-path).
+        if not has_architecture:
+            return GuardResult(
+                matched=False,
+                confidence=1.0,
+                reasoning=(
+                    "structural short-circuit: ready_for_next_wave requires "
+                    "architecture annotations"
+                ),
+            )
+        feedback_round = int(structural.get("feedback_round") or 0)
+        max_feedback_rounds = int(structural.get("max_feedback_rounds") or 8)
+        acceptance_met = bool(structural.get("acceptance_met"))
+        feedback_done = (
+            ("verify" in trigger_tags and "feedback" in trigger_tags)
+            or acceptance_met
+            or feedback_round >= max_feedback_rounds
+        )
+        ok = (
+            event == "goal_completed"
+            and pending == 0
+            and wave_below_max
+            and bool(structural.get("all_qa_terminal", True))
+            and feedback_done
+            and not bool(structural.get("feedback_inflight"))
+        )
+        return GuardResult(
+            matched=ok,
+            confidence=1.0,
+            reasoning=(
+                f"structural short-circuit: ready_for_next_wave "
+                f"pending={pending} wave_below_max={wave_below_max} "
+                f"feedback_done={feedback_done}"
+            ),
+        )
+
+    if name in {"ready_to_plan", "ready_to_fix", "scouts_done"}:
         exploration_done = bool(structural.get("all_exploration_terminal"))
         already_planned = bool(
             structural.get("implementation_goal_ids") or structural.get("planning_goal_ids")
         )
         if name == "scouts_done":
             ok = exploration_done
-        elif name == "ready_for_next_wave":
-            if has_architecture:
-                # greenfield-system: after feedback verify (or exhausted
-                # feedback / acceptance), idle DAG, waves remain
-                feedback_round = int(structural.get("feedback_round") or 0)
-                max_feedback_rounds = int(structural.get("max_feedback_rounds") or 8)
-                acceptance_met = bool(structural.get("acceptance_met"))
-                feedback_done = (
-                    ("verify" in trigger_tags and "feedback" in trigger_tags)
-                    or acceptance_met
-                    or feedback_round >= max_feedback_rounds
-                )
-                ok = (
-                    event == "goal_completed"
-                    and pending == 0
-                    and wave_below_max
-                    and bool(structural.get("all_qa_terminal", True))
-                    and feedback_done
-                    and not bool(structural.get("feedback_inflight"))
-                )
-            else:
-                # migration / scout-wave rails
-                ok = exploration_done and pending == 0
         else:
             # Gate once: do not re-fire after plan/implement already exists.
             ok = exploration_done and not already_planned
@@ -255,7 +272,7 @@ def _structural_short_circuit(
             confidence=1.0,
             reasoning=(
                 f"structural short-circuit: exploration_done={exploration_done} "
-                f"already_planned={already_planned} architecture={has_architecture}"
+                f"already_planned={already_planned}"
             ),
         )
 

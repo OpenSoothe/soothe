@@ -35,7 +35,8 @@ knobs). This IG closes the remaining gaps.
 ├──────────────────────────────────────────────────────────────┤
 │ LoopRail (per-rail choreography)                             │
 │ YAML flow / conditions / fanout *contract*, builtins, when   │
-│ Wave / wave_index / max_waves = greenfield-system ONLY       │
+│ Wave / wave_index / max_waves = rails that declare fanout:   │
+│   (greenfield-system, migration — see IG-715)                │
 ├──────────────────────────────────────────────────────────────┤
 │ LLM + job artifact (policy)                                  │
 │ module names, count, rationale for this job’s next wave      │
@@ -46,12 +47,13 @@ knobs). This IG closes the remaining gaps.
 |---------|--------|----------|
 | Pool / schedule cap | Engine | Module names, waves |
 | When to spawn / integrate / review | Rail YAML `flow` | Submit kwargs |
-| Wave / `max_waves` | `greenfield-system` rail | Treated as global Autopilot |
+| Wave / `max_waves` | Rails with `fanout:` (e.g. greenfield-system, migration) | Treated as global Autopilot |
 | Module list & width | LLM via job-scoped plan | Fixed `core/api/cli/tests` |
 | Artifact filesystem path | Rail runtime (internal) | CLI, TUI, user goal text |
 
-**Wave is not an Autopilot engine concept** — it is greenfield LoopRail
-choreography. Engine only runs the goals the rail creates.
+**Wave is not an Autopilot engine concept** — it is LoopRail choreography for
+rails that declare ``fanout:`` (originally greenfield-system; migration added
+in IG-715). Engine only runs the goals the rail creates.
 
 ---
 

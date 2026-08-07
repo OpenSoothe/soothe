@@ -15,11 +15,32 @@ from soothe.autopilot.rail import (
     ScriptedGuardEvaluator,
     export_trace_evaluation,
 )
+from soothe.autopilot.rail.builtins_exec import RailJobState
 from soothe.autopilot.rail.guards import GuardResult
 from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode
+from soothe.rails import LoopRailCatalog
 
 OnReady = Callable[[GoalNode, int], Awaitable[None]]
+
+
+def catalog_rail_job_state(
+    job_id: str,
+    rail_id: str = "greenfield-system",
+    **kwargs: Any,
+) -> RailJobState:
+    """Bind ``RailJobState`` from the catalog (includes ``verbs:`` / ``do:``)."""
+    rail = LoopRailCatalog().resolve(rail_id)
+    verb_overrides = kwargs.pop("verb_overrides", None)
+    if verb_overrides is None:
+        verb_overrides = dict(rail.verbs)
+    return RailJobState(
+        job_id=job_id,
+        rail_id=rail.id,
+        rail_version=rail.version,
+        verb_overrides=verb_overrides,
+        **kwargs,
+    )
 
 
 @dataclass

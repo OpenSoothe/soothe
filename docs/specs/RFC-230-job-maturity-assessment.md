@@ -7,7 +7,8 @@
 **Created**: 2026-08-05  
 **Authors**: Soothe Team  
 **Depends on**: RFC-204, RFC-222, RFC-228, RFC-624, RFC-625, RFC-630  
-**Related**: LoopRail design draft (`docs/drafts/2026-07-11-loop-rail-design.md`),
+**Related**: [RFC-231](RFC-231-looprail-rail-exec.md) (LoopRail + Rail Exec),
+LoopRail design draft (`docs/drafts/2026-07-11-loop-rail-design.md`; promoted by RFC-231),
 IG-678, IG-680, IG-687, IG-691, IG-692
 
 ## Abstract
@@ -58,8 +59,8 @@ structured evaluation as a future enhancement; that enhancement is this RFC.
 - StrangeLoop learning DAG shape, siblings, or rail policy (RFC-222 invariant).
 - Replacing LoopRail with more verifier LLM decompose.
 - Hardcoding language toolchains (cargo/pytest/npm/…) as the job accept latch.
-- Promoting the LoopRail draft to an RFC in this document (referenced as draft;
-  maturity hooks are specified here so rails can consume them).
+- Specifying LoopRail / Rail Exec itself (see **RFC-231**); maturity hooks here
+  remain the contract rails and Exec consume.
 
 ## 4. Architectural invariant
 
@@ -74,7 +75,7 @@ goal_completed
   → notify_rail(goal_completed)           # only spawner for rail jobs
   → if qa/verify-class: JobMaturityAssessor → CE + rail acceptance_met
   → if job idle: notify_rail(dag_idle)
-  → rail guard → CE builtin (feedback / complete_job / next wave)
+  → rail guard → Rail Exec catalog verb (feedback / complete_job / next wave)
 ```
 
 Child accept **≠** job accept. A QA narrative cannot latch `acceptance_met`
@@ -186,6 +187,10 @@ Maker / integrate / review completions do **not** set `acceptance_met=true`.
 
 ## 8. LoopRail integration
 
+Normative LoopRail / Rail Exec: **RFC-231**. Maturity remains a host latch that
+guards and verb recipes consume; this section only specifies the maturity
+contract.
+
 ### 8.1 Guards
 
 Structural short-circuits MUST read CE/rail maturity:
@@ -197,10 +202,11 @@ Structural short-circuits MUST read CE/rail maturity:
 Empty trigger tags after restart: **fail closed** — repair from CE `rail_tags`
 (IG-691) before skipping phase transitions.
 
-### 8.2 Builtins
+### 8.2 Catalog verbs / Rail Exec
 
 - Enrich `qa_verify` / feedback verify goal descriptions from maturity criteria
-  (not only `"QA verify for job {id}"`).
+  (not only `"QA verify for job {id}"`) — prefer YAML verb-body briefs (RFC-231)
+  over hardcoded executor strings.
 - `complete_job` requires `acceptance_met` (or explicit exhausted-feedback policy
   recorded on the snapshot).
 - `spawn_feedback_cycle` skipped when `acceptance_met` (already coded; make the

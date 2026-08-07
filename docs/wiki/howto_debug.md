@@ -526,10 +526,10 @@ rm -rf ~/.soothe/data/threads/*
 
 ---
 
-## Greenfield WavePlan stall
+## WavePlan stall (greenfield / migration)
 
-Symptoms: Autopilot job on `greenfield-system` (or any rail with
-`require_plan`) has a **completed** architecture/planner goal, **zero** maker
+Symptoms: Autopilot job on `greenfield-system`, `migration`, or any rail with
+`require_plan` has a **completed** architecture/planner goal, **zero** maker
 goals, and the job root stays `pending`. Logs show
 `wave_plan_ready=False` / `architecture_ready` unmatched on `dag_idle`, or
 rate-limited warnings that a WavePlan is missing for the job.

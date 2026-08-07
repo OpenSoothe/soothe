@@ -193,6 +193,94 @@ flow:
         load_rail_file(path)
 
 
+def test_load_rail_verbs_overrides(tmp_path: Path) -> None:
+    path = tmp_path / "with-verbs.yml"
+    path.write_text(
+        """
+id: with-verbs
+version: "1.0"
+summary: Verb brief override.
+applies_when: test
+verbs:
+  plan_milestones:
+    brief: |
+      Custom planner for job {job_id}.
+    tags: [architecture]
+    role: planner
+flow:
+  - event: job_start
+    then: plan_milestones
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    rail = load_rail_file(path)
+    assert "plan_milestones" in rail.verbs
+    assert "{job_id}" in rail.verbs["plan_milestones"]["brief"]
+    assert rail.verbs["plan_milestones"]["tags"] == ["architecture"]
+    assert rail.verbs["plan_milestones"]["role"] == "planner"
+
+
+def test_load_rail_rejects_unknown_verb_key(tmp_path: Path) -> None:
+    path = tmp_path / "bad-verbs.yml"
+    path.write_text(
+        """
+id: bad-verbs
+version: "1.0"
+summary: Bad verbs.
+applies_when: x
+verbs:
+  plan_milestones:
+    brief: ok
+    script: evil
+flow:
+  - event: job_start
+    then: plan_milestones
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RailCatalogError, match="unknown key"):
+        load_rail_file(path)
+
+
+def test_builtin_migration_and_greenfield_declare_plan_milestones_verbs() -> None:
+    catalog = LoopRailCatalog()
+    gf = catalog.resolve("greenfield-system")
+    assert gf.version == "1.6"
+    gf_do = (gf.verbs.get("plan_milestones") or {}).get("do") or []
+    assert gf_do and "ownership" in str(gf_do[0].get("spawn_goal", {}).get("brief", "")).lower()
+    mig = catalog.resolve("migration")
+    assert mig.version == "2.2"
+    mig_do = (mig.verbs.get("plan_milestones") or {}).get("do") or []
+    brief = str(mig_do[0].get("spawn_goal", {}).get("brief", ""))
+    assert "migration" in brief.lower()
+    assert "slice" in brief.lower() or "schema" in brief.lower()
+
+
+def test_load_rail_rejects_unknown_l0_op(tmp_path: Path) -> None:
+    path = tmp_path / "bad-do.yml"
+    path.write_text(
+        """
+id: bad-do
+version: "1.0"
+summary: Bad do op.
+applies_when: x
+verbs:
+  plan_milestones:
+    do:
+      - invent_op: {}
+flow:
+  - event: job_start
+    then: plan_milestones
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RailCatalogError, match="unknown L0"):
+        load_rail_file(path)
+
+
 def test_load_rail_aliases_legacy_on_to_event(tmp_path: Path) -> None:
     """Legacy ``on:`` (YAML bool key or string) is normalized to ``event``."""
     path = tmp_path / "legacy.yml"

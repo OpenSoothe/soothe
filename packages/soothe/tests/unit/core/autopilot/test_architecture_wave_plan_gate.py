@@ -6,10 +6,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.rail_harness import catalog_rail_job_state
 
 from soothe.autopilot import AutopilotService
 from soothe.autopilot.dispatch.models import Finding, GoalDispatchContextContribution
-from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor
 from soothe.autopilot.rail.wave_plan import DEFAULT_WAVE_PLAN_ARTIFACT, resolve_wave_plan_path
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
@@ -63,10 +64,8 @@ async def test_architecture_gate_accepts_when_wave_plan_in_findings(
     root.role = "root"
     ex: RailBuiltinExecutor = svc._rail_interpreter.builtins
     await ex.bind_job(
-        RailJobState(
-            job_id=root.id,
-            rail_id="greenfield-system",
-            rail_version="1.4",
+        catalog_rail_job_state(
+            root.id,
             require_plan=True,
             wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
             engine_max_parallel_goals=4,
@@ -131,10 +130,8 @@ async def test_architecture_gate_send_back_without_wave_plan(
     root.role = "root"
     ex = svc._rail_interpreter.builtins
     await ex.bind_job(
-        RailJobState(
-            job_id=root.id,
-            rail_id="greenfield-system",
-            rail_version="1.4",
+        catalog_rail_job_state(
+            root.id,
             require_plan=True,
             wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
         )
@@ -193,10 +190,8 @@ async def test_architecture_gate_never_calls_llm_consensus(
     root.role = "root"
     ex = svc._rail_interpreter.builtins
     await ex.bind_job(
-        RailJobState(
-            job_id=root.id,
-            rail_id="greenfield-system",
-            rail_version="1.4",
+        catalog_rail_job_state(
+            root.id,
             require_plan=True,
             wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
         )
@@ -283,10 +278,8 @@ async def test_workspace_wave_plan_file_not_authoritative(
     root.role = "root"
     ex = svc._rail_interpreter.builtins
     await ex.bind_job(
-        RailJobState(
-            job_id=root.id,
-            rail_id="greenfield-system",
-            rail_version="1.4",
+        catalog_rail_job_state(
+            root.id,
             require_plan=True,
             wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
         )

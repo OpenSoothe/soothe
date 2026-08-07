@@ -1,7 +1,8 @@
 # Built-in LoopRails
 
 Declarative job-scoped workflow patterns for Autopilot. Users author **when**
-orchestration should act; ContextEngine owns **what** (CE built-ins via `then:`).
+orchestration should act; **Rail Exec** (RFC-231) applies catalog verb recipes
+as CE primitives (`then:`). Normative spec: `docs/specs/RFC-231-looprail-rail-exec.md`.
 
 ## No `default` rail
 
@@ -40,8 +41,10 @@ soothe autopilot top
 
 ## Format
 
-See `docs/drafts/2026-07-11-loop-rail-design.md`. Each file: `id` must match
-filename stem; `then:` verbs are CE built-ins only.
+See RFC-231 and the historical draft `docs/drafts/2026-07-11-loop-rail-design.md`.
+Each file: `id` must match filename stem; `then:` verbs are catalog recipes.
+Override with `verbs:` — `brief`/`tags`/`role` (IG-716) and/or multi-step
+`do:` L0 recipes (IG-717).
 
 **YAML tip:** use ``event:`` for triggers (not ``on:`` — YAML 1.1 treats bare
 ``on`` as a boolean). Legacy ``on`` is still accepted and rewritten to ``event``.

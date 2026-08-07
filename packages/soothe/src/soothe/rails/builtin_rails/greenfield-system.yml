@@ -1,5 +1,5 @@
 id: greenfield-system
-version: "1.4"
+version: "1.6"
 
 summary: |
   Greenfield multi-module system build: architecture milestones, parallel
@@ -23,6 +23,38 @@ fanout:
   artifact: "{job_id}/wave-plan.json"
   require_plan: true
   max_waves: 3
+
+# RFC-231 M2/M3: catalog verb body — ``do:`` L0 recipe for plan_milestones.
+verbs:
+  plan_milestones:
+    do:
+      - spawn_goal:
+          id: planner
+          role: planner
+          tags: [architecture, planning, milestones]
+          priority: 80
+          brief: |
+            Architecture and milestone map for job {job_id}. Define module
+            boundaries, wave-1 independent ownership units, wave acceptance
+            criteria, and git commit milestones. Do not implement product code
+            here.
+
+            REQUIRED deliverable: append one findings entry that is exactly a
+            WavePlan JSON object (host persists fan-out for this job — do not
+            write fan-out policy into the project workspace tree; never write
+            docs/wave-plan.json or .soothe/wave-plan.json as the plan). Schema
+            example:
+            {"wave_modules":["frontend","ir","passes","backend","driver","tests"],
+            "independence":"disjoint write-sets per module",
+            "rationale":"why this partition"}
+            Optionally use rich `modules` entries
+            ({"module","description","priority","tags"}) and/or `max_waves`.
+            Prose alone is not enough (never scrapes markdown, never substitutes
+            a fixed default module list). Modules must be independent (no
+            overlapping primary write sets). Autopilot only clamps spawn width
+            to max_parallel_goals.
+          wire:
+            root_waits_on: self
 
 conditions:
   architecture_ready: |

@@ -1,4 +1,4 @@
-"""CE-facing LoopRail builtins (v1 test/runtime implementation).
+"""CE-facing LoopRail builtins + Rail Exec dispatch (RFC-231).
 
 Mutates ContextEngine goal DAG. Goal tags / branch metadata are mirrored onto
 ``GoalNode.rail_*`` and also kept in ``RailJobState`` for wave counters.
@@ -6,12 +6,8 @@ Mutates ContextEngine goal DAG. Goal tags / branch metadata are mirrored onto
 and optionally persists ``rail_state.json`` under the job artifact dir so
 guards survive daemon restart.
 
-Greenfield-system builtins: ``plan_milestones``, ``spawn_wave_makers``
-(with optional git worktrees), ``spawn_integrate``, ``commit_milestone``,
-``spawn_feedback_cycle`` (find → optimize → verify).
-
-LLM-determined fan-out uses a job-scoped ``wave-plan.json`` under
-``jobs_root`` (host ``record_wave_plan`` / structured findings ingest) before
+``invoke`` prefers YAML ``verbs.<name>.do`` recipes (IG-717) over ``_do_*``.
+Wave fan-out uses a job-scoped ``wave-plan.json`` under ``jobs_root`` before
 ``spawn_wave_makers`` — no markdown scraping, no project-workspace plan files.
 """
 
@@ -40,10 +36,42 @@ from soothe.autopilot.rail.wave_plan import (
 )
 from soothe.context.engine import ContextEngine
 from soothe.context.models import TERMINAL_STATES, GoalNode
+from soothe.rails.verb_defaults import (
+    DEFAULT_VERB_ROLES,
+    DEFAULT_VERB_TAGS,
+    resolve_verb_brief,
+    resolve_verb_field,
+)
 
 logger = logging.getLogger(__name__)
 
 _RAIL_STATE_FILENAME = "rail_state.json"
+
+
+def _coerce_verb_overrides(raw: Any) -> dict[str, dict[str, Any]]:
+    """Normalize persisted / bound verb override mapping."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for name, body in raw.items():
+        if not isinstance(name, str) or not isinstance(body, dict):
+            continue
+        entry: dict[str, Any] = {}
+        brief = body.get("brief")
+        if isinstance(brief, str) and brief.strip():
+            entry["brief"] = brief.strip()
+        tags = body.get("tags")
+        if isinstance(tags, list):
+            entry["tags"] = [str(t).strip() for t in tags if str(t).strip()]
+        role = body.get("role")
+        if isinstance(role, str) and role.strip():
+            entry["role"] = role.strip()
+        do_steps = body.get("do")
+        if isinstance(do_steps, list) and do_steps:
+            entry["do"] = do_steps
+        if entry:
+            out[name.strip()] = entry
+    return out
 
 
 @dataclass
@@ -84,6 +112,8 @@ class RailJobState:
     feedback_round: int = 0
     max_feedback_rounds: int = 8
     acceptance_met: bool = False
+    # RFC-231 M2: rail YAML ``verbs:`` overrides (brief/tags/role per catalog verb)
+    verb_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -300,6 +330,9 @@ class RailBuiltinExecutor:
             feedback_round=max(base.feedback_round, donor.feedback_round),
             max_feedback_rounds=max(base.max_feedback_rounds, donor.max_feedback_rounds),
             acceptance_met=base.acceptance_met or donor.acceptance_met,
+            verb_overrides=base.verb_overrides
+            if base.verb_overrides
+            else dict(donor.verb_overrides or {}),
         )
 
     async def _persist_job(self, state: RailJobState) -> None:
@@ -338,6 +371,7 @@ class RailBuiltinExecutor:
                 "feedback_round": state.feedback_round,
                 "max_feedback_rounds": state.max_feedback_rounds,
                 "acceptance_met": state.acceptance_met,
+                "verb_overrides": state.verb_overrides,
                 "annotations": {gid: asdict(ann) for gid, ann in state.annotations.items()},
             }
             path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
@@ -386,6 +420,7 @@ class RailBuiltinExecutor:
             feedback_round=int(raw.get("feedback_round") or 0),
             max_feedback_rounds=int(raw.get("max_feedback_rounds") or 8),
             acceptance_met=bool(raw.get("acceptance_met")),
+            verb_overrides=_coerce_verb_overrides(raw.get("verb_overrides")),
         )
 
     def _tags_by_goal_unlocked(self, job_id: str) -> dict[str, list[str]]:
@@ -460,11 +495,24 @@ class RailBuiltinExecutor:
         job_id: str,
         trigger_goal_id: str | None = None,
     ) -> BuiltinResult:
-        """Dispatch a CE builtin by name."""
-        handler = getattr(self, f"_do_{builtin}", None)
-        if handler is None:
-            return BuiltinResult(status="error", detail=f"unknown builtin: {builtin}")
+        """Dispatch a catalog verb: prefer YAML ``do:`` recipe, else ``_do_*``."""
         try:
+            state = await self.job_state(job_id)
+            steps = None
+            if state is not None:
+                body = (state.verb_overrides or {}).get(builtin) or {}
+                raw_do = body.get("do")
+                if isinstance(raw_do, list) and raw_do:
+                    steps = raw_do
+            if steps is not None:
+                from soothe.autopilot.rail.recipe_exec import RecipeRunner
+
+                return await RecipeRunner(self).run(
+                    steps, job_id=job_id, trigger_goal_id=trigger_goal_id
+                )
+            handler = getattr(self, f"_do_{builtin}", None)
+            if handler is None:
+                return BuiltinResult(status="error", detail=f"unknown builtin: {builtin}")
             return await handler(job_id=job_id, trigger_goal_id=trigger_goal_id)
         except Exception as exc:
             logger.exception("Rail builtin %s failed", builtin)
@@ -560,28 +608,34 @@ class RailBuiltinExecutor:
         del trigger_goal_id
         state = await self._require(job_id)
         ws = _job_workspace(self._ce, job_id)
-        # Opaque user/TUI-facing copy: no filesystem path for the plan artifact.
+        planner_brief = resolve_verb_brief(
+            "plan_milestones",
+            job_id=job_id,
+            overrides=state.verb_overrides,
+        )
+        if not planner_brief:
+            return BuiltinResult(
+                status="error",
+                detail="plan_milestones brief missing (no default and no verbs override)",
+            )
+        tags = resolve_verb_field(
+            "plan_milestones",
+            "tags",
+            overrides=state.verb_overrides,
+            defaults=DEFAULT_VERB_TAGS,
+        )
+        if not isinstance(tags, list) or not tags:
+            tags = list(DEFAULT_VERB_TAGS["plan_milestones"])
+        role = resolve_verb_field(
+            "plan_milestones",
+            "role",
+            overrides=state.verb_overrides,
+            defaults=DEFAULT_VERB_ROLES,
+        )
+        if not isinstance(role, str) or not role:
+            role = DEFAULT_VERB_ROLES["plan_milestones"]
         arch = await self._ce.create_goal(
-            (
-                f"Architecture and milestone map for job {job_id}. "
-                "Define module boundaries, wave-1 independent ownership units, "
-                "wave acceptance criteria, and git commit milestones. "
-                "Do not implement product code here.\n\n"
-                "REQUIRED deliverable: append one findings entry that is exactly "
-                "a WavePlan JSON object (host persists fan-out for this job — do "
-                "not write fan-out policy into the project workspace tree; never "
-                "write docs/wave-plan.json or .soothe/wave-plan.json as the plan). "
-                "Schema example:\n"
-                '{"wave_modules":["frontend","ir","passes","backend","driver","tests"],'
-                '"independence":"disjoint write-sets per module",'
-                '"rationale":"why this partition"}\n'
-                "Optionally use rich `modules` entries "
-                '({"module","description","priority","tags"}) and/or `max_waves`. '
-                "Prose alone is not enough (never scrapes markdown, never substitutes "
-                "a fixed default module list). Modules must be independent (no "
-                "overlapping primary write sets). Autopilot only clamps spawn width "
-                "to max_parallel_goals."
-            ),
+            planner_brief,
             parent_id=job_id,
             source="decomposition",
             priority=80,
@@ -591,8 +645,8 @@ class RailBuiltinExecutor:
         await self.annotate_goal(
             arch.id,
             job_id,
-            tags=["architecture", "planning", "milestones"],
-            role="planner",
+            tags=[str(t) for t in tags],
+            role=role,
             branch_id=job_id,
         )
         root = await self._ce.get_goal(job_id)
@@ -981,13 +1035,15 @@ class RailBuiltinExecutor:
         if commits:
             deps = commits[-1:]
         ws = _job_workspace(self._ce, job_id)
+        review_brief = resolve_verb_brief(
+            "review",
+            job_id=job_id,
+            overrides=state.verb_overrides,
+        )
+        if not review_brief:
+            return BuiltinResult(status="error", detail="review brief missing")
         goal = await self._ce.create_goal(
-            (
-                f"Diff-scoped code review for job {job_id}. "
-                "Review the milestone commit range (not an unclean dirty tree). "
-                "Record findings; block on design/security issues; do not "
-                "re-implement features."
-            ),
+            review_brief,
             parent_id=job_id,
             depends_on=deps or None,
             source="decomposition",
@@ -1253,8 +1309,8 @@ class RailBuiltinExecutor:
                 state.decompose_plan = None
                 self._persist_rail_state_unlocked(state)
 
-        # Reuse plan_milestones spawn copy (opaque deliverable; host ingests).
-        result = await self._do_plan_milestones(job_id=job_id, trigger_goal_id=trigger_goal_id)
+        # Prefer catalog ``do:`` / brief overrides via invoke (not a direct _do_*).
+        result = await self.invoke("plan_milestones", job_id=job_id, trigger_goal_id=None)
         if result.status != "success" or not result.created_goal_ids:
             return result
 

@@ -1,4 +1,4 @@
-"""LoopRail runtime: interpreter, guards, builtins, trace store."""
+"""LoopRail runtime: interpreter, guards, builtins, recipes, trace store."""
 
 from soothe.autopilot.rail.builtins_exec import (
     BuiltinResult,
@@ -14,6 +14,7 @@ from soothe.autopilot.rail.guards import (
     ScriptedGuardEvaluator,
 )
 from soothe.autopilot.rail.interpreter import LoopRailInterpreter, RailEvent
+from soothe.autopilot.rail.recipe_exec import L0_OPS, RecipeRunner
 from soothe.autopilot.rail.trace_store import (
     GuardResult,
     JsonlRailTraceStore,
@@ -39,6 +40,7 @@ __all__ = [
     "GuardEvaluator",
     "GuardResult",
     "JsonlRailTraceStore",
+    "L0_OPS",
     "LLMGuardEvaluator",
     "LoopRailInterpreter",
     "MemoryRailTraceStore",
@@ -46,11 +48,12 @@ __all__ = [
     "RailEvent",
     "RailJobState",
     "RailTraceStore",
+    "RecipeRunner",
     "RuleFireRecord",
+    "ScriptedGuardEvaluator",
     "WavePlan",
     "export_trace_evaluation",
     "load_wave_plan",
     "resolve_fanout_modules",
     "resolve_wave_plan_path",
-    "ScriptedGuardEvaluator",
 ]

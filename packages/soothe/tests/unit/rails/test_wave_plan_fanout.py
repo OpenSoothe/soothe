@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from support.rail_harness import catalog_rail_job_state
 
 from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
 from soothe.autopilot.rail.guards import GuardResult, _structural_short_circuit
@@ -146,10 +147,8 @@ async def test_plan_milestones_description_hides_artifact_path(tmp_path: Path) -
     root = await ce.create_goal("Build system", workspace=str(tmp_path), priority=70)
     ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
     await ex.bind_job(
-        RailJobState(
-            job_id=root.id,
-            rail_id="greenfield-system",
-            rail_version="1.4",
+        catalog_rail_job_state(
+            root.id,
             wave_plan_artifact=DEFAULT_WAVE_PLAN_ARTIFACT,
             require_plan=True,
         )
@@ -247,10 +246,8 @@ async def test_retry_architecture_replants_planner(tmp_path: Path) -> None:
     root = await ce.create_goal("Build system", workspace=str(tmp_path), priority=70)
     ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
     await ex.bind_job(
-        RailJobState(
-            job_id=root.id,
-            rail_id="greenfield-system",
-            rail_version="1.4",
+        catalog_rail_job_state(
+            root.id,
             require_plan=True,
             wave_modules=["stale"],
         )

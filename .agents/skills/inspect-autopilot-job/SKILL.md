@@ -191,7 +191,7 @@ makers should use distinct `.soothe/worktrees/…`.
 |------|-------|----------|
 | `feature-dev` | one plan+maker after scouts | scout fan-out |
 | `greenfield-system` | `plan_milestones` → one architecture | makers after `architecture_ready` |
-| `migration` | wave plan+implement | often singleton maker |
+| `migration` | same fan-out as greenfield (`plan_milestones` → WavePlan → makers); plus `needs_human` → pause | makers after `architecture_ready`; cutover may pause |
 
 ### 4. Rail conformance
 
@@ -264,7 +264,7 @@ Pointers to diagnose-loop Workflow B for `autopilot__{job}__*`.
 - Do not call early single-goal execution a parallelism bug during serial rail gates.
 - Distinguish **ready but not dispatched** (scheduler/reservation) vs **not ready** (deps).
 - Prefer `jobs/{id}/rail_trace.jsonl` over legacy `loops/{id}/`.
-- Greenfield fan-out plan (operator forensics only): `jobs/{id}/wave-plan.json`
+- Fan-out WavePlan (operator forensics; greenfield + migration): `jobs/{id}/wave-plan.json`
   under `$SOOTHE_DATA_DIR` (same dir as `rail_state.json`). Not a user workflow.
   Project-tree files (`docs/wave-plan.json`, `.soothe/wave-plan.json`) are
   **not** authoritative and will not unblock `spawn_wave_makers`.
