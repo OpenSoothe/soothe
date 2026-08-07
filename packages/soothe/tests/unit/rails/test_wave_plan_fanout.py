@@ -175,7 +175,10 @@ async def test_plan_milestones_description_hides_artifact_path(tmp_path: Path) -
     assert "project workspace tree" in arch.description
     assert "WavePlan JSON" in arch.description
     assert "ownership units" in arch.description.lower()
-    assert "fixed default" in arch.description.lower() or "never substitutes" in arch.description
+    assert "fixed default" in arch.description.lower()
+    assert "host persists" not in arch.description.lower()
+    assert "max_parallel_goals" not in arch.description
+    assert "autopilot" not in arch.description.lower()
 
 
 @pytest.mark.asyncio

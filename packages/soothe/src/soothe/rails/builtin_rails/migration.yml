@@ -1,30 +1,21 @@
 id: migration
-version: "2.3"
+version: "2.4"
 
 summary: |
-  Multi-step migration or upgrade as a goal loop: architecture milestones
-  with WavePlan slice/wave partitions (schema batches, dual-write slices,
-  cutover-prep), parallel makers, integrate, commit gate, review, wave QA,
-  feedback cycles, and pause on irreversible cutover. Differs from
-  feature-dev by partitioning work into independent migration slices and
-  requiring a job-scoped WavePlan before makers spawn.
+  Multi-step migration or upgrade: architecture milestones with WavePlan
+  slice/wave partitions (schema batches, dual-write slices, cutover-prep),
+  parallel makers, integrate, commit gate, review, wave QA, feedback cycles,
+  and pause on irreversible cutover.
 
 applies_when: |
   Framework upgrade, schema migration, API version bump, or multi-file
-  mechanical migration with a clear done condition — not a single hot
-  fix, research spike, or greenfield multi-part product from scratch.
+  mechanical migration with a clear done condition.
 
-# Fan-out is LoopRail policy — not AutopilotService / submit API.
-# Slice list is LLM-authored (WavePlan JSON in architecture findings);
-# host ingests findings into a job-scoped artifact under
-# $SOOTHE_DATA_DIR/jobs/{job_id}/. Rail only declares the contract path
-# template + require_plan. Engine clamps to max_parallel_goals.
 fanout:
   artifact: "{job_id}/wave-plan.json"
   require_plan: true
   max_waves: 3
 
-# RFC-231 M2/M3: migration planner as ``do:`` recipe (no rail_id fork).
 verbs:
   plan_milestones:
     do:
@@ -42,19 +33,17 @@ verbs:
             migration code here.
 
             REQUIRED deliverable: append one findings entry that is exactly a
-            WavePlan JSON object (host persists fan-out for this job — do not
-            write fan-out policy into the project workspace tree; never write
-            docs/wave-plan.json or .soothe/wave-plan.json as the plan). Schema
+            WavePlan JSON object. Do not write the plan into the project workspace tree
+            (never write docs/wave-plan.json or .soothe/wave-plan.json). Schema
             example:
             {"wave_slices":["schema","dual-write","cutover-prep","verify"],
             "independence":"disjoint write-sets per migration slice",
             "rationale":"why this partition"}
             Optionally use rich `slices` entries
             ({"slice","description","priority","tags"}) and/or `max_waves`.
-            Prose alone is not enough (never scrapes markdown, never substitutes
-            a fixed default slice list). Slices must be independent (no
-            overlapping primary write sets). Autopilot only clamps spawn width
-            to max_parallel_goals.
+            Prose alone is not enough — never substitute a fixed default
+            slice list. Slices must be independent (no overlapping primary
+            write sets).
           wire:
             root_waits_on: self
 
@@ -104,7 +93,6 @@ flow:
     when: architecture_ready
     then: spawn_wave_makers
 
-  # Recover when architecture completed and LLM later wrote the wave plan.
   - event: dag_idle
     when: architecture_ready
     then: spawn_wave_makers
@@ -149,7 +137,6 @@ flow:
     when: architecture_failed
     then: retry_architecture
 
-  # Recover when makers finished but integrate never spawned.
   - event: dag_idle
     when: wave_makers_done
     then: spawn_integrate

@@ -17,7 +17,7 @@ from soothe.rails import LoopRailCatalog
 
 def test_migration_rail_declares_fanout_and_human_gate() -> None:
     rail = LoopRailCatalog().resolve("migration")
-    assert rail.version == "2.3"
+    assert rail.version == "2.4"
     assert rail.fanout.get("artifact") == "{job_id}/wave-plan.json"
     assert rail.fanout.get("require_plan") is True
     assert "default_modules" not in rail.fanout
@@ -130,6 +130,10 @@ async def test_plan_milestones_migration_copy(tmp_path: Path) -> None:
     assert "docs/wave-plan.json" in arch.description
     assert "WavePlan JSON" in arch.description
     assert "record_wave_plan" not in arch.description
+    assert "project workspace tree" in arch.description
+    assert "host persists" not in arch.description.lower()
+    assert "max_parallel_goals" not in arch.description
+    assert "autopilot" not in arch.description.lower()
 
 
 @pytest.mark.asyncio

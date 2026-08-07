@@ -1,11 +1,10 @@
 id: maker-checker
-version: "1.0"
+version: "1.1"
 
 summary: |
-  Evaluator-optimizer style workflow: implement, then independently review
-  until the checker passes or the branch is replanted. Differs from no-rail
-  consensus (same-goal send_back) by forcing a separate checker goal and
-  replant on recoverable checker failure.
+  Implement, then independently check until the checker passes or the branch
+  is replanted. Uses a separate checker goal with a fresh identity; recoverable
+  checker failure replants rather than retrying the same maker trail.
 
 applies_when: |
   High-stakes change where self-grading is unacceptable: security-sensitive

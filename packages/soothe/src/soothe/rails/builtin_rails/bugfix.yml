@@ -1,14 +1,13 @@
 id: bugfix
-version: "1.0"
+version: "1.1"
 
 summary: |
   Reproduce and diagnose a defect, then fix and verify with a separate QA
-  goal. Differs from no-rail by gating implement on repro/root-cause evidence
-  and requiring QA against the original failure.
+  goal. Implement only after repro or root-cause evidence; QA re-checks the
+  original failure.
 
 applies_when: |
-  The user reports a bug, regression, failing test, or unexpected behavior
-  in existing code — not a greenfield feature or open-ended spike.
+  Bug, regression, failing test, or unexpected behavior in existing code.
 
 conditions:
   ready_to_fix: |

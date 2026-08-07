@@ -1,14 +1,13 @@
 id: feature-dev
-version: "1.0"
+version: "1.1"
 
 summary: |
   Implement or refactor a feature with parallel exploration, planning,
-  implementation, independent review, and QA. Differs from no-rail by
-  requiring a scout barrier before implement and separate review/QA goals.
+  implementation, independent review, and QA. Scouts finish before
+  implement; review and QA run as separate goals.
 
 applies_when: |
-  The user wants to build or change functionality in an existing codebase,
-  not a one-line fix, pure research spike, or production incident hotfix.
+  Build or change functionality in an existing codebase.
 
 conditions:
   ready_to_plan: |

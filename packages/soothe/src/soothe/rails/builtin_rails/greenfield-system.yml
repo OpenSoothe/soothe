@@ -1,30 +1,21 @@
 id: greenfield-system
-version: "1.7"
+version: "1.8"
 
 summary: |
   Greenfield multi-slice system build: architecture milestones, parallel
   makers (git worktrees when available), integrate, commit gate, diff-scoped
   review, wave QA, then find→optimize→verify feedback cycles until system
-  acceptance. Differs from feature-dev by rejecting a single maker pass,
-  never wiring makers to depend on the job root, and closing gaps with a
-  feedback loop before next wave or job completion.
+  acceptance.
 
 applies_when: |
   Building a new multi-part system or large scaffold from scratch
-  (compiler, platform, multi-crate product), not a feature in an existing
-  mature codebase, hotfix, bugfix, or research spike.
+  (compiler, platform, multi-crate product).
 
-# Fan-out is LoopRail policy — not AutopilotService / submit API.
-# Slice list is LLM-authored (WavePlan JSON in architecture findings);
-# host ingests findings into a job-scoped artifact under
-# $SOOTHE_DATA_DIR/jobs/{job_id}/. Rail only declares the contract path
-# template + require_plan. Engine clamps to max_parallel_goals.
 fanout:
   artifact: "{job_id}/wave-plan.json"
   require_plan: true
   max_waves: 3
 
-# RFC-231 M2/M3: catalog verb body — ``do:`` L0 recipe for plan_milestones.
 verbs:
   plan_milestones:
     do:
@@ -41,19 +32,17 @@ verbs:
             product code here.
 
             REQUIRED deliverable: append one findings entry that is exactly a
-            WavePlan JSON object (host persists fan-out for this job — do not
-            write fan-out policy into the project workspace tree; never write
-            docs/wave-plan.json or .soothe/wave-plan.json as the plan). Schema
+            WavePlan JSON object. Do not write the plan into the project workspace tree
+            (never write docs/wave-plan.json or .soothe/wave-plan.json). Schema
             example:
             {"wave_slices":["frontend","ir","passes","backend","driver","tests"],
             "independence":"disjoint write-sets per slice",
             "rationale":"why this partition"}
             Optionally use rich `slices` entries
             ({"slice","description","priority","tags"}) and/or `max_waves`.
-            Prose alone is not enough (never scrapes markdown, never substitutes
-            a fixed default slice list). Slices must be independent (no
-            overlapping primary write sets). Autopilot only clamps spawn width
-            to max_parallel_goals.
+            Prose alone is not enough — never substitute a fixed default
+            slice list. Slices must be independent (no overlapping primary
+            write sets).
           wire:
             root_waits_on: self
 
@@ -100,7 +89,6 @@ flow:
     when: architecture_ready
     then: spawn_wave_makers
 
-  # Recover when architecture completed and LLM later wrote the wave plan.
   - event: dag_idle
     when: architecture_ready
     then: spawn_wave_makers
@@ -141,8 +129,6 @@ flow:
     when: architecture_failed
     then: retry_architecture
 
-  # Recover when makers finished but integrate never spawned (e.g. pruned
-  # retries previously blocked wave_makers_done on the last maker completion).
   - event: dag_idle
     when: wave_makers_done
     then: spawn_integrate

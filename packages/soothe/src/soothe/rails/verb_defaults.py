@@ -19,19 +19,17 @@ DEFAULT_VERB_BRIEFS: dict[str, str] = {
         "wave acceptance criteria, and git commit milestones. "
         "Do not implement product code here.\n\n"
         "REQUIRED deliverable: append one findings entry that is exactly "
-        "a WavePlan JSON object (host persists fan-out for this job — do "
-        "not write fan-out policy into the project workspace tree; never "
-        "write docs/wave-plan.json or .soothe/wave-plan.json as the plan). "
-        "Schema example:\n"
+        "a WavePlan JSON object. Do not write the plan into the project "
+        "workspace tree (never write docs/wave-plan.json or "
+        ".soothe/wave-plan.json). Schema example:\n"
         '{"wave_slices":["frontend","ir","passes","backend","driver","tests"],'
         '"independence":"disjoint write-sets per slice",'
         '"rationale":"why this partition"}\n'
         "Optionally use rich `slices` entries "
         '({"slice","description","priority","tags"}) and/or `max_waves`. '
-        "Prose alone is not enough (never scrapes markdown, never substitutes "
-        "a fixed default slice list). Slices must be independent (no "
-        "overlapping primary write sets). Autopilot only clamps spawn width "
-        "to max_parallel_goals."
+        "Prose alone is not enough — never substitute a fixed default "
+        "slice list. Slices must be independent (no overlapping primary "
+        "write sets)."
     ),
     "review": (
         "Diff-scoped code review for job {job_id}. "

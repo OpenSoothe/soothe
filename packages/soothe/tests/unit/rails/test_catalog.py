@@ -80,6 +80,15 @@ def test_builtin_catalog_loads_all_shipped_rails() -> None:
         assert rail.flow or rail.rules
         assert rail.source_path is not None
         assert rail.source_path.stem == rail_id
+        # Self-contained copy: no cross-rail or host-internals prose.
+        blob = f"{rail.summary}\n{rail.applies_when}".lower()
+        assert "differs from" not in blob
+        assert "no-rail" not in blob
+        assert "host persists" not in blob
+        assert "autopilotservice" not in blob
+        assert "$soothe_data_dir" not in blob
+        for other in EXPECTED_BUILTIN_IDS - {rail_id}:
+            assert other not in blob, f"{rail_id} mentions other rail {other}"
 
 
 def test_project_rail_overrides_builtin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -247,11 +256,11 @@ flow:
 def test_builtin_migration_and_greenfield_declare_plan_milestones_verbs() -> None:
     catalog = LoopRailCatalog()
     gf = catalog.resolve("greenfield-system")
-    assert gf.version == "1.7"
+    assert gf.version == "1.8"
     gf_do = (gf.verbs.get("plan_milestones") or {}).get("do") or []
     assert gf_do and "ownership" in str(gf_do[0].get("spawn_goal", {}).get("brief", "")).lower()
     mig = catalog.resolve("migration")
-    assert mig.version == "2.3"
+    assert mig.version == "2.4"
     mig_do = (mig.verbs.get("plan_milestones") or {}).get("do") or []
     brief = str(mig_do[0].get("spawn_goal", {}).get("brief", ""))
     assert "migration" in brief.lower()

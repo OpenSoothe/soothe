@@ -1,10 +1,9 @@
 id: hotfix
-version: "1.0"
+version: "1.1"
 
 summary: |
-  Minimal-blast-radius production fix: skip wide exploration, patch, mandatory
-  review and QA, pause for a human when risk is high. Differs from no-rail by
-  forbidding scout fan-out and requiring human gates on irreversible risk.
+  Minimal-blast-radius production fix: skip wide exploration, patch, then
+  mandatory review and QA. Pause for a human when risk is high.
 
 applies_when: |
   Production incident, SEV, or urgent regression where speed and blast-radius

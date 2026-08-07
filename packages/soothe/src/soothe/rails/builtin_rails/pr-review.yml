@@ -1,14 +1,13 @@
 id: pr-review
-version: "1.0"
+version: "1.1"
 
 summary: |
-  Independent review of an existing change set: read the diff, record findings,
-  optionally run QA. Differs from no-rail by starting at review and forbidding
-  an implementation branch by policy.
+  Independent review of an existing change set: read the diff, record
+  findings, optionally run QA. Starts at review; does not open an
+  implementation branch.
 
 applies_when: |
-  Review a pull request, patch, or diff the user already produced — not
-  implement a new feature or fix from scratch.
+  Review a pull request, patch, or diff the user already produced.
 
 conditions:
   needs_qa: |
