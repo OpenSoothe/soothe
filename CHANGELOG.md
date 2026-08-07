@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.2] - 2026-08-07
+
+### Changed
+- Release fix versions for all clients: Python 1.0.12, TypeScript 0.5.8, Go 0.4.14, Rust 0.3.7
+- Raise `soothe-client-python` floor to `>=1.0.12` in soothe-cli and soothe-daemon
+
 ## [v0.10.1] - 2026-08-07
 
 ### Added
