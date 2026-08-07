@@ -11,13 +11,11 @@ from pydantic import BaseModel
 
 
 class GoalIntakeResult(BaseModel):
-    """Result of goal intake through GoalIntakeHandler."""
+    """Result of AutopilotMonitor.intake_goal (create-first; placement refine is async)."""
 
     status: Literal["accepted", "rejected", "skipped"]
     goal_id: str | None = None
     reason: str | None = None
-    adjusted_priority: int | None = None
-    suggested_dependencies: list[str] = []
 
 
 class GoalPlacement(BaseModel):

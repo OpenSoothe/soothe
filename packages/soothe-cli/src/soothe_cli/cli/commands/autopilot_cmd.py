@@ -37,7 +37,7 @@ _TOP_HELP_LINES = (
     "  g/G or Home/End Top/bottom        PgUp/PgDn page",
     "",
     "mode=active hides completed/failed/cancelled goals;",
-    "steps=on lists the full StepDAG; active lists active/pending steps.",
+    "steps=all lists the full StepDAG; active lists active/pending steps.",
     "mode=all shows the full forest including terminal goals.",
 )
 
@@ -711,7 +711,7 @@ class TopViewState:
     """Interactive view flags for autopilot top (IG-688 / IG-694 / IG-698)."""
 
     include_terminal: bool = False
-    steps_mode: Literal["on", "off", "active"] = "active"
+    steps_mode: Literal["off", "active", "all"] = "active"
     show_loops: bool = True
     interval: float = 2.0
     scroll: int = 0
@@ -752,7 +752,7 @@ def apply_top_key(state: TopViewState, key: str) -> None:
         state.scroll = 0
         return
     if key == "s":
-        modes: tuple[Literal["on", "off", "active"], ...] = ("on", "off", "active")
+        modes: tuple[Literal["off", "active", "all"], ...] = ("off", "active", "all")
         state.steps_mode = modes[(modes.index(state.steps_mode) + 1) % len(modes)]
         return
     if key == "l":
@@ -764,10 +764,10 @@ def apply_top_key(state: TopViewState, key: str) -> None:
             state.steps_mode = "off"
             state.show_loops = False
         elif state.steps_mode == "off" and not state.show_loops:
-            state.steps_mode = "on"
+            state.steps_mode = "all"
             state.show_loops = False
         else:
-            state.steps_mode = "on"
+            state.steps_mode = "all"
             state.show_loops = True
         return
     if key in {"+", "="}:
@@ -1290,7 +1290,7 @@ def _format_top_header(
 def _format_step_list(
     steps: dict,
     *,
-    mode: Literal["on", "active"],
+    mode: Literal["all", "active"],
     indent: str,
     lines: list[Text],
     trailing_siblings: int,
@@ -1299,7 +1299,7 @@ def _format_step_list(
 
     Renders the full StepDAG for goals already present in the forest. Goal
     filtering (mode=active) happens upstream; do not drop completed steps here
-    or live goals with finished plan waves look empty when ``steps=on``.
+    or live goals with finished plan waves look empty when ``steps=all``.
     """
     ordered_nodes: list[dict] = []
     seen: set[str] = set()
@@ -1344,14 +1344,14 @@ def _format_step_list(
 def _format_top_forest(
     snapshot: dict,
     *,
-    steps_mode: Literal["on", "off", "active"] = "active",
+    steps_mode: Literal["off", "active", "all"] = "active",
     show_loops: bool = True,
     include_terminal: bool = False,
 ) -> list[Text]:
     """Render jobs → goal DAG → step DAG → loops as colored Rich Text rows.
 
     Jobs are shown newest-first (by ``created_at``) so the latest job sits at
-    the top of the forest. ``steps_mode=on`` lists each goal's full StepDAG;
+    the top of the forest. ``steps_mode=all`` lists each goal's full StepDAG;
     ``active`` lists only active and pending steps.
 
     Entity rows share a unified layout::
@@ -1466,7 +1466,7 @@ def _format_top_forest(
             if steps_blob:
                 _format_step_list(
                     steps_blob,
-                    mode="active" if steps_mode == "active" else "on",
+                    mode="active" if steps_mode == "active" else "all",
                     indent=child_indent,
                     lines=lines,
                     trailing_siblings=trailing,

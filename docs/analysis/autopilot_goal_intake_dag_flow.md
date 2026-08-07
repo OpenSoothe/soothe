@@ -84,22 +84,19 @@ AutopilotService.submit_task()
     └─► _persist_goals() → AsyncPersistStore
 ```
 
-#### 1.2 Monitor Intake with Placement Analysis (RFC-625)
+#### 1.2 Monitor Intake with async Placement Refine (RFC-625)
 
 ```
 AutopilotMonitor.intake_goal()
     │
-    ├─► _analyze_placement() via GoalDAGVerifier
-    │       • LLM-driven analysis of DAG state
-    │       • Adjust priority based on load
-    │       • Suggest dependencies (depends_on)
-    │       • Detect merge opportunities
+    ├─► ContextEngine.create_goal()   # immediate — submit returns goal_id here
+    │       • Use caller priority / depends_on / informs
+    │       • status = "pending"
     │
-    ├─► ContextEngine.create_goal()
-    │       • Use adjusted_priority
-    │       • Merge suggested_dependencies with user deps
-    │
-    └─► InternalEventBus.emit("goal_created")
+    └─► schedule _refine_placement_async()  (background)
+            • GoalDAGVerifier.analyze_placement() LLM
+            • If still pending: adjust priority, merge deps/informs
+            • Persist DAG snapshot (when wired)
 ```
 
 #### 1.3 GoalDirective from Completed Goal (RFC-204)

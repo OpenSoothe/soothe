@@ -744,7 +744,7 @@ Pydantic default for `enabled` is **`true`** — set `agent.autopilot.enabled: f
 ### Daemon wiring (implemented)
 
 1. **AutopilotService.start/stop** starts and stops **AutopilotMonitor** background loops (verification + dreaming timer).
-2. **submit_task** routes through **AutopilotMonitor.intake_goal** when a monitor is wired (placement analysis path); falls back to direct `ContextEngine.create_goal` when no monitor.
+2. **submit_task** routes through **AutopilotMonitor.intake_goal** when a monitor is wired (create-first; LLM placement refine runs async); falls back to direct `ContextEngine.create_goal` when no monitor.
 3. **Consensus model**: `SootheConfig.create_chat_model("think")` tries the `think` router role, then **`default`** on instantiation failure when specs differ. Router resolution already maps unset `think` → `default`.
 
 ### Verification

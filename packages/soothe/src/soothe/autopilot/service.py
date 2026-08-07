@@ -139,6 +139,7 @@ class AutopilotService:
         if self._monitor is not None:
             self._monitor.bind_service_cancel(self.cancel_goal)
             self._monitor.bind_suspend_notify_scan(self.scan_notify_suspend_timeouts)
+            self._monitor.bind_dag_persist(self._persist_goals)
 
         # RFC-222 revised (Phase C): WorkerPool-driven dispatch.
         # Capacity: ``max_loops`` (pool size) and ``max_parallel_goals``
@@ -490,6 +491,10 @@ class AutopilotService:
         programmatic clients) to add a
         new goal to the DAG. The scheduling loop will pick it up on its
         next tick when ``self._running`` is True.
+
+        When a monitor is wired, intake creates the goal immediately and
+        schedules LLM placement refine asynchronously (priority / deps may
+        update while the goal is still ``pending``).
 
         Args:
             description: Goal description text.

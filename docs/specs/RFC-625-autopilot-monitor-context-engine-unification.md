@@ -283,9 +283,9 @@ class AutopilotMonitor:
         self._dreaming_task = asyncio.create_task(self._dreaming_timer_loop())
 
     async def intake_goal(self, description: str, **kwargs) -> GoalNode:
-        """Receive new goal, call CE.create_goal(), return created node."""
-        placement = self._verifier.analyze_placement(description)
+        """Create goal immediately; schedule LLM placement refine async."""
         goal = await self._ce.create_goal(description, ...)
+        self._schedule_placement_refine(goal.id, description=description)
         await self._bus.emit(GoalCreatedEvent(goal_id=goal.id))
         return goal
 
@@ -318,7 +318,7 @@ class AutopilotMonitor:
 
 1. **LLM-driven background health verification** — periodic check using LLM to analyze DAG health, detect stale goals, suggest restructuring
 2. **LLM-driven post-completion verification** — triggered by `goal_completed` event, LLM analyzes decomposition opportunities and redundancy
-3. **LLM-driven placement analysis** — for new goal intake, LLM suggests optimal priority, dependencies, and potential merging
+3. **LLM-driven placement refine** — after create-first intake, LLM may adjust priority / dependencies / merge suggestions while the goal is still pending
 
 **Architecture:**
 
@@ -416,12 +416,9 @@ class GoalIntakeHandler:
             if conflict:
                 return GoalIntakeResult(status="rejected", reason=f"Workspace conflicts with {conflict}")
 
-        # Placement analysis
-        placement = self._verifier.analyze_placement(description)
-        final_deps = list(set(depends_on or []) | set(placement.suggested_dependencies))
-
-        # Create via CE
-        goal = await self._ce.create_goal(description, priority=placement.adjusted_priority, depends_on=final_deps, ...)
+        # Create via CE first (submit returns goal_id without waiting on LLM)
+        goal = await self._ce.create_goal(description, priority=priority, depends_on=depends_on or [], ...)
+        self._schedule_placement_refine(goal.id, description=description)
 
         return GoalIntakeResult(status="accepted", goal_id=goal.id)
 
@@ -453,8 +450,6 @@ class GoalIntakeResult(BaseModel):
     status: Literal["accepted", "rejected", "skipped"]
     goal_id: str | None = None
     reason: str | None = None
-    adjusted_priority: int | None = None
-    suggested_dependencies: list[str] = []
 ```
 
 ---
@@ -845,7 +840,8 @@ User Input → PendingGoalQueue → StrangeLoop.run_with_progress()
 
 ```
 User Input → AutopilotMonitor.intake_goal()
-  → GoalDAGVerifier.analyze_placement() → CE.create_goal()
+  → CE.create_goal() (immediate goal_id)
+  → background GoalDAGVerifier.analyze_placement() refine while pending
   → EventBus.emit(GoalCreatedEvent) → GoalDAGCard updates
 
 AutopilotService.dispatch_loop()

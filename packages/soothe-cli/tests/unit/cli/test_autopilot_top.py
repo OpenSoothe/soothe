@@ -320,7 +320,7 @@ def test_apply_top_key_toggles() -> None:
     assert state.include_terminal is True
     assert state.force_refresh is True
     apply_top_key(state, "s")
-    assert state.steps_mode == "on"
+    assert state.steps_mode == "all"
     apply_top_key(state, "s")
     assert state.steps_mode == "off"
     apply_top_key(state, "s")
@@ -330,9 +330,9 @@ def test_apply_top_key_toggles() -> None:
     state.steps_mode = "off"
     # density from compact: steps-only → full → compact → steps-only
     apply_top_key(state, "d")
-    assert state.steps_mode == "on" and state.show_loops is False
+    assert state.steps_mode == "all" and state.show_loops is False
     apply_top_key(state, "d")
-    assert state.steps_mode == "on" and state.show_loops is True
+    assert state.steps_mode == "all" and state.show_loops is True
     apply_top_key(state, "d")
     assert state.steps_mode == "off" and state.show_loops is False
     apply_top_key(state, "+")
@@ -412,7 +412,7 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
                 }
             ],
         },
-        state=TopViewState(steps_mode="on", show_loops=True, interval=2.5),
+        state=TopViewState(steps_mode="all", show_loops=True, interval=2.5),
     )
     text = rendered.plain
     # Patch elapsed by checking format with known now via direct helper
@@ -442,7 +442,7 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
     )
     child_goal = next(ln for ln in text.splitlines() if "GOAL [e5f6aaaa]" in ln)
     assert re.search(r'\d{2}:\d{2}:\d{2}  "Write tests"', child_goal)
-    # steps=on lists full StepDAG under live goals (including completed).
+    # steps=all lists full StepDAG under live goals (including completed).
     assert "STEP [UZH-01]" in text
     assert "STEP [UZH-02]" in text
     assert "Add JWT" in text
@@ -683,7 +683,7 @@ def test_render_top_orphan_loop_marker() -> None:
 
 
 def test_render_top_steps_on_shows_full_stepdag_for_live_goals() -> None:
-    """steps=on lists completed/active/skipped STEPs under goals still in the forest."""
+    """steps=all lists completed/active/skipped STEPs under goals still in the forest."""
     snap = {
         "running": True,
         "loop_pool": {"active": 1, "idle": 0, "max": 4},
@@ -733,14 +733,14 @@ def test_render_top_steps_on_shows_full_stepdag_for_live_goals() -> None:
             }
         ],
     }
-    active = _plain(snap, state=TopViewState(include_terminal=False, steps_mode="on"))
+    active = _plain(snap, state=TopViewState(include_terminal=False, steps_mode="all"))
     assert "STEP [UZH-01]" in active
     assert "STEP [UZH-02]" in active
     assert "STEP [UZH-03]" in active
     assert "mode=active" in active
     assert "(live)" in active
 
-    all_mode = _plain(snap, state=TopViewState(include_terminal=True, steps_mode="on"))
+    all_mode = _plain(snap, state=TopViewState(include_terminal=True, steps_mode="all"))
     assert "STEP [UZH-01]" in all_mode
     assert "STEP [UZH-02]" in all_mode
     assert "STEP [UZH-03]" in all_mode
@@ -789,7 +789,7 @@ def test_render_top_steps_active_shows_only_active_and_pending() -> None:
 
 
 def test_render_top_active_goal_all_completed_steps_still_listed() -> None:
-    """Live goal with steps N/N must still show STEP rows when steps=on."""
+    """Live goal with steps N/N must still show STEP rows when steps=all."""
     text = _plain(
         {
             "running": True,
@@ -841,7 +841,7 @@ def test_render_top_active_goal_all_completed_steps_still_listed() -> None:
                 }
             ],
         },
-        state=TopViewState(include_terminal=False, steps_mode="on", show_loops=True),
+        state=TopViewState(include_terminal=False, steps_mode="all", show_loops=True),
     )
     assert "steps:2/2" in text
     assert "STEP [JNC-01] completed" in text
@@ -896,7 +896,7 @@ def test_render_top_shows_active_not_pending_for_running_work() -> None:
                 }
             ],
         },
-        state=TopViewState(steps_mode="on", show_loops=True, interval=1.0),
+        state=TopViewState(steps_mode="all", show_loops=True, interval=1.0),
     )
     assert "JOB  [jobjobj1] active" in text
     assert "GOAL [jobjobj1] active" in text

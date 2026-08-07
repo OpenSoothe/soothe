@@ -1,7 +1,7 @@
 """AutopilotMonitor - proactive DAG monitoring submodule (RFC-625).
 
 Monitors ContextEngine goal DAG, handles:
-- Goal intake with LLM placement analysis
+- Goal intake (fast create; LLM placement refine runs async)
 - Background DAG verification (health checks)
 - Post-completion verification (decomposition)
 - Backoff reasoning on goal failure
@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from soothe.autopilot.monitor.models import (
     GoalIntakeResult,
-    GoalPlacement,
 )
 from soothe.autopilot.verify.backoff_reasoner import GoalBackoffReasoner
 from soothe.autopilot.verify.goal_dag_verifier import GoalDAGVerifier
@@ -50,7 +50,7 @@ class AutopilotMonitor:
     """Proactive goal DAG monitor within AutopilotService.
 
     Responsibilities:
-      - Goal intake: receive new goals, call CE APIs with placement analysis
+      - Goal intake: create via CE immediately; refine placement async
       - DAG verification: background loop + event triggers
       - Backoff reasoning: on goal_failed events
       - Dreaming lifecycle: emit dreaming/awake events for downstream consumers
@@ -77,6 +77,8 @@ class AutopilotMonitor:
         self._backoff_reasoner = GoalBackoffReasoner(config)
         self._verifier = GoalDAGVerifier(ce, config)
         self._shutdown_event = asyncio.Event()
+        self._placement_tasks: set[asyncio.Task[None]] = set()
+        self._dag_persist: Callable[[], Awaitable[None]] | None = None
 
         # Subscribe to internal bus topics (IG-678 P0-3).
         self._bus.subscribe(INTERNAL_GOAL_COMPLETED, self._on_goal_completed)
@@ -90,6 +92,10 @@ class AutopilotMonitor:
 
         self._verifier.bind_cancel_goal(_cancel)
 
+    def bind_dag_persist(self, persist_fn: Callable[[], Awaitable[None]]) -> None:
+        """Wire AutopilotService DAG snapshot persist after async placement refine."""
+        self._dag_persist = persist_fn
+
     async def start(self) -> None:
         """Start background verification and dreaming timer loops."""
         self._verify_task = asyncio.create_task(self._verification_loop())
@@ -97,8 +103,13 @@ class AutopilotMonitor:
         logger.info("AutopilotMonitor started")
 
     async def stop(self) -> None:
-        """Stop background loops."""
+        """Stop background loops and cancel in-flight placement refine tasks."""
         self._shutdown_event.set()
+        for task in list(self._placement_tasks):
+            task.cancel()
+        if self._placement_tasks:
+            await asyncio.gather(*self._placement_tasks, return_exceptions=True)
+        self._placement_tasks.clear()
         if hasattr(self, "_verify_task"):
             self._verify_task.cancel()
         if hasattr(self, "_dreaming_task"):
@@ -121,11 +132,15 @@ class AutopilotMonitor:
         informs: list[str] | None = None,
         source_file: str | None = None,
     ) -> GoalIntakeResult:
-        """Receive new goal, call CE.create_goal() with placement analysis.
+        """Create a goal immediately; schedule LLM placement refine in the background.
+
+        Submit RPCs return ``goal_id`` without waiting on placement. While the
+        goal is still ``pending``, refine may adjust priority / depends_on /
+        informs from the placement LLM.
 
         Args:
             description: Goal description
-            priority: Initial priority (may be adjusted by placement analysis)
+            priority: Initial priority (may be adjusted async by placement)
             workspace: Optional workspace constraint
             depends_on: Optional initial dependencies
             source: Goal origin
@@ -138,13 +153,89 @@ class AutopilotMonitor:
         Returns:
             GoalIntakeResult with status and goal_id
         """
-        # Placement analysis
-        placement = await self._analyze_placement(description)
+        base_deps = list(depends_on or [])
+        base_informs = list(informs or [])
+        goal = await self._ce.create_goal(
+            description,
+            priority=priority,
+            parent_id=parent_id,
+            max_retries=max_retries,
+            max_send_backs=max_send_backs,
+            depends_on=base_deps,
+            informs=base_informs,
+            source_file=source_file,
+            workspace=workspace,
+            source=source,
+        )
 
-        # Merge user-provided deps with suggested deps
-        final_deps = list(set(depends_on or []) | set(placement.suggested_dependencies))
+        logger.info(
+            "Goal intake accepted goal_id=%s source=%s priority=%s parent_id=%s "
+            "deps=%d placement=pending",
+            goal.id,
+            source,
+            priority,
+            parent_id or "-",
+            len(base_deps),
+        )
+        self._schedule_placement_refine(
+            goal.id,
+            description=description,
+        )
+        return GoalIntakeResult(
+            status="accepted",
+            goal_id=goal.id,
+        )
 
-        # Check for merge opportunity
+    def _schedule_placement_refine(self, goal_id: str, *, description: str) -> None:
+        """Fire-and-forget placement refine; no-op after shutdown."""
+        if self._shutdown_event.is_set():
+            return
+        task = asyncio.create_task(
+            self._refine_placement_async(goal_id, description=description),
+            name=f"placement-refine-{goal_id[:8]}",
+        )
+        self._placement_tasks.add(task)
+
+        def _done(done: asyncio.Task[None]) -> None:
+            self._placement_tasks.discard(done)
+            if done.cancelled():
+                return
+            exc = done.exception()
+            if exc is not None:
+                logger.error(
+                    "Placement refine task crashed goal_id=%s: %s",
+                    goal_id,
+                    exc,
+                    exc_info=exc,
+                )
+
+        task.add_done_callback(_done)
+
+    async def _refine_placement_async(self, goal_id: str, *, description: str) -> None:
+        """Apply LLM placement suggestions to a still-pending goal."""
+        try:
+            placement = await self._verifier.analyze_placement(description)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Placement refine LLM failed goal_id=%s", goal_id)
+            return
+
+        if self._shutdown_event.is_set():
+            return
+
+        goal = self._ce.get_goal_sync(goal_id)
+        if goal is None:
+            logger.info("Placement refine skipped goal_id=%s: missing", goal_id)
+            return
+        if goal.status != "pending":
+            logger.info(
+                "Placement refine skipped goal_id=%s status=%s",
+                goal_id,
+                goal.status,
+            )
+            return
+
         if placement.merge_with:
             logger.info(
                 "Placement suggests merge with goal %s: %s",
@@ -152,38 +243,41 @@ class AutopilotMonitor:
                 placement.reasoning,
             )
 
-        # Create via CE
-        goal = await self._ce.create_goal(
-            description,
-            priority=placement.adjusted_priority,
-            parent_id=parent_id,
-            max_retries=max_retries,
-            max_send_backs=max_send_backs,
-            depends_on=final_deps,
-            informs=informs,
-            source_file=source_file,
-            workspace=workspace,
-            source=source,
-        )
+        new_priority = max(0, min(100, int(placement.adjusted_priority)))
+        if new_priority != goal.priority:
+            goal.priority = new_priority
+            goal.touch()
+
+        suggested_deps = [d for d in placement.suggested_dependencies if d and d != goal_id]
+        final_deps = list(dict.fromkeys([*goal.depends_on, *suggested_deps]))
+        if final_deps != list(goal.depends_on):
+            await self._ce.update_dependencies(goal_id, final_deps)
+
+        suggested_informs = [i for i in (placement.suggested_informs or []) if i and i != goal_id]
+        if suggested_informs:
+            final_informs = list(dict.fromkeys([*goal.informs, *suggested_informs]))
+            if final_informs != list(goal.informs):
+                goal.informs = final_informs
+                goal.touch()
 
         logger.info(
-            "Goal intake accepted goal_id=%s source=%s priority=%s parent_id=%s deps=%d",
-            goal.id,
-            source,
-            placement.adjusted_priority,
-            parent_id or "-",
-            len(final_deps),
+            "Placement refine applied goal_id=%s priority=%s deps=%d informs=%d complexity=%s",
+            goal_id,
+            goal.priority,
+            len(goal.depends_on),
+            len(goal.informs),
+            placement.estimated_complexity,
         )
-        return GoalIntakeResult(
-            status="accepted",
-            goal_id=goal.id,
-            adjusted_priority=placement.adjusted_priority,
-            suggested_dependencies=placement.suggested_dependencies,
-        )
-
-    async def _analyze_placement(self, description: str) -> GoalPlacement:
-        """LLM-driven placement analysis for new goal."""
-        return await self._verifier.analyze_placement(description)
+        persist = self._dag_persist
+        if persist is not None:
+            try:
+                await persist()
+            except Exception:
+                logger.warning(
+                    "Placement refine persist failed goal_id=%s",
+                    goal_id,
+                    exc_info=True,
+                )
 
     # ── Event Handlers ────────────────────────────────────────────────────────
 
