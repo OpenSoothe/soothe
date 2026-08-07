@@ -62,7 +62,8 @@ _STYLE_METRIC_TOKENS = "bold bright_magenta"
 _STYLE_METRIC_PRI = "bold bright_yellow"
 _STYLE_METRIC_SEQ = "bold bright_magenta"
 _STYLE_METRIC_DEPS = "cyan"
-# Compact description previews so metrics stay visible on narrow terminals.
+_STYLE_METRIC_RAIL = "bold bright_green"
+# Compact description previews at the row tail so metrics stay visible first.
 _TOP_DESC_JOB = 32
 _TOP_DESC_GOAL = 32
 _TOP_DESC_STEP = 28
@@ -91,6 +92,16 @@ def _preview_desc(text: object, max_chars: int) -> str:
     raw = text if isinstance(text, str) else str(text or "")
     compact = " ".join(raw.split())
     return preview_first(compact, max_chars)
+
+
+def _rail_label(entity: dict[str, Any] | None) -> str:
+    """Return LoopRail id from a job/goal payload, or empty when unset."""
+    if not isinstance(entity, dict):
+        return ""
+    raw = entity.get("rail_id")
+    if not isinstance(raw, str):
+        return ""
+    return raw.strip()
 
 
 def _resolve_submit_workspace(explicit: str | None) -> str:
@@ -305,7 +316,9 @@ def status() -> None:
             sstat = j.get("status", "pending")
             sdesc = _preview_desc(j.get("description", ""), 50)
             stok = format_tokens(j.get("total_tokens_used", 0))
-            typer.echo(f"  [{sid}] {sstat:10s}  tok={stok:>5s}  {sdesc}")
+            rail = _rail_label(j)
+            rail_s = f"  rail:{rail}" if rail else ""
+            typer.echo(f"  [{sid}] {sstat:10s}  tok:{stok:>5s}{rail_s}  {sdesc}")
 
 
 @app.command("jobs")
@@ -328,7 +341,9 @@ def list_jobs(
         sstat = j.get("status", "pending")
         spri = j.get("priority", 50)
         stok = format_tokens(j.get("total_tokens_used", 0))
-        typer.echo(f"  [{sid}] {sstat:10s} pri={spri:3d}  tok={stok:>5s}  {sdesc}")
+        rail = _rail_label(j)
+        rail_s = f"  rail:{rail}" if rail else ""
+        typer.echo(f"  [{sid}] {sstat:10s} pri:{spri:3d}  tok:{stok:>5s}{rail_s}  {sdesc}")
 
 
 @app.command("goals")
@@ -348,10 +363,14 @@ def list_goals(
             continue
         gid = str(g.get("id", "?"))[:8]
         parent = g.get("parent_id")
-        parent_s = f" parent={str(parent)[:8]}" if parent else ""
+        parent_s = f" parent:{str(parent)[:8]}" if parent else ""
+        rail = _rail_label(g)
+        rail_s = f" rail:{rail}" if rail else ""
+        role = g.get("role")
+        role_s = f" role:{role}" if isinstance(role, str) and role.strip() else ""
         desc = _preview_desc(g.get("description", ""), 50)
         stat = g.get("status", "pending")
-        typer.echo(f"  [{gid}] {stat:10s}{parent_s}  {desc}")
+        typer.echo(f"  [{gid}] {stat:10s}{parent_s}{rail_s}{role_s}  {desc}")
 
 
 def _children_from_edges(edges: list[Any]) -> dict[str, list[str]]:
@@ -383,7 +402,11 @@ def _render_dag_tree(dag: dict, root_id: str) -> None:
 
         status = node.get("status", "pending")
         desc = _preview_desc(node.get("description", ""), 50)
-        typer.echo(f'{prefix}{goal_id[:8]} ({status}) "{desc}"')
+        rail = _rail_label(node)
+        rail_s = f" rail:{rail}" if rail else ""
+        role = node.get("role")
+        role_s = f" role:{role}" if isinstance(role, str) and role.strip() else ""
+        typer.echo(f'{prefix}{goal_id[:8]} ({status}){rail_s}{role_s} "{desc}"')
 
         child_ids = children.get(goal_id, [])
         for i, child_id in enumerate(child_ids):
@@ -415,6 +438,9 @@ def show_job(
     typer.echo(f"Job ID:          {job.get('id')}")
     typer.echo(f"Status:          {job.get('status', 'pending')}")
     typer.echo(f"Priority:        {job.get('priority', 50)}")
+    rail = _rail_label(job)
+    if rail:
+        typer.echo(f"Rail:            {rail}")
     tokens = payload.get("total_tokens_used", job.get("total_tokens_used", 0))
     typer.echo(f"Tokens used:     {format_tokens(tokens)}")
     if job.get("workspace"):
@@ -423,6 +449,13 @@ def show_job(
     if created:
         created_short = created[:19] if len(created) > 19 else created
         typer.echo(f"Created:         {created_short}")
+    updated = job.get("updated_at", "")
+    if updated:
+        updated_short = updated[:19] if len(updated) > 19 else updated
+        typer.echo(f"Updated:         {updated_short}")
+    desc = job.get("description")
+    if desc:
+        typer.echo(f"Description:     {desc}")
 
     active = payload.get("active_goals", 0)
     completed = payload.get("completed_goals", 0)
@@ -454,10 +487,34 @@ def show_goal(
     typer.echo(f"Description: {found.get('description')}")
     typer.echo(f"Status:      {found.get('status', 'pending')}")
     typer.echo(f"Priority:    {found.get('priority', 50)}")
+    rail = _rail_label(found)
+    if rail:
+        typer.echo(f"Rail:        {rail}")
+    parent = found.get("parent_id")
+    if parent:
+        typer.echo(f"Parent:      {parent}")
+    role = found.get("role")
+    if isinstance(role, str) and role.strip():
+        typer.echo(f"Role:        {role}")
+    if found.get("workspace"):
+        typer.echo(f"Workspace:   {found['workspace']}")
+    tokens = found.get("total_tokens_used")
+    if tokens is not None:
+        typer.echo(f"Tokens used: {format_tokens(tokens)}")
     if found.get("depends_on"):
         typer.echo(f"Depends On:  {', '.join(found['depends_on'])}")
     if found.get("source_file"):
         typer.echo(f"Source File: {found['source_file']}")
+    assigned = found.get("assigned_loop_id")
+    if assigned:
+        typer.echo(f"Loop:        {_short_loop_id(str(assigned))}")
+    created = found.get("created_at", "")
+    if created:
+        created_short = created[:19] if len(str(created)) > 19 else created
+        typer.echo(f"Created:     {created_short}")
+    error = found.get("error")
+    if error:
+        typer.echo(f"Error:       {error}")
 
 
 @app.command("cancel")
@@ -494,11 +551,12 @@ def cancel_goal(
         return
     if job_id:
         result = client.job_cancel(job_id)
-        typer.echo(f"Cancel job result: {result.get('status', result)}")
+        typer.echo(f"Cancel job: {job_id[:8]} → {result.get('status', result)}")
         return
     assert goal_id is not None
     result = client.autopilot_cancel_goal(goal_id)
-    typer.echo(f"Cancel result: {result.get('status', result)}")
+    new_status = result.get("new_status", result.get("status", "cancelled"))
+    typer.echo(f"Cancel goal: {goal_id[:8]} → {new_status}")
 
 
 @app.command("resume")
@@ -512,9 +570,8 @@ def resume_goal(
     except RuntimeError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
-    typer.echo(
-        f"Goal resumed: {result.get('goal_id', goal_id)} → {result.get('new_status', 'pending')}"
-    )
+    resumed_id = str(result.get("goal_id", goal_id))
+    typer.echo(f"Goal resumed: {resumed_id[:8]} → {result.get('new_status', 'pending')}")
 
 
 def _short_loop_id(loop_id: str, *, keep: int = 8) -> str:
@@ -857,11 +914,11 @@ def _append_metric(line: Text, metric: Text) -> None:
 
 
 def _metric_progress(kind: str, done: int, total: int) -> Text:
-    """Colored progress metric, e.g. ``goals 2/5`` / ``steps 1/2``."""
+    """Colored progress metric, e.g. ``goals:2/5`` / ``steps:1/2``."""
     ratio = (float(done) / float(total)) if total > 0 else 0.0
     value_style = _meter_fill_style(ratio, kind="progress")
     out = Text()
-    out.append(f"{kind} ", style=_STYLE_DIM)
+    out.append(f"{kind}:", style=_STYLE_DIM)
     out.append(str(done), style=value_style)
     out.append("/", style=_STYLE_DIM)
     out.append(str(total), style=_STYLE_META)
@@ -869,29 +926,32 @@ def _metric_progress(kind: str, done: int, total: int) -> Text:
 
 
 def _metric_kv(key: str, value: str, value_style: str) -> Text:
-    """Colored key=value metric (``tok=12K``, ``pri=50``)."""
+    """Colored name:value metric (``tok:12K``, ``pri:50``)."""
     out = Text()
-    out.append(f"{key}=", style=_STYLE_DIM)
+    out.append(f"{key}:", style=_STYLE_DIM)
     out.append(value, style=value_style)
     return out
 
 
 def _metric_elapsed(elapsed: str) -> Text:
-    """Wall-clock elapsed accent."""
+    """Wall-clock elapsed as bare ``HH:MM:SS`` (shown right after status)."""
     return Text(elapsed, style=_STYLE_METRIC_TIME)
 
 
 def _metric_seq(seq: object) -> Text:
-    """Loop attempt sequence ``#N``."""
+    """Loop attempt sequence as ``seq:N``."""
     out = Text()
-    out.append("#", style=_STYLE_DIM)
+    out.append("seq:", style=_STYLE_DIM)
     out.append(str(seq), style=_STYLE_METRIC_SEQ)
     return out
 
 
 def _metric_deps(deps: list[str]) -> Text:
-    """Step dependency hint ``←a,b,c``."""
-    return Text(f"←{','.join(deps[:3])}", style=_STYLE_METRIC_DEPS)
+    """Step dependency hint as ``→a,b,c`` (shown after the step description).
+
+    Arrow points at prerequisites (same convention as plan quick-view ``→ N``).
+    """
+    return Text(f"→{','.join(deps[:3])}", style=_STYLE_METRIC_DEPS)
 
 
 def _format_entity_row(
@@ -899,17 +959,18 @@ def _format_entity_row(
     kind: str,
     kind_style: str,
     entity_id: str,
-    status: str,
+    status: str | None = None,
     description: str | None = None,
     metrics: list[Text] | None = None,
+    trailing: list[Text] | None = None,
     prefix: list[tuple[str, str | None]] | None = None,
     bracket_id: bool = True,
 ) -> Text:
-    """Unified forest row: ``KIND [id] status  "desc"  <metrics…>``.
+    """Unified forest row: ``KIND [id] status  <metrics…>  "desc"  <trailing…>``.
 
-    JOB / GOAL / STEP share this order so description always precedes metrics
-    (elapsed, progress counts, tokens, priority, deps). LOOP omits description
-    and may skip id brackets (assignment ids are already long).
+    JOB / GOAL lead with status and metrics, description preview at the tail.
+    STEP puts dependency arrows in ``trailing`` after the description. LOOP
+    omits status/description/elapsed and shows only ``seq`` in trailing.
     """
     parts: list[tuple[str, str | None]] = list(prefix or [])
     # Pad kind label to 4 chars so columns align (JOB / GOAL / STEP / LOOP).
@@ -917,11 +978,14 @@ def _format_entity_row(
     parts.append((f"{label} ", kind_style))
     id_seg = f"[{entity_id}] " if bracket_id else f"{entity_id}  "
     parts.append((id_seg, kind_style))
-    parts.append((f"{status:10s}", _status_style(status)))
-    if description is not None:
-        parts.append((f'  "{description}"', _STYLE_DIM))
+    if status is not None:
+        parts.append((f"{status:10s}", _status_style(status)))
     line = _text_line(*parts)
     for metric in metrics or []:
+        _append_metric(line, metric)
+    if description is not None:
+        line.append(f'  "{description}"', style=_STYLE_DIM)
+    for metric in trailing or []:
         _append_metric(line, metric)
     return line
 
@@ -1248,9 +1312,9 @@ def _format_step_list(
         step_id = str(node["id"])
         sid = step_id if len(step_id) <= 12 else step_id[:12] + "…"
         deps = [str(d) for d in (node.get("dependencies") or []) if d]
-        metrics: list[Text] = []
+        trailing: list[Text] = []
         if deps:
-            metrics.append(_metric_deps(deps))
+            trailing.append(_metric_deps(deps))
         lines.append(
             _format_entity_row(
                 kind="STEP",
@@ -1258,7 +1322,7 @@ def _format_step_list(
                 entity_id=sid,
                 status=status,
                 description=desc,
-                metrics=metrics,
+                trailing=trailing,
                 prefix=[(indent, _STYLE_TREE), (branch, _STYLE_TREE)],
             )
         )
@@ -1279,9 +1343,11 @@ def _format_top_forest(
 
     Entity rows share a unified layout::
 
-        KIND [id] status  "desc"  <metrics…>
+        KIND [id] status  HH:MM:SS  <name:value…>  "desc"
 
-    Metrics order: elapsed, progress (goals/steps), tokens, priority, deps.
+    Elapsed is bare time right after status. Other metrics use name:value
+    (progress, tokens, priority, rail). STEP rows put deps after the
+    description as ``→id`` arrows (prerequisites).
     """
     raw_jobs = [j for j in (snapshot.get("jobs") or []) if isinstance(j, dict)]
     jobs = _sort_jobs_newest_first(raw_jobs)
@@ -1302,6 +1368,7 @@ def _format_top_forest(
             ended_at=_elapsed_end_for_status(jstat, job.get("updated_at")),
         )
         jtok = int(job.get("total_tokens_used") or 0)
+        jrail = _rail_label(job)
         goals_done, goals_total = _job_goal_progress(job)
         job_metrics: list[Text] = []
         if jelapsed:
@@ -1311,6 +1378,8 @@ def _format_top_forest(
         if jtok:
             job_metrics.append(_metric_kv("tok", format_tokens(jtok), _STYLE_METRIC_TOKENS))
         job_metrics.append(_metric_kv("pri", str(jpri), _STYLE_METRIC_PRI))
+        if jrail:
+            job_metrics.append(_metric_kv("rail", jrail, _STYLE_METRIC_RAIL))
         lines.append(
             _format_entity_row(
                 kind="JOB",
@@ -1395,26 +1464,14 @@ def _format_top_forest(
                 lb = "└─ " if last_sub else "├─ "
                 lid = _short_loop_id(str(entry.get("loop_id", "?")))
                 seq = entry.get("seq", "?")
-                lstat = str(entry.get("status", "active"))
-                # ended_at is set only on record_end; always freeze when present.
-                elapsed = format_elapsed(
-                    entry.get("started_at"),
-                    ended_at=entry.get("ended_at"),
-                )
-                loop_metrics: list[Text] = [_metric_seq(seq)]
-                if elapsed:
-                    loop_metrics.append(_metric_elapsed(elapsed))
-                # LOOP has no description; keep id + status + metrics order.
+                # Compact: KIND [id]  seq:N (no status / elapsed).
                 lines.append(
                     _format_entity_row(
                         kind="LOOP",
                         kind_style=_STYLE_LOOP,
                         entity_id=lid,
-                        status=lstat,
-                        description=None,
-                        metrics=loop_metrics,
+                        trailing=[_metric_seq(seq)],
                         prefix=[(child_indent, _STYLE_TREE), (lb, _STYLE_TREE)],
-                        bracket_id=False,
                     )
                 )
             for i, child_id in enumerate(child_ids):
@@ -1437,25 +1494,16 @@ def _format_top_forest(
             lid = _short_loop_id(str(entry.get("loop_id", "?")))
             seq = entry.get("seq", "?")
             gid = str(entry.get("goal_id") or "?")[:8]
-            lstat = str(entry.get("status", "active"))
-            elapsed = format_elapsed(
-                entry.get("started_at"),
-                ended_at=entry.get("ended_at"),
-            )
-            orphan_metrics: list[Text] = [_metric_seq(seq)]
-            if elapsed:
-                orphan_metrics.append(_metric_elapsed(elapsed))
-            orphan_metrics.append(Text(f"?goal={gid}", style="bright_yellow"))
             lines.append(
                 _format_entity_row(
                     kind="LOOP",
                     kind_style=_STYLE_LOOP,
                     entity_id=lid,
-                    status=lstat,
-                    description=None,
-                    metrics=orphan_metrics,
+                    trailing=[
+                        _metric_seq(seq),
+                        Text(f"?goal={gid}", style="bright_yellow"),
+                    ],
                     prefix=[(branch, _STYLE_TREE)],
-                    bracket_id=False,
                 )
             )
 

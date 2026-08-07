@@ -361,6 +361,7 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
                     "description": "Implement auth",
                     "created_at": created,
                     "total_tokens_used": 12500,
+                    "rail_id": "feature-dev",
                     "dag": {
                         "root_id": "a1b2c3d4",
                         "nodes": [
@@ -417,35 +418,50 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
     # Patch elapsed by checking format with known now via direct helper
     assert format_elapsed(created, now=now) == "00:12:34"
     assert format_elapsed(started, now=now) == "00:03:21"
-    assert "pri=50" in text
-    assert "tok=12K" in text
+    assert "pri:50" in text
+    assert "tok:12K" in text
     assert "Implement auth" in text
-    assert "goals 0/2" in text
-    assert "steps 1/2" in text
+    assert "goals:0/2" in text
+    assert "steps:1/2" in text
     assert "JOB  [a1b2c3d4]" in text
     assert "GOAL [a1b2c3d4]" in text
-    # Unified order: status → "desc" → elapsed → other metrics.
+    # Unified order: status → metrics (name:value) → "desc" (preview at tail).
     job_line = next(ln for ln in text.splitlines() if ln.startswith("JOB  [a1b2c3d4]"))
-    assert job_line.index('"Implement auth"') < job_line.index("goals 0/2")
-    assert re.search(r'"Implement auth"  \d{2}:\d{2}:\d{2}  goals 0/2', job_line)
-    assert job_line.index("goals 0/2") < job_line.index("tok=12K")
-    assert job_line.index("tok=12K") < job_line.index("pri=50")
+    assert job_line.index("goals:0/2") < job_line.index('"Implement auth"')
+    assert re.search(r"\d{2}:\d{2}:\d{2}  goals:0/2", job_line)
+    assert job_line.index("goals:0/2") < job_line.index("tok:12K")
+    assert job_line.index("tok:12K") < job_line.index("pri:50")
+    assert job_line.index("pri:50") < job_line.index("rail:feature-dev")
+    assert job_line.index("rail:feature-dev") < job_line.index('"Implement auth"')
+    assert "rail:feature-dev" in job_line
     goal_line = next(ln for ln in text.splitlines() if "GOAL [a1b2c3d4]" in ln)
-    assert goal_line.index('"Implement auth"') < goal_line.index("steps 1/2")
-    assert re.search(r'"Implement auth"  \d{2}:\d{2}:\d{2}  steps 1/2  tok=3K', goal_line)
+    assert goal_line.index("steps:1/2") < goal_line.index('"Implement auth"')
+    assert re.search(
+        r'\d{2}:\d{2}:\d{2}  steps:1/2  tok:3K  "Implement auth"',
+        goal_line,
+    )
     child_goal = next(ln for ln in text.splitlines() if "GOAL [e5f6aaaa]" in ln)
-    assert re.search(r'"Write tests"  \d{2}:\d{2}:\d{2}', child_goal)
+    assert re.search(r'\d{2}:\d{2}:\d{2}  "Write tests"', child_goal)
     # steps=on lists full StepDAG under live goals (including completed).
     assert "STEP [UZH-01]" in text
     assert "STEP [UZH-02]" in text
     assert "Add JWT" in text
-    assert "←UZH-01" in text  # flat list keeps deps inline, not nested tree
+    assert "→UZH-01" in text  # flat list keeps deps inline, not nested tree
     assert "Write tests" in text
     # Steps are a flat list (same indent), not a nested step tree.
     step_lines = [ln for ln in text.splitlines() if "STEP [" in ln]
     assert len(step_lines) == 2
-    assert "LOOP autopilot__a1b2c3d4__deadbeef…" in text
-    assert "#3" in text
+    uzh02 = next(ln for ln in step_lines if "STEP [UZH-02]" in ln)
+    assert uzh02.index('"Add JWT"') < uzh02.index("→UZH-01")
+    assert "LOOP [autopilot__a1b2c3d4__deadbeef…]" in text
+    assert "seq:3" in text
+    loop_line = next(
+        ln for ln in text.splitlines() if "LOOP [autopilot__a1b2c3d4__deadbeef…]" in ln
+    )
+    assert "seq:3" in loop_line
+    assert "active" not in loop_line
+    assert "pending" not in loop_line
+    assert not re.search(r"\d{2}:\d{2}:\d{2}", loop_line)
     assert "refresh 2.5s" in text
     assert "bright_cyan" in rendered.markup
     assert "bright_blue" in rendered.markup  # elapsed
@@ -500,13 +516,15 @@ def test_render_top_job_uses_wire_goal_totals() -> None:
         state=TopViewState(steps_mode="off", show_loops=False),
     )
     job_line = next(ln for ln in text.splitlines() if ln.startswith("JOB  [a1b2c3d4]"))
-    assert 'active      "Implement auth"' in job_line
-    assert "goals 2/5" in job_line
-    assert "tok=1K" in job_line
-    assert "pri=50" in job_line
-    assert job_line.index('"Implement auth"') < job_line.index("goals 2/5")
+    assert "active" in job_line
+    assert '"Implement auth"' in job_line
+    assert "goals:2/5" in job_line
+    assert "tok:1K" in job_line
+    assert "pri:50" in job_line
+    assert job_line.index("goals:2/5") < job_line.index('"Implement auth"')
     goal_line = next(ln for ln in text.splitlines() if "GOAL [a1b2c3d4]" in ln)
     assert '"Implement auth"' in goal_line
+    assert goal_line.index("active") < goal_line.index('"Implement auth"')
 
 
 def test_render_top_hides_steps_and_loops() -> None:
@@ -558,7 +576,7 @@ def test_render_top_hides_steps_and_loops() -> None:
         },
         state=state,
     )
-    assert "steps 1/2" in text
+    assert "steps:1/2" in text
     assert "UZH-01" not in text
     assert "LOOP autopilot" not in text
     assert "STEP [UZH" not in text
@@ -622,7 +640,7 @@ def test_render_top_multiline_descriptions_stay_one_line() -> None:
     )
     assert "\nBuilding" not in text
     job_line = next(ln for ln in text.splitlines() if ln.startswith("JOB  [fad4717e]"))
-    assert "pri=70" in job_line
+    assert "pri:70" in job_line
     assert "Task: Initial C Compiler Scaffol..." in job_line
     assert "Building the compiler" not in job_line
     goal_line = next(ln for ln in text.splitlines() if "GOAL [fad4717e]" in ln)
@@ -827,10 +845,10 @@ def test_render_top_active_goal_all_completed_steps_still_listed() -> None:
         },
         state=TopViewState(include_terminal=False, steps_mode="on", show_loops=True),
     )
-    assert "steps 2/2" in text
+    assert "steps:2/2" in text
     assert "STEP [JNC-01] completed" in text
     assert "STEP [JNC-02] completed" in text
-    assert "LOOP autopilot__a1b2c3d4__deadbeef" in text
+    assert "LOOP [autopilot__a1b2c3d4__deadbeef…]" in text
 
 
 def test_render_top_shows_active_not_pending_for_running_work() -> None:
@@ -885,9 +903,12 @@ def test_render_top_shows_active_not_pending_for_running_work() -> None:
     assert "JOB  [jobjobj1] active" in text
     assert "GOAL [jobjobj1] active" in text
     assert "STEP [S-01] active" in text
-    assert "LOOP autopilot__jobjobj1__deadbeef" in text
-    loop_line = next(ln for ln in text.splitlines() if "LOOP autopilot__jobjobj1__deadbeef" in ln)
-    assert "active" in loop_line and "#1" in loop_line
+    assert "LOOP [autopilot__jobjobj1__deadbeef…]" in text
+    loop_line = next(
+        ln for ln in text.splitlines() if "LOOP [autopilot__jobjobj1__deadbeef…]" in ln
+    )
+    assert "seq:1" in loop_line
+    assert "active" not in loop_line
     assert "pending" not in loop_line
 
 

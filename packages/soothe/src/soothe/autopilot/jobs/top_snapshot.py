@@ -193,6 +193,7 @@ def build_top_job_entry(
     include_terminal: bool = False,
     maturity: dict[str, Any] | None = None,
     total_tokens_used: int = 0,
+    rail_id: str | None = None,
 ) -> dict[str, Any] | None:
     """Assemble one job row for ``autopilot_top``, or ``None`` if omitted.
 
@@ -212,6 +213,7 @@ def build_top_job_entry(
             When ``True``, keep the full DAG.
         maturity: Optional compact maturity wire fields (RFC-230).
         total_tokens_used: Sum of goal tokens in the (pre-filter) job subtree.
+        rail_id: Optional LoopRail id bound to this job root.
 
     Returns:
         Job dict with filtered ``dag`` and active ``loops``, or ``None``.
@@ -247,4 +249,6 @@ def build_top_job_entry(
         entry["updated_at"] = updated_at
     if maturity:
         entry["maturity"] = maturity
+    if rail_id:
+        entry["rail_id"] = rail_id
     return apply_top_running_status(entry, root_id=job_id)

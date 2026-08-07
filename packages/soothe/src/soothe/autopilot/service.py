@@ -2340,6 +2340,7 @@ class AutopilotService:
                 include_terminal=include_terminal,
                 maturity=maturity_wire_fields(root.maturity),
                 total_tokens_used=job_tokens,
+                rail_id=root.rail_id,
             )
             if entry is not None:
                 jobs.append(entry)
@@ -2434,6 +2435,8 @@ class AutopilotService:
                     else str(g.updated_at)
                 ),
             }
+            if g.rail_id:
+                node["rail_id"] = g.rail_id
             if step_payload["steps"] is not None:
                 node["steps"] = step_payload["steps"]
             # Report fields fill counts only when StepDAG is empty
