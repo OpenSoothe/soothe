@@ -313,6 +313,9 @@ for _sub_app, _name in (
     configure_command_group(_sub_app, show_help_on_no_args=True)
     app.add_typer(_sub_app, name=_name)
 
+# Alias: 'ap' -> 'autopilot'
+app.add_typer(_autopilot_app, name="ap")
+
 # status has a custom default action (combined status) — keep it; add help only.
 configure_command_group(_status_app, show_help_on_no_args=False)
 app.add_typer(_status_app, name="status")
