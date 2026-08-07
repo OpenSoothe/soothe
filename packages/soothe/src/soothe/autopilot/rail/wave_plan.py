@@ -8,10 +8,12 @@ plan into ``RailJobState`` (SoT: ``wave_slices`` / ``decompose_plan`` in
 Transfer forms (any may supply a flat WavePlan):
 
 - Structured completion fields (``wave_plan`` / ``wave_plan_path``)
-- Recommended dumps: ``$SOOTHE_DATA_DIR/jobs/{id}/wave-plan.json`` and
-  ``<workspace>/.soothe/wave-plan.json``
-- Declarative workspace allowlist (``docs/waveplan.json``, …)
+- Recommended dumps (optional convenience): ``$SOOTHE_DATA_DIR/jobs/{id}/wave-plan.json``
+  and ``<workspace>/.soothe/wave-plan.json``
 - Completion findings / evidence JSON blob
+
+``wave_plan_path`` may point to any file under the workspace or jobs root.
+Recommended dump paths are suggestions in planner briefs, not required.
 
 Nested waves/slices are forbidden (RFC-232): reject, do not flatten.
 Missing plan fails closed when ``require_plan`` is true.
@@ -25,7 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -37,21 +39,14 @@ _NESTED_CHILD_KEYS = frozenset({"slices", "children", "waves", "wave_slices"})
 
 WAVE_PLAN_FILENAME = "wave-plan.json"
 
-# Declarative convenience paths under the job workspace (not prose scraping).
-WAVE_PLAN_WORKSPACE_ALLOWLIST: tuple[str, ...] = (
-    "docs/waveplan.json",
-    "docs/wave-plan.json",
-    "waveplan.json",
-    "wave-plan.json",
-)
-
 
 class WavePlanSlice(BaseModel):
     """One independent slice for a maker wave (LLM-authored)."""
 
+    model_config = ConfigDict(extra="ignore")
+
     slice: str = Field(..., min_length=1, max_length=64)
     description: str | None = None
-    priority: int = Field(default=75, ge=0, le=100)
     tags: list[str] = Field(default_factory=list)
 
     @field_validator("slice")
@@ -65,6 +60,8 @@ class WavePlanSlice(BaseModel):
 
 class WavePlan(BaseModel):
     """Machine contract for LLM-determined ready-DAG width (CE findings)."""
+
+    model_config = ConfigDict(extra="ignore")
 
     wave_slices: list[str] = Field(default_factory=list)
     slices: list[WavePlanSlice] = Field(default_factory=list)
@@ -100,7 +97,6 @@ class WavePlan(BaseModel):
             {
                 "slice": s.slice,
                 "description": s.description or s.slice,
-                "priority": s.priority,
                 "tags": list(s.tags) or ["implementation", "maker"],
                 "role": "maker",
             }
@@ -374,8 +370,13 @@ def _prefer_ingest_detail(current: str, candidate: str) -> str:
         return current
     if "not a json" in cur_l or "empty string" in cur_l:
         return candidate
+    if "not a json" in cand_l or "empty string" in cand_l:
+        return current
     if ":" in candidate and ":" not in current:
         return candidate
+    # Keep an existing schema/path-specific detail over a later generic candidate.
+    if (":" in current or "source=" in cur_l) and "not a json" not in cur_l:
+        return current
     return candidate
 
 
@@ -424,11 +425,11 @@ _SEND_BACK_BASE = (
     "Architecture requires a flat WavePlan (wave_slices string list or flat "
     "slices[{slice,…}]). Host applies it into job rail state. Nested "
     "waves/slices are not allowed. Transfer via any of: completion "
-    "wave_plan / wave_plan_path fields; recommended "
+    "wave_plan / wave_plan_path fields; suggested dumps "
     "$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json or "
-    "<workspace>/.soothe/wave-plan.json; allowlisted workspace paths "
-    "(docs/waveplan.json, …); or a flat JSON blob in the goal completion "
-    "report. Custom paths outside the allowlist must set wave_plan_path."
+    "<workspace>/.soothe/wave-plan.json (optional); or a flat JSON blob in "
+    "the goal completion report. wave_plan_path may point to any file under "
+    "the workspace or jobs root."
 )
 
 
@@ -570,10 +571,10 @@ def diagnose_wave_plan_from_sources(
     job_id: str | None = None,
     findings: list[Any] | None = None,
 ) -> WavePlanIngestResult:
-    """Ingest WavePlan from structured wire, dumps, allowlist, then findings.
+    """Ingest WavePlan from structured wire, optional dumps, then findings.
 
     Order: inline ``wave_plan`` → ``wave_plan_path`` → jobs dump → workspace
-    ``.soothe/wave-plan.json`` → workspace allowlist → findings/evidence blob.
+    ``.soothe/wave-plan.json`` → findings/evidence blob.
     """
     best_detail = ""
     ws = Path(workspace).expanduser().resolve() if workspace else None
@@ -626,16 +627,6 @@ def diagnose_wave_plan_from_sources(
             if result.plan is not None:
                 return result
             best_detail = _prefer_ingest_detail(best_detail, result.detail)
-        for rel in WAVE_PLAN_WORKSPACE_ALLOWLIST:
-            candidate = (ws / rel).resolve()
-            if not candidate.is_file():
-                continue
-            if not _is_under_root(candidate, ws):
-                continue
-            result = diagnose_wave_plan_from_file(candidate, source=f"allowlist:{rel}")
-            if result.plan is not None:
-                return result
-            best_detail = _prefer_ingest_detail(best_detail, result.detail)
 
     findings_result = diagnose_wave_plan_from_findings(findings)
     if findings_result.plan is not None:
@@ -643,8 +634,7 @@ def diagnose_wave_plan_from_sources(
     best_detail = _prefer_ingest_detail(best_detail, findings_result.detail)
 
     return WavePlanIngestResult(
-        detail=best_detail
-        or "no usable flat WavePlan from structured fields, dumps, allowlist, or findings"
+        detail=best_detail or "no usable flat WavePlan from structured fields, dumps, or findings"
     )
 
 
@@ -709,7 +699,7 @@ def resolve_fanout_slices(
         detail = (
             "LLM wave plan required but missing or empty; "
             "architecture must supply a flat WavePlan via structured "
-            "fields, recommended dumps, allowlist path, or completion findings "
+            "fields, recommended dumps, wave_plan_path, or completion findings "
             "before makers spawn"
         )
         logger.warning("%s", detail)
@@ -791,17 +781,4 @@ def build_wave_plan(
             "max_waves": max_waves,
             "scout_count": scout_count,
         }
-    )
-
-
-def sort_decompose_plan_by_priority(
-    decompose_plan: list[dict[str, Any]] | None,
-) -> list[dict[str, Any]] | None:
-    """Return a copy of decompose_plan sorted by priority descending."""
-    if not decompose_plan:
-        return decompose_plan
-    return sorted(
-        list(decompose_plan),
-        key=lambda spec: int(spec.get("priority") or 75),
-        reverse=True,
     )

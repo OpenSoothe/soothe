@@ -537,12 +537,17 @@ rate-limited warnings that a WavePlan is missing for the job.
 Cause: host never applied a **flat** WavePlan into job rail state
 (`wave_slices` on `rail_state.json`). Common failure modes:
 
-- Missing WavePlan on all transfer forms (structured fields, dumps, allowlist,
-  completion JSON)
+- Missing WavePlan on all transfer forms (structured `wave_plan` /
+  `wave_plan_path`, suggested dumps, completion JSON)
 - **Nested** waves/slices (`wave_slices` as a `WAVE-*` dict, or wave objects
   with child `slices`) — rejected; the host does **not** flatten them
-- Custom path written outside the allowlist **without** setting completion
-  `wave_plan_path`
+- Declared `wave_plan_path` outside the workspace or jobs root (escape)
+
+There is **no** workspace path allowlist. Suggested dumps
+(`.soothe/wave-plan.json`, jobs dump) are optional convenience reads —
+the model may write the plan anywhere under the workspace and set
+`wave_plan_path`, or embed it inline / in findings. WavePlan slices have
+**no** `priority` field (wire `priority` is ignored).
 
 Recovery:
 
@@ -551,7 +556,7 @@ Recovery:
    processes can accept architecture via soft LLM consensus without a plan).
 2. Inspect: `soothe autopilot job {job_id}`, architecture goal findings, and
    `~/.soothe/data/jobs/{job_id}/rail_state.json` (`wave_slices`,
-   `wave_plan_source_path`). Also check recommended dumps:
+   `wave_plan_source_path`). Also check suggested dumps:
    `jobs/{job_id}/wave-plan.json` and `<workspace>/.soothe/wave-plan.json`.
    Send-back text should include a **Detail:** line (nesting or field error).
 3. Prefer fixing a **flat** WavePlan via any transfer form, e.g. write

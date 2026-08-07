@@ -155,7 +155,7 @@ def _structural_short_circuit(
                     "WavePlan missing for job %s — architecture finished but "
                     "no flat WavePlan applied into rail state; makers will not "
                     "spawn until a valid plan is supplied via structured fields, "
-                    "recommended dumps, allowlist path, or completion JSON "
+                    "recommended dumps, wave_plan_path, or completion JSON "
                     "(restart daemon after upgrades so the architecture gate is live)",
                     job_key[:8],
                 )

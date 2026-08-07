@@ -8,7 +8,7 @@ guards survive daemon restart.
 
 ``invoke`` prefers YAML ``verbs.<name>.do`` recipes over ``_do_*``.
 Wave fan-out applies a flat WavePlan into ``RailJobState`` (SoT) from
-structured completion fields, recommended dumps, workspace allowlist, or
+structured completion fields, recommended dumps, ``wave_plan_path``, or
 findings JSON — then mirrors recommended dump paths best-effort.
 """
 
@@ -31,7 +31,6 @@ from soothe.autopilot.rail.wave_plan import (
     jobs_wave_plan_path,
     parse_wave_plan_payload,
     resolve_fanout_slices,
-    sort_decompose_plan_by_priority,
     workspace_wave_plan_path,
 )
 from soothe.context.engine import ContextEngine
@@ -832,7 +831,7 @@ class RailBuiltinExecutor:
         """Apply WavePlan from multi-form sources into rail state.
 
         Already-applied ``wave_slices`` win; otherwise diagnose dumps /
-        allowlist / architecture findings.
+        ``wave_plan_path`` / architecture findings.
         """
         if state.wave_slices:
             return
@@ -875,8 +874,6 @@ class RailBuiltinExecutor:
                 depends.append(trigger_goal_id)
 
         repo = _job_workspace(self._ce, job_id)
-        if state.decompose_plan:
-            state.decompose_plan = sort_decompose_plan_by_priority(state.decompose_plan)
         resolution = resolve_fanout_slices(
             wave_slices=state.wave_slices,
             decompose_plan=state.decompose_plan,

@@ -660,7 +660,7 @@ class AutopilotService:
         """Parse WavePlan from multi-form sources and apply to rail state.
 
         Prefers structured contribution fields, then recommended dumps /
-        allowlist / findings. Nano/StrangeLoop never call Autopilot APIs —
+        findings. Nano/StrangeLoop never call Autopilot APIs —
         the host interprets opaque completion payloads and applies slices
         into ``RailJobState``.
 

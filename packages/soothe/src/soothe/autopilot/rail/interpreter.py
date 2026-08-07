@@ -112,7 +112,7 @@ class LoopRailInterpreter:
           - When ``fanout:`` is present: ``require_plan``, scout/max_waves.
             Absent ``fanout:`` → no wave-plan pollution.
           - WavePlan slices applied into ``RailJobState`` (SoT) from structured
-            fields, recommended dumps, allowlist, or completion findings.
+            fields, recommended dumps, wave_plan_path, or completion findings.
           - flow ``then:`` builtins decide *when* to fan out
 
         Args:

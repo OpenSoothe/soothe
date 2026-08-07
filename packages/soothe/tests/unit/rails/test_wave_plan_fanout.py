@@ -468,7 +468,7 @@ async def test_spawn_from_architecture_findings(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_spawn_rich_slices_use_description_and_priority(tmp_path: Path) -> None:
+async def test_spawn_rich_slices_use_description_and_list_order(tmp_path: Path) -> None:
     ce = ContextEngine()
     root = await ce.create_goal("Build", workspace=str(tmp_path), priority=70)
     ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
@@ -486,24 +486,24 @@ async def test_spawn_rich_slices_use_description_and_priority(tmp_path: Path) ->
         root.id,
         slices=[
             {
-                "slice": "low-prio",
-                "description": "Low slice write-set: apps/low/**",
-                "priority": 40,
+                "slice": "first",
+                "description": "First slice write-set: apps/first/**",
+                "priority": 40,  # ignored on WavePlan wire
                 "tags": ["feature"],
             },
             {
-                "slice": "high-prio",
-                "description": "High slice write-set: apps/high/**",
+                "slice": "second",
+                "description": "Second slice write-set: apps/second/**",
                 "priority": 90,
                 "tags": ["feature"],
             },
             {
-                "slice": "mid-prio",
-                "description": "Mid slice write-set: apps/mid/**",
+                "slice": "third",
+                "description": "Third slice write-set: apps/third/**",
                 "priority": 60,
             },
         ],
-        rationale="priority clamp",
+        rationale="list order fan-out",
     )
     arch = await ce.create_goal("Arch", parent_id=root.id, source="decomposition")
     await ce.complete_goal(arch.id)
@@ -514,10 +514,48 @@ async def test_spawn_rich_slices_use_description_and_priority(tmp_path: Path) ->
     assert len(result.created_goal_ids) == 2
     makers = [await ce.get_goal(gid) for gid in result.created_goal_ids]
     assert makers[0] is not None and makers[1] is not None
-    assert makers[0].priority == 90
-    assert makers[1].priority == 60
-    assert "High slice write-set" in (makers[0].description or "")
-    assert "Mid slice write-set" in (makers[1].description or "")
+    # Host default priority; WavePlan no longer authors maker priority.
+    assert makers[0].priority == 75
+    assert makers[1].priority == 75
+    assert "First slice write-set" in (makers[0].description or "")
+    assert "Second slice write-set" in (makers[1].description or "")
+
+
+def test_diagnose_ignores_wire_priority_on_rich_slices() -> None:
+    from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_payload
+
+    result = diagnose_wave_plan_payload(
+        {
+            "wave_slices": [
+                {
+                    "slice_id": "SLC-001",
+                    "slice_name": "Auth",
+                    "priority": "P0",
+                    "description": "auth ownership",
+                },
+                {
+                    "slice_id": "SLC-002",
+                    "priority": "high",
+                },
+            ],
+            "independence": "disjoint",
+            "rationale": "efd0ad70-shaped dump",
+        },
+        source="t",
+    )
+    assert result.plan is not None
+    assert result.plan.resolved_slice_ids() == ["SLC-001", "SLC-002"]
+    assert "priority" not in result.plan.slices[0].model_dump()
+    assert "priority" not in result.plan.as_decompose_plan()[0]
+
+
+def test_prefer_ingest_detail_keeps_schema_over_findings_noise() -> None:
+    from soothe.autopilot.rail.wave_plan import _prefer_ingest_detail
+
+    schema = "slices.0.priority: Input should be a valid integer (source=workspace_dump:x)"
+    noise = "not a JSON object (source=findings[2])"
+    assert _prefer_ingest_detail(schema, noise) == schema
+    assert "nested" in _prefer_ingest_detail(noise, "nested waves forbidden (source=t)").lower()
 
 
 def test_diagnose_rejects_wave_slices_dict_nesting() -> None:

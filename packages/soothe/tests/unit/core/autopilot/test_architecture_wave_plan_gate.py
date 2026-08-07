@@ -299,7 +299,7 @@ async def test_architecture_gate_never_calls_llm_consensus(
 async def test_workspace_and_jobs_wave_plan_dumps_are_authoritative(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Recommended dumps and allowlist satisfy is_wave_plan_ready after ingest."""
+    """Recommended dumps satisfy is_wave_plan_ready after ingest."""
     monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
     jobs_root = tmp_path / "jobs"
     jobs_root.mkdir(parents=True)
@@ -418,7 +418,7 @@ async def test_architecture_gate_accepts_jobs_dump_and_mirrors(
 async def test_architecture_gate_accepts_structured_wave_plan_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Custom path outside allowlist works when contribution.wave_plan_path is set."""
+    """Custom under-workspace path works when contribution.wave_plan_path is set."""
     monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
     jobs_root = tmp_path / "jobs"
     jobs_root.mkdir(parents=True)

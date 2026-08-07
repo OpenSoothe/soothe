@@ -243,7 +243,7 @@ class GoalDispatchContextContribution(BaseModel):
         max_length=1024,
         description=(
             "Optional path to flat WavePlan JSON (workspace-relative or under "
-            "jobs dir). Required for custom paths outside the declarative allowlist."
+            "jobs dir). Any path under the workspace or jobs root is accepted."
         ),
     )
 

@@ -21,16 +21,17 @@ DEFAULT_VERB_BRIEFS: dict[str, str] = {
         "REQUIRED deliverable: one flat WavePlan JSON object "
         '(wave_slices string list or flat slices[{"slice",…}]; nested '
         "WAVE trees forbidden). Host SoT is job rail state after ingest.\n"
-        "Recommended dumps: <workspace>/.soothe/wave-plan.json or "
-        "$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json. Also OK: allowlisted "
-        "paths (docs/waveplan.json, …), inline completion wave_plan, or a "
-        "flat JSON blob in the goal completion report. Custom paths outside "
-        "the allowlist must set completion wave_plan_path. Schema example:\n"
+        "Suggested dumps (optional, not required): "
+        "<workspace>/.soothe/wave-plan.json or "
+        "$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json. Also OK: set "
+        "completion wave_plan_path to any file under the workspace, inline "
+        "completion wave_plan, or a flat JSON blob in the goal completion "
+        "report. Schema example:\n"
         '{"wave_slices":["core","api","tests"],'
         '"independence":"disjoint write-sets per slice",'
         '"rationale":"why this partition"}\n'
         "Optionally use rich flat `slices` entries "
-        '({"slice","description","priority","tags"}) and/or `max_waves`. '
+        '({"slice","description","tags"}) and/or `max_waves`. '
         "Prose alone is not enough — never substitute a fixed default "
         "slice list. Slices must be independent (no overlapping primary "
         "write sets)."
