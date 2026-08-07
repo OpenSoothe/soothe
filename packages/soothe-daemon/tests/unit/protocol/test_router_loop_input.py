@@ -42,6 +42,7 @@ def test_coerce_loop_input_text(content: object, expected: str | None) -> None:
 def test_queue_options_from_daemon_message_defaults() -> None:
     assert _queue_options_from_daemon_message({}) == {
         "preferred_subagent": None,
+        "intake_scope": None,
         "model": None,
         "model_params": None,
         "router_profile": None,
@@ -54,6 +55,15 @@ def test_queue_options_from_daemon_message_defaults() -> None:
         "clarification_answers": None,
         "resume_interrupted": False,
     }
+
+
+def test_queue_options_from_daemon_message_intake_scope_normalized() -> None:
+    assert (
+        _queue_options_from_daemon_message({"intake_scope": "  Simple  "})["intake_scope"]
+        == "simple"
+    )
+    assert _queue_options_from_daemon_message({"intake_scope": "   "})["intake_scope"] is None
+    assert _queue_options_from_daemon_message({"intake_scope": 1})["intake_scope"] is None
 
 
 @pytest.mark.parametrize(
@@ -300,3 +310,52 @@ async def test_loop_input_image_to_text_keeps_hint(
     enqueue.assert_awaited_once()
     payload = enqueue.await_args.args[1]
     assert payload["intent_hint"] == "image_to_text"
+
+
+@pytest.mark.asyncio
+async def test_loop_input_invalid_intake_scope_returns_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    router, enqueue, sent, loop_id = _router_with_enqueue_stub(monkeypatch)
+    await router.dispatch(
+        "client-scope",
+        {
+            "proto": "1",
+            "type": "request",
+            "method": "loop_input",
+            "params": {
+                "loop_id": loop_id,
+                "content": "do the thing",
+                "intake_scope": "chitchat",
+            },
+        },
+    )
+    enqueue.assert_not_awaited()
+    assert sent
+    err = sent[-1][1]
+    assert err["type"] == "error"
+    assert "intake_scope" in err["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_loop_input_intake_scope_enqueues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    router, enqueue, sent, loop_id = _router_with_enqueue_stub(monkeypatch)
+    await router.dispatch(
+        "client-scope",
+        {
+            "proto": "1",
+            "type": "request",
+            "method": "loop_input",
+            "params": {
+                "loop_id": loop_id,
+                "content": "do the thing",
+                "intake_scope": "Complex",
+            },
+        },
+    )
+    enqueue.assert_awaited_once()
+    body = enqueue.await_args.args[1]
+    assert body["intake_scope"] == "complex"
+    assert not sent or sent[-1][1].get("type") != "error"

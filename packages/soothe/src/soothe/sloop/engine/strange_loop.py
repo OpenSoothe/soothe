@@ -619,6 +619,16 @@ class StrangeLoop:
             # RFC-225: continue_loop when prior goal(s) exist beside the active one.
             continue_loop_mode = len(checkpoint.goal_history) >= 2
 
+            # Client-forced / pre-graph intent skips Pass 1+2; sync routing now
+            # (Pass 2 path normally rebuilds routing after classify_scope_intake).
+            if preclassified_intent is not None:
+                synced_routing = build_loop_routing_classification(
+                    preclassified_intent,
+                    preferred_subagent,
+                )
+                if synced_routing is not None:
+                    routing_classification = synced_routing
+
             state = LoopState(
                 goal=execution_goal,
                 goal_user_submission=goal_user_submission,

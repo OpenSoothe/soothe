@@ -302,6 +302,7 @@ class TestLoopParams:
                 "loop_id": "abc",
                 "content": "hi",
                 "preferred_subagent": "researcher",
+                "intake_scope": "simple",
                 "model": "openai:gpt-4",
                 "intent_hint": "code",
                 "clarification_mode": "manual",
@@ -309,6 +310,7 @@ class TestLoopParams:
             }
         )
         assert p.preferred_subagent == "researcher"
+        assert p.intake_scope == "simple"
 
     def test_loop_messages_valid(self) -> None:
         p = LoopMessagesParams.model_validate({"loop_id": "abc", "limit": 50, "offset": 10})

@@ -23,7 +23,9 @@ from .models import (
     RoutingClassification,
     TaskComplexity,
     build_loop_routing_classification,
+    intent_classification_from_intake_scope,
     normalize_response_language,
+    parse_intake_scope,
 )
 from .pass1_classifier import IntakePass1Classifier
 from .pass2_classifier import IntakePass2Classifier
@@ -45,5 +47,7 @@ __all__ = [
     "TwoPassIntakeCoordinator",
     "TwoPassIntakeResult",
     "build_loop_routing_classification",
+    "intent_classification_from_intake_scope",
     "normalize_response_language",
+    "parse_intake_scope",
 ]

@@ -359,6 +359,7 @@ class LoopInputParams(BaseModel):
     loop_id: str = Field(..., min_length=1)
     content: str | dict[str, Any] = Field(..., description="User input text or structured content")
     preferred_subagent: str | None = None
+    intake_scope: Literal["trivial", "simple", "complex"] | None = None
     model: str | None = Field(default=None, pattern=r"^[a-z]+:.+$")
     model_params: dict[str, Any] | None = None
     attachments: list[dict[str, str]] | None = None

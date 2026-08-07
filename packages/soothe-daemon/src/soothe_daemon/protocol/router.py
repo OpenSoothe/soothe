@@ -23,6 +23,7 @@ from soothe_daemon.protocol.error_codes import (
     RpcProtocolError,
     build_error_response,
 )
+from soothe_daemon.protocol.intake_scope import validate_and_normalize_intake_scope
 from soothe_daemon.protocol.intent_hints import validate_and_normalize_intent_hint
 from soothe_daemon.protocol.schemas import PARAMS_REGISTRY
 from soothe_daemon.protocol.validation import validate_message
@@ -122,13 +123,19 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
 
     Returns:
         Keys to merge into the internal queue payload: ``preferred_subagent``,
-        ``model``, ``model_params``, ``router_profile``, ``intent_hint``
-        (normalized to lowercase when set), ``clarification_mode`` (RFC-622,
-        normalized to ``"auto"``/``"manual"`` or ``None``).
+        ``intake_scope``, ``model``, ``model_params``, ``router_profile``,
+        ``intent_hint`` (normalized to lowercase when set), ``clarification_mode``
+        (RFC-622, normalized to ``"auto"``/``"manual"`` or ``None``).
     """
     preferred_subagent = msg.get("preferred_subagent")
     preferred_norm = (
         preferred_subagent.strip() or None if isinstance(preferred_subagent, str) else None
+    )
+    raw_intake_scope = msg.get("intake_scope")
+    intake_scope = (
+        raw_intake_scope.strip().lower()
+        if isinstance(raw_intake_scope, str) and raw_intake_scope.strip()
+        else None
     )
     raw_clar_mode = msg.get("clarification_mode")
     if isinstance(raw_clar_mode, str):
@@ -172,6 +179,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         clarification_answers = None
     return {
         "preferred_subagent": preferred_norm,
+        "intake_scope": intake_scope,
         "model": model,
         "model_params": model_params,
         "router_profile": router_profile,
@@ -2120,6 +2128,22 @@ class MessageRouter:
             return
         if normalized_hint is not None:
             q_opts["intent_hint"] = normalized_hint
+
+        normalized_scope, scope_error = validate_and_normalize_intake_scope(
+            q_opts.get("intake_scope"),
+            intent_hint=q_opts.get("intent_hint"),
+        )
+        if scope_error is not None:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INVALID_REQUEST,
+                    scope_error,
+                    request_id=request_id,
+                ),
+            )
+            return
+        q_opts["intake_scope"] = normalized_scope
 
         if not await self._ensure_loop_exists(loop_id):
             await d._send_client_message(

@@ -265,11 +265,58 @@ class IntakeScope(StrEnum):
 
     Pass 2 only runs when Pass 1 returns ``is_task=True``. The ``chitchat`` label
     is not an option — Pass 1 already decided social vs task.
+
+    The same values are accepted on ``loop_input.intake_scope`` to skip Pass 1
+    and Pass 2 LLM intake and force branch routing.
     """
 
     TRIVIAL = "trivial"
     SIMPLE = "simple"
     COMPLEX = "complex"
+
+
+def parse_intake_scope(raw: object | None) -> IntakeScope | None:
+    """Parse a wire ``intake_scope`` value.
+
+    Args:
+        raw: Client value (string or ``None``). Empty / whitespace → ``None``.
+
+    Returns:
+        Normalized ``IntakeScope``, or ``None`` when unset.
+
+    Raises:
+        ValueError: When ``raw`` is a non-empty string outside trivial|simple|complex,
+            or a non-string non-None value.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise ValueError("intake_scope must be a string (trivial, simple, or complex)")
+    text = raw.strip().lower()
+    if not text:
+        return None
+    try:
+        return IntakeScope(text)
+    except ValueError as exc:
+        raise ValueError(f"intake_scope must be trivial, simple, or complex; got {raw!r}") from exc
+
+
+def intent_classification_from_intake_scope(
+    scope: IntakeScope,
+    *,
+    reasoning: str | None = None,
+) -> IntentClassification:
+    """Build a forced ``IntentClassification`` from a client ``intake_scope``.
+
+    Implies ``is_task=True`` (skips Pass 1 social vs task) and the given scope
+    (skips Pass 2). Continuation remains a structural checkpoint overlay.
+    """
+    intake_label = IntakeLabel(scope)
+    return IntentClassification(
+        intake_label=intake_label,
+        reasoning=(reasoning or "").strip() or f"Client intake_scope={scope.value}",
+        task_complexity=derive_task_complexity_from_intake(intake_label),
+    )
 
 
 class IntakePass2LLMResult(BaseModel):

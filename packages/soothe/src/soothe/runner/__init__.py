@@ -591,6 +591,7 @@ class SootheRunner(
         thread_id: str | None = None,
         workspace: str | None = None,
         preferred_subagent: str | None = None,
+        intake_scope: str | None = None,
         client_loop_id: str | None = None,
         autopilot_job: Any = None,  # GoalDispatchEnvelope | None — see RFC-222 revised
         clarification_mode: str | None = None,  # RFC-622 per-request override
@@ -618,6 +619,8 @@ class SootheRunner(
                 ``resolve_workspace_for_stream`` (daemon default, then cwd). The
                 resolved path is always a non-empty absolute directory string for this call.
             preferred_subagent: Optional subagent hint merged into StrangeLoop (IG-349).
+            intake_scope: Optional client-forced intake scope
+                (``trivial``|``simple``|``complex``); skips Pass 1+2 LLM when set.
             client_loop_id: Daemon client loop scope for logging and stream correlation.
             autopilot_job: When set, signals an autopilot-dispatched job (RFC-222 revised).
                 Worker hydrates StrangeLoop from ``autopilot_job.merged_context`` and runs
@@ -685,6 +688,7 @@ class SootheRunner(
                 workspace=effective_workspace,
                 max_iterations=max_iterations,
                 preferred_subagent=preferred_subagent,
+                intake_scope=intake_scope,
                 clarification_mode=clarification_mode,
                 clarification_answer=clarification_answer,
                 clarification_answers=clarification_answers,

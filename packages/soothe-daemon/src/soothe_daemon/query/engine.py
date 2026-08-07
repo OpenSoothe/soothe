@@ -892,6 +892,7 @@ class QueryEngine:
         *,
         loop_id: str | None = None,
         preferred_subagent: str | None = None,
+        intake_scope: str | None = None,
         client_id: str | None = None,
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
@@ -1064,6 +1065,7 @@ class QueryEngine:
                     d._thread_registry.get_workspace(thread_id) or d._daemon_workspace
                 ),
                 "preferred_subagent": preferred_subagent,
+                "intake_scope": intake_scope,
             }
             d._global_history.add(effective_text, thread_id=thread_id, metadata=metadata)
 
@@ -1176,6 +1178,8 @@ class QueryEngine:
                 stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
                 if preferred_subagent is not None:
                     stream_kwargs["preferred_subagent"] = preferred_subagent
+                if intake_scope is not None:
+                    stream_kwargs["intake_scope"] = intake_scope
                 if clarification_mode is not None:
                     stream_kwargs["clarification_mode"] = clarification_mode
 
@@ -1196,6 +1200,7 @@ class QueryEngine:
                     client_workspace_id=loop_meta.get("client_workspace_id"),
                     workspace_mapping=loop_meta.get("workspace_mapping"),
                     preferred_subagent=stream_kwargs.get("preferred_subagent"),
+                    intake_scope=stream_kwargs.get("intake_scope"),
                     model=model,
                     model_params=model_params or {},
                     router_profile=profile_name,

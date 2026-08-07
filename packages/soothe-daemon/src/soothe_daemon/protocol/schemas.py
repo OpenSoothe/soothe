@@ -176,6 +176,7 @@ class LoopInputParams(ParamsBase):
     loop_id: str = Field(..., min_length=1)
     content: str | dict[str, Any] = Field(..., description="User input text or structured content")
     preferred_subagent: str | None = None
+    intake_scope: str | None = None  # trivial|simple|complex; handler normalizes
     model: str | None = None  # Provider:model string; handler does the validation
     model_params: dict[str, Any] | None = None
     router_profile: str | None = None

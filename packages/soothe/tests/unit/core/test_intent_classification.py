@@ -14,6 +14,8 @@ from soothe.sloop.intention.models import (
     IntakeScope,
     ResponseLanguage,
     derive_task_complexity_from_intake,
+    intent_classification_from_intake_scope,
+    parse_intake_scope,
 )
 from soothe.sloop.intention.prompts import (
     INTAKE_PASS1_HUMAN_TASK,
@@ -56,6 +58,25 @@ class TestDeriveTaskComplexityFromIntake:
 
     def test_complex_maps_to_complex(self) -> None:
         assert derive_task_complexity_from_intake(IntakeLabel.COMPLEX) == TaskComplexity.COMPLEX
+
+
+class TestClientIntakeScope:
+    """Wire ``intake_scope`` parse + forced IntentClassification helpers."""
+
+    def test_parse_intake_scope_normalizes(self) -> None:
+        assert parse_intake_scope(None) is None
+        assert parse_intake_scope("  ") is None
+        assert parse_intake_scope("Simple") == IntakeScope.SIMPLE
+
+    def test_parse_intake_scope_rejects_invalid(self) -> None:
+        with pytest.raises(ValueError, match="intake_scope"):
+            parse_intake_scope("chitchat")
+
+    def test_intent_classification_from_intake_scope(self) -> None:
+        intent = intent_classification_from_intake_scope(IntakeScope.TRIVIAL)
+        assert intent.intake_label == IntakeLabel.TRIVIAL
+        assert intent.task_complexity == TaskComplexity.MINIMAL
+        assert "intake_scope=trivial" in (intent.reasoning or "")
 
 
 class TestTwoPassPrompts:

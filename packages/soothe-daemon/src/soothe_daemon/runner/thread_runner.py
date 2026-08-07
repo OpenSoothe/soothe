@@ -241,6 +241,7 @@ def _thread_worker_body(
                             thread_id=req.thread_id,
                             workspace=req.resolve_workspace_path(),
                             preferred_subagent=req.preferred_subagent,
+                            intake_scope=req.intake_scope,
                             client_loop_id=req.loop_id,
                             autopilot_job=req.autopilot_job,  # RFC-222 revised
                             clarification_mode=req.clarification_mode,

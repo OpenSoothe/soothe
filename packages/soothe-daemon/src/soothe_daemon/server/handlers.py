@@ -216,6 +216,7 @@ class DaemonHandlersMixin:
                     prompt_text,
                     loop_id=loop_id,
                     preferred_subagent=qo["preferred_subagent"],
+                    intake_scope=qo.get("intake_scope"),
                     client_id=msg.get("client_id"),
                     model=model_kw,
                     model_params=model_params,

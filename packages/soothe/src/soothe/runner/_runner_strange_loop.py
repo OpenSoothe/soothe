@@ -417,6 +417,7 @@ class StrangeLoopMixin:
         workspace: str | None = None,
         max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
         preferred_subagent: str | None = None,
+        intake_scope: str | None = None,
         clarification_mode: str | None = None,
         clarification_answer: bool = False,
         clarification_answers: list[str] | None = None,
@@ -432,6 +433,9 @@ class StrangeLoopMixin:
             workspace: Thread-specific workspace path (RFC-103)
             max_iterations: Maximum loop iterations (default: 8)
             preferred_subagent: Optional subagent hint for routing
+            intake_scope: Optional client-forced scope (``trivial``|``simple``|
+                ``complex``). When set (and not a clarification resume), skips
+                Pass 1 and Pass 2 LLM intake.
             clarification_mode: RFC-622 mode for this goal (``"auto"`` /
                 ``"manual"``). ``None`` falls back to
                 ``config.agent.clarification.default_mode``.
@@ -513,7 +517,31 @@ class StrangeLoopMixin:
             )
             clarification_policy = None
 
-        routing_classification = build_loop_routing_classification(None, preferred_subagent)
+        preclassified_intent = None
+        if intake_scope and not clarification_answer:
+            from soothe.sloop.intention.models import (
+                intent_classification_from_intake_scope,
+                parse_intake_scope,
+            )
+
+            try:
+                scope = parse_intake_scope(intake_scope)
+            except ValueError:
+                logger.warning(
+                    "[StrangeLoop] Ignoring invalid intake_scope=%r",
+                    intake_scope,
+                )
+                scope = None
+            if scope is not None:
+                preclassified_intent = intent_classification_from_intake_scope(scope)
+                logger.info(
+                    "[StrangeLoop] Client intake_scope=%s — skipping Pass 1 and Pass 2 LLM",
+                    scope.value,
+                )
+
+        routing_classification = build_loop_routing_classification(
+            preclassified_intent, preferred_subagent
+        )
 
         # Loop status liveness heartbeat (IG-466 follow-up):
         # While the loop runs, tick `updated_at` so periodic reconciliation can
@@ -531,7 +559,7 @@ class StrangeLoopMixin:
                 loop_id=strange_loop_id,
                 workspace=workspace,
                 max_iterations=max_iterations,
-                intent=None,
+                intent=preclassified_intent,
                 routing_classification=routing_classification,
                 intent_classifier=self._intent_classifier,
                 preferred_subagent=preferred_subagent,

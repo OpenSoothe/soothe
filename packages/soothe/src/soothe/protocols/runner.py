@@ -77,6 +77,8 @@ class LoopRunRequest:
     client_workspace_id: str | None = None
     workspace_mapping: dict[str, Any] | None = None
     preferred_subagent: str | None = None
+    # Client-forced Pass 2 scope (``trivial``|``simple``|``complex``); skips Pass 1+2 LLM.
+    intake_scope: str | None = None
     model: str | None = None
     model_params: dict[str, Any] = field(default_factory=dict)
     # Loop-scoped chat-role overlay (``/model-router``); embedding stays process-active.

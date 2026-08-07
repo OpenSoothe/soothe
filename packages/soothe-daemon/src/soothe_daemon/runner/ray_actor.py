@@ -46,6 +46,7 @@ class LoopRunnerActor:
                     thread_id=request.thread_id,
                     workspace=request.resolve_workspace_path(),
                     preferred_subagent=request.preferred_subagent,
+                    intake_scope=request.intake_scope,
                     client_loop_id=request.loop_id,
                     autopilot_job=request.autopilot_job,  # RFC-222 revised
                     clarification_mode=request.clarification_mode,
