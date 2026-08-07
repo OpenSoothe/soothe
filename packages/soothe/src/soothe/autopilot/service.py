@@ -1268,8 +1268,7 @@ class AutopilotService:
                 return False
 
         job_id = self._resolve_job_id(goal)
-        prefer = getattr(goal, "evidence_prefer_loop_id", None) or None
-        worker = await self._worker_pool.pick_worker(goal, job_id=job_id, prefer=prefer)
+        worker = await self._worker_pool.pick_worker(goal, job_id=job_id)
         if worker is None:
             if self._workspace_reservation is not None:
                 self._workspace_reservation.release(goal.id)
@@ -1332,38 +1331,17 @@ class AutopilotService:
         # the authoritative enforcer — it cancels the worker on overrun.
         deadline_seconds = getattr(self._config, "goal_deadline_seconds", None)
 
-        mission = getattr(goal, "pending_mission", None) or "implement"
-        if mission not in ("implement", "collect_evidence"):
-            mission = "implement"
-        evidence_round = int(getattr(goal, "evidence_turn_count", 0) or 0)
-        mission_brief = ""
-        goal_description = goal.description
-        intake_scope: str | None = None
-
-        if mission == "collect_evidence":
-            mission_brief = _evidence_mission_brief(goal)
-            goal_description = mission_brief
-            # Trivial intake defaults (RFC-630): 1-step pseudo-plan; iteration
-            # budget stays ``agent.loop.max_iterations``.
-            intake_scope = "trivial"
-            goal.pending_mission = None
-            goal.evidence_prefer_loop_id = None
-
         request = LoopRunRequest(
             loop_id=worker.loop_id,
             thread_id=f"autopilot__goal_{goal.id}__attempt_{goal.retry_count + 1}",
             user_input="",
             client_workspace=goal.workspace,
-            intake_scope=intake_scope,
             autopilot_job=GoalDispatchEnvelope(
                 goal_id=goal.id,
-                goal_description=goal_description,
+                goal_description=goal.description,
                 merged_context=bundle,
                 deadline_seconds=deadline_seconds,
                 attempt=goal.retry_count + 1,
-                mission=mission,  # type: ignore[arg-type]
-                mission_brief=mission_brief,
-                evidence_round=evidence_round if mission == "collect_evidence" else 0,
             ),
         )
 
@@ -1371,11 +1349,10 @@ class AutopilotService:
         worker.active_task = task
         self._dispatch_tasks[goal.id] = task
         logger.info(
-            "[Autopilot] dispatched goal %s to worker %s (attempt %d mission=%s)",
+            "[Autopilot] dispatched goal %s to worker %s (attempt %d)",
             goal.id,
             worker.loop_id,
             request.autopilot_job.attempt,
-            mission,
         )
 
     async def _build_merged_context(self, goal: GoalNode) -> Any:
@@ -1748,7 +1725,6 @@ class AutopilotService:
                         evidence_summary=str(data.get("evidence_summary", "")),
                         loop_id=worker.loop_id,
                         contribution=contribution,
-                        mission=str(data.get("mission") or "implement"),
                     )
                 elif outcome == "needs_replan":
                     # IG-707: clarification / empty PlanResult → send_back (or
@@ -1876,16 +1852,16 @@ class AutopilotService:
         evidence_summary: str,
         loop_id: str | None = None,
         contribution: Any | None = None,
-        mission: str | None = None,
     ) -> None:
-        """RFC-204 / IG-707 / IG-710 / IG-724: validate worker completion before accepting.
+        """RFC-204 / IG-707 / IG-710 / IG-725: validate worker completion before accepting.
 
         StrangeLoop Plan-Execute-Eval owns terminal done. Consensus compares
         ``goal.description`` to the worker StrangeLoop response
         (``evidence_summary`` on the wire) — never substitutes the goal text as
         the response, and never gates on host workspace probes.
-        When the judge marks a proof gap (``evidence_follow_up``), Autopilot may
-        queue a trivial ``collect_evidence`` turn (IG-724) instead of send_back.
+        IG-725: no ``collect_evidence`` re-dispatch. Prefer accept when StrangeLoop
+        completed; product send_back/fail only. After accept, AutopilotMonitor
+        evaluates CE DAG status (completed/active/failed/pending).
         Decisions are accept / send_back / fail only (automatic; no operator park).
         """
         from soothe.autopilot.verify.consensus import evaluate_goal_completion
@@ -1923,7 +1899,6 @@ class AutopilotService:
             evidence_summary=evidence_summary,
             contribution=contribution,
         )
-        evidence_follow_up = False
         if arch_gate is not None:
             decision, reasoning = arch_gate
             logger.info(
@@ -1933,12 +1908,7 @@ class AutopilotService:
                 reasoning[:160],
             )
         else:
-            wire = (evidence_summary or "").strip()
-            stashed = (getattr(goal, "stashed_implement_response", None) or "").strip()
-            if mission == "collect_evidence" and stashed:
-                response_text = f"## Implement narrative\n{stashed}\n\n## Evidence turn\n{wire}"
-            else:
-                response_text = wire
+            response_text = (evidence_summary or "").strip()
             try:
                 result = await evaluate_goal_completion(
                     goal.description,
@@ -1947,26 +1917,20 @@ class AutopilotService:
                     model=self._consensus_model,
                 )
                 decision, reasoning = result.decision, result.reasoning
-                evidence_follow_up = bool(result.evidence_follow_up)
             except Exception:
                 logger.exception("Consensus evaluation failed for goal %s", goal_id)
                 decision, reasoning = "fail", "Consensus evaluation failed"
-                evidence_follow_up = False
 
         rail_bound = bool(getattr(goal, "rail_id", None))
         logger.info(
-            "Consensus finalize goal_id=%s decision=%s evidence_follow_up=%s "
-            "rail_bound=%s reasoning=%s",
+            "Consensus finalize goal_id=%s decision=%s rail_bound=%s reasoning=%s",
             goal_id,
             decision,
-            evidence_follow_up,
             rail_bound,
             (reasoning or "")[:160],
         )
         try:
             if decision == "accept":
-                goal.stashed_implement_response = None
-                goal.pending_mission = None
                 await self._ce.complete_goal(goal_id)
                 await self._emit_goal_completed(goal_id, loop_id=loop_id)
                 await self._maybe_assess_job_maturity(
@@ -1975,40 +1939,9 @@ class AutopilotService:
                 )
                 await self._maybe_emit_dag_idle(goal_id)
             elif decision == "send_back":
-                # One free trivial evidence turn per goal (no AutopilotConfig knobs).
-                can_evidence = (
-                    evidence_follow_up
-                    and mission != "collect_evidence"
-                    and int(getattr(goal, "evidence_turn_count", 0) or 0) == 0
-                )
-                if can_evidence:
-                    updated = await self._ce.queue_evidence_turn(
-                        goal_id,
-                        implement_response=evidence_summary,
-                        brief=reasoning,
-                        prefer_loop_id=loop_id,
-                    )
-                    if updated.status == "failed":
-                        await self._emit_goal_failed(
-                            goal_id,
-                            error_message=reasoning,
-                            loop_id=loop_id,
-                        )
-                        await self._maybe_emit_dag_idle(goal_id)
-                    else:
-                        await self._notify_rail(
-                            "goal_send_back",
-                            goal_id,
-                            reason=f"evidence_follow_up: {reasoning}",
-                        )
-                else:
-                    goal.stashed_implement_response = None
-                    goal.pending_mission = None
-                    await self._apply_send_back_or_fail(goal_id, reason=reasoning, loop_id=loop_id)
+                await self._apply_send_back_or_fail(goal_id, reason=reasoning, loop_id=loop_id)
             else:
                 # fail (or any unexpected non-accept/send_back) — host recovery.
-                goal.stashed_implement_response = None
-                goal.pending_mission = None
                 await self._ce.fail_goal(goal_id, error=reasoning)
                 await self._emit_goal_failed(
                     goal_id,
@@ -2598,47 +2531,6 @@ def _serialize_goal_steps(goal: GoalNode) -> dict[str, Any]:
         "steps_total": len(step_nodes),
         "steps": {"nodes": step_nodes, "edges": step_edges},
     }
-
-
-def _evidence_mission_brief(goal: GoalNode) -> str:
-    """Build the trivial-turn goal text for a collect_evidence dispatch (IG-724)."""
-    branch = (goal.branch_id or "").strip()
-    workspace = (goal.workspace or "").strip()
-    gaps = ""
-    for entry in reversed(goal.guidance_accumulated or []):
-        text = str(entry.get("text") or "").strip()
-        if text.startswith("Evidence turn requested:"):
-            gaps = text.removeprefix("Evidence turn requested:").strip()
-            break
-        if text.startswith("Consensus send-back:"):
-            gaps = text.removeprefix("Consensus send-back:").strip()
-            break
-    parts = [
-        "Collect workspace proof for the goal below. Do NOT modify product code.",
-        "Use tools to verify branch isolation, recent commits, completion reports,",
-        "and key deliverable paths. Put the proof (branch, git log, file paths,",
-        "short deliverable map) in your completion narrative.",
-    ]
-    if workspace:
-        parts.append(f"Maker workspace (run all tools here): {workspace}.")
-        normalized_ws = workspace.replace("\\", "/")
-        if "/.soothe/worktrees/" in normalized_ws:
-            parts.append(
-                "This path is a git worktree for this maker. Stay in this worktree "
-                "for git status/log and file reads. Do not cd to the parent job "
-                "repo root or another maker's worktree."
-            )
-        elif branch:
-            parts.append(
-                "Run git and file tools only in the maker workspace above "
-                "(not a sibling checkout)."
-            )
-    if branch:
-        parts.append(f"Expected branch: {branch}.")
-    if gaps:
-        parts.append(f"Consensus gaps to address:\n{gaps}")
-    parts.append(f"\nOriginal goal:\n{goal.description}")
-    return "\n".join(parts)
 
 
 def _collect_operator_guidance(

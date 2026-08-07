@@ -1,12 +1,18 @@
 # IG-724: Engine-driven trivial evidence turns (same-loop tools)
 
 **Created**: 2026-08-07  
-**Status**: Implemented  
-**Related**: [RFC-204](../specs/RFC-204-autopilot-mode.md),
-[RFC-222](../specs/RFC-222-autopilot-goal-engine-architecture.md),
-[RFC-630](../specs/RFC-630-start-phase-llm-intake-and-branch-routing.md),
-[IG-710](IG-710-consensus-trust-sloop-response.md),
-[IG-707](IG-707-autopilot-automatic-consensus-no-operator-suspend.md)
+**Status**: Superseded by [IG-725](../../impl/IG-725-remove-evidence-turns-trust-sloop.md) (archived)  
+**Related**: [RFC-204](../../specs/RFC-204-autopilot-mode.md),
+[RFC-222](../../specs/RFC-222-autopilot-goal-engine-architecture.md),
+[RFC-630](../../specs/RFC-630-start-phase-llm-intake-and-branch-routing.md),
+[IG-710](../../impl/IG-710-consensus-trust-sloop-response.md),
+[IG-707](../../impl/IG-707-autopilot-automatic-consensus-no-operator-suspend.md),
+[IG-725](../../impl/IG-725-remove-evidence-turns-trust-sloop.md)
+
+> **Superseded:** Evidence missions caused assess thrash on proof-only
+> briefs. IG-725 removes `collect_evidence` / `evidence_follow_up` and trusts
+> StrangeLoop completion; AutopilotMonitor owns post-completion DAG evaluation.
+> Keep this document for historical rationale only.
 
 ---
 

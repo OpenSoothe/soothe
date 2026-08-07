@@ -1,13 +1,14 @@
-"""RFC-204 / IG-707: Consensus loop for Autopilot validation of StrangeLoop completions.
+"""RFC-204 / IG-707 / IG-725: Consensus loop for Autopilot validation of StrangeLoop completions.
 
 Autopilot validates StrangeLoop's "done" judgment before accepting goal completion.
 If not satisfied, Autopilot send_backs the goal with refined instructions, or fails
 it so host recovery (monitor / LoopRail / engine health) can act — never parks for
 an operator mid-goal.
 
-IG-724: when ``send_back`` is primarily a missing workspace/git/file proof gap,
-``evidence_follow_up`` requests a StrangeLoop ``collect_evidence`` turn instead of
-immediate product rework. The host judge never opens the workspace.
+IG-725: no ``evidence_follow_up`` / ``collect_evidence`` turns. Prefer accepting
+StrangeLoop Plan-Execute-Eval completions; product send_back/fail only. Post-accept
+DAG structure is AutopilotMonitor's job (completed/active/failed/pending), not a
+second worker mission. The host judge never opens the workspace (IG-710).
 """
 
 from __future__ import annotations
@@ -37,22 +38,13 @@ class ConsensusVerdict(BaseModel):
         default="",
         description="Brief explanation for the decision",
     )
-    evidence_follow_up: bool = Field(
-        default=False,
-        description=(
-            "When decision is send_back: true if the gap is missing "
-            "workspace/git/file proof that tools could gather; false for "
-            "product rework / wrong approach. Ignored for accept/fail."
-        ),
-    )
 
 
 class ConsensusResult(NamedTuple):
-    """Host-facing consensus outcome (IG-724)."""
+    """Host-facing consensus outcome."""
 
     decision: ConsensusDecision
     reasoning: str
-    evidence_follow_up: bool = False
 
 
 class ConsensusEvaluationError(RuntimeError):
@@ -65,7 +57,7 @@ async def evaluate_goal_completion(
     evidence_summary: str = "",
     model: BaseChatModel | None = None,
 ) -> ConsensusResult:
-    """RFC-204 / IG-707 / IG-724: Holistic evaluation of goal completion via structured LLM.
+    """RFC-204 / IG-707 / IG-725: Holistic evaluation of goal completion via structured LLM.
 
     Args:
         goal_description: The original goal text.
@@ -74,7 +66,7 @@ async def evaluate_goal_completion(
         model: LLM for evaluation (required).
 
     Returns:
-        ConsensusResult with decision, reasoning, and evidence_follow_up.
+        ConsensusResult with decision and reasoning.
 
     Raises:
         ConsensusEvaluationError: When ``model`` is missing or the LLM call fails.
@@ -115,15 +107,13 @@ async def evaluate_goal_completion(
         )
         decision: ConsensusDecision = verdict.decision
         reasoning = (verdict.reasoning or "").strip() or f"Consensus decided {decision}"
-        evidence_follow_up = bool(verdict.evidence_follow_up) and decision == "send_back"
 
         logger.info(
-            "Consensus evaluation: decision=%s evidence_follow_up=%s reasoning=%s",
+            "Consensus evaluation: decision=%s reasoning=%s",
             decision,
-            evidence_follow_up,
             preview_first(reasoning, 200),
         )
-        return ConsensusResult(decision, reasoning, evidence_follow_up)
+        return ConsensusResult(decision, reasoning)
     except ConsensusEvaluationError:
         raise
     except Exception as exc:
@@ -161,19 +151,19 @@ def _build_consensus_prompt(
 
     parts.append(
         "\nChoose one decision:\n"
-        "- accept: the goal appears completed satisfactorily\n"
-        "- send_back: more verification detail is needed, or the agent should "
-        "retry with a different approach\n"
+        "- accept: StrangeLoop Plan-Execute-Eval finished and the response "
+        "indicates the goal work was done satisfactorily — prefer accept "
+        "when the agent completed its plan unless product work is clearly "
+        "incomplete or wrong\n"
+        "- send_back: the approach or product deliverable must be reworked "
+        "(not a request for more git/file proof narrative)\n"
         "- fail: the goal appears fundamentally blocked or unrecoverable by "
         "further agent retries (host recovery will decide next steps)\n"
-        "Judge from the Goal and Agent Response (StrangeLoop Plan-Execute-Eval "
-        "output). Prefer send_back when the response is thin relative to the "
-        "goal; do not choose fail solely because the narrative is short.\n"
-        "When decision is send_back, set evidence_follow_up=true if the main "
-        "gap is missing workspace proof (branch name, git commits, completion "
-        "report, file paths) that a short tool-using gather pass could supply; "
-        "set evidence_follow_up=false when the approach itself must be reworked "
-        "or product code is clearly incomplete/wrong.\n"
+        "Judge from the Goal and Agent Response only. Do not reject solely "
+        "because the narrative omits branch names, git logs, or file-path "
+        "lists — AutopilotMonitor and LoopRail own post-completion DAG "
+        "structure, not a second proof mission. Prefer fail only when work "
+        "is fundamentally blocked.\n"
         "Provide a brief reasoning string."
     )
     return "\n".join(parts)

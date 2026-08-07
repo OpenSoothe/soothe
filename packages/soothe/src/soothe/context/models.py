@@ -260,11 +260,6 @@ class GoalNode(BaseModel):
     attempts_after_crash: int = 0  # RFC-222 H4
     # Engine liveness recovery after retry/send_back budgets (IG-697)
     engine_recovery_count: int = 0
-    # IG-724: at most one trivial collect_evidence turn (separate from send_back_count)
-    evidence_turn_count: int = 0
-    pending_mission: Literal["implement", "collect_evidence"] | None = None
-    stashed_implement_response: str | None = None
-    evidence_prefer_loop_id: str | None = None  # sticky slot hint after implement
 
     # Workspace/source (from Goal, RFC-222)
     source_file: str | None = None  # GOAL.md path if file-sourced

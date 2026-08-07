@@ -205,7 +205,7 @@ class TestConsensusGoalPlusResponse:
         ) -> ConsensusResult:
             seen["response"] = agent_response
             seen["evidence"] = evidence
-            return ConsensusResult("send_back", "empty response", False)
+            return ConsensusResult("send_back", "empty response")
 
         bus = InternalEventBus()
         ce = ContextEngine()
@@ -242,7 +242,7 @@ class TestConsensusGoalPlusResponse:
             seen["goal"] = goal_desc
             seen["response"] = agent_response
             seen["evidence"] = evidence
-            return ConsensusResult("accept", "ok", False)
+            return ConsensusResult("accept", "ok")
 
         bus = InternalEventBus()
         ce = ContextEngine()

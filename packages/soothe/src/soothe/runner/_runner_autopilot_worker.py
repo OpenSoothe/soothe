@@ -96,13 +96,11 @@ class AutopilotWorkerMixin:
             ``GoalDispatchContextContribution`` synthesized from the run.
         """
         tid = thread_id or f"autopilot__goal_{job.goal_id}__attempt_{job.attempt}"
-        mission = getattr(job, "mission", None) or "implement"
         logger.info(
-            "[Autopilot worker] starting goal %s (attempt %d, mission=%s, "
+            "[Autopilot worker] starting goal %s (attempt %d, "
             "max_iter=%d, intake_scope=%s, deadline=%s)",
             job.goal_id,
             job.attempt,
-            mission,
             max_iterations,
             intake_scope,
             f"{job.deadline_seconds}s" if job.deadline_seconds else "none",
@@ -172,7 +170,6 @@ class AutopilotWorkerMixin:
                 "type": "soothe.internal.autopilot.goal_started",
                 "goal_id": job.goal_id,
                 "attempt": job.attempt,
-                "mission": mission,
                 "loop_thread_id": tid,
             }
         )
@@ -271,7 +268,6 @@ class AutopilotWorkerMixin:
         plan_result: PlanResult | None,
         *,
         goal_id: str = "",
-        prefer_full_output: bool = False,
     ) -> GoalDispatchContextContribution:
         """Synthesize a contribution from the final ``PlanResult``.
 
@@ -317,10 +313,7 @@ class AutopilotWorkerMixin:
                 )
             )
 
-        summary = synthesize_sloop_response(
-            plan_result,
-            prefer_full_output=prefer_full_output,
-        )
+        summary = synthesize_sloop_response(plan_result)
         if summary:
             # Avoid duplicating the flat WavePlan JSON as the prose finding.
             # Finding.summary is schema-capped at 2000; the consensus wire uses
@@ -381,7 +374,6 @@ class AutopilotWorkerMixin:
         contribution = self._build_contribution(
             plan_result,
             goal_id=job.goal_id,
-            prefer_full_output=(getattr(job, "mission", None) or "") == "collect_evidence",
         )
         payload: dict[str, Any] = {
             "type": _GOAL_COMPLETION_TYPE,
@@ -393,13 +385,7 @@ class AutopilotWorkerMixin:
         }
         if plan_result is not None:
             payload["plan_result_status"] = getattr(plan_result, "status", None)
-            prefer_full = (getattr(job, "mission", None) or "") == "collect_evidence"
-            payload["evidence_summary"] = synthesize_sloop_response(
-                plan_result,
-                prefer_full_output=prefer_full,
-            )
-            payload["mission"] = getattr(job, "mission", None) or "implement"
-            payload["evidence_round"] = int(getattr(job, "evidence_round", 0) or 0)
+            payload["evidence_summary"] = synthesize_sloop_response(plan_result)
         if error_text is not None:
             payload["error_text"] = error_text
         return _custom(payload)

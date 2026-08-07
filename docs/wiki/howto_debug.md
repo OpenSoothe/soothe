@@ -572,26 +572,24 @@ Forensics: `.agents/skills/inspect-autopilot-job/SKILL.md`.
 
 ---
 
-## Thin consensus / evidence turn
+## Thin consensus / post-completion DAG
 
-Symptoms: Maker goals have real commits and/or on-disk completion reports,
-but consensus keeps `send_back` with “thin” / “no evidence of branch /
-commits” reasoning while the worktree is rich.
+Symptoms (historical): Maker goals had real commits while consensus
+`send_back` complained about “thin” / missing branch/commit narrative, then
+a proof-only re-dispatch spun without product progress.
 
-Cause: per-goal consensus judges **goal text vs StrangeLoop wire response
-only** — the host does not read the workspace. Thin `evidence_summary`
-(step/line digests) fails even when git is fine.
+Current host behavior: consensus judges **goal text vs StrangeLoop wire
+response only** (no host workspace probes). Prefer **accept** when
+StrangeLoop completed; do not re-dispatch a second proof mission on the
+same goal. After accept, AutopilotMonitor evaluates CE DAG
+(completed/active/failed/pending) and may rewire or wait; LoopRail reacts
+to `goal_completed` / `dag_idle`.
 
-Host behavior: when the judge marks a proof gap (`evidence_follow_up`),
-Autopilot may re-dispatch the **same goal** with `mission=collect_evidence`,
-forced `intake_scope=trivial` (RFC-630 trivial defaults; iteration budget is
-`agent.loop.max_iterations`), and a short brief on the maker worktree. Tools
-run in StrangeLoop; a second completion chunk feeds consensus. At most one
-evidence turn per goal (does not consume `max_send_backs`).
-
-Inspect: `soothe autopilot goal {id}`, worker logs for trivial intake, and
-job loops for a short follow-up after implement. Do not expect daemon-side
-file probes in consensus logs.
+Inspect: `soothe autopilot goal {id}`, consensus finalize logs
+(`decision=accept|send_back|fail`), Monitor post-completion / DAG health
+lines, and rail trace. Do not expect `mission=collect_evidence` or
+“Collect workspace proof” goal texts after package upgrades (restart
+daemon).
 
 ---
 

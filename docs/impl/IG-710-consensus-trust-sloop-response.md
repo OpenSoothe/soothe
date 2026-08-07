@@ -1,11 +1,12 @@
 # IG-710: Consensus trusts StrangeLoop response (drop host evidence grounding)
 
 **Created**: 2026-08-06  
-**Status**: Done (superseded in part by [IG-724](IG-724-engine-driven-trivial-evidence-turns.md))  
+**Status**: Done (evidence-mission digression removed by [IG-725](IG-725-remove-evidence-turns-trust-sloop.md); IG-724 archived)  
 **Related**: [RFC-204](../specs/RFC-204-autopilot-mode.md),
 [RFC-230](../specs/RFC-230-job-maturity-assessment.md),
 [IG-707](IG-707-autopilot-automatic-consensus-no-operator-suspend.md),
-[IG-724](IG-724-engine-driven-trivial-evidence-turns.md),
+[IG-725](IG-725-remove-evidence-turns-trust-sloop.md),
+[IG-724](../archive/impl/IG-724-engine-driven-trivial-evidence-turns.md) (historical),
 [IG-680](../archive/impl/IG-680-autopilot-dag-health-evidence-deps.md) (historical),
 [IG-685](../archive/impl/IG-685-consensus-full-output-evidence.md) (historical)
 
@@ -23,10 +24,11 @@ Structural / language probes must **not** gate per-goal consensus (this IG).
 Job-level `acceptance_met` is latched by the LLM maturity assessor (RFC-230 /
 IG-711) — not by cargo/pytest host runners.
 
-**IG-724 clarification:** The ban on **daemon-local** workspace probes remains.
-When proof is missing from the wire, Autopilot may **dispatch** a StrangeLoop
-`collect_evidence` mission (`intake_scope=trivial`) so tools run in the worker;
-the host judge stays structured-only and still must not open the workspace.
+**IG-725 clarification:** The ban on **daemon-local** workspace probes remains.
+Do **not** re-dispatch a `collect_evidence` mission for thin narratives.
+Prefer accepting StrangeLoop Plan-Execute-Eval completions; product
+`send_back` / `fail` only. After accept, AutopilotMonitor evaluates CE DAG
+status (completed/active/failed/pending) — not a second worker proof turn.
 
 ---
 

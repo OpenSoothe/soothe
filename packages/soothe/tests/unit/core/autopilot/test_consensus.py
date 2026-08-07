@@ -43,9 +43,9 @@ class TestConsensusPrompt:
         assert "fail" in prompt.lower()
         assert "suspend" not in prompt.lower()
         assert "accept" in prompt.lower()
-        assert "prefer send_back" in prompt.lower()
+        assert "prefer accept" in prompt.lower()
         assert "fundamentally blocked" in prompt.lower()
-        assert "evidence_follow_up" in prompt
+        assert "evidence_follow_up" not in prompt
 
 
 @pytest.mark.asyncio
