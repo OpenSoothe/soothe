@@ -13,18 +13,6 @@ EMBED: Final = "embed"
 DAEMON_INTENT_HINTS: frozenset[str] = frozenset({TEXT_COMPLETION, IMAGE_TO_TEXT, OCR, EMBED})
 STRUCTURED_OUTPUT_HINTS: frozenset[str] = frozenset({TEXT_COMPLETION, IMAGE_TO_TEXT})
 
-# Legacy wire values rejected with migration messages (never pass through).
-REMOVED_INTENT_HINTS: dict[str, str] = {
-    "direct_llm": (
-        "intent_hint direct_llm is removed; "
-        "use text_completion (text-only) or image_to_text (with attachments)"
-    ),
-    "quiz": ("intent_hint quiz is removed; omit intent_hint and let intake classify the turn"),
-    "direct_model": (
-        "intent_hint direct_model is removed; use text_completion, image_to_text, ocr, or embed"
-    ),
-}
-
 
 def is_daemon_intent_hint(hint: str | None) -> bool:
     """Return True when ``hint`` selects a daemon-side intent-hint turn."""
@@ -54,9 +42,6 @@ def validate_and_normalize_intent_hint(
         if prompt_text is None:
             return None, "loop_id and non-empty content (string or object with text) required"
         return None, None
-
-    if hint in REMOVED_INTENT_HINTS:
-        return None, REMOVED_INTENT_HINTS[hint]
 
     if hint not in DAEMON_INTENT_HINTS:
         if prompt_text is None:

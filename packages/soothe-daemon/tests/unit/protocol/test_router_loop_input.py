@@ -221,34 +221,6 @@ def _router_with_enqueue_stub(
 
 
 @pytest.mark.asyncio
-async def test_loop_input_direct_llm_rejected(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Removed intent_hint direct_llm must not enqueue."""
-    router, enqueue, sent, loop_id = _router_with_enqueue_stub(monkeypatch)
-
-    await router.dispatch(
-        "client-go-parity",
-        {
-            "proto": "1",
-            "type": "request",
-            "method": "loop_input",
-            "params": {
-                "loop_id": loop_id,
-                "content": "hello",
-                "intent_hint": "direct_llm",
-            },
-        },
-    )
-
-    enqueue.assert_not_awaited()
-    err = sent[-1][1]
-    assert err["type"] == "error"
-    assert err["error"]["code"] == ErrorCode.INVALID_REQUEST.value
-    assert "removed" in err["error"]["message"].lower()
-
-
-@pytest.mark.asyncio
 async def test_loop_input_image_to_text_attachments_only_enqueues(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
