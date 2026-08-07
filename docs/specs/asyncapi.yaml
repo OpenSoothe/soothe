@@ -255,12 +255,55 @@ components:
             - type: string
             - type: object
           description: User input text or structured content
+        preferred_subagent:
+          type: string
+          description: Optional wired-subagent routing hint
+        intake_scope:
+          type: string
+          enum: [trivial, simple, complex]
+          description: >
+            Optional forced StrangeLoop intake scope. When set, the daemon skips
+            Pass 1 and Pass 2 LLM intake and routes by this label.
         model:
           type: string
           description: Optional model override
         model_params:
           type: object
           description: Optional model parameters
+        router_profile:
+          type: string
+          description: Optional named router profile for chat-role overlay
+        attachments:
+          type: array
+          items:
+            type: object
+          description: Optional image attachments (mime_type + base64 data)
+        intent_hint:
+          type: string
+          description: >
+            Daemon non-agent turn hint (text_completion, image_to_text, ocr, embed)
+            or agent-path pass-through
+        response_schema:
+          type: object
+          description: Optional JSON Schema for structured output
+        response_schema_name:
+          type: string
+          description: Optional provider schema name
+        response_schema_strict:
+          type: boolean
+          description: Optional strict JSON Schema mode
+        clarification_mode:
+          type: string
+          enum: [auto, manual]
+          description: Optional clarification relay mode
+        clarification_answer:
+          type: boolean
+          description: Treat content as answer to a pending clarification
+        clarification_answers:
+          type: array
+          items:
+            type: string
+          description: Per-question clarification answers
 
     subscribeParams:
       type: object

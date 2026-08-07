@@ -1175,14 +1175,6 @@ class QueryEngine:
                         await d._persistence_manager.get_loop_metadata(effective_loop_id) or {}
                     )
 
-                stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
-                if preferred_subagent is not None:
-                    stream_kwargs["preferred_subagent"] = preferred_subagent
-                if intake_scope is not None:
-                    stream_kwargs["intake_scope"] = intake_scope
-                if clarification_mode is not None:
-                    stream_kwargs["clarification_mode"] = clarification_mode
-
                 # All queries use subprocess isolation via the runner factory.
                 _runner_key = effective_loop_id or thread_id
 
@@ -1199,12 +1191,12 @@ class QueryEngine:
                     user_id=loop_meta.get("user_id") or loop_meta.get("user"),
                     client_workspace_id=loop_meta.get("client_workspace_id"),
                     workspace_mapping=loop_meta.get("workspace_mapping"),
-                    preferred_subagent=stream_kwargs.get("preferred_subagent"),
-                    intake_scope=stream_kwargs.get("intake_scope"),
+                    preferred_subagent=preferred_subagent,
+                    intake_scope=intake_scope,
                     model=model,
                     model_params=model_params or {},
                     router_profile=profile_name,
-                    clarification_mode=stream_kwargs.get("clarification_mode"),
+                    clarification_mode=clarification_mode,
                     clarification_answer=clarification_answer,
                     clarification_answers=clarification_answers,
                     resume_interrupted=resume_interrupted,

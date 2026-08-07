@@ -45,7 +45,7 @@ This RFC defines:
 - Plan-token streaming to the user as a draft.
 - Embedding-based pre-filter of intent.
 - Post-execution failure-intent keyword fast-path as primary classifier (migrated to LLM-first in IG-567; keyword path remains offline fallback).
-- Changes to the wire protocol, event envelopes, or daemon transport.
+- Changes to event envelopes or daemon transport framing (optional `loop_input.intake_scope` is an additive params field; see RFC-450).
 - Changes to clarification relay (`RFC-622`) behavior.
 - A feature flag or staged rollout — two-pass replaces one-pass outright.
 - Fine-tuning pipeline for intake classification (future work).
@@ -481,7 +481,7 @@ init_or_resume --(route_by_intent)--> {
 
 - **Direct replacement** — two-pass replaces one-pass in same change.
 - **Removed** — legacy `IntentClassificationLLMResult`, `classify_intent`, `_is_likely_agentic`, `simple_bypass` prefix/detector, `chitchat` row in intake prompt.
-- **No wire-protocol change** — `IntentClassifiedEvent` derived from combined results.
+- **Wire** — `IntentClassifiedEvent` is still derived from intake results. Optional additive `loop_input.intake_scope` (`trivial`|`simple`|`complex`) forces scope and skips Pass 1+2 LLM when set (RFC-450).
 
 ---
 

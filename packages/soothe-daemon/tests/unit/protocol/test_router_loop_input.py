@@ -57,13 +57,14 @@ def test_queue_options_from_daemon_message_defaults() -> None:
     }
 
 
-def test_queue_options_from_daemon_message_intake_scope_normalized() -> None:
+def test_queue_options_from_daemon_message_intake_scope_passthrough() -> None:
+    """Queue options keep the raw wire value; handler validation normalizes."""
     assert (
         _queue_options_from_daemon_message({"intake_scope": "  Simple  "})["intake_scope"]
-        == "simple"
+        == "  Simple  "
     )
-    assert _queue_options_from_daemon_message({"intake_scope": "   "})["intake_scope"] is None
-    assert _queue_options_from_daemon_message({"intake_scope": 1})["intake_scope"] is None
+    assert _queue_options_from_daemon_message({"intake_scope": 1})["intake_scope"] == 1
+    assert _queue_options_from_daemon_message({})["intake_scope"] is None
 
 
 @pytest.mark.parametrize(
@@ -327,6 +328,31 @@ async def test_loop_input_invalid_intake_scope_returns_error(
                 "loop_id": loop_id,
                 "content": "do the thing",
                 "intake_scope": "chitchat",
+            },
+        },
+    )
+    enqueue.assert_not_awaited()
+    assert sent
+    err = sent[-1][1]
+    assert err["type"] == "error"
+    assert "intake_scope" in err["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_loop_input_non_string_intake_scope_returns_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    router, enqueue, sent, loop_id = _router_with_enqueue_stub(monkeypatch)
+    await router.dispatch(
+        "client-scope",
+        {
+            "proto": "1",
+            "type": "request",
+            "method": "loop_input",
+            "params": {
+                "loop_id": loop_id,
+                "content": "do the thing",
+                "intake_scope": 1,
             },
         },
     )

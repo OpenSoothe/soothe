@@ -131,12 +131,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     preferred_norm = (
         preferred_subagent.strip() or None if isinstance(preferred_subagent, str) else None
     )
-    raw_intake_scope = msg.get("intake_scope")
-    intake_scope = (
-        raw_intake_scope.strip().lower()
-        if isinstance(raw_intake_scope, str) and raw_intake_scope.strip()
-        else None
-    )
+    # Raw value; ``validate_and_normalize_intake_scope`` owns parse + reject.
     raw_clar_mode = msg.get("clarification_mode")
     if isinstance(raw_clar_mode, str):
         candidate = raw_clar_mode.strip().lower()
@@ -179,7 +174,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         clarification_answers = None
     return {
         "preferred_subagent": preferred_norm,
-        "intake_scope": intake_scope,
+        "intake_scope": msg.get("intake_scope"),
         "model": model,
         "model_params": model_params,
         "router_profile": router_profile,

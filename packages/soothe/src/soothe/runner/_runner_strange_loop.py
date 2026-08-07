@@ -37,6 +37,10 @@ from soothe.sloop.clarification.events import (
     ClarificationRequestedEvent,
 )
 from soothe.sloop.intention import build_loop_routing_classification
+from soothe.sloop.intention.models import (
+    intent_classification_from_intake_scope,
+    parse_intake_scope,
+)
 from soothe.sloop.utils.events import LoopAgentReasonEvent
 from soothe.sloop.utils.loop_reason_display import (
     is_displayable_assessment_reasoning as _is_displayable_assessment_reasoning,
@@ -519,11 +523,6 @@ class StrangeLoopMixin:
 
         preclassified_intent = None
         if intake_scope and not clarification_answer:
-            from soothe.sloop.intention.models import (
-                intent_classification_from_intake_scope,
-                parse_intake_scope,
-            )
-
             try:
                 scope = parse_intake_scope(intake_scope)
             except ValueError:
