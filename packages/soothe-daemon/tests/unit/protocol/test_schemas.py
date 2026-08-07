@@ -301,8 +301,6 @@ class TestLoopParams:
             {
                 "loop_id": "abc",
                 "content": "hi",
-                "autonomous": True,
-                "max_iterations": 5,
                 "preferred_subagent": "researcher",
                 "model": "openai:gpt-4",
                 "intent_hint": "code",
@@ -310,8 +308,6 @@ class TestLoopParams:
                 "clarification_answer": True,
             }
         )
-        assert p.autonomous is True
-        assert p.max_iterations == 5
         assert p.preferred_subagent == "researcher"
 
     def test_loop_messages_valid(self) -> None:
@@ -414,11 +410,9 @@ class TestJobParams:
             {
                 "goal": "build feature",
                 "workspace": "/tmp",
-                "autonomous": True,
             }
         )
         assert p.goal == "build feature"
-        assert p.autonomous is True
 
     def test_job_create_missing_goal(self) -> None:
         with pytest.raises(ValidationError):

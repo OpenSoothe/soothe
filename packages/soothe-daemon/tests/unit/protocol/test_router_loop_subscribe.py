@@ -45,7 +45,6 @@ async def test_loop_subscribe_responds_before_background_reattach() -> None:
 
     assert sent[-1]["type"] == "next"
     assert sent[-1]["payload"]["success"] is True
-    assert sent[-1]["payload"]["autopilot_mode"] == "solo"
     assert not gate.is_set()
 
     gate.set()

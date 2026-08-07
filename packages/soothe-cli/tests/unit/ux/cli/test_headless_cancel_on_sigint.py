@@ -151,9 +151,7 @@ async def test_sigint_flag_triggers_cancel_then_task_cancel(
 
     cfg = SimpleNamespace()
     task = asyncio.create_task(
-        daemon_exec._run_headless_session_once(
-            cfg, prompt="test", resume_loop_id=None, autonomous=False, max_iterations=None
-        )
+        daemon_exec._run_headless_session_once(cfg, prompt="test", resume_loop_id=None)
     )
 
     # Give the session time to start and install the signal handler.
@@ -199,8 +197,6 @@ async def test_cancelled_error_sends_cancel(monkeypatch: pytest.MonkeyPatch) -> 
 
     cfg = SimpleNamespace()
     with pytest.raises(asyncio.CancelledError):
-        await daemon_exec._run_headless_session_once(
-            cfg, prompt="test", resume_loop_id=None, autonomous=False, max_iterations=None
-        )
+        await daemon_exec._run_headless_session_once(cfg, prompt="test", resume_loop_id=None)
 
     assert "/cancel" in stub_client.cancel_commands

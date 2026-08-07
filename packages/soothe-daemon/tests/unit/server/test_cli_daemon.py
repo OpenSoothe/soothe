@@ -1,4 +1,4 @@
-"""Tests for daemon autonomous propagation and client payloads."""
+"""Tests for daemon loop_input propagation and client payloads."""
 
 from __future__ import annotations
 
@@ -104,8 +104,6 @@ class _FakeLoopRunner:
             request.user_input,
             thread_id=request.thread_id,
             workspace=request.resolve_workspace_path(),
-            autonomous=request.autonomous,
-            max_iterations=request.max_iterations,
             preferred_subagent=request.preferred_subagent,
         ):
             yield chunk
@@ -190,7 +188,7 @@ class _FakeThreadRegistry:
 
 
 @pytest.mark.asyncio
-async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
+async def test_daemon_run_query_passes_preferred_subagent() -> None:
     daemon = SootheDaemon(SootheConfig())
     fake_runner = _FakeRunner()
     daemon._runner = fake_runner  # type: ignore[attr-defined]
@@ -239,7 +237,7 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
     await daemon._query_engine.run_query(
-        "download skills", loop_id="loop-u", autonomous=True, max_iterations=42
+        "download skills", loop_id="loop-u", preferred_subagent="deep_research"
     )
 
     await _await_background_query_idle(daemon, sent)
@@ -248,8 +246,7 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
     call = daemon._runner.calls[0]  # type: ignore[attr-defined]
     assert call["text"] == "download skills"
     assert call["thread_id"] == "thread-1"
-    assert call["autonomous"] is True
-    assert call["max_iterations"] == 42
+    assert call["preferred_subagent"] == "deep_research"
 
 
 @pytest.mark.asyncio
@@ -278,8 +275,7 @@ async def test_loop_input_enqueues_options(monkeypatch: pytest.MonkeyPatch) -> N
             "params": {
                 "loop_id": loop_id,
                 "content": "crawl",
-                "autonomous": True,
-                "max_iterations": 12,
+                "preferred_subagent": "browser_use",
             },
             "id": "r-loop-input-1",
         },
@@ -289,8 +285,31 @@ async def test_loop_input_enqueues_options(monkeypatch: pytest.MonkeyPatch) -> N
     body = enqueue.call_args[0][1]
     assert body["type"] == "input"
     assert body["text"] == "crawl"
-    assert body["autonomous"] is True
-    assert body["max_iterations"] == 12
+    assert body["preferred_subagent"] == "browser_use"
+
+
+@pytest.mark.asyncio
+async def test_websocket_client_send_input_includes_options() -> None:
+    client = WebSocketClient()
+    captured: list[dict] = []
+
+    async def _fake_send(payload: dict) -> None:
+        captured.append(payload)
+
+    client._connected = True
+    client.send = _fake_send  # type: ignore[method-assign]
+    await client.send_input("loop-1", "run task", preferred_subagent="planner")
+
+    # Under protocol-1, send_input delegates to notify("loop_input", params).
+    assert len(captured) == 1
+    msg = captured[0]
+    assert msg["proto"] == "1"
+    assert msg["type"] == "notification"
+    assert msg["method"] == "loop_input"
+    params = msg["params"]
+    assert params["loop_id"] == "loop-1"
+    assert params["content"] == "run task"
+    assert params["preferred_subagent"] == "planner"
 
 
 @pytest.mark.asyncio
@@ -397,31 +416,6 @@ async def test_non_cancel_command_still_enqueues() -> None:
     # (not the flattened envelope method name).
     assert enqueue.call_args[0][1]["type"] == "command"
     assert enqueue.call_args[0][1]["cmd"] == "/help"
-
-
-@pytest.mark.asyncio
-async def test_websocket_client_send_input_includes_options() -> None:
-    client = WebSocketClient()
-    captured: list[dict] = []
-
-    async def _fake_send(payload: dict) -> None:
-        captured.append(payload)
-
-    client._connected = True
-    client.send = _fake_send  # type: ignore[method-assign]
-    await client.send_input("loop-1", "run task", autonomous=True, max_iterations=9)
-
-    # Under protocol-1, send_input delegates to notify("loop_input", params).
-    assert len(captured) == 1
-    msg = captured[0]
-    assert msg["proto"] == "1"
-    assert msg["type"] == "notification"
-    assert msg["method"] == "loop_input"
-    params = msg["params"]
-    assert params["loop_id"] == "loop-1"
-    assert params["content"] == "run task"
-    assert params["autonomous"] is True
-    assert params["max_iterations"] == 9
 
 
 @pytest.mark.asyncio
@@ -748,8 +742,6 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
             _loop_id: str,
             _text: str,
             *,
-            autonomous: bool = False,  # noqa: FBT001, FBT002
-            max_iterations: int | None = None,
             preferred_subagent: str | None = None,
         ) -> None:
             return None

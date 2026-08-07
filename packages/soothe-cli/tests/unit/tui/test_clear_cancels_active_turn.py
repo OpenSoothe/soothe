@@ -19,9 +19,7 @@ async def test_clear_cancels_agent_before_new_loop() -> None:
     app._tokens_approximate = False
     app._session_state = MagicMock(loop_id="old-loop")
     app._daemon_session = AsyncMock()
-    app._daemon_session.new_loop = AsyncMock(
-        return_value={"loop_id": "new-loop", "autopilot_mode": "solo"}
-    )
+    app._daemon_session.new_loop = AsyncMock(return_value={"loop_id": "new-loop"})
     app._agent_running = True
     app._agent_worker = AsyncMock()
     app._agent_worker.wait = AsyncMock()

@@ -215,8 +215,6 @@ class DaemonHandlersMixin:
                 await self._query_engine.run_query(
                     prompt_text,
                     loop_id=loop_id,
-                    autonomous=qo["autonomous"],
-                    max_iterations=qo["max_iterations"],
                     preferred_subagent=qo["preferred_subagent"],
                     client_id=msg.get("client_id"),
                     model=model_kw,

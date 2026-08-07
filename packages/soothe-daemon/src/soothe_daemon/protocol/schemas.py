@@ -13,7 +13,7 @@ Design notes
   ``skill``, ``cmd``) use ``min_length=1`` so empty strings are caught here
   instead of inside handlers.
 - Models are intentionally permissive about optional fields — the handler is
-  the authority on domain semantics (e.g. whether ``autonomous`` is honoured).
+  the authority on domain semantics.
 """
 
 from __future__ import annotations
@@ -175,8 +175,6 @@ class LoopInputParams(ParamsBase):
 
     loop_id: str = Field(..., min_length=1)
     content: str | dict[str, Any] = Field(..., description="User input text or structured content")
-    autonomous: bool = False
-    max_iterations: int | None = Field(default=None, gt=0)
     preferred_subagent: str | None = None
     model: str | None = None  # Provider:model string; handler does the validation
     model_params: dict[str, Any] | None = None
@@ -248,8 +246,6 @@ class JobCreateParams(ParamsBase):
     goal: str = Field(..., min_length=1, description="Job goal text")
     workspace: str | None = None
     user_id: str | None = None
-    autonomous: bool = False
-    max_iterations: int | None = Field(default=None, gt=0)
     guidance: str | None = None
     intent_hint: str | None = None
     rail_id: str | None = None

@@ -51,7 +51,7 @@ class TestGoalDispatchEnvelope:
         with pytest.raises(Exception):  # FrozenInstanceError
             job.attempt = 5  # type: ignore[misc]
 
-    def test_backward_compat_alias(self) -> None:
+    def test_dispatch_envelope_fields(self) -> None:
         """GoalDispatchEnvelope is the canonical dispatch envelope type."""
         job = GoalDispatchEnvelope(
             goal_id="g1",
@@ -61,7 +61,7 @@ class TestGoalDispatchEnvelope:
         assert job.goal_id == "g1"
 
 
-class TestLoopRunRequestAutopilotJob:
+class TestLoopRunRequestDispatch:
     def test_default_is_none(self) -> None:
         """Existing callers that don't pass autopilot_job must be unaffected."""
         request = LoopRunRequest(
@@ -115,8 +115,7 @@ class TestLoopRunRequestAutopilotJob:
             thread_id="T1",
             user_input="x",
             timeout_seconds=30.0,
-            autonomous=True,
-            max_iterations=5,
+            preferred_subagent="deep_research",
             autopilot_job=GoalDispatchEnvelope(
                 goal_id="g1",
                 goal_description="d",
@@ -124,6 +123,5 @@ class TestLoopRunRequestAutopilotJob:
             ),
         )
         assert request.timeout_seconds == 30.0
-        assert request.autonomous is True
-        assert request.max_iterations == 5
+        assert request.preferred_subagent == "deep_research"
         assert request.autopilot_job is not None

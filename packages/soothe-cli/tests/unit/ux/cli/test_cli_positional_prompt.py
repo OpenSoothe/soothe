@@ -86,8 +86,6 @@ def test_prompt_defaults_to_headless_run_impl(monkeypatch: pytest.MonkeyPatch) -
         prompt="hello",
         resume_loop_id=None,
         no_tui=False,
-        autonomous=False,
-        max_iterations=None,
         tui_with_prompt=False,
     )
     assert mode.get("which") == "headless"
@@ -114,8 +112,6 @@ def test_prompt_with_resume_loop_uses_tui(monkeypatch: pytest.MonkeyPatch) -> No
         prompt="hello",
         resume_loop_id="loop_abc",
         no_tui=False,
-        autonomous=False,
-        max_iterations=None,
         tui_with_prompt=False,
     )
     assert mode.get("which") == "tui"
@@ -141,8 +137,6 @@ def test_prompt_with_tui_flag_uses_tui(monkeypatch: pytest.MonkeyPatch) -> None:
         prompt="hello",
         resume_loop_id=None,
         no_tui=False,
-        autonomous=False,
-        max_iterations=None,
         tui_with_prompt=True,
     )
     assert mode.get("which") == "tui"
@@ -161,7 +155,5 @@ def test_no_tui_without_prompt_exits(monkeypatch: pytest.MonkeyPatch) -> None:
             prompt=None,
             resume_loop_id=None,
             no_tui=True,
-            autonomous=False,
-            max_iterations=None,
         )
     assert exc.value.code == 1

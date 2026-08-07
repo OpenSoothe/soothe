@@ -233,7 +233,6 @@ async def test_recover_enqueues_when_auto_resume_enabled(monkeypatch: pytest.Mon
                 "type": "input",
                 "text": "Ship the feature",
                 "client_id": None,
-                "autonomous": False,
                 "resume_interrupted": True,
             },
         )

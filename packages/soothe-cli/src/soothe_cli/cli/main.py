@@ -287,8 +287,6 @@ def main(
             prompt=prompt,
             resume_loop_id=None,
             no_tui=no_tui,
-            autonomous=False,
-            max_iterations=None,
             tui_with_prompt=tui_with_prompt,
             mcp_config=mcp_config,
         )

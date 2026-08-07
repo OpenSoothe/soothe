@@ -7,11 +7,7 @@ from soothe_daemon.runtime.loop_dispatcher import (
 )
 from soothe_daemon.runtime.thread_state import ThreadState, ThreadStateRegistry
 
-# Wire-compat: interactive loops are always solo; autopilot jobs use daemon AutopilotService.
-DEPRECATED_LOOP_AUTOPILOT_MODE = "solo"
-
 __all__ = [
-    "DEPRECATED_LOOP_AUTOPILOT_MODE",
     "LoopBroadcastBudget",
     "LoopInputDispatcher",
     "ThreadState",

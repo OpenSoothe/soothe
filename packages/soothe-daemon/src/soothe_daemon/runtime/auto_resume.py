@@ -309,7 +309,6 @@ async def recover_incomplete_loops(daemon: Any) -> list[AutoResumeClassification
                 "type": "input",
                 "text": item.resume_prompt,
                 "client_id": None,
-                "autonomous": False,
                 "resume_interrupted": True,
             },
         )

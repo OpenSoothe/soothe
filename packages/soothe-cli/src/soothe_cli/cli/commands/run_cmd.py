@@ -19,8 +19,6 @@ def run_impl(
     prompt: str | None,
     resume_loop_id: str | None,
     no_tui: bool,  # noqa: FBT001
-    autonomous: bool,  # noqa: FBT001
-    max_iterations: int | None,
     *,
     tui_with_prompt: bool = False,
     mcp_config: str | None = None,
@@ -33,8 +31,6 @@ def run_impl(
             resumed (``resume_loop_id``).
         resume_loop_id: Existing loop id to attach to (optional)
         no_tui: Require headless mode (must include a non-empty prompt)
-        autonomous: Enable autonomous iteration mode
-        max_iterations: Max iterations for autonomous mode
         tui_with_prompt: When True with a prompt, open the TUI instead of headless.
         mcp_config: Deprecated. MCP servers must be configured on the daemon;
             passing this flag only emits a warning.
@@ -88,8 +84,6 @@ def run_impl(
                 cfg,
                 str(prompt).strip(),
                 resume_loop_id=resume_loop_id,
-                autonomous=autonomous,
-                max_iterations=max_iterations,
             )
         else:
             run_tui(cfg, resume_loop_id=resume_loop_id, initial_prompt=prompt)

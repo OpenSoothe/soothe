@@ -626,7 +626,7 @@ class SootheDaemon(DaemonHandlersMixin):
             # full real-dispatch wiring. Constructs its OWN ContextEngine and
             # InternalEventBus (not the singleton/runner's) so its DAG state
             # and event subscriptions are isolated from the per-runner
-            # AutopilotService that handles autonomous mode in subprocess.
+            # AutopilotService that handles Autopilot goal dispatch in subprocess.
             #
             # The daemon-owned instance is the one HTTP /autopilot/submit
             # talks to (Phase C5 cutover). Its scheduling loop dispatches

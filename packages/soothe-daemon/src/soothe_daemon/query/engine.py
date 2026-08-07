@@ -891,8 +891,6 @@ class QueryEngine:
         text: str,
         *,
         loop_id: str | None = None,
-        autonomous: bool = False,
-        max_iterations: int | None = None,
         preferred_subagent: str | None = None,
         client_id: str | None = None,
         model: str | None = None,
@@ -1065,7 +1063,6 @@ class QueryEngine:
                 "workspace": str(
                     d._thread_registry.get_workspace(thread_id) or d._daemon_workspace
                 ),
-                "autonomous": autonomous,
                 "preferred_subagent": preferred_subagent,
             }
             d._global_history.add(effective_text, thread_id=thread_id, metadata=metadata)
@@ -1177,10 +1174,6 @@ class QueryEngine:
                     )
 
                 stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
-                if autonomous:
-                    stream_kwargs["autonomous"] = True
-                    if max_iterations is not None:
-                        stream_kwargs["max_iterations"] = max_iterations
                 if preferred_subagent is not None:
                     stream_kwargs["preferred_subagent"] = preferred_subagent
                 if clarification_mode is not None:
@@ -1202,8 +1195,6 @@ class QueryEngine:
                     user_id=loop_meta.get("user_id") or loop_meta.get("user"),
                     client_workspace_id=loop_meta.get("client_workspace_id"),
                     workspace_mapping=loop_meta.get("workspace_mapping"),
-                    autonomous=stream_kwargs.get("autonomous", False),
-                    max_iterations=stream_kwargs.get("max_iterations"),
                     preferred_subagent=stream_kwargs.get("preferred_subagent"),
                     model=model,
                     model_params=model_params or {},

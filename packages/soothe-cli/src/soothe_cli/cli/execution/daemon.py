@@ -75,8 +75,6 @@ async def _run_headless_session_once(
     prompt: str,
     *,
     resume_loop_id: str | None = None,
-    autonomous: bool = False,
-    max_iterations: int | None = None,
 ) -> tuple[int, bool]:
     """Run one headless daemon session; return ``(exit_code, retry_on_worker_loss)``."""
     # Track whether the daemon was notified of cancellation.
@@ -143,8 +141,6 @@ async def _run_headless_session_once(
         await asyncio.wait_for(
             session.send_turn(
                 effective_prompt,
-                autonomous=autonomous,
-                max_iterations=max_iterations,
                 preferred_subagent=subagent_name,
             ),
             timeout=_SESSION_BOOTSTRAP_TIMEOUT_S,
@@ -312,8 +308,6 @@ async def run_headless_via_daemon(
     prompt: str,
     *,
     resume_loop_id: str | None = None,
-    autonomous: bool = False,
-    max_iterations: int | None = None,
 ) -> int:
     """Run a single prompt by connecting to a running daemon.
 
@@ -329,8 +323,6 @@ async def run_headless_via_daemon(
             cfg,
             prompt,
             resume_loop_id=resume_loop_id,
-            autonomous=autonomous,
-            max_iterations=max_iterations,
         )
         if last_code == 0:
             return 0

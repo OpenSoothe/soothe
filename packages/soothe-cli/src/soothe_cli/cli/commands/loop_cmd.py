@@ -700,8 +700,6 @@ def continue_loop(
         prompt=prompt,
         resume_loop_id=resolved_loop_id,
         no_tui=False,
-        autonomous=False,
-        max_iterations=None,
     )
 
 

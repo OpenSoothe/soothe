@@ -264,9 +264,8 @@ class AutopilotConfig(BaseModel):
 
     Note:
         StrangeLoop iteration budget is shared via ``agent.loop.max_iterations`` —
-        Autopilot does not redefine it. Workers fall back to that value when
-        ``LoopRunRequest.max_iterations`` is unset. Dynamic goal creation
-        (decomposition, rails, directives) is always enabled.
+        Autopilot does not redefine it. Dynamic goal creation (decomposition,
+        rails, directives) is always enabled.
     """
 
     # === Autopilot scheduling (daemon-level) ===

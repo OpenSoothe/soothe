@@ -1343,7 +1343,6 @@ class AutopilotService:
                 deadline_seconds=deadline_seconds,
                 attempt=goal.retry_count + 1,
             ),
-            autonomous=True,
         )
 
         task = asyncio.create_task(self._consume_worker_stream(goal.id, worker, request))

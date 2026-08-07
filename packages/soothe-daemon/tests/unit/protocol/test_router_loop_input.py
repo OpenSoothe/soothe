@@ -41,8 +41,6 @@ def test_coerce_loop_input_text(content: object, expected: str | None) -> None:
 
 def test_queue_options_from_daemon_message_defaults() -> None:
     assert _queue_options_from_daemon_message({}) == {
-        "autonomous": False,
-        "max_iterations": None,
         "preferred_subagent": None,
         "model": None,
         "model_params": None,
@@ -96,24 +94,18 @@ def test_queue_options_from_daemon_message_response_schema() -> None:
 
 
 @pytest.mark.parametrize(
-    ("msg", "expected_max", "expected_model"),
+    ("msg", "expected_model"),
     [
-        ({"max_iterations": 0}, None, None),
-        ({"max_iterations": -1}, None, None),
-        ({"max_iterations": 3}, 3, None),
-        ({"max_iterations": "3"}, None, None),
-        ({"model": "  gpt-4  "}, None, "gpt-4"),
-        ({"model": ""}, None, None),
-        ({"model": 1}, None, None),
+        ({"model": "  gpt-4  "}, "gpt-4"),
+        ({"model": ""}, None),
+        ({"model": 1}, None),
     ],
 )
-def test_queue_options_from_daemon_message_max_and_model(
+def test_queue_options_from_daemon_message_model(
     msg: dict[str, object],
-    expected_max: int | None,
     expected_model: str | None,
 ) -> None:
     out = _queue_options_from_daemon_message(msg)
-    assert out["max_iterations"] == expected_max
     assert out["model"] == expected_model
 
 

@@ -590,7 +590,6 @@ class SootheRunner(
         *,
         thread_id: str | None = None,
         workspace: str | None = None,
-        max_iterations: int | None = None,
         preferred_subagent: str | None = None,
         client_loop_id: str | None = None,
         autopilot_job: Any = None,  # GoalDispatchEnvelope | None — see RFC-222 revised
@@ -618,7 +617,6 @@ class SootheRunner(
             workspace: Thread-specific workspace path (RFC-103). When omitted, resolved via
                 ``resolve_workspace_for_stream`` (daemon default, then cwd). The
                 resolved path is always a non-empty absolute directory string for this call.
-            max_iterations: Override max iterations from config.
             preferred_subagent: Optional subagent hint merged into StrangeLoop (IG-349).
             client_loop_id: Daemon client loop scope for logging and stream correlation.
             autopilot_job: When set, signals an autopilot-dispatched job (RFC-222 revised).
@@ -666,15 +664,16 @@ class SootheRunner(
                 resolved.source,
             )
 
-            # RFC-222 revised: autopilot-dispatched job takes priority
-            # over autonomous= flag. StrangeLoop runs the single goal hydrated
-            # from the bundle; ignores user_input.
+            max_iterations = self._config.agent.loop.max_iterations
+
+            # RFC-222 revised: autopilot-dispatched job takes priority.
+            # StrangeLoop runs the single goal hydrated from the bundle; ignores user_input.
             if autopilot_job is not None:
                 async for chunk in self._run_single_autopilot_goal(
                     autopilot_job,
                     thread_id=thread_id,
                     workspace=effective_workspace,
-                    max_iterations=max_iterations or self._config.agent.loop.max_iterations,
+                    max_iterations=max_iterations,
                 ):
                     yield chunk
                 return
@@ -684,7 +683,7 @@ class SootheRunner(
                 user_input,
                 thread_id=thread_id,
                 workspace=effective_workspace,
-                max_iterations=max_iterations or self._config.agent.loop.max_iterations,
+                max_iterations=max_iterations,
                 preferred_subagent=preferred_subagent,
                 clarification_mode=clarification_mode,
                 clarification_answer=clarification_answer,

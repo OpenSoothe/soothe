@@ -107,7 +107,7 @@ class GlobalInputHistory:
         Args:
             text: User input text (will be stripped).
             thread_id: Thread where input was submitted.
-            metadata: Optional metadata dict (workspace, autonomous, subagent).
+            metadata: Optional metadata dict (workspace, preferred_subagent).
         """
         stripped = text.strip()
         if not stripped:

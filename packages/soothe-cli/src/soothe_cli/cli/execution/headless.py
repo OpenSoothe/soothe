@@ -22,8 +22,6 @@ def run_headless(
     prompt: str,
     *,
     resume_loop_id: str | None = None,
-    autonomous: bool = False,
-    max_iterations: int | None = None,
 ) -> None:
     """Run a single prompt with streaming output and progress events.
 
@@ -75,8 +73,6 @@ def run_headless(
             cfg,
             prompt,
             resume_loop_id=resume_loop_id,
-            autonomous=autonomous,
-            max_iterations=max_iterations,
         )
 
     daemon_exit_code = asyncio.run(_run_headless_pipeline())

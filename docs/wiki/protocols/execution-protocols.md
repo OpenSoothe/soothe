@@ -53,7 +53,8 @@ Key fields and their purposes:
 - **`loop_id` / `thread_id`** — bind the run to a durable thread (DurabilityProtocol) and a unique loop instance.
 - **`user_input`** — the user's query or instruction.
 - **`client_workspace` / `user_id` / `client_workspace_id`** — workspace resolution. If `client_workspace` is set, it's used directly; otherwise the runner computes `$SOOTHE_HOME/workspaces/<normalized_user_id>/ws_<hash>`.
-- **`autonomous` / `max_iterations`** — `autonomous` enables Autopilot-style headless runs; `max_iterations` optionally overrides `agent.loop.max_iterations` for this request (Autopilot dispatches leave it unset and use the shared loop budget).
+- **`max_iterations`** — StrangeLoop iteration budget comes from
+  `agent.loop.max_iterations` (shared with Autopilot workers).
 - **`timeout_seconds`** — worker pool timeout for cancellation.
 - **`intent_hint`** — daemon-only non-agent turns (``text_completion``, ``image_to_text``, ``ocr``, ``embed``).
 - **`clarification_mode` / `clarification_answer` / `clarification_answers`** (RFC-622) — when `clarification_answer=True`, the runner treats `user_input` as the answer to a pending clarification interrupt and resumes the graph via `Command(resume=...)` rather than starting a new turn. The runner verifies against the loop's persisted `pending_clarification` state.
@@ -69,7 +70,7 @@ When `autopilot_job` is set, it carries a `GoalDispatchEnvelope` — a **transie
 - `deadline_seconds` — wall-clock budget (`None` = no cap)
 - `attempt` — 1 on first dispatch, N on retry/backoff
 
-> **Terminology gotcha**: "Job" in Desktop UX = user-facing term for a *root Goal* (persistent). `GoalDispatchEnvelope` = transient dispatch *message* (not stored). `AutopilotJob` is a deprecated alias — use `GoalDispatchEnvelope` in new code.
+> **Terminology gotcha**: "Job" in Desktop UX = user-facing term for a *root Goal* (persistent). `GoalDispatchEnvelope` = transient dispatch *message* (not stored).
 
 ## Execution Flow
 

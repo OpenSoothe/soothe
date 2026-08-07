@@ -76,8 +76,6 @@ class LoopRunRequest:
     user_id: str | None = None
     client_workspace_id: str | None = None
     workspace_mapping: dict[str, Any] | None = None
-    autonomous: bool = False
-    max_iterations: int | None = None
     preferred_subagent: str | None = None
     model: str | None = None
     model_params: dict[str, Any] = field(default_factory=dict)

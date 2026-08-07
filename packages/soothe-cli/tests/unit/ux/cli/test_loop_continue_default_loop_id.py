@@ -37,8 +37,6 @@ def test_loop_continue_without_loop_id_uses_most_recent_loop(monkeypatch) -> Non
     assert result.exit_code == 0
     assert captured["resume_loop_id"] == "loop_running"
     assert captured["no_tui"] is False
-    assert captured["autonomous"] is False
-    assert captured["max_iterations"] is None
 
 
 def test_loop_continue_without_loop_id_errors_when_no_loops(monkeypatch) -> None:

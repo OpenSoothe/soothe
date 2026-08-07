@@ -121,15 +121,11 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         msg: Raw client message dict.
 
     Returns:
-        Keys to merge into the internal queue payload: ``autonomous``,
-        ``max_iterations``, ``preferred_subagent``, ``model``,
-        ``model_params``, ``router_profile``, ``intent_hint`` (normalized to lowercase when set),
-        ``clarification_mode`` (RFC-622, normalized to ``"auto"``/``"manual"`` or ``None``).
+        Keys to merge into the internal queue payload: ``preferred_subagent``,
+        ``model``, ``model_params``, ``router_profile``, ``intent_hint``
+        (normalized to lowercase when set), ``clarification_mode`` (RFC-622,
+        normalized to ``"auto"``/``"manual"`` or ``None``).
     """
-    max_iterations = msg.get("max_iterations")
-    parsed_max: int | None = (
-        max_iterations if isinstance(max_iterations, int) and max_iterations > 0 else None
-    )
     preferred_subagent = msg.get("preferred_subagent")
     preferred_norm = (
         preferred_subagent.strip() or None if isinstance(preferred_subagent, str) else None
@@ -175,8 +171,6 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     else:
         clarification_answers = None
     return {
-        "autonomous": bool(msg.get("autonomous", False)),
-        "max_iterations": parsed_max,
         "preferred_subagent": preferred_norm,
         "model": model,
         "model_params": model_params,
@@ -1209,8 +1203,6 @@ class MessageRouter:
             {
                 "type": "input",
                 "text": plain_user_line,
-                "autonomous": False,
-                "max_iterations": None,
                 "preferred_subagent": None,
                 "clarification_mode": clarification_mode,
                 "client_id": client_id,
@@ -1798,8 +1790,6 @@ class MessageRouter:
             )
             return
 
-        from soothe_daemon.runtime import DEPRECATED_LOOP_AUTOPILOT_MODE
-
         wire_tier = msg.get("wire_tier", "full")
         # IG-441: three first-class modes (batch / adaptive / streaming);
         # default to ``adaptive`` for new subscribers since it gives the best
@@ -1824,7 +1814,6 @@ class MessageRouter:
                 "loop_id": loop_id,
                 "event": "subscribed",
                 "success": True,
-                "autopilot_mode": DEPRECATED_LOOP_AUTOPILOT_MODE,
                 "client_id": client_id,
             },
         )
@@ -2051,8 +2040,6 @@ class MessageRouter:
             }
         await d._persistence_manager.update_loop_metadata(loop_id, **meta_updates)
 
-        from soothe_daemon.runtime import DEPRECATED_LOOP_AUTOPILOT_MODE
-
         logger.info(
             "Created new loop %s (ephemeral=%s workspace=%s)",
             loop_id,
@@ -2065,7 +2052,6 @@ class MessageRouter:
             "loop_id": loop_id,
             "success": True,
             "is_ephemeral": is_ephemeral,
-            "autopilot_mode": DEPRECATED_LOOP_AUTOPILOT_MODE,
         }
         if host_root is not None:
             result["workspace_mapping"] = {
