@@ -137,8 +137,17 @@ jobs:
     - name: Wait for soothe-nano on PyPI
       run: |
         # soothe-nano publishes from mirasoth/soothe-nano (independent repo).
-        # Monorepo release waits for the submodule version on PyPI; does not publish nano.
-        VERSION=$(grep '^version = "' packages/soothe-nano/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        # Monorepo release waits for the soothe pin floor on PyPI; does not publish nano.
+        VERSION=$(python - <<'PY'
+        import re
+        from pathlib import Path
+        text = Path("packages/soothe/pyproject.toml").read_text()
+        match = re.search(r'"soothe-nano>=([^,<"]+)', text)
+        if not match:
+            raise SystemExit("soothe-nano pin not found in packages/soothe/pyproject.toml")
+        print(match.group(1))
+        PY
+        )
         for i in {1..30}; do
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://pypi.org/pypi/soothe-nano/${VERSION}/json" 2>/dev/null || echo "000")

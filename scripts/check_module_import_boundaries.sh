@@ -3,8 +3,9 @@
 # check_module_import_boundaries.sh — enforce import layering for monorepo-owned
 # packages only (soothe, soothe-daemon, soothe-cli).
 #
-# Submodules (soothe-sdk, soothe-nano, language clients) are consumed as code;
-# their internal boundaries and formatting are owned by their own repos.
+# External packages (soothe-sdk submodule, soothe-nano on PyPI, language clients)
+# are consumed as dependencies; their internal boundaries and formatting are
+# owned by their own repos.
 #
 # Rules (host packages only):
 #   1. soothe must NOT import soothe_daemon or soothe_cli
@@ -31,7 +32,7 @@ Rules (soothe / soothe-daemon / soothe-cli only):
   2. soothe-daemon must not import soothe_cli or soothe_client.
   3. host must not import private soothe-nano middleware modules.
 
-Submodule packages (soothe-sdk, soothe-nano, clients) are not formatted or
+External packages (soothe-sdk, soothe-nano, clients) are not formatted or
 boundary-scanned here — maintain them in their own repositories.
 
 Usage: ./scripts/check_module_import_boundaries.sh [--help]

@@ -78,14 +78,18 @@ packages/
 Submodules are **consumed only** (do not format, lint, test, or release them here):
 
 - `packages/soothe-sdk` — [mirasoth/soothe-sdk](https://github.com/mirasoth/soothe-sdk)
-- `packages/soothe-nano` — [mirasoth/soothe-nano](https://github.com/mirasoth/soothe-nano)
 - `client/{python,go,typescript,rust}` — language clients
+
+PyPI-only first-party deps (not vendored in this tree):
+
+- [soothe-nano](https://github.com/mirasoth/soothe-nano) — Coding CoreAgent
+- [soothe-deepagents](https://github.com/mirasoth/soothe-deepagents) — deepagents fork
 
 Community plugins ship from [mirasoth/soothe-plugins](https://github.com/mirasoth/soothe-plugins).
 
 **Dependency order** (imports):
 ```
-soothe-sdk → soothe-nano → soothe → soothe-daemon
+soothe-sdk → soothe-nano (PyPI) → soothe → soothe-daemon
 soothe-sdk → soothe-client-python → soothe-cli
 ```
 

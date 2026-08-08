@@ -52,9 +52,10 @@ Enforcement for owned packages: `scripts/check_module_import_boundaries.sh`
 (wired into `./scripts/verify_finally.sh`).
 
 **This monorepo owns** `soothe`, `soothe-daemon`, and `soothe-cli` only.
-Submodules (`soothe-sdk`, `soothe-nano`, `client/*`) are **consumed as
-code** — do **not** format, lint, test, or release them from this repo. Maintain
-those packages in their own repositories.
+Submodules (`soothe-sdk`, `client/*`) are **consumed as code** — do **not**
+format, lint, test, or release them from this repo. `soothe-nano` and
+`soothe-deepagents` are **PyPI dependencies** (maintain/release in their own
+repositories).
 
 #### Dependency DAG (allowed direction only)
 
@@ -62,7 +63,7 @@ those packages in their own repositories.
 soothe-sdk            ← shared contracts (submodule; leaf)
 soothe-deepagents     ← deepagents fork (PyPI; leaf)
         ↓
-soothe-nano           ← Coding CoreAgent (submodule)
+soothe-nano           ← Coding CoreAgent (PyPI)
         ↓
 soothe                ← host: StrangeLoop, Autopilot, CE, cron, runner   ← OWNED
         ↓
@@ -78,7 +79,7 @@ soothe-cli            ← Typer + Textual TUI                             ← OW
 | Concern | Package |
 |---------|---------|
 | Shared events, wire, display, plugin contracts, protocols | `soothe-sdk` (external submodule) |
-| Coding CoreAgent, skills/MCP/backends used in-proc | `soothe-nano` (external submodule) |
+| Coding CoreAgent, skills/MCP/backends used in-proc | `soothe-nano` (PyPI; mirasoth/soothe-nano) |
 | StrangeLoop, Autopilot, Context Engine, cron, identity, host runner | `soothe` |
 | Process lifecycle, channels, HTTP/WS server, admin IO | `soothe-daemon` |
 | Human CLI / TUI | `soothe-cli` |
@@ -139,13 +140,13 @@ packages/
 
 # Submodules (consume only — format/lint/test/release in their own repos):
 #   packages/soothe-sdk      mirasoth/soothe-sdk
-#   packages/soothe-nano     mirasoth/soothe-nano
 #   client/{python,go,typescript,rust}
+# PyPI-only (not vendored here): soothe-nano, soothe-deepagents
 ```
 
 Do **not** run monorepo format/lint/test/publish against submodule trees. Bump
-submodule pins when consuming new upstream versions; release those packages from
-their repositories.
+submodule pins / PyPI floors when consuming new upstream versions; release those
+packages from their repositories.
 
 **Key docs**: [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) for architecture, [RFC-600](docs/specs/RFC-600-plugin-extension-system.md) for plugins.
 
@@ -155,9 +156,9 @@ their repositories.
 
 | What | Where |
 |------|-------|
-| Nano agent factory | `packages/soothe-nano/src/soothe_nano/agent/factory.py` (`create_nano_agent`) |
+| Nano agent factory | `soothe_nano.agent.factory.create_nano_agent` (PyPI `soothe-nano`) |
 | Host agent factory | `packages/soothe/src/soothe/coreagent/factory.py` (`create_soothe_agent`) |
-| Nano config | `packages/soothe-nano/src/soothe_nano/config/settings.py` |
+| Nano config | `soothe_nano.config.settings` (PyPI `soothe-nano`) |
 | Host config | `packages/soothe/src/soothe/config/settings.py` |
 | Shared protocols | `packages/soothe-sdk/src/soothe_sdk/protocols/` |
 | Loop protocols | `packages/soothe/src/soothe/protocols/` |

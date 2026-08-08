@@ -69,7 +69,7 @@ cd packages/soothe-daemon
 uv run pytest tests/
 ```
 
-Submodule packages (`soothe-sdk`, `soothe-nano`, clients) run tests in their own repos.
+External packages (`soothe-sdk`, `soothe-nano`, clients) run tests in their own repos.
 
 ---
 

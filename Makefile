@@ -6,7 +6,8 @@
 # 3. soothe-daemon     - Daemon server (WebSocket/HTTP transports)
 #
 # Submodules (consume code only — do not format, lint, test, or release here):
-#   soothe-sdk, soothe-nano, client/* (python/go/ts/rust), apps/soothe-desktop
+#   soothe-sdk, client/* (python/go/ts/rust)
+# PyPI-only first-party deps (not in this tree): soothe-nano, soothe-deepagents
 #
 # Uses .venv managed by uv for development.
 
