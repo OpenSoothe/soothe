@@ -31,6 +31,7 @@ from soothe.autopilot.rail.wave_plan import (
     jobs_wave_plan_path,
     parse_wave_plan_payload,
     resolve_fanout_slices,
+    wave_plan_to_findings_json,
     workspace_wave_plan_path,
 )
 from soothe.context.engine import ContextEngine
@@ -519,6 +520,10 @@ class RailBuiltinExecutor:
     ) -> BuiltinResult:
         """Dispatch a catalog verb: prefer YAML ``do:`` recipe, else ``_do_*``."""
         try:
+            if builtin == "plan_milestones":
+                await self.ingest_wave_plan(job_id)
+                if self._should_reuse_existing_wave_plan(job_id):
+                    return await self._plan_milestones_reuse_existing(job_id=job_id)
             state = await self.job_state(job_id)
             steps = None
             if state is not None:
@@ -542,6 +547,108 @@ class RailBuiltinExecutor:
                 status="error",
                 detail=f"{type(exc).__name__}: builtin {builtin} failed",
             )
+
+    def _has_architecture_annotation(self, job_id: str) -> bool:
+        """True when any architecture/planner annotation exists (incl. pruned)."""
+        state = self._jobs.get(job_id)
+        if state is None:
+            return False
+        for ann in state.annotations.values():
+            tags = list(ann.tags or [])
+            if "architecture" in tags or (ann.role or "") == "planner":
+                return True
+        return False
+
+    def _should_reuse_existing_wave_plan(self, job_id: str) -> bool:
+        """Whether plan_milestones may short-circuit on an existing dump.
+
+        Requires transfer evidence (recorded source path or diagnosable dump),
+        not a bare ``wave_slices`` seed. Never reuse after a prior architecture
+        attempt (retry must spawn a fresh planner).
+        """
+        state = self._jobs.get(job_id)
+        if state is None:
+            return False
+        if self._has_architecture_annotation(job_id):
+            return False
+        if not self.is_wave_plan_ready(job_id):
+            return False
+        if state.wave_plan_source_path:
+            return True
+        diagnosed = self._diagnose_job_wave_plan(state)
+        return diagnosed.plan is not None and bool(diagnosed.source_path)
+
+    async def _plan_milestones_reuse_existing(self, *, job_id: str) -> BuiltinResult:
+        """Complete architecture from existing WavePlan and spawn wave makers."""
+        await self.ingest_wave_plan(job_id)
+        state = await self._require(job_id)
+
+        diagnosed = self._diagnose_job_wave_plan(state)
+        plan = diagnosed.plan
+        if plan is None and state.wave_slices:
+            plan = build_wave_plan(
+                wave_slices=list(state.wave_slices),
+                slices=list(state.decompose_plan or []) or None,
+                independence="disjoint write-sets per slice",
+                rationale="reused existing rail-state WavePlan",
+            )
+        if plan is None or not plan.resolved_slice_ids():
+            return BuiltinResult(
+                status="error",
+                detail="WavePlan reuse requested but no usable slices",
+            )
+
+        source = state.wave_plan_source_path or diagnosed.source_path or "rail_state"
+        brief = (
+            f"Reused existing WavePlan for job {job_id} (source={source}). "
+            "Host applied flat slices into rail state; planner loop skipped."
+        )
+        tags = list(DEFAULT_VERB_TAGS["plan_milestones"])
+        role = DEFAULT_VERB_ROLES["plan_milestones"]
+        ws = _job_workspace(self._ce, job_id)
+        arch = await self._ce.create_goal(
+            brief,
+            parent_id=job_id,
+            source="decomposition",
+            priority=80,
+            workspace=str(ws) if ws else None,
+            rail_id=state.rail_id,
+        )
+        arch.findings = [wave_plan_to_findings_json(plan)]
+        await self._ce.complete_goal(arch.id)
+        await self.annotate_goal(
+            arch.id,
+            job_id,
+            tags=tags,
+            role=role,
+            branch_id=job_id,
+        )
+        root = await self._ce.get_goal(job_id)
+        if root is not None:
+            deps = list(root.depends_on or [])
+            if arch.id not in deps:
+                deps.append(arch.id)
+            await self._ce.update_dependencies(job_id, deps)
+
+        logger.info(
+            "plan_milestones reused existing WavePlan job=%s arch=%s source=%s slices=%s",
+            job_id[:8],
+            arch.id[:8],
+            source,
+            plan.resolved_slice_ids(),
+        )
+        makers = await self.invoke(
+            "spawn_wave_makers",
+            job_id=job_id,
+            trigger_goal_id=arch.id,
+        )
+        created = [arch.id, *list(makers.created_goal_ids or [])]
+        detail = f"reused existing WavePlan; {makers.detail or makers.status}"
+        return BuiltinResult(
+            status="success" if makers.status in ("success", "skipped") else makers.status,
+            detail=detail,
+            created_goal_ids=created,
+        )
 
     async def _do_decompose_parallel(
         self, *, job_id: str, trigger_goal_id: str | None

@@ -120,6 +120,20 @@ def test_catalog_rejects_fanout_artifact(tmp_path: Path) -> None:
         _normalize_fanout({"artifact": "{job_id}/wave-plan.json"}, path=tmp_path / "x.yml")
 
 
+def test_waveplan_efficiency_hint_idempotent() -> None:
+    from soothe.rails.verb_defaults import (
+        WAVEPLAN_EFFICIENCY_HINT,
+        ensure_waveplan_efficiency_hint,
+    )
+
+    base = "REQUIRED deliverable: flat WavePlan"
+    once = ensure_waveplan_efficiency_hint(base)
+    twice = ensure_waveplan_efficiency_hint(once)
+    assert once.count("Efficiency:") == 1
+    assert twice == once
+    assert WAVEPLAN_EFFICIENCY_HINT.strip() in once
+
+
 @pytest.mark.asyncio
 async def test_plan_milestones_description_multiform_transfer(tmp_path: Path) -> None:
     ce = ContextEngine()
@@ -144,6 +158,9 @@ async def test_plan_milestones_description_multiform_transfer(tmp_path: Path) ->
     assert "WavePlan JSON" in desc
     assert "ownership units" in desc_l
     assert "fixed default" in desc_l
+    assert "Efficiency:" in desc
+    assert "plain string" in desc_l
+    assert "markdown" in desc_l
     assert "max_parallel_goals" not in desc
     assert "autopilot" not in desc_l
     assert "those files are ignored" not in desc_l
@@ -221,6 +238,107 @@ async def test_spawn_wave_makers_from_record_wave_plan(tmp_path: Path) -> None:
     result = await ex.invoke("spawn_wave_makers", job_id=root.id, trigger_goal_id=arch.id)
     assert result.status == "success"
     assert len(result.created_goal_ids) == 6
+
+
+@pytest.mark.asyncio
+async def test_plan_milestones_reuses_existing_workspace_dump(tmp_path: Path) -> None:
+    """Continue/resume: dump present → completed architecture + makers, no planner loop."""
+    import json
+
+    ce = ContextEngine()
+    root = await ce.create_goal("Build system", workspace=str(tmp_path), priority=70)
+    ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+            worktrees_enabled=False,
+            engine_max_parallel_goals=16,
+        )
+    )
+    dump = {
+        "wave_slices": ["core", "api"],
+        "independence": "disjoint write-sets per slice",
+        "rationale": "mvp continue",
+    }
+    (tmp_path / ".soothe").mkdir(parents=True)
+    (tmp_path / ".soothe" / "wave-plan.json").write_text(json.dumps(dump), encoding="utf-8")
+
+    result = await ex.invoke("plan_milestones", job_id=root.id)
+    assert result.status == "success"
+    assert "reused existing WavePlan" in result.detail
+    assert len(result.created_goal_ids) == 3  # arch + 2 makers
+
+    arch = await ce.get_goal(result.created_goal_ids[0])
+    assert arch is not None
+    assert arch.status == "completed"
+    assert arch.findings
+    assert "wave_slices" in arch.findings[0]
+
+    makers = [await ce.get_goal(gid) for gid in result.created_goal_ids[1:]]
+    assert all(m is not None and m.status == "pending" for m in makers)
+    state = await ex.job_state(root.id)
+    assert state is not None
+    assert state.wave_slices == ["core", "api"]
+    root2 = await ce.get_goal(root.id)
+    assert root2 is not None
+    for gid in result.created_goal_ids:
+        assert gid in (root2.depends_on or [])
+
+
+@pytest.mark.asyncio
+async def test_plan_milestones_no_dump_spawns_pending_planner(tmp_path: Path) -> None:
+    ce = ContextEngine()
+    root = await ce.create_goal("Build system", workspace=str(tmp_path), priority=70)
+    ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
+    await ex.bind_job(catalog_rail_job_state(root.id, require_plan=True))
+    result = await ex.invoke("plan_milestones", job_id=root.id)
+    assert result.status == "success"
+    assert "reused" not in result.detail
+    assert len(result.created_goal_ids) == 1
+    arch = await ce.get_goal(result.created_goal_ids[0])
+    assert arch is not None
+    assert arch.status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_retry_architecture_does_not_reuse_dump(tmp_path: Path) -> None:
+    """After a failed planner, dump on disk must not auto-complete a new planner."""
+    import json
+
+    ce = ContextEngine()
+    root = await ce.create_goal("Build system", workspace=str(tmp_path), priority=70)
+    ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+            worktrees_enabled=False,
+        )
+    )
+    first = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = first.created_goal_ids[0]
+    await ce.fail_goal(arch_id, error="no wave plan")
+
+    (tmp_path / ".soothe").mkdir(parents=True)
+    (tmp_path / ".soothe" / "wave-plan.json").write_text(
+        json.dumps(
+            {
+                "wave_slices": ["core"],
+                "independence": "disjoint",
+                "rationale": "late dump",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = await ex.invoke("retry_architecture", job_id=root.id, trigger_goal_id=arch_id)
+    assert result.status == "success"
+    assert len(result.created_goal_ids) == 1
+    new_arch = await ce.get_goal(result.created_goal_ids[0])
+    assert new_arch is not None
+    assert new_arch.status == "pending"
+    assert "Reused existing WavePlan" not in (new_arch.description or "")
 
 
 @pytest.mark.asyncio

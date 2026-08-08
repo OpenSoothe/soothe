@@ -568,6 +568,14 @@ Recovery:
 4. Wait for the next `dag_idle` tick (or restart the daemon) so
    `spawn_wave_makers` can fire.
 
+**Continue / resume jobs:** If a recommended dump (or
+`wave_plan_source_path`) already makes the plan ready at `job_start`,
+`plan_milestones` short-circuits: it completes a synthetic architecture
+goal and calls `spawn_wave_makers` in the same builtin (no long planner
+loop). If you still see a long rediscovery planner with dumps already
+present, restart the daemon so that short-circuit is live. Keep
+`independence` a plain string (not a nested object).
+
 Forensics: `.agents/skills/inspect-autopilot-job/SKILL.md`.
 
 ---

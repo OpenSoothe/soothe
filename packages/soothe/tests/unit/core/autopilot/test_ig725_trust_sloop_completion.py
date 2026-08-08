@@ -123,7 +123,7 @@ async def test_accept_emits_goal_completed_for_monitor() -> None:
 
 
 @pytest.mark.asyncio
-async def test_implement_dispatch_does_not_force_trivial() -> None:
+async def test_implement_dispatch_defaults_intake_scope_null() -> None:
     bus = InternalEventBus()
     ce = ContextEngine()
     svc = AutopilotService(
@@ -159,3 +159,39 @@ async def test_implement_dispatch_does_not_force_trivial() -> None:
     job = getattr(req, "autopilot_job")
     assert job.goal_description == goal.description
     assert not hasattr(job, "mission")
+
+
+@pytest.mark.asyncio
+async def test_implement_dispatch_simple_intake_scope_forced() -> None:
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=1, intake_scope="simple"),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(decision="accept", reasoning="ok"),
+        runner_factory=IdleFakeFactory(),
+    )
+    goal = await svc.submit_task("implement feature", max_send_backs=3)
+
+    captured: dict[str, object] = {}
+
+    class _Worker:
+        loop_id = "autopilot__x__y"
+
+        def __init__(self) -> None:
+            self.active_task = None
+
+    def _fake_create_task(coro: object) -> MagicMock:
+        frame = getattr(coro, "cr_frame", None)
+        if frame is not None:
+            captured["request"] = frame.f_locals.get("request")
+        getattr(coro, "close", lambda: None)()
+        return MagicMock()
+
+    with patch("asyncio.create_task", side_effect=_fake_create_task):
+        await svc._dispatch_to_worker(goal, _Worker())
+
+    req = captured["request"]
+    assert req is not None
+    assert getattr(req, "intake_scope", "MISSING") == "simple"

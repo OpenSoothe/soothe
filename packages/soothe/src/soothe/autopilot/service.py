@@ -1376,11 +1376,15 @@ class AutopilotService:
         # the authoritative enforcer — it cancels the worker on overrun.
         deadline_seconds = getattr(self._config, "goal_deadline_seconds", None)
 
+        # AutopilotConfig.intake_scope: null (default) = loop Pass 1+2.
+        intake_scope = getattr(self._config, "intake_scope", None)
+
         request = LoopRunRequest(
             loop_id=worker.loop_id,
             thread_id=f"autopilot__goal_{goal.id}__attempt_{goal.retry_count + 1}",
             user_input="",
             client_workspace=goal.workspace,
+            intake_scope=intake_scope,
             autopilot_job=GoalDispatchEnvelope(
                 goal_id=goal.id,
                 goal_description=goal.description,
@@ -1394,10 +1398,11 @@ class AutopilotService:
         worker.active_task = task
         self._dispatch_tasks[goal.id] = task
         logger.info(
-            "[Autopilot] dispatched goal %s to worker %s (attempt %d)",
+            "[Autopilot] dispatched goal %s to worker %s (attempt %d, intake_scope=%s)",
             goal.id,
             worker.loop_id,
             request.autopilot_job.attempt,
+            intake_scope,
         )
 
     async def _build_merged_context(self, goal: GoalNode) -> Any:

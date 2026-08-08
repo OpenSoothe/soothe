@@ -261,6 +261,9 @@ class AutopilotConfig(BaseModel):
             fallback to ``default`` on instantiation failure.
         judge_allow_structural_dag_ops: Allowlisted structural judge ops
             (``spawn_goal`` / ``cancel_goal``). Empty = deny (LoopRail owns fan-out).
+        intake_scope: Forced StrangeLoop intake scope for dispatched goals
+            (``trivial``|``simple``|``complex``). Default ``None`` lets the
+            loop run Pass 1+2 intake classification.
         webhooks: Webhook URLs by event type (legacy; prefer ``notify.sinks.webhook``).
         notify: Job lifecycle multi-channel notify (IG-713).
 
@@ -387,6 +390,17 @@ class AutopilotConfig(BaseModel):
         description=(
             "When True, high-confidence LLM abstain (rail_id null) skips "
             ".rail-default and default_rail."
+        ),
+    )
+
+    # Forced StrangeLoop intake scope for dispatched goals (RFC-630 / loop_input).
+    # null (default) = Pass 1+2 classify; trivial|simple|complex skip intake LLM.
+    intake_scope: Literal["trivial", "simple", "complex"] | None = Field(
+        default=None,
+        description=(
+            "Forced StrangeLoop intake scope for autopilot-dispatched goals "
+            "(trivial|simple|complex). Null (default) lets the loop classify "
+            "intake. Set simple/trivial/complex to skip Pass 1+2."
         ),
     )
 

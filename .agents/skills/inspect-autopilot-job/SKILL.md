@@ -276,6 +276,11 @@ Pointers to diagnose-loop Workflow B for `autopilot__{job}__*`.
   `rail_state.json`, then wait for `dag_idle` (or `soothed restart`). After
   package upgrades, always restart the daemon so the architecture WavePlan
   gate is live.
+- **Continue job, dump already ready, long planner:** with a current daemon,
+  `plan_milestones` should reuse the dump and spawn makers immediately. If the
+  planner still rediscovers for tens of minutes, the process predates that
+  short-circuit — restart. Nested `independence` objects also fuel rewrite
+  thrash; keep independence a string.
 - Live CLI beats stale `goals:snapshot` when they disagree.
 - Never cite IG-/RFC- ids in user-facing report text.
 - Skipping schedule for rail job root is expected.

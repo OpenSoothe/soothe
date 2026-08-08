@@ -1,5 +1,5 @@
 id: greenfield-system
-version: "1.12"
+version: "1.13"
 
 # Explicit --rail only; excluded from LLM auto-pick (RFC-231 §10 / IG-728).
 auto_pick: false

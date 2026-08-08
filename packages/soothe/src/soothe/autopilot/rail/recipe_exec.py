@@ -18,7 +18,10 @@ from soothe.autopilot.rail.builtins_exec import (
 )
 from soothe.context.models import TERMINAL_STATES
 from soothe.rails.l0_schema import L0_OPS
-from soothe.rails.verb_defaults import interpolate_brief
+from soothe.rails.verb_defaults import (
+    ensure_waveplan_efficiency_hint,
+    interpolate_brief,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +176,9 @@ class RecipeRunner:
         if not isinstance(tags_raw, list):
             raise ValueError("spawn_goal.tags must be a list")
         tags = [interpolate_recipe_text(str(t), ctx) for t in tags_raw]
+        # Architecture/milestones planners share efficiency SoT (verb_defaults).
+        if "architecture" in tags and "milestones" in tags:
+            brief = ensure_waveplan_efficiency_hint(brief)
         role = spec.get("role")
         role_s = str(role).strip() if isinstance(role, str) and role.strip() else None
         priority = int(spec.get("priority") or 70)

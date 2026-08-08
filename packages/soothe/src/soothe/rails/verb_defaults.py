@@ -11,6 +11,28 @@ from typing import Any
 # Host defaults for Python ``_do_*`` fallback when a rail has no ``do:`` recipe.
 # Builtin greenfield/migration ship ``do:`` for plan_milestones.
 
+# Single SoT for plan_milestones efficiency copy (appended by
+# ``ensure_waveplan_efficiency_hint`` — do not duplicate in rail YAML).
+WAVEPLAN_EFFICIENCY_HINT = (
+    "\n\nEfficiency: If a recommended dump already exists and is flat, verify "
+    "it in one step (wave_slices + string independence + rationale), set "
+    "completion wave_plan_path to that file (or inline wave_plan), and "
+    "complete. Do not rediscover the whole tree, rewrite the plan repeatedly, "
+    "or write markdown validation/completion reports — those are not "
+    "deliverables. independence must be a plain string, never a nested object."
+)
+
+
+def ensure_waveplan_efficiency_hint(brief: str) -> str:
+    """Append ``WAVEPLAN_EFFICIENCY_HINT`` once (idempotent)."""
+    text = (brief or "").rstrip()
+    if not text:
+        return text
+    if "Efficiency:" in text and "plain string" in text.lower():
+        return text
+    return text + WAVEPLAN_EFFICIENCY_HINT
+
+
 DEFAULT_VERB_BRIEFS: dict[str, str] = {
     "plan_milestones": (
         "Architecture and milestone map for job {job_id}. "
@@ -82,4 +104,7 @@ def resolve_verb_brief(
     raw = resolve_verb_field(verb, "brief", overrides=overrides, defaults=DEFAULT_VERB_BRIEFS)
     if not isinstance(raw, str) or not raw.strip():
         return None
-    return interpolate_brief(raw, job_id=job_id)
+    out = interpolate_brief(raw, job_id=job_id)
+    if verb == "plan_milestones":
+        out = ensure_waveplan_efficiency_hint(out)
+    return out

@@ -1,5 +1,5 @@
 id: migration
-version: "2.8"
+version: "2.9"
 
 summary: |
   Multi-step migration or upgrade: architecture milestones with WavePlan

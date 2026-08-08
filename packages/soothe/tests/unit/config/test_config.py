@@ -74,6 +74,16 @@ class TestSootheConfig:
         assert "enable_dynamic_goals" not in type(ap).model_fields
         assert not hasattr(ap, "enable_dynamic_goals")
 
+    def test_autopilot_intake_scope_default_null(self) -> None:
+        """Autopilot intake_scope defaults to null (loop classifies)."""
+        from soothe.config.models import AutopilotConfig
+
+        assert AutopilotConfig().intake_scope is None
+        assert AutopilotConfig.model_validate({"intake_scope": "simple"}).intake_scope == ("simple")
+        assert AutopilotConfig.model_validate({"intake_scope": "complex"}).intake_scope == (
+            "complex"
+        )
+
     def test_yaml_with_daemon_top_level_block_is_rejected(self, tmp_path: Path) -> None:
         """Agent config rejects daemon-only top-level keys."""
         p = tmp_path / "cfg.yml"

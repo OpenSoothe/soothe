@@ -11,7 +11,8 @@ agent:
     max_retries: 2
     max_total_goals: 99
     max_goal_depth: 5
-    max_parallel_goals: 16
+    # Cap goal fan-out under provider concurrency quota (dashscope throttling).
+    max_parallel_goals: 3
     max_send_backs: 3
     max_engine_recoveries: 2
     checkpoint_interval: 10
@@ -33,6 +34,8 @@ agent:
     rail_auto_pick_max_candidates: 32
     rail_auto_pick_skip_if_workspace_default: false
     rail_auto_pick_abstain_overrides_defaults: true
+    # Develop: force simple intake (skip Pass 1+2). Product default is null.
+    intake_scope: null
     verify_interval: 30
     dreaming_interval: 300
     dreaming_scope: workspace
@@ -73,7 +76,7 @@ agent:
           smtp_use_tls: false
           smtp_use_ssl: true
           from_address: "413245279@qq.com"
-    max_loops: 16
+    max_loops: 4
     loop_idle_timeout: 300
     poll_interval: 5
     dreaming_poll_interval: 60
@@ -196,10 +199,11 @@ agent:
       auto_resume_max_age_hours: 24
       auto_resume_clarifications: skip
     concurrency:
-      max_parallel_goals: 16
-      max_parallel_steps: 4
-      max_parallel_subagents: 4
-      global_max_llm_calls: 48
+      # Keep below provider in-flight quota; pair with nano llm_rate_limit.global_concurrent_limit.
+      max_parallel_goals: 3
+      max_parallel_steps: 3
+      max_parallel_subagents: 3
+      global_max_llm_calls: 8
       step_parallelism: dependency
       max_parallel_tools: 99
       checkpoint:

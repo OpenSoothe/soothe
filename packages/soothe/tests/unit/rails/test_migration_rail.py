@@ -16,7 +16,7 @@ from soothe.rails import LoopRailCatalog
 
 def test_migration_rail_declares_fanout_and_human_gate() -> None:
     rail = LoopRailCatalog().resolve("migration")
-    assert rail.version == "2.8"
+    assert rail.version == "2.9"
     assert "artifact" not in rail.fanout
     assert rail.fanout.get("require_plan") is True
     assert "default_modules" not in rail.fanout
