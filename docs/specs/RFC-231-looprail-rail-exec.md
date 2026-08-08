@@ -5,11 +5,13 @@
 **Status**: Draft  
 **Kind**: Architecture Design  
 **Created**: 2026-08-07  
+**Updated**: 2026-08-08  
 **Authors**: Soothe Team  
 **Depends on**: RFC-204, RFC-222, RFC-228, RFC-230, RFC-625, RFC-626, RFC-630  
 **Related**: RFC-232 (flat WavePlan wire ingest), LoopRail design draft
-(`docs/drafts/2026-07-11-loop-rail-design.md`), IG-678, IG-687, IG-691,
-IG-692, IG-693, IG-700, IG-704, IG-714, IG-715, IG-720  
+(`docs/drafts/2026-07-11-loop-rail-design.md`),
+design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
+IG-678, IG-687, IG-691, IG-692, IG-693, IG-700, IG-704, IG-714, IG-715, IG-720  
 **Promotes / extends**: LoopRail design draft (normative architecture for
 job-scoped rails; this RFC adds Rail Exec and user-defined verb bodies)  
 **Amended by**: RFC-232 (§9 Fan-out contract — flat wire / nesting reject)
@@ -69,12 +71,17 @@ alone.
 
 ## 4. Architectural invariant
 
-> **StrangeLoop executes one goal. LoopRail decides *when*. Rail Exec applies
-> catalog verb recipes as CE primitives. AutopilotService schedules workers and
-> runs job maturity (RFC-230).**
+> **StrangeLoop executes one goal and always writes a ledger report. CE commits
+> the report. AutopilotService judges on `goal_report_committed` (RFC-204 §1.3)
+> — accept / send_back / fail + bounded DAG revise. LoopRail decides *when*
+> (deterministic YAML). Rail Exec applies catalog verb recipes as CE
+> primitives. AutopilotService also schedules workers and runs job maturity
+> (RFC-230).**
 
 ```text
-job event (goal_completed | dag_idle | …)
+StrangeLoop loop end → CE commit_goal_report → goal_report_committed
+  → Autopilot report-commit judge (accept | send_back | fail [+ bounded dag_ops])
+  → job event (goal_completed | goal_send_back | goal_failed | dag_idle | …)
   → LoopRailInterpreter: match flow/rules + guards
   → Rail Exec: resolve verb body (rail override ▸ builtin default)
   → expand NL intent once (optional) → ActionPlan of L0 ops
@@ -84,6 +91,8 @@ job event (goal_completed | dag_idle | …)
 
 Rail-bound jobs spawn follow-up goals **only** through Rail Exec (RFC-230
 rail exclusivity). Monitor/verifier must not invent phases on rail jobs.
+The report-commit judge MUST NOT select next catalog verbs — only the
+verdict + allowlisted soft DAG ops (pending briefs, deps, priority).
 
 ## 5. Layer model
 
@@ -272,7 +281,7 @@ and RFC-204 / IG-693 still apply.
 
 ## 8. Guards and structural predicates
 
-### 8.1 Shared vocabulary (compatibility)
+### 8.1 Shared vocabulary
 
 Existing structural short-circuit names (`architecture_ready`,
 `wave_makers_done`, `needs_integrate`, `needs_commit`, `needs_review`,
@@ -304,7 +313,7 @@ RFC-230 maturity fields (`acceptance_met`, snapshot) continue to feed
 
 | Layer | Owns | Must not |
 |-------|------|----------|
-| Autopilot engine | Pool, deps, consensus, `max_parallel_goals` clamp | Slice ids, `wave_index`, phase order |
+| Autopilot engine | Pool, deps, report-commit judgment, `max_parallel_goals` clamp | Slice ids, `wave_index`, phase order |
 | Rail YAML | `flow` / conditions / `fanout` / `verbs` | Submit kwargs for slices; nested WavePlan examples; `fanout.artifact` |
 | LLM + transfer | Flat WavePlan via structured `wave_plan` / `wave_plan_path`, recommended dumps, allowlist paths, or completion JSON blob | Nested waves/slices |
 | LoopRail | Apply parsed **flat** WavePlan into `RailJobState` (`wave_slices` / `decompose_plan`); persist via `rail_state.json`; optional `wave_plan_source_path` | Store nested wave trees on job state |
@@ -453,10 +462,11 @@ worktree / feedback macro extract; **M4** intent expand.
 
 | Document | Relation |
 |----------|----------|
-| `docs/drafts/2026-07-11-loop-rail-design.md` | Historical design; promoted here for normative rails + extended by Rail Exec |
+| `docs/drafts/2026-07-11-loop-rail-design.md` | Earlier design notes; this RFC is normative for rails + Rail Exec |
 | RFC-230 | Maturity latch + rail exclusivity; consumes Exec outcomes |
-| RFC-204 | Consensus / send-back; host recovery via catalog verbs |
-| RFC-222 / RFC-625 | Autopilot / CE ownership; StrangeLoop invariant unchanged |
+| RFC-204 | Report-commit judgment / send-back; host recovery via catalog verbs |
+| RFC-222 / RFC-625 | Autopilot / CE ownership; StrangeLoop report → CE commit before rail events |
+| `2026-08-08-autopilot-report-commit-judgment-design.md` | Event-centric judgment; bounded DAG revise; deterministic rail |
 | RFC-232 | Flat WavePlan wire; semi-structured allowed; nesting forbidden; amends §9 |
 | IG-715 | Migration wave fan-out; must migrate planner copy into YAML bodies (M2) |
 | IG-720 | Historical findings-only file ban; amended by IG-722 (SoT still rail_state) |

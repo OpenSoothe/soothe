@@ -5,9 +5,9 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-06-15
-**Updated**: 2026-08-04
+**Updated**: 2026-08-08
 **Dependencies**: RFC-624 (Context Engine), RFC-222 (Autopilot and Goal Engine Architecture), RFC-200 (Autonomous Goal Management)
-**Related**: RFC-204 (Autopilot Mode — user-facing surface: CLI, HTTP endpoints, consensus semantics; RFC-625 defines runtime implementation: AutopilotMonitor, ContextEngine integration, proactive DAG monitoring), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), [IG-678](../impl/IG-678-autopilot-ce-rails-production-readiness.md), [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
+**Related**: RFC-204 (Autopilot Mode — user-facing surface + report-commit judgment §1.3; RFC-625 defines runtime: AutopilotMonitor, ContextEngine integration, proactive DAG monitoring, `GoalNode.report` commit), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-678](../impl/IG-678-autopilot-ce-rails-production-readiness.md), [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
 **Supersedes**: RFC-200 (Goal Management) — GoalEngine deleted, features migrated to ContextEngine
 **Implements**: RFC-303 (MemoryProtocol) — CE's EpisodicSubmodule implements MemoryProtocol API for persistent episodic memory
 
@@ -129,7 +129,8 @@ Fields migrated from Goal model (`autopilot/models.py:Goal`):
 | `max_send_backs` | `3` | Send-back budget (RFC-204) |
 | `source_file` | `None` | GOAL.md path if file-sourced |
 | `workspace` | `None` | Autopilot dispatch workspace (RFC-222) |
-| `report` | `None` | `GoalReport` on completion |
+| `report` | `None` | `GoalReport` committed from StrangeLoop ledger (judgment SoT) |
+| `report_revision` | `0` | Monotonic per goal; idempotency key with `goal_id` for Autopilot judge |
 | `attempts_after_crash` | `0` | Crash recovery count (RFC-222) |
 | `pending_clarification` | `None` | RFC-622 clarification state |
 | `guidance_accumulated` | `[]` | RFC-228 operator guidance |
@@ -145,7 +146,7 @@ Fields deferred (not migrated):
 | `findings` | `[]` | Key findings from goal execution |
 | `distilled` | `False` | Whether goal has been distilled |
 
-**Final GoalNode model (after migration):**
+**GoalNode model:**
 
 ```python
 class GoalNode(BaseModel):
@@ -180,14 +181,15 @@ class GoalNode(BaseModel):
     # Retry/backoff (from Goal)
     retry_count: int = 0
     max_retries: int = 2
-    send_back_count: int = 0  # RFC-204 consensus
+    send_back_count: int = 0  # RFC-204 report-commit judgment
     max_send_backs: int = 3
     attempts_after_crash: int = 0  # RFC-222
 
     # Workspace/source (from Goal)
     source_file: str | None = None
     workspace: str | None = None
-    report: GoalReport | None = None
+    report: GoalReport | None = None  # StrangeLoop ledger projection; judge SoT
+    report_revision: int = 0  # bumped on each commit_goal_report
     pending_clarification: dict[str, Any] | None = None  # RFC-622
     guidance_accumulated: list[dict[str, Any]] = []  # RFC-228
 
@@ -201,10 +203,26 @@ class GoalNode(BaseModel):
     updated_at: datetime
 ```
 
-**BackoffReasoner migration:**
-- Move to `foundation/autopilot/backoff_reasoner.py`
-- Input: `GoalNode` from CE DAG (instead of `Goal`)
-- Output: `BackoffDecision` unchanged
+### CE `commit_goal_report`
+
+ContextEngine MUST expose a commit path used by Autopilot worker completion:
+
+1. Upsert `GoalNode.report` from the StrangeLoop ledger report (minimal report
+   required on any loop end).
+2. Monotonically increment `report_revision`.
+3. Emit **`goal_report_committed`** (`goal_id`, `report_revision`) as the sole
+   Autopilot judgment subscription.
+
+**AutopilotService** (not AutopilotMonitor) owns the LLM judge on this event
+(RFC-204 §1.3): project CE report → accept / send_back / fail + bounded DAG
+ops (wire/unwire, priority, pending briefs; spawn/cancel only via allowlists).
+AutopilotMonitor continues proactive DAG health / dreaming for **non-rail**
+concerns and MUST NOT invent LoopRail phases on rail-bound jobs (RFC-230 /
+RFC-231). Bare status transitions MUST NOT invoke the judge.
+
+**BackoffReasoner:**
+- Lives under Autopilot (`backoff_reasoner`); input is CE `GoalNode`
+- Output: `BackoffDecision`
 - Called by AutopilotMonitor `on_goal_failed` event handler
 
 ---
@@ -1056,16 +1074,28 @@ IG-680 (unit regression in `test_ig680_health_evidence_deps.py`):
 
 ### Completion Tracking
 
-See `docs/impl/IG-494-rfc625-completion.md` for historical completion work, and
-[IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) for health /
-evidence / deps production fixes.
+See [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) for health /
+deps production fixes.
+
+### Report-commit judgment
+
+Normative Autopilot completion judgment is **CE report commit** (RFC-204 §1.3;
+design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`):
+
+- `GoalNode.report` + `report_revision` are the per-goal evidence SoT.
+- `commit_goal_report` emits `goal_report_committed` for AutopilotService.
+- AutopilotMonitor MUST NOT duplicate that LLM judge on bare status changes;
+  rail phase invention remains forbidden (RFC-230 / RFC-231).
+- Bounded DAG ops from the judge (wire/priority/pending briefs; allowlisted
+  spawn/cancel) are applied through CE APIs (`update_dependencies`, goal field
+  updates, allowlisted create/cancel).
 
 ---
 
 ## References
 
 - RFC-624: Context Engine — GoalNode, StepDAG, LedgerManager, ProjectionEngine
-- RFC-222: Autopilot and Goal Engine Architecture — AutopilotService, WorkerPool, WorkspaceReservation (GoalEngine deleted per this RFC)
+- RFC-222: Autopilot daemon dispatch — AutopilotService, WorkerPool, WorkspaceReservation
 - RFC-200: Autonomous Goal Management (superseded) — BackoffReasoner migrated to monitor
 - RFC-204: Autopilot Mode — job submit via daemon AutopilotService; interactive loops remain solo
 - RFC-217: Goal Context Management — GoalContextManager reads from CE DAG

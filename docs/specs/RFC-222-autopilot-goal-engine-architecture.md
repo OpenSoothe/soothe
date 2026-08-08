@@ -1,36 +1,23 @@
-# RFC-222: Autopilot and Goal Engine Architecture
+# RFC-222: Autopilot Daemon Architecture
 
 **RFC**: 222
-**Title**: Autopilot and Goal Engine Architecture (Daemon-Owned)
-**Status**: Implemented (Partially Superseded) — see superseded-by notes below
+**Title**: Autopilot Daemon Architecture (Worker Dispatch)
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-05-27
-**Revised**: 2026-05-28 — daemon-ownership pivot; StrangeLoop reframed as pure execution unit; bounded summarization via `GoalDispatchContextBundle` replaces in-memory lineage; `WorkspaceReservation` replaces per-path file-lock coordination. `GoalDispatchContext*` naming chosen to avoid collision with `GoalContext` already defined in RFC-217 (thread ecosystem) and RFC-200 (DAG snapshot for backoff).
-**Dependencies**: RFC-000, RFC-201, RFC-204, RFC-221 (Loop Runner Protocol)
-**Related**: RFC-200 (Goal Lifecycle), RFC-220 (Loop Orchestrator), RFC-403 (Events), RFC-229 (Cron Service for Autopilot)
-**Supersedes (in part)**:
-- Earlier RFC-222 §"Loop Pool Management", §"Lineage-Aware Loop Assignment", §"File Lock Conflict Resolution" — replaced by the design herein.
-- RFC-200 §"Pull-Based Architecture" / §"StrangeLoop ↔ GoalEngine Integration": the inverted control flow ("StrangeLoop pulls from GoalEngine, GoalEngine never invokes StrangeLoop") is replaced by **autopilot push**: daemon's `AutopilotService` dispatches goals to StrangeLoop workers via the job contract. StrangeLoop never sees `GoalEngine`. RFC-200's backoff reasoning, evidence schema, and goal-directives sections remain authoritative.
+**Updated**: 2026-08-08
+**Dependencies**: RFC-000, RFC-201, RFC-204, RFC-221 (Loop Runner Protocol), RFC-625, RFC-626
+**Related**: RFC-200 (Goal Lifecycle), RFC-220 (Loop Orchestrator), RFC-403 (Events), RFC-229 (Cron Service for Autopilot), RFC-204 §1.3 (report-commit judgment), RFC-231 (LoopRail), design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`
 
-**Superseded by (in part)**:
-- **RFC-625 (AutopilotMonitor and ContextEngine Unification)** — deletes `GoalEngine` entirely (~1821 lines). All goal/step/ledger state consolidated into `ContextEngine`; autopilot scheduling migrated to `AutopilotMonitor`. **All `GoalEngine` references in this RFC are historical reference only.**
-- **RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination)** — consolidates all entity models under ContextEngine, eliminates `LoopState`, unifies ledger management. Job abstraction refined to operate directly on CE GoalNode entities without intermediate state containers. **Sections describing `LoopState` and legacy entity models are historical reference only.**
-
-> ⚠️ **Historical Reference Notice**: The `GoalEngine` architecture described in this RFC has been superseded by RFC-625. The following sections remain for historical reference:
-> - §"Architecture Position" (component model with `GoalEngine`)
-> - §"GoalDispatchContext and ContextProjector" (legacy context projection)
-> - §"GoalEngine Component" (entire component deleted)
-> - §"WorkerPool and Sticky Affinity" (scheduling logic moved to `AutopilotMonitor`)
->
-> Active implementations should reference RFC-625 (AutopilotMonitor/ContextEngine) and RFC-626 (entity models) instead.
+> **Ownership**: Goal/step DAG state lives in **ContextEngine** (RFC-624 / RFC-625). This RFC owns the daemon-side **dispatch contract**: `AutopilotService`, `WorkerPool`, `WorkspaceReservation`, `AutopilotJob` / `GoalCompletionChunk`, and report-commit handoff into CE. Sections that still name `GoalEngine` describe deleted components — treat CE + AutopilotMonitor as authoritative for those concerns.
 
 ---
 
 ## Abstract
 
-This RFC defines the architecture for **daemon-owned autopilot**: one `AutopilotService` instance per daemon that composes `GoalEngine`, `WorkerPool`, `ContextProjector`, `WorkspaceReservation`, and `InternalEventBus`, and dispatches goals to fungible subprocess workers via the existing `LoopRunnerProtocol` (RFC-221). Workers run `StrangeLoop` as a pure execution unit — they hydrate from an immutable `GoalDispatchContextBundle`, execute one goal, and emit a `GoalCompletionChunk` that the daemon's autopilot consumes to advance the DAG.
+This RFC defines **daemon-owned autopilot**: one `AutopilotService` per daemon that schedules fungible StrangeLoop workers via `LoopRunnerProtocol` (RFC-221), gates concurrent workspace use with `WorkspaceReservation`, and hydrates each worker from a bounded `GoalDispatchContextBundle` built from CE. Workers execute one goal, emit `GoalCompletionChunk`, and the daemon commits the StrangeLoop ledger report to CE for report-commit judgment (RFC-204 §1.3).
 
-This replaces the prior per-`SootheRunner` autopilot model in which goal state, file-lock state, and the loop pool lived inside subprocess `SootheRunner` instances and died at the end of each request. The daemon-owned model enables true 24/7 operation, cross-session coordination, crash recovery via persisted `GoalDispatchContextContribution`, and workspace-level conflict gating at scheduling time.
+The model enables 24/7 operation, cross-session coordination, crash recovery via persisted context contributions, and workspace-level conflict gating at scheduling time.
 
 ---
 
@@ -65,7 +52,7 @@ In-memory continuity only handles linear-chain-on-one-worker. Every other shape 
 3. **Bounded summarization for DAG composability.** Cross-goal context flows as a serializable `GoalDispatchContextBundle` (kilobytes, not megabytes). Diamonds and fan-out compose naturally. Crash recovery is automatic.
 4. **Workspace-level conflict gate at scheduling time.** Daemon refuses to dispatch two goals on overlapping workspace prefixes concurrently. Removes the need for cross-process file-lock RPC.
 5. **Subprocess isolation preserved (RFC-221).** Workers still crash independently; the daemon still consumes their streams; cancellation still uses the existing `cancel_event`.
-6. **Solo mode unchanged.** `soothe -p "do X"` bypasses autopilot entirely — no `GoalEngine`, no `GoalDispatchContextBundle`, no DAG.
+6. **Solo mode unchanged.** `soothe -p "do X"` bypasses autopilot entirely — no CE job DAG dispatch, no `GoalDispatchContextBundle`.
 
 ---
 
@@ -81,22 +68,18 @@ This invariant gates every design choice. If a proposed change would require Str
 
 ## Architecture Position
 
-> ⚠️ **Historical Reference**: This section describes `GoalEngine` which has been superseded by `ContextEngine` (RFC-625). The component diagram and GoalEngine references are preserved for historical context only.
-
-### Layer Model (revised)
+### Layer Model
 
 ```
 Autopilot (daemon process, singleton)
   ┌──────────────────────────────────────────────────────────────┐
   │ AutopilotService (composes the following)                    │
-  │   • GoalEngine            — DAG, state machine, backoff      │
-  │                              ⚠️ SUPERSeded by ContextEngine (RFC-625) │
+  │   • ContextEngine (RFC-625) — GoalNode DAG, reports, backoff │
+  │   • AutopilotMonitor      — DAG health / dreaming (non-rail) │
   │   • WorkspaceReservation  — workspace-prefix conflict gate   │
   │   • WorkerPool            — sticky wrapper over LoopRunner-  │
   │                             Factory (subprocess workers)     │
-  │   • ContextProjector      — parents' GoalContexts → bundle   │
-  │                              ⚠️ SUPERSeded by CE projection (RFC-625) │
-  │   • GoalDispatchContextStore      — durability-backed context store  │
+  │   • CE projection         — parents → GoalDispatchContextBundle │
   │   • InternalEventBus      — injected, not singleton          │
   │   • SchedulerService      — cron-style timed task triggers   │
   │                                                              │
@@ -185,31 +168,18 @@ class AutopilotJob:
 
 Properties:
 - `autopilot_job` is **optional**. Solo callers pass `None`. StrangeLoop branches on presence — no global config gates behavior.
-- `merged_context` is **pre-computed in the daemon**. Worker never reads `GoalEngine`, never queries parents, never sees the DAG.
-- `deadline_seconds` bounds runaway goals (closes gap H5).
+- `merged_context` is **pre-computed in the daemon**. Worker never queries CE parents or the DAG.
+- `deadline_seconds` bounds runaway goals.
 - `attempt` lets the worker adapt strategy on retries without daemon-side prompt mutation.
-- **One implement dispatch per attempt (IG-725):** Autopilot does **not** re-dispatch the same goal for workspace/git proof theater. StrangeLoop completion → host consensus accept/send_back/fail → on accept, AutopilotMonitor evaluates CE DAG status. Historical evidence missions ([IG-724](../archive/impl/IG-724-engine-driven-trivial-evidence-turns.md)) are removed.
+- **One implement dispatch per attempt (IG-725):** Autopilot does **not** re-dispatch the same goal for workspace/git proof theater. StrangeLoop loop end → ledger report → CE `commit_goal_report` → `goal_report_committed` → Autopilot report-commit judge (accept / send_back / fail + bounded DAG ops per RFC-204 §1.3). Worker completion MUST NOT invent a second judgment path outside CE. On accept, LoopRail is notified; AutopilotMonitor may evaluate non-rail CE DAG health.
 
-### Refined Job Abstraction (RFC-626 Alignment)
+### Job abstraction (CE entities)
 
-> **Note**: RFC-626 (Entity Model and State Management Consolidation) refines the job abstraction to eliminate intermediate state containers (`LoopState`) and operate directly on ContextEngine entity model.
-
-**Key refinements applied:**
-
-1. **Entity Identity Unification**: `goal_id` in `AutopilotJob` references CE `GoalNode` directly, no intermediate `Goal` or `goal_history` entry.
-
-2. **Metrics Consolidation**: Wave execution metrics (`tool_call_count`, `subagent_task_count`, etc.) stored in CE `WaveMetrics` property instead of `LoopState`.
-
-3. **Context Bundle Source**: `merged_context` built from CE `CognitiveSubmodule.projection()` and `GoalNode.lineage`, eliminating dual `ContextProtocol` + `LedgerManager` ingestion.
-
-4. **Completion Chunk State**: `GoalCompletionChunk.context_contribution` written directly to CE `GoalNode` and `EpisodicSubmodule`, no separate `GoalDispatchContextStore`.
-
-**Migration Impact**:
-- StrangeLoop reads `ce.wave_metrics` instead of `state.last_wave_*`
-- Executor writes to `ce.ingest_cognitive()` instead of dual `context.ingest()` + ledger
-- Completion handler updates CE GoalNode status directly via `ce.complete_goal()`
-
-**Backward Compatibility**: Job contract (`AutopilotJob` dataclass) unchanged; only internal state management refined. Workers continue to hydrate from bundle, emit completion chunk.
+1. `goal_id` in `AutopilotJob` references CE `GoalNode` directly.
+2. Wave execution metrics live on CE (`WaveMetrics` / related GoalNode fields).
+3. `merged_context` is built from CE projection + `GoalNode` lineage.
+4. `GoalCompletionChunk.context_contribution` is written to CE (`GoalNode` / EpisodicSubmodule).
+5. Workers hydrate from the bundle and emit a completion chunk; completion updates CE via `complete_goal` / report commit.
 
 ### Stream Contract — Worker → Autopilot
 
@@ -230,17 +200,37 @@ class GoalCompletionChunk(BaseModel):
 
 `AutopilotService` subscribes to its own dispatched workers' streams and reacts when it sees `GoalCompletionChunk`. No new IPC mechanism — the streaming pipe is the single channel.
 
+#### Report commit before judgment
+
+On `GoalCompletionChunk` (or equivalent loop-end), the daemon MUST:
+
+1. Project the StrangeLoop ledger report into CE via `commit_goal_report`
+   (always write a **minimal** report if the loop ended without a rich
+   finalize payload).
+2. Use **`goal_report_committed`** as the sole Autopilot LLM judgment
+   entrypoint (RFC-204 §1.3): project CE report → accept / send_back / fail
+   + optional bounded DAG ops.
+3. NOT rebuild evidence from the workspace or from a second narrative
+   outside CE for that judgment.
+
+Dispatch / WorkerPool claim ready goals from CE status and deps only — bare
+`pending`/`active` transitions MUST NOT call the judge. LoopRail phase
+advancement remains event-driven after the verdict (RFC-231).
+
 ### Cancellation Contract
 
-Reuse the RFC-221 `cancel_event` mechanism (`pool_runner.py:448`). Autopilot's `cancel_goal(goal_id)` resolves the assigned worker via `goal_engine.get_goal()`, calls `worker.runner.cancel()`, then transitions the goal to `failed` in the engine. StrangeLoop's cooperative check between chunks (`pool_runner.py:485`) is unchanged. Closes gap H8.
+Reuse the RFC-221 `cancel_event` mechanism. Autopilot's `cancel_goal(goal_id)`
+resolves the assigned worker, cancels the runner, and transitions the CE goal
+to `failed`. StrangeLoop's cooperative check between chunks is unchanged.
 
 ---
 
-## GoalDispatchContext and ContextProjector
+## GoalDispatchContextBundle (worker hydration)
 
-> ⚠️ **Historical Reference**: Context projection has been superseded by `ContextEngine` (RFC-625). The `GoalDispatchContextBundle` and `ContextProjector` described here are preserved for historical reference. See RFC-626 for the current entity model.
-
-> **Naming note**: `GoalDispatchContext*` is distinct from `GoalContext` in RFC-217 (thread ecosystem + execution memory) and RFC-200 (DAG snapshot for backoff reasoning). Those concepts continue to exist; this RFC introduces a third, narrower concept: the bounded summary autopilot ships to a worker so StrangeLoop can hydrate without seeing the DAG.
+> **Naming**: `GoalDispatchContext*` is the bounded summary Autopilot ships to a
+> worker so StrangeLoop can hydrate without seeing the DAG. It is distinct from
+> `GoalContext` in RFC-217 / RFC-200. Bundles are produced from CE projection
+> (RFC-625 / RFC-626), not a separate GoalEngine store.
 
 ### Why bounded summarization (not full-memory continuity)
 
@@ -594,15 +584,14 @@ The existing internal-event types declared in `core/events/internal_events.py` a
 └────────────────────────────────────────────────────────────┘
 ```
 
-The `soothe --autopilot` CLI command (per Q7) **becomes a daemon client**: it posts to `/api/v1/autopilot/submit` and streams progress via WebSocket. Prints a clear error + start-daemon hint if the daemon isn't running. The legacy in-process multi-goal mode is removed.
+The `soothe --autopilot` / Autopilot CLI path is a **daemon client**: it posts to `/api/v1/autopilot/submit` (or equivalent IPC) and streams progress via WebSocket. Prints a clear error + start-daemon hint if the daemon isn't running.
 
 ---
 
 ## Configuration
 
-Per IG-434 / current config, autopilot fields live under `agent.autopilot:`.
-RFC-222 historically said `agent.autonomous:` — that key is obsolete; use
-`agent.autopilot.enabled` (default `true`).
+Autopilot host config lives under `agent.autopilot:` (e.g.
+`agent.autopilot.enabled`, default `true`).
 
 ```yaml
 agent:
@@ -691,7 +680,7 @@ These were debated in the brainstorming session and locked as defaults:
 | Q4 | Multi-tenancy | **Reject overlapping-workspace submissions** unless explicit shared-mode opt-in. Cross-tenant authz deferred to its own RFC. |
 | Q5 | Solo + autopilot coexistence | **Yes**, with workspace-overlap check. Solo invocations register a transient workspace claim. |
 | Q6 | Backoff reasoning | **Async fire-and-forget.** Engine schedules `BackoffReasoner` as a separate task; scheduling loop is non-blocking. |
-| Q7 | CLI backwards compatibility (`soothe --autopilot`) | **Becomes a daemon client.** Requires daemon running; posts to `/autopilot/submit`, streams via WebSocket. |
+| Q7 | Autopilot CLI | **Daemon client.** Requires daemon running; posts to `/autopilot/submit`, streams via WebSocket. |
 | Q8 | `InternalEventBus` placement | **Drop the singleton `get_internal_bus()`.** Owned by `AutopilotService`; injected to all consumers. |
 
 ---
@@ -834,6 +823,15 @@ reservation key via the inherited path.
 - Documented production gaps: workspace inherit on decompose, consensus evidence
   grounding, health remove guardrails, pipeline `depends_on` wiring.
 - Related errata in RFC-625; implementation backlog [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md).
+
+### 2026-08-08 (Report-commit judgment + legacy cleanup)
+- Worker completion → CE `commit_goal_report` → `goal_report_committed` is the
+  sole Autopilot LLM judgment path (RFC-204 §1.3).
+- Retitled to daemon dispatch architecture; normative layer model uses
+  ContextEngine / AutopilotMonitor; removed “partially superseded”,
+  “historical reference only”, and backward-compat hedges from the body.
+- Aligns with design draft
+  `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`.
 
 ---
 

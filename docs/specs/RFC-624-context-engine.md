@@ -5,9 +5,9 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-12
-**Updated**: 2026-08-04 (workspace inherit addendum for decompose)
+**Updated**: 2026-08-08 (report-commit API addendum; workspace inherit 2026-08-04)
 **Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (StrangeLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-803 (Persistence Backend)
-**Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation), [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
+**Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture), RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification — `commit_goal_report`), RFC-626 (Entity Model and State Management Consolidation), design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
 
 ---
 
@@ -139,7 +139,7 @@ RFC-222 established the invariant: **"StrangeLoop is the pure execution unit. Au
 
 The core data model is a two-level DAG: `GoalStepDAG` contains `GoalNode` entries, each embedding a `StepDAG` of `StepNode` entries.
 
-**GoalNode** represents a goal with: status, priority, nesting (`parent_id`), hard dependencies (`depends_on`), soft dependencies (`informs`), conflicts (`conflicts_with`), an embedded `StepDAG`, lineage fields (`generating_reasoning`, `source`), and observability fields (`total_tokens_used`, `thread_id`, `assigned_loop_id`).
+**GoalNode** represents a goal with: status, priority, nesting (`parent_id`), hard dependencies (`depends_on`), soft dependencies (`informs`), conflicts (`conflicts_with`), an embedded `StepDAG`, lineage fields (`generating_reasoning`, `source`), observability fields (`total_tokens_used`, `thread_id`, `assigned_loop_id`), and Autopilot completion fields (`report`, `report_revision`, send-back budgets) per RFC-625. Autopilot judgment SoT is the committed `report` (StrangeLoop ledger projection); CE MUST support `commit_goal_report` emitting `goal_report_committed` (RFC-204 §1.3 / RFC-625).
 
 **StepNode** represents a step within a goal with: status, intra-goal dependencies, lineage (`plan_iteration`, `reasoning_trace`), and an optional `StepExecution` record.
 

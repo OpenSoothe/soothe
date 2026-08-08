@@ -5,19 +5,24 @@
 **Status**: Draft  
 **Kind**: Architecture Design  
 **Created**: 2026-08-05  
+**Updated**: 2026-08-08  
 **Authors**: Soothe Team  
 **Depends on**: RFC-204, RFC-222, RFC-228, RFC-624, RFC-625, RFC-630  
 **Related**: [RFC-231](RFC-231-looprail-rail-exec.md) (LoopRail + Rail Exec),
 [RFC-232](RFC-232-waveplan-flat-semistructured-ingest.md) (flat WavePlan wire),
 LoopRail design draft (`docs/drafts/2026-07-11-loop-rail-design.md`; promoted by RFC-231),
+design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
 IG-678, IG-680, IG-687, IG-691, IG-692
 
 ## Abstract
 
 Define **job-level maturity assessment** as a host responsibility of
-`AutopilotService` + `ContextEngine`, distinct from per-goal consensus
-(RFC-204) and from StrangeLoop execution. Maturity snapshots drive LoopRail
-guards (`needs_feedback`, `job_complete`) and the `acceptance_met` latch.
+`AutopilotService` + `ContextEngine`, distinct from per-goal **report-commit
+judgment** (RFC-204 §1.3) and from StrangeLoop execution. Maturity may use
+host workspace probes at the **job** layer; per-goal judgment MUST NOT
+re-collect evidence and trusts the CE GoalReport projection. Maturity
+snapshots drive LoopRail guards (`needs_feedback`, `job_complete`) and the
+`acceptance_met` latch.
 Rail-bound jobs spawn follow-up goals **only** through LoopRail builtins;
 `AutopilotMonitor` / `GoalDAGVerifier` must not invent phases on rail jobs.
 Production emits `dag_idle` so rails can complete job roots that are never
@@ -30,7 +35,7 @@ Incident class (job `20999e64`, `greenfield-system`):
 | Observation | Gap |
 |-------------|-----|
 | Wave makers + integrate + (ad hoc) review/QA completed | Workflow topology progressed |
-| Quality-gate narrative claimed PASS | Per-goal consensus accepted a writeup |
+| Quality-gate narrative claimed PASS | Per-goal report-commit judgment accepted a writeup |
 | GOAL demos (`return N`, `printf`) failed / ELF header-only | No job-level acceptance check |
 | Root stayed `pending`; scheduler skipped rail root | No `dag_idle` → `complete_job` |
 | `RailJobState.acceptance_met` stayed `false` forever | Flag never written from evidence |
@@ -65,15 +70,16 @@ structured evaluation as a future enhancement; that enhancement is this RFC.
 
 ## 4. Architectural invariant
 
-> **StrangeLoop executes one goal. LoopRail decides *when*. ContextEngine
-> applies *what* to the DAG. AutopilotService schedules workers and runs
-> job maturity assessment.**
+> **StrangeLoop executes one goal and writes a ledger report. CE commits the
+> report. AutopilotService judges on `goal_report_committed` (RFC-204 §1.3).
+> LoopRail decides *when*. ContextEngine applies *what* to the DAG.
+> AutopilotService also schedules workers and runs job maturity assessment.**
 
 ```text
-goal_completed
-  → per-goal consensus (RFC-204)          # child accept / send_back / fail
+goal_report_committed
+  → per-goal report-commit judgment (RFC-204)  # accept / send_back / fail [+ dag_ops]
   → CE.complete_goal (if accept)
-  → notify_rail(goal_completed)           # only spawner for rail jobs
+  → notify_rail(goal_completed)                # only spawner for rail jobs
   → if qa/verify-class: JobMaturityAssessor → CE + rail acceptance_met
   → if job idle: notify_rail(dag_idle)
   → rail guard → Rail Exec catalog verb (feedback / complete_job / next wave)
@@ -117,7 +123,7 @@ JobMaturitySnapshot {
   blockers: list[str]
   suggested_rail_signal: needs_feedback | ready_for_next_wave
                        | job_complete | none
-  probe_summary: str       # assessment summary (legacy field name)
+  probe_summary: str       # assessment summary text
 }
 ```
 
@@ -146,7 +152,8 @@ Levels are derived; **`acceptance_met` is the latch rails trust**.
 - Invoked by `AutopilotService` (not StrangeLoop, not rail interpreter).
 - Reads CE DAG + workspace inventory + contract text; writes CE snapshot + rail
   state via existing rail executor annotate/persist APIs.
-- Uses the Autopilot consensus / light model (`_consensus_model`).
+- Uses the Autopilot judgment / light model (configured via the daemon
+  consensus/reflection model role).
 
 ### 7.2 Evidence pack (deterministic gather)
 
@@ -239,10 +246,11 @@ Jobs without `rail_id` keep current monitor/verifier behavior (RFC-625).
 This matches LoopRail design §11 (Monitor forwards events; rail owns
 job-scoped restructuring).
 
-## 10. Consensus relationship (RFC-204)
+## 10. Report-commit judgment relationship (RFC-204)
 
-Per-goal consensus (RFC-204 / IG-710): **goal text + StrangeLoop response**
-only. Host workspace probes are **not** consensus inputs.
+Per-goal report-commit judgment (RFC-204 §1.3): **goal text + CE GoalReport
+projection** (StrangeLoop ledger) only. Host workspace probes are **not**
+per-goal judgment inputs (they belong to this RFC’s job maturity assessor).
 
 Unchanged for **non-rail child** goals: accept / send_back / fail (IG-707).
 
@@ -251,19 +259,20 @@ Rail-bound children (IG-693):
 1. Child accept does not complete the job root.
 2. Send-back budget exhaustion → **`failed`** + LoopRail `goal_failed` (not
    silent suspend). Rails may `retry_maker` / equivalent — Autopilot does not
-   invent git/commit/pytest accept overrides for rail or non-rail consensus.
+   invent git/commit/pytest accept overrides for rail or non-rail judgment.
 3. Job acceptance is latched only by the maturity LLM assessor (job latch),
-   never as soft/hard consensus overrides (no git/pytest consensus hard-accept).
+   never as soft/hard per-goal judgment overrides (no git/pytest hard-accept
+   on the report-commit path).
 
 ## 11. IPC / observation (RFC-228)
 
 - `job_create.verification_rules` remains write-once opaque text at submit;
   evaluation semantics are defined here (not “LLM only at completion”).
 - `job_status` / `autopilot_top` SHOULD expose maturity `level`,
-  `acceptance_met`, and top blockers (additive fields; backward compatible).
-- Absence of `verification_rules` no longer means “complete when all children
-  completed” for **rail** jobs — rail + maturity apply. Non-rail jobs may keep
-  legacy “all children terminal” completion.
+  `acceptance_met`, and top blockers.
+- For **rail** jobs, absence of `verification_rules` does not mean “children
+  done ⇒ root done” — rail + maturity apply. Non-rail jobs may complete when
+  all children are terminal if no other policy applies.
 
 ## 12. Failure modes
 
@@ -306,3 +315,5 @@ Implementation tracking: **IG-692** (P0–P2), **IG-711** (LLM-primary latch).
 | 2026-08-06 | Flip latch to LLM contract judgment (IG-711); remove coding probe registry
   as accept mechanism; domain-agnostic workspaces |
 | 2026-08-06 | Note GoalEffect wire metadata (IG-712); drop `build_files_touched` latch wording |
+| 2026-08-08 | Align with report-commit judgment (RFC-204 §1.3); maturity remains
+  job-layer only; rename §10 from “consensus”; drop legacy/compat hedges |

@@ -5,9 +5,11 @@
 **Status**: Draft  
 **Kind**: Architecture Design  
 **Created**: 2026-08-07  
+**Updated**: 2026-08-08  
 **Authors**: Soothe Team  
 **Depends on**: RFC-231, RFC-204, RFC-222, RFC-625, RFC-630  
-**Related**: RFC-230, IG-704, IG-714, IG-718, IG-720, IG-722  
+**Related**: RFC-230, design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
+IG-704, IG-714, IG-718, IG-720, IG-722  
 **Amends**: RFC-231 §9 (Fan-out contract)
 
 ## Abstract
@@ -190,20 +192,24 @@ After accept:
 `RailJobState` MUST NOT grow a nested `waves[]` tree field. Transfer forms
 (dumps, structured path, findings blob) are not a second SoT after apply.
 
-## 6. Architecture gate and consensus
+## 6. Architecture gate and report-commit judgment
 
-When `_is_architecture_planner_goal` and job `require_plan`:
+When `_is_architecture_planner_goal` and job `require_plan`, the Autopilot
+**deterministic gate** (RFC-204 §1.3) runs as part of / before the report-commit
+handler using CE + rail state (not a workspace re-probe):
 
 1. Extract candidates from structured contribution fields, recommended dumps,
-   allowlist paths, evidence + contribution findings + `goal.findings`.
+   allowlist paths, and fields already on the committed CE goal report /
+   findings.
 2. Reject nesting (§5.4) or fail validate → **`send_back`** with reason that
    includes the reject/validation detail (truncated).
 3. Else `record_wave_plan` → **`accept`** (mirror recommended dumps).
-4. Do **not** fall through to free-form LLM consensus (fail-closed; RFC-231 /
-   IG-714).
+4. Do **not** fall through to free-form LLM judgment that ignores the
+   WavePlan structural result (fail-closed; RFC-231 / IG-714).
 
 Send-back exhaustion and `retry_architecture` behavior remain RFC-204 /
-LoopRail (per-subgoal budget).
+LoopRail (per-subgoal budget). Trigger remains **`goal_report_committed`**
+after the planner loop writes its CE report.
 
 ### 6.1 Planner briefs
 

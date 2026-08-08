@@ -5,9 +5,9 @@
 **Status**: Proposed
 **Kind**: Protocol Specification
 **Created**: 2026-06-04
-**Updated**: 2026-08-06
+**Updated**: 2026-08-08
 **Dependencies**: RFC-222 (Autopilot and Goal Engine Architecture), RFC-450 (Daemon Communication Protocol)
-**Related**: RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands), RFC-230 (Job Maturity Assessment), IG-677 (Job↔Loop Index), IG-613 (protocol-1 `autopilot_*` RPCs), IG-692
+**Related**: RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands), RFC-230 (Job Maturity Assessment), design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, IG-677 (Job↔Loop Index), IG-613 (protocol-1 `autopilot_*` RPCs), IG-692
 
 ## Abstract
 
@@ -51,7 +51,7 @@ Extend the daemon IPC protocol with a new command category: **Autopilot Job Comm
 | **Job** | Root GoalNode submitted to AutopilotService (parent_id=None) | RFC-626 §44 |
 | **GoalNode** | CE entity model for goals; root GoalNode = Job | RFC-626 §40-44 |
 | **AutopilotService** | Daemon-owned singleton managing ContextEngine and WorkerPool | RFC-222 §86-89, RFC-625 §1 |
-| **ContextEngine** | Unified goal/step DAG management (supersedes GoalEngine) | RFC-624, RFC-625 |
+| **ContextEngine** | Unified goal/step DAG management | RFC-624, RFC-625 |
 | **Worker** | StrangeLoop executor bound to one goal assignment | RFC-222 / IG-677 |
 | **Worker loop_id** | Assignment id `autopilot__{job_id}__{uuid}` under `data/loops/{loop_id}/` | IG-677 |
 | **Pool slot** | Reusable capacity key `autopilot__slot_NNN` (sticky affinity); not a filesystem key | IG-677 |
@@ -63,7 +63,7 @@ Extend the daemon IPC protocol with a new command category: **Autopilot Job Comm
 > - Job cancellation operates on GoalNode and descendant StepNodes via CE DAG traversal
 >
 > **IG-677**: Live mapping of active goals to workers remains `GoalNode.assigned_loop_id`.
-> Historical / multi-assignment membership is `JobLoopIndex` (not CE). One job may have
+> Multi-assignment membership is `JobLoopIndex` (not CE). One job may have
 > many assignment `loop_id`s over its lifetime; `job_status.workers` lists only **active** ones.
 
 ## Protocol Specification
@@ -256,10 +256,10 @@ The optional `verification_rules` field on `job_create` provides natural-languag
 | **Submission** | Client provides `verification_rules` as a free-text string in `job_create`. Stored on the root GoalNode (e.g., `GoalNode.verification_rules` field). |
 | **Planning** | Scheduler/BackoffDecision reasoner and LoopRail QA/feedback builtins may read `verification_rules` to enrich acceptance criteria for subgoals. |
 | **Execution** | Workers (StrangeLoop instances) may read `verification_rules` from their assigned GoalNode (or job root) to self-check before reporting completion. |
-| **Maturity (host)** | **AutopilotService `JobMaturityAssessor`** (RFC-230) evaluates `verification_rules` together with workspace `GOAL.md` / probes and writes `JobMaturitySnapshot` + `acceptance_met`. Per-goal consensus (RFC-204) does **not** latch job acceptance alone. |
+| **Maturity (host)** | **AutopilotService `JobMaturityAssessor`** (RFC-230) evaluates `verification_rules` together with workspace `GOAL.md` / probes and writes `JobMaturitySnapshot` + `acceptance_met`. Per-goal report-commit judgment (RFC-204 §1.3) does **not** latch job acceptance alone. |
 | **Completion** | For **rail-bound** jobs (`rail_id` set), the job root completes via LoopRail `dag_idle` + `job_complete` when maturity allows (RFC-230) — not merely when all children are terminal. For **non-rail** jobs, AutopilotService evaluates maturity/`verification_rules` before transitioning the root to `completed`; unsatisfied required criteria → do not complete (suspend/fail with `last_error` as appropriate). |
 | **Observation** | `job_status_response.last_error` reflects verification failures. Additive maturity fields (`level`, `acceptance_met`, blockers) are defined in RFC-230. `job_status` does NOT echo raw `verification_rules` back (write-once at creation). `job_dag_response` nodes expose `summary`/`findings` for completed goals (see §Node Fields). |
-| **Absence** | If omitted: non-rail jobs may still complete when all subgoals reach `completed` (legacy). Rail jobs still require RFC-230 maturity / rail policy (`acceptance_met` or exhausted-feedback / blocked), not silent “children done ⇒ root done”. |
+| **Absence** | If omitted: non-rail jobs may complete when all subgoals reach `completed`. Rail jobs require RFC-230 maturity / rail policy (`acceptance_met` or exhausted-feedback / blocked), not silent “children done ⇒ root done”. |
 
 > **Normative evaluation**: Structured / executable assessment is specified in
 > [RFC-230](RFC-230-job-maturity-assessment.md) (prefer probes; LLM residual only).
@@ -558,7 +558,7 @@ Subscribes to autopilot worker events, bypassing the `autopilot__*` namespace fi
 4. Worker `autopilot__*` loop events now visible to this client
 
 > **Note**: Without this subscription, client's `subscribe_thread` requests for
-> assignment loop ids (`autopilot__{job_id}__{uuid}`, or legacy `autopilot__wNNN`)
+> assignment loop ids (`autopilot__{job_id}__{uuid}`)
 > are rejected (`autopilot__*` filter; RFC-222 / IG-677).
 
 ### autopilot_unsubscribe

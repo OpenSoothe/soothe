@@ -2,27 +2,27 @@
 
 **RFC**: 204
 **Title**: Autopilot Mode
-**Status**: Implemented — runtime architecture refined by RFC-222 (revised 2026-05-28)
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-04-03
-**Updated**: 2026-08-06
+**Updated**: 2026-08-08
 **Dependencies**: RFC-200, RFC-201, RFC-203, RFC-222, RFC-450, RFC-500
-**Related**: RFC-229 (Cron Service for Autopilot — natural language scheduled jobs),
-RFC-230 (job maturity; host probes ≠ per-goal consensus gates),
+**Related**: RFC-229 (Cron Service for Autopilot),
+RFC-230 (job maturity; host probes ≠ per-goal report-commit judgment),
 [RFC-231](RFC-231-looprail-rail-exec.md) (LoopRail + Rail Exec),
-[RFC-232](RFC-232-waveplan-flat-semistructured-ingest.md) (flat WavePlan wire; nesting reject),
-LoopRail design draft, [IG-710](../impl/IG-710-consensus-trust-sloop-response.md)
-(consensus = goal + StrangeLoop response),
+[RFC-232](RFC-232-waveplan-flat-semistructured-ingest.md) (flat WavePlan wire),
+[RFC-625](RFC-625-autopilot-monitor-context-engine-unification.md) (CE `GoalNode.report` / Monitor),
+design draft [2026-08-08-autopilot-report-commit-judgment-design.md](../drafts/2026-08-08-autopilot-report-commit-judgment-design.md),
+[IG-725](../impl/IG-725-remove-evidence-turns-trust-sloop.md)
+(no evidence-follow-up turns),
 [IG-693](../impl/IG-693-rail-subgoal-consensus-exhaustion-recovery.md)
 (rail-bound send-back exhaustion → fail + maker replant)
 
-> **Compatibility note (2026-05-28)**: This RFC defines autopilot's **user-facing surface** — file layout (`SOOTHE_HOME/autopilot/`), CLI commands (`soothe autopilot ...`), HTTP endpoints (`/autopilot/*`), and consensus/dreaming semantics. The **runtime implementation** — daemon-owned `AutopilotService`, subprocess worker dispatch, `GoalDispatchContextBundle`, `WorkspaceReservation`, sticky-affinity `WorkerPool` — is specified in RFC-222 (revised). The two are complementary: RFC-204 owns "what users see and submit," RFC-222 owns "how the daemon executes it."
->
-> **Update (2026-05-30)**: The file-based inbox/outbox channel transport (`autopilot/inbox/`, `autopilot/outbox/`) has been removed. Task submission and control use HTTP REST (`/api/v1/autopilot/*`) and CLI commands backed by the daemon-owned `AutopilotService`.
+> **Scope**: This RFC owns Autopilot’s **user-facing surface** — `SOOTHE_HOME/autopilot/` layout, CLI (`soothe autopilot …`), HTTP (`/api/v1/autopilot/*`), report-commit judgment (§1.3), and dreaming semantics. Daemon runtime (`AutopilotService`, WorkerPool, workspace reservation, CE integration) is specified in RFC-222 / RFC-625. Per-goal judgment is report-commit driven; LoopRail owns rail DAG structure; host MUST NOT re-collect workspace evidence for the per-goal gate.
 
 ## Abstract
 
-This RFC defines Autopilot Mode, an autonomous extension that enables Soothe to operate as a long-running agent. Autopilot introduces: (1) a consensus loop for validating StrangeLoop completions, (2) dreaming mode for continuous operation without termination, (3) a channel protocol for user communication, (4) a scheduler service for time-based task execution, and (5) comprehensive UX surfaces for monitoring and control. Autopilot treats StrangeLoop as a black-box ReAct engine; DAG mutations after a goal completes flow through `GoalCompletionChunk.goal_directives` (reflection) and host-side spawners (LoopRail / AutopilotMonitor), not mid-run proposal tools.
+This RFC defines Autopilot Mode, an autonomous extension that enables Soothe to operate as a long-running agent. Autopilot introduces: (1) **report-commit judgment** for validating StrangeLoop completions from the CE-stored goal report (no second evidence pass), (2) dreaming mode for continuous operation without termination, (3) a channel protocol for user communication, (4) a scheduler service for time-based task execution, and (5) comprehensive UX surfaces for monitoring and control. Autopilot treats StrangeLoop as a black-box ReAct engine; rail-bound DAG structure is owned by LoopRail (RFC-231); soft pending-plan / dep / priority revisions may accompany the report-commit judge (bounded ops). Mid-run proposal tools are out of scope.
 
 ## Position in Architecture
 
@@ -34,7 +34,8 @@ Autopilot extends RFC-200 (Autonomous Goal Management) with additional capabilit
 Autonomous Goal Management (RFC-200)
   ├─ Core: Goal DAG orchestration, StrangeLoop delegation
   └─ Autopilot Extension (this RFC):
-       ├─ Consensus loop with send-back budget
+       ├─ Report-commit judgment (CE GoalReport projection) + send-back budget
+       ├─ Bounded CE DAG revise on the same judge reaction
        ├─ Dreaming mode (no termination)
        ├─ Channel protocol for user communication
        ├─ Scheduler service for time-based tasks
@@ -47,7 +48,7 @@ Autonomous Goal Management (RFC-200)
 |--------|---------|----------|
 | Goal creation | File-discovered + dynamic | Adds MUST confirmation, scheduler-fed |
 | StrangeLoop delegation | Black-box | Adds bidirectional tools |
-| Completion | StrangeLoop judges | Adds Autopilot consensus validation |
+| Completion | StrangeLoop judges | Adds Autopilot report-commit judgment (CE report SoT) |
 | Termination | All goals resolved | Transitions to dreaming mode |
 | Persistence | Checkpoint on state changes | Adds periodic + milestone checkpoints |
 
@@ -87,28 +88,68 @@ implemented):
   applies them via `ContextEngine.apply_directives`.
 - Follow-up / decompose goals are created by LoopRail builtins (rail-bound jobs)
   or AutopilotMonitor health / post-completion verification (non-rail).
-- A former proactive path (`suggest_goal` / `ProposalQueue` mid-execution) was
-  removed — see Group C errata and [IG-703](../impl/IG-703-remove-suggest-goal-proposal-queue.md).
+- Mid-run DAG mutation tools (`suggest_goal` / `ProposalQueue`) are out of scope
+  ([IG-703](../impl/IG-703-remove-suggest-goal-proposal-queue.md)).
 
-### 1.3 Consensus Loop
+### 1.3 Report-Commit Judgment
 
-Autopilot validates StrangeLoop's completion judgment:
+Autopilot validates StrangeLoop completions **only after** the goal report is
+committed to ContextEngine. The StrangeLoop ledger report is the evidence SoT;
+the host **projects** `GoalNode.report` into the judge and MUST NOT re-collect
+workspace evidence for this gate. Job-level structural acceptance remains
+RFC-230 maturity, not this loop.
+
+**Control-plane split**:
+
+| Concern | Owner |
+|---------|--------|
+| Decompose / phase order / fan-out | LoopRail (RFC-231) — deterministic YAML builtins/guards |
+| Schedule ready goals | Autopilot dispatch + WorkerPool (status/deps only) |
+| Execution + ledger report | StrangeLoop (always write a report on any loop end) |
+| Persist report + emit commit | ContextEngine `commit_goal_report` |
+| Accept / send_back / fail + bounded DAG revise | AutopilotService on `goal_report_committed` |
 
 **Process**:
-1. StrangeLoop returns `PlanResult` with `status: "done"` after its internal
-   Plan-Execute-Eval loop (trusted terminal judgment for the worker).
-2. Autopilot reflection LLM compares **goal description** vs **StrangeLoop
-   response** (wire `evidence_summary` / seeded `full_output` narrative).
-3. Autopilot decides: accept, send back, or fail
+1. StrangeLoop ends a loop (done / failed / cancelled / crash / max_iter) and
+   persists a report in its ledger (minimal report required if work was thin).
+2. Host upserts CE `GoalNode.report`, bumps `report_revision`, emits
+   **`goal_report_committed`** (sole Autopilot judgment trigger).
+3. AutopilotService handler (idempotent on `(goal_id, report_revision)`):
+   - Project CE report + relevant CE DAG slice (no tools, no workspace open).
+   - Optional deterministic gates from CE/rail state (e.g. WavePlan present).
+   - Structured LLM judge → `accept` | `send_back` | `fail` + `reasoning`,
+     plus optional **bounded DAG ops**.
+4. Apply validated `dag_ops`, then apply verdict; notify LoopRail
+   (`goal_completed` / `goal_send_back` / `goal_failed`). Rail builtins remain
+   deterministic — the judge does **not** choose next rail verbs.
 
-Host MUST NOT invent separate workspace “evidence grounding” (deliverable
-markers, language-specific test probes, contribution packing) as a consensus
-gate. Job-level structural acceptance remains RFC-230 maturity, not this loop.
+**Trigger rules**:
+- Judgment fires on **report commit only**.
+- Bare CE status transitions (`pending` / `active`) MUST NOT invoke the judge.
+- Worker completion MUST ensure report commit and MUST NOT invent a second
+  judgment path outside CE.
+- If a report is still missing after loop end → **no Autopilot LLM**; engine
+  recovery / retries only.
+
+**Judge input**: projection of CE-stored goal report (ledger-backed) + goal
+description + CE DAG slice needed for bounded ops. Fields such as
+`evidence_summary` / `full_output` are judge inputs only when already present
+inside that committed report.
+
+**Bounded DAG ops** (same judge reaction; optional):
+
+| Op | Allowed |
+|----|---------|
+| wire / unwire `depends_on` | yes |
+| set priority | yes |
+| update pending briefs / pending-plan fields | yes |
+| spawn / cancel goal | only via existing rail/monitor allowlists |
+| free-form decompose / merge / new topology | **no** (LoopRail owns structure) |
 
 **Send-Back Mechanics**:
-- Separate send-back budget per goal (default: 3 rounds)
-- Refined instructions accompany send-back
-- Independent from StrangeLoop's Plan-and-Execute iteration budget
+- Separate send-back budget per goal (default: 3 rounds).
+- Rework brief = the **same judge call’s `reasoning`** (no second reactor LLM).
+- Independent from StrangeLoop's Plan-and-Execute iteration budget.
 
 **Budget Exhaustion**:
 - Budget is **per subgoal** (`GoalNode.send_back_count` /
@@ -116,32 +157,31 @@ gate. Job-level structural acceptance remains RFC-230 maturity, not this loop.
 - Exhaustion MUST transition the subgoal to **`failed`** and emit
   `goal_failed` so host recovery can act (LoopRail / monitor backoff /
   engine health). Autopilot MUST NOT park goals in `suspended` awaiting
-  an operator for consensus judgment (IG-707).
-- DAG health MUST NOT auto-reset legacy send-back-exhausted *suspended*
-  goals; failed workers use engine recovery (IG-697) when deps allow.
+  an operator for judgment (IG-707).
+- DAG health MUST NOT auto-reset send-back-exhausted *suspended* goals;
+  failed workers use engine recovery (IG-697) when deps allow.
 - Autopilot MUST NOT encode tool- or VCS-specific “done” gates (git commit,
-  cargo, pytest hard-accept) as consensus overrides — those policies live in
-  rails / host maturity probes (RFC-230), never in the per-goal consensus path.
+  cargo, pytest hard-accept) as judgment overrides — those policies live in
+  rails / host maturity probes (RFC-230), never in the per-goal report-commit
+  path.
 
-**Reflection LLM Decision Criteria**:
+**Judge decision criteria**:
 
 | Decision | Conditions | Outcome |
 |----------|------------|---------|
-| **Accept** | Goal text satisfied by StrangeLoop response; no unresolved blockers | Goal → `validated` / `completed` state |
-| **Send back** | Response incomplete vs goal; minor gaps; judge wants a retry | Refined instructions → StrangeLoop retry; count toward budget |
-| **Fail** | Unrecoverable blocker; send-back budget exhausted; consensus judge error | Goal → `failed`; host recovery (LoopRail / monitor / engine) |
+| **Accept** | Goal text satisfied by CE report projection; no unresolved blockers | Goal → `completed`; rail `goal_completed`; apply `dag_ops` |
+| **Send back** | Report incomplete vs goal; minor gaps; retry warranted | `send_back` with `reasoning` as brief; count toward budget; apply `dag_ops` |
+| **Fail** | Unrecoverable blocker; send-back budget exhausted; judge LLM error | Goal → `failed`; host recovery (LoopRail / monitor / engine) |
 
 **Failure / park triggers** (explicit conditions):
 
 1. Send-back budget exhausted on any goal → **fail** (not suspend)
-2. Consensus judge reports fundamentally blocked / unrecoverable → **fail**
-3. Consensus judge chooses `send_back` (including thin/empty response) → retry; fail on budget exhaust
-4. Dependency on suspended/blocked goal → scheduler **blocked** (not consensus)
+2. Judge reports fundamentally blocked / unrecoverable → **fail**
+3. Judge chooses `send_back` (including thin/minimal report) → retry; fail on budget exhaust
+4. Dependency on suspended/blocked goal → scheduler **blocked** (not judgment)
 5. Explicit job pause (`pause_job`, rail `pause_for_user`) → **suspend** (job-level only)
 
-> **Implementation Note**: The reflection LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). The judge prompt is **goal description + StrangeLoop response** (structured `decision: accept | send_back | fail`). Do **not** substitute the goal description as the agent response. Do **not** require host workspace probes or contribution packing before invoking the judge — the daemon MUST NOT open the goal workspace for consensus grounding. Prefer **accept** when StrangeLoop Plan-Execute-Eval completed satisfactorily; do **not** reject solely for missing git/file proof narrative, and do **not** re-dispatch a second proof mission on the same goal ([IG-725](../impl/IG-725-remove-evidence-turns-trust-sloop.md)). After accept, AutopilotMonitor evaluates ContextEngine DAG status (completed/active/failed/pending) and may rewire or wait. Host `bind_tools` consensus and job-level LangGraphs for evidence are out of scope. Headless clarification deferral / empty terminal MUST map to `needs_replan` → host `send_back` (or `fail` on budget), not operator-wait `suspend` and not `failed` with narrative `"no narrative"`. See [IG-707](../impl/IG-707-autopilot-automatic-consensus-no-operator-suspend.md), [IG-710](../impl/IG-710-consensus-trust-sloop-response.md), [IG-725](../impl/IG-725-remove-evidence-turns-trust-sloop.md).
-
-### 1.4 Termination → Dreaming Transition
+> **Implementation Note**: The judge LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). Structured output: `decision: accept | send_back | fail`, `reasoning`, optional `dag_ops`. Prefer **accept** when StrangeLoop Plan-Execute-Eval completed and the CE report supports the goal; do **not** reject solely for missing git/file proof narrative outside the report, and do **not** re-dispatch a second proof mission on the same goal ([IG-725](../impl/IG-725-remove-evidence-turns-trust-sloop.md)). After accept, LoopRail advances on events; AutopilotMonitor may perform non-rail DAG health without inventing rail phases. Headless clarification / empty terminal MUST still produce a **minimal CE report** then map to `send_back` (or `fail` on budget), not operator-wait `suspend`. See design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md` and [IG-707](../impl/IG-707-autopilot-automatic-consensus-no-operator-suspend.md).
 
 ### 1.4 Termination → Dreaming Transition
 
@@ -524,7 +564,8 @@ agent:
 | `soothe.autopilot.dreaming_exited` | `timestamp`, `trigger` | Exited dreaming |
 | `soothe.autopilot.goal_validated` | `goal_id`, `confidence` | Autopilot accepted |
 | `soothe.autopilot.goal_suspended` | `goal_id`, `reason` | Explicit job pause |
-| `soothe.autopilot.send_back` | `goal_id`, `remaining_budget`, `feedback` | Sent back to StrangeLoop |
+| `soothe.autopilot.send_back` | `goal_id`, `remaining_budget`, `feedback` | Sent back after report-commit judge |
+| `goal_report_committed` (CE/Autopilot) | `goal_id`, `report_revision` | Canonical judgment trigger (RFC-625) |
 | `soothe.autopilot.relationship_detected` | `from_goal`, `to_goal`, `type`, `confidence` | Auto-detected relationship |
 | `soothe.autopilot.checkpoint.saved` | `thread_id`, `trigger` | Checkpoint persisted |
 
@@ -804,6 +845,17 @@ async def apply_directives(
 
 ## Changelog
 
+### 2026-08-08
+- **Report-commit judgment** is the normative per-goal completion gate (§1.3):
+  StrangeLoop ledger → CE `GoalNode.report` → `goal_report_committed` →
+  Autopilot LLM judge (accept / send_back / fail) + bounded CE DAG revise;
+  LoopRail stays deterministic for structure/phases. See design draft
+  `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`.
+- Pure report-commit trigger; always write a minimal report on loop end;
+  send_back brief = same judge `reasoning`.
+- Removed user-facing compatibility / dual-path / “formerly consensus” hedges
+  from the normative body (changelog retains prior history).
+
 ### 2026-08-06
 - **Retire proactive ProposalQueue path** ([IG-703](../impl/IG-703-remove-suggest-goal-proposal-queue.md)):
   remove `suggest_goal` / `add_finding` / `ProposalQueue` from the architecture.
@@ -835,4 +887,4 @@ async def apply_directives(
 
 ---
 
-*Autopilot Mode extends autonomous goal management with continuous operation, consensus validation, and comprehensive user control surfaces.*
+*Autopilot Mode extends autonomous goal management with continuous operation, report-commit judgment, and comprehensive user control surfaces.*
