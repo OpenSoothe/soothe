@@ -110,7 +110,7 @@ Rule of thumb: for thread-pool mode keep defaults; for worker-pool mode divide b
 
 ## Rate Limits & Timeouts
 
-Provider APIs have their own limits; Soothe's `agent.loop.llm_rate_limit` keeps you under them with retry/backoff. Set `rpm_limit` and `concurrent_limit` on that block; `retry_on_timeout` and `retry_on_rate_limit` default to `true`.
+Provider APIs have their own limits; Soothe's `agent.middleware.llm_rate_limit` (in `nano.yml`) keeps you under them with retry/backoff. Set `rpm_limit` and `concurrent_limit` on that block; optional `global_concurrent_limit` caps process-wide in-flight calls (`0` = unlimited). `retry_on_timeout` and `retry_on_rate_limit` default to `true`.
 
 | Provider | Typical RPM | Concurrency |
 |----------|-------------|-------------|

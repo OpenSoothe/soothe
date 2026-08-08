@@ -70,7 +70,7 @@ observability:
 
 ## Production Mindset
 
-Production configs differ from dev configs in three ways: state becomes durable (Postgres), cost is bounded (rate limits, cheaper default model), and observability is structured (Langfuse, not console). The essential moves: set `persistence.default_backend: postgresql` with a `postgres_base_dsn`; add `agent.loop.llm_rate_limit.rpm_limit` / `concurrent_limit`; and switch observability from `console` to `langfuse` with `${LANGFUSE_*}` keys.
+Production configs differ from dev configs in three ways: state becomes durable (Postgres), cost is bounded (rate limits, cheaper default model), and observability is structured (Langfuse, not console). The essential moves: set `persistence.default_backend: postgresql` with a `postgres_base_dsn`; add `agent.middleware.llm_rate_limit.rpm_limit` / `concurrent_limit` (and optional `global_concurrent_limit`) in `nano.yml`; and switch observability from `console` to `langfuse` with `${LANGFUSE_*}` keys.
 
 **Decision points:** Use Postgres when you need thread durability across restarts or multiple workers — SQLite locks under concurrent writers (WAL mode helps but doesn't eliminate it). Set `rpm_limit` below your provider's tier ceiling; Soothe retries on 429 with exponential backoff, but staying under the limit avoids the latency hit.
 

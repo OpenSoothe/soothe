@@ -34,3 +34,10 @@ calls and provider concurrency 429s.
 - deepagents CI + PyPI publish for 0.8.5
 - soothe: path source removed; `uv.lock` / nano lock pin `0.8.5`;
   `./scripts/verify_finally.sh`
+
+## Cleanse (follow-up)
+
+- `llm_rate_limit_config_from` stopped reading removed `agent.loop.llm_rate_limit`
+  and now resolves `agent.middleware.llm_rate_limit` (so direct LLM paths honor
+  configured timeouts/retries/`global_concurrent_limit`).
+- Wiki / IG-709 paths updated off the legacy `agent.loop` rate-limit keys.

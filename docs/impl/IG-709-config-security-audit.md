@@ -106,8 +106,8 @@ Configuration surfaces audited:
 | `transports.websocket.tls_enabled` | `false` | Acceptable for localhost bind (`127.0.0.1`); production must enable TLS |
 | `transports.websocket.host` | `127.0.0.1` | Correct — localhost-only bind by default |
 | `transports.websocket.cors_origins` | `localhost:*`, `127.0.0.1:*` | Correct — localhost-only CORS |
-| `agent.loop.llm_rate_limit.enabled` | `true` | Correct — rate limiting on by default |
-| `agent.loop.llm_rate_limit.rpm_limit` | `60` | Reasonable — 60 requests/min default |
+| `agent.middleware.llm_rate_limit.enabled` | `true` | Correct — rate limiting on by default |
+| `agent.middleware.llm_rate_limit.rpm_limit` | `60` | Reasonable — 60 requests/min default |
 | `agent.loop.context_overflow_threshold_pct` | `0.80` | Correct — triggers compaction at 80% |
 | `agent.loop.context_compaction_target_pct` | `0.60` | Correct — compacts to 60% of limit |
 | `loop_gc.enabled` | `true` | Correct — automatic GC |
