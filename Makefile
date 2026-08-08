@@ -35,10 +35,11 @@ ROOT_LINT_DIRS = examples scripts
 ifdef UV_PYPI_MIRROR
 UV_SYNC = uv sync --all-packages --all-extras --default-index $(UV_PYPI_MIRROR)
 else
-# Default to Tsinghua mirror for better connectivity in China.
+# Default to Tencent mirror for better connectivity in China.
 # PyPI's Fastly CDN occasionally resets connections (ECONNRESET / os error 54).
-# The committed uv.lock stays pinned to PyPI and is restored after mirror runs.
-UV_PYPI_MIRROR ?= https://pypi.tuna.tsinghua.edu.cn/simple
+# Tsinghua PEP 691 `versions` can lag `files` (breaks soothe-nano>=1.1.5 resolution).
+# After sync, rewrite lock URLs back to canonical PyPI (rewrite_uv_lock_to_pypi.sh).
+UV_PYPI_MIRROR ?= https://mirrors.cloud.tencent.com/pypi/simple
 UV_SYNC = UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras --default-index $(UV_PYPI_MIRROR)
 endif
 
@@ -92,11 +93,11 @@ help:
 # Workspace Setup
 # ============================================================================
 
-# Sync workspace dependencies using the configured mirror.
-# uv.lock is restored after sync to keep it pinned to PyPI.
+# Sync workspace dependencies using the configured mirror, then rewrite
+# uv.lock package URLs back to canonical PyPI hosts (keeps version bumps).
 define uv_sync_with_fallback
 	$(UV_SYNC) \
-		&& { git checkout -- uv.lock 2>/dev/null || true; }
+		&& ./scripts/rewrite_uv_lock_to_pypi.sh
 endef
 
 setup:

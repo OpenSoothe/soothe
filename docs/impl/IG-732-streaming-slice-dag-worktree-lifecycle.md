@@ -227,6 +227,7 @@ without waiting for a batch integrate.
 - [x] RFC-231 §9 / RFC-232 `depends_on` behaviors covered by unit tests
 - [x] Greenfield + migration YAML match streaming flow
 - [x] `merge_branches` / land no longer stubbed
-- [ ] `./scripts/verify_finally.sh` green (blocked earlier by env: soothe-nano /
-      py3.14; rails+autopilot unit suite 413 passed locally)
+- [x] `./scripts/verify_finally.sh` green (Tencent default mirror + lock URL
+      rewrite to PyPI; `requires-python` capped `<3.14` so CI `uv sync --frozen`
+      no longer dies on the win32/3.14 soothe-nano split)
 - [x] Design draft + RFCs point at this IG as implementing

@@ -5,6 +5,10 @@ on:
     types: [published]
   workflow_dispatch:
 
+# Use canonical PyPI on GHA (avoid regional mirrors rewriting uv.lock).
+env:
+  UV_PYPI_MIRROR: https://pypi.org/simple
+
 permissions:
   contents: read
   id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing

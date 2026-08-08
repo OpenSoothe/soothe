@@ -2,8 +2,9 @@
 name = "soothe-workspace"
 version = "0.0.0"
 description = "Soothe monorepo workspace (meta-package, no dependencies)"
-# Cap below 3.15 until upstream wheels/markers are validated (uv resolves all supported versions).
-requires-python = ">=3.11,<3.15"
+# Cap below 3.14: uv universal resolution hits an unsatisfiable soothe-nano split on
+# python_full_version==3.14.* + win32; CI matrix is 3.12/3.13.
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "soothe-sdk",
     "soothe-nano",

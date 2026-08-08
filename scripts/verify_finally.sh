@@ -339,18 +339,19 @@ print_note() {
 }
 
 # Sync command kept in lockstep with `make sync` (UV_SYNC in Makefile).
-# Broken/partial mirrors (e.g. tsinghua) leave dist-info without wheels for
-# packages like psycopg_pool and jsonschema.
 # Use UV_PYPI_MIRROR to override the default PyPI (for networks with connectivity issues).
 # Usage: UV_PYPI_MIRROR=https://mirrors.aliyun.com/pypi/simple ./scripts/verify_finally.sh
 # Export UV_DEFAULT_INDEX so all uv sync/run commands use the mirror.
 if [[ -n "${UV_PYPI_MIRROR:-}" ]]; then
   export UV_DEFAULT_INDEX="$UV_PYPI_MIRROR"
 else
-  # Default to Tsinghua mirror for better connectivity in China.
+  # Default to Tencent mirror for better connectivity in China.
   # PyPI's Fastly CDN occasionally resets connections (ECONNRESET / os error 54).
+  # Tsinghua's PEP 691 `versions` list can lag behind `files` (e.g. soothe-nano
+  # 1.1.7 present in files but missing from versions), which makes uv report
+  # "only soothe-nano<=X is available" and fail resolution.
   # The committed uv.lock stays pinned to PyPI and is restored after mirror runs.
-  UV_PYPI_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple"
+  UV_PYPI_MIRROR="https://mirrors.cloud.tencent.com/pypi/simple"
   export UV_DEFAULT_INDEX="$UV_PYPI_MIRROR"
   # Clear any conflicting index vars that might interfere
   unset UV_INDEX_URL UV_EXTRA_INDEX_URL UV_INDEX UV_FIND_LINKS 2>/dev/null || true
@@ -526,13 +527,26 @@ setup_workspace() {
   fi
 
   print_note "syncing packages..."
-  if ! "${UV_SYNC_CMD[@]}" >/dev/null 2>&1; then
+  local sync_log
+  sync_log=$(mktemp)
+  if ! "${UV_SYNC_CMD[@]}" >"$sync_log" 2>&1; then
     print_fail "uv sync failed"
-    print_note "try: make sync"
+    # Show the useful tail; full log path for deep dives.
+    tail -n 40 "$sync_log" | sed 's/^/  /' >&2
+    print_note "log: $sync_log"
+    print_note "try: make sync  (or UV_PYPI_MIRROR=https://pypi.org/simple ./scripts/verify_finally.sh)"
     exit 1
   fi
+  rm -f "$sync_log"
   print_ok "uv sync"
   record_check_outcome "workspace" "uv sync" "pass"
+
+  # Mirror sync rewrites registry/wheel URLs; normalize back to PyPI hosts
+  # (same as `make sync`) so a dirty mirror lock is never left behind.
+  if ! ./scripts/rewrite_uv_lock_to_pypi.sh >/dev/null 2>&1; then
+    print_fail "uv.lock mirror→PyPI rewrite failed"
+    exit 1
+  fi
 
   if ! _verify_critical_deps >/dev/null 2>&1; then
     print_fail "critical deps missing after sync (broken mirror?)"
