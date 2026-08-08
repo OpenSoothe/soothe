@@ -5,10 +5,12 @@ from __future__ import annotations
 import pytest
 from textual.app import App, ComposeResult
 
+from soothe_cli.tui.composer_mode import (
+    COMPOSER_MODE_AUTO,
+    COMPOSER_MODE_MANUAL,
+    COMPOSER_MODE_PLAN,
+)
 from soothe_cli.tui.widgets.status import (
-    CLARIFICATION_MODE_AUTO,
-    CLARIFICATION_MODE_MANUAL,
-    CLARIFICATION_MODE_PLAN,
     ClarificationModeBadge,
     ModelLabel,
     StatusBar,
@@ -32,7 +34,7 @@ async def test_badge_defaults_to_auto_text_and_class() -> None:
     """Initial mount renders the Auto label and applies the ``auto`` class."""
     async with _BadgeOnlyApp().run_test() as pilot:
         badge = pilot.app.query_one("#badge", ClarificationModeBadge)
-        assert badge.mode == CLARIFICATION_MODE_AUTO
+        assert badge.mode == COMPOSER_MODE_AUTO
         assert badge.has_class("auto")
         assert not badge.has_class("manual")
         assert _read_static_content(badge) == "Auto"
@@ -43,7 +45,7 @@ async def test_badge_flips_to_manual_when_mode_assigned() -> None:
     """Setting ``mode`` updates the visible text and CSS class atomically."""
     async with _BadgeOnlyApp().run_test() as pilot:
         badge = pilot.app.query_one("#badge", ClarificationModeBadge)
-        badge.mode = CLARIFICATION_MODE_MANUAL
+        badge.mode = COMPOSER_MODE_MANUAL
         await pilot.pause()
         assert badge.has_class("manual")
         assert not badge.has_class("auto")
@@ -56,7 +58,7 @@ async def test_badge_flips_to_plan_when_mode_assigned() -> None:
     """Setting ``mode`` to plan applies the teal Plan pill."""
     async with _BadgeOnlyApp().run_test() as pilot:
         badge = pilot.app.query_one("#badge", ClarificationModeBadge)
-        badge.mode = CLARIFICATION_MODE_PLAN
+        badge.mode = COMPOSER_MODE_PLAN
         await pilot.pause()
         assert badge.has_class("plan")
         assert not badge.has_class("auto")

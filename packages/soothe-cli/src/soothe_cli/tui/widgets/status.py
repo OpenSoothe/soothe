@@ -14,13 +14,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
-from soothe_cli.tui.composer_mode import (
-    COMPOSER_MODE_AUTO,
-    COMPOSER_MODE_MANUAL,
-    COMPOSER_MODE_PLAN,
-    VALID_COMPOSER_MODES,
-    normalize_composer_mode,
-)
+from soothe_cli.tui.composer_mode import COMPOSER_MODE_AUTO, normalize_composer_mode
 from soothe_cli.tui.config import get_glyphs
 
 logger = logging.getLogger(__name__)
@@ -76,13 +70,6 @@ class ModelLabel(Widget):
         return Content("\u2026")
 
 
-# Backward-compatible aliases (tests and call sites still use these names).
-CLARIFICATION_MODE_AUTO = COMPOSER_MODE_AUTO
-CLARIFICATION_MODE_MANUAL = COMPOSER_MODE_MANUAL
-CLARIFICATION_MODE_PLAN = COMPOSER_MODE_PLAN
-_VALID_CLARIFICATION_MODES = VALID_COMPOSER_MODES
-
-
 class ClarificationModeBadge(Static):
     """Visual block showing the active composer mode (Auto / Manual / Plan).
 
@@ -114,9 +101,9 @@ class ClarificationModeBadge(Static):
     }
     """
 
-    mode: reactive[str] = reactive(CLARIFICATION_MODE_AUTO, init=False)
+    mode: reactive[str] = reactive(COMPOSER_MODE_AUTO, init=False)
 
-    def __init__(self, *args: Any, mode: str = CLARIFICATION_MODE_AUTO, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, mode: str = COMPOSER_MODE_AUTO, **kwargs: Any) -> None:
         """Initialize with the badge text already rendered so it shows on first paint."""
         initial = normalize_composer_mode(mode)
         super().__init__(initial.capitalize(), *args, **kwargs)
@@ -229,7 +216,7 @@ class StatusBar(Horizontal):
     }
     """
     mode: reactive[str] = reactive("normal", init=False)
-    clarification_mode: reactive[str] = reactive(CLARIFICATION_MODE_AUTO, init=False)
+    clarification_mode: reactive[str] = reactive(COMPOSER_MODE_AUTO, init=False)
     status_message: reactive[str] = reactive("", init=False)
     session_tip: reactive[str] = reactive("", init=False)
     tip_is_notification: reactive[bool] = reactive(False, init=False)

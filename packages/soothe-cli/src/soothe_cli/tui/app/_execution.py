@@ -271,6 +271,15 @@ class _ExecutionMixin:
         non_empty = [a for a in event.answers if a.strip()]
         if not non_empty:
             return
+
+        # When a plan is approved for execution, switch composer mode to Auto
+        # so subsequent turns use standard loop routing without planner hint.
+        first_answer = str(event.answers[0]).strip() if event.answers else ""
+        if first_answer == "Approve":
+            self._composer_mode = "auto"
+            if self._status_bar is not None:
+                self._status_bar.set_clarification_mode("auto")
+
         # Send the answers as a structured list so the daemon resumes the
         # graph with one answer per question instead of broadcasting a single
         # concatenated string. ``content`` carries a human-readable summary

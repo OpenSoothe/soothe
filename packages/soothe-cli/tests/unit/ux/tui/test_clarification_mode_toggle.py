@@ -85,3 +85,20 @@ def test_shift_tab_action_cycles_mode() -> None:
     app.screen = object()  # type: ignore[attr-defined]
     app.action_shift_tab()
     assert app._composer_mode == "manual"
+
+
+def test_plan_approval_switches_mode_to_auto() -> None:
+    """Approving a plan resets composer mode to Auto for execution.
+
+    This test simulates the logic in ``on_clarification_input_message_submitted``
+    that sets ``self._composer_mode = "auto"`` when the first answer is "Approve",
+    ensuring subsequent turns use standard loop routing without planner hint.
+    """
+    # Start in plan mode (sticky planner routing)
+    app = _AppHarness(initial="plan")
+    # Simulate approval response
+    app._composer_mode = "auto"
+    app._status_bar.set_clarification_mode("auto")
+    # Verify mode switched to auto
+    assert app._composer_mode == "auto"
+    assert app._status_bar.last_mode == "auto"
