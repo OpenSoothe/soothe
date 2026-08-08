@@ -67,8 +67,9 @@ class TestConsensusTrustPrompt:
                 response_text="7 steps",
                 model=mock_model,
             )
-        assert result == ConsensusResult("send_back", "Product incomplete")
-        assert len(result) == 2
+        assert result.decision == "send_back"
+        assert result.reasoning == "Product incomplete"
+        assert result.dag_ops == ()
 
 
 @pytest.mark.asyncio

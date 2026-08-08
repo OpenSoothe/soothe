@@ -47,6 +47,7 @@ class TestConsensusPrompt:
         assert "fundamentally blocked" in prompt.lower()
         assert "evidence_follow_up" not in prompt
         assert "goal report" in prompt.lower()
+        assert "dag_ops" in prompt.lower()
 
 
 @pytest.mark.asyncio

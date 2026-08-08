@@ -1,7 +1,7 @@
 # IG-726: Autopilot report-commit judgment
 
 **Created**: 2026-08-08  
-**Status**: P0/P1 implemented (P2 dag_ops open)  
+**Status**: Implemented (P0–P2)  
 **Related**: [RFC-204 §1.3](../specs/RFC-204-autopilot-mode.md),
 [RFC-222](../specs/RFC-222-autopilot-goal-engine-architecture.md),
 [RFC-625](../specs/RFC-625-autopilot-monitor-context-engine-unification.md),
@@ -101,9 +101,9 @@ commit API is stable.
 
 ### P2 — Bounded DAG ops
 
-- [ ] Extend structured judge result with optional `dag_ops: list[DagOp]`
-- [ ] Validate + apply: wire/unwire, priority, pending brief updates
-- [ ] Reject illegal spawn/cancel unless allowlisted
+- [x] Extend structured judge result with optional `dag_ops: list[DagOp]`
+- [x] Validate + apply: wire/unwire, priority, pending brief updates
+- [x] Reject illegal spawn/cancel unless allowlisted (default deny)
 
 ### P3 — Tests + cleanse
 
@@ -111,6 +111,7 @@ commit API is stable.
 - [x] Unit: judge prompt built from CE Goal Report
 - [x] Accept path still completes (IG-725 / wave-plan gate suites)
 - [x] Align IG-680/IG-697 tests to report-commit semantics
+- [x] Unit: bounded dag_ops apply / allowlist skip
 - [x] `./scripts/verify_finally.sh`
 
 ---
@@ -140,3 +141,4 @@ commit API is stable.
 |------|--------|
 | 2026-08-08 | Initial IG from report-commit design + RFC refine commit |
 | 2026-08-08 | P0/P1 implemented: commit_goal_report, projection, finalize cutover |
+| 2026-08-08 | P2: bounded dag_ops on judge + apply (spawn/cancel deny-by-default) |

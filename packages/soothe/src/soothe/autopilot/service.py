@@ -1944,6 +1944,7 @@ class AutopilotService:
             return
 
         report_projection = project_goal_report_for_judge(goal.report)
+        dag_ops: tuple[Any, ...] = ()
         # Architecture + require_plan: host owns WavePlan ingest / accept gate
         # (nano must not call Autopilot tools). Prefer committed report text.
         arch_gate = await self._architecture_wave_plan_consensus_gate(
@@ -1961,28 +1962,47 @@ class AutopilotService:
             )
         else:
             response_text = report_projection or (evidence_summary or "").strip()
+            dag_context = self._dag_slice_for_judge(goal_id)
             try:
                 result = await evaluate_goal_completion(
                     goal.description,
                     response_text,
                     "",
                     model=self._consensus_model,
+                    dag_context=dag_context,
                 )
                 decision, reasoning = result.decision, result.reasoning
+                dag_ops = tuple(result.dag_ops or ())
             except Exception:
                 logger.exception("Report-commit judgment failed for goal %s", goal_id)
                 decision, reasoning = "fail", "Report-commit judgment failed"
 
         rail_bound = bool(getattr(goal, "rail_id", None))
         logger.info(
-            "Report-commit finalize goal_id=%s rev=%s decision=%s rail_bound=%s reasoning=%s",
+            "Report-commit finalize goal_id=%s rev=%s decision=%s dag_ops=%d "
+            "rail_bound=%s reasoning=%s",
             goal_id,
             getattr(goal, "report_revision", 0),
             decision,
+            len(dag_ops),
             rail_bound,
             (reasoning or "")[:160],
         )
         try:
+            if dag_ops:
+                from soothe.autopilot.verify.dag_ops import apply_bounded_dag_ops
+
+                notes = await apply_bounded_dag_ops(
+                    self._ce,
+                    list(dag_ops),
+                    source_goal_id=goal_id,
+                )
+                if notes:
+                    logger.info(
+                        "Applied bounded dag_ops for %s: %s",
+                        goal_id,
+                        "; ".join(notes)[:240],
+                    )
             if decision == "accept":
                 await self._ce.complete_goal(goal_id)
                 await self._emit_goal_completed(goal_id, loop_id=loop_id)
@@ -2004,6 +2024,23 @@ class AutopilotService:
                 await self._maybe_emit_dag_idle(goal_id)
         except Exception:
             logger.exception("Report-commit finalize transitions failed for %s", goal_id)
+
+    def _dag_slice_for_judge(self, goal_id: str) -> str:
+        """Compact related CE goals for optional bounded dag_ops."""
+        from soothe.autopilot.verify.dag_ops import format_dag_slice_for_judge
+
+        job_id = self._job_id_for_goal(goal_id)
+        goals = []
+        if job_id is not None:
+            for g in self._ce._dag.goals.values():
+                if g.id == job_id or self._is_descendant_of(g.id, job_id):
+                    if g.status in ("pending", "active", "failed") or g.id == goal_id:
+                        goals.append(g)
+        else:
+            g = self._ce._dag.get_goal(goal_id)
+            if g is not None:
+                goals = [g]
+        return format_dag_slice_for_judge(goals)
 
     async def _maybe_assess_job_maturity(
         self,
