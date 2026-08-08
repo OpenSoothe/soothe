@@ -443,11 +443,12 @@ async def test_iter_turn_chunks_records_stream_end_cancel_reason() -> None:
 
 @pytest.mark.asyncio
 async def test_iter_turn_chunks_records_stopped_end_state() -> None:
-    """Stopped status after payload should end the turn."""
+    """Stopped status after real progress should end the turn."""
     session = object.__new__(TuiDaemonSession)
     session._loop_id = "loop-main"
     session._read_lock = asyncio.Lock()
     session._streaming = False
+    session._post_idle_drain_deadline = 0.0
     session._client = _StubEventClient(
         [
             {
@@ -461,8 +462,8 @@ async def test_iter_turn_chunks_records_stopped_end_state() -> None:
                 "loop_id": "loop-main",
                 "turn_id": "loop-main:1",
                 "namespace": [],
-                "mode": "custom",
-                "data": {"type": "soothe.test.payload"},
+                "mode": "messages",
+                "data": ("progress", {}),
             },
             {
                 "type": "status",

@@ -109,9 +109,7 @@ async def test_send_back_attaches_consensus_guidance() -> None:
     ce.claim_goal(goal.id, loop_id="w1")
     updated = await ce.send_back_goal(goal.id, reason="Show actual git merge output")
     assert updated.status == "pending"
-    assert updated.guidance_accumulated[-1]["text"] == (
-        "Send-back: Show actual git merge output"
-    )
+    assert updated.guidance_accumulated[-1]["text"] == ("Send-back: Show actual git merge output")
     assert updated.guidance_accumulated[-1]["source"] == "report_commit_send_back"
 
 

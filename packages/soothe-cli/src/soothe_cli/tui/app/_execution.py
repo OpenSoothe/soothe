@@ -857,6 +857,33 @@ class _ExecutionMixin:
         else:
             await self._mount_message(AppMessage("Agent not configured for this session."))
 
+    async def _daemon_loop_is_live(self) -> bool:
+        """Return True when the subscribed daemon loop is already executing.
+
+        Used to attach with ``skip_daemon_send_turn`` instead of enqueueing a
+        duplicate ``loop_input`` (stale-reader / ghost follow-on goals).
+        """
+        session = self._daemon_session
+        state = self._session_state
+        if session is None or state is None:
+            return False
+        loop_id = str(getattr(state, "loop_id", "") or "").strip()
+        if not loop_id:
+            return False
+        try:
+            history = await session.fetch_loop_history(loop_id)
+            if getattr(history, "live_goal_index", None) is not None:
+                return True
+        except Exception:
+            logger.debug("live probe via fetch_loop_history failed", exc_info=True)
+        try:
+            exec_state = await session.fetch_execution_state(loop_id)
+            status = str(getattr(exec_state, "status", "") or "").strip().lower()
+            return status == "running"
+        except Exception:
+            logger.debug("live probe via fetch_execution_state failed", exc_info=True)
+            return False
+
     async def _run_agent_task(
         self,
         message: str,
@@ -892,6 +919,14 @@ class _ExecutionMixin:
         try:
             for attempt in (1, 2):
                 try:
+                    attach_only = skip_daemon_send_turn
+                    if (
+                        not attach_only
+                        and self._daemon_session is not None
+                        and await self._daemon_loop_is_live()
+                    ):
+                        attach_only = True
+                        logger.info("Daemon loop already live; attaching without send_turn")
                     await execute_task_textual(
                         user_input=message,
                         daemon_session=self._daemon_session,
@@ -907,7 +942,7 @@ class _ExecutionMixin:
                             router_profile=self._router_profile_override,
                         ),
                         turn_stats=turn_stats,
-                        skip_daemon_send_turn=skip_daemon_send_turn,
+                        skip_daemon_send_turn=attach_only,
                         clarification_mode=wire_clar,
                         sticky_preferred_subagent=sticky_subagent,
                         is_shutting_down=lambda: getattr(self, "_exit", False),
@@ -1058,5 +1093,42 @@ class _ExecutionMixin:
                     )
                 )
 
+        # If the daemon already admitted a follow-on goal (serial input queue /
+        # successor turn), re-attach without sending another loop_input.
+        if (
+            not self._exit
+            and self._daemon_session is not None
+            and self._ui_adapter is not None
+            and self._runtime_backend_ready()
+            and await self._daemon_loop_is_live()
+        ):
+            await self._attach_to_live_daemon_turn()
+            return
+
         # Process next message from queue if any
         await self._process_next_from_queue()
+
+    async def _attach_to_live_daemon_turn(self) -> None:
+        """Attach the TUI reader to an already-running daemon turn.
+
+        When a local queue head exists, mount it as the user echo then attach
+        with ``skip_daemon_send_turn`` (prompt already on the daemon). Otherwise
+        attach with an empty prompt so activity keeps streaming.
+        """
+        prompt = ""
+        if self._pending_messages:
+            msg = self._pending_messages.popleft()
+            prompt = msg.text
+            if self._queued_widgets:
+                widget = self._queued_widgets.popleft()
+                with suppress(Exception):
+                    await widget.remove()
+                self._refresh_queued_goal_tips()
+            if msg.mode != "normal":
+                # Shell/command still need their normal handlers.
+                await self._process_message(msg.text, msg.mode)
+                return
+            if prompt.strip():
+                await self._mount_message(UserMessage(prompt))
+        logger.info("Attaching TUI to live daemon turn (skip send_turn)")
+        await self._send_to_agent(prompt, skip_daemon_send_turn=True)
