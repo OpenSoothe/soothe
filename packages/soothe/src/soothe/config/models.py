@@ -286,7 +286,7 @@ class AutopilotConfig(BaseModel):
     max_retries: int = 2
     max_total_goals: int = Field(default=99, ge=1, le=500)
     max_goal_depth: int = Field(default=5, ge=1, le=10)
-    max_parallel_goals: int = Field(default=16, ge=1, le=32)
+    max_parallel_goals: int = Field(default=3, ge=1, le=32)
     # Cap on goals scheduled at once (``AutopilotService._schedule_via_worker_pool``).
     # Independent of ``max_loops`` (WorkerPool capacity). Runner-side
     # ``ConcurrencyController`` uses ``agent.loop.concurrency.max_parallel_goals``.
@@ -735,18 +735,18 @@ class LoopConcurrencyConfig(BaseModel):
     """
 
     max_parallel_goals: int = Field(
-        default=16, ge=0, description="Maximum parallel goals (0=unlimited)"
+        default=3, ge=0, description="Maximum parallel goals (0=unlimited)"
     )
     max_parallel_steps: int = Field(
-        default=4,
+        default=3,
         ge=0,
         description="Max concurrent plan steps per batch; 0=unlimited; multiple batches per execute",
     )
     max_parallel_subagents: int = Field(
-        default=4, ge=0, description="Maximum parallel subagents (0=unlimited)"
+        default=3, ge=0, description="Maximum parallel subagents (0=unlimited)"
     )
     global_max_llm_calls: int = Field(
-        default=48, ge=0, description="Global LLM call cap (0=unlimited)"
+        default=8, ge=0, description="Global LLM call cap (0=unlimited)"
     )
     step_parallelism: Literal["sequential", "dependency", "max"] = Field(
         default="dependency", description="Step scheduling strategy"

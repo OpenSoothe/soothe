@@ -17,8 +17,9 @@ calls and provider concurrency 429s.
 2. Add `LLMRateLimitConfig.global_concurrent_limit` and wire it through nano
    middleware builder as `max_concurrent_requests_global`.
 3. Sync `config/nano.template.yml` and daemon `setup/templates/nano.yml`.
-4. Default `global_concurrent_limit: 0` (no process-wide cap); positive values
-   remain a hard cap. Per-budget `concurrent_limit` still applies.
+4. Initially defaulted `global_concurrent_limit: 0` (no process-wide cap);
+   product default later moved to `4` / `concurrent_limit: 2` (soothe-nano 1.1.7).
+   Positive values remain a hard cap; `0` still means no global cap.
 
 ## Upstream
 

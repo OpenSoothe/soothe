@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Default LLM rate-limit / loop concurrency to develop-safe caps:
+  `llm_rate_limit.concurrent_limit=2`, `global_concurrent_limit=4`,
+  `max_parallel_goals=3`, `max_parallel_steps/subagents=3`,
+  `global_max_llm_calls=8` (requires `soothe-nano>=1.1.7`).
 - Remove `packages/soothe-nano` git submodule; consume Coding CoreAgent from
   PyPI (`soothe-nano>=1.1.6`) only. Local Docker builds and release waits use
   the host pin instead of a vendored nano checkout.

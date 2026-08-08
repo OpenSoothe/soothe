@@ -87,19 +87,8 @@ embedding_profile:
   - model_role: dashscope:text-embedding-v4
     embedding_dims: 1536
 
-# Provider concurrency quota (dashscope: "concurrency allocated quota exceeded").
-# global_concurrent_limit is the hard process-wide in-flight cap; keep ≤ provider C.
-agent:
-  middleware:
-    llm_rate_limit:
-      enabled: true
-      rpm_limit: 60
-      concurrent_limit: 2
-      global_concurrent_limit: 4
-      retry_on_rate_limit: true
-      max_rate_limit_retries: 10
-      rate_limit_backoff_base: 2.0
-      rate_limit_backoff_max: 60.0
+# llm_rate_limit defaults (concurrent_limit=2, global_concurrent_limit=4) are
+# product defaults — raise in overlay if the provider tier allows more fan-out.
 
 # Local develop defaults to SQLite (one process mode for the whole runtime).
 # Flip to postgresql + pgvector when exercising the Postgres path against

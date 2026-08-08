@@ -676,7 +676,7 @@ agent:
     llm_rate_limit:
       rpm_limit: 120                 # Requests per minute
       concurrent_limit: 10           # Per-budget concurrent calls
-      global_concurrent_limit: 0     # Process-wide cap (0 = unlimited)
+      global_concurrent_limit: 4     # Process-wide in-flight cap (0 = unlimited)
 ```
 
 **Context window management** (RFC-224):

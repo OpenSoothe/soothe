@@ -12,7 +12,8 @@ agent:
     max_retries: 2
     max_total_goals: 99
     max_goal_depth: 5
-    max_parallel_goals: 16
+    # Cap goal fan-out under typical provider concurrency quotas.
+    max_parallel_goals: 3
     max_send_backs: 3
     max_engine_recoveries: 2
     checkpoint_interval: 10
@@ -214,10 +215,11 @@ agent:
       auto_resume_max_age_hours: 24
       auto_resume_clarifications: skip
     concurrency:
-      max_parallel_goals: 16
-      max_parallel_steps: 4
-      max_parallel_subagents: 4
-      global_max_llm_calls: 48
+      # Keep below provider in-flight quota; pair with nano llm_rate_limit.global_concurrent_limit.
+      max_parallel_goals: 3
+      max_parallel_steps: 3
+      max_parallel_subagents: 3
+      global_max_llm_calls: 8
       step_parallelism: dependency
       max_parallel_tools: 99
       checkpoint:
