@@ -110,9 +110,9 @@ async def test_send_back_attaches_consensus_guidance() -> None:
     updated = await ce.send_back_goal(goal.id, reason="Show actual git merge output")
     assert updated.status == "pending"
     assert updated.guidance_accumulated[-1]["text"] == (
-        "Consensus send-back: Show actual git merge output"
+        "Send-back: Show actual git merge output"
     )
-    assert updated.guidance_accumulated[-1]["source"] == "consensus_send_back"
+    assert updated.guidance_accumulated[-1]["source"] == "report_commit_send_back"
 
 
 @pytest.mark.asyncio

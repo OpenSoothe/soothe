@@ -1725,6 +1725,7 @@ class AutopilotService:
                         evidence_summary=str(data.get("evidence_summary", "")),
                         loop_id=worker.loop_id,
                         contribution=contribution,
+                        outcome=outcome,
                     )
                 elif outcome == "needs_replan":
                     # IG-707: clarification / empty PlanResult → send_back (or
@@ -1735,6 +1736,12 @@ class AutopilotService:
                         or "Worker needs replan (insufficient terminal evidence)"
                     )
                     try:
+                        await self._commit_loop_end_report(
+                            goal_id,
+                            outcome="needs_replan",
+                            summary=narrative,
+                            contribution=contribution,
+                        )
                         await self._apply_send_back_or_fail(
                             goal_id,
                             reason=narrative,
@@ -1754,6 +1761,12 @@ class AutopilotService:
                         source="layer2_execute",
                     )
                     try:
+                        await self._commit_loop_end_report(
+                            goal_id,
+                            outcome="failed",
+                            summary=evidence.narrative,
+                            contribution=contribution,
+                        )
                         await self._ce.fail_goal(goal_id, evidence=evidence)
                         await self._emit_goal_failed(
                             goal_id,
@@ -1845,36 +1858,34 @@ class AutopilotService:
         else:
             await self._notify_rail("goal_send_back", goal_id, reason=reason)
 
-    async def _apply_consensus_and_finalize(
+    async def _commit_loop_end_report(
         self,
         goal_id: str,
         *,
-        evidence_summary: str,
-        loop_id: str | None = None,
+        outcome: str,
+        summary: str,
         contribution: Any | None = None,
-    ) -> None:
-        """RFC-204 / IG-707 / IG-710 / IG-725: validate worker completion before accepting.
-
-        StrangeLoop Plan-Execute-Eval owns terminal done. Consensus compares
-        ``goal.description`` to the worker StrangeLoop response
-        (``evidence_summary`` on the wire) — never substitutes the goal text as
-        the response, and never gates on host workspace probes.
-        IG-725: no ``collect_evidence`` re-dispatch. Prefer accept when StrangeLoop
-        completed; product send_back/fail only. After accept, AutopilotMonitor
-        evaluates CE DAG status (completed/active/failed/pending).
-        Decisions are accept / send_back / fail only (automatic; no operator park).
-        """
-        from soothe.autopilot.verify.consensus import evaluate_goal_completion
-
-        goal = await self._ce.get_goal(goal_id)
-        if goal is None:
-            return
+    ) -> int | None:
+        """Persist StrangeLoop loop-end report onto CE (IG-726)."""
+        from soothe.autopilot.verify.report_projection import build_goal_report
 
         findings = getattr(contribution, "findings", None) if contribution else None
-        # Persist findings onto the goal for post-completion context.
-        # WavePlan-shaped JSON keeps a higher cap so host ingest can re-read it
-        # from goal.findings if contribution is gone.
-        if findings:
+        effects = getattr(contribution, "effects", None) if contribution else None
+        report = build_goal_report(
+            outcome=outcome,
+            summary=summary,
+            findings=findings,
+            effects=effects,
+        )
+        try:
+            revision = await self._ce.commit_goal_report(goal_id, report)
+        except Exception:
+            logger.exception("commit_goal_report failed for goal %s", goal_id)
+            return None
+
+        # Mirror findings onto goal.findings for WavePlan / maturity readers.
+        goal = await self._ce.get_goal(goal_id)
+        if goal is not None and findings:
             try:
                 from soothe.autopilot.rail.wave_plan import (
                     WAVE_PLAN_FINDING_CAP,
@@ -1882,21 +1893,62 @@ class AutopilotService:
                 )
 
                 for finding in findings[:20]:
-                    summary = getattr(finding, "summary", None) or str(finding)
-                    if not summary or summary in goal.findings:
+                    text = getattr(finding, "summary", None) or str(finding)
+                    if not text or text in goal.findings:
                         continue
                     cap = 500
-                    if parse_wave_plan_payload(str(summary).strip()) is not None:
+                    if parse_wave_plan_payload(str(text).strip()) is not None:
                         cap = WAVE_PLAN_FINDING_CAP
-                    goal.findings.append(str(summary)[:cap])
+                    goal.findings.append(str(text)[:cap])
             except Exception:
                 logger.debug("Failed to attach findings to goal %s", goal_id, exc_info=True)
+        return revision
 
+    async def _apply_consensus_and_finalize(
+        self,
+        goal_id: str,
+        *,
+        evidence_summary: str,
+        loop_id: str | None = None,
+        contribution: Any | None = None,
+        outcome: str = "completed",
+    ) -> None:
+        """RFC-204 §1.3 / IG-726: commit CE report, then judge from projection.
+
+        StrangeLoop Plan-Execute-Eval owns terminal done. Autopilot commits the
+        ledger report to CE, projects it, and judges accept/send_back/fail —
+        never gates on host workspace probes. IG-725: no collect_evidence
+        re-dispatch. After accept, LoopRail / AutopilotMonitor react to CE.
+        """
+        from soothe.autopilot.verify.consensus import evaluate_goal_completion
+        from soothe.autopilot.verify.report_projection import project_goal_report_for_judge
+
+        goal = await self._ce.get_goal(goal_id)
+        if goal is None:
+            return
+
+        await self._commit_loop_end_report(
+            goal_id,
+            outcome=outcome,
+            summary=str(evidence_summary or "").strip(),
+            contribution=contribution,
+        )
+        goal = await self._ce.get_goal(goal_id)
+        if goal is None:
+            return
+        if not goal.report:
+            logger.error(
+                "No CE goal report after commit for %s — skipping LLM judge",
+                goal_id,
+            )
+            return
+
+        report_projection = project_goal_report_for_judge(goal.report)
         # Architecture + require_plan: host owns WavePlan ingest / accept gate
-        # (nano must not call Autopilot tools).
+        # (nano must not call Autopilot tools). Prefer committed report text.
         arch_gate = await self._architecture_wave_plan_consensus_gate(
             goal,
-            evidence_summary=evidence_summary,
+            evidence_summary=report_projection or evidence_summary,
             contribution=contribution,
         )
         if arch_gate is not None:
@@ -1908,7 +1960,7 @@ class AutopilotService:
                 reasoning[:160],
             )
         else:
-            response_text = (evidence_summary or "").strip()
+            response_text = report_projection or (evidence_summary or "").strip()
             try:
                 result = await evaluate_goal_completion(
                     goal.description,
@@ -1918,13 +1970,14 @@ class AutopilotService:
                 )
                 decision, reasoning = result.decision, result.reasoning
             except Exception:
-                logger.exception("Consensus evaluation failed for goal %s", goal_id)
-                decision, reasoning = "fail", "Consensus evaluation failed"
+                logger.exception("Report-commit judgment failed for goal %s", goal_id)
+                decision, reasoning = "fail", "Report-commit judgment failed"
 
         rail_bound = bool(getattr(goal, "rail_id", None))
         logger.info(
-            "Consensus finalize goal_id=%s decision=%s rail_bound=%s reasoning=%s",
+            "Report-commit finalize goal_id=%s rev=%s decision=%s rail_bound=%s reasoning=%s",
             goal_id,
+            getattr(goal, "report_revision", 0),
             decision,
             rail_bound,
             (reasoning or "")[:160],
@@ -1935,7 +1988,7 @@ class AutopilotService:
                 await self._emit_goal_completed(goal_id, loop_id=loop_id)
                 await self._maybe_assess_job_maturity(
                     goal_id,
-                    qa_response=evidence_summary,
+                    qa_response=report_projection or evidence_summary,
                 )
                 await self._maybe_emit_dag_idle(goal_id)
             elif decision == "send_back":
@@ -1950,7 +2003,7 @@ class AutopilotService:
                 )
                 await self._maybe_emit_dag_idle(goal_id)
         except Exception:
-            logger.exception("Consensus finalize transitions failed for %s", goal_id)
+            logger.exception("Report-commit finalize transitions failed for %s", goal_id)
 
     async def _maybe_assess_job_maturity(
         self,

@@ -19,13 +19,13 @@ class TestConsensusPrompt:
         prompt = _build_consensus_prompt("Test goal", "Response text", "")
         assert "Test goal" in prompt
         assert "Response text" in prompt
-        assert "Agent Response:\nResponse text" in prompt
+        assert "Goal Report (from ContextEngine):\nResponse text" in prompt
         assert "Agent Response Preview" not in prompt
         assert "accept" in prompt.lower()
 
     def test_prompt_with_evidence(self) -> None:
         prompt = _build_consensus_prompt("Goal", "Response", "Evidence summary")
-        assert "Evidence Summary:\nEvidence summary" in prompt
+        assert "Additional report context:\nEvidence summary" in prompt
 
     def test_prompt_preserves_long_response_and_evidence(self) -> None:
         long_response = "R" * 2000
@@ -34,8 +34,8 @@ class TestConsensusPrompt:
         assert long_response in prompt
         assert long_evidence in prompt
         assert "Agent Response Preview" not in prompt
-        assert "Agent Response:\n" + long_response in prompt
-        assert "Evidence Summary:\n" + long_evidence in prompt
+        assert "Goal Report (from ContextEngine):\n" + long_response in prompt
+        assert "Additional report context:\n" + long_evidence in prompt
 
     def test_prompt_includes_instructions(self) -> None:
         prompt = _build_consensus_prompt("Goal", "Response", "")
@@ -46,6 +46,7 @@ class TestConsensusPrompt:
         assert "prefer accept" in prompt.lower()
         assert "fundamentally blocked" in prompt.lower()
         assert "evidence_follow_up" not in prompt
+        assert "goal report" in prompt.lower()
 
 
 @pytest.mark.asyncio

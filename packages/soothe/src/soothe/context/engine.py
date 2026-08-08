@@ -610,10 +610,45 @@ class ContextEngine:
         goal = self._scheduler.claim_goal(goal_id, loop_id=loop_id)
         return goal
 
-    # ── RFC-204 consensus methods ───────────────────────────────────────────
+    # ── RFC-204 report-commit / send-back methods ───────────────────────────
+
+    async def commit_goal_report(
+        self,
+        goal_id: str,
+        report: dict[str, Any],
+    ) -> int:
+        """Upsert ``GoalNode.report`` and bump ``report_revision`` (IG-726).
+
+        Autopilot judgment MUST read from the committed report after this call.
+        Idempotent content writes still bump the revision so each loop-end
+        yields a distinct ``(goal_id, report_revision)`` judgment key.
+
+        Args:
+            goal_id: Goal receiving the StrangeLoop ledger report.
+            report: Serializable report dict (outcome, summary, findings, …).
+
+        Returns:
+            New ``report_revision`` after the commit.
+
+        Raises:
+            KeyError: If goal not found.
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            raise KeyError(f"Goal {goal_id} not found")
+        goal.report = dict(report)
+        goal.report_revision = int(goal.report_revision or 0) + 1
+        goal.updated_at = datetime.now(UTC)
+        logger.info(
+            "Committed goal report %s revision=%s outcome=%s",
+            goal_id,
+            goal.report_revision,
+            (report.get("outcome") if isinstance(report, dict) else None),
+        )
+        return goal.report_revision
 
     async def send_back_goal(self, goal_id: str, reason: str = "") -> GoalNode:
-        """Return goal to pending after consensus rejection.
+        """Return goal to pending after report-commit rejection.
 
         Increments send_back_count. When budget is exhausted, transitions to
         ``failed`` so host recovery (LoopRail / monitor / engine health) can
@@ -621,7 +656,7 @@ class ContextEngine:
 
         Args:
             goal_id: Goal to send back.
-            reason: Consensus reasoning for the send-back.
+            reason: Judge reasoning for the send-back.
 
         Returns:
             The updated GoalNode.
@@ -641,12 +676,12 @@ class ContextEngine:
 
         # Validate that the goal can transition back to pending.
         _validate_transition(goal_id, goal.status, "pending")
-        # Preserve consensus rejection as guidance for the rework attempt.
+        # Preserve rejection as guidance for the rework attempt.
         if reason.strip():
             self._append_goal_guidance(
                 goal,
-                f"Consensus send-back: {reason.strip()}",
-                source="consensus_send_back",
+                f"Send-back: {reason.strip()}",
+                source="report_commit_send_back",
             )
         goal.status = "pending"
         goal.assigned_loop_id = None

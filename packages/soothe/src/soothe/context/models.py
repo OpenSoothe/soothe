@@ -267,7 +267,8 @@ class GoalNode(BaseModel):
 
     # Completion/completion state (from Goal)
     # report is serialized GoalReport (avoid circular import)
-    report: dict[str, Any] | None = None  # Serialized GoalReport on completion
+    report: dict[str, Any] | None = None  # StrangeLoop ledger projection (IG-726)
+    report_revision: int = 0  # Monotonic; Autopilot judge idempotency key
     error: str | None = None  # Failure reason if status == "failed"
     pending_clarification: dict[str, Any] | None = None  # RFC-622
 

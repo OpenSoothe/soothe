@@ -196,7 +196,7 @@ class TestConsensusGoalPlusResponse:
 
     @pytest.mark.asyncio
     async def test_workspace_markers_do_not_ground_consensus(self, tmp_path: Path) -> None:
-        """Markers alone must not substitute for a StrangeLoop response."""
+        """Workspace files must not ground judgment; CE minimal report may."""
         (tmp_path / "SUMMARY.md").write_text("done\n", encoding="utf-8")
         seen: dict[str, str] = {}
 
@@ -225,11 +225,14 @@ class TestConsensusGoalPlusResponse:
         ):
             await svc._apply_consensus_and_finalize(goal.id, evidence_summary="")
 
-        assert seen.get("response") == ""
+        # IG-726: empty wire → minimal CE report projection (not workspace scrape).
+        assert "Loop ended with outcome=" in (seen.get("response") or "")
+        assert "SUMMARY.md" not in seen.get("response", "")
         assert "SUMMARY.md" not in seen.get("evidence", "")
         updated = await ce.get_goal(goal.id)
         assert updated is not None
         assert updated.status == "pending"
+        assert updated.report_revision >= 1
 
     @pytest.mark.asyncio
     async def test_consensus_uses_goal_and_sloop_response_only(self, tmp_path: Path) -> None:

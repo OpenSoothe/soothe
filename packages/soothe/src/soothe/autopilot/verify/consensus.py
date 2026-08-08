@@ -1,13 +1,13 @@
-"""RFC-204 / IG-707 / IG-725: Consensus loop for Autopilot validation of StrangeLoop completions.
+"""RFC-204 §1.3 / IG-726: Report-commit judgment for Autopilot completions.
 
-Autopilot validates StrangeLoop's "done" judgment before accepting goal completion.
-If not satisfied, Autopilot send_backs the goal with refined instructions, or fails
-it so host recovery (monitor / LoopRail / engine health) can act — never parks for
-an operator mid-goal.
+Autopilot validates StrangeLoop's "done" judgment from the **CE-committed goal
+report** before accepting completion. If not satisfied, Autopilot send_backs
+the goal with refined instructions, or fails it so host recovery (monitor /
+LoopRail / engine health) can act — never parks for an operator mid-goal.
 
-IG-725: no ``evidence_follow_up`` / ``collect_evidence`` turns. Prefer accepting
-StrangeLoop Plan-Execute-Eval completions; product send_back/fail only. Post-accept
-DAG structure is AutopilotMonitor's job (completed/active/failed/pending), not a
+IG-725/IG-726: no ``evidence_follow_up`` / ``collect_evidence`` turns. Prefer
+accepting StrangeLoop Plan-Execute-Eval completions; product send_back/fail
+only. Post-accept DAG structure is AutopilotMonitor / LoopRail's job, not a
 second worker mission. The host judge never opens the workspace (IG-710).
 """
 
@@ -144,14 +144,14 @@ def _build_consensus_prompt(
     parts = [
         "You are evaluating whether an AI agent has successfully completed a goal.",
         f"\nGoal: {goal}",
-        f"\nAgent Response:\n{response}",
+        f"\nGoal Report (from ContextEngine):\n{response}",
     ]
     if evidence:
-        parts.append(f"\nEvidence Summary:\n{evidence}")
+        parts.append(f"\nAdditional report context:\n{evidence}")
 
     parts.append(
         "\nChoose one decision:\n"
-        "- accept: StrangeLoop Plan-Execute-Eval finished and the response "
+        "- accept: StrangeLoop Plan-Execute-Eval finished and the Goal Report "
         "indicates the goal work was done satisfactorily — prefer accept "
         "when the agent completed its plan unless product work is clearly "
         "incomplete or wrong\n"
@@ -159,8 +159,8 @@ def _build_consensus_prompt(
         "(not a request for more git/file proof narrative)\n"
         "- fail: the goal appears fundamentally blocked or unrecoverable by "
         "further agent retries (host recovery will decide next steps)\n"
-        "Judge from the Goal and Agent Response only. Do not reject solely "
-        "because the narrative omits branch names, git logs, or file-path "
+        "Judge from the Goal and Goal Report only. Do not reject solely "
+        "because the report omits branch names, git logs, or file-path "
         "lists — AutopilotMonitor and LoopRail own post-completion DAG "
         "structure, not a second proof mission. Prefer fail only when work "
         "is fundamentally blocked.\n"
