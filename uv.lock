@@ -7691,8 +7691,8 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-deepagents"
-version = "0.8.4"
-source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+version = "0.8.5"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain" },
     { name = "langchain-anthropic" },
@@ -7701,9 +7701,9 @@ dependencies = [
     { name = "langsmith" },
     { name = "wcmatch" },
 ]
-sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/c3/d8/c67fb46a24bde60fb0a8e443280f2f6d3d9eec2cb7049752a32474ef4da2/soothe_deepagents-0.8.4.tar.gz", hash = "sha256:c2935b67156f8248dd2a33c46a2c93d87f2f0e62da369bc1b3035a713dee5d77", size = 279208, upload-time = "2026-07-25T09:59:44.563Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/3c/7eb6d26d3c2abcf34da7a31102d26e84fc4a5c93f60db34e5457f9ee754c/soothe_deepagents-0.8.5.tar.gz", hash = "sha256:29d60da8db34058c4b9e3f7efd5923b634eb157bec9c43b148fe07da00d90a14", size = 281284, upload-time = "2026-08-08T12:58:47.852Z" }
 wheels = [
-    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/ae/7e/5e9e794fe6556d15e73b0b12b265ddc32132c1179a46b836ffd85308c580/soothe_deepagents-0.8.4-py3-none-any.whl", hash = "sha256:f270d721ee8874e48a3681c846aac54dfe2d86b1fa91c0ad9b314d114b67d121", size = 310809, upload-time = "2026-07-25T09:59:42.961Z" },
+    { url = "https://files.pythonhosted.org/packages/65/39/e8c4110e370d25613e4c4e53b6bf28f871115688508a13977fd4ec62bd3f/soothe_deepagents-0.8.5-py3-none-any.whl", hash = "sha256:3f2700cec26042c5b4481a6a15d9ec339d2ab0e11543a74494a7df3ca8dd3c58", size = 312705, upload-time = "2026-08-08T12:58:46.209Z" },
 ]
 
 [[package]]
@@ -7797,7 +7797,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
     { name = "requests", specifier = ">=2.32.3,<3.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
-    { name = "soothe-deepagents", specifier = ">=0.8.4,<1.0.0" },
+    { name = "soothe-deepagents", specifier = ">=0.8.5,<1.0.0" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "tarzi", specifier = ">=0.2.3,<0.3.0" },

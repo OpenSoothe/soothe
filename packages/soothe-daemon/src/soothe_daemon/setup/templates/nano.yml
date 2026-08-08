@@ -100,6 +100,7 @@ agent:
       enabled: true
       rpm_limit: 60
       concurrent_limit: 8
+      global_concurrent_limit: 0
       call_timeout_seconds: 600
       call_timeout_max_seconds: 900
       retry_on_timeout: true
