@@ -826,8 +826,6 @@ class _AutopilotGoalReported(SootheEvent):
     type: str = "soothe.system.autopilot.goal.reported"
     goal_id: str
     status: str = ""
-    report_revision: int = 0
-    outcome: str = ""
 
 
 class _AutopilotGoalCompleted(SootheEvent):

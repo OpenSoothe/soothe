@@ -7,7 +7,7 @@
 **Created**: 2026-06-04
 **Updated**: 2026-08-08
 **Dependencies**: RFC-222 (Autopilot and Goal Engine Architecture), RFC-450 (Daemon Communication Protocol)
-**Related**: RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands), RFC-230 (Job Maturity Assessment), design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, IG-677 (Job↔Loop Index), IG-613 (protocol-1 `autopilot_*` RPCs), IG-692
+**Related**: RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands), RFC-230 (Job Maturity Assessment), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, IG-677 (Job↔Loop Index), IG-613 (protocol-1 `autopilot_*` RPCs), IG-692
 
 ## Abstract
 

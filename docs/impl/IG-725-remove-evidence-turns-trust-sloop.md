@@ -55,7 +55,8 @@ Monitor / LoopRail react to CE state.
    shows product work incomplete/wrong or fundamentally blocked (`fail`).
    Product `send_back` remains for genuine rework — not proof collection.
 4. **Host still does not open the goal workspace** for consensus grounding
-   (IG-710). Judge uses goal text + StrangeLoop wire response only.
+   (IG-710). Judge input is the CE-committed Goal Report projection
+   (IG-726), not a second workspace probe.
 5. **Post-completion ownership:**
    - AutopilotService: `complete_goal` → `INTERNAL_GOAL_COMPLETED` + rail
      `goal_completed` / `dag_idle`.

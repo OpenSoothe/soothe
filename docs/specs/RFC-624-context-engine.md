@@ -7,7 +7,7 @@
 **Created**: 2026-06-12
 **Updated**: 2026-08-08 (report-commit API addendum; workspace inherit 2026-08-04)
 **Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (StrangeLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-803 (Persistence Backend)
-**Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture), RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification — `commit_goal_report`), RFC-626 (Entity Model and State Management Consolidation), design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
+**Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture), RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification — `commit_goal_report`), RFC-626 (Entity Model and State Management Consolidation), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
 
 ---
 

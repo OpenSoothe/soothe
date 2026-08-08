@@ -201,10 +201,9 @@ class TestConsensusGoalPlusResponse:
         seen: dict[str, str] = {}
 
         async def _capture(
-            goal_desc: str, agent_response: str, evidence: str, **kwargs: object
+            goal_desc: str, agent_response: str, **kwargs: object
         ) -> ConsensusResult:
             seen["response"] = agent_response
-            seen["evidence"] = evidence
             return ConsensusResult("send_back", "empty response")
 
         bus = InternalEventBus()
@@ -228,7 +227,6 @@ class TestConsensusGoalPlusResponse:
         # IG-726: empty wire → minimal CE report projection (not workspace scrape).
         assert "Loop ended with outcome=" in (seen.get("response") or "")
         assert "SUMMARY.md" not in seen.get("response", "")
-        assert "SUMMARY.md" not in seen.get("evidence", "")
         updated = await ce.get_goal(goal.id)
         assert updated is not None
         assert updated.status == "pending"
@@ -240,11 +238,10 @@ class TestConsensusGoalPlusResponse:
         seen: dict[str, str] = {}
 
         async def _capture(
-            goal_desc: str, agent_response: str, evidence: str, **kwargs: object
+            goal_desc: str, agent_response: str, **kwargs: object
         ) -> ConsensusResult:
             seen["goal"] = goal_desc
             seen["response"] = agent_response
-            seen["evidence"] = evidence
             return ConsensusResult("accept", "ok")
 
         bus = InternalEventBus()
@@ -269,7 +266,6 @@ class TestConsensusGoalPlusResponse:
             )
 
         assert seen.get("response") == "wrote a todo list and ran one command"
-        assert seen.get("evidence") == ""
         updated = await ce.get_goal(goal.id)
         assert updated is not None
         assert updated.status == "completed"

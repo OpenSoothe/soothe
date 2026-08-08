@@ -10,7 +10,7 @@
 **Depends on**: RFC-204, RFC-222, RFC-228, RFC-230, RFC-625, RFC-626, RFC-630  
 **Related**: RFC-232 (flat WavePlan wire ingest), LoopRail design draft
 (`docs/drafts/2026-07-11-loop-rail-design.md`),
-design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
+design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
 IG-678, IG-687, IG-691, IG-692, IG-693, IG-700, IG-704, IG-714, IG-715, IG-720  
 **Promotes / extends**: LoopRail design draft (normative architecture for
 job-scoped rails; this RFC adds Rail Exec and user-defined verb bodies)  

@@ -11,8 +11,6 @@ from soothe.autopilot.dispatch.plan_contribution import synthesize_sloop_respons
 from soothe.autopilot.verify.consensus import (
     ConsensusResult,
     ConsensusVerdict,
-    _build_consensus_prompt,
-    evaluate_goal_completion,
 )
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
@@ -42,34 +40,6 @@ class TestSynthesizeResponse:
             full_output="Branch job/x/w1/auth\ncommits:\n abc feat auth",
         )
         assert synthesize_sloop_response(pr).startswith("Completed steps")
-
-
-class TestConsensusTrustPrompt:
-    def test_prompt_trusts_sloop_not_evidence_follow_up(self) -> None:
-        prompt = _build_consensus_prompt("Goal", "thin", "")
-        assert "evidence_follow_up" not in prompt
-        assert "prefer accept" in prompt.lower()
-        assert "git/file proof" in prompt.lower() or "git logs" in prompt.lower()
-
-    @pytest.mark.asyncio
-    async def test_evaluate_returns_decision_only(self) -> None:
-        mock_model = MagicMock()
-        with patch(
-            "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
-            new_callable=AsyncMock,
-            return_value=ConsensusVerdict(
-                decision="send_back",
-                reasoning="Product incomplete",
-            ),
-        ):
-            result = await evaluate_goal_completion(
-                goal_description="Implement auth",
-                response_text="7 steps",
-                model=mock_model,
-            )
-        assert result.decision == "send_back"
-        assert result.reasoning == "Product incomplete"
-        assert result.dag_ops == ()
 
 
 @pytest.mark.asyncio

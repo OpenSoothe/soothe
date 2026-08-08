@@ -77,7 +77,9 @@ async def apply_bounded_dag_ops(
     structural_allowlist: frozenset[str] | None = None,
 ) -> list[str]:
     """Validate and apply bounded DAG ops. Returns human-readable apply notes."""
-    allow = structural_allowlist if structural_allowlist is not None else _DEFAULT_STRUCTURAL_ALLOWLIST
+    allow = (
+        structural_allowlist if structural_allowlist is not None else _DEFAULT_STRUCTURAL_ALLOWLIST
+    )
     notes: list[str] = []
     for raw in ops:
         op = raw if isinstance(raw, DagOp) else DagOp.model_validate(raw)
@@ -186,9 +188,7 @@ async def _apply_one(
         if not brief:
             return "rejected:spawn_goal:empty_brief"
         parent = await ce.get_goal(source_goal_id)
-        parent_id = (
-            (parent.parent_id or source_goal_id) if parent is not None else source_goal_id
-        )
+        parent_id = (parent.parent_id or source_goal_id) if parent is not None else source_goal_id
         created = await ce.create_goal(
             description=brief,
             priority=max(0, min(100, int(op.priority))) if op.priority is not None else 50,

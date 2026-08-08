@@ -66,7 +66,6 @@ class ConsensusEvaluationError(RuntimeError):
 async def evaluate_goal_completion(
     goal_description: str,
     response_text: str,
-    evidence_summary: str = "",
     model: BaseChatModel | None = None,
     *,
     dag_context: str = "",
@@ -76,7 +75,6 @@ async def evaluate_goal_completion(
     Args:
         goal_description: The original goal text.
         response_text: CE GoalReport projection text.
-        evidence_summary: Extra report context (usually empty).
         model: LLM for evaluation (required).
         dag_context: Optional compact CE DAG slice for bounded ops.
 
@@ -93,7 +91,6 @@ async def evaluate_goal_completion(
     prompt = _build_consensus_prompt(
         goal_description,
         response_text,
-        evidence_summary,
         dag_context=dag_context,
     )
     try:
@@ -147,23 +144,20 @@ async def evaluate_goal_completion(
 def _build_consensus_prompt(
     goal: str,
     response: str,
-    evidence: str,
     *,
     dag_context: str = "",
 ) -> str:
     """Build prompt for structured report-commit judgment.
 
-    Pass full response/evidence into the judge prompt (IG-690). Do not clip
-    with ``preview_first`` here — truncation caused false ``fail`` when the
-    model mistook the preview for incomplete work.
+    Pass the full CE Goal Report projection into the judge prompt (IG-690 /
+    IG-726). Do not clip with ``preview_first`` here — truncation caused false
+    ``fail`` when the model mistook the preview for incomplete work.
     """
     parts = [
         "You are evaluating whether an AI agent has successfully completed a goal.",
         f"\nGoal: {goal}",
         f"\nGoal Report (from ContextEngine):\n{response}",
     ]
-    if evidence:
-        parts.append(f"\nAdditional report context:\n{evidence}")
     if dag_context.strip():
         parts.append(f"\n{dag_context.strip()}")
 

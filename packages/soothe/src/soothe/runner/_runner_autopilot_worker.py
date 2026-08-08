@@ -17,8 +17,8 @@ Phase B (this file) ships a minimal working implementation:
   ``PlanResult`` (no full context extraction yet — that's later phase work).
 - Maps ``PlanResult`` status to ``completed`` / ``failed`` / ``needs_replan``.
 
-Wire ``evidence_summary`` is the StrangeLoop response for host consensus
-(IG-710) — prefer evidence_summary → full_output → completed steps.
+Wire ``evidence_summary`` feeds the host CE goal report commit
+(IG-726 / IG-710) — prefer evidence_summary → full_output → completed steps.
 When a flat WavePlan is present (structured ``PlanResult.wave_plan`` or
 JSON in those texts), a dedicated bare-JSON finding is attached as one
 host transfer form. Structured ``wave_plan`` / ``wave_plan_path`` are also

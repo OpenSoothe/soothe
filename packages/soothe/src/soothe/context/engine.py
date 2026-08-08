@@ -19,7 +19,6 @@ from langchain_core.messages import (
 from soothe.context.ledger import LedgerManager
 from soothe.context.models import (
     EpisodeSummary,
-    EvidenceEntry,
     GoalNode,
     GoalStatus,
     GoalStepDAG,
@@ -461,29 +460,6 @@ class ContextEngine:
         goal.touch()
         return goal.iteration_count
 
-    def record_evidence(
-        self,
-        goal_id: str,
-        evidence_id: str,
-        summary: str,
-        kind: str = "tool",
-    ) -> None:
-        """Append an evidence entry to the goal's evidence ledger.
-
-        Args:
-            goal_id: Goal to update.
-            evidence_id: Stable identifier for the evidence.
-            summary: Compact summary text for prompts/validation.
-            kind: Provenance classification ("tool", "bootstrap", "ledger").
-        """
-        goal = self._dag.get_goal(goal_id)
-        if goal is None:
-            logger.warning("record_evidence called on missing goal %s", goal_id)
-            return
-        entry = EvidenceEntry(evidence_id=evidence_id, summary=summary, kind=kind)
-        goal.evidence_ledger.append(entry)
-        goal.touch()
-
     def get_iteration(self, goal_id: str) -> int:
         """Get current iteration count for a goal.
 
@@ -798,7 +774,7 @@ class ContextEngine:
         Used when backoff retry budget is exhausted or rail recovery did not
         fire, but the DAG is deadlocked (pending dependents blocked by this
         failed worker). Increments ``engine_recovery_count`` and resets
-        ``send_back_count`` so consensus can accept fresh evidence. Prior
+        ``send_back_count`` so a later report-commit can re-judge. Prior
         failure text is kept as operator guidance for the next dispatch.
 
         Args:

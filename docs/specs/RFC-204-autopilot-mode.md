@@ -12,7 +12,7 @@ RFC-230 (job maturity; host probes ≠ per-goal report-commit judgment),
 [RFC-231](RFC-231-looprail-rail-exec.md) (LoopRail + Rail Exec),
 [RFC-232](RFC-232-waveplan-flat-semistructured-ingest.md) (flat WavePlan wire),
 [RFC-625](RFC-625-autopilot-monitor-context-engine-unification.md) (CE `GoalNode.report` / Monitor),
-design draft [2026-08-08-autopilot-report-commit-judgment-design.md](../drafts/2026-08-08-autopilot-report-commit-judgment-design.md),
+design draft [2026-08-08-autopilot-report-commit-judgment-design.md](../archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md),
 [IG-725](../impl/IG-725-remove-evidence-turns-trust-sloop.md)
 (no evidence-follow-up turns),
 [IG-693](../impl/IG-693-rail-subgoal-consensus-exhaustion-recovery.md)
@@ -181,7 +181,7 @@ inside that committed report.
 4. Dependency on suspended/blocked goal → scheduler **blocked** (not judgment)
 5. Explicit job pause (`pause_job`, rail `pause_for_user`) → **suspend** (job-level only)
 
-> **Implementation Note**: The judge LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). Structured output: `decision: accept | send_back | fail`, `reasoning`, optional `dag_ops`. Prefer **accept** when StrangeLoop Plan-Execute-Eval completed and the CE report supports the goal; do **not** reject solely for missing git/file proof narrative outside the report, and do **not** re-dispatch a second proof mission on the same goal ([IG-725](../impl/IG-725-remove-evidence-turns-trust-sloop.md)). After accept, LoopRail advances on events; AutopilotMonitor may perform non-rail DAG health without inventing rail phases. Headless clarification / empty terminal MUST still produce a **minimal CE report** then map to `send_back` (or `fail` on budget), not operator-wait `suspend`. See design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md` and [IG-707](../impl/IG-707-autopilot-automatic-consensus-no-operator-suspend.md).
+> **Implementation Note**: The judge LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). Structured output: `decision: accept | send_back | fail`, `reasoning`, optional `dag_ops`. Prefer **accept** when StrangeLoop Plan-Execute-Eval completed and the CE report supports the goal; do **not** reject solely for missing git/file proof narrative outside the report, and do **not** re-dispatch a second proof mission on the same goal ([IG-725](../impl/IG-725-remove-evidence-turns-trust-sloop.md)). After accept, LoopRail advances on events; AutopilotMonitor may perform non-rail DAG health without inventing rail phases. Headless clarification / empty terminal MUST still produce a **minimal CE report** then map to `send_back` (or `fail` on budget), not operator-wait `suspend`. See design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md` and [IG-707](../impl/IG-707-autopilot-automatic-consensus-no-operator-suspend.md).
 
 ### 1.4 Termination → Dreaming Transition
 
@@ -850,7 +850,7 @@ async def apply_directives(
   StrangeLoop ledger → CE `GoalNode.report` → `goal_report_committed` →
   Autopilot LLM judge (accept / send_back / fail) + bounded CE DAG revise;
   LoopRail stays deterministic for structure/phases. See design draft
-  `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`.
+  `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`.
 - Pure report-commit trigger; always write a minimal report on loop end;
   send_back brief = same judge `reasoning`.
 - Removed user-facing compatibility / dual-path / “formerly consensus” hedges

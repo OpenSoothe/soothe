@@ -1,4 +1,4 @@
-"""Tests for GoalNode iteration tracking and evidence ledger (RFC-624 Phase 4 Step 4)."""
+"""Tests for GoalNode iteration tracking and evidence ledger schema (RFC-624)."""
 
 import asyncio
 
@@ -64,7 +64,7 @@ class TestGoalNodeIterationTracking:
 
 
 class TestGoalNodeEvidenceLedger:
-    """Tests for evidence_ledger field and ContextEngine.record_evidence."""
+    """Schema tests for persisted GoalNode.evidence_ledger (CE write API removed)."""
 
     def test_goal_node_has_evidence_ledger_field(self) -> None:
         """GoalNode should have evidence_ledger initialized as empty list."""
@@ -79,32 +79,6 @@ class TestGoalNodeEvidenceLedger:
         assert len(goal.evidence_ledger) == 1
         assert goal.evidence_ledger[0].evidence_id == "EV-01"
 
-    def test_context_engine_record_evidence(self) -> None:
-        """ContextEngine.record_evidence should append to goal's evidence_ledger."""
-        ce = ContextEngine()
-        goal = asyncio.run(ce.create_goal(description="Test goal"))
-
-        # Record first evidence
-        ce.record_evidence(goal.id, "EV-01", "First evidence", kind="tool")
-
-        # Record second evidence
-        ce.record_evidence(goal.id, "EV-02", "Second evidence", kind="bootstrap")
-
-        # Verify entries
-        updated = ce.get_goal_sync(goal.id)
-        assert updated is not None
-        assert len(updated.evidence_ledger) == 2
-        assert updated.evidence_ledger[0].evidence_id == "EV-01"
-        assert updated.evidence_ledger[0].kind == "tool"
-        assert updated.evidence_ledger[1].evidence_id == "EV-02"
-        assert updated.evidence_ledger[1].kind == "bootstrap"
-
-    def test_record_evidence_missing_goal_logs_warning(self) -> None:
-        """record_evidence should log warning for missing goal without error."""
-        ce = ContextEngine()
-        # Should not raise, just log warning
-        ce.record_evidence("nonexistent", "EV-01", "Test summary")
-
     def test_evidence_entry_fields(self) -> None:
         """EvidenceEntry should have required fields."""
         entry = EvidenceEntry(evidence_id="EV-01", summary="Test summary", kind="tool")
@@ -118,29 +92,11 @@ class TestGoalNodeEvidenceLedger:
         assert entry.kind == "bootstrap"
 
 
-class TestIterationAndEvidenceLedgerIntegration:
-    """Tests for combined iteration tracking and evidence ledger."""
-
-    def test_iteration_and_evidence_work_together(self) -> None:
-        """Iteration and evidence_ledger can be updated independently."""
-        ce = ContextEngine()
-        goal = asyncio.run(ce.create_goal(description="Test goal"))
-
-        # Increment iteration
-        ce.increment_iteration(goal.id)
-        ce.increment_iteration(goal.id)
-
-        # Record evidence at iter 2
-        ce.record_evidence(goal.id, "EV-01", "Evidence at iter 2")
-
-        # Verify both
-        updated = ce.get_goal_sync(goal.id)
-        assert updated is not None
-        assert updated.iteration_count == 2
-        assert len(updated.evidence_ledger) == 1
+class TestIterationTrackingTimestamps:
+    """Iteration updates touch goal timestamps."""
 
     def test_goal_touch_updates_timestamp_on_changes(self) -> None:
-        """GoalNode.updated_at should change when iteration/evidence changes."""
+        """GoalNode.updated_at should change when iteration changes."""
         import time
 
         ce = ContextEngine()

@@ -16,29 +16,23 @@ class TestConsensusPrompt:
     """Tests for consensus prompt builder."""
 
     def test_basic_prompt(self) -> None:
-        prompt = _build_consensus_prompt("Test goal", "Response text", "")
+        prompt = _build_consensus_prompt("Test goal", "Response text")
         assert "Test goal" in prompt
         assert "Response text" in prompt
         assert "Goal Report (from ContextEngine):\nResponse text" in prompt
         assert "Agent Response Preview" not in prompt
+        assert "Additional report context" not in prompt
         assert "accept" in prompt.lower()
 
-    def test_prompt_with_evidence(self) -> None:
-        prompt = _build_consensus_prompt("Goal", "Response", "Evidence summary")
-        assert "Additional report context:\nEvidence summary" in prompt
-
-    def test_prompt_preserves_long_response_and_evidence(self) -> None:
+    def test_prompt_preserves_long_goal_report(self) -> None:
         long_response = "R" * 2000
-        long_evidence = "E" * 2000
-        prompt = _build_consensus_prompt("Goal", long_response, long_evidence)
+        prompt = _build_consensus_prompt("Goal", long_response)
         assert long_response in prompt
-        assert long_evidence in prompt
         assert "Agent Response Preview" not in prompt
         assert "Goal Report (from ContextEngine):\n" + long_response in prompt
-        assert "Additional report context:\n" + long_evidence in prompt
 
     def test_prompt_includes_instructions(self) -> None:
-        prompt = _build_consensus_prompt("Goal", "Response", "")
+        prompt = _build_consensus_prompt("Goal", "Response")
         assert "send_back" in prompt.lower()
         assert "fail" in prompt.lower()
         assert "suspend" not in prompt.lower()

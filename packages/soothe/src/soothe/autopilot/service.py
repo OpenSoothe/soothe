@@ -118,7 +118,7 @@ class AutopilotService:
                 When provided, the scheduling loop refuses to dispatch a
                 goal whose workspace overlaps an active reservation. When
                 ``None``, no workspace gating is applied.
-            consensus_model: Optional LLM for RFC-204 consensus validation.
+            consensus_model: Optional LLM for RFC-204 report-commit judgment.
                 When ``None``, completed goals fail consensus (host recovery)
                 rather than parking for an operator (IG-707).
             goal_persist_store: Optional ``AsyncPersistStore`` for persisting
@@ -1977,7 +1977,7 @@ class AutopilotService:
             return
 
         rev = int(goal.report_revision or 0)
-        judged = int(getattr(goal, "judged_report_revision", 0) or 0)
+        judged = int(goal.judged_report_revision or 0)
         if rev > 0 and judged >= rev:
             logger.info(
                 "Skipping report-commit judge for %s — already judged rev=%s",
@@ -2010,7 +2010,6 @@ class AutopilotService:
                 result = await evaluate_goal_completion(
                     goal.description,
                     response_text,
-                    "",
                     model=self._consensus_model,
                     dag_context=dag_context,
                 )

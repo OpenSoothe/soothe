@@ -8,7 +8,7 @@
 **Updated**: 2026-08-08  
 **Authors**: Soothe Team  
 **Depends on**: RFC-231, RFC-204, RFC-222, RFC-625, RFC-630  
-**Related**: RFC-230, design draft `docs/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
+**Related**: RFC-230, design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
 IG-704, IG-714, IG-718, IG-720, IG-722  
 **Amends**: RFC-231 §9 (Fan-out contract)
 

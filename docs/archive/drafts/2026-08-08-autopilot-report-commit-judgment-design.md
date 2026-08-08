@@ -1,9 +1,9 @@
 # Design Draft: Autopilot Report-Commit Judgment
 
-**Status**: Formalized into Autopilot RFC set (2026-08-08) — see RFC-204 §1.3, RFC-222 report-commit subsection, RFC-625 `commit_goal_report`, RFC-231 invariant, RFC-230/228/232/624 cross-links  
+**Status**: Archived — formalized into Autopilot RFC set (2026-08-08); implementation [IG-726](../../impl/IG-726-autopilot-report-commit-judgment.md). See RFC-204 §1.3, RFC-222, RFC-625 `commit_goal_report`, RFC-231/230/228/232/624.  
 **Date**: 2026-08-08  
 **Scope**: Polish Autopilot so LoopRail owns DAG decompose/run, StrangeLoop ledger reports are the CE SoT for completion evidence, and AutopilotService judges + optionally revises the CE DAG only on `goal_report_committed` — without re-collecting evidence.  
-**Related**: [RFC-204](../specs/RFC-204-autopilot-mode.md), [RFC-222](../specs/RFC-222-autopilot-goal-engine-architecture.md), [RFC-231](../specs/RFC-231-looprail-rail-exec.md), [RFC-625](../specs/RFC-625-autopilot-monitor-context-engine-unification.md), [RFC-624](../specs/RFC-624-context-engine.md), [RFC-228](../specs/RFC-228-autopilot-job-ipc.md), [RFC-230](../specs/RFC-230-job-maturity-assessment.md), [RFC-232](../specs/RFC-232-waveplan-flat-semistructured-ingest.md). Canonical trigger: `goal_report_committed` from CE `commit_goal_report`.
+**Related**: [RFC-204](../../specs/RFC-204-autopilot-mode.md), [RFC-222](../../specs/RFC-222-autopilot-goal-engine-architecture.md), [RFC-231](../../specs/RFC-231-looprail-rail-exec.md), [RFC-625](../../specs/RFC-625-autopilot-monitor-context-engine-unification.md), [RFC-624](../../specs/RFC-624-context-engine.md), [RFC-228](../../specs/RFC-228-autopilot-job-ipc.md), [RFC-230](../../specs/RFC-230-job-maturity-assessment.md), [RFC-232](../../specs/RFC-232-waveplan-flat-semistructured-ingest.md). Canonical trigger: `goal_report_committed` from CE `commit_goal_report`.
 
 ---
 

@@ -249,7 +249,10 @@ class GoalNode(BaseModel):
     action_history: list[str] = Field(default_factory=list)
     evidence_ledger: list[EvidenceEntry] = Field(
         default_factory=list,
-        description="Append-only evidence ids for plan validation.",
+        description=(
+            "Legacy append-only evidence ids (schema retained for persistence). "
+            "Autopilot judgment SoT is ``report`` / ``report_revision`` (IG-726)."
+        ),
     )
 
     # Retry/backoff (from Goal, RFC-204)

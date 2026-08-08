@@ -6,8 +6,8 @@
 [RFC-222](../specs/RFC-222-autopilot-goal-engine-architecture.md),
 [RFC-625](../specs/RFC-625-autopilot-monitor-context-engine-unification.md),
 [RFC-231](../specs/RFC-231-looprail-rail-exec.md),
-design draft
-[2026-08-08-autopilot-report-commit-judgment-design.md](../drafts/2026-08-08-autopilot-report-commit-judgment-design.md),
+design draft (archived)
+[2026-08-08-autopilot-report-commit-judgment-design.md](../archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md),
 [IG-725](IG-725-remove-evidence-turns-trust-sloop.md),
 [IG-710](IG-710-consensus-trust-sloop-response.md),
 [IG-707](IG-707-autopilot-automatic-consensus-no-operator-suspend.md)
@@ -150,3 +150,4 @@ commit API is stable.
 | 2026-08-08 | P0/P1 implemented: commit_goal_report, projection, finalize cutover |
 | 2026-08-08 | P2: bounded dag_ops on judge + apply (spawn/cancel deny-by-default) |
 | 2026-08-08 | P3: bus emit, judged_report_revision, crash commit, config allowlist |
+| 2026-08-08 | Cleanse: drop dual evidence judge channel, dead CE.record_evidence, archive design draft |
