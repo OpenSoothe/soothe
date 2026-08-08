@@ -5,10 +5,11 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Updated**: 2026-05-05
+**Updated**: 2026-08-08
 **Authors**: Claude Code
 **Dependencies**: RFC-200, RFC-203
 **Related**: RFC-207 (Thread), RFC-214 (plan-context human), RFC-603, RFC-604, IG-376
+**Implementation**: IG-372 (two-phase plan), IG-329 (PlanResult consolidation), IG-376 (reasoning quality)
 
 ---
 

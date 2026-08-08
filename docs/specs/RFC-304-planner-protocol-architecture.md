@@ -5,9 +5,11 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
+**Last Updated**: 2026-08-08
 **Dependencies**: RFC-000, RFC-302
-**Related**: RFC-201 (StrangeLoop)
+**Related**: RFC-201 (StrangeLoop), RFC-213 (Two-Phase Plan Assessment)
 **Note**: Moved from 4xx (RFC-304) per RFC-900 reclassification
+**Implementation**: IG-372 (LLMPlanner two-phase), IG-329 (PlanResult consolidation)
 
 ---
 

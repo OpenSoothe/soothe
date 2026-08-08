@@ -3,12 +3,26 @@
 **RFC**: 201
 **Title**: StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
 **Status**: Implemented (Partially Superseded)
-**Partially Superseded By**: RFC-220 (§loop driver)
+**Partially Superseded By**: RFC-220 (§loop driver), RFC-222 (GoalEngine daemon-ownership), RFC-225 (loop-centric model)
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Last Updated**: 2026-06-16
+**Last Updated**: 2026-08-08
 **Dependencies**: RFC-000, RFC-001, RFC-100
-**Related**: RFC-203 (State), RFC-207 (Thread), RFC-213 (Reasoning)
+**Related**: RFC-203 (State), RFC-207 (Thread), RFC-213 (Reasoning), RFC-219 (Goal Completion), RFC-220 (LangGraph Orchestrator)
+
+---
+
+## Supersession Summary
+
+| Section | Status | Superseded By |
+|---------|--------|---------------|
+| §Loop driver | Deprecated | RFC-220 (LangGraph orchestrator) |
+| §GoalEngine integration | Modified | RFC-222 (daemon-ownership model) |
+| §Thread continuation | Replaced | RFC-225 (loop-centric derivation) |
+| §Goal completion flow | Extracted | RFC-219 (GoalCompletionModule) |
+| §Plan assessment | Enhanced | RFC-213 (two-phase reasoning) |
+
+**Preserved sections**: Plan-Execute structure, CoreAgent delegation, evidence accumulation
 
 ---
 

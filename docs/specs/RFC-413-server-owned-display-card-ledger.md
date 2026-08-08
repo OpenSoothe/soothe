@@ -5,12 +5,41 @@
 **Status**: Draft (Phases 1–4 shipped; structural live path via ``soothe.card.*`` — IG-655)
 **Kind**: Architecture Design
 **Created**: 2026-06-04
-**Updated**: 2026-07-27
+**Updated**: 2026-08-08
 **Authors**: xiaming (with Claude)
 **Dependencies**: RFC-225 (Goal Record Enrichment), RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-631 (Goal Display Snapshots)
 **Supersedes**: RFC-411 (history reconstruction model)
 **Amended by**: [RFC-631](RFC-631-goal-display-snapshots.md) (goal-bound display snapshots; live-only ledger scope); 2026-07-19 persistence backend follows `persistence.default_backend` (PostgreSQL `soothe_metadata` when configured); 2026-07-27 Phase 4 completion (live `soothe.card.*` cutover, append-oriented ledger, DisplayCardStore as SoT — see §11 / §16 and [design draft](../drafts/2026-07-27-tui-card-replay-source-of-truth-design.md))
-**Implemented by**: IG-655 (Phase 4 cutover)
+**Implemented by**: IG-655 (Phase 4 cutover), IG-577 (resume card rendering)
+
+---
+
+## Implementation Status
+
+### Completed Phases
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 1 | CardBinder + DisplayCardLedger core | ✅ Shipped |
+| Phase 2 | `soothe.card.*` wire frames | ✅ Shipped |
+| Phase 3 | Persistence backend integration | ✅ Shipped |
+| Phase 4 | Live `soothe.card.*` cutover | ✅ Shipped (IG-655) |
+
+### Key Components Delivered
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `CardBinder` | `soothe_daemon/display/card_binder.py` | ✅ Implemented |
+| `DisplayCardLedger` | `soothe_daemon/display/ledger.py` | ✅ Implemented |
+| `soothe.card.*` wire | `soothe_sdk/wire/cards.py` | ✅ Implemented |
+| DisplayCardStore | `soothe_daemon/display/store.py` | ✅ Implemented |
+| Goal snapshots | RFC-631 integration | ✅ Implemented |
+| Resume card rendering | IG-577 | ✅ Fixed |
+
+### Testing Coverage
+
+- Unit tests: `tests/unit/display/test_card_binder.py`, `test_ledger.py`
+- Integration: `tests/integration/test_display_card_flow.py`
 
 ---
 

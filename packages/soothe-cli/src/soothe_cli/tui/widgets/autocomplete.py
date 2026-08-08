@@ -248,7 +248,7 @@ class SlashCommandController:
                 return CompletionResult.IGNORED
             case "enter":
                 if self._apply_selected_completion(cursor_index):
-                    return CompletionResult.SUBMIT
+                    return CompletionResult.HANDLED
                 return CompletionResult.HANDLED
             case "down":
                 self._move_selection(1)

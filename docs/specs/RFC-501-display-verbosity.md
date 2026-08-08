@@ -5,11 +5,12 @@
 **Status**: Draft
 **Kind**: Implementation Interface Design
 **Created**: 2026-03-31
-**Updated**: 2026-06-26  
-**Authors**: Soothe Team  
-**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-401 (Event Processing)  
-**Related**: RFC-628 (TUI step card display)  
+**Updated**: 2026-08-08
+**Authors**: Soothe Team
+**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-401 (Event Processing)
+**Related**: RFC-628 (TUI step card display), RFC-502 (Unified Presentation Engine)
 **Supersedes**: RFC-0020, RFC-0024
+**Implementation**: VerbosityTier enum complete, registry-driven display in progress
 
 ---
 

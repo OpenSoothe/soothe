@@ -5,9 +5,11 @@
 **Status**: Draft (revised 2026-05-28)
 **Kind**: Architecture Design
 **Created**: 2026-05-27
+**Last Updated**: 2026-08-08
 **Revised**: 2026-05-28 — sole-child optimization; in-house ``copy_thread_via_public_api`` (no LangGraph saver implements ``acopy_thread`` natively).
 **Dependencies**: RFC-201, RFC-214, RFC-207, RFC-218
 **Related**: RFC-222 (Autopilot loop management), RFC-452 (Unified Thread Management), RFC-224 (Context Window Management)
+**Implementation**: IG-477 (step isolation + envelope grounding), partial checkpoint forking pending
 
 ---
 

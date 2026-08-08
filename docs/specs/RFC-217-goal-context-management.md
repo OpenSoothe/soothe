@@ -5,7 +5,10 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Dependencies**: RFC-201 (Agentic Goal Execution), RFC-207 (Thread Lifecycle & Goal Context), RFC-203 (Layer 2 Unified State Model)
+**Last Updated**: 2026-08-08
+**Dependencies**: RFC-201 (Agentic Goal Execution), RFC-207 (Thread Lifecycle & Goal Context), RFC-225 (Loop Continuity)
+**Related**: RFC-219 (Goal Completion Module), RFC-218 (Checkpoint Tree Architecture)
+**Implementation**: IG-477 (partial - execute step grounding), IG-567 (heuristic-to-rules migration)
 
 ## Abstract
 
@@ -198,6 +201,86 @@ agentic:
 **Strategy Details**:
 
 | Strategy | Selection Logic | Use Case |
+|----------|-----------------|----------|
+| `latest` | Most recent thread for goal_id | Default - prefer fresh context |
+| `all` | All threads for goal_id (up to limit) | Comprehensive context gathering |
+| `best_performing` | Thread with highest success metrics | Quality-focused continuation |
+
+---
+
+## Implementation Status
+
+### Completed
+
+- **Execute phase grounding**: RFC-214 §3.1 implements `PRIOR STEP EVIDENCE` envelope injection for DAG-dependent steps (IG-477)
+- **Bootstrap continuation**: RFC-225 implements `prior_loop_execute_messages()` for loop continuation
+- **Goal context structure**: `GoalExecutionRecord` enriched with plan DAG, step results, evidence ledger
+
+### In Progress
+
+- **GoalContextManager module**: Unified interface for plan/execute context injection (target design documented below)
+- **ThreadRelationshipModule**: Similarity computation and thread clustering
+- **Embedding integration**: Semantic similarity for goal matching
+
+### Not Started
+
+- `get_plan_context()` full implementation with same-thread constraint
+- `get_execute_briefing()` thread-switch detection
+- Cross-thread goal context aggregation
+
+---
+
+## Integration Points
+
+### Plan Phase Integration
+
+```python
+# In plan_assess / plan_generate
+goal_context = goal_context_manager.get_plan_context(limit=10)
+plan_context.recent_messages.extend(goal_context)
+```
+
+### Execute Phase Integration
+
+```python
+# In executor.run()
+if checkpoint.thread_switch_pending:
+    briefing = goal_context_manager.get_execute_briefing(limit=10)
+    execute_envelope["goal_briefing"] = briefing
+```
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+
+1. **Same-thread constraint**: Verify only current thread's goals injected in plan context
+2. **Thread-switch detection**: Verify briefing only generated when `thread_switch_pending`
+3. **Limit enforcement**: Verify goal count respects `limit` parameter
+4. **Empty history**: Verify graceful handling when no previous goals exist
+
+### Integration Tests
+
+1. **Continuation flow**: Execute query after goal completion, verify context injected
+2. **Thread-switch flow**: Resume thread after daemon restart, verify briefing generated
+3. **Multi-goal loop**: Complete multiple goals in sequence, verify context accumulation
+
+---
+
+## Migration Notes
+
+### From Current State
+
+1. `inject_previous_goal_context()` method exists but unused → deprecate
+2. Goal final_reports not injected → implement via GoalContextManager
+3. Thread-switch context missing → implement via `get_execute_briefing()`
+
+### Backward Compatibility
+
+- Existing loop execution continues unchanged
+- GoalContextManager adds new context injection path
+- No breaking changes to checkpoint schema
 |----------|----------------|----------|
 | `latest` | Most recent thread execution (by timestamp) | Default - focus on recent context |
 | `all` | All matching threads (bounded by limit) | Comprehensive analysis |

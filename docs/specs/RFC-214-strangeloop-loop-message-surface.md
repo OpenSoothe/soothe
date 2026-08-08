@@ -5,9 +5,10 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-05-03
-**Updated**: 2026-07-01
+**Updated**: 2026-08-08
 **Dependencies**: RFC-100 (CoreAgent Runtime), RFC-206 (Prompt Architecture), RFC-104 (Dynamic System Context), RFC-207 (Thread Lifecycle & Goal Context), RFC-203 (StrangeLoop State & Memory), RFC-803 (StrangeLoop Checkpoint Backend), RFC-218 (Checkpoint Tree), RFC-217 (Goal Context Management), RFC-624 (Context Engine)
 **Related**: RFC-211 (Tool Result Shaping), RFC-213 (StrangeLoop Reasoning Quality), RFC-220 (LangGraph Agent Loop Orchestrator), RFC-614 (Streaming Messaging), RFC-225 (Loop Continuation), RFC-226 (Continuation-Aware plan_assess)
+**Implementation**: IG-477 (envelope grounding), prompt-cache ordering complete, ledger consolidation in progress
 
 ---
 

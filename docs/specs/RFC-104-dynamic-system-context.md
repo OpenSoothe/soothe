@@ -5,9 +5,11 @@
 **Status**: Implemented
 **Kind**: Implementation Interface Design
 **Created**: 2026-03-31
+**Last Updated**: 2026-08-08
 **Author**: Platonic brainstorming session
 **Design Draft**: [2026-03-31-dynamic-system-context-design.md](../archive/drafts/2026-03-31-dynamic-system-context-design.md)
 **Depends On**: RFC-100 (CoreAgent Runtime), RFC-101 (Tool Interface), RFC-103 (Thread-Aware Workspace)
+**Implementation**: IG-117 (prompt-cache ordering), core context injection complete
 
 ## Abstract
 
@@ -93,6 +95,36 @@ To maximize prefix-cache hits on supported providers:
 3. **Most volatile last**: lines that change every request (e.g. current date) are appended **after** all `<SOOTHE_*>` blocks.
 
 Shared builders live in `src/soothe/core/prompts/context_xml.py` so **main agent**, **LLMPlanner**, and **** emit the same ENV+WORKSPACE shape where config is available.
+
+---
+
+## Implementation Status
+
+### Completed (as of 2026-08-08)
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| XML context builders | `soothe/core/prompts/context_xml.py` | ✅ Implemented |
+| Environment section | `<SOOTHE_ENVIRONMENT>` | ✅ Implemented |
+| Workspace section | `<SOOTHE_WORKSPACE>` with git context | ✅ Implemented |
+| Thread section | `<SOOTHE_THREAD>` | ✅ Implemented |
+| Protocols section | `<SOOTHE_PROTOCOLS>` | ✅ Implemented |
+| Prompt-cache ordering | IG-117 | ✅ Static → structured → volatile ordering |
+| Complexity adaptation | Classification-driven depth | ✅ Implemented |
+
+### Key Implementation Details
+
+1. **Versioned XML tags**: All `<SOOTHE_*>` blocks include `version="1"` for forward compatibility
+2. **Nested structure**: Inner elements (`<platform>`, `<root>`, `<vcs>`) replace flat key-value format
+3. **Shared builders**: `context_xml.py` provides unified builders for main agent, LLMPlanner, and other callers
+4. **Fail gracefully**: Context collection failures never block execution
+
+### Testing Coverage
+
+- Unit tests: `tests/unit/prompts/test_context_xml.py`
+- Integration: `tests/integration/test_system_context_injection.py`
+
+---
 
 ## Architecture
 

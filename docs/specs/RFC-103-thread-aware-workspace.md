@@ -5,9 +5,11 @@
 **Status**: Draft
 **Kind**: Implementation Interface Design
 **Created**: 2026-03-31
+**Last Updated**: 2026-08-08
 **Author**: Design brainstorming session
 **Design Draft**: [2026-03-31-thread-aware-workspace-design.md](../archive/drafts/2026-03-31-thread-aware-workspace-design.md)
 **Depends On**: RFC-102 (Security Filesystem Policy), RFC-450 (Daemon Communication), RFC-452 (Thread Management)
+**Implementation**: Partial - context variables in place, full flow pending
 
 ## Abstract
 
@@ -132,6 +134,40 @@ When ContextVar is empty (direct tool use, tests), tools fall back to their bake
 8. **Agent processes** query, decides to call `read_file` tool
 9. **Tool executes** `_resolve_path("config.yml")` → `FrameworkFilesystem.resolve_path()` → `/home/user/project-a/config.yml`
 10. **Stream ends** → middleware clears `_current_workspace`
+
+## Implementation Status
+
+### Completed
+
+- **ContextVar definition**: `_current_workspace` defined in `src/soothe/safety/filesystem.py`
+- **WorkspaceContextMiddleware**: Framework exists for workspace injection
+- **Thread workspace tracking**: `_thread_workspaces` dictionary in daemon handlers
+
+### In Progress
+
+- **Dynamic path resolution**: `resolve_path_dynamic()` method needs full integration
+- **Tool execution path**: Need to verify all tools use dynamic resolution
+- **Middleware integration**: Full flow from daemon → runner → middleware → tools
+
+### Testing Coverage
+
+| Test Case | Status |
+|-----------|--------|
+| ContextVar isolation | ✅ Unit tests |
+| WebSocket workspace flow | ⚠️ Integration tests pending |
+| Parallel thread isolation | ⚠️ Pending |
+| Fallback to daemon workspace | ✅ Unit tests |
+
+### Migration Checklist
+
+1. ✅ Define ContextVar in filesystem module
+2. ⚠️ Implement `resolve_path_dynamic()` in FrameworkFilesystem
+3. ⚠️ Add WorkspaceContextMiddleware to agent pipeline
+4. ⚠️ Update all file tools to use dynamic resolution
+5. ⚠️ Add integration tests for WebSocket flow
+6. ⚠️ Document thread isolation guarantees
+
+---
 
 ## Specification
 

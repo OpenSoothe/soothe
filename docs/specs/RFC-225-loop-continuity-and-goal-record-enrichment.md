@@ -6,10 +6,11 @@
 **Kind**: Architecture Design
 **Authors**: xiaming
 **Created**: 2026-05-29
-**Last Updated**: 2026-07-07
+**Last Updated**: 2026-08-08
 **Depends on**: RFC-201, RFC-214, RFC-207, RFC-218, RFC-220
 **Supersedes**: ---
 **Related**: RFC-217 (Goal Context Management), RFC-223 (Thread Inheritance with Checkpoint Forking), RFC-224 (Automatic Context Window Management)
+**Implementation**: IG-477 (step isolation), IG-567 (heuristic removal), status alignment pending
 
 ---
 

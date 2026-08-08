@@ -5,8 +5,10 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-05-27
+**Last Updated**: 2026-08-08
 **Dependencies**: RFC-223, RFC-201, RFC-214
 **Related**: RFC-207 (Thread Lifecycle & Goal Context), RFC-218 (Checkpoint Tree)
+**Implementation**: Not started - context tracking exists, compaction pending
 
 ---
 

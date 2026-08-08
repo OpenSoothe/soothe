@@ -5,9 +5,39 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-16
+**Last Updated**: 2026-08-08
 **Author**: Soothe contributors
 **Extends**: RFC-450 (Daemon Communication Protocol)
 **Related**: RFC-500 (CLI/TUI Architecture), IG-176 (Move Rich to CLI)
+**Implementation**: IG-176 (Rich rendering), command routing in progress
+
+---
+
+## Implementation Status
+
+### Completed
+
+| Component | Status |
+|-----------|--------|
+| Rich rendering moved to CLI | ✅ IG-176 |
+| CLI-only commands (`/help`, `/keymaps`) | ✅ Implemented |
+| Daemon returns structured data | ✅ Implemented |
+
+### In Progress
+
+| Component | Status |
+|-----------|--------|
+| `command_request` message type | ⚠️ Wire protocol pending |
+| CLI rendering wired to daemon events | ⚠️ Integration pending |
+| Command parsing consolidated in CLI | ⚠️ Partial - some parsing in daemon |
+| Command routing (`_handle_command()`) | ⚠️ Needs refactoring |
+
+### Architectural Issues to Resolve
+
+1. **Command parsing split**: Both CLI and daemon parse commands - needs consolidation
+2. **No command registry**: Daemon handles all commands in single `_handle_command()` method
+3. **No API contract**: Commands sent as user input, daemon parses to detect
+4. **Daemon knows CLI-only commands**: Daemon defines `/help`, `/keymaps` locally
 
 ---
 

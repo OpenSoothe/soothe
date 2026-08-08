@@ -5,8 +5,49 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-04-28
+**Last Updated**: 2026-08-08
 **Dependencies**: RFC-201, RFC-603
-**Related**: IG-199, IG-295, IG-296, IG-355, IG-400, IG-580
+**Related**: IG-199, IG-295, IG-296, IG-355, IG-400, IG-580, IG-567
+
+---
+
+## Implementation Status
+
+### Completed (as of 2026-08-08)
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `PlanDAG` | `soothe/core/strange_loop/core/plan_dag.py` | ✅ Implemented |
+| `PlanManager` | `soothe/core/strange_loop/core/plan_manager.py` | ✅ Implemented |
+| `CompletionStrategy` enum | `soothe/core/strange_loop/core/plan_manager.py` | ✅ Implemented |
+| Ledger direct eligibility | `_ledger_direct_eligible()` | ✅ Implemented |
+| DAG synthesis check | `_dag_requires_synthesis()` | ✅ Implemented |
+| Content heuristic removal | IG-580 | ✅ Removed regex/token overlap checks |
+| Skip duplicate wire flag | `skip_goal_completion_wire_duplicate` | ✅ Implemented |
+
+### Implementation Notes
+
+1. **PlanManager replaces GoalCompletionPolicy**: The policy layer is now in `plan_manager.py`, not `goal_completion_policy.py` (deprecated)
+2. **Content heuristics removed**: IG-580 removed `is_rich_enough`, `overlaps_with_plan_output`, and `can_return_directly_from_ledger` - replaced with structural rules
+3. **Hybrid mode**: `heuristic_requires_goal_completion()` provides fallback when LLM decision unavailable
+4. **Runner wire**: Goal completion emits via `loop_assistant_messages_chunk` with `phase="goal_completion"`
+
+### Key Configuration
+
+```yaml
+agent:
+  loop:
+    rules:
+      completion:
+        simple_ledger_direct_max_steps: 1
+        ledger_direct_max_tool_calls: 50
+        execute_ai_ledger_max_tokens: 65536
+```
+
+### Testing Coverage
+
+- Unit tests: `tests/unit/strange_loop/test_plan_dag.py`, `test_plan_manager.py`
+- Integration: `tests/integration/test_goal_completion_flow.py`
 
 ---
 
