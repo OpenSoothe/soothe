@@ -57,6 +57,20 @@ class InternalGoalFailedEvent(SootheEvent):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class InternalGoalReportCommittedEvent(SootheEvent):
+    """CE goal report committed after a StrangeLoop loop end (IG-726).
+
+    Canonical trigger signal for Autopilot report-commit judgment. Autopilot
+    may still finalize on the same call stack after emit.
+    """
+
+    type: str = "soothe.internal.goal.report_committed"
+    goal_id: str
+    report_revision: int = 0
+    outcome: str = ""
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class InternalGoalProgressEvent(SootheEvent):
     """Goal progress update from StrangeLoop.
 
@@ -303,6 +317,7 @@ class InternalAutopilotAwakeEvent(SootheEvent):
 
 INTERNAL_GOAL_COMPLETED = "soothe.internal.goal.completed"
 INTERNAL_GOAL_FAILED = "soothe.internal.goal.failed"
+INTERNAL_GOAL_REPORT_COMMITTED = "soothe.internal.goal.report_committed"
 INTERNAL_GOAL_PROGRESS = "soothe.internal.goal.progress"
 INTERNAL_GOAL_STATE_CHANGED = "soothe.internal.goal.state_changed"
 INTERNAL_GOALS_READY = "soothe.internal.goal.ready"
@@ -329,6 +344,7 @@ INTERNAL_EVENT_TYPES: frozenset[str] = frozenset(
     {
         INTERNAL_GOAL_COMPLETED,
         INTERNAL_GOAL_FAILED,
+        INTERNAL_GOAL_REPORT_COMMITTED,
         INTERNAL_GOAL_PROGRESS,
         INTERNAL_GOAL_STATE_CHANGED,
         INTERNAL_GOALS_READY,

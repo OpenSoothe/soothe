@@ -1,7 +1,7 @@
 # IG-726: Autopilot report-commit judgment
 
 **Created**: 2026-08-08  
-**Status**: Implemented (P0–P2)  
+**Status**: Implemented (P0–P3 production)  
 **Related**: [RFC-204 §1.3](../specs/RFC-204-autopilot-mode.md),
 [RFC-222](../specs/RFC-222-autopilot-goal-engine-architecture.md),
 [RFC-625](../specs/RFC-625-autopilot-monitor-context-engine-unification.md),
@@ -86,7 +86,6 @@ commit API is stable.
 - [x] Add `GoalNode.report_revision: int = 0`
 - [x] `ContextEngine.commit_goal_report(goal_id, report: dict) -> int`
   - upsert `report`, bump revision, touch goal
-  - (bus emit of `goal_report_committed` deferred; same-stack finalize after commit)
 - [x] Helper to build minimal report from completion chunk fields
   (`soothe.autopilot.verify.report_projection`)
 
@@ -105,13 +104,19 @@ commit API is stable.
 - [x] Validate + apply: wire/unwire, priority, pending brief updates
 - [x] Reject illegal spawn/cancel unless allowlisted (default deny)
 
-### P3 — Tests + cleanse
+### P3 — Production hardening
 
+- [x] Emit `InternalGoalReportCommittedEvent` from `_commit_loop_end_report`
+  (same-stack finalize remains; bus is observability + future subscribers)
+- [x] `GoalNode.judged_report_revision` + skip re-judge on same revision /
+  already-terminal goals
+- [x] No-completion-chunk path commits minimal CE report before `fail_goal`
+- [x] `AutopilotConfig.judge_allow_structural_dag_ops` + config template sync
 - [x] Unit: commit bumps revision; projector; finalize commits before judge
-- [x] Unit: judge prompt built from CE Goal Report
+- [x] Unit: judge prompt built from CE Goal Report; emit + idempotency
 - [x] Accept path still completes (IG-725 / wave-plan gate suites)
 - [x] Align IG-680/IG-697 tests to report-commit semantics
-- [x] Unit: bounded dag_ops apply / allowlist skip
+- [x] Unit: bounded dag_ops apply / allowlist skip / allowlisted spawn
 - [x] `./scripts/verify_finally.sh`
 
 ---
@@ -131,6 +136,8 @@ commit API is stable.
 - [x] No Autopilot LLM judgment without a committed report (skip if commit empty)
 - [x] WavePlan architecture gate still works
 - [x] Send_back uses judge `reasoning`
+- [x] `goal_report_committed` emitted; judge idempotent on revision / terminal
+- [x] Crash / no-completion path still commits a minimal report
 - [x] verify_finally green
 
 ---
@@ -142,3 +149,4 @@ commit API is stable.
 | 2026-08-08 | Initial IG from report-commit design + RFC refine commit |
 | 2026-08-08 | P0/P1 implemented: commit_goal_report, projection, finalize cutover |
 | 2026-08-08 | P2: bounded dag_ops on judge + apply (spawn/cancel deny-by-default) |
+| 2026-08-08 | P3: bus emit, judged_report_revision, crash commit, config allowlist |

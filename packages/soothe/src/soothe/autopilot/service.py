@@ -37,6 +37,7 @@ from soothe.events.internal_events import (
     InternalAutopilotStoppedEvent,
     InternalGoalCompletedEvent,
     InternalGoalFailedEvent,
+    InternalGoalReportCommittedEvent,
     InternalGoalsReadyEvent,
     InternalGoalStateChangedEvent,
     InternalGoalUnblockedEvent,
@@ -1787,21 +1788,28 @@ class AutopilotService:
 
         if not completion_seen:
             # Worker stream ended without a completion chunk — treat as failed.
+            # Still commit a minimal CE report so report-commit SoT holds (IG-726).
             from soothe.autopilot.dispatch.models import EvidenceBundle as _EvBundle
 
+            narrative = "Worker exited without emitting GoalCompletionChunk"
             try:
+                await self._commit_loop_end_report(
+                    goal_id,
+                    outcome="failed",
+                    summary=narrative,
+                )
                 await self._ce.fail_goal(
                     goal_id,
                     evidence=_EvBundle(
                         structured={"outcome": "no_completion_chunk"},
-                        narrative="Worker exited without emitting GoalCompletionChunk",
+                        narrative=narrative,
                         source="layer2_execute",
                     ),
                 )
                 await self._emit_goal_failed(
                     goal_id,
                     evidence={"outcome": "no_completion_chunk"},
-                    error_message="Worker exited without emitting GoalCompletionChunk",
+                    error_message=narrative,
                     loop_id=worker.loop_id,
                 )
             except Exception:
@@ -1902,6 +1910,21 @@ class AutopilotService:
                     goal.findings.append(str(text)[:cap])
             except Exception:
                 logger.debug("Failed to attach findings to goal %s", goal_id, exc_info=True)
+
+        try:
+            await self._internal_bus.emit(
+                InternalGoalReportCommittedEvent(
+                    goal_id=goal_id,
+                    report_revision=revision,
+                    outcome=str(report.get("outcome") or outcome or ""),
+                )
+            )
+        except Exception:
+            logger.debug(
+                "Failed to emit goal.report_committed for %s",
+                goal_id,
+                exc_info=True,
+            )
         return revision
 
     async def _apply_consensus_and_finalize(
@@ -1919,6 +1942,7 @@ class AutopilotService:
         ledger report to CE, projects it, and judges accept/send_back/fail —
         never gates on host workspace probes. IG-725: no collect_evidence
         re-dispatch. After accept, LoopRail / AutopilotMonitor react to CE.
+        Idempotent on ``(goal_id, report_revision)`` via ``judged_report_revision``.
         """
         from soothe.autopilot.verify.consensus import evaluate_goal_completion
         from soothe.autopilot.verify.report_projection import project_goal_report_for_judge
@@ -1940,6 +1964,25 @@ class AutopilotService:
             logger.error(
                 "No CE goal report after commit for %s — skipping LLM judge",
                 goal_id,
+            )
+            return
+
+        # Already terminal (prior accept/fail) — commit above is SoT only.
+        if goal.status in TERMINAL_STATES:
+            logger.info(
+                "Skipping report-commit judge for %s — already terminal status=%s",
+                goal_id,
+                goal.status,
+            )
+            return
+
+        rev = int(goal.report_revision or 0)
+        judged = int(getattr(goal, "judged_report_revision", 0) or 0)
+        if rev > 0 and judged >= rev:
+            logger.info(
+                "Skipping report-commit judge for %s — already judged rev=%s",
+                goal_id,
+                rev,
             )
             return
 
@@ -1977,12 +2020,16 @@ class AutopilotService:
                 logger.exception("Report-commit judgment failed for goal %s", goal_id)
                 decision, reasoning = "fail", "Report-commit judgment failed"
 
+        # Mark judged before transitions so crash mid-apply does not re-judge.
+        goal.judged_report_revision = rev
+        goal.updated_at = datetime.now(UTC)
+
         rail_bound = bool(getattr(goal, "rail_id", None))
         logger.info(
             "Report-commit finalize goal_id=%s rev=%s decision=%s dag_ops=%d "
             "rail_bound=%s reasoning=%s",
             goal_id,
-            getattr(goal, "report_revision", 0),
+            rev,
             decision,
             len(dag_ops),
             rail_bound,
@@ -1992,10 +2039,16 @@ class AutopilotService:
             if dag_ops:
                 from soothe.autopilot.verify.dag_ops import apply_bounded_dag_ops
 
+                allow = frozenset(
+                    str(x).strip()
+                    for x in (getattr(self._config, "judge_allow_structural_dag_ops", None) or [])
+                    if str(x).strip()
+                )
                 notes = await apply_bounded_dag_ops(
                     self._ce,
                     list(dag_ops),
                     source_goal_id=goal_id,
+                    structural_allowlist=allow,
                 )
                 if notes:
                     logger.info(

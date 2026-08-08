@@ -248,7 +248,7 @@ class AutopilotConfig(BaseModel):
         max_goal_depth: Maximum hierarchy depth (RFC-0007 §5.6).
         max_parallel_goals: Maximum goals running simultaneously.
 
-        max_send_backs: Per-goal send-back budget for consensus validation (daemon-level).
+        max_send_backs: Per-goal send-back budget for report-commit judgment.
         max_engine_recoveries: Max engine-driven recoveries per failed goal (deadlock backstop).
         checkpoint_interval: Iterations between periodic checkpoints.
         dreaming_enabled: Enter dreaming mode when all goals complete.
@@ -256,9 +256,11 @@ class AutopilotConfig(BaseModel):
         dreaming_health_check_interval: Seconds between health checks during dreaming.
         monitor_model_role: Router role for AutopilotMonitor LLM reasoners (backoff,
             DAG verification, dreaming distillation). Defaults to ``think``.
-        consensus_model_role: Router role for RFC-204 goal consensus validation.
+        consensus_model_role: Router role for RFC-204 report-commit judgment.
             Defaults to ``think``; daemon uses ``create_chat_model`` with automatic
             fallback to ``default`` on instantiation failure.
+        judge_allow_structural_dag_ops: Allowlisted structural judge ops
+            (``spawn_goal`` / ``cancel_goal``). Empty = deny (LoopRail owns fan-out).
         webhooks: Webhook URLs by event type (legacy; prefer ``notify.sinks.webhook``).
         notify: Job lifecycle multi-channel notify (IG-713).
 
@@ -314,7 +316,15 @@ class AutopilotConfig(BaseModel):
 
     consensus_model_role: ModelRole = Field(
         default="think",
-        description="Router model role for RFC-204 goal consensus validation.",
+        description="Router model role for RFC-204 report-commit judgment.",
+    )
+    judge_allow_structural_dag_ops: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Allowlisted structural dag_ops from report-commit judgment "
+            "(spawn_goal, cancel_goal). Empty denies both — LoopRail owns "
+            "structural fan-out."
+        ),
     )
 
     default_rail: str | None = Field(

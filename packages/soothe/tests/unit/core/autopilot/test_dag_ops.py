@@ -61,6 +61,23 @@ async def test_spawn_cancel_skipped_without_allowlist() -> None:
 
 
 @pytest.mark.asyncio
+async def test_spawn_allowed_when_allowlisted() -> None:
+    ce = ContextEngine()
+    g = await ce.create_goal("source")
+    notes = await apply_bounded_dag_ops(
+        ce,
+        [DagOp(op="spawn_goal", brief="extra verify slice", priority=40)],
+        source_goal_id=g.id,
+        structural_allowlist=frozenset({"spawn_goal"}),
+    )
+    assert any(n.startswith("spawned:") for n in notes)
+    spawned_id = next(n.split(":", 1)[1] for n in notes if n.startswith("spawned:"))
+    child = await ce.get_goal(spawned_id)
+    assert child is not None
+    assert "extra verify slice" in child.description
+
+
+@pytest.mark.asyncio
 async def test_update_brief_rejects_non_pending() -> None:
     ce = ContextEngine()
     g = await ce.create_goal("active goal")
