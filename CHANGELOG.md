@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Raise `soothe-client-python` floor to `>=1.0.13` in soothe-cli and soothe-daemon (stale turn-reader terminate fix)
+
 ## [v0.10.2] - 2026-08-07
 
 ### Changed
