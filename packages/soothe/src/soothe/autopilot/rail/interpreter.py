@@ -348,11 +348,23 @@ class LoopRailInterpreter:
         feedback_round = 0
         max_feedback_rounds = 8
         rail_acceptance = False
+        slices_ready_unspawned = False
+        trigger_needs_merge = False
+        trigger_just_merged = False
         if job_state is not None:
-            wave_below_max = job_state.wave_index < job_state.max_waves
+            wave_below_max = len(job_state.spawned_slices) < job_state.effective_max_slices()
             feedback_round = int(job_state.feedback_round)
             max_feedback_rounds = int(job_state.max_feedback_rounds)
             rail_acceptance = bool(job_state.acceptance_met)
+            slices_ready_unspawned = self._builtins.has_ready_unspawned_slices(event.job_id)
+            if event.goal_id:
+                tann = job_state.annotations.get(event.goal_id)
+                if tann is not None and "implementation" in (tann.tags or []):
+                    trigger_needs_merge = tann.branch_status in {
+                        "active",
+                        "conflict",
+                    }
+                    trigger_just_merged = tann.branch_status == "merged"
         root = await self._ce.get_goal(event.job_id)
         acceptance_met = latch_acceptance_met(
             rail_acceptance_met=rail_acceptance,
@@ -437,6 +449,9 @@ class LoopRailInterpreter:
             "max_feedback_rounds": max_feedback_rounds,
             "acceptance_met": acceptance_met,
             "wave_below_max": wave_below_max,
+            "slices_ready_unspawned": slices_ready_unspawned,
+            "trigger_needs_merge": trigger_needs_merge,
+            "trigger_just_merged": trigger_just_merged,
             "fanout_enabled": fanout_enabled,
             "require_plan": require_plan,
             "wave_plan_ready": wave_plan_ready,

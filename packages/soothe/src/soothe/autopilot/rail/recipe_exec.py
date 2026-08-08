@@ -137,8 +137,9 @@ class RecipeRunner:
                 ctx.skipped_detail = f"max_feedback_rounds={ctx.state.max_feedback_rounds} reached"
                 return
         elif max_key == "waves":
-            if ctx.state.wave_index >= ctx.state.max_waves:
-                ctx.skipped_detail = f"max_waves={ctx.state.max_waves} reached"
+            # Expansion budget (legacy gate name); IG-732 uses spawned count.
+            if len(ctx.state.spawned_slices) >= ctx.state.effective_max_slices():
+                ctx.skipped_detail = f"max_slices={ctx.state.effective_max_slices()} reached"
                 return
         inflight = str(spec.get("no_inflight") or "").strip()
         if inflight == "feedback":

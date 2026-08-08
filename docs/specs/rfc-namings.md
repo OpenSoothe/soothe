@@ -2,9 +2,10 @@
 
 This document defines the terminology and naming conventions used in this project.
 
-**Last Updated**: 2026-07-24
+**Last Updated**: 2026-08-08
 
-> Note: Also covers start-phase intake & branch routing terms (RFC-630).
+> Note: Also covers start-phase intake & branch routing terms (RFC-630) and
+> LoopRail streaming slice / worktree terms (RFC-231 §9, RFC-232).
 
 ## Core Terminology
 
@@ -121,6 +122,12 @@ This document defines the terminology and naming conventions used in this projec
 | ExecutionState | Thin facade holding execution-only runtime fields (iteration, max_iterations, wave metrics, context window stats) with CE-backed properties for goal/step data. Replaces LoopState. | RFC-626 |
 | Job | Root GoalNode with `parent_id=None` submitted to AutopilotService. Single entry point for DAG visualization and status queries. | RFC-626, RFC-228 |
 | GoalNode | Unified entity model combining goal lifecycle, retry/backoff semantics, workspace metadata, and dreaming fields. CE's atomic unit of persistence. | RFC-624, RFC-625, RFC-626 |
+| LoopRail | Job-scoped, event-driven workflow pattern consumed only by AutopilotService; mutates the CE DAG via catalog verbs. CE never reads rail YAML. | RFC-231 |
+| Slice catalog | Flat SoT of leaf slice specs on `RailJobState` after WavePlan ingest (`wave_slices` / rich `slices` / `decompose_plan`). | RFC-231 §9, RFC-232 |
+| Streaming spawn | Autopilot creates maker goals for unspawned catalog slices whose slice `depends_on` are satisfied; pool fills under concurrency with no wave/stage CE barrier. | RFC-231 §9 |
+| Spawn-ready | Predicate / verb semantics (`spawn_wave_makers` / `slices_ready_to_spawn`): materialize only currently ready slices. | RFC-231 §8–§9 |
+| Job branch | Per-job integration git branch (`job/<id>`); host merges maker branches here; land on `main`/`master` only at job complete. | RFC-231 §9 |
+| WavePlan | Flat planner deliverable: leaf slice ids and/or rich `slices[]` with optional peer-slice `depends_on`; nested wave trees forbidden. | RFC-232 |
 | StepNode | Execution step entity within GoalNode's embedded StepDAG with lineage tracking (plan_iteration, reasoning_trace). | RFC-624, RFC-626 |
 | LedgerManager | Unified message ledger replacing LoopWorkingMemory and loop_messages list, with phase-scoped retrieval and bounded projection. | RFC-624, RFC-626 |
 | CheckpointEnvelope | Consolidated checkpoint structure storing CE GoalStepDAG snapshot and ExecutionState fields, eliminating duplicate StrangeLoop checkpoint schemas. | RFC-626 |

@@ -20,13 +20,12 @@ def test_greenfield_system_rail_loads() -> None:
     thens = [str(e.get("then")) for e in rail.flow]
     assert thens[0] == "plan_milestones"
     assert "spawn_wave_makers" in thens
-    assert "spawn_integrate" in thens
-    assert "commit_milestone" in thens
-    assert "review" in thens
+    assert "merge_branches" in thens
+    assert "spawn_integrate" not in thens
     assert "spawn_feedback_cycle" in thens
     assert "retry_architecture" in thens
     dag_idle = [e for e in rail.flow if e.get("event") == "dag_idle"]
-    assert any(e.get("when") == "wave_makers_done" for e in dag_idle)
+    assert any(e.get("when") == "slices_ready_to_spawn" for e in dag_idle)
     assert any(e.get("when") == "needs_feedback" for e in dag_idle)
 
 
@@ -479,7 +478,8 @@ def test_needs_human_and_checker_tag_short_circuits() -> None:
     assert checker is not None and checker.matched is True
 
 
-def test_dag_idle_wave_makers_done_spawns_integrate() -> None:
+def test_legacy_wave_makers_done_guard_still_matches() -> None:
+    """Legacy condition kept for custom rails; greenfield uses host merge."""
     structural = {
         "architecture_goal_ids": ["a1"],
         "implementation_goal_ids": ["m1", "m2"],
@@ -506,7 +506,7 @@ def test_dag_idle_wave_makers_done_spawns_integrate() -> None:
 
 @pytest.mark.asyncio
 async def test_pruned_makers_excluded_from_wave_completion() -> None:
-    """Pruned failed makers must not block wave_makers_done / integrate."""
+    """Completed maker triggers host merge; pruned siblings do not block."""
     from soothe.autopilot.rail.guards import LLMGuardEvaluator
     from soothe.autopilot.rail.interpreter import LoopRailInterpreter, RailEvent
 
@@ -538,6 +538,7 @@ async def test_pruned_makers_excluded_from_wave_completion() -> None:
         tags=["implementation", "maker", "wave-1", "api", "replant"],
         role="maker",
         branch_id="job/x/w1/api-retry",
+        branch_status="active",
     )
 
     fired = await interp.handle(
@@ -547,11 +548,12 @@ async def test_pruned_makers_excluded_from_wave_completion() -> None:
             goal_id=ok_maker.id,
         )
     )
-    integrate_fires = [
-        r for r in fired if r.builtin == "spawn_integrate" and r.builtin_result == "success"
+    merge_fires = [
+        r for r in fired if r.builtin == "merge_branches" and r.builtin_result == "success"
     ]
-    assert integrate_fires, (
-        f"expected spawn_integrate; got {[(r.condition, r.builtin, r.builtin_result, r.guard_result) for r in fired]}"
+    assert merge_fires, (
+        f"expected merge_branches; got "
+        f"{[(r.condition, r.builtin, r.builtin_result, r.guard_result) for r in fired]}"
     )
 
 

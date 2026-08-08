@@ -11,13 +11,15 @@
 **Related**: RFC-232 (flat WavePlan wire ingest), LoopRail design draft
 (`docs/drafts/2026-07-11-loop-rail-design.md`),
 design draft `docs/drafts/2026-08-08-llm-rail-auto-pick-design.md` (§10 selection),
+design draft `docs/drafts/2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md`
+(§9 streaming slice DAG + host worktrees),
 design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
 IG-678, IG-687, IG-691, IG-692, IG-693, IG-700, IG-704, IG-714, IG-715, IG-720,
 IG-728 (LLM rail auto-pick)  
 **Promotes / extends**: LoopRail design draft (normative architecture for
 job-scoped rails; this RFC adds Rail Exec and user-defined verb bodies)  
-**Amended by**: RFC-232 (§9 Fan-out contract — flat wire / nesting reject);
-IG-728 implements §10 LLM auto-pick
+**Amended by**: RFC-232 (§9 — flat wire / nesting reject + optional slice
+`depends_on`); IG-728 implements §10 LLM auto-pick
 
 ## Abstract
 
@@ -28,7 +30,13 @@ architecture and specifies **Rail Exec**: catalog verbs invoked by `flow` /
 `rules` are recipes whose bodies are composed of **CE primitives (verbs)**
 and/or **natural-language briefs/intent**, not hardcoded Python special cases
 per `rail_id`. Custom rails under the three-tier catalog can reach the same
-power as shipped builtins (including wave fan-out) without forking the executor.
+power as shipped builtins (including **streaming slice fan-out** and host
+worktree merge) without forking the executor.
+
+**Layering (normative):** LoopRail is consumed only by AutopilotService. The
+Context Engine never reads rail YAML. CE goals execute in streaming parallel
+under pool concurrency and `depends_on` readiness — with **no wave or stage
+execution boundary** in CE.
 
 ## 1. Problem
 
@@ -57,11 +65,19 @@ alone.
    **NL** (brief / intent), or **hybrid** — data in rail YAML, not `rail_id`
    switches in Python.
 4. Keep **CE primitives closed** and framework-owned (atomicity, resume, trace).
-5. Preserve **fan-out as rail policy** (`fanout:` + WavePlan into job state);
-   engine remains wave-agnostic (capacity clamp only).
-6. Enable custom rails to reach **builtin-class power** (waves, feedback chains,
+5. Preserve **fan-out as rail policy** (`fanout:` + flat WavePlan into a
+   **slice catalog** on job state). Autopilot grows the CE DAG by spawning
+   makers when slice deps are satisfied (**streaming spawn**). The engine
+   remains wave-/stage-agnostic (deps + capacity clamp only). Wave/stage
+   counters MUST NOT gate CE readiness.
+6. Enable custom rails to reach **builtin-class power** (streaming slice
+   fan-out, host worktree merge/refresh/land, feedback chains,
    domain-specific planner/review/QA copy) via YAML overrides.
-7. When submit omits `rail_id`, optionally **auto-pick** a rail via structured
+7. **Host-manage worktrees**: on maker success, merge into per-job branch
+   `job/<id>`; refresh peer worktrees; conflict → focused resolve goal;
+   land on `main`/`master` only at job completion. Per-maker review/QA
+   replace batch wave-integrate gates.
+8. When submit omits `rail_id`, optionally **auto-pick** a rail via structured
    light-LLM match against the merged catalog (`summary` / `applies_when`),
    with deterministic fallbacks (RFC-630; design draft
    `2026-08-08-llm-rail-auto-pick-design.md`).
@@ -70,7 +86,8 @@ alone.
 
 - Arbitrary Python, shell, or unconstrained scripts inside rail YAML.
 - StrangeLoop learning DAG shape, siblings, or rail recipes (RFC-222).
-- Engine-level wave API or submit kwargs for slice lists (IG-715 boundary).
+- Engine-level wave/stage API or submit kwargs for slice lists (IG-715
+  boundary). CE MUST NOT grow wave fields on goals.
 - Replacing AutopilotMonitor dreaming / backoff for **no-rail** jobs.
 - Visual rail editor.
 - Per-rail prune-policy overrides beyond composing L0 `prune` / `replant`.
@@ -79,6 +96,9 @@ alone.
 - LLM choosing next catalog verbs / flow advancement (report-commit judge and
   LoopRail remain separate — RFC-204).
 - Re-picking `rail_id` mid-job (resume uses stored id + integrity).
+- Nested WavePlan trees as machine contract (RFC-232).
+- Requiring batch “wave complete → integrate” before other ready slices may
+  exist in the CE DAG.
 
 ## 4. Architectural invariant
 
@@ -128,21 +148,23 @@ bodies.
 |-----------|----------|
 | `spawn_goal` | `create_goal` + annotate tags/role/branch; optional workspace |
 | `wire_deps` | Update `depends_on` / root-waits-on children (never child→root) |
-| `foreach` | Iterate WavePlan slices or an explicit list; bind loop vars |
-| `ensure_worktree` | Optional git worktree under job policy |
-| `ingest_wave_plan` | Architecture goal findings (CE) → `RailJobState` slices |
+| `foreach` | Iterate slice-catalog entries or an explicit list; bind loop vars |
+| `ensure_worktree` | Optional git worktree under job policy (from `job/<id>` tip) |
+| `ingest_wave_plan` | Architecture findings → `RailJobState` **slice catalog** |
+| `merge_into_job_branch` | Host-merge maker branch into `job/<id>`; refresh peer WTs |
+| `land_job_branch` | Host-merge `job/<id>` into configured base (`main`/`master`) |
 | `gate` | Skip recipe when counter/acceptance/inflight predicates fail |
-| `bump` | Increment `wave_index` / `feedback_round` (etc.) |
+| `bump` | Increment job counters (`feedback_round`, optional budgets) |
 | `prune` / `replant` | Branch salvage with `informs` (RFC-204 recovery) |
 | `pause_job` | Suspend for human (`pause_for_user`) |
 | `complete_job` | Mark job root complete when maturity allows (RFC-230) |
 
-WavePlan **slice lists** are applied into `RailJobState` as a **flat** leaf
-list (SoT). Transfer may use structured completion fields, recommended dumps,
-allowlist paths, or findings/evidence JSON — never nested wave trees, NL
-inventing slices at exec time, or rigid rail `default_modules` (already
-rejected by catalog). Wire shape and nesting reject rules:
-[RFC-232](RFC-232-waveplan-flat-semistructured-ingest.md).
+WavePlan **slice lists** are applied into `RailJobState` as a **flat slice
+catalog** (SoT). Transfer may use structured completion fields, recommended
+dumps, allowlist paths, or findings/evidence JSON — never nested wave trees,
+NL inventing slices at exec time, or rigid rail `default_modules` (already
+rejected by catalog). Wire shape, optional per-slice `depends_on`, and
+nesting reject rules: [RFC-232](RFC-232-waveplan-flat-semistructured-ingest.md).
 
 ### 5.2 L1 catalog verbs
 
@@ -156,9 +178,12 @@ a `verbs:` entry on the winning rail document. Unknown names → catalog error
 Shipped recipe names (initial set; may grow as defaults, not as Python forks):
 
 `decompose_parallel`, `plan_and_implement`, `plan_milestones`,
-`spawn_wave_makers`, `spawn_integrate`, `commit_milestone`,
-`spawn_feedback_cycle`, `review`, `qa_verify`, `retry_branch`, `retry_maker`,
-`retry_architecture`, `merge_branches`, `pause_for_user`, `complete_job`.
+`spawn_wave_makers` (streaming **spawn-ready** semantics — §9),
+`spawn_integrate` (**deprecated** for greenfield merge path; custom rails may
+still compose it), `commit_milestone` (optional evidence helper; not a wave
+barrier), `spawn_feedback_cycle`, `review`, `qa_verify`, `retry_branch`,
+`retry_maker`, `retry_architecture`, `merge_branches` (host merge primitive),
+`pause_for_user`, `complete_job`, `land_job_branch`.
 
 ### 5.3 L2 flow / rules
 
@@ -294,11 +319,24 @@ and RFC-204 / IG-693 still apply.
 
 ### 8.1 Shared vocabulary
 
-Existing structural short-circuit names (`architecture_ready`,
-`wave_makers_done`, `needs_integrate`, `needs_commit`, `needs_review`,
-`needs_qa`, `needs_feedback`, `ready_for_next_wave`, `architecture_failed`,
-`job_complete`, …) remain a **documented shared vocabulary**. Any rail may use
-them; semantics are structural-fact based, not rail-id based.
+Shared structural short-circuit vocabulary (structural-fact based, not
+rail-id based). **Normative for streaming greenfield / migration fan-out:**
+
+| Name | Structural intent |
+|------|-------------------|
+| `architecture_ready` | Architecture terminal; catalog non-empty when `require_plan`; ready unspawned slices may exist |
+| `slices_ready_to_spawn` | At least one catalog slice unspawned whose slice deps are satisfied |
+| `maker_merged` | A maker completed and host-merged into `job/<id>` (triggers per-maker quality) |
+| `needs_review` / `needs_qa` | Per-lineage (merged maker range), not “wave complete” |
+| `needs_feedback` | Lineage QA/acceptance gap (RFC-230 maturity still feeds job-level acceptance) |
+| `architecture_failed` | Planner failed / no usable catalog |
+| `job_complete` | Acceptance + idle; ready for `land_job_branch` then `complete_job` |
+
+**Deprecated as execution barriers** (MUST NOT gate whether slice makers exist
+in the CE DAG): `wave_makers_done`, `ready_for_next_wave`, `needs_integrate`
+as batch wave integrate. Custom rails MAY keep the names with non-barrier
+semantics during migration; shipped greenfield MUST NOT use them to withhold
+ready slices.
 
 ### 8.2 Evolution (preferred)
 
@@ -308,9 +346,15 @@ Rails MAY declare structural hooks beside NL conditions:
 conditions:
   architecture_ready:
     nl: |
-      The architecture / milestone map completed and makers are not spawned yet.
+      The architecture / milestone map completed and the slice catalog is ready;
+      streaming spawn may create ready makers.
     structural:
-      require: [architecture_terminal, no_makers, wave_plan_if_required]
+      require: [architecture_terminal, wave_plan_if_required]
+  slices_ready_to_spawn:
+    nl: |
+      At least one catalog slice is unspawned and its slice deps are satisfied.
+    structural:
+      require: [catalog_has_ready_unspawned]
 ```
 
 Predicate ids are a closed library owned by the host (rail-agnostic). Unknown
@@ -320,40 +364,98 @@ structural block is the deterministic short-circuit when present.
 RFC-230 maturity fields (`acceptance_met`, snapshot) continue to feed
 `needs_feedback` / `job_complete` predicates.
 
-## 9. Fan-out contract
+## 9. Fan-out contract (streaming slice catalog)
+
+Design source:
+[`2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md`](../drafts/2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md).
+
+### 9.1 Layer ownership
 
 | Layer | Owns | Must not |
 |-------|------|----------|
-| Autopilot engine | Pool, deps, report-commit judgment, `max_parallel_goals` clamp | Slice ids, `wave_index`, phase order |
-| Rail YAML | `flow` / conditions / `fanout` / `verbs` | Submit kwargs for slices; nested WavePlan examples; `fanout.artifact` |
-| LLM + transfer | Flat WavePlan via structured `wave_plan` / `wave_plan_path`, recommended dumps, allowlist paths, or completion JSON blob | Nested waves/slices |
-| LoopRail | Apply parsed **flat** WavePlan into `RailJobState` (`wave_slices` / `decompose_plan`); persist via `rail_state.json`; optional `wave_plan_source_path` | Store nested wave trees on job state |
+| Autopilot engine | Pool, CE `depends_on`, report-commit judgment, `max_parallel_goals` clamp | Slice ids, wave/stage phase order, rail YAML |
+| Context Engine | Goal DAG status and edges | Rail documents, wave index, slice catalog |
+| Rail YAML | `flow` / conditions / `fanout` / `verbs` | Submit kwargs for slices; nested WavePlan examples; `fanout.artifact`; wave barriers that withhold ready slices |
+| LLM + transfer | Flat WavePlan (+ optional per-slice `depends_on`) via structured fields, dumps, allowlist, or completion blob | Nested waves/slices |
+| LoopRail / AutopilotService | Ingest catalog; **streaming spawn**; host merge/refresh/land; per-maker review/QA reactions | Store nested wave trees; teach CE about waves |
+
+### 9.2 Slice catalog SoT
 
 **Persistence (normative; amends IG-720 via multi-form transfer):**
 
-1. **SoT** after ingest is `RailJobState.wave_slices` / `decompose_plan`
-   (persisted in `rail_state.json`). Optional `wave_plan_source_path` records
-   which file supplied the plan.
-2. Architecture / planner goals supply a **flat** WavePlan via any transfer
-   form: structured contribution fields (`wave_plan`, `wave_plan_path`),
-   recommended dumps (`$SOOTHE_DATA_DIR/jobs/{job_id}/wave-plan.json`,
-   `<workspace>/.soothe/wave-plan.json`), declarative allowlist paths, or a
-   findings/evidence JSON blob. Custom paths outside the allowlist MUST set
-   `wave_plan_path` (no prose path scraping).
-3. Host extracts candidates, **rejects nested waves/slices** (no
-   clever-flatten), validates, then calls `record_wave_plan` to **apply**
-   leaf ids into `RailJobState`. Successful apply mirrors recommended dumps
-   best-effort. Gate send_backs MUST include reject / validation detail
-   (RFC-232).
-4. `is_wave_plan_ready` is true when `RailJobState.wave_slices` is non-empty
-   (or multi-form diagnose still yields a **flat** WavePlan).
-5. Rail **wave rounds** (`wave_index` / `max_waves`) are job counters, not
-   nested objects inside the WavePlan payload.
+1. **SoT** after ingest is the **slice catalog** on `RailJobState` (persisted in
+   `rail_state.json`): flat leaf specs derived from `wave_slices` and/or rich
+   `slices[]` (RFC-232). Compatible on-disk keys may still expose
+   `wave_slices` / `decompose_plan` as the flattened id list + rich specs.
+   Optional `wave_plan_source_path` records which file supplied the plan.
+2. Catalog entries: `{slice, description?, tags?, priority?, depends_on?}`.
+   Omitted `depends_on` ⇒ ready after architecture (true fan-out).
+3. Additional runtime maps (normative): `spawned_slices` (`slice_id → goal_id`),
+   `job_branch` (e.g. `job/<id>`), `base_branch` (`main` or `master`).
+4. Architecture / planner goals supply a **flat** WavePlan via any transfer
+   form (unchanged multi-form list). Host **rejects nested waves/slices**,
+   validates, then `record_wave_plan` applies the catalog. Gate send_backs
+   MUST include reject / validation detail (RFC-232).
+5. `is_wave_plan_ready` / catalog-ready is true when the catalog has at least
+   one leaf slice (or multi-form diagnose still yields a **flat** WavePlan).
+6. **`wave_index` / batch `wave_slices` rounds MUST NOT gate spawn.** Optional
+   expansion budget `max_slices` (alias: legacy `fanout.max_waves`) may cap
+   total makers; it is not a stage barrier.
 
-`fanout:` keys: `require_plan`, `scout_count`, `max_waves`. The former
-`fanout.artifact` key remains **removed** (catalog reject; use structured
-`wave_plan_path` or recommended dumps). Rails without `fanout:` must not
-pollute job state with wave-plan requirements.
+`fanout:` keys: `require_plan`, `scout_count`, `max_slices` (preferred;
+`max_waves` accepted as alias). `fanout.artifact` remains **removed**. Rails
+without `fanout:` must not pollute job state with wave-plan requirements.
+
+### 9.3 Streaming spawn (normative)
+
+Catalog verb `spawn_wave_makers` (name stable for custom rails) implements
+**spawn-ready** semantics:
+
+1. On `architecture_ready` and on subsequent `goal_completed` / `dag_idle`
+   when `slices_ready_to_spawn`: create maker goals only for **unspawned**
+   slices whose `depends_on` slice ids map to **completed** maker goals (or
+   have no deps).
+2. Maker CE `depends_on`: architecture goal + CE goals for satisfied slice
+   deps. Children MUST NEVER `depends_on` the job root while it is active.
+3. Root coordinator waits on spawned makers (and later land), unchanged
+   pattern.
+4. Pool fills streaming: when a maker completes and a slot frees, any other
+   **CE-ready** goal (including newly spawned makers) may claim it.
+5. Shipped greenfield/migration MUST NOT wait for batch integrate / “wave
+   done” before materializing other ready catalog slices.
+
+### 9.4 Host worktree lifecycle (normative)
+
+When `worktrees_enabled` (default true for greenfield-class rails):
+
+1. Ensure `job_branch` from `base_branch` at first maker spawn (or earlier).
+2. Each maker gets an isolated worktree + branch from the current `job_branch`
+   tip (`ensure_worktree`).
+3. On **maker success**: host `merge_into_job_branch` (catalog
+   `merge_branches` / L0). On success, refresh/rebase other **active** maker
+   worktrees onto the new tip; annotate maker `branch_status=merged`.
+4. On **merge conflict**: do **not** suspend the job. Annotate conflict;
+   spawn a focused **resolve** goal on that lineage; siblings keep running.
+   Retry host merge after resolve completes.
+5. Maker briefs MUST NOT say “leave commits for later integrate”; they MUST
+   state that the host merges into `job_branch` on completion.
+6. **Final land**: on `job_complete`, `land_job_branch` merges `job_branch`
+   into `base_branch`, then `complete_job`. Mid-job `base_branch` is not the
+   integration tip.
+
+Batch agent `spawn_integrate` is **not** the greenfield merge path. Custom
+rails may still spawn an integrate-style goal for audit, but MUST NOT use it
+to withhold ready slice spawn.
+
+### 9.5 Per-maker quality chain
+
+After a successful host merge of maker M:
+
+1. Rail MAY spawn diff-scoped `review` then `qa_verify` for M’s land range /
+   slice tags (`maker_merged` / `needs_review` / `needs_qa`).
+2. Feedback cycles attach to **that lineage** when QA/acceptance fails.
+3. These quality goals MUST NOT appear in `depends_on` of unrelated ready
+   makers (they must not serialize the streaming DAG).
 
 ## 10. Catalog storage and selection
 
@@ -460,8 +562,11 @@ worktree / feedback macro extract; **M4** intent expand.
 | Intent expands to non-L0 op | Builtin error; no partial apply |
 | CE / L0 failure mid-batch | Trace `builtin_error`; no partial DAG commit |
 | Guard LLM timeout | Log; skip rule; optional deterministic `check:` fallback |
-| WavePlan missing when `require_plan` | Structural gate does not match; makers do not spawn |
+| WavePlan / catalog missing when `require_plan` | Structural gate does not match; makers do not spawn |
 | Nested WavePlan (waves/slices trees) | Architecture gate `send_back` with nesting reason; no apply (RFC-232) |
+| Host merge conflict on maker success | Resolve goal on lineage; siblings continue; no job-wide pause |
+| Peer worktree refresh fails (dirty) | Annotate that WT; optional resolve; other makers unaffected |
+| Final land conflict | Land-resolve goal; do not `complete_job` until land succeeds |
 | Consensus send-back exhausted (rail subgoal) | Subgoal `failed` + `goal_failed`; recipe recovery (e.g. `retry_maker`) — RFC-204 / IG-693 |
 | Auto-pick low confidence / timeout / error | Fall back to `.rail-default` / config / no rail; log reasoning |
 | Auto-pick returns unknown or denied id | Treat as picker failure → same fallback |
@@ -481,6 +586,8 @@ worktree / feedback macro extract; **M4** intent expand.
 | Trace | Expanded L0 steps recorded |
 | Resume | Incomplete prune/replant recovery unchanged |
 | Auto-pick | Cascade order; unknown id; deny/`auto_pick: false`; formatter with N custom rails; timeout → fallback; bind before `job_start` |
+| Streaming spawn | Independent slices parallel under cap; dep edge delays spawn until predecessor **merged/completed**; no wave barrier |
+| Worktree merge | Maker tip lands on `job/<id>`; peer WT refresh; conflict → resolve; final land on base |
 
 ## 14. Component map
 
@@ -507,9 +614,13 @@ worktree / feedback macro extract; **M4** intent expand.
 | L0 ownership | Framework-closed; optional future primitive plugins only |
 | NL in bodies | Briefs + optional once-per-fire intent→ActionPlan (RFC-630) |
 | `rail_id` switches in Exec | Forbidden after M2 |
-| Fan-out / engine boundary | Unchanged (IG-715) |
-| WavePlan persistence | SoT = `RailJobState`; transfer via structured fields, recommended dumps, allowlist, or findings blob (IG-722 amends IG-720) |
-| WavePlan wire shape | Flat leaf slices only; semi-structured markdown+JSON allowed; **nested waves/slices forbidden** (RFC-232) |
+| Fan-out / engine boundary | Fan-out = rail policy; engine/CE wave-agnostic (IG-715); **no wave execution barrier** |
+| Streaming spawn | Grow CE DAG as slice deps satisfied; pool streams ready goals |
+| Worktree merge | Host merge into `job/<id>` on maker success; land on main/master at job complete |
+| Quality gates | Per-maker review/QA after merge; not batch wave integrate |
+| Merge conflict | Lineage resolve goal; job not suspended |
+| WavePlan persistence | SoT = slice catalog on `RailJobState`; transfer via structured fields, dumps, allowlist, or findings blob (IG-722 amends IG-720) |
+| WavePlan wire shape | Flat leaf slices + optional `depends_on`; semi-structured allowed; **nested waves/slices forbidden** (RFC-232) |
 | New `then:` without L0 | Forbidden — compose L0 or add framework primitive |
 | Default body style for builtins | Hybrid |
 | Rail selection without `--rail` | Structured LLM auto-pick over dynamic catalog, then `.rail-default` / config / none (IG-728) |
@@ -524,6 +635,9 @@ worktree / feedback macro extract; **M4** intent expand.
 - Plugin registration surface for new L0 primitives (defer until a concrete need).
 - Whether workspace-tier rails should be ordered before builtins in the auto-pick
   prompt (default: alphabetical by id for stability).
+- Peer worktree refresh default: rebase vs merge-from-`job_branch`.
+- Short vs full job id in `job/<id>` branch names (today often `job_id[:8]`).
+- Opportunistic GC of worktrees for cancelled/completed foreign jobs.
 
 ## 17. Suggested implementation routing
 
@@ -542,6 +656,11 @@ worktree / feedback macro extract; **M4** intent expand.
    dumps, allowlist); SoT = `RailJobState`.
 8. **IG-728** LLM rail auto-pick (§10.1–10.2): picker, cascade, config, tests;
    align builtin README.
+9. **IG-732** (Draft): streaming slice DAG + host worktree lifecycle —
+   slice catalog + spawn-ready; host `merge_branches` / merge-on-success /
+   refresh / land; greenfield + migration YAML rewrite; per-maker review/QA;
+   tests from §13. Design draft:
+   `docs/drafts/2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md`.
 
 ## Appendix A: relation to prior docs
 
@@ -553,8 +672,9 @@ worktree / feedback macro extract; **M4** intent expand.
 | RFC-204 | Report-commit judgment / send-back; host recovery via catalog verbs |
 | RFC-222 / RFC-625 | Autopilot / CE ownership; StrangeLoop report → CE commit before rail events |
 | `2026-08-08-autopilot-report-commit-judgment-design.md` | Event-centric judgment; bounded DAG revise; deterministic rail |
-| RFC-232 | Flat WavePlan wire; semi-structured allowed; nesting forbidden; amends §9 |
-| IG-715 | Migration wave fan-out; must migrate planner copy into YAML bodies (M2) |
+| RFC-232 | Flat WavePlan wire; optional slice `depends_on`; nesting forbidden; amends §9 |
+| `2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md` | Streaming spawn + host worktree lifecycle; source for §9 revision |
+| IG-715 | Migration fan-out; planner copy into YAML bodies (M2); wave barriers to remove |
 | IG-720 | Historical findings-only file ban; amended by IG-722 (SoT still rail_state) |
 | IG-722 | Multi-form WavePlan transfer; recommended dumps + structured wave_plan_path |
 | IG-728 | LLM rail auto-pick on submit when `rail_id` omitted |

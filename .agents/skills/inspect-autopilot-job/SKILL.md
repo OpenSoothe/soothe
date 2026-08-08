@@ -112,13 +112,17 @@ Extract only lines with `builtin` set (ignore pure `dag_idle` no-ops). Report:
 seq | event | condition | builtin | result | goal | timestamp
 ```
 
-Map to phases: `plan_milestones` → `spawn_wave_makers` → `retry_maker`* →
-`spawn_integrate` → `commit_milestone` → `review` → `qa_verify` →
-`spawn_feedback_cycle` → …
+Map to phases (streaming greenfield/migration): `plan_milestones` →
+`spawn_wave_makers` (spawn-ready) → `merge_branches`* → `review` /
+`qa_verify` (per maker) → `spawn_wave_makers` (unblocked slices) →
+`spawn_feedback_cycle` → … → `complete_job` (lands `job/<id>/_base`).
 
-Flag: long gaps between consecutive builtins (hang / deadlock); early
-`spawn_feedback_cycle` before integrate/QA; unmatched `goal_failed` on
-integrator tags (rail does not retry integrate).
+Legacy custom rails may still show `spawn_integrate` / `commit_milestone`.
+
+Flag: long gaps between consecutive builtins (hang / deadlock); makers
+completed but no `merge_branches`; catalog slices never in `spawned_slices`
+while pool idle (deps / spawn-ready miss); early `spawn_feedback_cycle`
+before any merge/QA.
 
 #### 2b. Per-goal attempt ledger from `job_loops`
 
@@ -265,17 +269,21 @@ Pointers to diagnose-loop Workflow B for `autopilot__{job}__*`.
 - Distinguish **ready but not dispatched** (scheduler/reservation) vs **not ready** (deps).
 - Prefer `jobs/{id}/rail_trace.jsonl` over legacy `loops/{id}/`.
 - Fan-out WavePlan (operator forensics; greenfield + migration): SoT is
-  `jobs/{id}/rail_state.json` (`wave_slices`, optional `wave_plan_source_path`).
+  `jobs/{id}/rail_state.json` (`wave_slices` / `decompose_plan`,
+  `spawned_slices`, `job_branch`, optional `wave_plan_source_path`).
   Transfer candidates: recommended dumps (`jobs/{id}/wave-plan.json`,
   `<workspace>/.soothe/wave-plan.json`), allowlist paths, structured
   `wave_plan` / `wave_plan_path`, or completion findings JSON.
 - **Stuck after architecture, no makers:** planner completed but
-  `wave_plan_ready=False` — see Debug Guide “WavePlan stall”. Recovery: supply
-  a **flat** WavePlan via dump/path/blob (`wave_slices` string list or flat
-  `slices[]`; nested WAVE trees are rejected), or set `wave_slices` on
-  `rail_state.json`, then wait for `dag_idle` (or `soothed restart`). After
-  package upgrades, always restart the daemon so the architecture WavePlan
-  gate is live.
+  `wave_plan_ready=False` — see Debug Guide “WavePlan / catalog stall”.
+  Recovery: supply a **flat** WavePlan via dump/path/blob (`wave_slices`
+  string list or flat `slices[]` with optional `depends_on`; nested WAVE
+  trees are rejected), or set `wave_slices` on `rail_state.json`, then wait
+  for `dag_idle` (or `soothed restart`). Restart after package upgrades so
+  streaming spawn + host merge are live.
+- **Idle pool, more slices in plan:** not a wave barrier — check
+  `spawned_slices` vs catalog and slice `depends_on`; expect
+  `merge_branches` after each maker before dependents unlock.
 - **Continue job, dump already ready, long planner:** with a current daemon,
   `plan_milestones` should reuse the dump and spawn makers immediately. If the
   planner still rediscovers for tens of minutes, the process predates that

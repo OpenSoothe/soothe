@@ -526,7 +526,7 @@ rm -rf ~/.soothe/data/threads/*
 
 ---
 
-## WavePlan stall (greenfield / migration)
+## WavePlan / catalog stall (greenfield / migration)
 
 Symptoms: Autopilot job on `greenfield-system`, `migration`, or any rail with
 `require_plan` has a **completed** architecture/planner goal, **zero** maker
@@ -534,8 +534,8 @@ goals, and the job root stays `pending`. Logs show
 `wave_plan_ready=False` / `architecture_ready` unmatched on `dag_idle`, or
 rate-limited warnings that a WavePlan is missing for the job.
 
-Cause: host never applied a **flat** WavePlan into job rail state
-(`wave_slices` on `rail_state.json`). Common failure modes:
+Cause: host never applied a **flat** WavePlan into the job **slice catalog**
+(`wave_slices` / `decompose_plan` on `rail_state.json`). Common failure modes:
 
 - Missing WavePlan on all transfer forms (structured `wave_plan` /
   `wave_plan_path`, suggested dumps, completion JSON)
@@ -546,27 +546,35 @@ Cause: host never applied a **flat** WavePlan into job rail state
 There is **no** workspace path allowlist. Suggested dumps
 (`.soothe/wave-plan.json`, jobs dump) are optional convenience reads —
 the model may write the plan anywhere under the workspace and set
-`wave_plan_path`, or embed it inline / in findings. WavePlan slices have
-**no** `priority` field (wire `priority` is ignored).
+`wave_plan_path`, or embed it inline / in findings. Rich slices may include
+optional peer-slice `depends_on`; non-numeric wire `priority` is ignored.
+
+**Execution model (current):** makers stream into the CE DAG as slice deps
+clear (`spawn_wave_makers` = spawn-ready). There is **no** wave/stage barrier.
+On maker success the host runs `merge_branches` into `job/<id>/_base`, refreshes
+peer worktrees, and spawns per-maker review. Empty pool slots with more catalog
+slices still pending usually means those slices are **not ready** (deps) or
+not yet spawned — not a “wait for integrate” gate.
 
 Recovery:
 
 1. Confirm daemon is current: after upgrading soothe packages, run
-   `soothed restart` so the architecture WavePlan gate is live (stale
-   processes can accept architecture via soft LLM consensus without a plan).
+   `soothed restart` so the architecture WavePlan gate and streaming spawn
+   are live.
 2. Inspect: `soothe autopilot job {job_id}`, architecture goal findings, and
    `~/.soothe/data/jobs/{job_id}/rail_state.json` (`wave_slices`,
-   `wave_plan_source_path`). Also check suggested dumps:
-   `jobs/{job_id}/wave-plan.json` and `<workspace>/.soothe/wave-plan.json`.
+   `spawned_slices`, `job_branch`, `wave_plan_source_path`). Also check
+   suggested dumps: `jobs/{job_id}/wave-plan.json` and
+   `<workspace>/.soothe/wave-plan.json`.
    Send-back text should include a **Detail:** line (nesting or field error).
 3. Prefer fixing a **flat** WavePlan via any transfer form, e.g. write
    `{"wave_slices":["core","api","tests"],"independence":"…","rationale":"…"}`
-   to `.soothe/wave-plan.json` or the jobs dump, set `wave_plan` /
-   `wave_plan_path` on completion, or put the JSON in the completion report.
-   Do not emit nested WAVE trees. As a last resort, set `wave_slices` on
-   `rail_state.json` and wait for `dag_idle` (or restart).
-4. Wait for the next `dag_idle` tick (or restart the daemon) so
-   `spawn_wave_makers` can fire.
+   (or rich `slices` with optional `depends_on`) to `.soothe/wave-plan.json`
+   or the jobs dump. Do not emit nested WAVE trees. As a last resort, set
+   `wave_slices` on `rail_state.json` and wait for `dag_idle` (or restart).
+4. Wait for the next `dag_idle` / `goal_completed` tick so
+   `spawn_wave_makers` (spawn-ready) or `maker_needs_merge` → `merge_branches`
+   can fire.
 
 **Continue / resume jobs:** If a recommended dump (or
 `wave_plan_source_path`) already makes the plan ready at `job_start`,

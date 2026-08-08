@@ -8,9 +8,11 @@
 **Updated**: 2026-08-08  
 **Authors**: Soothe Team  
 **Depends on**: RFC-204, RFC-222, RFC-228, RFC-624, RFC-625, RFC-630  
-**Related**: [RFC-231](RFC-231-looprail-rail-exec.md) (LoopRail + Rail Exec),
+**Related**: [RFC-231](RFC-231-looprail-rail-exec.md) (LoopRail + Rail Exec;
+§8–§9 streaming spawn / deprecated wave barriers),
 [RFC-232](RFC-232-waveplan-flat-semistructured-ingest.md) (flat WavePlan wire),
 LoopRail design draft (`docs/drafts/2026-07-11-loop-rail-design.md`; promoted by RFC-231),
+design draft `docs/drafts/2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md`,
 design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
 IG-678, IG-680, IG-687, IG-691, IG-692
 
@@ -121,8 +123,10 @@ JobMaturitySnapshot {
     evidence: str          # criterion evidence excerpt
   }]
   blockers: list[str]
-  suggested_rail_signal: needs_feedback | ready_for_next_wave
+  suggested_rail_signal: needs_feedback | slices_ready_to_spawn
                        | job_complete | none
+                       # legacy alias ready_for_next_wave MUST NOT withhold
+                       # ready slice spawn (RFC-231 §8–§9)
   probe_summary: str       # assessment summary text
 }
 ```
@@ -136,8 +140,8 @@ guard short-circuits / restart (IG-691 `rail_state.json` pattern).
 | Level | Meaning |
 |-------|---------|
 | `scaffold` | Little contract evidence; early DAG / empty workspace |
-| `wave_partial` | Some makers done; integrate incomplete |
-| `wave_integrated` | Integrate (+ commit) done; acceptance not met |
+| `wave_partial` | Some makers done; job branch not fully landed (informative name; not a spawn barrier — RFC-231 §9) |
+| `wave_integrated` | Job-branch merges progressed; acceptance not met (informative; host merge replaces batch integrate) |
 | `acceptance_candidate` | Verify-class goal completed; contract not yet met |
 | `accepted` | `acceptance_met=true` |
 | `blocked` | Hard contract failure / budget / operator suspend |
@@ -205,7 +209,9 @@ Structural short-circuits MUST read CE/rail maturity:
 
 - `needs_feedback`: verify/QA completed ∧ `not acceptance_met` ∧ rounds remain ∧ not inflight
 - `job_complete`: idle descendants ∧ `acceptance_met` (or exhausted feedback under operator policy)
-- `ready_for_next_wave`: existing greenfield rules; may require acceptance or feedback_done
+- `slices_ready_to_spawn`: catalog has unspawned slices whose deps are satisfied
+  (RFC-231 §8.1 / §9.3). Legacy name `ready_for_next_wave` MUST NOT be used as a
+  barrier that keeps ready slices out of the CE DAG.
 
 Empty trigger tags after restart: **fail closed** — repair from CE `rail_tags`
 (IG-691) before skipping phase transitions.

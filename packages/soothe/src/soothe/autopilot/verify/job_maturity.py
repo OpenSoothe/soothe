@@ -31,7 +31,13 @@ MaturityLevel = Literal[
     "blocked",
 ]
 CriterionStatus = Literal["pass", "fail", "unknown", "skipped"]
-RailSignal = Literal["needs_feedback", "ready_for_next_wave", "job_complete", "none"]
+RailSignal = Literal[
+    "needs_feedback",
+    "slices_ready_to_spawn",
+    "ready_for_next_wave",  # legacy alias; must not withhold ready slices
+    "job_complete",
+    "none",
+]
 
 _WORKSPACE_INVENTORY_MAX_ENTRIES = 80
 _WORKSPACE_INVENTORY_MAX_CHARS = 2500
@@ -351,7 +357,13 @@ def _snapshot_from_verdict(verdict: MaturityAssessmentVerdict) -> JobMaturitySna
             level = "acceptance_candidate"
         signal = (
             verdict.suggested_rail_signal
-            if verdict.suggested_rail_signal in {"needs_feedback", "none", "ready_for_next_wave"}
+            if verdict.suggested_rail_signal
+            in {
+                "needs_feedback",
+                "none",
+                "slices_ready_to_spawn",
+                "ready_for_next_wave",
+            }
             else "needs_feedback"
         )
     summary = (

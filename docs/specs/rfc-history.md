@@ -40,6 +40,16 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ### 2026-08-08
 
+- **RFC-231 §8–§9** revised: streaming slice catalog (no wave/stage CE
+  barrier); spawn-ready makers as slice deps clear; host worktree merge into
+  `job/<id>`, peer refresh, conflict resolve goals, land on main at job
+  complete; per-maker review/QA replaces batch integrate. Design draft
+  `docs/drafts/2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md`.
+  Implementation guide **IG-732** (Draft).
+- **RFC-232** amended: optional per-slice `depends_on`; catalog SoT;
+  `max_slices` preferred over nested wave rounds; aligns with RFC-231 §9.
+- **RFC-230** §8 / maturity signals: `slices_ready_to_spawn`; deprecate
+  `ready_for_next_wave` as a spawn barrier (RFC-231 §8–§9).
 - **RFC-231 §10** amended: catalog selection cascade adds structured light-LLM
   auto-pick when submit omits `rail_id` (dynamic merged catalog cards;
   confidence / abstain / fallback to `.rail-default` / `default_rail` / no rail).
@@ -74,6 +84,14 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 ## Chronological Timeline
 
 ### Major Changes - 2026-08-08
+
+**RFC-231 §8–§9 / RFC-232 / RFC-230**: Streaming Slice DAG + Host Worktrees
+
+- Wave/stage is not a CE execution boundary; Autopilot grows the DAG via
+  spawn-ready + optional WavePlan `depends_on`
+- Host merge makers → `job/<id>`; land on main/master only at job complete
+- Per-maker review/QA; batch `spawn_integrate` deprecated for greenfield merge
+- Design draft `2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md`
 
 **RFC-231 §10 / RFC-228**: LLM LoopRail Auto-Pick
 

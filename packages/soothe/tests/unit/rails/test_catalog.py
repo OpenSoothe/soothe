@@ -260,11 +260,11 @@ flow:
 def test_builtin_migration_and_greenfield_declare_plan_milestones_verbs() -> None:
     catalog = LoopRailCatalog()
     gf = catalog.resolve("greenfield-system")
-    assert gf.version == "1.13"
+    assert gf.version == "1.14"
     gf_do = (gf.verbs.get("plan_milestones") or {}).get("do") or []
     assert gf_do and "ownership" in str(gf_do[0].get("spawn_goal", {}).get("brief", "")).lower()
     mig = catalog.resolve("migration")
-    assert mig.version == "2.9"
+    assert mig.version == "2.10"
     mig_do = (mig.verbs.get("plan_milestones") or {}).get("do") or []
     brief = str(mig_do[0].get("spawn_goal", {}).get("brief", ""))
     assert "migration" in brief.lower()

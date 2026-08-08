@@ -26,7 +26,7 @@ def test_greenfield_rail_declares_llm_fanout_contract() -> None:
     assert "artifact" not in rail.fanout
     assert rail.fanout.get("require_plan") is True
     assert "default_modules" not in rail.fanout
-    assert rail.fanout.get("max_waves") == 3
+    assert int(rail.fanout.get("max_waves") or 0) >= 3
     dag_idle = [e for e in rail.flow if e.get("event") == "dag_idle"]
     assert any(e.get("when") == "architecture_ready" for e in dag_idle)
 
@@ -541,8 +541,9 @@ async def test_spawn_clamps_llm_plan_to_engine_budget(tmp_path: Path) -> None:
 
     result = await ex.invoke("spawn_wave_makers", job_id=root.id, trigger_goal_id=arch.id)
     assert result.status == "success"
-    assert len(result.created_goal_ids) == 3
-    assert "clamped_from=10" in result.detail
+    # Streaming spawn materializes all ready slices; pool enforces concurrency.
+    assert len(result.created_goal_ids) == 10
+    assert "spawned 10 ready makers" in result.detail
 
 
 @pytest.mark.asyncio
@@ -629,12 +630,12 @@ async def test_spawn_rich_slices_use_description_and_list_order(tmp_path: Path) 
 
     result = await ex.invoke("spawn_wave_makers", job_id=root.id, trigger_goal_id=arch.id)
     assert result.status == "success"
-    assert len(result.created_goal_ids) == 2
+    assert len(result.created_goal_ids) == 3
     makers = [await ce.get_goal(gid) for gid in result.created_goal_ids]
-    assert makers[0] is not None and makers[1] is not None
-    # Host default priority; WavePlan no longer authors maker priority.
-    assert makers[0].priority == 75
-    assert makers[1].priority == 75
+    assert makers[0] is not None and makers[1] is not None and makers[2] is not None
+    # Host uses WavePlan priority when numeric; else default 75.
+    assert makers[0].priority == 40
+    assert makers[1].priority == 90
     assert "First slice write-set" in (makers[0].description or "")
     assert "Second slice write-set" in (makers[1].description or "")
 
@@ -663,7 +664,8 @@ def test_diagnose_ignores_wire_priority_on_rich_slices() -> None:
     )
     assert result.plan is not None
     assert result.plan.resolved_slice_ids() == ["SLC-001", "SLC-002"]
-    assert "priority" not in result.plan.slices[0].model_dump()
+    # Non-numeric wire priority is coerced away (None), not stored as noise.
+    assert result.plan.slices[0].priority is None
     assert "priority" not in result.plan.as_decompose_plan()[0]
 
 

@@ -27,7 +27,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +48,15 @@ WAVE_PLAN_FILENAME = "wave-plan.json"
 
 
 class WavePlanSlice(BaseModel):
-    """One independent slice for a maker wave (LLM-authored)."""
+    """One independent slice for a maker (LLM-authored)."""
 
     model_config = ConfigDict(extra="ignore")
 
     slice: str = Field(..., min_length=1, max_length=64)
     description: str | None = None
     tags: list[str] = Field(default_factory=list)
+    depends_on: list[str] = Field(default_factory=list)
+    priority: int | None = None
 
     @field_validator("slice")
     @classmethod
@@ -56,6 +65,35 @@ class WavePlanSlice(BaseModel):
         if not cleaned:
             raise ValueError("slice id must be non-empty")
         return cleaned
+
+    @field_validator("depends_on")
+    @classmethod
+    def _strip_deps(cls, value: list[str]) -> list[str]:
+        out: list[str] = []
+        for item in value or []:
+            name = str(item).strip()
+            if name and name not in out:
+                out.append(name)
+        return out
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def _coerce_priority(cls, value: Any) -> int | None:
+        """Accept int priorities; ignore non-numeric wire noise (IG-723)."""
+        if value is None or value == "":
+            return None
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            text = value.strip()
+            if text.isdigit() or (text.startswith("-") and text[1:].isdigit()):
+                return int(text)
+            return None
+        return None
 
 
 class WavePlan(BaseModel):
@@ -66,7 +104,13 @@ class WavePlan(BaseModel):
     wave_slices: list[str] = Field(default_factory=list)
     slices: list[WavePlanSlice] = Field(default_factory=list)
     scout_count: int | None = Field(default=None, ge=1, le=32)
-    max_waves: int | None = Field(default=None, ge=1, le=32)
+    max_slices: int | None = Field(default=None, ge=1, le=64)
+    max_waves: int | None = Field(
+        default=None,
+        ge=1,
+        le=64,
+        description="Legacy alias for max_slices expansion budget",
+    )
     independence: str | None = None
     rationale: str | None = Field(
         default=None,
@@ -83,25 +127,70 @@ class WavePlan(BaseModel):
                 out.append(name)
         return out
 
+    @model_validator(mode="after")
+    def _validate_depends_on_graph(self) -> WavePlan:
+        """Reject unknown / self / cyclic slice depends_on (RFC-232)."""
+        if not self.slices:
+            return self
+        ids = {s.slice for s in self.slices}
+        for s in self.slices:
+            for dep in s.depends_on:
+                if dep == s.slice:
+                    raise ValueError(f"slice {s.slice!r} depends_on itself")
+                if dep not in ids:
+                    raise ValueError(f"slice {s.slice!r} depends_on unknown slice {dep!r}")
+        # Cycle detect (DFS).
+        graph = {s.slice: list(s.depends_on) for s in self.slices}
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(node: str) -> None:
+            if node in visited:
+                return
+            if node in visiting:
+                raise ValueError(f"slice depends_on cycle involving {node!r}")
+            visiting.add(node)
+            for nxt in graph.get(node) or []:
+                visit(nxt)
+            visiting.remove(node)
+            visited.add(node)
+
+        for node in graph:
+            visit(node)
+        return self
+
     def resolved_slice_ids(self) -> list[str]:
         """Prefer rich ``slices`` entries, else ``wave_slices``."""
         if self.slices:
             return [s.slice for s in self.slices]
         return list(self.wave_slices)
 
+    def expansion_budget(self) -> int | None:
+        """Preferred ``max_slices``, else legacy ``max_waves``."""
+        if self.max_slices is not None:
+            return int(self.max_slices)
+        if self.max_waves is not None:
+            return int(self.max_waves)
+        return None
+
     def as_decompose_plan(self) -> list[dict[str, Any]] | None:
         """Map rich slices to ``RailJobState.decompose_plan`` shape."""
         if not self.slices:
             return None
-        return [
-            {
+        out: list[dict[str, Any]] = []
+        for s in self.slices:
+            entry: dict[str, Any] = {
                 "slice": s.slice,
                 "description": s.description or s.slice,
                 "tags": list(s.tags) or ["implementation", "maker"],
                 "role": "maker",
             }
-            for s in self.slices
-        ]
+            if s.depends_on:
+                entry["depends_on"] = list(s.depends_on)
+            if s.priority is not None:
+                entry["priority"] = int(s.priority)
+            out.append(entry)
+        return out
 
 
 @dataclass(frozen=True)
@@ -750,8 +839,10 @@ def apply_wave_plan_to_state_fields(plan: WavePlan) -> dict[str, Any]:
         updates["decompose_plan"] = decompose
     if plan.scout_count is not None:
         updates["scout_count"] = plan.scout_count
-    if plan.max_waves is not None:
-        updates["max_waves"] = plan.max_waves
+    budget = plan.expansion_budget()
+    if budget is not None:
+        updates["max_slices"] = budget
+        updates["max_waves"] = budget  # legacy alias on rail state
     return updates
 
 
@@ -762,6 +853,7 @@ def build_wave_plan(
     rationale: str | None = None,
     independence: str | None = None,
     max_waves: int | None = None,
+    max_slices: int | None = None,
     scout_count: int | None = None,
 ) -> WavePlan:
     """Build a validated ``WavePlan`` from tool / API arguments."""
@@ -779,6 +871,7 @@ def build_wave_plan(
             "rationale": rationale,
             "independence": independence,
             "max_waves": max_waves,
+            "max_slices": max_slices,
             "scout_count": scout_count,
         }
     )

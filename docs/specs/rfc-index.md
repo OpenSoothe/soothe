@@ -1,6 +1,6 @@
 # RFC Index
 
-**Last Updated**: 2026-08-07
+**Last Updated**: 2026-08-08
 **Total RFCs**: 84 (6 archived, 7 reclassified, 1 process specification)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
@@ -226,9 +226,10 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-08-05
+  - Updated: 2026-08-08
   - Depends on: RFC-204, RFC-222, RFC-228, RFC-624, RFC-625, RFC-630
   - Related: RFC-231 (LoopRail + Rail Exec), RFC-232 (flat WavePlan), LoopRail design draft, IG-687, IG-691, IG-692, IG-693
-  - Notes: Host maturity latch; rail exclusivity; consensus exhaust recovery in IG-693
+  - Notes: Host maturity latch; rail exclusivity; `slices_ready_to_spawn`; wave barriers deprecated as spawn gates (RFC-231 §8–§9)
 
 - **RFC-231**: [LoopRail and Rail Exec (Composable Verb Bodies)](RFC-231-looprail-rail-exec.md)
   - Kind: Architecture Design
@@ -236,18 +237,20 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-08-07
   - Updated: 2026-08-08
   - Depends on: RFC-204, RFC-222, RFC-228, RFC-230, RFC-625, RFC-626, RFC-630
-  - Related: RFC-232 (amends §9 fan-out), LoopRail design draft (promoted),
+  - Related: RFC-232 (amends §9), LoopRail design draft (promoted),
+    `2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md` (§9),
     `2026-08-08-llm-rail-auto-pick-design.md` (§10), IG-678, IG-687, IG-691–IG-720, IG-728
-  - Notes: Normative LoopRail; Rail Exec L0/L1/L2; verb bodies as verbs | NL | hybrid;
-    no rail_id forks; §9 amended by RFC-232; §10 LLM auto-pick + deterministic fallbacks (IG-728)
+  - Notes: Normative LoopRail; Rail Exec L0/L1/L2; §9 streaming slice catalog +
+    host worktrees; CE wave-free; §10 LLM auto-pick (IG-728); follow-on IG for §9 impl
 
 - **RFC-232**: [Flat WavePlan Wire Ingest (Semi-Structured, No Nesting)](RFC-232-waveplan-flat-semistructured-ingest.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-08-07
+  - Updated: 2026-08-08
   - Depends on: RFC-231, RFC-204, RFC-222, RFC-625, RFC-630
-  - Related: RFC-230, IG-704, IG-714, IG-718, IG-720
-  - Notes: Flat leaf WavePlan only; markdown+JSON wire OK; nested waves/slices rejected; SoT remains RailJobState; amends RFC-231 §9
+  - Related: RFC-230, streaming slice DAG design draft, IG-704, IG-714, IG-718, IG-720, IG-722
+  - Notes: Flat leaf WavePlan + optional `depends_on`; nested waves rejected; SoT = slice catalog on RailJobState; amends RFC-231 §9
 
 ---
 

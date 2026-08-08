@@ -1,10 +1,10 @@
 id: migration
-version: "2.9"
+version: "2.10"
 
 summary: |
   Multi-step migration or upgrade: architecture milestones with WavePlan
-  slice/wave partitions, parallel makers, integrate, commit gate, review,
-  wave QA, feedback cycles, and pause on irreversible cutover.
+  slice catalog, streaming makers with host job-branch merge, per-maker
+  review/QA, feedback cycles, and pause on irreversible cutover.
 
 applies_when: |
   Framework upgrade, schema migration, API version bump, or multi-file
@@ -12,7 +12,7 @@ applies_when: |
 
 fanout:
   require_plan: true
-  max_waves: 3
+  max_waves: 32
 
 verbs:
   plan_milestones:
@@ -52,27 +52,21 @@ verbs:
 
 conditions:
   architecture_ready: |
-    The architecture / migration milestone map goal completed, and the
-    first wave of independent maker goals has not been spawned yet.
-  wave_makers_done: |
-    All maker goals for the current wave completed successfully.
-  needs_commit: |
-    Integrate finished (or makers finished when integrate was skipped) and
-    a milestone git commit gate should run before review.
-  needs_review: |
-    Commit milestone completed; independent diff-scoped code review should
-    run against the job branch / commit range.
+    The architecture / migration milestone map goal completed, and makers
+    have not been spawned yet.
+  slices_ready_to_spawn: |
+    At least one catalog slice is unspawned and its slice depends_on are
+    satisfied (or omitted).
+  maker_needs_merge: |
+    An implementation maker completed and its branch has not been host-merged
+    into the job branch yet.
   needs_qa: |
-    Review passed or was skipped by policy; wave acceptance tests and
-    migration invariant verification should run.
+    A per-maker review passed or was skipped by policy; slice acceptance
+    tests and migration invariant verification should run for that lineage.
   needs_feedback: |
     Wave QA or a prior feedback verify finished, migration acceptance is
     not yet met, and another find→optimize→verify round should close
     remaining gaps.
-  ready_for_next_wave: |
-    Feedback verify (or exhausted feedback) shows the wave is ready, the
-    DAG has no pending children, and further migration milestone slices
-    remain in the architecture map.
   needs_human: |
     Next step is irreversible (production migrate, data backfill, or cutover).
   branch_is_stuck: |
@@ -98,24 +92,16 @@ flow:
     then: spawn_wave_makers
 
   - event: goal_completed
-    when: wave_makers_done
-    then: spawn_integrate
+    when: maker_needs_merge
+    then: merge_branches
 
   - event: goal_completed
-    when: needs_commit
-    then: commit_milestone
+    when: slices_ready_to_spawn
+    then: spawn_wave_makers
 
   - event: dag_idle
-    when: needs_commit
-    then: commit_milestone
-
-  - event: goal_completed
-    when: needs_review
-    then: review
-
-  - event: dag_idle
-    when: needs_review
-    then: review
+    when: slices_ready_to_spawn
+    then: spawn_wave_makers
 
   - event: goal_completed
     when: needs_qa
@@ -132,14 +118,6 @@ flow:
   - event: goal_failed
     when: needs_feedback
     then: spawn_feedback_cycle
-
-  - event: goal_completed
-    when: ready_for_next_wave
-    then: spawn_wave_makers
-
-  - event: dag_idle
-    when: ready_for_next_wave
-    then: spawn_wave_makers
 
   - event: goal_completed
     when: needs_human
@@ -156,10 +134,6 @@ flow:
   - event: goal_failed
     when: architecture_failed
     then: retry_architecture
-
-  - event: dag_idle
-    when: wave_makers_done
-    then: spawn_integrate
 
   - event: dag_idle
     when: needs_feedback

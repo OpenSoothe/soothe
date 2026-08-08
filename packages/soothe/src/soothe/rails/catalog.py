@@ -27,6 +27,7 @@ CE_RAIL_BUILTINS: frozenset[str] = frozenset(
         "retry_maker",
         "retry_architecture",
         "merge_branches",
+        "land_job_branch",
         "pause_for_user",
         "complete_job",
     }

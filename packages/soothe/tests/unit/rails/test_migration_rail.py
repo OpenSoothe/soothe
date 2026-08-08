@@ -16,11 +16,11 @@ from soothe.rails import LoopRailCatalog
 
 def test_migration_rail_declares_fanout_and_human_gate() -> None:
     rail = LoopRailCatalog().resolve("migration")
-    assert rail.version == "2.9"
+    assert rail.version == "2.10"
     assert "artifact" not in rail.fanout
     assert rail.fanout.get("require_plan") is True
     assert "default_modules" not in rail.fanout
-    assert rail.fanout.get("max_waves") == 3
+    assert int(rail.fanout.get("max_waves") or 0) >= 3
     pm = rail.verbs.get("plan_milestones") or {}
     assert isinstance(pm.get("do"), list) and pm["do"]
     spawn = pm["do"][0].get("spawn_goal") or {}
@@ -31,9 +31,8 @@ def test_migration_rail_declares_fanout_and_human_gate() -> None:
     thens = [str(e.get("then")) for e in rail.flow]
     assert thens[0] == "plan_milestones"
     assert "spawn_wave_makers" in thens
-    assert "spawn_integrate" in thens
-    assert "commit_milestone" in thens
-    assert "review" in thens
+    assert "merge_branches" in thens
+    assert "spawn_integrate" not in thens
     assert "qa_verify" in thens
     assert "spawn_feedback_cycle" in thens
     assert "retry_architecture" in thens
@@ -47,7 +46,7 @@ def test_migration_rail_declares_fanout_and_human_gate() -> None:
     assert human
     dag_idle = [e for e in rail.flow if e.get("event") == "dag_idle"]
     assert any(e.get("when") == "architecture_ready" for e in dag_idle)
-    assert any(e.get("when") == "wave_makers_done" for e in dag_idle)
+    assert any(e.get("when") == "slices_ready_to_spawn" for e in dag_idle)
 
 
 def test_ready_for_next_wave_without_architecture_unmatched() -> None:
@@ -72,23 +71,19 @@ def test_ready_for_next_wave_without_architecture_unmatched() -> None:
 
 
 def test_ready_for_next_wave_architecture_path_still_works() -> None:
+    """Legacy name aliases to slices_ready_to_spawn (streaming; IG-732)."""
     r = _structural_short_circuit(
         condition_name="ready_for_next_wave",
         event="goal_completed",
         trigger_tags=["verify", "feedback"],
         structural={
             "architecture_goal_ids": ["a1"],
+            "all_architecture_terminal": True,
             "fanout_enabled": True,
             "require_plan": True,
-            "pending_or_active_count": 0,
-            "wave_index": 0,
-            "max_waves": 3,
+            "wave_plan_ready": True,
+            "slices_ready_unspawned": True,
             "wave_below_max": True,
-            "all_qa_terminal": True,
-            "feedback_inflight": False,
-            "acceptance_met": False,
-            "feedback_round": 1,
-            "max_feedback_rounds": 8,
         },
     )
     assert isinstance(r, GuardResult)
@@ -104,7 +99,7 @@ async def test_bind_migration_stamps_fanout_state(tmp_path: Path) -> None:
     state = await interp.builtins.job_state(root.id)
     assert state is not None
     assert state.require_plan is True
-    assert state.max_waves == 3
+    assert state.max_waves >= 3
 
 
 @pytest.mark.asyncio

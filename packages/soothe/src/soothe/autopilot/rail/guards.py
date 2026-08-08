@@ -131,7 +131,8 @@ def _structural_short_circuit(
     fanout_mode = _fanout_mode(structural)
 
     if name == "architecture_ready":
-        # When require_plan, WavePlan must be applied (CE findings → rail_state).
+        # Initial fan-out only (no makers yet). Later growth uses
+        # slices_ready_to_spawn (IG-732 streaming).
         require_plan = bool(structural.get("require_plan", False))
         wave_plan_ready = bool(structural.get("wave_plan_ready", False))
         plan_ok = (not require_plan) or wave_plan_ready
@@ -167,6 +168,57 @@ def _structural_short_circuit(
                 f"has_makers={has_makers} require_plan={require_plan} "
                 f"wave_plan_ready={wave_plan_ready} event={event}"
             ),
+        )
+
+    if name == "slices_ready_to_spawn":
+        # Streaming catalog growth — do not require idle DAG.
+        require_plan = bool(structural.get("require_plan", False))
+        wave_plan_ready = bool(structural.get("wave_plan_ready", False))
+        plan_ok = (not require_plan) or wave_plan_ready
+        ready = bool(structural.get("slices_ready_unspawned"))
+        below = bool(structural.get("wave_below_max", True))
+        ok = (
+            event in {"goal_completed", "dag_idle"}
+            and architecture_done
+            and plan_ok
+            and ready
+            and below
+        )
+        return GuardResult(
+            matched=ok,
+            confidence=1.0,
+            reasoning=(
+                f"structural short-circuit: slices_ready_to_spawn ready={ready} "
+                f"plan_ok={plan_ok} below_budget={below} event={event}"
+            ),
+        )
+
+    if name == "maker_needs_merge":
+        ok = (
+            event == "goal_completed"
+            and "implementation" in trigger_tags
+            and "feedback" not in trigger_tags
+            and bool(structural.get("trigger_needs_merge"))
+        )
+        return GuardResult(
+            matched=ok,
+            confidence=1.0,
+            reasoning=(
+                f"structural short-circuit: maker_needs_merge "
+                f"tags={trigger_tags} needs={structural.get('trigger_needs_merge')}"
+            ),
+        )
+
+    if name == "maker_merged":
+        ok = (
+            event == "goal_completed"
+            and "implementation" in trigger_tags
+            and bool(structural.get("trigger_just_merged"))
+        )
+        return GuardResult(
+            matched=ok,
+            confidence=1.0,
+            reasoning="structural short-circuit: maker_merged",
         )
 
     if name == "wave_makers_done":
@@ -227,45 +279,32 @@ def _structural_short_circuit(
         )
 
     if name == "ready_for_next_wave":
-        # Fan-out rails: after feedback verify (or exhausted feedback), idle DAG,
-        # waves remain. Without fanout, do not match structurally.
+        # Deprecated as a spawn barrier (RFC-231 §8). Alias to
+        # slices_ready_to_spawn so legacy YAML does not withhold ready slices.
+        require_plan = bool(structural.get("require_plan", False))
+        wave_plan_ready = bool(structural.get("wave_plan_ready", False))
+        plan_ok = (not require_plan) or wave_plan_ready
+        ready = bool(structural.get("slices_ready_unspawned"))
+        below = bool(structural.get("wave_below_max", True))
         if not fanout_mode:
             return GuardResult(
                 matched=False,
                 confidence=1.0,
                 reasoning=("structural short-circuit: ready_for_next_wave requires fan-out mode"),
             )
-        feedback_round = int(structural.get("feedback_round") or 0)
-        max_feedback_rounds = int(structural.get("max_feedback_rounds") or 8)
-        acceptance_met = bool(structural.get("acceptance_met"))
-        feedback_done = (
-            ("verify" in trigger_tags and "feedback" in trigger_tags)
-            or acceptance_met
-            or feedback_round >= max_feedback_rounds
-            or (
-                event == "dag_idle"
-                and (
-                    acceptance_met
-                    or feedback_round >= max_feedback_rounds
-                    or bool(structural.get("any_verify_completed"))
-                )
-            )
-        )
         ok = (
             event in {"goal_completed", "dag_idle"}
-            and pending == 0
-            and wave_below_max
-            and bool(structural.get("all_qa_terminal", True))
-            and feedback_done
-            and not bool(structural.get("feedback_inflight"))
+            and architecture_done
+            and plan_ok
+            and ready
+            and below
         )
         return GuardResult(
             matched=ok,
             confidence=1.0,
             reasoning=(
-                f"structural short-circuit: ready_for_next_wave "
-                f"pending={pending} wave_below_max={wave_below_max} "
-                f"feedback_done={feedback_done} event={event}"
+                f"structural short-circuit: ready_for_next_wave→slices_ready "
+                f"ready={ready} below_budget={below} event={event}"
             ),
         )
 

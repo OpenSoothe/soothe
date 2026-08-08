@@ -17,11 +17,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from soothe.autopilot.rail import worktree_ops
 from soothe.autopilot.rail.wave_plan import (
     WavePlan,
     apply_wave_plan_to_state_fields,
@@ -80,7 +80,7 @@ class GoalAnnotation:
 
     tags: list[str] = field(default_factory=list)
     branch_id: str | None = None
-    branch_status: str = "active"  # active | pruned | suspended
+    branch_status: str = "active"  # active | pruned | suspended | merged | conflict
     role: str | None = None
 
 
@@ -97,10 +97,14 @@ class RailJobState:
     # Test knobs / decompose plans (None = unset; coalesce at use sites)
     scout_count: int | None = None
     decompose_plan: list[dict[str, Any]] | None = None
-    # Fan-out wave state (active only when fanout_enabled)
+    # Fan-out catalog (streaming spawn; wave_index is legacy/trace only)
     wave_index: int = 0
-    max_waves: int = 3
+    max_waves: int = 32  # legacy alias / default expansion budget; prefer max_slices
+    max_slices: int | None = None
     wave_slices: list[str] | None = None
+    spawned_slices: dict[str, str] = field(default_factory=dict)
+    job_branch: str | None = None
+    base_branch: str | None = None
     # Path that supplied the WavePlan when ingested from a file (optional).
     wave_plan_source_path: str | None = None
     worktrees_enabled: bool = True
@@ -129,6 +133,12 @@ class RailJobState:
             else 32
         )
 
+    def effective_max_slices(self) -> int:
+        """Catalog expansion budget (default max_waves / 32)."""
+        if self.max_slices is not None:
+            return int(self.max_slices)
+        return int(self.max_waves) if self.max_waves else 32
+
 
 @dataclass
 class BuiltinResult:
@@ -155,39 +165,15 @@ def _ensure_worktree(
     *,
     branch: str,
     worktree_path: Path,
+    start_point: str | None = None,
 ) -> Path | None:
     """Create ``branch`` checked out at ``worktree_path``. Return path or None."""
-    worktree_path.parent.mkdir(parents=True, exist_ok=True)
-    if worktree_path.exists():
-        return worktree_path
-    try:
-        # Prefer new branch from HEAD; fall back if branch already exists.
-        proc = subprocess.run(
-            ["git", "worktree", "add", "-b", branch, str(worktree_path)],
-            cwd=repo,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if proc.returncode != 0:
-            proc = subprocess.run(
-                ["git", "worktree", "add", str(worktree_path), branch],
-                cwd=repo,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        if proc.returncode != 0:
-            logger.warning(
-                "git worktree add failed for %s: %s",
-                worktree_path,
-                (proc.stderr or proc.stdout or "").strip()[:300],
-            )
-            return None
-        return worktree_path
-    except OSError as exc:
-        logger.warning("git worktree unavailable: %s", exc)
-        return None
+    return worktree_ops.ensure_worktree(
+        repo,
+        branch=branch,
+        worktree_path=worktree_path,
+        start_point=start_point,
+    )
 
 
 class RailBuiltinExecutor:
@@ -289,6 +275,8 @@ class RailBuiltinExecutor:
             goal.rail_id = rail_id
         goal.rail_tags = list(ann.tags)
         goal.branch_id = ann.branch_id
+        # CE GoalNode only accepts active|pruned|suspended; merged/conflict stay
+        # on RailJobState annotations (IG-732).
         if ann.branch_status in ("active", "pruned", "suspended"):
             goal.branch_status = ann.branch_status  # type: ignore[assignment]
         goal.role = ann.role
@@ -313,14 +301,19 @@ class RailBuiltinExecutor:
                 ann.role = goal.role
             if goal.branch_id and not ann.branch_id:
                 ann.branch_id = goal.branch_id
-            if goal.branch_status in ("active", "pruned", "suspended"):
+            if goal.branch_status in ("active", "pruned", "suspended") and ann.branch_status in {
+                "active",
+                "",
+            }:
                 ann.branch_status = goal.branch_status
 
     @staticmethod
     def _merge_rail_state(base: RailJobState, donor: RailJobState) -> RailJobState:
-        """Prefer ``base`` identity; keep donor annotations / wave counters."""
+        """Prefer ``base`` identity; keep donor annotations / catalog maps."""
         annotations = dict(donor.annotations)
         annotations.update(base.annotations)
+        spawned = dict(donor.spawned_slices or {})
+        spawned.update(base.spawned_slices or {})
         return RailJobState(
             job_id=base.job_id,
             rail_id=base.rail_id or donor.rail_id,
@@ -334,7 +327,11 @@ class RailBuiltinExecutor:
             else donor.decompose_plan,
             wave_index=max(base.wave_index, donor.wave_index),
             max_waves=max(base.max_waves, donor.max_waves),
+            max_slices=base.max_slices if base.max_slices is not None else donor.max_slices,
             wave_slices=base.wave_slices if base.wave_slices is not None else donor.wave_slices,
+            spawned_slices=spawned,
+            job_branch=base.job_branch or donor.job_branch,
+            base_branch=base.base_branch or donor.base_branch,
             wave_plan_source_path=base.wave_plan_source_path
             if base.wave_plan_source_path is not None
             else donor.wave_plan_source_path,
@@ -380,7 +377,11 @@ class RailBuiltinExecutor:
                 "decompose_plan": state.decompose_plan,
                 "wave_index": state.wave_index,
                 "max_waves": state.max_waves,
+                "max_slices": state.max_slices,
                 "wave_slices": state.wave_slices,
+                "spawned_slices": state.spawned_slices,
+                "job_branch": state.job_branch,
+                "base_branch": state.base_branch,
                 "wave_plan_source_path": state.wave_plan_source_path,
                 "worktrees_enabled": state.worktrees_enabled,
                 "fanout_enabled": state.fanout_enabled,
@@ -417,6 +418,13 @@ class RailBuiltinExecutor:
                 branch_status=str(ann_raw.get("branch_status") or "active"),
                 role=ann_raw.get("role"),
             )
+        spawned_raw = raw.get("spawned_slices") or {}
+        spawned: dict[str, str] = {}
+        if isinstance(spawned_raw, dict):
+            for k, v in spawned_raw.items():
+                if k and v:
+                    spawned[str(k)] = str(v)
+        max_slices = int(raw["max_slices"]) if raw.get("max_slices") is not None else None
         return RailJobState(
             job_id=str(raw.get("job_id") or job_id),
             rail_id=str(raw.get("rail_id") or ""),
@@ -427,8 +435,12 @@ class RailBuiltinExecutor:
             scout_count=int(raw["scout_count"]) if raw.get("scout_count") is not None else None,
             decompose_plan=raw.get("decompose_plan"),
             wave_index=int(raw.get("wave_index") or 0),
-            max_waves=int(raw.get("max_waves") or 3),
+            max_waves=int(raw.get("max_waves") or 32),
+            max_slices=max_slices,
             wave_slices=raw.get("wave_slices"),
+            spawned_slices=spawned,
+            job_branch=str(raw["job_branch"]) if raw.get("job_branch") else None,
+            base_branch=str(raw["base_branch"]) if raw.get("base_branch") else None,
             wave_plan_source_path=(
                 str(raw["wave_plan_source_path"]) if raw.get("wave_plan_source_path") else None
             ),
@@ -869,16 +881,20 @@ class RailBuiltinExecutor:
             state.decompose_plan = updates["decompose_plan"]
         if updates.get("scout_count") is not None:
             state.scout_count = int(updates["scout_count"])
-        if updates.get("max_waves") is not None:
+        if updates.get("max_slices") is not None:
+            state.max_slices = int(updates["max_slices"])
+            state.max_waves = max(state.max_waves, int(updates["max_slices"]))
+        elif updates.get("max_waves") is not None:
             state.max_waves = max(state.wave_index, int(updates["max_waves"]))
+            state.max_slices = int(updates["max_waves"])
         if source_path:
             state.wave_plan_source_path = source_path
         logger.info(
-            "Applied wave plan for job %s slices=%s scout_count=%s max_waves=%s source=%s",
+            "Applied wave plan for job %s slices=%s scout_count=%s max_slices=%s source=%s",
             state.job_id[:8],
             state.wave_slices,
             state.scout_count,
-            state.max_waves,
+            state.effective_max_slices(),
             state.wave_plan_source_path,
         )
 
@@ -952,40 +968,100 @@ class RailBuiltinExecutor:
         )
         self._mirror_wave_plan_dumps_unlocked(state, diagnosed.plan)
 
+    def _catalog_specs(self, state: RailJobState) -> list[dict[str, Any]]:
+        """Flat slice specs from decompose_plan or synthetic from wave_slices."""
+        if state.decompose_plan:
+            return [dict(s) for s in state.decompose_plan if isinstance(s, dict)]
+        out: list[dict[str, Any]] = []
+        for name in state.wave_slices or []:
+            sid = str(name).strip()
+            if sid:
+                out.append({"slice": sid, "description": sid, "tags": ["implementation", "maker"]})
+        return out
+
+    def _rebuild_spawned_slices(self, state: RailJobState) -> None:
+        """Fill spawned_slices from maker annotations when empty (upgrade path)."""
+        if state.spawned_slices:
+            return
+        for gid, ann in state.annotations.items():
+            if ann.role != "maker" and "maker" not in ann.tags:
+                continue
+            if "implementation" not in ann.tags:
+                continue
+            slug = None
+            for tag in ann.tags:
+                if tag.startswith("slice:"):
+                    slug = tag.split(":", 1)[1]
+                    break
+            if slug is None:
+                # Prefer last non-generic tag as slice id.
+                for tag in reversed(ann.tags):
+                    if tag not in {
+                        "implementation",
+                        "maker",
+                        "feedback",
+                        "replant",
+                    } and not tag.startswith("wave-"):
+                        slug = tag
+                        break
+            if slug:
+                state.spawned_slices[slug] = gid
+
+    def ready_unspawned_slice_ids(self, state: RailJobState) -> list[str]:
+        """Catalog slice ids ready to spawn (deps completed / omitted)."""
+        self._rebuild_spawned_slices(state)
+        specs = self._catalog_specs(state)
+        ready: list[str] = []
+        for spec in specs:
+            slice_id = str(spec.get("slice") or "").strip()
+            if not slice_id or slice_id in state.spawned_slices:
+                continue
+            deps = [str(d).strip() for d in (spec.get("depends_on") or []) if str(d).strip()]
+            ok = True
+            for dep in deps:
+                gid = state.spawned_slices.get(dep)
+                if not gid:
+                    ok = False
+                    break
+                goal = self._ce._dag.get_goal(gid)
+                if goal is None or goal.status != "completed":
+                    ok = False
+                    break
+            if ok:
+                ready.append(slice_id)
+        return ready
+
+    def has_ready_unspawned_slices(self, job_id: str) -> bool:
+        """Structural helper for ``slices_ready_to_spawn`` guards."""
+        state = self._jobs.get(job_id)
+        if state is None:
+            return False
+        if not state.wave_slices and not state.decompose_plan:
+            return False
+        return bool(self.ready_unspawned_slice_ids(state))
+
     async def _do_spawn_wave_makers(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        """Spawn parallel makers for the next wave; optional git worktrees."""
+        """Spawn-ready makers for unspawned catalog slices (streaming; IG-732)."""
+        del trigger_goal_id
         state = await self._require(job_id)
-        if state.wave_index >= state.max_waves:
+        self._ingest_job_wave_plan(state)
+        self._rebuild_spawned_slices(state)
+
+        if len(state.spawned_slices) >= state.effective_max_slices():
             return BuiltinResult(
                 status="skipped",
-                detail=f"max_waves={state.max_waves} reached",
+                detail=f"max_slices={state.effective_max_slices()} reached",
             )
 
-        # Rail policy: ingest structured plan before resolving fan-out width.
-        self._ingest_job_wave_plan(state)
-
-        arch_ids = [
-            gid
-            for gid, ann in state.annotations.items()
-            if "architecture" in ann.tags
-            and (g := self._ce._dag.get_goal(gid)) is not None
-            and g.status == "completed"
-        ]
-        depends = list(arch_ids)
-        if trigger_goal_id and trigger_goal_id not in depends:
-            # Next-wave trigger is usually QA; do not depend on root.
-            tg = self._ce._dag.get_goal(trigger_goal_id)
-            if tg is not None and tg.id != job_id:
-                depends.append(trigger_goal_id)
-
-        repo = _job_workspace(self._ce, job_id)
         resolution = resolve_fanout_slices(
             wave_slices=state.wave_slices,
             decompose_plan=state.decompose_plan,
-            plan=None,  # already ingested into state above
-            max_slices=state.effective_engine_max_parallel_goals(),
+            plan=None,
+            max_slices=max(
+                state.effective_max_slices(), state.effective_engine_max_parallel_goals()
+            ),
             require_plan=state.require_plan,
         )
         if resolution.source == "missing_plan" or not resolution.slices:
@@ -998,40 +1074,71 @@ class RailBuiltinExecutor:
             )
             return BuiltinResult(status="skipped", detail=detail)
 
-        slices = list(resolution.slices)
-        state.wave_slices = slices
-        await self._persist_job(state)
+        # Keep full catalog ids on state (do not shrink to a wave batch).
+        if not state.wave_slices:
+            state.wave_slices = list(resolution.slices)
 
-        logger.info(
-            "spawn_wave_makers job=%s slices=%s source=%s clamped_from=%s "
-            "engine_max_parallel_goals=%s",
-            job_id[:8],
-            slices,
-            resolution.source,
-            resolution.clamped_from,
-            state.effective_engine_max_parallel_goals(),
-        )
+        ready = self.ready_unspawned_slice_ids(state)
+        # Expansion budget: only spawn until max_slices total.
+        room = max(0, state.effective_max_slices() - len(state.spawned_slices))
+        ready = ready[:room]
+        if not ready:
+            return BuiltinResult(
+                status="skipped",
+                detail="no ready unspawned slices",
+            )
 
-        state.wave_index += 1
-        wave = state.wave_index
-        await self._persist_job(state)
-        created: list[str] = []
+        arch_ids = [
+            gid
+            for gid, ann in state.annotations.items()
+            if "architecture" in ann.tags
+            and (g := self._ce._dag.get_goal(gid)) is not None
+            and g.status == "completed"
+        ]
+
+        repo = _job_workspace(self._ce, job_id)
+        if state.worktrees_enabled and repo is not None and _is_git_repo(repo):
+            if not state.base_branch:
+                state.base_branch = worktree_ops.detect_base_branch(repo)
+            if not state.job_branch:
+                # Avoid git ref nesting under maker branches job/<id>/<slug>.
+                state.job_branch = f"job/{job_id[:8]}/_base"
+            ensured = worktree_ops.ensure_job_branch(
+                repo,
+                job_branch=state.job_branch,
+                base_branch=state.base_branch,
+            )
+            if not ensured.ok:
+                logger.warning("ensure job branch failed job=%s: %s", job_id[:8], ensured.detail)
+
         spec_by_slice: dict[str, dict[str, Any]] = {}
-        for spec in state.decompose_plan or []:
+        for spec in self._catalog_specs(state):
             key = str(spec.get("slice") or "").strip()
             if key:
                 spec_by_slice[key] = spec
 
-        for slice_id in slices:
+        created: list[str] = []
+        logger.info(
+            "spawn_wave_makers (spawn-ready) job=%s ready=%s spawned=%s budget=%s",
+            job_id[:8],
+            ready,
+            list(state.spawned_slices),
+            state.effective_max_slices(),
+        )
+
+        for slice_id in ready:
             slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in slice_id)[:48]
             slug = slug.strip("-") or f"slice-{len(created) + 1}"
             maker_ws: str | None = str(repo) if repo else None
-            branch = f"job/{job_id[:8]}/w{wave}/{slug}"
+            branch = f"job/{job_id[:8]}/{slug}"
             if state.worktrees_enabled and repo is not None and _is_git_repo(repo):
-                wt = repo / ".soothe" / "worktrees" / f"w{wave}-{slug}"
-                ensured = _ensure_worktree(repo, branch=branch, worktree_path=wt)
-                if ensured is not None:
-                    maker_ws = str(ensured)
+                wt = repo / ".soothe" / "worktrees" / slug
+                start = state.job_branch or "HEAD"
+                ensured_wt = _ensure_worktree(
+                    repo, branch=branch, worktree_path=wt, start_point=start
+                )
+                if ensured_wt is not None:
+                    maker_ws = str(ensured_wt)
 
             spec = spec_by_slice.get(slice_id) or spec_by_slice.get(slug) or {}
             ownership = str(spec.get("description") or "").strip()
@@ -1043,12 +1150,19 @@ class RailBuiltinExecutor:
                 for t in (spec.get("tags") or [])
                 if str(t).strip() and str(t).strip() not in {"implementation", "maker"}
             ]
+            # CE depends: architecture + completed slice-dep makers.
+            depends = list(arch_ids)
+            for dep_slice in spec.get("depends_on") or []:
+                dep_gid = state.spawned_slices.get(str(dep_slice).strip())
+                if dep_gid and dep_gid not in depends:
+                    depends.append(dep_gid)
+            job_br = state.job_branch or f"job/{job_id[:8]}/_base"
             desc = (
-                f"Wave {wave} maker [{slug}] for job {job_id}. "
+                f"Slice maker [{slug}] for job {job_id}. "
                 f"{ownership} "
                 f"Work in workspace isolation (branch {branch}). "
-                "Do not modify unrelated slices. Leave atomic commits on this "
-                "branch for later integrate/commit gates."
+                "Do not modify unrelated slices. Commit on this branch; "
+                f"the host merges into {job_br} when you complete."
             )
             goal = await self._ce.create_goal(
                 desc,
@@ -1059,7 +1173,7 @@ class RailBuiltinExecutor:
                 workspace=maker_ws,
                 rail_id=state.rail_id,
             )
-            maker_tags = ["implementation", "maker", f"wave-{wave}", slug, *extra_tags]
+            maker_tags = ["implementation", "maker", slug, f"slice:{slug}", *extra_tags]
             seen_tags: set[str] = set()
             maker_tags = [t for t in maker_tags if not (t in seen_tags or seen_tags.add(t))]
             await self.annotate_goal(
@@ -1069,9 +1183,14 @@ class RailBuiltinExecutor:
                 role="maker",
                 branch_id=branch,
             )
+            state.spawned_slices[slice_id] = goal.id
             created.append(goal.id)
 
-        # Root waits on makers (coordinator), makers never wait on root.
+        # Trace counter only (not a spawn gate).
+        if created:
+            state.wave_index += 1
+        await self._persist_job(state)
+
         root = await self._ce.get_goal(job_id)
         if root is not None and created:
             deps = list(root.depends_on or [])
@@ -1080,9 +1199,7 @@ class RailBuiltinExecutor:
                     deps.append(gid)
             await self._ce.update_dependencies(job_id, deps)
 
-        detail = f"spawned {len(created)} makers slices={slices} source={resolution.source}"
-        if resolution.clamped_from is not None:
-            detail += f" clamped_from={resolution.clamped_from}"
+        detail = f"spawned {len(created)} ready makers slices={ready} source={resolution.source}"
         return BuiltinResult(
             status="success",
             detail=detail,
@@ -1092,26 +1209,29 @@ class RailBuiltinExecutor:
     async def _do_spawn_integrate(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        """Spawn integrate/merge goal depending on completed wave makers."""
+        """Spawn an agent integrate goal (custom rails only).
+
+        Shipped greenfield/migration use host ``merge_branches`` instead.
+        """
         state = await self._require(job_id)
-        wave = state.wave_index
         makers = [
             gid
             for gid, ann in state.annotations.items()
             if "implementation" in ann.tags
-            and f"wave-{wave}" in ann.tags
+            and "feedback" not in ann.tags
+            and ann.branch_status != "pruned"
             and (g := self._ce._dag.get_goal(gid)) is not None
             and g.status == "completed"
         ]
         if not makers and trigger_goal_id:
             makers = [trigger_goal_id]
         ws = _job_workspace(self._ce, job_id)
+        job_br = state.job_branch or f"job/{job_id[:8]}/_base"
         goal = await self._ce.create_goal(
             (
-                f"Integrate wave {wave} for job {job_id}. "
-                "Merge maker worktree branches into the job branch, resolve "
-                "conflicts, and leave a clean tree ready for a milestone commit. "
-                "Do not start unrelated features."
+                f"Integrate makers for job {job_id} into {job_br}. "
+                "Prefer host merge when available; resolve remaining conflicts "
+                "and leave a clean tree. Do not start unrelated features."
             ),
             parent_id=job_id,
             depends_on=makers or None,
@@ -1123,41 +1243,39 @@ class RailBuiltinExecutor:
         await self.annotate_goal(
             goal.id,
             job_id,
-            tags=["integrate", f"wave-{wave}"],
+            tags=["integrate"],
             role="integrator",
-            branch_id=job_id,
+            branch_id=job_br,
         )
         return BuiltinResult(
             status="success",
-            detail=f"spawned integrate wave {wave}",
+            detail=f"spawned integrate goal → {job_br}",
             created_goal_ids=[goal.id],
         )
 
     async def _do_commit_milestone(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        """Spawn git commit gate goal (diff-scoped evidence for review/QA)."""
+        """Spawn git commit gate goal (custom rails; not greenfield merge path)."""
         state = await self._require(job_id)
-        wave = state.wave_index
         deps = [trigger_goal_id] if trigger_goal_id else []
         # Prefer integrate as dependency when present.
         integrates = [
             gid
             for gid, ann in state.annotations.items()
             if "integrate" in ann.tags
-            and f"wave-{wave}" in ann.tags
             and (g := self._ce._dag.get_goal(gid)) is not None
             and g.status == "completed"
         ]
         if integrates:
             deps = integrates
         ws = _job_workspace(self._ce, job_id)
+        job_br = state.job_branch or f"job/{job_id[:8]}/_base"
         goal = await self._ce.create_goal(
             (
-                f"Commit milestone for wave {wave} of job {job_id}. "
-                "Create one or more atomic git commits on the job branch covering "
-                "this wave's slices. Commit messages must name the wave and "
-                "slices. Do not push unless asked. Leave `git log` / `git show` "
+                f"Commit milestone for job {job_id} on {job_br}. "
+                "Create one or more atomic git commits covering merged slices. "
+                "Do not push unless asked. Leave `git log` / `git show` "
                 "evidence for the following review goal."
             ),
             parent_id=job_id,
@@ -1170,13 +1288,13 @@ class RailBuiltinExecutor:
         await self.annotate_goal(
             goal.id,
             job_id,
-            tags=["commit", "milestone", f"wave-{wave}"],
+            tags=["commit", "milestone"],
             role="committer",
-            branch_id=job_id,
+            branch_id=job_br,
         )
         return BuiltinResult(
             status="success",
-            detail=f"spawned commit milestone wave {wave}",
+            detail=f"spawned commit milestone on {job_br}",
             created_goal_ids=[goal.id],
         )
 
@@ -1375,12 +1493,6 @@ class RailBuiltinExecutor:
             ),
             "slice",
         )
-        wave_tag = next((t for t in tags if t.startswith("wave-")), f"wave-{state.wave_index}")
-        try:
-            wave = int(wave_tag.split("-", 1)[1])
-        except (IndexError, ValueError):
-            wave = state.wave_index or 1
-
         if failed.status not in TERMINAL_STATES:
             await self._ce.cancel_goal(trigger_goal_id, reason="rail:retry_maker_replace")
         await self.annotate_goal(trigger_goal_id, job_id, branch_status="pruned")
@@ -1394,19 +1506,33 @@ class RailBuiltinExecutor:
         ]
         repo = _job_workspace(self._ce, job_id)
         maker_ws: str | None = str(repo) if repo else None
-        branch = f"job/{job_id[:8]}/w{wave}/{slug}-retry"
+        if not state.job_branch:
+            state.job_branch = f"job/{job_id[:8]}/_base"
+        branch = f"job/{job_id[:8]}/{slug}-retry"
         if state.worktrees_enabled and repo is not None and _is_git_repo(repo):
-            wt = repo / ".soothe" / "worktrees" / f"w{wave}-{slug}-retry"
-            ensured = _ensure_worktree(repo, branch=branch, worktree_path=wt)
+            if not state.base_branch:
+                state.base_branch = worktree_ops.detect_base_branch(repo)
+            worktree_ops.ensure_job_branch(
+                repo,
+                job_branch=state.job_branch,
+                base_branch=state.base_branch,
+            )
+            wt = repo / ".soothe" / "worktrees" / f"{slug}-retry"
+            ensured = _ensure_worktree(
+                repo,
+                branch=branch,
+                worktree_path=wt,
+                start_point=state.job_branch,
+            )
             if ensured is not None:
                 maker_ws = str(ensured)
 
         desc = (
-            f"Wave {wave} maker [{slug}] retry for job {job_id}. "
+            f"Slice maker [{slug}] retry for job {job_id}. "
             f"Implement only the '{slug}' slice ownership. "
             f"Work in workspace isolation (branch {branch}). "
-            "Do not modify unrelated slices. Leave atomic commits on this "
-            "branch for later integrate/commit gates."
+            "Do not modify unrelated slices. Commit on this branch; "
+            f"the host merges into {state.job_branch} when you complete."
         )
         replacement = await self._ce.create_goal(
             desc,
@@ -1418,7 +1544,9 @@ class RailBuiltinExecutor:
             rail_id=state.rail_id,
             informs=[trigger_goal_id],
         )
-        new_tags = ["implementation", "maker", wave_tag, slug, "replant"]
+        new_tags = ["implementation", "maker", slug, f"slice:{slug}", "replant"]
+        state.spawned_slices[slug] = replacement.id
+        await self._persist_job(state)
         await self.annotate_goal(
             replacement.id,
             job_id,
@@ -1532,9 +1660,190 @@ class RailBuiltinExecutor:
     async def _do_merge_branches(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        """Reserved catalog verb — not used by shipped builtins."""
-        del job_id, trigger_goal_id
-        return BuiltinResult(status="skipped", detail="merge_branches not implemented")
+        """Host-merge completed maker into job branch; refresh peers; spawn review."""
+        state = await self._require(job_id)
+        if not trigger_goal_id:
+            return BuiltinResult(status="skipped", detail="merge_branches needs trigger maker")
+        ann = state.annotations.get(trigger_goal_id)
+        if ann is None or "implementation" not in ann.tags:
+            return BuiltinResult(status="skipped", detail="trigger is not an implementation maker")
+        if ann.branch_status in {"merged", "pruned"}:
+            return BuiltinResult(status="skipped", detail=f"already {ann.branch_status}")
+        maker = self._ce._dag.get_goal(trigger_goal_id)
+        if maker is None or maker.status != "completed":
+            return BuiltinResult(status="skipped", detail="maker not completed")
+
+        created: list[str] = []
+        repo = _job_workspace(self._ce, job_id)
+        branch = ann.branch_id
+        merge_detail = "no-git merge skipped"
+
+        if state.worktrees_enabled and repo is not None and _is_git_repo(repo) and branch:
+            if not state.base_branch:
+                state.base_branch = worktree_ops.detect_base_branch(repo)
+            if not state.job_branch:
+                state.job_branch = f"job/{job_id[:8]}/_base"
+            worktree_ops.ensure_job_branch(
+                repo,
+                job_branch=state.job_branch,
+                base_branch=state.base_branch,
+            )
+            result = await asyncio.to_thread(
+                worktree_ops.merge_branch_into,
+                repo,
+                target_branch=state.job_branch,
+                source_branch=branch,
+            )
+            if result.conflict:
+                await self.annotate_goal(trigger_goal_id, job_id, branch_status="conflict")
+                resolve = await self._ce.create_goal(
+                    (
+                        f"Resolve merge conflict for maker {trigger_goal_id[:8]} "
+                        f"into {state.job_branch}. Fix conflicts on branch {branch}, "
+                        "then complete so the host can retry the merge."
+                    ),
+                    parent_id=job_id,
+                    depends_on=[trigger_goal_id],
+                    source="decomposition",
+                    priority=85,
+                    workspace=str(maker.workspace or repo),
+                    rail_id=state.rail_id,
+                )
+                await self.annotate_goal(
+                    resolve.id,
+                    job_id,
+                    tags=["resolve", "merge", "implementation"],
+                    role="resolver",
+                    branch_id=branch,
+                    branch_status="conflict",
+                )
+                await self._persist_job(state)
+                return BuiltinResult(
+                    status="success",
+                    detail=result.detail,
+                    created_goal_ids=[resolve.id],
+                )
+            if not result.ok:
+                await self._persist_job(state)
+                return BuiltinResult(status="error", detail=result.detail)
+            merge_detail = result.detail
+            # Refresh other active maker worktrees.
+            for gid, other in state.annotations.items():
+                if gid == trigger_goal_id or "implementation" not in other.tags:
+                    continue
+                if other.branch_status in {"merged", "pruned", "conflict"}:
+                    continue
+                g = self._ce._dag.get_goal(gid)
+                if g is None or not g.workspace:
+                    continue
+                wt = Path(g.workspace)
+                if wt.exists():
+                    await asyncio.to_thread(
+                        worktree_ops.refresh_worktree_onto,
+                        wt,
+                        onto_branch=state.job_branch,
+                    )
+        else:
+            # Non-git / worktrees disabled: still mark merged for streaming spawn.
+            merge_detail = "annotated merged (git worktrees disabled or unavailable)"
+
+        await self.annotate_goal(trigger_goal_id, job_id, branch_status="merged")
+        await self._persist_job(state)
+
+        # Per-maker review (does not block unrelated makers).
+        review = await self._ce.create_goal(
+            (
+                f"Review merged slice for maker {trigger_goal_id[:8]} on "
+                f"{state.job_branch or 'job branch'}. Diff-scoped review only; "
+                "do not block unrelated slices."
+            ),
+            parent_id=job_id,
+            depends_on=[trigger_goal_id],
+            source="decomposition",
+            priority=80,
+            workspace=str(repo) if repo else None,
+            rail_id=state.rail_id,
+        )
+        await self.annotate_goal(
+            review.id,
+            job_id,
+            tags=["review"],
+            role="reviewer",
+            branch_id=state.job_branch or job_id,
+        )
+        created.append(review.id)
+
+        # Grow the CE DAG with newly unblocked slices.
+        spawn = await self.invoke(
+            "spawn_wave_makers",
+            job_id=job_id,
+            trigger_goal_id=trigger_goal_id,
+        )
+        created.extend(list(spawn.created_goal_ids or []))
+
+        root = await self._ce.get_goal(job_id)
+        if root is not None:
+            deps = list(root.depends_on or [])
+            for gid in created:
+                if gid not in deps:
+                    deps.append(gid)
+            await self._ce.update_dependencies(job_id, deps)
+
+        return BuiltinResult(
+            status="success",
+            detail=f"{merge_detail}; spawn={spawn.detail}",
+            created_goal_ids=created,
+        )
+
+    async def _do_land_job_branch(
+        self, *, job_id: str, trigger_goal_id: str | None
+    ) -> BuiltinResult:
+        """Merge job branch into base branch (main/master)."""
+        del trigger_goal_id
+        state = await self._require(job_id)
+        repo = _job_workspace(self._ce, job_id)
+        if repo is None or not _is_git_repo(repo) or not state.job_branch:
+            return BuiltinResult(
+                status="skipped",
+                detail="land skipped (no git repo or job_branch)",
+            )
+        if not state.base_branch:
+            state.base_branch = worktree_ops.detect_base_branch(repo)
+        result = await asyncio.to_thread(
+            worktree_ops.land_job_branch,
+            repo,
+            job_branch=state.job_branch,
+            base_branch=state.base_branch,
+        )
+        await self._persist_job(state)
+        if result.conflict:
+            resolve = await self._ce.create_goal(
+                (
+                    f"Resolve land conflict merging {state.job_branch} into "
+                    f"{state.base_branch} for job {job_id}."
+                ),
+                parent_id=job_id,
+                source="decomposition",
+                priority=90,
+                workspace=str(repo),
+                rail_id=state.rail_id,
+            )
+            await self.annotate_goal(
+                resolve.id,
+                job_id,
+                tags=["resolve", "land"],
+                role="resolver",
+                branch_id=state.job_branch,
+                branch_status="conflict",
+            )
+            return BuiltinResult(
+                status="success",
+                detail=result.detail,
+                created_goal_ids=[resolve.id],
+            )
+        if not result.ok:
+            return BuiltinResult(status="error", detail=result.detail)
+        return BuiltinResult(status="success", detail=result.detail)
 
     async def _do_pause_for_user(
         self, *, job_id: str, trigger_goal_id: str | None
@@ -1550,6 +1859,16 @@ class RailBuiltinExecutor:
 
     async def _do_complete_job(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:
         state = await self._require(job_id)
+        # Final land onto base branch before completing the root.
+        land = await self._do_land_job_branch(job_id=job_id, trigger_goal_id=trigger_goal_id)
+        if land.status == "error":
+            return land
+        if land.created_goal_ids:
+            return BuiltinResult(
+                status="success",
+                detail=f"land blocked on resolve: {land.detail}",
+                created_goal_ids=list(land.created_goal_ids),
+            )
         root = await self._ce.get_goal(job_id)
         if root is None:
             return BuiltinResult(status="error", detail="job root missing")
@@ -1558,7 +1877,10 @@ class RailBuiltinExecutor:
         state.completed = True
         state.suspended = False
         await self._persist_job(state)
-        return BuiltinResult(status="success", detail="job completed")
+        return BuiltinResult(
+            status="success",
+            detail=f"job completed; land={land.detail or land.status}",
+        )
 
     async def _require(self, job_id: str) -> RailJobState:
         async with self._lock:

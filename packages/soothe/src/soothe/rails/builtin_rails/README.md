@@ -29,10 +29,11 @@ When submit omits `--rail` / `rail_id`, selection follows RFC-231 §10
 | `hotfix` | Patch → review → QA; human pause on high blast radius |
 | `spike` | Explore → pause for human; no auto-implement |
 | `pr-review` | Review → QA; no implementation branch |
-| `migration` | Milestones → WavePlan makers → integrate → commit → review → QA → feedback; pause on cutover |
-| `greenfield-system` | Milestones → worktree makers → integrate → commit → review → QA → find/optimize/verify until acceptance |
+| `migration` | Milestones → streaming WavePlan makers → host merge → per-maker QA → feedback; pause on cutover |
+| `greenfield-system` | Milestones → streaming worktree makers → host merge into `job/<id>/_base` → per-maker review/QA → feedback until acceptance → land on main |
 
-`merge_branches` is a reserved catalog verb (not used by shipped builtins).
+`merge_branches` is a host verb (merge maker → job branch, refresh peers, spawn
+review). `land_job_branch` runs before `complete_job`.
 
 ### Submit with `greenfield-system`
 
