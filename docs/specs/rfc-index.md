@@ -234,9 +234,12 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-08-07
+  - Updated: 2026-08-08
   - Depends on: RFC-204, RFC-222, RFC-228, RFC-230, RFC-625, RFC-626, RFC-630
-  - Related: RFC-232 (amends §9 fan-out), LoopRail design draft (promoted), IG-678, IG-687, IG-691–IG-720
-  - Notes: Normative LoopRail; Rail Exec L0/L1/L2; verb bodies as verbs | NL | hybrid; no rail_id forks; §9 amended by RFC-232
+  - Related: RFC-232 (amends §9 fan-out), LoopRail design draft (promoted),
+    `2026-08-08-llm-rail-auto-pick-design.md` (§10), IG-678, IG-687, IG-691–IG-720, IG-728
+  - Notes: Normative LoopRail; Rail Exec L0/L1/L2; verb bodies as verbs | NL | hybrid;
+    no rail_id forks; §9 amended by RFC-232; §10 LLM auto-pick + deterministic fallbacks (IG-728)
 
 - **RFC-232**: [Flat WavePlan Wire Ingest (Semi-Structured, No Nesting)](RFC-232-waveplan-flat-semistructured-ingest.md)
   - Kind: Architecture Design

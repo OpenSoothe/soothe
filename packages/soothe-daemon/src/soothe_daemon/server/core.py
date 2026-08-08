@@ -712,6 +712,22 @@ class SootheDaemon(DaemonHandlersMixin):
                         consensus_role,
                     )
 
+                auto_pick_model = None
+                ap_cfg = self._config.agent.autopilot
+                if ap_cfg.rail_auto_pick:
+                    pick_role = ap_cfg.rail_auto_pick_model_role or ap_cfg.monitor_model_role
+                    if pick_role == consensus_role and consensus_model is not None:
+                        auto_pick_model = consensus_model
+                    else:
+                        try:
+                            auto_pick_model = self._config.create_chat_model(pick_role)
+                        except Exception:
+                            logger.warning(
+                                "[Autopilot] rail auto-pick model unavailable for role %s; "
+                                "submit will use deterministic rail defaults only",
+                                pick_role,
+                            )
+
                 self._autopilot_service = AutopilotService(
                     ce=daemon_ce,
                     config=self._config.agent.autopilot,
@@ -721,6 +737,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     runner_factory=self._runner_factory,
                     workspace_reservation=workspace_reservation,
                     consensus_model=consensus_model,
+                    auto_pick_model=auto_pick_model,
                     goal_persist_store=goal_persist_store,
                 )
                 if context_persist_store is not None:

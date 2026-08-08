@@ -91,6 +91,7 @@ class AutopilotService:
         runner_factory: Any,
         workspace_reservation: Any | None = None,
         consensus_model: Any | None = None,
+        auto_pick_model: Any | None = None,
         goal_persist_store: Any | None = None,
     ) -> None:
         """Initialize AutopilotService.
@@ -121,6 +122,9 @@ class AutopilotService:
             consensus_model: Optional LLM for RFC-204 report-commit judgment.
                 When ``None``, completed goals fail consensus (host recovery)
                 rather than parking for an operator (IG-707).
+            auto_pick_model: Optional LLM for LoopRail auto-pick when submit
+                omits ``rail_id`` (RFC-231 §10 / IG-728). Falls back to
+                ``consensus_model`` when unset.
             goal_persist_store: Optional ``AsyncPersistStore`` for persisting
                 the ContextEngine DAG snapshot across daemon restarts.
                 Also backs the job↔loop membership index (IG-677).
@@ -153,6 +157,7 @@ class AutopilotService:
         self._worker_pool = WorkerPool(factory=runner_factory, max_loops=self._config.max_loops)
         self._workspace_reservation = workspace_reservation
         self._consensus_model = consensus_model
+        self._auto_pick_model = auto_pick_model if auto_pick_model is not None else consensus_model
         self._goal_persist_store = goal_persist_store
         self._job_loop_index = JobLoopIndex(store=goal_persist_store)
         self._context_store: Any = None
@@ -511,7 +516,8 @@ class AutopilotService:
             workspace: Optional client workspace path. When set, workers execute
                 in this directory and scheduling-time reservation uses it.
             cron_job_id: Optional cron job ID for tracking recurring job goals (RFC-229).
-            rail_id: Optional LoopRail id (IG-678). Resolved via selector when None.
+            rail_id: Optional LoopRail id (IG-678 / RFC-231 §10). When None,
+                resolved via LLM auto-pick then workspace/config defaults.
             verification_rules: Optional operator criteria (RFC-228; stored on goal).
 
         Returns:
@@ -526,13 +532,38 @@ class AutopilotService:
 
             resolved_workspace = str(validate_client_workspace(workspace))
 
-        from soothe.rails.selector import resolve_rail_id
-
-        resolved_rail = resolve_rail_id(
-            rail_id,
-            workspace=resolved_workspace,
-            default_rail=getattr(self._config, "default_rail", None),
+        from soothe.autopilot.jobs.rail_selection import write_rail_selection
+        from soothe.rails.catalog import LoopRailCatalog
+        from soothe.rails.selector import (
+            RailAutoPicker,
+            RailPickResult,
+            resolve_rail_for_job,
         )
+
+        # Rail selection applies to job roots only (RFC-231 §10 / IG-728).
+        rail_pick: RailPickResult | None = None
+        resolved_rail: str | None = None
+        if parent_id is None:
+            cfg = self._config
+            picker = None
+            if cfg.rail_auto_pick and self._auto_pick_model is not None:
+                picker = RailAutoPicker(self._auto_pick_model)
+            rail_pick = await resolve_rail_for_job(
+                rail_id,
+                description=description,
+                workspace=resolved_workspace,
+                catalog=LoopRailCatalog(workspace=resolved_workspace),
+                picker=picker,
+                default_rail=cfg.default_rail,
+                auto_pick=cfg.rail_auto_pick,
+                min_confidence=cfg.rail_auto_pick_min_confidence,
+                deny=list(cfg.rail_auto_pick_deny),
+                max_candidates=cfg.rail_auto_pick_max_candidates,
+                timeout_s=cfg.rail_auto_pick_timeout_s,
+                skip_llm_if_workspace_default=cfg.rail_auto_pick_skip_if_workspace_default,
+                abstain_overrides_defaults=cfg.rail_auto_pick_abstain_overrides_defaults,
+            )
+            resolved_rail = rail_pick.rail_id
 
         if self._monitor is not None:
             intake = await self._monitor.intake_goal(
@@ -586,15 +617,28 @@ class AutopilotService:
                 job_id=goal.id,
                 description=goal.description,
             )
+            if rail_pick is not None:
+                write_rail_selection(
+                    jobs_root=self._jobs_root,
+                    job_id=goal.id,
+                    pick=rail_pick,
+                )
             await self._bind_rail_for_job(goal)
         if self._dreaming:
             await self.wake_from_dreaming(trigger="new_task")
         await self._persist_goals()
         logger.info(
-            "Goal submitted goal_id=%s parent_id=%s rail_id=%s priority=%s workspace=%s",
+            "Goal submitted goal_id=%s parent_id=%s rail_id=%s rail_source=%s "
+            "rail_confidence=%s priority=%s workspace=%s",
             goal.id,
             goal.parent_id or "-",
             getattr(goal, "rail_id", None) or "-",
+            rail_pick.source if rail_pick is not None else "-",
+            (
+                f"{rail_pick.confidence:.2f}"
+                if rail_pick is not None and rail_pick.confidence is not None
+                else "-"
+            ),
             goal.priority,
             (goal.workspace or "-")[:80],
         )

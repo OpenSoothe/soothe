@@ -69,6 +69,8 @@ class RailDefinition:
             rejected. Engine must not invent fan-out — it lives in rail YAML.
         verbs: Optional catalog-verb body overrides (RFC-231 M2). Keys are
             CE builtin names; values may include ``brief``, ``tags``, ``role``.
+        auto_pick: When False, omit from LLM auto-pick candidates (still
+            selectable via explicit ``rail_id`` / ``--rail``). Default True.
         source_path: Absolute path to the YAML file that won resolution.
         integrity_hash: SHA-256 of the raw YAML text.
     """
@@ -82,6 +84,7 @@ class RailDefinition:
     rules: list[dict[str, Any]] = field(default_factory=list)
     fanout: dict[str, Any] = field(default_factory=dict)
     verbs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    auto_pick: bool = True
     source_path: Path | None = None
     integrity_hash: str = ""
 
@@ -128,6 +131,15 @@ def _normalize_fanout(raw: Any, *, path: Path) -> dict[str, Any]:
 
 
 _VERB_BODY_KEYS = frozenset({"brief", "tags", "role", "do"})
+
+
+def _normalize_auto_pick(raw: Any, *, path: Path) -> bool:
+    """Validate optional ``auto_pick:`` flag (default True)."""
+    if raw is None:
+        return True
+    if not isinstance(raw, bool):
+        raise RailCatalogError(f"{path}: 'auto_pick' must be a bool when present")
+    return bool(raw)
 
 
 def _normalize_verbs(raw: Any, *, path: Path) -> dict[str, dict[str, Any]]:
@@ -294,6 +306,7 @@ def load_rail_file(path: Path) -> RailDefinition:
     rules = _normalize_list_of_maps(data.get("rules"), field_name="rules", path=path)
     fanout = _normalize_fanout(data.get("fanout"), path=path)
     verbs = _normalize_verbs(data.get("verbs"), path=path)
+    auto_pick = _normalize_auto_pick(data.get("auto_pick"), path=path)
 
     if not flow and not rules:
         raise RailCatalogError(f"{path}: rail must define 'flow' and/or 'rules'")
@@ -314,6 +327,7 @@ def load_rail_file(path: Path) -> RailDefinition:
         rules=rules,
         fanout=fanout,
         verbs=verbs,
+        auto_pick=auto_pick,
         source_path=path,
         integrity_hash=compute_rail_hash(text),
     )

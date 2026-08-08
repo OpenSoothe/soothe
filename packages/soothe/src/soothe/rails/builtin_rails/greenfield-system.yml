@@ -1,6 +1,9 @@
 id: greenfield-system
 version: "1.12"
 
+# Explicit --rail only; excluded from LLM auto-pick (RFC-231 §10 / IG-728).
+auto_pick: false
+
 summary: |
   Multi-slice system build from scratch: architecture milestones, parallel
   makers (git worktrees when available), integrate, commit gate, diff-scoped

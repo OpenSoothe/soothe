@@ -31,9 +31,10 @@ Run `./scripts/verify_finally.sh` before ANY commit. Zero lint errors, all tests
 ### 6. After Code Impl: Cleanse → Verify → Fix (MUST)
 After implementing (or changing) code—and before marking work done (commit, PR, or handoff)—you MUST apply this sequence every time:
 
-1. **Cleanse related legacy and dead code** — remove superseded helpers, unused exports, duplicate parallel paths, and stale tests/docs tied to the change. Do **not** change existing functionality while cleansing; cleanup is deletion/consolidation only, not behavior rewrites.
-2. **Run verification** — `./scripts/verify_finally.sh`
-3. **Fix all errors** — lint, format, tests, vulture; do not stop with a failing verify. Re-cleanse if fixes leave new dead code, then re-run verify until green.
+1. **Ask user before cleansing** — for each implementation finished, ask whether to cleanse legacy code, backward compatibility shims, and dead code related to the change.
+2. **Cleanse related legacy and dead code** — if approved, remove superseded helpers, unused exports, duplicate parallel paths, backward compat shims, and stale tests/docs tied to the change. Do **not** change existing functionality while cleansing; cleanup is deletion/consolidation only, not behavior rewrites.
+3. **Run verification** — `./scripts/verify_finally.sh`
+4. **Fix all errors** — lint, format, tests, vulture; do not stop with a failing verify. Re-cleanse if fixes leave new dead code, then re-run verify until green.
 
 ### 7. Terminology
 - NEVER use "layer N" — use concrete names (CoreAgent, StrangeLoop, GoalEngine)

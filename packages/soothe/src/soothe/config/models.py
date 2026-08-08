@@ -335,6 +335,61 @@ class AutopilotConfig(BaseModel):
         ),
     )
 
+    rail_auto_pick: bool = Field(
+        default=True,
+        description=(
+            "When True and submit omits rail_id, run structured LLM auto-pick "
+            "over the merged LoopRail catalog before workspace/config defaults "
+            "(RFC-231 §10 / IG-728)."
+        ),
+    )
+    rail_auto_pick_min_confidence: float = Field(
+        default=0.6,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence to accept an LLM rail pick or abstain.",
+    )
+    rail_auto_pick_model_role: ModelRole | None = Field(
+        default=None,
+        description=("Router model role for rail auto-pick. Null uses monitor_model_role."),
+    )
+    rail_auto_pick_timeout_s: float = Field(
+        default=12.0,
+        ge=1.0,
+        le=120.0,
+        description="Timeout seconds for the rail auto-pick LLM call.",
+    )
+    rail_auto_pick_deny: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Extra rail ids excluded from auto-pick candidates (still selectable "
+            "via explicit rail_id / --rail). Rails with YAML ``auto_pick: false`` "
+            "(e.g. greenfield-system) are omitted without listing them here."
+        ),
+    )
+    rail_auto_pick_max_candidates: int = Field(
+        default=32,
+        ge=1,
+        le=128,
+        description=(
+            "If filtered catalog size exceeds this, skip LLM and use deterministic fallbacks."
+        ),
+    )
+    rail_auto_pick_skip_if_workspace_default: bool = Field(
+        default=False,
+        description=(
+            "When True and workspace .rail-default exists, skip LLM and use "
+            "the marker (operator-pinned workspace)."
+        ),
+    )
+    rail_auto_pick_abstain_overrides_defaults: bool = Field(
+        default=True,
+        description=(
+            "When True, high-confidence LLM abstain (rail_id null) skips "
+            ".rail-default and default_rail."
+        ),
+    )
+
     # RFC-625: AutopilotMonitor settings
     verify_interval: int = Field(
         default=30,

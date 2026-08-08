@@ -10,11 +10,14 @@
 **Depends on**: RFC-204, RFC-222, RFC-228, RFC-230, RFC-625, RFC-626, RFC-630  
 **Related**: RFC-232 (flat WavePlan wire ingest), LoopRail design draft
 (`docs/drafts/2026-07-11-loop-rail-design.md`),
+design draft `docs/drafts/2026-08-08-llm-rail-auto-pick-design.md` (§10 selection),
 design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
-IG-678, IG-687, IG-691, IG-692, IG-693, IG-700, IG-704, IG-714, IG-715, IG-720  
+IG-678, IG-687, IG-691, IG-692, IG-693, IG-700, IG-704, IG-714, IG-715, IG-720,
+IG-728 (LLM rail auto-pick)  
 **Promotes / extends**: LoopRail design draft (normative architecture for
 job-scoped rails; this RFC adds Rail Exec and user-defined verb bodies)  
-**Amended by**: RFC-232 (§9 Fan-out contract — flat wire / nesting reject)
+**Amended by**: RFC-232 (§9 Fan-out contract — flat wire / nesting reject);
+IG-728 implements §10 LLM auto-pick
 
 ## Abstract
 
@@ -58,6 +61,10 @@ alone.
    engine remains wave-agnostic (capacity clamp only).
 6. Enable custom rails to reach **builtin-class power** (waves, feedback chains,
    domain-specific planner/review/QA copy) via YAML overrides.
+7. When submit omits `rail_id`, optionally **auto-pick** a rail via structured
+   light-LLM match against the merged catalog (`summary` / `applies_when`),
+   with deterministic fallbacks (RFC-630; design draft
+   `2026-08-08-llm-rail-auto-pick-design.md`).
 
 ## 3. Non-goals
 
@@ -67,7 +74,11 @@ alone.
 - Replacing AutopilotMonitor dreaming / backoff for **no-rail** jobs.
 - Visual rail editor.
 - Per-rail prune-policy overrides beyond composing L0 `prune` / `replant`.
-- Keyword/regex content judgment for guards or NL expand (RFC-630).
+- Keyword/regex content judgment for guards, NL expand, or **rail selection**
+  (RFC-630).
+- LLM choosing next catalog verbs / flow advancement (report-commit judge and
+  LoopRail remain separate — RFC-204).
+- Re-picking `rail_id` mid-job (resume uses stored id + integrity).
 
 ## 4. Architectural invariant
 
@@ -352,12 +363,72 @@ Three-tier precedence (low → high, last wins), unchanged:
 2. `$SOOTHE_HOME/rails/`
 3. `<workspace>/.soothe/rails/`
 
-Selection: explicit `--rail` → `.rail-default` → `agent.autopilot.default_rail`
-→ **no rail** (Monitor/CE opportunistic path). There is no invented
-`default.yml`.
+Drafts under `drafts/` are never loaded. There is no invented `default.yml`.
 
-Validity rule: a rail is valid iff removing it changes outcomes vs no-rail for
-the same submit text.
+### 10.1 Selection cascade
+
+On job submit (root goal only; `parent_id is None`):
+
+```text
+1. Explicit rail_id / --rail
+      → must exist in merged catalog; unknown id rejects submit
+2. If agent.autopilot.rail_auto_pick and a picker model is available:
+      structured light-LLM over filtered catalog candidates
+        → rail_id in allowed ∧ confidence ≥ min → bind that rail
+        → rail_id null ∧ confidence ≥ min ∧ abstain_overrides_defaults
+            → no rail (skip steps 3–4)
+        → else (low confidence / invalid id / timeout / error)
+            → continue to step 3
+3. Workspace <workspace>/.soothe/rails/.rail-default (first non-comment line)
+4. agent.autopilot.default_rail
+5. No rail — Monitor/CE opportunistic path
+```
+
+Optional `rail_auto_pick_skip_if_workspace_default`: when true and
+`.rail-default` exists, skip step 2 and use the marker (operator-pinned
+workspace). Default false (LLM first; marker is fallback).
+
+Resolution MUST complete **before** LoopRail bind / `job_start`. Auto-pick
+failure MUST NOT fail submit solely for that reason — degrade to steps 3–5.
+
+Sync helper `resolve_rail_id` remains the deterministic subset (explicit →
+workspace default → config → none) for tests and when auto-pick is off.
+
+### 10.2 LLM auto-pick (RFC-630)
+
+When step 2 runs:
+
+- **Candidates**: `LoopRailCatalog(workspace).load_all()` after excluding rails
+  with `auto_pick: false` (e.g. shipped `greenfield-system`) and any ids in
+  `rail_auto_pick_deny` (operator extras; default empty). Builtins and
+  external home/workspace rails share one list; last-wins merge already applied.
+- **Card fields only**: `id`, truncated `summary`, truncated `applies_when`
+  (optional `version` / source tier for logs). Do not send `flow` / `verbs` /
+  full YAML.
+- **Caps**: truncate NL fields; if candidate count exceeds
+  `rail_auto_pick_max_candidates`, skip LLM and use steps 3–5 (fail closed —
+  do not silently drop arbitrary rails).
+- **Prompt**: stable system policy (no hardcoded rail names or counts) + user
+  message with generated Allowed ids, `<catalog_data>` cards, and job text in
+  `<untrusted_data>`. Catalog NL is data about options; job text is the request
+  to classify — neither is instructions (same posture as rail guards).
+- **Output**: structured `{rail_id, confidence, reasoning}`. Host validates
+  `rail_id ∈ allowed ∪ {null}`.
+- **Model**: `rail_auto_pick_model_role` or fallback `monitor_model_role`.
+- **Persistence**: record `source`, `confidence`, `reasoning`,
+  `candidates_considered`, and a catalog hash on job metadata /
+  `rail_state.json` for forensics.
+
+Auto-pick MUST NOT choose next flow verbs. It only sets root `rail_id` once.
+
+Implementation: [IG-728](../impl/IG-728-llm-rail-auto-pick.md). Design detail:
+[2026-08-08-llm-rail-auto-pick-design.md](../drafts/2026-08-08-llm-rail-auto-pick-design.md).
+
+### 10.3 Validity
+
+A rail is valid iff removing it changes outcomes vs no-rail for the same submit
+text. `applies_when` / `summary` SHOULD be self-contained (no “better than X”
+rankings) so external catalog updates remain first-class for auto-pick.
 
 ## 11. Migration from v1 Python builtins
 
@@ -392,6 +463,10 @@ worktree / feedback macro extract; **M4** intent expand.
 | WavePlan missing when `require_plan` | Structural gate does not match; makers do not spawn |
 | Nested WavePlan (waves/slices trees) | Architecture gate `send_back` with nesting reason; no apply (RFC-232) |
 | Consensus send-back exhausted (rail subgoal) | Subgoal `failed` + `goal_failed`; recipe recovery (e.g. `retry_maker`) — RFC-204 / IG-693 |
+| Auto-pick low confidence / timeout / error | Fall back to `.rail-default` / config / no rail; log reasoning |
+| Auto-pick returns unknown or denied id | Treat as picker failure → same fallback |
+| Auto-pick high-confidence abstain | No rail when `abstain_overrides_defaults`; else continue fallback ladder |
+| Candidate set exceeds max | Skip LLM → deterministic fallback |
 
 ## 13. Testing strategy
 
@@ -405,6 +480,7 @@ worktree / feedback macro extract; **M4** intent expand.
 | Guards | Structural predicates + RFC-230 maturity |
 | Trace | Expanded L0 steps recorded |
 | Resume | Incomplete prune/replant recovery unchanged |
+| Auto-pick | Cascade order; unknown id; deny/`auto_pick: false`; formatter with N custom rails; timeout → fallback; bind before `job_start` |
 
 ## 14. Component map
 
@@ -413,11 +489,13 @@ worktree / feedback macro extract; **M4** intent expand.
 | Catalog + `RailDefinition` | `soothe/rails/catalog.py` |
 | Path tiers | `soothe/rails/builtins.py` |
 | Builtin / override recipes | `soothe/rails/builtin_rails/*.yml` + `verbs:` |
+| Rail selection / auto-pick | `soothe/rails/selector.py` (+ picker helper) |
 | Interpreter (L2) | `soothe/autopilot/rail/interpreter.py` |
 | Rail Exec (L1→L0) | `soothe/autopilot/rail/` (evolve `builtins_exec.py` → exec + primitives) |
 | Guards | `soothe/autopilot/rail/guards.py` |
 | WavePlan | `soothe/autopilot/rail/wave_plan.py` |
 | Trace | `soothe/autopilot/rail/trace_store.py` |
+| Submit bind | `soothe/autopilot/service.py` (`submit_goal` → resolve → `_bind_rail_for_job`) |
 | Protocol reference | `soothe_nano` skill `looprail-creator` references |
 
 ## 15. Decision log
@@ -434,6 +512,9 @@ worktree / feedback macro extract; **M4** intent expand.
 | WavePlan wire shape | Flat leaf slices only; semi-structured markdown+JSON allowed; **nested waves/slices forbidden** (RFC-232) |
 | New `then:` without L0 | Forbidden — compose L0 or add framework primitive |
 | Default body style for builtins | Hybrid |
+| Rail selection without `--rail` | Structured LLM auto-pick over dynamic catalog, then `.rail-default` / config / none (IG-728) |
+| Auto-pick prompt | Stable system + live candidate cards; no hardcoded builtin list |
+| `greenfield-system` auto-pick | YAML `auto_pick: false`; still selectable via explicit `--rail` |
 
 ## 16. Open questions
 
@@ -441,6 +522,8 @@ worktree / feedback macro extract; **M4** intent expand.
 - Whether `flow.then` may be a list of catalog verbs in one hook (draft open Q).
 - Structural predicate library completeness vs keeping name-magic forever.
 - Plugin registration surface for new L0 primitives (defer until a concrete need).
+- Whether workspace-tier rails should be ordered before builtins in the auto-pick
+  prompt (default: alphabetical by id for stability).
 
 ## 17. Suggested implementation routing
 
@@ -457,12 +540,15 @@ worktree / feedback macro extract; **M4** intent expand.
    actionable architecture-gate send_backs; amend §9 briefs.
 7. **IG-722** Multi-form WavePlan transfer (structured path/blob, recommended
    dumps, allowlist); SoT = `RailJobState`.
+8. **IG-728** LLM rail auto-pick (§10.1–10.2): picker, cascade, config, tests;
+   align builtin README.
 
 ## Appendix A: relation to prior docs
 
 | Document | Relation |
 |----------|----------|
 | `docs/drafts/2026-07-11-loop-rail-design.md` | Earlier design notes; this RFC is normative for rails + Rail Exec |
+| `docs/drafts/2026-08-08-llm-rail-auto-pick-design.md` | LLM auto-pick design; §10 is normative; IG-728 implements |
 | RFC-230 | Maturity latch + rail exclusivity; consumes Exec outcomes |
 | RFC-204 | Report-commit judgment / send-back; host recovery via catalog verbs |
 | RFC-222 / RFC-625 | Autopilot / CE ownership; StrangeLoop report → CE commit before rail events |
@@ -471,3 +557,4 @@ worktree / feedback macro extract; **M4** intent expand.
 | IG-715 | Migration wave fan-out; must migrate planner copy into YAML bodies (M2) |
 | IG-720 | Historical findings-only file ban; amended by IG-722 (SoT still rail_state) |
 | IG-722 | Multi-form WavePlan transfer; recommended dumps + structured wave_plan_path |
+| IG-728 | LLM rail auto-pick on submit when `rail_id` omitted |

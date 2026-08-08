@@ -2,7 +2,7 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-08-07
+**Last Updated**: 2026-08-08
 **Total RFCs**: 85
 
 ## Summary Statistics
@@ -38,6 +38,16 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ## Recent Changes
 
+### 2026-08-08
+
+- **RFC-231 §10** amended: catalog selection cascade adds structured light-LLM
+  auto-pick when submit omits `rail_id` (dynamic merged catalog cards;
+  confidence / abstain / fallback to `.rail-default` / `default_rail` / no rail).
+  Implementation **IG-728**. Design draft
+  `docs/drafts/2026-08-08-llm-rail-auto-pick-design.md`.
+- **RFC-228** `job_create`: optional `rail_id`; processing steps reference
+  RFC-231 §10 resolution before rail bind / `job_start`.
+
 ### 2026-08-07
 
 - **RFC-232** drafted: Flat WavePlan Wire Ingest (semi-structured markdown+JSON
@@ -62,6 +72,16 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **RFC-413** Phase 4 complete (IG-655): append-oriented DisplayCardStore ledger, live `soothe.card.*` via `event`/`custom`, TUI always prefers daemon projection for structural cards; inline tool rows remain live-only on step widgets. Design draft `docs/drafts/2026-07-27-tui-card-replay-source-of-truth-design.md`.
 
 ## Chronological Timeline
+
+### Major Changes - 2026-08-08
+
+**RFC-231 §10 / RFC-228**: LLM LoopRail Auto-Pick
+
+- Submit without `rail_id`: structured LLM over merged catalog (`summary` /
+  `applies_when`) → confidence gate → `.rail-default` / config / no rail
+- Prompt: stable system + dynamic candidate cards (external rails first-class)
+- **IG-728** implements; design draft `2026-08-08-llm-rail-auto-pick-design.md`
+- `job_create` documents optional `rail_id` and resolution ordering
 
 ### Major Changes - 2026-08-07
 

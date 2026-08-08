@@ -1,4 +1,4 @@
-"""Unit tests for LoopRail selector + AutopilotService rail bind (IG-678 P2)."""
+"""Unit tests for AutopilotService LoopRail bind (IG-678 P2 / IG-728)."""
 
 from __future__ import annotations
 
@@ -10,34 +10,8 @@ from soothe.autopilot import AutopilotService
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.events.internal_bus import InternalEventBus
-from soothe.rails.selector import resolve_rail_id
 
 from .fakes import IdleFakeFactory
-
-
-def test_resolve_rail_explicit_wins(tmp_path: Path) -> None:
-    marker = tmp_path / ".soothe" / "rails"
-    marker.mkdir(parents=True)
-    (marker / ".rail-default").write_text("spike\n", encoding="utf-8")
-    assert (
-        resolve_rail_id("feature-dev", workspace=str(tmp_path), default_rail="hotfix")
-        == "feature-dev"
-    )
-
-
-def test_resolve_rail_workspace_default(tmp_path: Path) -> None:
-    marker = tmp_path / ".soothe" / "rails"
-    marker.mkdir(parents=True)
-    (marker / ".rail-default").write_text("# comment\nspike\n", encoding="utf-8")
-    assert resolve_rail_id(None, workspace=str(tmp_path), default_rail="hotfix") == "spike"
-
-
-def test_resolve_rail_config_default() -> None:
-    assert resolve_rail_id(None, workspace=None, default_rail="pr-review") == "pr-review"
-
-
-def test_resolve_rail_none() -> None:
-    assert resolve_rail_id(None, workspace=None, default_rail=None) is None
 
 
 @pytest.mark.asyncio
@@ -54,6 +28,51 @@ async def test_submit_task_binds_spike_rail_and_decomposes() -> None:
     assert len(children) >= 1
     assert children[0].role == "scout"
     assert "exploration" in children[0].rail_tags
+
+
+@pytest.mark.asyncio
+async def test_submit_auto_pick_binds_llm_rail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """IG-728: submit without rail_id binds LLM pick before job_start."""
+    from soothe.rails.selector import RailAutoPicker, RailAutoPickResponse
+
+    async def fake_pick(
+        self: RailAutoPicker,
+        description: str,
+        cands: object,
+        *,
+        max_field_chars: int = 400,
+    ) -> RailAutoPickResponse:
+        return RailAutoPickResponse(
+            rail_id="spike",
+            confidence=0.92,
+            reasoning="exploration before coding",
+        )
+
+    monkeypatch.setattr(RailAutoPicker, "pick", fake_pick)
+    jobs = tmp_path / "jobs"
+    jobs.mkdir()
+    svc = AutopilotService(
+        ce=ContextEngine(),
+        config=AutopilotConfig(
+            max_loops=2,
+            max_parallel_goals=2,
+            rail_auto_pick=True,
+            rail_auto_pick_min_confidence=0.6,
+        ),
+        internal_bus=InternalEventBus(),
+        runner_factory=IdleFakeFactory(),
+        auto_pick_model=object(),
+    )
+    svc._jobs_root = jobs
+    goal = await svc.submit_task("Compare two store backends before implementing")
+    assert goal.rail_id == "spike"
+    children = [g for g in await svc.list_goals() if g.parent_id == goal.id]
+    assert len(children) >= 1
+    selection = jobs / goal.id / "rail_selection.json"
+    assert selection.is_file()
+    assert "llm" in selection.read_text(encoding="utf-8")
 
 
 @pytest.mark.asyncio

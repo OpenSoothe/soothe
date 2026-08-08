@@ -80,6 +80,10 @@ def test_builtin_catalog_loads_all_shipped_rails() -> None:
         assert rail.flow or rail.rules
         assert rail.source_path is not None
         assert rail.source_path.stem == rail_id
+        if rail_id == "greenfield-system":
+            assert rail.auto_pick is False
+        else:
+            assert rail.auto_pick is True
         # Self-contained copy: no cross-rail or host-internals prose.
         blob = f"{rail.summary}\n{rail.applies_when}".lower()
         assert "differs from" not in blob

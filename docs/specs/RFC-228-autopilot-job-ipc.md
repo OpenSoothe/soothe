@@ -7,7 +7,7 @@
 **Created**: 2026-06-04
 **Updated**: 2026-08-08
 **Dependencies**: RFC-222 (Autopilot and Goal Engine Architecture), RFC-450 (Daemon Communication Protocol)
-**Related**: RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands), RFC-230 (Job Maturity Assessment), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, IG-677 (Job↔Loop Index), IG-613 (protocol-1 `autopilot_*` RPCs), IG-692
+**Related**: RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands), RFC-230 (Job Maturity Assessment), RFC-231 (§10 rail selection / auto-pick), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, IG-677 (Job↔Loop Index), IG-613 (protocol-1 `autopilot_*` RPCs), IG-692, IG-728
 
 ## Abstract
 
@@ -224,9 +224,17 @@ Creates a new autopilot job by submitting a root goal to AutopilotService.
   "type": "job_create",
   "goal": "Refactor the authentication module to support OAuth2.0 with proper error handling and logging.",
   "verification_rules": "All existing tests pass. No type errors. API endpoints return correct status codes.",
+  "rail_id": null,
   "request_id": "req-001"
 }
 ```
+
+Optional fields:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `verification_rules` | string | Free-text success criteria (lifecycle below) |
+| `rail_id` | string \| null | Explicit LoopRail id. When null/omitted, Autopilot resolves per [RFC-231 §10](RFC-231-looprail-rail-exec.md) (LLM auto-pick → `.rail-default` → `default_rail` → no rail). Unknown explicit id MUST reject create. |
 
 > **`user_id` Derivation**: The `user_id` associated with a job is **session-derived**, not passed in the request body. The daemon resolves `user_id` from the authenticated WebSocket session (RFC-450 §30-38). For authenticated sessions this is the real user identity; for unauthenticated CLI sessions in development mode, it defaults to the `http_api` pseudo-user. The resolved `user_id` is recorded on the root GoalNode at creation time and used for subsequent ownership checks (see §Authorization Rules). Clients MUST NOT send a `user_id` field in the request body; if present, it is silently ignored in favor of the session-derived value. This ensures ownership cannot be spoofed by client-supplied data.
 
@@ -241,11 +249,13 @@ Creates a new autopilot job by submitting a root goal to AutopilotService.
 ```
 
 **Processing**:
-1. AutopilotService receives goal submission
+1. AutopilotService receives goal submission (optional `rail_id`, workspace, …)
 2. Daemon resolves `user_id` from the authenticated session and attaches it to the goal submission
-3. AutopilotMonitor calls `ce.create_goal()` to create root GoalNode with status `pending` and `user_id` recorded on the node
-4. Scheduler begins planning and worker assignment
-5. Return GoalNode.id as job_id
+3. Resolve root `rail_id` per [RFC-231 §10](RFC-231-looprail-rail-exec.md) (explicit or auto-pick / defaults) — await before bind
+4. AutopilotMonitor / CE creates root GoalNode with status `pending`, `user_id`, and resolved `rail_id` when any (intake may refine placement asynchronously; rail resolution is **not** deferred to placement)
+5. When `rail_id` is set, bind LoopRail and emit `job_start` before rail-owned fan-out is scheduled
+6. Scheduler begins planning and worker assignment
+7. Return GoalNode.id as job_id
 
 #### `verification_rules` Lifecycle
 

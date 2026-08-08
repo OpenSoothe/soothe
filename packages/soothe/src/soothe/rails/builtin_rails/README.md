@@ -10,11 +10,14 @@ Jobs **without** a `rail_id` keep AutopilotMonitor / ContextEngine opportunistic
 behavior (placement, verifier suggestions, backoff, consensus). A rail is only
 shipped when its policy adds hard gates or topology beyond that path.
 
-Fallback when auto-pick confidence is low:
+When submit omits `--rail` / `rail_id`, selection follows RFC-231 §10
+(implementation IG-728): structured LLM auto-pick over the merged catalog, then:
 
 1. `<workspace>/.soothe/rails/.rail-default` (if set)
 2. `agent.autopilot.default_rail` in config (if set)
 3. **No rail** — Monitor/CE defaults (do not invent a `default.yml`)
+
+`greenfield-system` sets ``auto_pick: false`` (pass `--rail` explicitly).
 
 ## Catalog
 

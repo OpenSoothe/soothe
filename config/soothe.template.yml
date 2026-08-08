@@ -26,6 +26,15 @@ agent:
     consensus_model_role: think
     judge_allow_structural_dag_ops: []
     default_rail: null
+    # LLM LoopRail auto-pick when submit omits rail_id (RFC-231 §10 / IG-728).
+    rail_auto_pick: true
+    rail_auto_pick_min_confidence: 0.6
+    rail_auto_pick_model_role: null
+    rail_auto_pick_timeout_s: 12
+    rail_auto_pick_deny: []
+    rail_auto_pick_max_candidates: 32
+    rail_auto_pick_skip_if_workspace_default: false
+    rail_auto_pick_abstain_overrides_defaults: true
     verify_interval: 30
     dreaming_interval: 300
     dreaming_scope: workspace
