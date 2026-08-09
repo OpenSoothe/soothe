@@ -93,6 +93,7 @@ class AutopilotService:
         consensus_model: Any | None = None,
         auto_pick_model: Any | None = None,
         goal_persist_store: Any | None = None,
+        soothe_config: Any | None = None,
     ) -> None:
         """Initialize AutopilotService.
 
@@ -128,6 +129,9 @@ class AutopilotService:
             goal_persist_store: Optional ``AsyncPersistStore`` for persisting
                 the ContextEngine DAG snapshot across daemon restarts.
                 Also backs the job↔loop membership index (IG-677).
+            soothe_config: Optional full ``SootheConfig`` for Veritas on rail
+                ``pause_for_user`` (IG-737). When unset, pause fails open to
+                CE suspend.
         """
         if runner_factory is None:
             msg = "runner_factory is required"
@@ -135,6 +139,7 @@ class AutopilotService:
         self._ce = ce
         self._monitor = monitor
         self._config = config
+        self._soothe_config = soothe_config
         self._internal_bus = internal_bus if internal_bus is not None else InternalEventBus()
         self._running = False
         self._dreaming = False
@@ -260,6 +265,9 @@ class AutopilotService:
                 guards=guards,
                 trace=JsonlRailTraceStore(root=trace_root, legacy_root=legacy_root),
                 jobs_root=trace_root,
+                soothe_config=self._soothe_config,
+                rail_pause_auto_clarify=bool(self._config.rail_pause_auto_clarify),
+                on_user_intervention=self._on_rail_pause_user_intervention,
             )
         except Exception:
             logger.warning("LoopRail interpreter unavailable", exc_info=True)
@@ -899,6 +907,10 @@ class AutopilotService:
                 break
             goal = parent
         return goal.id if goal is not None else None
+
+    async def _on_rail_pause_user_intervention(self, job_id: str) -> None:
+        """Fire ``user_intervention`` after Veritas auto-proceeds a pause gate."""
+        await self._notify_rail("user_intervention", job_id)
 
     async def _notify_rail(self, event_name: str, goal_id: str, **payload: Any) -> None:
         if self._rail_interpreter is None:

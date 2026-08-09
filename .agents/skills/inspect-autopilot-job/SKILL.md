@@ -195,7 +195,7 @@ makers should use distinct `.soothe/worktrees/…`.
 |------|-------|----------|
 | `feature-dev` | one plan+maker after scouts | scout fan-out |
 | `greenfield-system` | `plan_milestones` → one architecture | makers after `architecture_ready` |
-| `migration` | same fan-out as greenfield (`plan_milestones` → WavePlan → makers); plus `needs_human` → pause | makers after `architecture_ready`; cutover may pause |
+| `migration` | same fan-out as greenfield (`plan_milestones` → WavePlan → makers); plus `needs_human` → `pause_for_user` (Veritas auto-clarify; suspend on defer) | makers after `architecture_ready`; cutover may pause |
 
 ### 4. Rail conformance
 

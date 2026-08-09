@@ -179,7 +179,9 @@ inside that committed report.
 2. Judge reports fundamentally blocked / unrecoverable → **fail**
 3. Judge chooses `send_back` (including thin/minimal report) → retry; fail on budget exhaust
 4. Dependency on suspended/blocked goal → scheduler **blocked** (not judgment)
-5. Explicit job pause (`pause_job`, rail `pause_for_user`) → **suspend** (job-level only)
+5. Explicit job pause (`pause_job`) or rail `pause_for_user` after Veritas
+   defer/deny → **suspend** (job-level only; Veritas PROCEED auto-continues —
+   [IG-737](../impl/IG-737-rail-pause-veritas.md))
 
 > **Implementation Note**: The judge LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). Structured output: `decision: accept | send_back | fail`, `reasoning`, optional `dag_ops`. Prefer **accept** when StrangeLoop Plan-Execute-Eval completed and the CE report supports the goal; do **not** reject solely for missing git/file proof narrative outside the report, and do **not** re-dispatch a second proof mission on the same goal ([IG-725](../impl/IG-725-remove-evidence-turns-trust-sloop.md)). After accept, LoopRail advances on events; AutopilotMonitor may perform non-rail DAG health without inventing rail phases. Headless clarification / empty terminal MUST still produce a **minimal CE report** then map to `send_back` (or `fail` on budget), not operator-wait `suspend`. See design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md` and [IG-707](../impl/IG-707-autopilot-automatic-consensus-no-operator-suspend.md).
 
@@ -257,7 +259,7 @@ MUST goals queue for user confirmation before creation.
 | validated | Autopilot accepted completion | active → accepted |
 | completed | Finished successfully | validated → reported |
 | failed | Unrecoverable / budget exhausted | active → error / exhaust |
-| suspended | Explicit job pause (operator / rail) | pause_job / pause_for_user |
+| suspended | Explicit job pause (operator / rail defer) | pause_job / pause_for_user (Veritas defer) |
 | blocked | Waiting on deps / external gate | active → blocked |
 
 **State Transitions**:

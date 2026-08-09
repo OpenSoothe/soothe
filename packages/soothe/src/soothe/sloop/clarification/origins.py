@@ -39,6 +39,9 @@ ORIGIN_PLAN_EVALUATE: Final = EVALUATE
 ORIGIN_PLANNER_SUBAGENT_REVIEW: Final = "planner_subagent_review"
 """Human review gate after the intake ``planner`` subagent (RFC-633)."""
 
+ORIGIN_RAIL_PAUSE: Final = "rail_pause"
+"""LoopRail ``pause_for_user`` human gate (IG-737); host-side Veritas only."""
+
 PLANNER_WIRE_SUBAGENT: Final = "planner"
 """Intake-only wire id for the planner specialist (RFC-633 / RFC-618)."""
 
@@ -47,6 +50,7 @@ ClarificationOrigin = Literal[
     "generate_plan",
     "evaluate",
     "planner_subagent_review",
+    "rail_pause",
     # legacy ids still accepted by normalize / resume
     "assess",
     "analyze_gaps",
@@ -61,6 +65,7 @@ CLARIFICATION_ORIGINS: frozenset[str] = frozenset(
         ORIGIN_PLAN_GENERATE,
         ORIGIN_PLAN_EVALUATE,
         ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        ORIGIN_RAIL_PAUSE,
     }
 )
 
@@ -104,9 +109,12 @@ def resume_node_for_clarification_origin(origin: str | None) -> str | None:
     Accepts legacy origin ids (``plan_generate``, ``plan_assess``, …) and normalizes them.
 
     Returns:
-        Canonical graph station name, or ``None`` when the origin is unknown.
+        Canonical graph station name, or ``None`` when the origin is unknown
+        or host-only (``rail_pause`` — not a StrangeLoop interrupt).
     """
     if not origin or origin not in _ACCEPTED_CLARIFICATION_ORIGINS:
+        return None
+    if origin == ORIGIN_RAIL_PAUSE:
         return None
     if origin in CLARIFICATION_ORIGIN_RESUME_NODE:
         return CLARIFICATION_ORIGIN_RESUME_NODE[origin]
@@ -123,6 +131,7 @@ __all__ = [
     "ORIGIN_PLAN_EVALUATE",
     "ORIGIN_PLAN_GENERATE",
     "ORIGIN_PLANNER_SUBAGENT_REVIEW",
+    "ORIGIN_RAIL_PAUSE",
     "PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX",
     "PLANNER_WIRE_SUBAGENT",
     "STRANGELOOP_PLANNING_ORIGINS",

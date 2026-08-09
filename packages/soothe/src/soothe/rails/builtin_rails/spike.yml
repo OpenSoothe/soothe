@@ -3,7 +3,7 @@ version: "1.2"
 
 summary: |
   Timeboxed investigation or prototype. Parallel scouts gather evidence, then
-  pause for a human decision before any implementation.
+  pause_for_user (Veritas auto-clarify in autopilot; suspend only on defer).
 
 applies_when: |
   Spike, PoC, architecture comparison, or "should we do X?" research with an

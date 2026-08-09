@@ -10,6 +10,7 @@ from soothe.sloop.clarification.origins import (
     ORIGIN_PLAN_EVALUATE,
     ORIGIN_PLAN_GENERATE,
     ORIGIN_PLANNER_SUBAGENT_REVIEW,
+    ORIGIN_RAIL_PAUSE,
     STRANGELOOP_PLANNING_ORIGINS,
     resume_node_for_clarification_origin,
 )
@@ -21,6 +22,7 @@ def test_clarification_origins_cover_all_stages() -> None:
         ORIGIN_PLAN_GENERATE,
         ORIGIN_PLAN_EVALUATE,
         ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        ORIGIN_RAIL_PAUSE,
     }
 
 
@@ -47,8 +49,14 @@ def test_resume_node_mapping() -> None:
     assert resume_node_for_clarification_origin("plan_assess") == ORIGIN_PLAN_EVALUATE
     assert resume_node_for_clarification_origin("plan_gap_analysis") == ORIGIN_PLAN_EVALUATE
     assert resume_node_for_clarification_origin(ORIGIN_PLANNER_SUBAGENT_REVIEW) == "delegate"
+    assert resume_node_for_clarification_origin(ORIGIN_RAIL_PAUSE) is None
     assert resume_node_for_clarification_origin("not_a_stage") is None
     assert resume_node_for_clarification_origin(None) is None
+
+
+def test_rail_pause_not_force_manual_by_default() -> None:
+    assert ORIGIN_RAIL_PAUSE not in DEFAULT_FORCE_MANUAL_ORIGINS
+    assert ORIGIN_RAIL_PAUSE not in STRANGELOOP_PLANNING_ORIGINS
 
 
 def test_accepted_includes_legacy_origins() -> None:

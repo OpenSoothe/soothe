@@ -739,6 +739,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     consensus_model=consensus_model,
                     auto_pick_model=auto_pick_model,
                     goal_persist_store=goal_persist_store,
+                    soothe_config=self._config,
                 )
                 if context_persist_store is not None:
                     self._autopilot_service._context_store = DurabilityGoalDispatchContextStore(

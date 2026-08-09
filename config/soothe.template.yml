@@ -36,6 +36,9 @@ agent:
     rail_auto_pick_max_candidates: 32
     rail_auto_pick_skip_if_workspace_default: false
     rail_auto_pick_abstain_overrides_defaults: true
+    # Veritas auto-clarify before pause_for_user CE suspend.
+    # PROCEED skips suspend and fires user_intervention; false = always suspend.
+    rail_pause_auto_clarify: true
     # Forced StrangeLoop intake for dispatched goals (null|trivial|simple|complex).
     # null (default) lets the loop classify; simple/trivial/complex skip Pass 1+2.
     intake_scope: null

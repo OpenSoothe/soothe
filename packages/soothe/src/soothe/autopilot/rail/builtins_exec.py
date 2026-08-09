@@ -17,11 +17,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from soothe.autopilot.rail import worktree_ops
+from soothe.autopilot.rail.pause_clarify import (
+    PauseClarifyDecision,
+    decision_to_audit,
+    run_rail_pause_clarify,
+)
 from soothe.autopilot.rail.wave_plan import (
     WavePlan,
     apply_wave_plan_to_state_fields,
@@ -42,6 +48,12 @@ from soothe.rails.verb_defaults import (
     resolve_verb_field,
     waveplan_verify_existing_brief,
 )
+
+if TYPE_CHECKING:
+    from soothe.config.models import SootheConfig
+
+UserInterventionFn = Callable[[str], Awaitable[None]]
+PauseClarifyFn = Callable[..., Awaitable[PauseClarifyDecision]]
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +132,8 @@ class RailJobState:
     acceptance_met: bool = False
     # RFC-231 M2: rail YAML ``verbs:`` overrides (brief/tags/role per catalog verb)
     verb_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # IG-737: last Veritas decision for pause_for_user (forensics)
+    last_pause_clarify: dict[str, Any] | None = None
 
     def effective_scout_count(self) -> int:
         """Scout fan-out width (default 2 when unset)."""
@@ -168,11 +182,19 @@ class RailBuiltinExecutor:
         ce: ContextEngine,
         *,
         jobs_root: Path | None = None,
+        soothe_config: SootheConfig | None = None,
+        rail_pause_auto_clarify: bool = True,
+        on_user_intervention: UserInterventionFn | None = None,
+        pause_clarify_fn: PauseClarifyFn | None = None,
     ) -> None:
         self._ce = ce
         self._jobs: dict[str, RailJobState] = {}
         self._lock = asyncio.Lock()
         self._jobs_root = jobs_root
+        self._soothe_config = soothe_config
+        self._rail_pause_auto_clarify = bool(rail_pause_auto_clarify)
+        self._on_user_intervention = on_user_intervention
+        self._pause_clarify_fn = pause_clarify_fn
 
     async def bind_job(self, state: RailJobState) -> None:
         """Register or replace job state for a root goal id.
@@ -331,6 +353,9 @@ class RailBuiltinExecutor:
             verb_overrides=base.verb_overrides
             if base.verb_overrides
             else dict(donor.verb_overrides or {}),
+            last_pause_clarify=base.last_pause_clarify
+            if base.last_pause_clarify is not None
+            else donor.last_pause_clarify,
         )
 
     async def _persist_job(self, state: RailJobState) -> None:
@@ -375,6 +400,7 @@ class RailBuiltinExecutor:
                 "max_feedback_rounds": state.max_feedback_rounds,
                 "acceptance_met": state.acceptance_met,
                 "verb_overrides": state.verb_overrides,
+                "last_pause_clarify": state.last_pause_clarify,
                 "annotations": {gid: asdict(ann) for gid, ann in state.annotations.items()},
             }
             path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
@@ -440,6 +466,11 @@ class RailBuiltinExecutor:
             max_feedback_rounds=int(raw.get("max_feedback_rounds") or 8),
             acceptance_met=bool(raw.get("acceptance_met")),
             verb_overrides=_coerce_verb_overrides(raw.get("verb_overrides")),
+            last_pause_clarify=(
+                dict(raw["last_pause_clarify"])
+                if isinstance(raw.get("last_pause_clarify"), dict)
+                else None
+            ),
         )
 
     def _tags_by_goal_unlocked(self, job_id: str) -> dict[str, list[str]]:
@@ -1970,17 +2001,93 @@ class RailBuiltinExecutor:
             return BuiltinResult(status="error", detail=result.detail)
         return BuiltinResult(status="success", detail=result.detail)
 
+    async def _resolve_pause_clarify(
+        self,
+        *,
+        job_id: str,
+        trigger_goal_id: str | None,
+    ) -> PauseClarifyDecision:
+        """Run Veritas (or test hook); fail open to defer when unavailable."""
+        if not self._rail_pause_auto_clarify:
+            return PauseClarifyDecision(
+                outcome="defer",
+                rationale="rail_pause_auto_clarify_disabled",
+                source="config",
+            )
+        job = await self._ce.get_goal(job_id)
+        if job is None:
+            return PauseClarifyDecision(
+                outcome="defer",
+                rationale="job_root_missing",
+                source="error",
+            )
+        trigger = await self._ce.get_goal(trigger_goal_id) if trigger_goal_id else None
+        ann = None
+        if trigger_goal_id:
+            try:
+                ann = await self.annotation(trigger_goal_id, job_id)
+            except KeyError:
+                ann = None
+        tags = (
+            list(ann.tags)
+            if ann is not None
+            else list((trigger.rail_tags if trigger else []) or [])
+        )
+        if self._pause_clarify_fn is not None:
+            return await self._pause_clarify_fn(
+                job=job,
+                trigger=trigger,
+                trigger_tags=tags,
+            )
+        if self._soothe_config is None:
+            return PauseClarifyDecision(
+                outcome="defer",
+                rationale="soothe_config_unavailable",
+                source="config",
+            )
+        return await run_rail_pause_clarify(
+            soothe_config=self._soothe_config,
+            job=job,
+            trigger=trigger,
+            trigger_tags=tags,
+        )
+
     async def _do_pause_for_user(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
+        """Human gate: Veritas auto-clarify first; suspend only on defer/deny (IG-737)."""
         state = await self._require(job_id)
+        decision = await self._resolve_pause_clarify(job_id=job_id, trigger_goal_id=trigger_goal_id)
+        state.last_pause_clarify = decision_to_audit(decision)
+
+        if decision.outcome == "proceed":
+            state.suspended = False
+            await self._persist_job(state)
+            if self._on_user_intervention is not None:
+                try:
+                    await self._on_user_intervention(job_id)
+                except Exception:
+                    logger.warning(
+                        "user_intervention after Veritas proceed failed job=%s",
+                        job_id[:8],
+                        exc_info=True,
+                    )
+            return BuiltinResult(
+                status="success",
+                detail="veritas_auto_proceed",
+            )
+
         state.suspended = True
         if trigger_goal_id:
             await self.annotate_goal(trigger_goal_id, job_id, branch_status="suspended")
         root = await self._ce.get_goal(job_id)
         if root is not None and root.status not in TERMINAL_STATES:
             await self._ce.suspend_goal(job_id, reason="rail:pause_for_user")
-        return BuiltinResult(status="success", detail="job suspended for user")
+        await self._persist_job(state)
+        return BuiltinResult(
+            status="success",
+            detail=f"job suspended for user ({decision.outcome})",
+        )
 
     async def _do_complete_job(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:
         state = await self._require(job_id)

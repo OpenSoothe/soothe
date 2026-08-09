@@ -77,7 +77,11 @@ async def test_submit_auto_pick_binds_llm_rail(
 
 @pytest.mark.asyncio
 async def test_spike_pause_resume_user_intervention_and_jsonl_trace(tmp_path: Path) -> None:
-    """Spike rail: scouts → pause → resume fires user_intervention → complete."""
+    """Spike rail: scouts → pause → resume fires user_intervention → complete.
+
+    Without ``soothe_config``, pause_for_user fails open to CE suspend (legacy
+    operator path). Veritas auto-proceed is covered separately.
+    """
     from soothe.autopilot.rail.guards import ScriptedGuardEvaluator
     from soothe.autopilot.rail.interpreter import LoopRailInterpreter
     from soothe.autopilot.rail.trace_store import JsonlRailTraceStore
@@ -98,6 +102,7 @@ async def test_spike_pause_resume_user_intervention_and_jsonl_trace(tmp_path: Pa
         svc._ce,
         guards=ScriptedGuardEvaluator.from_mapping(scripts),
         trace=trace,
+        jobs_root=data / "jobs",
     )
 
     job = await svc.submit_task("Spike compare stores", rail_id="spike")
@@ -126,6 +131,72 @@ async def test_spike_pause_resume_user_intervention_and_jsonl_trace(tmp_path: Pa
     assert "pause_for_user" in builtins
     assert "complete_job" in builtins
     assert (data / "jobs" / job.id / "rail_trace.jsonl").is_file()
+
+
+@pytest.mark.asyncio
+async def test_spike_veritas_auto_proceed_completes_without_resume(tmp_path: Path) -> None:
+    """IG-737: Veritas PROCEED on pause_for_user fires user_intervention → complete."""
+    from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor
+    from soothe.autopilot.rail.guards import ScriptedGuardEvaluator
+    from soothe.autopilot.rail.interpreter import LoopRailInterpreter
+    from soothe.autopilot.rail.pause_clarify import PauseClarifyDecision
+    from soothe.autopilot.rail.trace_store import JsonlRailTraceStore
+
+    data = tmp_path / "data"
+    svc = AutopilotService(
+        ce=ContextEngine(),
+        config=AutopilotConfig(max_loops=2, max_parallel_goals=2),
+        internal_bus=InternalEventBus(),
+        runner_factory=IdleFakeFactory(),
+    )
+
+    async def fake_clarify(**_kwargs: object) -> PauseClarifyDecision:
+        return PauseClarifyDecision(
+            outcome="proceed",
+            confidence=0.95,
+            answers=("PROCEED",),
+            rationale="spike checkpoint auto-approved",
+        )
+
+    # user_intervention has no when clause (always matches). Only script scouts_done.
+    scripts = {
+        ("goal_completed", "scouts_done"): [False, True],
+    }
+    trace = JsonlRailTraceStore(root=data / "jobs", legacy_root=data / "loops")
+    builtins = RailBuiltinExecutor(
+        svc._ce,
+        jobs_root=data / "jobs",
+        rail_pause_auto_clarify=True,
+        on_user_intervention=svc._on_rail_pause_user_intervention,
+        pause_clarify_fn=fake_clarify,
+    )
+    svc._rail_interpreter = LoopRailInterpreter(
+        svc._ce,
+        builtins=builtins,
+        guards=ScriptedGuardEvaluator.from_mapping(scripts),
+        trace=trace,
+        jobs_root=data / "jobs",
+    )
+
+    job = await svc.submit_task("Spike compare stores", rail_id="spike")
+    scouts = [g for g in await svc.list_goals() if g.parent_id == job.id]
+    assert len(scouts) >= 2
+
+    for scout in scouts:
+        await svc._ce.complete_goal(scout.id)
+        await svc._notify_rail("goal_completed", scout.id)
+
+    final = await svc.get_goal(job.id)
+    assert final is not None
+    assert final.status == "completed"
+
+    records = trace.read(job.id)
+    builtins_fired = [r.builtin for r in records if r.builtin and r.guard_result.matched]
+    assert "pause_for_user" in builtins_fired
+    assert "complete_job" in builtins_fired
+    pause_recs = [r for r in records if r.builtin == "pause_for_user"]
+    assert pause_recs
+    assert pause_recs[-1].builtin_result == "success"
 
 
 @pytest.mark.asyncio

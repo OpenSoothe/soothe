@@ -5,16 +5,20 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from soothe.autopilot.rail.builtins_exec import (
     BuiltinResult,
     RailBuiltinExecutor,
     RailJobState,
 )
+
+if TYPE_CHECKING:
+    from soothe.config.models import SootheConfig
 from soothe.autopilot.rail.guards import GuardContext, GuardEvaluator
 from soothe.autopilot.rail.trace_store import (
     GuardResult,
@@ -69,12 +73,21 @@ class LoopRailInterpreter:
         trace: RailTraceStore | None = None,
         catalog: LoopRailCatalog | None = None,
         jobs_root: Path | None = None,
+        soothe_config: SootheConfig | None = None,
+        rail_pause_auto_clarify: bool = True,
+        on_user_intervention: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self._ce = ce
         if builtins is not None:
             self._builtins = builtins
         else:
-            self._builtins = RailBuiltinExecutor(ce, jobs_root=jobs_root)
+            self._builtins = RailBuiltinExecutor(
+                ce,
+                jobs_root=jobs_root,
+                soothe_config=soothe_config,
+                rail_pause_auto_clarify=rail_pause_auto_clarify,
+                on_user_intervention=on_user_intervention,
+            )
         self._guards = guards
         self._trace = trace or MemoryRailTraceStore()
         self._catalog = catalog or LoopRailCatalog()

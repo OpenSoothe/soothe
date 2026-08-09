@@ -392,6 +392,15 @@ class AutopilotConfig(BaseModel):
             ".rail-default and default_rail."
         ),
     )
+    rail_pause_auto_clarify: bool = Field(
+        default=True,
+        description=(
+            "When True, LoopRail pause_for_user runs Veritas auto-clarification "
+            "before CE-suspending the job root. PROCEED skips suspend and fires "
+            "user_intervention; defer/deny keeps suspend. When False, always "
+            "suspend (legacy operator gate)."
+        ),
+    )
 
     # Forced StrangeLoop intake scope for dispatched goals (RFC-630 / loop_input).
     # null (default) = Pass 1+2 classify; trivial|simple|complex skip intake LLM.
@@ -1518,6 +1527,7 @@ class ClarificationConfig(BaseModel):
             "generate_plan",
             "evaluate",
             "planner_subagent_review",
+            "rail_pause",
             # dual-read persisted / pre-IG-672 origin strings
             "plan_generate",
             "plan_assess",

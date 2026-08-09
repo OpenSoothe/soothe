@@ -20,7 +20,8 @@ park waiting for an operator. Consensus and related host paths choose only
 monitor backoff, LoopRail, engine health).
 
 `suspend` / `awaiting_clarification` remain for explicit job-level pauses
-(`pause_job`, rail `pause_for_user`) and interactive (non-autopilot) loops —
+(`pause_job`, rail `pause_for_user` after Veritas defer/deny — see
+[IG-737](IG-737-rail-pause-veritas.md)) and interactive (non-autopilot) loops —
 not for completion judgment.
 
 ---
@@ -42,7 +43,9 @@ not for completion judgment.
 ## Out of scope
 
 - Clarification TUI / interactive `awaiting_clarification` for human loops.
-- Explicit `pause_job` / rail `pause_for_user`.
+- Explicit operator `pause_job` API.
+- Rail `pause_for_user` Veritas auto-clarify (delivered in
+  [IG-737](IG-737-rail-pause-veritas.md); suspend remains for defer/deny).
 - Implementing `max_defer_age_hours` sweeper (unused config; separate IG if needed).
 
 ---
