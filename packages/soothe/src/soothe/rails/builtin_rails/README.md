@@ -32,8 +32,11 @@ When submit omits `--rail` / `rail_id`, selection follows RFC-231 §10
 | `migration` | Milestones → streaming WavePlan makers → host merge → per-maker QA → feedback; pause on cutover |
 | `greenfield-system` | Milestones → streaming worktree makers → host merge into `job/<id>/_base` → per-maker review/QA → feedback until acceptance → land on main |
 
-`merge_branches` is a host verb (merge maker → job branch, refresh peers, spawn
-review). `land_job_branch` runs before `complete_job`.
+`merge_branches` is a host verb (happy-path merge maker → job branch in an
+isolated merge worktree, refresh peers, spawn review). Conflicts or other
+non-trivial git failures spawn a resolve StrangeLoop goal so a worker can fix
+the tree with tools; `dag_idle` / resolve completion retries the host merge.
+`land_job_branch` runs before `complete_job`.
 
 ### Submit with `greenfield-system`
 

@@ -160,22 +160,6 @@ def _is_git_repo(path: Path) -> bool:
     return (path / ".git").exists() or (path / ".git").is_file()
 
 
-def _ensure_worktree(
-    repo: Path,
-    *,
-    branch: str,
-    worktree_path: Path,
-    start_point: str | None = None,
-) -> Path | None:
-    """Create ``branch`` checked out at ``worktree_path``. Return path or None."""
-    return worktree_ops.ensure_worktree(
-        repo,
-        branch=branch,
-        worktree_path=worktree_path,
-        start_point=start_point,
-    )
-
-
 class RailBuiltinExecutor:
     """Execute ``then:`` verbs against ContextEngine + RailJobState."""
 
@@ -1134,7 +1118,7 @@ class RailBuiltinExecutor:
             if state.worktrees_enabled and repo is not None and _is_git_repo(repo):
                 wt = repo / ".soothe" / "worktrees" / slug
                 start = state.job_branch or "HEAD"
-                ensured_wt = _ensure_worktree(
+                ensured_wt = worktree_ops.ensure_worktree(
                     repo, branch=branch, worktree_path=wt, start_point=start
                 )
                 if ensured_wt is not None:
@@ -1518,7 +1502,7 @@ class RailBuiltinExecutor:
                 base_branch=state.base_branch,
             )
             wt = repo / ".soothe" / "worktrees" / f"{slug}-retry"
-            ensured = _ensure_worktree(
+            ensured = worktree_ops.ensure_worktree(
                 repo,
                 branch=branch,
                 worktree_path=wt,
@@ -1657,21 +1641,196 @@ class RailBuiltinExecutor:
             created_goal_ids=[replacement.id],
         )
 
+    def unmerged_maker_ids(self, job_id: str) -> list[str]:
+        """Completed wave makers still needing host merge (oldest first)."""
+        state = self._jobs.get(job_id)
+        if state is None:
+            return []
+        out: list[str] = []
+        for gid, ann in state.annotations.items():
+            tags = ann.tags or []
+            if "implementation" not in tags or "feedback" in tags:
+                continue
+            if "resolve" in tags:
+                continue
+            if ann.branch_status not in {"active", "conflict"}:
+                continue
+            goal = self._ce._dag.get_goal(gid)
+            if goal is None or goal.status != "completed":
+                continue
+            out.append(gid)
+
+        # Stable: created_at when available, else id.
+        def _key(gid: str) -> tuple[str, str]:
+            g = self._ce._dag.get_goal(gid)
+            created = getattr(g, "created_at", None) or ""
+            return (str(created), gid)
+
+        out.sort(key=_key)
+        return out
+
+    def resolve_inflight_for_maker(self, job_id: str, maker_id: str) -> str | None:
+        """Return pending/active resolve+merge goal id for ``maker_id``, if any."""
+        state = self._jobs.get(job_id)
+        if state is None:
+            return None
+        for gid, ann in state.annotations.items():
+            tags = set(ann.tags or [])
+            if "resolve" not in tags or "merge" not in tags:
+                continue
+            goal = self._ce._dag.get_goal(gid)
+            if goal is None or goal.status not in {"pending", "active"}:
+                continue
+            deps = list(goal.depends_on or [])
+            informs = list(getattr(goal, "informs", None) or [])
+            if maker_id in deps or maker_id in informs:
+                return gid
+            # Also match when brief/workspace lineage uses same branch_id.
+            if ann.branch_id and state.annotations.get(maker_id):
+                maker_ann = state.annotations[maker_id]
+                if maker_ann.branch_id and ann.branch_id == maker_ann.branch_id:
+                    return gid
+        return None
+
+    def _maker_id_for_resolve_trigger(
+        self, state: RailJobState, trigger_goal_id: str
+    ) -> str | None:
+        """If trigger is a resolve goal, return the maker it should re-merge."""
+        ann = state.annotations.get(trigger_goal_id)
+        if ann is None:
+            return None
+        tags = set(ann.tags or [])
+        if "resolve" not in tags or "merge" not in tags:
+            return None
+        goal = self._ce._dag.get_goal(trigger_goal_id)
+        if goal is None:
+            return None
+        for dep in list(goal.depends_on or []):
+            dann = state.annotations.get(dep)
+            if (
+                dann is not None
+                and "implementation" in (dann.tags or [])
+                and "resolve" not in (dann.tags or [])
+            ):
+                return dep
+        # Fall back: maker with matching branch_id still unmerged.
+        if ann.branch_id:
+            for gid, other in state.annotations.items():
+                if other.branch_id == ann.branch_id and "implementation" in (other.tags or []):
+                    if "resolve" not in (other.tags or []) and other.branch_status in {
+                        "active",
+                        "conflict",
+                    }:
+                        return gid
+        return None
+
+    async def _spawn_merge_resolve_goal(
+        self,
+        *,
+        job_id: str,
+        state: RailJobState,
+        maker_id: str,
+        branch: str,
+        detail: str,
+        workspace: str | None,
+    ) -> str:
+        """Spawn or reuse a trivial StrangeLoop resolve goal for host merge failure."""
+        existing = self.resolve_inflight_for_maker(job_id, maker_id)
+        if existing is not None:
+            return existing
+        job_branch = state.job_branch or f"job/{job_id[:8]}/_base"
+        brief = (
+            f"Integrate maker branch {branch} into {job_branch} for job {job_id[:8]}. "
+            f"Workspace: {workspace or 'repo root'}. "
+            f"Host merge failed: {detail[:400]}. "
+            "Use git/tools to commit any uncommitted slice work, fix conflicts, "
+            f"leave {job_branch} containing the slice tip, then complete. "
+            "Do not re-implement features."
+        )
+        resolve = await self._ce.create_goal(
+            brief,
+            parent_id=job_id,
+            depends_on=[maker_id],
+            source="decomposition",
+            priority=85,
+            workspace=workspace,
+            rail_id=state.rail_id,
+        )
+        await self.annotate_goal(
+            resolve.id,
+            job_id,
+            tags=["resolve", "merge", "implementation"],
+            role="resolver",
+            branch_id=branch,
+            branch_status="conflict",
+        )
+        await self.annotate_goal(maker_id, job_id, branch_status="conflict")
+        root = await self._ce.get_goal(job_id)
+        if root is not None:
+            deps = list(root.depends_on or [])
+            if resolve.id not in deps:
+                deps.append(resolve.id)
+            await self._ce.update_dependencies(job_id, deps)
+        return resolve.id
+
     async def _do_merge_branches(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        """Host-merge completed maker into job branch; refresh peers; spawn review."""
+        """Host-merge completed maker into job branch; refresh peers; spawn review.
+
+        Happy-path git merge only. Conflicts / complex failures spawn a resolve
+        StrangeLoop goal instead of wedging the rail with a bare error.
+        """
         state = await self._require(job_id)
-        if not trigger_goal_id:
-            return BuiltinResult(status="skipped", detail="merge_branches needs trigger maker")
-        ann = state.annotations.get(trigger_goal_id)
+
+        maker_id: str | None = None
+        if trigger_goal_id:
+            # Resolve completion → retry merge for its maker.
+            resolved_maker = self._maker_id_for_resolve_trigger(state, trigger_goal_id)
+            if resolved_maker is not None:
+                maker_id = resolved_maker
+            else:
+                ann = state.annotations.get(trigger_goal_id)
+                if (
+                    ann is not None
+                    and "implementation" in (ann.tags or [])
+                    and "resolve" not in (ann.tags or [])
+                    and "feedback" not in (ann.tags or [])
+                    and ann.branch_status not in {"merged", "pruned"}
+                ):
+                    maker = self._ce._dag.get_goal(trigger_goal_id)
+                    if maker is not None and maker.status == "completed":
+                        maker_id = trigger_goal_id
+
+        if maker_id is None:
+            # dag_idle / non-maker trigger: pick oldest unmerged without resolve inflight.
+            for cand in self.unmerged_maker_ids(job_id):
+                if self.resolve_inflight_for_maker(job_id, cand) is None:
+                    maker_id = cand
+                    break
+            if maker_id is None:
+                return BuiltinResult(
+                    status="skipped",
+                    detail="no unmerged maker ready (resolve inflight or none)",
+                )
+
+        ann = state.annotations.get(maker_id)
         if ann is None or "implementation" not in ann.tags:
             return BuiltinResult(status="skipped", detail="trigger is not an implementation maker")
         if ann.branch_status in {"merged", "pruned"}:
             return BuiltinResult(status="skipped", detail=f"already {ann.branch_status}")
-        maker = self._ce._dag.get_goal(trigger_goal_id)
+        maker = self._ce._dag.get_goal(maker_id)
         if maker is None or maker.status != "completed":
             return BuiltinResult(status="skipped", detail="maker not completed")
+
+        # Skip while a resolve worker is already active (completed resolve → not inflight).
+        inflight = self.resolve_inflight_for_maker(job_id, maker_id)
+        if inflight is not None:
+            return BuiltinResult(
+                status="skipped",
+                detail=f"resolve inflight for maker: {inflight[:8]}",
+                created_goal_ids=[inflight],
+            )
 
         created: list[str] = []
         repo = _job_workspace(self._ce, job_id)
@@ -1683,53 +1842,34 @@ class RailBuiltinExecutor:
                 state.base_branch = worktree_ops.detect_base_branch(repo)
             if not state.job_branch:
                 state.job_branch = f"job/{job_id[:8]}/_base"
-            worktree_ops.ensure_job_branch(
-                repo,
-                job_branch=state.job_branch,
-                base_branch=state.base_branch,
-            )
+            maker_wt = Path(maker.workspace) if maker.workspace else None
             result = await asyncio.to_thread(
                 worktree_ops.merge_branch_into,
                 repo,
                 target_branch=state.job_branch,
                 source_branch=branch,
+                maker_worktree=maker_wt,
+                base_branch=state.base_branch,
             )
-            if result.conflict:
-                await self.annotate_goal(trigger_goal_id, job_id, branch_status="conflict")
-                resolve = await self._ce.create_goal(
-                    (
-                        f"Resolve merge conflict for maker {trigger_goal_id[:8]} "
-                        f"into {state.job_branch}. Fix conflicts on branch {branch}, "
-                        "then complete so the host can retry the merge."
-                    ),
-                    parent_id=job_id,
-                    depends_on=[trigger_goal_id],
-                    source="decomposition",
-                    priority=85,
+            if not result.ok:
+                resolve_id = await self._spawn_merge_resolve_goal(
+                    job_id=job_id,
+                    state=state,
+                    maker_id=maker_id,
+                    branch=branch,
+                    detail=result.detail or "host merge failed",
                     workspace=str(maker.workspace or repo),
-                    rail_id=state.rail_id,
-                )
-                await self.annotate_goal(
-                    resolve.id,
-                    job_id,
-                    tags=["resolve", "merge", "implementation"],
-                    role="resolver",
-                    branch_id=branch,
-                    branch_status="conflict",
                 )
                 await self._persist_job(state)
                 return BuiltinResult(
                     status="success",
                     detail=result.detail,
-                    created_goal_ids=[resolve.id],
+                    created_goal_ids=[resolve_id],
                 )
-            if not result.ok:
-                await self._persist_job(state)
-                return BuiltinResult(status="error", detail=result.detail)
             merge_detail = result.detail
             # Refresh other active maker worktrees.
             for gid, other in state.annotations.items():
-                if gid == trigger_goal_id or "implementation" not in other.tags:
+                if gid == maker_id or "implementation" not in other.tags:
                     continue
                 if other.branch_status in {"merged", "pruned", "conflict"}:
                     continue
@@ -1747,18 +1887,18 @@ class RailBuiltinExecutor:
             # Non-git / worktrees disabled: still mark merged for streaming spawn.
             merge_detail = "annotated merged (git worktrees disabled or unavailable)"
 
-        await self.annotate_goal(trigger_goal_id, job_id, branch_status="merged")
+        await self.annotate_goal(maker_id, job_id, branch_status="merged")
         await self._persist_job(state)
 
         # Per-maker review (does not block unrelated makers).
         review = await self._ce.create_goal(
             (
-                f"Review merged slice for maker {trigger_goal_id[:8]} on "
+                f"Review merged slice for maker {maker_id[:8]} on "
                 f"{state.job_branch or 'job branch'}. Diff-scoped review only; "
                 "do not block unrelated slices."
             ),
             parent_id=job_id,
-            depends_on=[trigger_goal_id],
+            depends_on=[maker_id],
             source="decomposition",
             priority=80,
             workspace=str(repo) if repo else None,
@@ -1777,7 +1917,7 @@ class RailBuiltinExecutor:
         spawn = await self.invoke(
             "spawn_wave_makers",
             job_id=job_id,
-            trigger_goal_id=trigger_goal_id,
+            trigger_goal_id=maker_id,
         )
         created.extend(list(spawn.created_goal_ids or []))
 

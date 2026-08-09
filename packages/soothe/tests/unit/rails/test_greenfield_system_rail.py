@@ -27,6 +27,7 @@ def test_greenfield_system_rail_loads() -> None:
     dag_idle = [e for e in rail.flow if e.get("event") == "dag_idle"]
     assert any(e.get("when") == "slices_ready_to_spawn" for e in dag_idle)
     assert any(e.get("when") == "needs_feedback" for e in dag_idle)
+    assert any(e.get("when") == "maker_needs_merge" for e in dag_idle)
 
 
 def test_architecture_ready_short_circuit() -> None:

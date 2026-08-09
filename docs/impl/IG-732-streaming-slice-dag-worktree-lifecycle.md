@@ -107,7 +107,37 @@ tips were not on `master`; `merge_branches` was unimplemented.
 - [x] Greenfield no longer uses batch `spawn_integrate` in flow
 - [x] `branch_status` includes `merged` / `conflict` on rail annotations
 
-### P4 — Tests
+### P4 — Merge resilience (happy-path host + agent resolve)
+
+Forensic follow-up: job `abe91be4` — dirty primary blocked `checkout`
+of `job/<id>/_base`; late-slice `merge_branches` returned bare `error`
+with no retry; unborn maker worktrees never got tips.
+
+- [x] Host merge only in isolated `.soothe/merge/_host` worktree (never
+      checkout job branch in dirty primary)
+- [x] Thin materialize tip (one best-effort commit); else `needs_agent`
+- [x] Conflict **or** any complex failure → spawn/reuse resolve StrangeLoop
+      goal (tool-oriented brief); do not wedge rail with bare `error`
+- [x] `dag_idle` + `maker_needs_merge` → `merge_branches` (greenfield +
+      migration); resolve completion re-enters merge
+- [x] Unit: dirty primary merge; conflict flag; unborn WT materialize;
+      resolve spawn; idle/resolve guards
+- [ ] `./scripts/verify_finally.sh` green before commit
+
+### Continue stuck job (operator runbook)
+
+After upgrading the daemon and `soothed restart`:
+
+1. Leave `.soothe/worktrees/*` in place; optionally stash/commit dirty
+   primary files.
+2. Idle fires `merge_branches` for makers still `branch_status=active|conflict`.
+3. Host merges happy-path **or** spawns resolve goals; workers fix git;
+   host retries until annotations show `merged`.
+4. Confirm unity: `git ls-tree -r job/<id>/_base` contains late slices.
+5. Integration ≠ acceptance — job may still need maturity / feedback
+   budget / operator stop separately (`acceptance_met`).
+
+### P5 — Tests (earlier)
 
 - [x] Unit: WavePlan `depends_on` accept / unknown / cycle reject
 - [x] Unit: spawn-ready A∥B; C→A waits
@@ -115,7 +145,6 @@ tips were not on `master`; `merge_branches` was unimplemented.
 - [x] Rails suite updated (140 unit/rails tests green)
 - [ ] Pool cap=1 sequential fill (scheduler integration — optional follow-on)
 - [ ] Merge conflict + land conflict git integration tests (optional)
-- [ ] `./scripts/verify_finally.sh` green before commit
 
 ---
 
@@ -168,10 +197,13 @@ root.depends_on ∪= new maker ids
 ### Merge-on-success
 
 ```text
-on maker goal completed (role=maker, branch set):
-  result = merge_into_job_branch(maker.branch)
-  if conflict:
-    annotate conflict; spawn resolve; return
+on maker goal completed (role=maker, branch set)
+  or dag_idle with unmerged makers
+  or resolve goal completed:
+  ensure job_branch; optional one-shot materialize source tip
+  result = merge in .soothe/merge/_host (not primary checkout)
+  if conflict or needs_agent:
+    annotate conflict; spawn/reuse resolve StrangeLoop; return success
   annotate merged; refresh_peer_worktrees()
   spawn review(M) → (on ok) qa_verify(M)
   invoke spawn_wave_makers (ready set may have grown)
@@ -207,6 +239,16 @@ without waiting for a batch integrate.
 - [x] `job_maturity` RailSignal includes `slices_ready_to_spawn`
 - Kept: `wave_makers_done` / `ready_for_next_wave` guards as legacy aliases;
   `spawn_integrate` catalog verb for custom rails; `wave_index` for trace
+
+## Cleanse (P4 merge resilience — approved 2026-08-09)
+
+- [x] Remove thin `_ensure_worktree` wrapper (call `worktree_ops.ensure_worktree`)
+- [x] Drop duplicate `ensure_job_branch` before `merge_branch_into`
+- [x] Drop redundant post-materialize tip check; simplify failure → resolve gate
+- [x] Simplify resolve-inflight skip (completed resolve is not inflight)
+- [x] Drop `_branch_tip_exists` wrapper (use `_ref_exists`)
+- Kept: custom-rail `spawn_integrate` / `commit_milestone` + legacy guards
+- [x] `./scripts/verify_finally.sh` after cleanse
 
 ---
 

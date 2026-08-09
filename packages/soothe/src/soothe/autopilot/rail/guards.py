@@ -194,18 +194,30 @@ def _structural_short_circuit(
         )
 
     if name == "maker_needs_merge":
-        ok = (
+        unmerged = list(structural.get("unmerged_maker_ids") or [])
+        resolve_done = bool(structural.get("trigger_is_merge_resolve"))
+        maker_done = (
             event == "goal_completed"
             and "implementation" in trigger_tags
             and "feedback" not in trigger_tags
+            and "resolve" not in trigger_tags
             and bool(structural.get("trigger_needs_merge"))
         )
+        resolve_retry = event == "goal_completed" and resolve_done and bool(unmerged)
+        idle_retry = (
+            event == "dag_idle"
+            and bool(unmerged)
+            and not bool(structural.get("resolve_inflight_blocks_all"))
+        )
+        ok = maker_done or resolve_retry or idle_retry
         return GuardResult(
             matched=ok,
             confidence=1.0,
             reasoning=(
                 f"structural short-circuit: maker_needs_merge "
-                f"tags={trigger_tags} needs={structural.get('trigger_needs_merge')}"
+                f"tags={trigger_tags} needs={structural.get('trigger_needs_merge')} "
+                f"unmerged={len(unmerged)} resolve_done={resolve_done} "
+                f"idle={event == 'dag_idle'}"
             ),
         )
 

@@ -351,12 +351,21 @@ class LoopRailInterpreter:
         slices_ready_unspawned = False
         trigger_needs_merge = False
         trigger_just_merged = False
+        trigger_is_merge_resolve = False
+        unmerged_maker_ids: list[str] = []
+        resolve_inflight_blocks_all = False
         if job_state is not None:
             wave_below_max = len(job_state.spawned_slices) < job_state.effective_max_slices()
             feedback_round = int(job_state.feedback_round)
             max_feedback_rounds = int(job_state.max_feedback_rounds)
             rail_acceptance = bool(job_state.acceptance_met)
             slices_ready_unspawned = self._builtins.has_ready_unspawned_slices(event.job_id)
+            unmerged_maker_ids = self._builtins.unmerged_maker_ids(event.job_id)
+            if unmerged_maker_ids:
+                resolve_inflight_blocks_all = all(
+                    self._builtins.resolve_inflight_for_maker(event.job_id, mid) is not None
+                    for mid in unmerged_maker_ids
+                )
             if event.goal_id:
                 tann = job_state.annotations.get(event.goal_id)
                 if tann is not None and "implementation" in (tann.tags or []):
@@ -365,6 +374,8 @@ class LoopRailInterpreter:
                         "conflict",
                     }
                     trigger_just_merged = tann.branch_status == "merged"
+                    ttags = set(tann.tags or [])
+                    trigger_is_merge_resolve = "resolve" in ttags and "merge" in ttags
         root = await self._ce.get_goal(event.job_id)
         acceptance_met = latch_acceptance_met(
             rail_acceptance_met=rail_acceptance,
@@ -452,6 +463,9 @@ class LoopRailInterpreter:
             "slices_ready_unspawned": slices_ready_unspawned,
             "trigger_needs_merge": trigger_needs_merge,
             "trigger_just_merged": trigger_just_merged,
+            "trigger_is_merge_resolve": trigger_is_merge_resolve,
+            "unmerged_maker_ids": unmerged_maker_ids,
+            "resolve_inflight_blocks_all": resolve_inflight_blocks_all,
             "fanout_enabled": fanout_enabled,
             "require_plan": require_plan,
             "wave_plan_ready": wave_plan_ready,

@@ -9,6 +9,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+_MERGE_WORKTREE_REL = Path(".soothe") / "merge" / "_host"
+
 
 @dataclass(frozen=True)
 class GitOpResult:
@@ -17,6 +19,7 @@ class GitOpResult:
     ok: bool
     detail: str = ""
     conflict: bool = False
+    needs_agent: bool = False
 
 
 def _run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -29,11 +32,15 @@ def _run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _ref_exists(repo: Path, ref: str) -> bool:
+    proc = _run_git(repo, "rev-parse", "--verify", ref)
+    return proc.returncode == 0
+
+
 def detect_base_branch(repo: Path) -> str:
     """Return ``main`` or ``master`` (prefer main) when present."""
     for name in ("main", "master"):
-        proc = _run_git(repo, "rev-parse", "--verify", f"refs/heads/{name}")
-        if proc.returncode == 0:
+        if _ref_exists(repo, f"refs/heads/{name}"):
             return name
     # Detached / empty — fall back to current branch name.
     proc = _run_git(repo, "rev-parse", "--abbrev-ref", "HEAD")
@@ -44,20 +51,38 @@ def detect_base_branch(repo: Path) -> str:
 
 
 def ensure_job_branch(repo: Path, *, job_branch: str, base_branch: str) -> GitOpResult:
-    """Create ``job_branch`` from ``base_branch`` when missing."""
-    exists = _run_git(repo, "rev-parse", "--verify", f"refs/heads/{job_branch}")
-    if exists.returncode == 0:
+    """Create ``job_branch`` from the richest safe tip when missing."""
+    if _ref_exists(repo, f"refs/heads/{job_branch}"):
         return GitOpResult(ok=True, detail=f"job branch exists: {job_branch}")
-    base_ok = _run_git(repo, "rev-parse", "--verify", f"refs/heads/{base_branch}")
-    if base_ok.returncode != 0:
-        # Create from HEAD if base missing.
+
+    # Prefer primary HEAD when it is a descendant of base (or base missing).
+    start = base_branch if _ref_exists(repo, f"refs/heads/{base_branch}") else None
+    head = _run_git(repo, "rev-parse", "--verify", "HEAD")
+    if head.returncode == 0:
+        head_sha = (head.stdout or "").strip()
+        if start is None:
+            start = head_sha
+        else:
+            contains = _run_git(repo, "merge-base", "--is-ancestor", start, "HEAD")
+            if contains.returncode == 0:
+                start = head_sha
+
+    if start is None:
         proc = _run_git(repo, "branch", job_branch)
+        start_label = "HEAD"
     else:
-        proc = _run_git(repo, "branch", job_branch, base_branch)
+        proc = _run_git(repo, "branch", job_branch, start)
+        head_sha = (head.stdout or "").strip() if head.returncode == 0 else ""
+        start_label = "HEAD" if start == head_sha else start
+
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "").strip()[:300]
-        return GitOpResult(ok=False, detail=f"create job branch failed: {err}")
-    return GitOpResult(ok=True, detail=f"created {job_branch} from {base_branch}")
+        return GitOpResult(
+            ok=False,
+            needs_agent=True,
+            detail=f"create job branch failed: {err}",
+        )
+    return GitOpResult(ok=True, detail=f"created {job_branch} from {start_label}")
 
 
 def ensure_worktree(
@@ -112,30 +137,173 @@ def ensure_worktree(
         return None
 
 
+def ensure_source_branch_tip(
+    repo: Path,
+    *,
+    source_branch: str,
+    maker_worktree: Path | None,
+) -> GitOpResult:
+    """Best-effort single materialize commit when source tip is missing or WT dirty.
+
+    Complex failures escalate with ``needs_agent=True`` (no multi-step recovery).
+    """
+    tip_ok = _ref_exists(repo, f"refs/heads/{source_branch}")
+    if maker_worktree is None or not maker_worktree.exists():
+        if tip_ok:
+            return GitOpResult(ok=True, detail=f"source tip exists: {source_branch}")
+        return GitOpResult(
+            ok=False,
+            needs_agent=True,
+            detail=(
+                f"source branch {source_branch} has no tip and maker worktree "
+                "is unavailable for materialize"
+            ),
+        )
+
+    status = _run_git(maker_worktree, "status", "--porcelain")
+    dirty = bool((status.stdout or "").strip())
+    if tip_ok and not dirty:
+        return GitOpResult(ok=True, detail=f"source tip clean: {source_branch}")
+
+    # Ensure we are on the maker branch inside the worktree when possible.
+    cur = _run_git(maker_worktree, "rev-parse", "--abbrev-ref", "HEAD")
+    cur_name = (cur.stdout or "").strip()
+    if cur_name != source_branch:
+        # Unborn / wrong branch: try checkout -B onto source from current tree.
+        co = _run_git(maker_worktree, "checkout", "-B", source_branch)
+        if co.returncode != 0 and not tip_ok:
+            err = (co.stderr or co.stdout or "").strip()[:300]
+            return GitOpResult(
+                ok=False,
+                needs_agent=True,
+                detail=f"cannot checkout source branch {source_branch}: {err}",
+            )
+
+    add = _run_git(maker_worktree, "add", "-A")
+    if add.returncode != 0:
+        err = (add.stderr or add.stdout or "").strip()[:300]
+        return GitOpResult(
+            ok=False,
+            needs_agent=True,
+            detail=f"materialize add failed: {err}",
+        )
+    commit = _run_git(
+        maker_worktree,
+        "-c",
+        "user.email=rail@soothe.local",
+        "-c",
+        "user.name=Soothe Rail",
+        "commit",
+        "-m",
+        "rail: materialize slice for host merge",
+    )
+    if commit.returncode != 0:
+        err = (commit.stderr or commit.stdout or "").strip()[:300]
+        if tip_ok and "nothing to commit" in err.lower():
+            return GitOpResult(ok=True, detail=f"source tip exists: {source_branch}")
+        return GitOpResult(
+            ok=False,
+            needs_agent=True,
+            detail=f"materialize commit failed: {err}",
+        )
+    if not _ref_exists(repo, f"refs/heads/{source_branch}"):
+        return GitOpResult(
+            ok=False,
+            needs_agent=True,
+            detail=f"source branch {source_branch} still has no tip after materialize",
+        )
+    return GitOpResult(ok=True, detail=f"materialized tip on {source_branch}")
+
+
+def _ensure_merge_worktree(repo: Path, *, target_branch: str) -> GitOpResult:
+    """Return a clean worktree checked out to ``target_branch`` (never primary)."""
+    merge_wt = repo / _MERGE_WORKTREE_REL
+    merge_wt.parent.mkdir(parents=True, exist_ok=True)
+
+    if merge_wt.exists():
+        # Reset hard to target tip; keep worktree attached.
+        co = _run_git(merge_wt, "checkout", "-f", target_branch)
+        if co.returncode != 0:
+            # Re-add if worktree metadata is broken.
+            _run_git(repo, "worktree", "remove", "--force", str(merge_wt))
+        else:
+            _run_git(merge_wt, "reset", "--hard", "HEAD")
+            _run_git(merge_wt, "clean", "-fd")
+            return GitOpResult(ok=True, detail=str(merge_wt))
+
+    if not merge_wt.exists():
+        proc = _run_git(
+            repo,
+            "worktree",
+            "add",
+            "--force",
+            str(merge_wt),
+            target_branch,
+        )
+        if proc.returncode != 0:
+            err = (proc.stderr or proc.stdout or "").strip()[:300]
+            return GitOpResult(
+                ok=False,
+                needs_agent=True,
+                detail=f"merge worktree add failed: {err}",
+            )
+    _run_git(merge_wt, "reset", "--hard", "HEAD")
+    _run_git(merge_wt, "clean", "-fd")
+    return GitOpResult(ok=True, detail=str(merge_wt))
+
+
 def merge_branch_into(
     repo: Path,
     *,
     target_branch: str,
     source_branch: str,
+    maker_worktree: Path | str | None = None,
+    base_branch: str | None = None,
 ) -> GitOpResult:
-    """Merge ``source_branch`` into ``target_branch`` in ``repo`` (no commit message editor)."""
-    checkout = _run_git(repo, "checkout", target_branch)
-    if checkout.returncode != 0:
-        err = (checkout.stderr or checkout.stdout or "").strip()[:300]
-        return GitOpResult(ok=False, detail=f"checkout {target_branch} failed: {err}")
+    """Happy-path merge ``source_branch`` into ``target_branch`` via isolated merge WT.
 
-    merge = _run_git(repo, "merge", "--no-edit", source_branch)
+    Never checks out ``target_branch`` in the dirty primary workspace. Complex
+    failures set ``needs_agent=True`` or ``conflict=True`` for StrangeLoop resolve.
+    """
+    base = base_branch or detect_base_branch(repo)
+    ensured = ensure_job_branch(repo, job_branch=target_branch, base_branch=base)
+    if not ensured.ok:
+        return GitOpResult(
+            ok=False,
+            needs_agent=True,
+            detail=ensured.detail,
+        )
+
+    wt_path: Path | None = None
+    if maker_worktree is not None:
+        wt_path = Path(maker_worktree)
+    tip = ensure_source_branch_tip(repo, source_branch=source_branch, maker_worktree=wt_path)
+    if not tip.ok:
+        return tip
+
+    merge_wt_res = _ensure_merge_worktree(repo, target_branch=target_branch)
+    if not merge_wt_res.ok:
+        return merge_wt_res
+    merge_wt = Path(merge_wt_res.detail)
+
+    merge = _run_git(merge_wt, "merge", "--no-edit", source_branch)
     out = ((merge.stdout or "") + (merge.stderr or "")).strip()
     if merge.returncode != 0:
-        conflict = "CONFLICT" in out or _run_git(repo, "ls-files", "-u").stdout.strip() != ""
+        conflict = "CONFLICT" in out or _run_git(merge_wt, "ls-files", "-u").stdout.strip() != ""
         if conflict:
-            _run_git(repo, "merge", "--abort")
+            _run_git(merge_wt, "merge", "--abort")
             return GitOpResult(
                 ok=False,
                 conflict=True,
+                needs_agent=True,
                 detail=f"merge conflict merging {source_branch} into {target_branch}",
             )
-        return GitOpResult(ok=False, detail=f"merge failed: {out[:300]}")
+        _run_git(merge_wt, "merge", "--abort")
+        return GitOpResult(
+            ok=False,
+            needs_agent=True,
+            detail=f"merge failed: {out[:300]}",
+        )
     return GitOpResult(ok=True, detail=f"merged {source_branch} into {target_branch}")
 
 
@@ -162,6 +330,7 @@ def refresh_worktree_onto(
             return GitOpResult(
                 ok=False,
                 conflict=conflict,
+                needs_agent=True,
                 detail=f"refresh failed for {worktree.name}: {out}",
             )
         return GitOpResult(ok=True, detail=f"merged {onto_branch} into {worktree.name}")
@@ -175,4 +344,9 @@ def land_job_branch(
     base_branch: str,
 ) -> GitOpResult:
     """Merge ``job_branch`` into ``base_branch`` (final land)."""
-    return merge_branch_into(repo, target_branch=base_branch, source_branch=job_branch)
+    return merge_branch_into(
+        repo,
+        target_branch=base_branch,
+        source_branch=job_branch,
+        base_branch=base_branch,
+    )

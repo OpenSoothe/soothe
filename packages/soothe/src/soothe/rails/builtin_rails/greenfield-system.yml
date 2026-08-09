@@ -61,7 +61,8 @@ conditions:
     satisfied (or omitted).
   maker_needs_merge: |
     An implementation maker completed and its branch has not been host-merged
-    into the job branch yet.
+    into the job branch yet — including dag_idle while unmerged makers remain,
+    or after a resolve StrangeLoop goal completes so the host can retry.
   needs_qa: |
     A per-maker review passed or was skipped by policy; slice acceptance
     tests and build verification should run for that lineage.
@@ -92,6 +93,10 @@ flow:
     then: spawn_wave_makers
 
   - event: goal_completed
+    when: maker_needs_merge
+    then: merge_branches
+
+  - event: dag_idle
     when: maker_needs_merge
     then: merge_branches
 
