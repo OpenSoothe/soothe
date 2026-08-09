@@ -122,10 +122,27 @@ class TestSootheConfig:
     def test_loop_concurrency_defaults(self) -> None:
         cfg = SootheConfig()
         assert cfg.agent.autopilot.max_parallel_goals == 3
-        assert cfg.agent.loop.concurrency.max_parallel_goals == 3
+        assert not hasattr(cfg.agent.loop.concurrency, "max_parallel_goals")
         assert cfg.agent.loop.concurrency.max_parallel_steps == 3
         assert cfg.agent.loop.concurrency.max_parallel_subagents == 3
         assert cfg.agent.loop.concurrency.global_max_llm_calls == 8
+
+    def test_loop_concurrency_ignores_legacy_max_parallel_goals(self) -> None:
+        """Stale YAML key must not fail load (Pydantic ignores extras)."""
+        cfg = SootheConfig.model_validate(
+            {
+                "agent": {
+                    "loop": {
+                        "concurrency": {
+                            "max_parallel_goals": 9,
+                            "max_parallel_steps": 5,
+                        }
+                    }
+                }
+            }
+        )
+        assert not hasattr(cfg.agent.loop.concurrency, "max_parallel_goals")
+        assert cfg.agent.loop.concurrency.max_parallel_steps == 5
 
     def test_checkpoint_defaults(self) -> None:
         cfg = SootheConfig()

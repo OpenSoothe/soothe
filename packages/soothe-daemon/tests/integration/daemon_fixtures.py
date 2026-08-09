@@ -549,7 +549,6 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
         SootheConfig with test-specific overrides
     """
     # Use smaller limits for faster testing
-    test_config.agent.loop.concurrency.max_parallel_goals = 1
     test_config.agent.loop.concurrency.max_parallel_steps = 1
     test_config.agent.loop.concurrency.global_max_llm_calls = 3
     test_config.agent.loop.max_iterations = 5

@@ -60,13 +60,12 @@ This lets the planner encode routing intent ("this step needs the research subag
 
 Every `Plan` carries a `ConcurrencyPolicy` controlling parallelism at multiple levels:
 
-- `max_parallel_goals` — concurrent goals in autonomous mode
 - `max_parallel_steps` — concurrent plan steps in one batch
 - `max_parallel_subagents` — concurrent subagents
 - `global_max_llm_calls` — cross-level circuit breaker for LLM invocations
 - `step_parallelism` — scheduling strategy: `sequential`, `dependency` (DAG-aware), or `max`
 
-A special value: `0` means "unlimited." The `global_max_llm_calls` circuit breaker prevents rate-limit exhaustion across all concurrency levels simultaneously.
+A special value: `0` means "unlimited." The `global_max_llm_calls` circuit breaker prevents rate-limit exhaustion across steps and subagents. Autopilot goal fan-out uses `agent.autopilot.max_parallel_goals` (not loop concurrency).
 
 ## LoopPlannerProtocol
 
@@ -182,7 +181,6 @@ agent:
       llm_role: planner
       max_iterations: 8
       concurrency:
-        max_parallel_goals: 1
         max_parallel_steps: 2
         max_parallel_subagents: 4
         global_max_llm_calls: 5

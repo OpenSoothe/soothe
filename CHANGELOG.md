@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- `agent.loop.concurrency.max_parallel_goals` — dead after single-goal StrangeLoop
+  workers; use `agent.autopilot.max_parallel_goals` for Autopilot goal fan-out.
+  Stale YAML keys are ignored on load.
+- `ConcurrencyPolicy.max_parallel_goals` (soothe-sdk 1.0.8) — same split; persisted
+  plans with the legacy key still load via `extra="ignore"`.
+
 ### Changed
 - Default LLM rate-limit / loop concurrency to develop-safe caps:
   `llm_rate_limit.concurrent_limit=2`, `global_concurrent_limit=4`,
-  `max_parallel_goals=3`, `max_parallel_steps/subagents=3`,
+  `autopilot.max_parallel_goals=3`, `max_parallel_steps/subagents=3`,
   `global_max_llm_calls=8` (requires `soothe-nano>=1.1.7`).
 - Remove `packages/soothe-nano` git submodule; consume Coding CoreAgent from
   PyPI (`soothe-nano>=1.1.6`) only. Local Docker builds and release waits use

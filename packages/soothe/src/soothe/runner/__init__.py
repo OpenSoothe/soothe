@@ -200,9 +200,9 @@ class SootheRunner(
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
         _concurrency_cfg = self._config.agent.loop.concurrency
+        # Goal fan-out is Autopilot-owned (agent.autopilot.max_parallel_goals).
         self._concurrency = ConcurrencyController(
             ConcurrencyPolicy(
-                max_parallel_goals=_concurrency_cfg.max_parallel_goals,
                 max_parallel_steps=_concurrency_cfg.max_parallel_steps,
                 max_parallel_subagents=_concurrency_cfg.max_parallel_subagents,
                 global_max_llm_calls=_concurrency_cfg.global_max_llm_calls,

@@ -1,9 +1,11 @@
 """ConcurrencyController -- hierarchical concurrency enforcement (RFC-0009).
 
-Provides semaphore-based concurrency control at three levels:
-goal scheduling, step scheduling, and global LLM call budget.
-Created once in ``SootheRunner.__init__`` and shared across all
-execution paths.
+Provides semaphore-based concurrency control for step scheduling and a
+global LLM call budget. Created once in ``SootheRunner.__init__`` and
+shared across execution paths for that runner.
+
+Goal fan-out is owned by Autopilot (``agent.autopilot.max_parallel_goals``);
+each StrangeLoop worker is single-goal, so there is no runner goal semaphore.
 
 Note: Tool parallelism is handled by langchain's built-in asyncio.gather
 in ToolNode. No explicit tool semaphore needed.
@@ -27,13 +29,11 @@ logger = logging.getLogger(__name__)
 class ConcurrencyController:
     """Hierarchical concurrency enforcement via semaphores.
 
-    Controls parallel execution at three levels:
+    Controls parallel execution at two levels:
 
-    - **Goal level** (autonomous mode): limits concurrent goal executions.
     - **Step level** (within a goal's plan): limits concurrent step executions.
-    - **LLM call level** (global circuit breaker): caps total concurrent
-      LangGraph invocations across all goals and steps to prevent API
-      rate-limit exhaustion.
+    - **LLM call level** (circuit breaker): caps concurrent LangGraph
+      invocations to prevent API rate-limit exhaustion.
 
     Note: Tool parallelism is handled by langchain's ToolNode via
     asyncio.gather. No tool-level semaphore needed here.
@@ -50,9 +50,6 @@ class ConcurrencyController:
         """
         self._policy = policy
         # Create semaphores only for positive limits (0 = unlimited)
-        self._goal_sem = (
-            asyncio.Semaphore(policy.max_parallel_goals) if policy.max_parallel_goals > 0 else None
-        )
         self._step_sem = (
             asyncio.Semaphore(policy.max_parallel_steps) if policy.max_parallel_steps > 0 else None
         )
@@ -61,24 +58,6 @@ class ConcurrencyController:
             if policy.global_max_llm_calls > 0
             else None
         )
-
-    @asynccontextmanager
-    async def acquire_goal(self) -> AsyncGenerator[None]:
-        """Acquire a goal execution slot.
-
-        Unlimited mode (limit=0): No semaphore, passes through immediately.
-        Limited mode: Acquires semaphore, blocks if limit reached.
-
-        Yields:
-            None -- releases the slot on exit (if semaphore exists).
-        """
-        if self._goal_sem is None:
-            # Unlimited: no blocking
-            yield
-        else:
-            # Limited: acquire semaphore
-            async with self._goal_sem:
-                yield
 
     @asynccontextmanager
     async def acquire_step(self) -> AsyncGenerator[None]:
@@ -105,8 +84,8 @@ class ConcurrencyController:
         Unlimited mode (limit=0): Circuit breaker disabled, passes through.
         Limited mode: Acquires semaphore, blocks if global limit reached.
 
-        This is the cross-level budget that prevents goals * steps from
-        exhausting API rate limits.
+        This is the cross-level budget that prevents steps from exhausting
+        API rate limits.
 
         Yields:
             None -- releases the slot on exit (if semaphore exists).
@@ -133,16 +112,6 @@ class ConcurrencyController:
     def max_parallel_steps(self) -> int:
         """Maximum parallel steps allowed."""
         return self._policy.max_parallel_steps
-
-    @property
-    def max_parallel_goals(self) -> int:
-        """Maximum parallel goals allowed."""
-        return self._policy.max_parallel_goals
-
-    @property
-    def has_goal_limit(self) -> bool:
-        """Check if goal concurrency is limited (semaphore exists)."""
-        return self._goal_sem is not None
 
     @property
     def has_step_limit(self) -> bool:

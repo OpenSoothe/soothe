@@ -103,7 +103,6 @@ def agent_config_file(config_workspace: Path) -> Path:
     # Use base config and export it
     base_config = get_base_config().model_copy(deep=True)
     base_config.agent.loop.max_iterations = 5
-    base_config.agent.loop.concurrency.max_parallel_goals = 1
     base_config.agent.loop.concurrency.max_parallel_steps = 1
     base_config.agent.loop.concurrency.global_max_llm_calls = 10
     # Write to file

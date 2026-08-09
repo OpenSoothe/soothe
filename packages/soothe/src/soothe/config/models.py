@@ -288,8 +288,8 @@ class AutopilotConfig(BaseModel):
     max_goal_depth: int = Field(default=5, ge=1, le=10)
     max_parallel_goals: int = Field(default=3, ge=1, le=32)
     # Cap on goals scheduled at once (``AutopilotService._schedule_via_worker_pool``).
-    # Independent of ``max_loops`` (WorkerPool capacity). Runner-side
-    # ``ConcurrencyController`` uses ``agent.loop.concurrency.max_parallel_goals``.
+    # Independent of ``max_loops`` (WorkerPool capacity). Autopilot owns goal
+    # fan-out; StrangeLoop runners are single-goal workers.
 
     # === Orchestration (from old autopilot) ===
     max_send_backs: int = Field(default=3, ge=1, le=10)
@@ -734,8 +734,11 @@ class LoopCheckpointAsyncConfig(BaseModel):
 class LoopConcurrencyConfig(BaseModel):
     """Loop execution concurrency and scheduling controls.
 
+    Goal fan-out is owned by ``agent.autopilot.max_parallel_goals`` (Autopilot
+    scheduler). Each StrangeLoop worker runs one goal; do not reintroduce a
+    loop-level ``max_parallel_goals`` here.
+
     Args:
-        max_parallel_goals: Maximum goals running simultaneously (autonomous mode).
         max_parallel_steps: Maximum plan steps running concurrently per execute batch.
         max_parallel_subagents: Maximum subagents running simultaneously.
         global_max_llm_calls: Cross-level circuit breaker for concurrent LLM calls.
@@ -743,9 +746,6 @@ class LoopConcurrencyConfig(BaseModel):
         max_parallel_tools: Maximum concurrent tool calls per thread.
     """
 
-    max_parallel_goals: int = Field(
-        default=3, ge=0, description="Maximum parallel goals (0=unlimited)"
-    )
     max_parallel_steps: int = Field(
         default=3,
         ge=0,

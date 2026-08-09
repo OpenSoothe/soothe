@@ -360,7 +360,6 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
     al.working_memory.max_entry_chars_before_spill = 500
     # Concurrency config (LoopConcurrencyConfig)
     al.concurrency.max_parallel_steps = 1
-    al.concurrency.max_parallel_goals = 1
     al.concurrency.max_parallel_tools = 5
     al.concurrency.max_parallel_subagents = 4
     # Async checkpoint worker config (LoopCheckpointAsyncConfig). Must be real

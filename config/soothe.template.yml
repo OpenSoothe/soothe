@@ -219,7 +219,7 @@ agent:
       auto_resume_clarifications: skip
     concurrency:
       # Keep below provider in-flight quota; pair with nano llm_rate_limit.global_concurrent_limit.
-      max_parallel_goals: 3
+      # Goal fan-out: agent.autopilot.max_parallel_goals (not a loop concurrency key).
       max_parallel_steps: 3
       max_parallel_subagents: 3
       global_max_llm_calls: 8
