@@ -29,7 +29,10 @@ from soothe_client import (
 
 from soothe_cli.runtime import load_config
 
-console = Console()
+# Rich reads width from the TTY; under CI / test runners (no TTY) it falls back
+# to a narrow default that truncates the Job ID column. Use a comfortable fixed
+# width when stdout is not interactive so IDs render in full.
+console = Console() if sys.stdout.isatty() else Console(width=100)
 
 app = typer.Typer(help="Manage scheduled cron jobs — natural language scheduled tasks.")
 
@@ -148,7 +151,7 @@ def list_jobs(
         return
 
     table = Table(title="Scheduled Jobs")
-    table.add_column("Job ID", style="cyan", width=12)
+    table.add_column("Job ID", style="cyan", no_wrap=True, width=12)
     table.add_column("Description", width=40)
     table.add_column("Status", style="green", width=10)
     table.add_column("Next Run", style="yellow", width=20)
@@ -156,8 +159,8 @@ def list_jobs(
 
     for job in jobs:
         desc = job.get("description", "")
-        if len(desc) > 40:
-            desc = desc[:37] + "..."
+        if len(desc) > 28:
+            desc = desc[:25] + "..."
         table.add_row(
             job.get("id", "?")[:12],
             desc,
