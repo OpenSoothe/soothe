@@ -159,6 +159,7 @@ async def test_plan_milestones_description_multiform_transfer(tmp_path: Path) ->
     assert "ownership units" in desc_l
     assert "fixed default" in desc_l
     assert "Efficiency:" in desc
+    assert "Parallel dispatch:" in desc
     assert "plain string" in desc_l
     assert "markdown" in desc_l
     assert "max_parallel_goals" not in desc

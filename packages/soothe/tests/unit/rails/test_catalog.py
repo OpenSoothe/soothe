@@ -255,7 +255,7 @@ flow:
 def test_builtin_greenfield_declares_plan_milestones_verbs() -> None:
     catalog = LoopRailCatalog()
     gf = catalog.resolve("greenfield-system")
-    assert gf.version == "1.15"
+    assert gf.version == "1.16"
     gf_do = (gf.verbs.get("plan_milestones") or {}).get("do") or []
     brief = str(gf_do[0].get("spawn_goal", {}).get("brief", ""))
     assert "ownership" in brief.lower()
@@ -278,7 +278,7 @@ def test_removed_rails_unknown() -> None:
 
 def test_feature_dev_absorbs_defect_gates() -> None:
     rail = LoopRailCatalog().resolve("feature-dev")
-    assert rail.version == "1.3"
+    assert rail.version == "1.4"
     assert "ready_to_plan" in rail.conditions
     assert "ready_to_fix" in rail.conditions
     thens = [

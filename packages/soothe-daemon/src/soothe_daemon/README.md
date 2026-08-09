@@ -124,10 +124,10 @@ Persistence checks live in `daemon/persistence/health_check.py` and gate on
 ## Key types
 
 ```python
-from soothe_daemon import SootheDaemon      # main daemon class
-from soothe_daemon import run_daemon        # entrypoint
-from soothe_daemon import pid_path          # ~/.soothe/soothe.pid
-from soothe_client import WebSocketClient   # tests / external clients only
+from soothe_daemon import SootheDaemon  # main daemon class
+from soothe_daemon import run_daemon  # entrypoint
+from soothe_daemon import pid_path  # ~/.soothe/soothe.pid
+from soothe_client import WebSocketClient  # tests / external clients only
 from soothe_daemon.health import HealthChecker
 ```
 

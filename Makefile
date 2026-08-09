@@ -35,11 +35,11 @@ ROOT_LINT_DIRS = examples scripts
 ifdef UV_PYPI_MIRROR
 UV_SYNC = uv sync --all-packages --all-extras --default-index $(UV_PYPI_MIRROR)
 else
-# Default to Tencent mirror for better connectivity in China.
-# PyPI's Fastly CDN occasionally resets connections (ECONNRESET / os error 54).
+# Default to PyPI for reliable package resolution.
+# Tencent mirror can lag on new releases (e.g., soothe-nano>=1.1.8).
 # Tsinghua PEP 691 `versions` can lag `files` (breaks soothe-nano>=1.1.5 resolution).
 # After sync, rewrite lock URLs back to canonical PyPI (rewrite_uv_lock_to_pypi.sh).
-UV_PYPI_MIRROR ?= https://mirrors.cloud.tencent.com/pypi/simple
+UV_PYPI_MIRROR ?= https://pypi.org/simple
 UV_SYNC = UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras --default-index $(UV_PYPI_MIRROR)
 endif
 

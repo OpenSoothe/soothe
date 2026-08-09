@@ -2,6 +2,10 @@
 
 Rails override via YAML ``verbs.<name>.brief`` or ``do:`` (M3). Templates may
 include ``{job_id}``; interpolation is literal replace only.
+
+Discipline fragments (TDD, systematic debugging, parallel dispatch,
+``using-git-worktrees``) are appended by helpers so Python builtins and YAML
+``do:`` recipes share one SoT (IG-737).
 """
 
 from __future__ import annotations
@@ -11,8 +15,8 @@ from typing import Any
 # Host defaults for Python ``_do_*`` fallback when a rail has no ``do:`` recipe.
 # Builtin greenfield/migration ship ``do:`` for plan_milestones.
 
-# Single SoT for plan_milestones efficiency copy (appended by
-# ``ensure_waveplan_efficiency_hint`` — do not duplicate in rail YAML).
+# Single SoT for plan_milestones efficiency / parallel-dispatch copy (appended by
+# ``apply_planner_waveplan_hints`` — do not duplicate those blocks in rail YAML).
 WAVEPLAN_EFFICIENCY_HINT = (
     "\n\nEfficiency: If a recommended dump already exists and is flat, verify "
     "it in one step (wave_slices + string independence + rationale), set "
@@ -20,6 +24,54 @@ WAVEPLAN_EFFICIENCY_HINT = (
     "complete. Do not rediscover the whole tree, rewrite the plan repeatedly, "
     "or write markdown validation/completion reports — those are not "
     "deliverables. independence must be a plain string, never a nested object."
+)
+
+# Parallel partition policy (dispatching-parallel-agents discipline).
+PARALLEL_DISPATCH_HINT = (
+    "\n\nParallel dispatch: Partition only into independent domains — "
+    "no overlapping primary write-sets, no shared mutable state that would "
+    "make concurrent makers interfere. If domains are related (one root cause "
+    "could explain all), keep a single slice. Each slice description must be "
+    "self-contained (ownership, files/areas, done check)."
+)
+
+# Nano builtin skill — makers must invoke explicitly (host may already isolate).
+WORKTREE_SKILL_BRIEF = (
+    '\n\nREQUIRED: invoke_skill("using-git-worktrees") before any file edits. '
+    "If cwd is already under .soothe/worktrees/ (or a linked worktree): reuse it; "
+    "do not create another worktree; do not nest. "
+    "If on the primary checkout: follow that skill to create "
+    ".soothe/worktrees/<slug> (ensure .soothe/ is gitignored). "
+    "Never use .worktrees/ or worktrees/ unless the user asked for that layout. "
+    "Host-assigned Autopilot worktrees count as already-approved isolation — "
+    "skip interactive confirmation and continue in place."
+)
+
+TDD_IRON_LAW_BRIEF = (
+    "\n\nTDD (mandatory for behavior changes): "
+    "NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. "
+    "RED: write one failing behavioral test → run it → confirm it fails for the "
+    "right reason. GREEN: minimal code to pass → run again. "
+    "REFACTOR: only after green; keep tests green. "
+    "If you already wrote code first: delete it and restart from RED "
+    "(exceptions: throwaway spike or pure config — state that in the report). "
+    "Bug fixes: failing regression test first, then fix."
+)
+
+SYSTEMATIC_DEBUG_MAKER_BRIEF = (
+    "\n\nSystematic debugging: Fix only after root-cause evidence "
+    "(scout findings, failing test, or traced bad value). "
+    "One hypothesis at a time. If 3+ fix attempts fail without confirmed "
+    "root cause, stop and complete with failure requesting architecture "
+    "rethink / branch retry — do not thrash."
+)
+
+QA_VERIFY_DISCIPLINE_BRIEF = (
+    "\n\nVerification discipline: Run the relevant automated checks "
+    "(and the original failing path when fixing a defect). "
+    "Report pass/fail with fresh command output — never claim success "
+    "from intuition or prior runs. Prefer proving the RED test fails "
+    "without the fix when practical."
 )
 
 
@@ -31,6 +83,134 @@ def ensure_waveplan_efficiency_hint(brief: str) -> str:
     if "Efficiency:" in text and "plain string" in text.lower():
         return text
     return text + WAVEPLAN_EFFICIENCY_HINT
+
+
+def ensure_parallel_dispatch_hint(brief: str) -> str:
+    """Append ``PARALLEL_DISPATCH_HINT`` once (idempotent)."""
+    text = (brief or "").rstrip()
+    if not text:
+        return text
+    if "Parallel dispatch:" in text:
+        return text
+    return text + PARALLEL_DISPATCH_HINT
+
+
+def ensure_worktree_skill_brief(brief: str) -> str:
+    """Append ``WORKTREE_SKILL_BRIEF`` once (idempotent)."""
+    text = (brief or "").rstrip()
+    if not text:
+        return text
+    if 'invoke_skill("using-git-worktrees")' in text:
+        return text
+    return text + WORKTREE_SKILL_BRIEF
+
+
+def ensure_tdd_iron_law(brief: str) -> str:
+    """Append ``TDD_IRON_LAW_BRIEF`` once (idempotent)."""
+    text = (brief or "").rstrip()
+    if not text:
+        return text
+    if "NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST" in text:
+        return text
+    return text + TDD_IRON_LAW_BRIEF
+
+
+def ensure_systematic_debug_maker(brief: str) -> str:
+    """Append ``SYSTEMATIC_DEBUG_MAKER_BRIEF`` once (idempotent)."""
+    text = (brief or "").rstrip()
+    if not text:
+        return text
+    if "Systematic debugging:" in text and "3+ fix" in text:
+        return text
+    return text + SYSTEMATIC_DEBUG_MAKER_BRIEF
+
+
+def ensure_qa_verify_discipline(brief: str) -> str:
+    """Append ``QA_VERIFY_DISCIPLINE_BRIEF`` once (idempotent)."""
+    text = (brief or "").rstrip()
+    if not text:
+        return text
+    if "Verification discipline:" in text:
+        return text
+    return text + QA_VERIFY_DISCIPLINE_BRIEF
+
+
+def apply_maker_discipline(brief: str) -> str:
+    """Worktree skill + TDD + systematic-debug maker rules (idempotent)."""
+    text = ensure_worktree_skill_brief(brief)
+    text = ensure_tdd_iron_law(text)
+    return ensure_systematic_debug_maker(text)
+
+
+def apply_planner_waveplan_hints(brief: str) -> str:
+    """Efficiency + parallel-dispatch hints for architecture planners."""
+    text = ensure_waveplan_efficiency_hint(brief)
+    return ensure_parallel_dispatch_hint(text)
+
+
+def scout_explore_brief(*, job_id: str, domain_index: int, domain_hint: str | None = None) -> str:
+    """Default scout brief for ``decompose_parallel`` (systematic debugging)."""
+    domain = (domain_hint or "").strip() or f"independent domain {domain_index}"
+    return (
+        f"Systematic debugging / exploration scout for job {job_id}. "
+        f"Scope: ONE independent domain — {domain}. "
+        "Do not edit production code; do not implement fixes.\n\n"
+        "Follow four phases before proposing any fix:\n"
+        "1) Root cause — reproduce, read errors in full, gather evidence at "
+        "component boundaries\n"
+        "2) Pattern — compare working vs broken references\n"
+        "3) Single hypothesis — state it; test minimally if needed\n"
+        "4) Report only — evidence + hypothesis for the planner/maker\n\n"
+        "Iron law: no fixes without root-cause investigation first.\n"
+        "Return: domain name, repro steps, failing command output (if any), "
+        "root-cause statement, related files. "
+        "If multiple unrelated domains exist, cover only this domain — "
+        "parallel scouts handle the others."
+    )
+
+
+def plan_implementation_brief(*, job_id: str) -> str:
+    """Planner goal brief for ``plan_and_implement``."""
+    base = (
+        f"Plan implementation for job {job_id}. "
+        "Use scout findings (informs). Produce a concrete plan with "
+        "file paths, interfaces, and per-task acceptance "
+        "(prefer the first failing test or verify command per task). "
+        "Partition work into independent domains only when write-sets "
+        "do not overlap. Do not implement product code here."
+    )
+    return ensure_parallel_dispatch_hint(base)
+
+
+def implement_goal_brief(*, job_id: str) -> str:
+    """Maker goal brief for ``plan_and_implement``."""
+    base = (
+        f"Implement for job {job_id} according to the plan goal. "
+        "Stay within planned ownership; commit on an isolated branch when "
+        "using a worktree."
+    )
+    return apply_maker_discipline(base)
+
+
+def slice_maker_brief(
+    *,
+    job_id: str,
+    slug: str,
+    ownership: str,
+    branch: str,
+    job_branch: str,
+    retry: bool = False,
+) -> str:
+    """Maker brief for ``spawn_wave_makers`` / ``retry_maker`` (+ discipline)."""
+    own = (ownership or "").strip() or f"Implement only the '{slug}' slice ownership."
+    label = f"Slice maker [{slug}] retry" if retry else f"Slice maker [{slug}]"
+    base = (
+        f"{label} for job {job_id}. {own} "
+        f"Commit on this branch ({branch}); "
+        f"the host merges into {job_branch} when you complete. "
+        "Do not modify unrelated slices."
+    )
+    return apply_maker_discipline(base)
 
 
 def waveplan_verify_existing_brief(*, job_id: str, source: str) -> str:
@@ -127,5 +307,5 @@ def resolve_verb_brief(
         return None
     out = interpolate_brief(raw, job_id=job_id)
     if verb == "plan_milestones":
-        out = ensure_waveplan_efficiency_hint(out)
+        out = apply_planner_waveplan_hints(out)
     return out

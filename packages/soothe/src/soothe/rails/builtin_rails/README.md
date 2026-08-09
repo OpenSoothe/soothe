@@ -32,6 +32,20 @@ rail with `--rail` / `rail_id`, set `.rail-default`, or exclude ids via
 | `pr-review` | Review → QA; no implementation branch |
 | `greenfield-system` | Milestones → streaming WavePlan makers → host merge → per-maker review/QA → feedback; pause on irreversible cutover → land on main |
 
+### Maker / scout discipline (IG-737)
+
+Goal briefs from Rail Exec append shared SoT fragments in
+`soothe.rails.verb_defaults`:
+
+- **Scouts** (`decompose_parallel`): systematic debugging — evidence only, no fixes
+- **Planners** (`plan_milestones` / plan goals): parallel dispatch — independent domains only
+- **Makers** (`plan_and_implement`, `spawn_wave_makers`, feedback optimize):
+  `invoke_skill("using-git-worktrees")` before edits, TDD red→green, fix from root cause
+- **QA / feedback verify**: fresh command evidence; never claim pass without running checks
+
+Host-created `.soothe/worktrees/<slug>` counts as already-approved isolation
+(skill Step 0: reuse; do not nest).
+
 Removed (hard cut; use replacements above):
 
 | Former id | Use instead |

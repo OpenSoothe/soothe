@@ -44,8 +44,14 @@ from soothe.context.models import TERMINAL_STATES, GoalNode
 from soothe.rails.verb_defaults import (
     DEFAULT_VERB_ROLES,
     DEFAULT_VERB_TAGS,
+    apply_maker_discipline,
+    ensure_qa_verify_discipline,
+    implement_goal_brief,
+    plan_implementation_brief,
     resolve_verb_brief,
     resolve_verb_field,
+    scout_explore_brief,
+    slice_maker_brief,
     waveplan_verify_existing_brief,
 )
 
@@ -670,17 +676,29 @@ class RailBuiltinExecutor:
         if plan is None:
             plan = [
                 {
-                    "description": f"Explore facet {i + 1} for job {job_id}",
+                    "description": scout_explore_brief(job_id=job_id, domain_index=i + 1),
                     "tags": ["exploration"],
                     "role": "scout",
                 }
                 for i in range(state.effective_scout_count())
             ]
         created: list[str] = []
-        for spec in plan:
+        for i, spec in enumerate(plan):
             tags = list(spec.get("tags") or ["exploration"])
+            raw_desc = str(spec.get("description") or "").strip()
+            # Host-supplied plans may be short labels; expand scouts to
+            # systematic-debug briefs when the body is not already disciplined.
+            if "exploration" in tags and "Systematic debugging" not in raw_desc:
+                domain_hint = raw_desc or None
+                description = scout_explore_brief(
+                    job_id=job_id,
+                    domain_index=i + 1,
+                    domain_hint=domain_hint,
+                )
+            else:
+                description = raw_desc or scout_explore_brief(job_id=job_id, domain_index=i + 1)
             goal = await self._ce.create_goal(
-                str(spec["description"]),
+                description,
                 parent_id=job_id,
                 source="decomposition",
                 priority=int(spec.get("priority", 60)),
@@ -712,7 +730,7 @@ class RailBuiltinExecutor:
             and g.status == "completed"
         ]
         plan = await self._ce.create_goal(
-            f"Plan implementation for job {job_id}",
+            plan_implementation_brief(job_id=job_id),
             parent_id=job_id,
             depends_on=informs or None,
             source="decomposition",
@@ -725,7 +743,7 @@ class RailBuiltinExecutor:
         )
 
         impl = await self._ce.create_goal(
-            f"Implement for job {job_id}",
+            implement_goal_brief(job_id=job_id),
             parent_id=job_id,
             depends_on=[plan.id],
             source="decomposition",
@@ -1157,12 +1175,12 @@ class RailBuiltinExecutor:
                 if dep_gid and dep_gid not in depends:
                     depends.append(dep_gid)
             job_br = state.job_branch or f"job/{job_id[:8]}/_base"
-            desc = (
-                f"Slice maker [{slug}] for job {job_id}. "
-                f"{ownership} "
-                f"Work in workspace isolation (branch {branch}). "
-                "Do not modify unrelated slices. Commit on this branch; "
-                f"the host merges into {job_br} when you complete."
+            desc = slice_maker_brief(
+                job_id=job_id,
+                slug=slug,
+                ownership=ownership,
+                branch=branch,
+                job_branch=job_br,
             )
             goal = await self._ce.create_goal(
                 desc,
@@ -1340,11 +1358,12 @@ class RailBuiltinExecutor:
         state = await self._require(job_id)
         brief = self._acceptance_brief_for_job(job_id)
         ws = _job_workspace(self._ce, job_id)
+        qa_text = ensure_qa_verify_discipline(
+            f"QA verify for job {job_id}. Run acceptance checks against "
+            f"the job contract and report pass/fail with evidence.\n\n{brief}"
+        )
         goal = await self._ce.create_goal(
-            (
-                f"QA verify for job {job_id}. Run acceptance checks against "
-                f"the job contract and report pass/fail with evidence.\n\n{brief}"
-            ),
+            qa_text,
             parent_id=job_id,
             depends_on=deps or None,
             source="decomposition",
@@ -1402,9 +1421,10 @@ class RailBuiltinExecutor:
         diagnose = await self._ce.create_goal(
             (
                 f"Feedback round {round_n} diagnose for job {job_id}. "
-                "Find bugs, acceptance gaps, and regressions against the "
-                "job acceptance contract. Produce a concrete defect "
-                "list; do not implement fixes here.\n\n"
+                "Systematic debugging: reproduce gaps, gather evidence, "
+                "state root-cause hypotheses. Find bugs, acceptance gaps, "
+                "and regressions against the job acceptance contract. "
+                "Produce a concrete defect list; do not implement fixes here.\n\n"
                 f"{self._acceptance_brief_for_job(job_id)}"
             ),
             parent_id=job_id,
@@ -1423,7 +1443,7 @@ class RailBuiltinExecutor:
         )
 
         optimize = await self._ce.create_goal(
-            (
+            apply_maker_discipline(
                 f"Feedback round {round_n} optimize for job {job_id}. "
                 "Fix and optimize against the diagnose findings. Prefer "
                 "minimal targeted changes; do not expand scope beyond gaps."
@@ -1444,7 +1464,7 @@ class RailBuiltinExecutor:
         )
 
         verify = await self._ce.create_goal(
-            (
+            ensure_qa_verify_discipline(
                 f"Feedback round {round_n} verify for job {job_id}. "
                 "Re-run acceptance checks / golden tests against diagnose "
                 "findings and the job contract. Report remaining gaps; "
@@ -1527,12 +1547,13 @@ class RailBuiltinExecutor:
             if ensured is not None:
                 maker_ws = str(ensured)
 
-        desc = (
-            f"Slice maker [{slug}] retry for job {job_id}. "
-            f"Implement only the '{slug}' slice ownership. "
-            f"Work in workspace isolation (branch {branch}). "
-            "Do not modify unrelated slices. Commit on this branch; "
-            f"the host merges into {state.job_branch} when you complete."
+        desc = slice_maker_brief(
+            job_id=job_id,
+            slug=slug,
+            ownership=f"Implement only the '{slug}' slice ownership.",
+            branch=branch,
+            job_branch=state.job_branch or f"job/{job_id[:8]}/_base",
+            retry=True,
         )
         replacement = await self._ce.create_goal(
             desc,

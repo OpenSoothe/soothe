@@ -16,7 +16,7 @@ from soothe.rails import LoopRailCatalog
 
 def test_greenfield_declares_fanout_and_human_gate() -> None:
     rail = LoopRailCatalog().resolve("greenfield-system")
-    assert rail.version == "1.15"
+    assert rail.version == "1.16"
     assert "artifact" not in rail.fanout
     assert rail.fanout.get("require_plan") is True
     assert "default_modules" not in rail.fanout
@@ -171,7 +171,7 @@ async def test_greenfield_spawn_makers_from_architecture_findings(tmp_path: Path
         RailJobState(
             job_id=root.id,
             rail_id="greenfield-system",
-            rail_version="1.15",
+            rail_version="1.16",
             worktrees_enabled=False,
             require_plan=True,
             engine_max_parallel_goals=8,

@@ -17,7 +17,7 @@ from soothe.rails import LoopRailCatalog
 def test_greenfield_system_rail_loads() -> None:
     rail = LoopRailCatalog().resolve("greenfield-system")
     assert rail.id == "greenfield-system"
-    assert rail.version == "1.15"
+    assert rail.version == "1.16"
     thens = [str(e.get("then")) for e in rail.flow]
     assert thens[0] == "plan_milestones"
     assert "spawn_wave_makers" in thens
@@ -210,6 +210,8 @@ async def test_spawn_wave_makers_worktrees_and_no_root_dep(tmp_path: Path) -> No
         assert g.workspace is not None
         assert "worktrees" in g.workspace
         assert Path(g.workspace).is_dir()
+        assert 'invoke_skill("using-git-worktrees")' in (g.description or "")
+        assert "NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST" in (g.description or "")
 
     refreshed = await ce.get_goal(root.id)
     assert refreshed is not None

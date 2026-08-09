@@ -1,11 +1,13 @@
 id: greenfield-system
-version: "1.15"
+version: "1.16"
 
 summary: |
   Multi-slice system build or migration/upgrade: architecture milestones,
   streaming makers (git worktrees when available) with host merge into a job
   branch, per-maker review/QA, find→optimize→verify feedback until acceptance,
   and pause on irreversible cutover. Land on main/master at job complete.
+  Makers must invoke using-git-worktrees, follow TDD, and fix only from
+  root-cause evidence; WavePlan partitions independent domains only.
 
 applies_when: |
   Building a new multi-part system or large scaffold from scratch, or a
