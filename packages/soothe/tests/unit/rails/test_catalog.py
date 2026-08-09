@@ -17,12 +17,10 @@ from soothe.rails import (
 EXPECTED_BUILTIN_IDS = frozenset(
     {
         "feature-dev",
-        "bugfix",
         "maker-checker",
         "hotfix",
         "spike",
         "pr-review",
-        "migration",
         "greenfield-system",
     }
 )
@@ -80,10 +78,7 @@ def test_builtin_catalog_loads_all_shipped_rails() -> None:
         assert rail.flow or rail.rules
         assert rail.source_path is not None
         assert rail.source_path.stem == rail_id
-        if rail_id == "greenfield-system":
-            assert rail.auto_pick is False
-        else:
-            assert rail.auto_pick is True
+        assert rail.auto_pick is True
         # Self-contained copy: no cross-rail or host-internals prose.
         blob = f"{rail.summary}\n{rail.applies_when}".lower()
         assert "differs from" not in blob
@@ -257,18 +252,42 @@ flow:
         load_rail_file(path)
 
 
-def test_builtin_migration_and_greenfield_declare_plan_milestones_verbs() -> None:
+def test_builtin_greenfield_declares_plan_milestones_verbs() -> None:
     catalog = LoopRailCatalog()
     gf = catalog.resolve("greenfield-system")
-    assert gf.version == "1.14"
+    assert gf.version == "1.15"
     gf_do = (gf.verbs.get("plan_milestones") or {}).get("do") or []
-    assert gf_do and "ownership" in str(gf_do[0].get("spawn_goal", {}).get("brief", "")).lower()
-    mig = catalog.resolve("migration")
-    assert mig.version == "2.10"
-    mig_do = (mig.verbs.get("plan_milestones") or {}).get("do") or []
-    brief = str(mig_do[0].get("spawn_goal", {}).get("brief", ""))
+    brief = str(gf_do[0].get("spawn_goal", {}).get("brief", ""))
+    assert "ownership" in brief.lower()
     assert "migration" in brief.lower()
     assert "slice" in brief.lower() or "schema" in brief.lower()
+    assert "needs_human" in gf.conditions
+    human = [
+        e for e in gf.flow if e.get("when") == "needs_human" and e.get("then") == "pause_for_user"
+    ]
+    assert human
+
+
+def test_removed_rails_unknown() -> None:
+    catalog = LoopRailCatalog()
+    with pytest.raises(RailCatalogError, match="rail not found"):
+        catalog.resolve("bugfix")
+    with pytest.raises(RailCatalogError, match="rail not found"):
+        catalog.resolve("migration")
+
+
+def test_feature_dev_absorbs_defect_gates() -> None:
+    rail = LoopRailCatalog().resolve("feature-dev")
+    assert rail.version == "1.3"
+    assert "ready_to_plan" in rail.conditions
+    assert "ready_to_fix" in rail.conditions
+    thens = [
+        (e.get("when"), e.get("then"))
+        for e in rail.flow
+        if e.get("event") == "goal_completed" and e.get("then") == "plan_and_implement"
+    ]
+    assert ("ready_to_plan", "plan_and_implement") in thens
+    assert ("ready_to_fix", "plan_and_implement") in thens
 
 
 def test_load_rail_rejects_list_then(tmp_path: Path) -> None:

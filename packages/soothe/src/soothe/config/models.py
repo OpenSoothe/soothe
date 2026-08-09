@@ -357,9 +357,9 @@ class AutopilotConfig(BaseModel):
         description=("Router model role for rail auto-pick. Null uses monitor_model_role."),
     )
     rail_auto_pick_timeout_s: float = Field(
-        default=12.0,
+        default=120.0,
         ge=1.0,
-        le=120.0,
+        le=300.0,
         description="Timeout seconds for the rail auto-pick LLM call.",
     )
     rail_auto_pick_deny: list[str] = Field(
@@ -367,7 +367,7 @@ class AutopilotConfig(BaseModel):
         description=(
             "Extra rail ids excluded from auto-pick candidates (still selectable "
             "via explicit rail_id / --rail). Rails with YAML ``auto_pick: false`` "
-            "(e.g. greenfield-system) are omitted without listing them here."
+            "are omitted without listing them here."
         ),
     )
     rail_auto_pick_max_candidates: int = Field(

@@ -56,19 +56,19 @@ def test_status_lists_job_rail(mock_client: MagicMock) -> None:
                 "status": "pending",
                 "description": "Root job",
                 "total_tokens_used": 0,
-                "rail_id": "migration",
+                "rail_id": "greenfield-system",
             }
         ]
     }
     mock_client.autopilot_list_goals.return_value = {
         "goals": [
-            {"id": "jobroot01", "status": "pending", "rail_id": "migration"},
+            {"id": "jobroot01", "status": "pending", "rail_id": "greenfield-system"},
             {"id": "child0001", "status": "active", "parent_id": "jobroot01"},
         ]
     }
     result = runner.invoke(app, ["autopilot", "status"])
     assert result.exit_code == 0, result.output
-    assert "rail:migration" in result.output
+    assert "rail:greenfield-system" in result.output
     assert "Jobs (root goals): 1" in result.output
 
 

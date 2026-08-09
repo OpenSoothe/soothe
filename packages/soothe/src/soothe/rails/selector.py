@@ -24,9 +24,13 @@ from soothe.rails.catalog import LoopRailCatalog, RailCatalogError, RailDefiniti
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_FIELD_CHARS = 400
+DEFAULT_MAX_DESCRIPTION_CHARS = 2000
 DEFAULT_MIN_CONFIDENCE = 0.6
 DEFAULT_MAX_CANDIDATES = 32
-DEFAULT_TIMEOUT_S = 12.0
+# Structured pick over several rail cards routinely exceeds a low tens-of-seconds
+# budget when the model is cold or the job brief is long; 120s leaves headroom
+# while description truncation keeps prompts bounded.
+DEFAULT_TIMEOUT_S = 120.0
 
 RAIL_AUTO_PICK_SYSTEM_PROMPT = """\
 You are a Soothe LoopRail selector. Choose at most one rail from Allowed \
@@ -160,12 +164,14 @@ def format_rail_pick_user_prompt(
     candidates: Sequence[RailDefinition],
     *,
     max_field_chars: int = DEFAULT_MAX_FIELD_CHARS,
+    max_description_chars: int = DEFAULT_MAX_DESCRIPTION_CHARS,
 ) -> str:
     """Build the user message with dynamic Allowed ids + catalog cards + job."""
     allowed = ", ".join(c.id for c in candidates) if candidates else "(none)"
     cards = "\n\n".join(format_rail_card(c, max_field_chars=max_field_chars) for c in candidates)
     if not cards:
         cards = "(no candidates)"
+    job_text = _truncate(description, max_description_chars)
     return (
         "## Task\n"
         "Pick at most one LoopRail for this job from Allowed rail_ids, or null "
@@ -175,7 +181,7 @@ def format_rail_pick_user_prompt(
         f"<catalog_data>\n{cards}\n</catalog_data>\n\n"
         "## Job\n"
         "<untrusted_data>\n"
-        f"{description}\n"
+        f"{job_text}\n"
         "</untrusted_data>"
     )
 

@@ -28,7 +28,7 @@ agent:
     rail_auto_pick: true
     rail_auto_pick_min_confidence: 0.6
     rail_auto_pick_model_role: null
-    rail_auto_pick_timeout_s: 12
+    rail_auto_pick_timeout_s: 120
     rail_auto_pick_deny: []
     rail_auto_pick_max_candidates: 32
     rail_auto_pick_skip_if_workspace_default: false

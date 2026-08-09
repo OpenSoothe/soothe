@@ -17,20 +17,27 @@ When submit omits `--rail` / `rail_id`, selection follows RFC-231 §10
 2. `agent.autopilot.default_rail` in config (if set)
 3. **No rail** — Monitor/CE defaults (do not invent a `default.yml`)
 
-`greenfield-system` sets ``auto_pick: false`` (pass `--rail` explicitly).
+All shipped builtins are eligible for LLM auto-pick. Operators can still force a
+rail with `--rail` / `rail_id`, set `.rail-default`, or exclude ids via
+`rail_auto_pick_deny` / per-rail `auto_pick: false` in custom YAML.
 
 ## Catalog
 
 | Rail | Pipeline |
 |------|----------|
-| `feature-dev` | Scouts → plan+implement → review → QA |
-| `bugfix` | Scouts (repro/root-cause) → fix → review → QA |
+| `feature-dev` | Scouts → plan+implement (feature or defect) → review → QA |
 | `maker-checker` | Implement → independent checker → replant on send_back → QA |
 | `hotfix` | Patch → review → QA; human pause on high blast radius |
 | `spike` | Explore → pause for human; no auto-implement |
 | `pr-review` | Review → QA; no implementation branch |
-| `migration` | Milestones → streaming WavePlan makers → host merge → per-maker QA → feedback; pause on cutover |
-| `greenfield-system` | Milestones → streaming worktree makers → host merge into `job/<id>/_base` → per-maker review/QA → feedback until acceptance → land on main |
+| `greenfield-system` | Milestones → streaming WavePlan makers → host merge → per-maker review/QA → feedback; pause on irreversible cutover → land on main |
+
+Removed (hard cut; use replacements above):
+
+| Former id | Use instead |
+|-----------|-------------|
+| `bugfix` | `feature-dev` |
+| `migration` | `greenfield-system` |
 
 `merge_branches` is a host verb (happy-path merge maker → job branch in an
 isolated merge worktree, refresh peers, spawn review). Conflicts or other
@@ -40,8 +47,8 @@ the tree with tools; `dag_idle` / resolve completion retries the host merge.
 
 ### Submit with `greenfield-system`
 
-From a repo that has a `GOAL.md` (pass `--rail` explicitly; auto-pick does not
-select greenfield). With no TASK / `--file`, submit reads `./GOAL.md`:
+From a repo that has a `GOAL.md`. With no TASK / `--file`, submit reads
+`./GOAL.md`:
 
 ```bash
 cd /path/to/repo

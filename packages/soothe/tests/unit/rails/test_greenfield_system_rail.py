@@ -17,6 +17,7 @@ from soothe.rails import LoopRailCatalog
 def test_greenfield_system_rail_loads() -> None:
     rail = LoopRailCatalog().resolve("greenfield-system")
     assert rail.id == "greenfield-system"
+    assert rail.version == "1.15"
     thens = [str(e.get("then")) for e in rail.flow]
     assert thens[0] == "plan_milestones"
     assert "spawn_wave_makers" in thens
@@ -24,10 +25,17 @@ def test_greenfield_system_rail_loads() -> None:
     assert "spawn_integrate" not in thens
     assert "spawn_feedback_cycle" in thens
     assert "retry_architecture" in thens
+    assert "pause_for_user" in thens
+    assert "needs_human" in rail.conditions
+    human = [
+        e for e in rail.flow if e.get("when") == "needs_human" and e.get("then") == "pause_for_user"
+    ]
+    assert human
     dag_idle = [e for e in rail.flow if e.get("event") == "dag_idle"]
     assert any(e.get("when") == "slices_ready_to_spawn" for e in dag_idle)
     assert any(e.get("when") == "needs_feedback" for e in dag_idle)
     assert any(e.get("when") == "maker_needs_merge" for e in dag_idle)
+    assert any(e.get("when") == "needs_human" for e in dag_idle)
 
 
 def test_architecture_ready_short_circuit() -> None:

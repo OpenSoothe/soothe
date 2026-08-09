@@ -1,27 +1,32 @@
 id: feature-dev
-version: "1.2"
+version: "1.3"
 
 summary: |
-  Implement or refactor a feature with parallel exploration, planning,
-  implementation, independent review, and QA. Scouts finish before
-  implement; review and QA run as separate goals.
+  Implement a feature or fix a defect with parallel exploration, planning,
+  implementation, independent review, and QA. Scouts finish before implement
+  (plan-ready or repro/root-cause ready); review and QA run as separate goals.
 
 applies_when: |
-  Build or change functionality in an existing codebase.
+  Build or change functionality in an existing codebase, or fix a bug,
+  regression, failing test, or unexpected behavior.
 
 conditions:
   ready_to_plan: |
     All exploration scouts for the current effort have completed,
     and their findings are sufficient to write an implementation plan.
+  ready_to_fix: |
+    Reproduction or root-cause evidence is sufficient to attempt a fix
+    without guessing (failing test, stack trace, or confirmed repro steps).
   needs_review: |
-    An implementation goal just finished and the changes should be
+    An implementation or fix goal just finished and the changes should be
     reviewed before merging or continuing.
   needs_qa: |
     Review passed or was skipped by policy, and automated verification
-    (tests / lint relevant to the change) should run.
+    (tests / lint relevant to the change, including the original failure
+    path when fixing a defect) should run.
   branch_is_stuck: |
     A maker or implementation goal failed, or evidence shows the approach
-    conflicts with the codebase architecture.
+    conflicts with the codebase architecture or hypothesized root cause.
   job_complete: |
     All review and QA goals passed and no pending work remains.
 
@@ -31,6 +36,10 @@ flow:
 
   - event: goal_completed
     when: ready_to_plan
+    then: plan_and_implement
+
+  - event: goal_completed
+    when: ready_to_fix
     then: plan_and_implement
 
   - event: goal_completed

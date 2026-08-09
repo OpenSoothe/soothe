@@ -1,4 +1,4 @@
-"""Unit tests for migration rail v2.0 fan-out (IG-715)."""
+"""Unit tests for greenfield-system absorbing former migration fan-out (IG-734)."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from soothe.context import ContextEngine
 from soothe.rails import LoopRailCatalog
 
 
-def test_migration_rail_declares_fanout_and_human_gate() -> None:
-    rail = LoopRailCatalog().resolve("migration")
-    assert rail.version == "2.10"
+def test_greenfield_declares_fanout_and_human_gate() -> None:
+    rail = LoopRailCatalog().resolve("greenfield-system")
+    assert rail.version == "1.15"
     assert "artifact" not in rail.fanout
     assert rail.fanout.get("require_plan") is True
     assert "default_modules" not in rail.fanout
@@ -25,7 +25,8 @@ def test_migration_rail_declares_fanout_and_human_gate() -> None:
     assert isinstance(pm.get("do"), list) and pm["do"]
     spawn = pm["do"][0].get("spawn_goal") or {}
     brief = str(spawn.get("brief") or "")
-    assert "Migration architecture" in brief
+    assert "ownership" in brief.lower()
+    assert "migration" in brief.lower()
     assert "slice" in brief.lower() or "schema" in brief.lower()
 
     thens = [str(e.get("then")) for e in rail.flow]
@@ -91,11 +92,11 @@ def test_ready_for_next_wave_architecture_path_still_works() -> None:
 
 
 @pytest.mark.asyncio
-async def test_bind_migration_stamps_fanout_state(tmp_path: Path) -> None:
+async def test_bind_greenfield_stamps_fanout_state(tmp_path: Path) -> None:
     ce = ContextEngine()
     root = await ce.create_goal("Migrate schema", workspace=str(tmp_path), priority=70)
     interp = LoopRailInterpreter(ce, jobs_root=tmp_path)
-    await interp.bind_job(root.id, rail_id="migration", workspace=str(tmp_path))
+    await interp.bind_job(root.id, rail_id="greenfield-system", workspace=str(tmp_path))
     state = await interp.builtins.job_state(root.id)
     assert state is not None
     assert state.require_plan is True
@@ -103,15 +104,15 @@ async def test_bind_migration_stamps_fanout_state(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_plan_milestones_migration_copy(tmp_path: Path) -> None:
+async def test_plan_milestones_covers_migration_and_greenfield_copy(tmp_path: Path) -> None:
     ce = ContextEngine()
     root = await ce.create_goal("Migrate", workspace=str(tmp_path), priority=70)
     ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
-    rail = LoopRailCatalog().resolve("migration")
+    rail = LoopRailCatalog().resolve("greenfield-system")
     await ex.bind_job(
         RailJobState(
             job_id=root.id,
-            rail_id="migration",
+            rail_id="greenfield-system",
             rail_version=rail.version,
             require_plan=True,
             verb_overrides=dict(rail.verbs),
@@ -121,9 +122,9 @@ async def test_plan_milestones_migration_copy(tmp_path: Path) -> None:
     arch = await ce.get_goal(result.created_goal_ids[0])
     assert arch is not None
     desc = arch.description.lower()
+    assert "ownership" in desc
     assert "migration" in desc
     assert "slice" in desc or "schema" in desc
-    assert "ownership units" not in desc
     assert "wave_plan_path" in desc
     assert ".soothe/wave-plan.json" in arch.description
     assert "rail state" in desc
@@ -162,15 +163,15 @@ async def test_plan_milestones_uses_verb_override_not_rail_id(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
-async def test_migration_spawn_makers_from_architecture_findings(tmp_path: Path) -> None:
+async def test_greenfield_spawn_makers_from_architecture_findings(tmp_path: Path) -> None:
     ce = ContextEngine()
     root = await ce.create_goal("Migrate", workspace=str(tmp_path), priority=70)
     ex = RailBuiltinExecutor(ce, jobs_root=tmp_path)
     await ex.bind_job(
         RailJobState(
             job_id=root.id,
-            rail_id="migration",
-            rail_version="2.0",
+            rail_id="greenfield-system",
+            rail_version="1.15",
             worktrees_enabled=False,
             require_plan=True,
             engine_max_parallel_goals=8,

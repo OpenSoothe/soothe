@@ -69,9 +69,17 @@ def test_filter_excludes_deny_and_auto_pick_false() -> None:
     assert ids == ["feature-dev", "hotfix"]
 
 
-def test_greenfield_builtin_has_auto_pick_false() -> None:
+def test_greenfield_builtin_has_auto_pick_true() -> None:
     rail = LoopRailCatalog().resolve("greenfield-system")
-    assert rail.auto_pick is False
+    assert rail.auto_pick is True
+
+
+def test_format_prompt_truncates_long_description() -> None:
+    rails = [_fake_rail("feature-dev")]
+    long_job = "A" * 5000
+    prompt = format_rail_pick_user_prompt(long_job, rails, max_description_chars=100)
+    assert "A" * 97 + "..." in prompt
+    assert "A" * 200 not in prompt
 
 
 @pytest.mark.asyncio
