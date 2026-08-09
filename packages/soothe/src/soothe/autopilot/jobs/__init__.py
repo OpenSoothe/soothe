@@ -1,10 +1,8 @@
-"""Job artifacts and autopilot top snapshot helpers."""
+"""Job artifacts and autopilot top snapshot helpers.
 
-from soothe.autopilot.jobs.goal_md import (
-    load_job_goal_md,
-    resolve_job_goal_md_path,
-    write_job_goal_md,
-)
+GOAL.md contract helpers live in ``soothe.autopilot.cognition`` (IG-733).
+"""
+
 from soothe.autopilot.jobs.top_snapshot import (
     apply_top_running_status,
     build_top_job_entry,
@@ -22,8 +20,5 @@ __all__ = [
     "derive_top_running_status",
     "filter_active_dag",
     "filter_active_loops",
-    "load_job_goal_md",
-    "resolve_job_goal_md_path",
     "sort_top_jobs",
-    "write_job_goal_md",
 ]

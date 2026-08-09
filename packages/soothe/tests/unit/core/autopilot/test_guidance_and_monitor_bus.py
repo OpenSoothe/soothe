@@ -6,11 +6,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.autopilot.service import AutopilotService, _collect_operator_guidance
+from soothe.autopilot.cognition import absorb_user_guidance
+from soothe.autopilot.service import AutopilotService
 from soothe.config import SootheConfig
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
-from soothe.context.models import GoalNode
 from soothe.events.internal_bus import InternalEventBus
 from soothe.events.internal_events import (
     INTERNAL_GOAL_COMPLETED,
@@ -26,33 +26,18 @@ from .fakes import IdleFakeFactory
 async def test_absorb_guidance_async_on_real_ce() -> None:
     ce = ContextEngine()
     goal = await ce.create_goal("Ship OAuth")
-    ok = await ce.absorb_guidance(goal.id, "Prefer PKCE", scope="goal")
+    ok = await ce.absorb_guidance(goal.id, "Prefer PKCE", scope="goal", source="user")
     assert ok is True
     refreshed = await ce.get_goal(goal.id)
     assert refreshed is not None
     assert refreshed.guidance_accumulated[-1]["text"] == "Prefer PKCE"
+    assert refreshed.guidance_accumulated[-1]["source"] == "user"
 
 
 @pytest.mark.asyncio
 async def test_absorb_guidance_missing_goal() -> None:
     ce = ContextEngine()
     assert await ce.absorb_guidance("deadbeef", "nope") is False
-
-
-def test_collect_operator_guidance_includes_goal_and_job_scope() -> None:
-    root = GoalNode(id="root0001", description="job root")
-    root.guidance_accumulated = [
-        {"text": "job-wide: use feature branch", "scope": "job"},
-        {"text": "root-only note", "scope": "goal"},
-    ]
-    child = GoalNode(id="child001", description="implement", parent_id="root0001")
-    child.guidance_accumulated = [{"text": "focus on login route", "scope": "goal"}]
-    goals = {"root0001": root, "child001": child}
-
-    texts = _collect_operator_guidance(child, goals)
-    assert "focus on login route" in texts
-    assert "job-wide: use feature branch" in texts
-    assert "root-only note" not in texts
 
 
 @pytest.mark.asyncio
@@ -66,7 +51,7 @@ async def test_build_merged_context_attaches_guidance() -> None:
         runner_factory=IdleFakeFactory(),
     )
     goal = await ce.create_goal("Add tests")
-    await ce.absorb_guidance(goal.id, "Cover edge cases")
+    await absorb_user_guidance(ce, goal.id, "Cover edge cases")
     bundle = await svc._build_merged_context(goal)
     assert "Cover edge cases" in bundle.operator_guidance
 

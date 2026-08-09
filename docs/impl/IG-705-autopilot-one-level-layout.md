@@ -20,12 +20,13 @@ soothe/autopilot/
   __init__.py                 # AutopilotService, AutopilotMonitor only
   service.py
 
+  cognition/                  # GOAL.md contract + guidance intake (IG-733)
   rail/                       # LoopRail runtime
   monitor/                    # AutopilotMonitor + models
   verify/                     # consensus, maturity, DAG health, backoff, verifiers
   workers/                    # pool, job loop index, workspace reservation
   dispatch/                   # goal-dispatch context store/projector/models
-  jobs/                       # GOAL.md artifact + top snapshot
+  jobs/                       # top snapshot + rail selection artifacts
   schedule/                   # cron helpers (tasks, timezone)
 ```
 

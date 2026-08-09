@@ -3123,9 +3123,16 @@ class MessageRouter:
             )
             return
 
-        # Absorb guidance via ContextEngine (RFC-228)
-        scope = "goal" if goal_id else "job"
-        absorbed = await context_engine.absorb_guidance(target_id, content.strip(), scope=scope)
+        # Absorb via Autopilot cognition → CE (RFC-228 / IG-733); does not spawn goals.
+        from soothe.autopilot.cognition import GuidanceScope, absorb_user_guidance
+
+        scope: GuidanceScope = "goal" if goal_id else "job"
+        absorbed = await absorb_user_guidance(
+            context_engine,
+            target_id,
+            content.strip(),
+            scope=scope,
+        )
 
         logger.info(
             "[JobGuidance] Guidance for job=%s goal=%s absorbed=%s: %s",

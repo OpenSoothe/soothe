@@ -1,4 +1,4 @@
-"""Job-scoped GOAL.md artifact under ``data/jobs/{job_id}/`` (IG-702).
+"""Job-scoped GOAL.md contract artifact under ``data/jobs/{job_id}/`` (IG-702/IG-733).
 
 Persists the Autopilot root job description as a durable filesystem snapshot
 alongside rail soft-state. Distinct from workspace ``GOAL.md`` (operator

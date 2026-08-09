@@ -621,7 +621,7 @@ class TestJobGuidance:
         assert msg["result"]["absorbed"] is True
 
         daemon._autopilot_service._ce.absorb_guidance.assert_awaited_once_with(
-            "job-g1", "Focus on testing first", scope="job"
+            "job-g1", "Focus on testing first", scope="job", source="user"
         )
 
     @pytest.mark.asyncio
@@ -654,7 +654,7 @@ class TestJobGuidance:
         assert msg["result"]["goal_id"] == "child-g2"
 
         daemon._autopilot_service._ce.absorb_guidance.assert_awaited_once_with(
-            "child-g2", "Complete this subtask", scope="goal"
+            "child-g2", "Complete this subtask", scope="goal", source="user"
         )
 
     @pytest.mark.asyncio

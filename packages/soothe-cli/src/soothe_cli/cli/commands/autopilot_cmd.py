@@ -561,6 +561,43 @@ def resume_goal(
     typer.echo(f"Goal resumed: {resumed_id[:8]} → {result.get('new_status', 'pending')}")
 
 
+@app.command("guide")
+def guide_job(
+    job_id: str = typer.Argument(..., help="Job (root goal) ID."),
+    text: str = typer.Argument(..., help="Guidance text for the next Autopilot dispatch."),
+    goal_id: str | None = typer.Option(
+        None,
+        "--goal",
+        "-g",
+        help="Optional goal under the job (default: job-root / job-wide scope).",
+    ),
+) -> None:
+    """Absorb operator guidance into ContextEngine (does not create goals).
+
+    Text is stored on the job/goal for Autopilot cognition and applied on the
+    next worker dispatch. It does not spawn or inject new goals.
+    """
+    cleaned = (text or "").strip()
+    if not cleaned:
+        typer.echo("Guidance text must be non-empty.", err=True)
+        raise typer.Exit(1)
+    client = _require_daemon_ws()
+    try:
+        result = client.job_guidance(job_id, cleaned, goal_id=goal_id)
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    absorbed = bool(result.get("absorbed"))
+    target = str(result.get("goal_id") or goal_id or job_id)
+    if not absorbed:
+        typer.echo(
+            f"Guidance not absorbed for job {job_id[:8]} goal {target[:8]}.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    typer.echo(f"Guidance absorbed: job {job_id[:8]} → goal {target[:8]}")
+
+
 def _short_loop_id(loop_id: str, *, head: int = 4, tail: int = 4) -> str:
     """Shorten loop ids as ``prefix…suffix`` (4 chars each by default)."""
     text = str(loop_id or "")

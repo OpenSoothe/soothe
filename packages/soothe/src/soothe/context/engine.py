@@ -1087,16 +1087,19 @@ class ContextEngine:
         goal_id: str,
         guidance_text: str,
         scope: str = "goal",
+        *,
+        source: str = "user",
     ) -> bool:
-        """Absorb user guidance from job IPC (RFC-228).
+        """Absorb guidance from Autopilot cognition / job IPC (RFC-228 / IG-733).
 
         Accumulates guidance for the next worker dispatch (see Autopilot
-        ``GoalDispatchContextBundle.operator_guidance``).
+        ``GoalDispatchContextBundle.operator_guidance``). Does not create goals.
 
         Args:
             goal_id: Target goal ID.
-            guidance_text: User's guidance/instruction.
+            guidance_text: Guidance/instruction text.
             scope: "goal" for specific, "job" for root (full DAG).
+            source: Provenance tag (``user``, ``channel``, or ``system``).
 
         Returns:
             True if absorbed, False if goal not found.
@@ -1106,18 +1109,28 @@ class ContextEngine:
             logger.warning("[Guidance] Goal %s not found", goal_id)
             return False
 
-        guidance_entry = {
-            "text": guidance_text,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "scope": scope,
-        }
-        goal.guidance_accumulated.append(guidance_entry)
+        cleaned = (guidance_text or "").strip()
+        if not cleaned:
+            return False
+
+        source_norm = (source or "user").strip() or "user"
+        before = len(goal.guidance_accumulated)
+        self._append_goal_guidance(
+            goal,
+            cleaned,
+            source=source_norm,
+            scope=scope,
+        )
+        if len(goal.guidance_accumulated) == before:
+            # Duplicate of last entry — still treat as absorbed for IPC idempotency.
+            return True
         goal.updated_at = datetime.now(UTC)
         logger.info(
-            "[Guidance] Absorbed guidance for goal %s (scope=%s): %s",
+            "[Guidance] Absorbed guidance for goal %s (scope=%s source=%s): %s",
             goal_id,
             scope,
-            guidance_text[:50],
+            source_norm,
+            cleaned[:50],
         )
         return True
 

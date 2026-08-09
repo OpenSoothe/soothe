@@ -610,7 +610,7 @@ class AutopilotService:
         if goal.parent_id is None:
             await self._job_loop_index.ensure_job(goal.id)
             # IG-702: durable submit contract under jobs/{job_id}/GOAL.md.
-            from soothe.autopilot.jobs.goal_md import write_job_goal_md
+            from soothe.autopilot.cognition import write_job_goal_md
 
             write_job_goal_md(
                 jobs_root=self._jobs_root,
@@ -1427,7 +1427,9 @@ class AutopilotService:
                 )
                 bundle = GoalDispatchContextBundle()
 
-        guidance = _collect_operator_guidance(goal, self._ce._dag.goals)
+        from soothe.autopilot.cognition import collect_operator_guidance
+
+        guidance = collect_operator_guidance(goal, self._ce._dag.goals)
         if guidance:
             return bundle.model_copy(update={"operator_guidance": guidance})
         return bundle
@@ -2723,40 +2725,3 @@ def _serialize_goal_steps(goal: GoalNode) -> dict[str, Any]:
         "steps": {"nodes": step_nodes, "edges": step_edges},
     }
 
-
-def _collect_operator_guidance(
-    goal: GoalNode,
-    all_goals: dict[str, GoalNode],
-) -> list[str]:
-    """Collect RFC-228 guidance texts for a goal about to be dispatched.
-
-    Includes guidance on the goal itself plus job-scoped entries on the root.
-    """
-    texts: list[str] = []
-    seen: set[str] = set()
-
-    def _append(entries: list[dict[str, Any]] | None) -> None:
-        for entry in entries or []:
-            text = str(entry.get("text") or "").strip()
-            if not text or text in seen:
-                continue
-            seen.add(text)
-            texts.append(text)
-
-    _append(goal.guidance_accumulated)
-
-    root: GoalNode | None = goal
-    visited: set[str] = set()
-    while root is not None and root.parent_id and root.parent_id not in visited:
-        visited.add(root.id)
-        parent = all_goals.get(root.parent_id)
-        if parent is None:
-            break
-        root = parent
-    if root is not None and root.id != goal.id:
-        job_scoped = [
-            e for e in (root.guidance_accumulated or []) if str(e.get("scope") or "") == "job"
-        ]
-        _append(job_scoped)
-
-    return texts

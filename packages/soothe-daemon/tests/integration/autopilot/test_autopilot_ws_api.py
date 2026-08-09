@@ -571,7 +571,9 @@ async def test_job_guidance_with_specific_goal_id(ws_daemon) -> None:
         assert resp["type"] == "response"
         assert resp["result"]["goal_id"] == "child-1"
         assert resp["result"]["absorbed"] is True
-        ge.absorb_guidance.assert_awaited_once_with("child-1", "Use pytest fixtures", scope="goal")
+        ge.absorb_guidance.assert_awaited_once_with(
+            "child-1", "Use pytest fixtures", scope="goal", source="user"
+        )
 
 
 @pytest.mark.asyncio

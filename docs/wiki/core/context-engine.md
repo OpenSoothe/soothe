@@ -107,7 +107,7 @@ The async API manages goal state transitions:
 - `fail_goal(goal_id, error=, evidence=)` — terminal failure (retry/backoff is applied by AutopilotMonitor / consensus, not by CE itself).
 - `suspend_goal(goal_id, reason)` / `block_goal(goal_id)` / `unblock_goal(goal_id)` — temporary pauses.
 - `cancel_goal(goal_id, reason=)` — terminal cancellation.
-- `absorb_guidance(goal_id, text, scope=)` — async; accumulates operator guidance for the next autopilot dispatch.
+- `absorb_guidance(goal_id, text, scope=, *, source=)` — async; accumulates operator guidance for the next autopilot dispatch (prefer `soothe.autopilot.cognition.absorb_*` for typed intake).
 
 ### Retry and Backoff
 

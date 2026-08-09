@@ -188,7 +188,7 @@ class GoalDispatchContextBundle(BaseModel):
     tool_call_summary: ToolCallStats = Field(default_factory=ToolCallStats)
     operator_guidance: list[str] = Field(
         default_factory=list,
-        description="Operator guidance texts absorbed via RFC-228 job_guidance",
+        description="Operator guidance texts from cognition intake (RFC-228 / IG-733)",
     )
     cached_system_prompt_hash: str | None = Field(
         default=None,
