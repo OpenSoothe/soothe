@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Literal, NamedTuple
 from pydantic import BaseModel, Field
 from soothe_nano.utils.text_preview import preview_first
 
+from soothe.autopilot.prompts import build_consensus_prompt
 from soothe.autopilot.verify.dag_ops import DagOp
 
 if TYPE_CHECKING:
@@ -88,7 +89,7 @@ async def evaluate_goal_completion(
         msg = "Consensus model is required for goal completion validation"
         raise ConsensusEvaluationError(msg)
 
-    prompt = _build_consensus_prompt(
+    prompt = build_consensus_prompt(
         goal_description,
         response_text,
         dag_context=dag_context,
@@ -139,46 +140,3 @@ async def evaluate_goal_completion(
         logger.exception("Report-commit LLM judgment failed")
         msg = f"Report-commit LLM judgment failed: {exc}"
         raise ConsensusEvaluationError(msg) from exc
-
-
-def _build_consensus_prompt(
-    goal: str,
-    response: str,
-    *,
-    dag_context: str = "",
-) -> str:
-    """Build prompt for structured report-commit judgment.
-
-    Pass the full CE Goal Report projection into the judge prompt (IG-690 /
-    IG-726). Do not clip with ``preview_first`` here — truncation caused false
-    ``fail`` when the model mistook the preview for incomplete work.
-    """
-    parts = [
-        "You are evaluating whether an AI agent has successfully completed a goal.",
-        f"\nGoal: {goal}",
-        f"\nGoal Report (from ContextEngine):\n{response}",
-    ]
-    if dag_context.strip():
-        parts.append(f"\n{dag_context.strip()}")
-
-    parts.append(
-        "\nChoose one decision:\n"
-        "- accept: StrangeLoop Plan-Execute-Eval finished and the Goal Report "
-        "indicates the goal work was done satisfactorily — prefer accept "
-        "when the agent completed its plan unless product work is clearly "
-        "incomplete or wrong\n"
-        "- send_back: the approach or product deliverable must be reworked "
-        "(not a request for more git/file proof narrative)\n"
-        "- fail: the goal appears fundamentally blocked or unrecoverable by "
-        "further agent retries (host recovery will decide next steps)\n"
-        "Judge from the Goal and Goal Report only. Do not reject solely "
-        "because the report omits branch names, git logs, or file-path "
-        "lists — AutopilotMonitor and LoopRail own post-completion DAG "
-        "structure, not a second proof mission. Prefer fail only when work "
-        "is fundamentally blocked.\n"
-        "Optionally propose bounded dag_ops (wire_depends, unwire_depends, "
-        "set_priority, update_pending_brief on pending goals). Leave dag_ops "
-        "empty unless a clear pending-plan fix is needed. Do not invent "
-        "spawn_goal/cancel_goal. Provide a brief reasoning string."
-    )
-    return "\n".join(parts)

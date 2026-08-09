@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from soothe.autopilot.prompts import build_consensus_prompt
 from soothe.autopilot.verify.consensus import (
     ConsensusEvaluationError,
     ConsensusVerdict,
-    _build_consensus_prompt,
     evaluate_goal_completion,
 )
 
@@ -16,7 +16,7 @@ class TestConsensusPrompt:
     """Tests for consensus prompt builder."""
 
     def test_basic_prompt(self) -> None:
-        prompt = _build_consensus_prompt("Test goal", "Response text")
+        prompt = build_consensus_prompt("Test goal", "Response text")
         assert "Test goal" in prompt
         assert "Response text" in prompt
         assert "Goal Report (from ContextEngine):\nResponse text" in prompt
@@ -26,13 +26,13 @@ class TestConsensusPrompt:
 
     def test_prompt_preserves_long_goal_report(self) -> None:
         long_response = "R" * 2000
-        prompt = _build_consensus_prompt("Goal", long_response)
+        prompt = build_consensus_prompt("Goal", long_response)
         assert long_response in prompt
         assert "Agent Response Preview" not in prompt
         assert "Goal Report (from ContextEngine):\n" + long_response in prompt
 
     def test_prompt_includes_instructions(self) -> None:
-        prompt = _build_consensus_prompt("Goal", "Response")
+        prompt = build_consensus_prompt("Goal", "Response")
         assert "send_back" in prompt.lower()
         assert "fail" in prompt.lower()
         assert "suspend" not in prompt.lower()

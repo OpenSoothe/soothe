@@ -23,3 +23,6 @@ Develop profile sets **`simple`** to skip intake LLM for local evals.
 | `simple` / `trivial` / `complex` | Pre-classify scope; skip Pass 1+2 |
 
 Plumbed on `LoopRunRequest.intake_scope` from `AutopilotService._dispatch_to_worker`.
+
+**Per-goal override (IG-735):** `GoalNode.intake_scope` (default `null`) wins
+over this config when set (e.g. WavePlan verify planner forces `trivial`).

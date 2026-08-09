@@ -195,3 +195,41 @@ async def test_implement_dispatch_simple_intake_scope_forced() -> None:
     req = captured["request"]
     assert req is not None
     assert getattr(req, "intake_scope", "MISSING") == "simple"
+
+
+@pytest.mark.asyncio
+async def test_goal_intake_scope_overrides_config() -> None:
+    """Per-goal intake_scope wins over AutopilotConfig.intake_scope."""
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=1, intake_scope="simple"),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(decision="accept", reasoning="ok"),
+        runner_factory=IdleFakeFactory(),
+    )
+    goal = await svc.submit_task("verify wave plan", max_send_backs=3)
+    goal.intake_scope = "trivial"
+
+    captured: dict[str, object] = {}
+
+    class _Worker:
+        loop_id = "autopilot__x__y"
+
+        def __init__(self) -> None:
+            self.active_task = None
+
+    def _fake_create_task(coro: object) -> MagicMock:
+        frame = getattr(coro, "cr_frame", None)
+        if frame is not None:
+            captured["request"] = frame.f_locals.get("request")
+        getattr(coro, "close", lambda: None)()
+        return MagicMock()
+
+    with patch("asyncio.create_task", side_effect=_fake_create_task):
+        await svc._dispatch_to_worker(goal, _Worker())
+
+    req = captured["request"]
+    assert req is not None
+    assert getattr(req, "intake_scope", "MISSING") == "trivial"

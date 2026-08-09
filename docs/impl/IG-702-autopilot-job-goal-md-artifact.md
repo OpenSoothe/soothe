@@ -61,7 +61,7 @@ maturity without requiring a workspace copy.
 
 ## Implementation plan
 
-1. Helper module `soothe.autopilot.cognition.contract` — resolve / write / load (IG-733; formerly `jobs/goal_md.py`)
+1. Helper module `soothe.autopilot.intake.contract` — resolve / write / load (IG-733; formerly `jobs/goal_md.py`)
 2. `AutopilotService` retains `_jobs_root`; write after root `ensure_job`
 3. Wire maturity + acceptance brief fallback
 4. Unit tests for write-on-submit, path safety, maturity fallback

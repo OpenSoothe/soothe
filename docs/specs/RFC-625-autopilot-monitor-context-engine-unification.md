@@ -254,7 +254,7 @@ foundation/autopilot/
 ├── monitor.py               # AutopilotMonitor class (~400 lines)
 ├── goal_dag_verifier.py     # LLM-driven DAG verification coordinator
 ├── verifier_reasoner.py     # DagVerificationReasoner (LLM caller)
-├── verifier_prompts.py      # LLM prompt templates for verification
+├── prompts/                 # LLM fragments + builders (see soothe.autopilot.prompts)
 ├── goal_intake_handler.py   # New goal intake → CE calls
 ├── dreaming_coordinator.py  # LLM-driven multi-mode distillation orchestrator
 ├── dreaming_reasoner.py     # DreamingDistillationReasoner (LLM caller)
@@ -343,7 +343,7 @@ class AutopilotMonitor:
 ```
 foundation/autopilot/
 ├── goal_dag_verifier.py      # GoalDAGVerifier coordinator
-├── verifier_prompts.py       # LLM prompt templates for verification
+├── prompts/                  # LLM fragments + builders (soothe.autopilot.prompts)
 └── verifier_reasoner.py      # DagVerificationReasoner (LLM caller)
 ```
 
@@ -1021,7 +1021,7 @@ class AutopilotService:
 | §1 Module relocation | ✅ Complete | `soothe.context` → `soothe.context` |
 | §2 GoalNode enhancement | ✅ Complete | All Goal fields migrated, dreaming fields added |
 | §3 GoalEngine deletion | ✅ Complete | `soothe.core.goal_engine/` empty, BackoffReasoner migrated |
-| §4 LLM Verification Reasoner | ✅ Complete | `verifier_reasoner.py`, `verifier_prompts.py` implemented |
+| §4 LLM Verification Reasoner | ✅ Complete | `verifier_reasoner.py` + `soothe.autopilot.prompts` (IG-736) |
 | §4 LLM Dreaming Reasoner | ✅ Complete | `dreaming_reasoner.py`, `dreaming_prompts.py` implemented |
 | §5 AutopilotMonitor | ✅ Complete | Core monitor with event handlers implemented |
 | §6 DreamingCoordinator | ✅ Complete | 4-mode distillation coordinator implemented |

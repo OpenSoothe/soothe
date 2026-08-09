@@ -1,0 +1,77 @@
+Analyze the goal DAG for health issues and restructuring opportunities.
+
+## DAG Snapshot
+
+Total Goals: {total_goals}
+Active Goals: {active_count}
+Pending Goals: {pending_count}
+Completed Goals: {completed_count}
+Failed Goals: {failed_count}
+
+Goal Details:
+{goals_detail}
+
+Step Progress Summary:
+{step_progress}
+
+## Analysis Required
+
+Identify issues in the goal DAG:
+
+1. **Stale Goals**: Goals pending for too long (> 1 hour) that may need reset
+2. **Clutter Removal**: Only cancelled/failed goals with ZERO dependents and ZERO
+   non-terminal descendants — never remove job roots or active/suspended goals
+3. **Merge Opportunities**: Similar pending goals that could be consolidated (suggestions only)
+4. **Decomposition Opportunities**: Completed complex goals that should spawn follow-ups
+5. **Priority Imbalances**: Goals with mismatched priorities vs importance
+6. **Dependency Issues**: Pipeline goals missing hard depends_on edges — use wire_dependencies
+
+Output JSON structure (strict format):
+```json
+{{
+  "reset_goals": ["goal_id1", "goal_id2"],
+  "remove_goals": ["cancelled_clutter_id"],
+  "merge_goals": [
+    {{
+      "goal_ids": ["goal_id4", "goal_id5"],
+      "merged_description": "Consolidated description..."
+    }}
+  ],
+  "decompose_goals": [
+    {{
+      "goal_id": "goal_id6",
+      "subgoals": [
+        {{"description": "Subgoal 1...", "priority": 50, "depends_on": []}},
+        {{"description": "Subgoal 2...", "priority": 40, "depends_on": ["0"]}}
+      ]
+    }}
+  ],
+  "wire_dependencies": [
+    {{"goal_id": "goal_id_test", "depends_on": ["goal_id_implement"]}}
+  ],
+  "priority_adjustments": {{"goal_id7": 70, "goal_id8": 30}},
+  "reasoning": "Overall DAG health assessment..."
+}}
+```
+
+Constraints:
+- reset_goals: Goals stuck in pending/suspended/failed that should retry —
+  NEVER reset goals suspended after legacy consensus send_back budget
+  exhaustion (send_back_count >= max_send_backs); those are terminal for
+  operator-pause paths — new exhaustions fail and use engine recovery.
+  Do reset ordinary suspended/blocked goals whose dependencies are satisfied
+  and that are not send_back-exhausted.
+  DO reset failed non-root workers when all hard deps are completed and a
+  pending dependent is blocked (engine deadlock recovery). Prefer the failed
+  worker id, not the pending root.
+  NEVER reset job roots that have rail_id set (rail coordinators, not workers).
+- remove_goals: ONLY cancelled or failed clutter with no dependents; NEVER job roots
+  (parent_id null) that are still active/pending/suspended; NEVER goals with live children
+- merge_goals: Combine similar goals (logged; not always auto-applied)
+- decompose_goals: Split completed complex goals into follow-ups; each subgoal MUST
+  include depends_on when a pipeline is implied (use sibling index "0","1",… or real IDs).
+  NEVER suggest decompose_goals for goals under a job with rail_id — LoopRail owns spawn.
+- wire_dependencies: Set hard depends_on on existing goals to enforce pipeline order.
+  NEVER wire a child goal to depend_on a job root (parent_id null). Roots may
+  depend on children; children must never depend on the job root.
+- All goal IDs MUST exist in current DAG

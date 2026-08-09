@@ -1,0 +1,41 @@
+Analyze goal execution failure and determine optimal backoff point in goal DAG.
+
+## Current Goal Context
+
+Failed Goal ID: {goal_id}
+Goal Description: {goal_description}
+
+Goal DAG State:
+{goal_dag_state}
+
+Dependency Chain:
+{dependency_chain}
+
+## Failure Evidence
+
+Evidence Type: {evidence_source}
+Execution Metrics: {structured_metrics}
+Narrative Summary: {failure_narrative}
+
+## Decision Required
+
+You must decide WHERE to backoff in the goal DAG. Consider:
+1. Root cause analysis: Is the failure isolated to current goal or systemic?
+2. Dependency validity: Are prerequisite goals still valid?
+3. Recovery strategy: Should we retry current goal, backoff to parent, or create new goals?
+
+Output JSON structure (strict format):
+```json
+{{
+  "backoff_to_goal_id": "<goal_id>",
+  "reason": "<natural language reasoning for backoff decision>",
+  "new_directives": [],
+  "evidence_summary": "<condensed failure analysis>"
+}}
+```
+
+Constraints:
+- backoff_to_goal_id MUST exist in current goal DAG
+- Prefer backing off to parent goal if dependency assumption failed
+- Use new_directives to create corrective goals if needed (optional, leave empty array if not needed)
+- reason should be clear and actionable for operator visibility

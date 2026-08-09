@@ -33,6 +33,27 @@ def ensure_waveplan_efficiency_hint(brief: str) -> str:
     return text + WAVEPLAN_EFFICIENCY_HINT
 
 
+def waveplan_verify_existing_brief(*, job_id: str, source: str) -> str:
+    """Brief for a trivial StrangeLoop verify of a candidate WavePlan dump.
+
+    Host never auto-accepts a dump; the agent must accept or rewrite.
+    """
+    return (
+        f"Verify candidate WavePlan for job {job_id} before fan-out. "
+        f"Candidate source: {source}. "
+        "Compare the dump against this job's current goal description and "
+        "workspace state. If it is still a correct flat partition "
+        "(wave_slices string list or flat slices entries; string independence; "
+        "rationale; no nested WAVE trees), complete with wave_plan_path "
+        "pointing at that file (or inline wave_plan JSON). "
+        "If the dump is stale, wrong for this job, or incomplete, rewrite a "
+        "flat WavePlan and complete with that instead. "
+        "Do not implement product or migration code. "
+        "Do not write markdown validation/completion reports — those are not "
+        "deliverables. independence must be a plain string, never a nested object."
+    )
+
+
 DEFAULT_VERB_BRIEFS: dict[str, str] = {
     "plan_milestones": (
         "Architecture and milestone map for job {job_id}. "

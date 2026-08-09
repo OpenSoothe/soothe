@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
+from soothe.autopilot.prompts import build_maturity_prompt
+
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
@@ -394,48 +396,6 @@ def _fail_closed_snapshot(*, reason: str) -> JobMaturitySnapshot:
     )
 
 
-def _build_maturity_prompt(
-    *,
-    verification_rules: str,
-    goal_md: str,
-    dag_summary: str,
-    workspace_inventory: str,
-    qa_response: str,
-) -> str:
-    parts = [
-        "You assess whether a multi-goal Autopilot job has met its acceptance "
-        "contract. Workspaces may be coding, writing, planning, research, or "
-        "other domains — judge against the contract, not a specific toolchain.",
-        "\nSet acceptance_met=true only when the contract is clearly satisfied. "
-        "Prefer acceptance_met=false with needs_feedback when evidence is thin "
-        "or deliverables are missing.",
-        "\nWhen accepted, set level=accepted and suggested_rail_signal=job_complete. "
-        "When not accepted, prefer suggested_rail_signal=needs_feedback and a "
-        "non-accepted level (acceptance_candidate, blocked, or scaffold).",
-    ]
-    if verification_rules.strip():
-        parts.append(f"\nverification_rules:\n{verification_rules.strip()[:2000]}")
-    if goal_md.strip():
-        parts.append(f"\nGOAL.md:\n{goal_md.strip()[:2000]}")
-    if not verification_rules.strip() and not goal_md.strip():
-        parts.append(
-            "\nNo explicit GOAL.md / verification_rules. Infer success criteria "
-            "from the job root description and completed child goals; be "
-            "conservative about acceptance_met."
-        )
-    if dag_summary.strip():
-        parts.append(f"\nJob DAG:\n{dag_summary.strip()[:3000]}")
-    if workspace_inventory.strip():
-        parts.append(f"\nWorkspace inventory (shallow):\n{workspace_inventory.strip()[:2500]}")
-    if qa_response.strip():
-        parts.append(f"\nLatest QA/verify response:\n{qa_response.strip()[:2000]}")
-    parts.append(
-        "\nReturn structured criteria (id/description/status/evidence), blockers, "
-        "level, suggested_rail_signal, acceptance_met, and brief reasoning."
-    )
-    return "\n".join(parts)
-
-
 class JobMaturityAssessor:
     """Assess job root maturity via structured LLM against the acceptance contract."""
 
@@ -479,7 +439,7 @@ class JobMaturityAssessor:
             logger.warning("Job maturity model missing; fail-closed (no acceptance latch)")
             return _fail_closed_snapshot(reason="maturity model unavailable")
 
-        prompt = _build_maturity_prompt(
+        prompt = build_maturity_prompt(
             verification_rules=rules,
             goal_md=goal_text,
             dag_summary=dag,

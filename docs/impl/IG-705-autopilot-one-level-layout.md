@@ -20,7 +20,8 @@ soothe/autopilot/
   __init__.py                 # AutopilotService, AutopilotMonitor only
   service.py
 
-  cognition/                  # GOAL.md contract + guidance intake (IG-733)
+  intake/                     # GOAL.md contract + guidance absorb/collect (IG-733)
+  prompts/                    # LLM fragments + builders (IG-736; like sloop.prompts)
   rail/                       # LoopRail runtime
   monitor/                    # AutopilotMonitor + models
   verify/                     # consensus, maturity, DAG health, backoff, verifiers

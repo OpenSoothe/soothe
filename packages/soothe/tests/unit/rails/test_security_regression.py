@@ -275,95 +275,124 @@ def test_guard_error_reasoning_uses_type_name() -> None:
 
 
 # ── V9: LLM prompt injection surface — system/user role separation ────
+# Prompt text lives in soothe.autopilot.prompts (IG-736); evaluator only invokes.
 
 
-def test_llm_guard_uses_system_message_for_instructions() -> None:
-    """LLMGuardEvaluator must use SystemMessage for evaluation instructions.
+def _sample_guard_messages() -> list:
+    from soothe.autopilot.prompts import build_guard_messages
 
-    System instructions (guidance, rules) must be in a SystemMessage so the
-    model treats them as privileged, not as content a user can override.
-    """
+    return build_guard_messages(
+        event="goal_completed",
+        goal_id="g1",
+        trigger_tags=["implementation"],
+        condition_name="needs_review",
+        structural={"all_exploration_terminal": True},
+        sibling_statuses={"g1": "completed"},
+        tags_by_goal={"g1": ["implementation"]},
+        retry_count=0,
+        condition_text="when implementation finishes, need review",
+        goal_summary="ship the feature",
+    )
+
+
+def test_llm_guard_evaluator_delegates_to_prompt_builder() -> None:
+    """LLMGuardEvaluator.evaluate must assemble prompts via build_guard_messages."""
     import inspect
 
     from soothe.autopilot.rail.guards import LLMGuardEvaluator
 
     source = inspect.getsource(LLMGuardEvaluator.evaluate)
-    assert "SystemMessage" in source, (
-        "LLMGuardEvaluator must send a SystemMessage to separate instructions "
+    assert "build_guard_messages" in source, (
+        "LLMGuardEvaluator must call build_guard_messages (prompts package) "
+        "so injection delimiters stay centralized."
+    )
+
+
+def test_llm_guard_uses_system_message_for_instructions() -> None:
+    """Guard builder must use SystemMessage for evaluation instructions.
+
+    System instructions (guidance, rules) must be in a SystemMessage so the
+    model treats them as privileged, not as content a user can override.
+    """
+    from langchain_core.messages import SystemMessage
+
+    messages = _sample_guard_messages()
+    assert any(isinstance(m, SystemMessage) for m in messages), (
+        "Guard prompts must include a SystemMessage to separate instructions "
         "from untrusted user data (V9 prompt injection mitigation)."
     )
 
 
 def test_llm_guard_uses_human_message_for_untrusted_data() -> None:
-    """LLMGuardEvaluator must use HumanMessage for untrusted data only."""
-    import inspect
+    """Guard builder must use HumanMessage for untrusted data only."""
+    from langchain_core.messages import HumanMessage
 
-    from soothe.autopilot.rail.guards import LLMGuardEvaluator
-
-    source = inspect.getsource(LLMGuardEvaluator.evaluate)
-    assert "HumanMessage" in source
+    messages = _sample_guard_messages()
+    assert any(isinstance(m, HumanMessage) for m in messages)
 
 
 def test_llm_guard_encloses_untrusted_data_in_delimiters() -> None:
     """Untrusted data (goal_summary, condition_text) must be enclosed in
     <untrusted_data> delimiters so the model treats them as data, not commands.
     """
-    import inspect
+    from langchain_core.messages import HumanMessage
 
-    from soothe.autopilot.rail.guards import LLMGuardEvaluator
-
-    source = inspect.getsource(LLMGuardEvaluator.evaluate)
-    assert "<untrusted_data>" in source, (
-        "LLMGuardEvaluator must enclose untrusted data in <untrusted_data> tags."
+    human = next(m for m in _sample_guard_messages() if isinstance(m, HumanMessage))
+    content = str(human.content)
+    assert "<untrusted_data>" in content, (
+        "Guard user prompt must enclose untrusted data in <untrusted_data> tags."
     )
-    assert "</untrusted_data>" in source
+    assert "</untrusted_data>" in content
 
 
 def test_llm_guard_goal_summary_inside_untrusted_block() -> None:
     """goal_summary (user-controlled) must be inside the <untrusted_data> block,
     not in the system message or mixed with instructions.
     """
-    import inspect
+    from langchain_core.messages import HumanMessage, SystemMessage
 
-    from soothe.autopilot.rail.guards import LLMGuardEvaluator
-
-    source = inspect.getsource(LLMGuardEvaluator.evaluate)
-    # Use rfind to skip the system prompt's mention of the delimiter name
-    start = source.rfind("<untrusted_data>")
-    end = source.find("</untrusted_data>", start) if start != -1 else -1
+    messages = _sample_guard_messages()
+    system = next(m for m in messages if isinstance(m, SystemMessage))
+    human = next(m for m in messages if isinstance(m, HumanMessage))
+    content = str(human.content)
+    start = content.find("<untrusted_data>")
+    end = content.find("</untrusted_data>", start) if start != -1 else -1
     assert start != -1 and end != -1, "untrusted_data block not found"
-    block = source[start:end]
-    assert "goal_summary" in block, (
+    block = content[start:end]
+    assert "ship the feature" in block, (
         "goal_summary must be inside <untrusted_data> block, not in system prompt."
     )
+    assert "ship the feature" not in str(system.content)
 
 
 def test_llm_guard_condition_text_inside_untrusted_block() -> None:
     """condition_text (user/agent-controlled) must be inside the untrusted block."""
-    import inspect
+    from langchain_core.messages import HumanMessage
 
-    from soothe.autopilot.rail.guards import LLMGuardEvaluator
-
-    source = inspect.getsource(LLMGuardEvaluator.evaluate)
-    start = source.rfind("<untrusted_data>")
-    end = source.find("</untrusted_data>", start) if start != -1 else -1
-    block = source[start:end]
-    assert "condition_text" in block, "condition_text must be inside <untrusted_data> block."
+    human = next(m for m in _sample_guard_messages() if isinstance(m, HumanMessage))
+    content = str(human.content)
+    start = content.find("<untrusted_data>")
+    end = content.find("</untrusted_data>", start) if start != -1 else -1
+    assert start != -1 and end != -1
+    block = content[start:end]
+    assert "when implementation finishes, need review" in block, (
+        "condition_text must be inside <untrusted_data> block."
+    )
 
 
 def test_llm_guard_system_prompt_has_injection_defense_rules() -> None:
     """System prompt must explicitly instruct the model to ignore prompt injection
     attempts inside the untrusted data block."""
-    import inspect
+    from langchain_core.messages import SystemMessage
 
-    from soothe.autopilot.rail.guards import LLMGuardEvaluator
+    from soothe.autopilot.prompts.fragments import GUARD_SYSTEM_FRAGMENT
 
-    source = inspect.getsource(LLMGuardEvaluator.evaluate)
-    # The system prompt must mention untrusted data handling
+    system = next(m for m in _sample_guard_messages() if isinstance(m, SystemMessage))
+    source = str(system.content)
+    assert source == GUARD_SYSTEM_FRAGMENT
     assert "UNTRUSTED" in source.upper() or "untrusted" in source.lower(), (
         "System prompt must warn the model about untrusted data."
     )
-    # Must mention prompt injection defense
     assert "injection" in source.lower() or "ignore previous" in source.lower(), (
         "System prompt must include prompt-injection defense instructions."
     )
@@ -372,15 +401,16 @@ def test_llm_guard_system_prompt_has_injection_defense_rules() -> None:
 def test_llm_guard_structural_facts_not_in_untrusted_block() -> None:
     """STRUCTURAL FACTS are machine-derived, not user-controlled — they must
     be OUTSIDE the <untrusted_data> block (in the trusted portion of the user message)."""
-    import inspect
+    from langchain_core.messages import HumanMessage
 
-    from soothe.autopilot.rail.guards import LLMGuardEvaluator
-
-    source = inspect.getsource(LLMGuardEvaluator.evaluate)
-    start = source.rfind("<untrusted_data>")
-    end = source.find("</untrusted_data>", start) if start != -1 else -1
-    block = source[start:end]
-    # Structural facts should be outside the untrusted block
+    human = next(m for m in _sample_guard_messages() if isinstance(m, HumanMessage))
+    content = str(human.content)
+    start = content.find("<untrusted_data>")
+    end = content.find("</untrusted_data>", start) if start != -1 else -1
+    assert start != -1 and end != -1
+    block = content[start:end]
+    trusted = content[:start]
+    assert "STRUCTURAL FACTS" in trusted
     assert "STRUCTURAL FACTS" not in block, (
         "STRUCTURAL FACTS are machine-derived and should be outside the untrusted_data block."
     )

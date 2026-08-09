@@ -51,6 +51,17 @@ def normalize_do_steps(raw: Any, *, path: Path, verb: str) -> list[dict[str, Any
                     raise RailCatalogError(
                         f"{path}: verbs.{verb}.do[{i}].spawn_goal.tags must be list[str]"
                     )
+            if "intake_scope" in spec and spec["intake_scope"] is not None:
+                scope = spec["intake_scope"]
+                if not isinstance(scope, str) or scope.strip().lower() not in {
+                    "trivial",
+                    "simple",
+                    "complex",
+                }:
+                    raise RailCatalogError(
+                        f"{path}: verbs.{verb}.do[{i}].spawn_goal.intake_scope "
+                        "must be trivial|simple|complex"
+                    )
         elif op == "bump":
             if isinstance(spec, str):
                 if spec.strip() not in {"feedback_round", "wave_index"}:

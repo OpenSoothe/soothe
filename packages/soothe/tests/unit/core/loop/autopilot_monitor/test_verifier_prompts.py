@@ -1,17 +1,17 @@
-"""Tests for autopilot monitor LLM prompt templates."""
+"""Tests for autopilot verify LLM prompt templates (IG-736)."""
 
 from __future__ import annotations
 
-from soothe.autopilot.verify.verifier_prompts import (
-    DAG_HEALTH_VERIFICATION_PROMPT,
-    GOAL_PLACEMENT_PROMPT,
-    POST_COMPLETION_VERIFICATION_PROMPT,
+from soothe.autopilot.prompts import (
+    render_dag_health_prompt,
+    render_goal_placement_prompt,
+    render_post_completion_prompt,
 )
 
 
 def test_goal_placement_prompt_format_includes_json_example() -> None:
     """JSON example braces must not break str.format() (KeyError on 'priority')."""
-    prompt = GOAL_PLACEMENT_PROMPT.format(
+    prompt = render_goal_placement_prompt(
         goal_description="verify cron dispatch",
         active_count=1,
         pending_count=2,
@@ -26,7 +26,7 @@ def test_goal_placement_prompt_format_includes_json_example() -> None:
 
 def test_dag_health_prompt_format_includes_json_example() -> None:
     """DAG health prompt JSON example must survive .format()."""
-    prompt = DAG_HEALTH_VERIFICATION_PROMPT.format(
+    prompt = render_dag_health_prompt(
         total_goals=4,
         active_count=1,
         pending_count=2,
@@ -42,7 +42,7 @@ def test_dag_health_prompt_format_includes_json_example() -> None:
 
 def test_post_completion_prompt_format_substitutes_completed_goal_id() -> None:
     """Post-completion prompt keeps completed_goal_id in JSON example."""
-    prompt = POST_COMPLETION_VERIFICATION_PROMPT.format(
+    prompt = render_post_completion_prompt(
         completed_goal_id="goal-99",
         completed_description="done",
         outcome_summary="ok",

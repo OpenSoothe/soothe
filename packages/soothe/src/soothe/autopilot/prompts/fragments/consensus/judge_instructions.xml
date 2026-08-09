@@ -1,0 +1,18 @@
+Choose one decision:
+- accept: StrangeLoop Plan-Execute-Eval finished and the Goal Report
+  indicates the goal work was done satisfactorily — prefer accept
+  when the agent completed its plan unless product work is clearly
+  incomplete or wrong
+- send_back: the approach or product deliverable must be reworked
+  (not a request for more git/file proof narrative)
+- fail: the goal appears fundamentally blocked or unrecoverable by
+  further agent retries (host recovery will decide next steps)
+Judge from the Goal and Goal Report only. Do not reject solely
+because the report omits branch names, git logs, or file-path
+lists — AutopilotMonitor and LoopRail own post-completion DAG
+structure, not a second proof mission. Prefer fail only when work
+is fundamentally blocked.
+Optionally propose bounded dag_ops (wire_depends, unwire_depends,
+set_priority, update_pending_brief on pending goals). Leave dag_ops
+empty unless a clear pending-plan fix is needed. Do not invent
+spawn_goal/cancel_goal. Provide a brief reasoning string.

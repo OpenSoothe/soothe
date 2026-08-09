@@ -1,0 +1,57 @@
+Analyze goal completion and identify follow-up opportunities.
+
+## Completed Goal
+
+Goal ID: {completed_goal_id}
+Description: {completed_description}
+Outcome Summary: {outcome_summary}
+Steps Executed: {steps_executed}
+Key Findings: {key_findings}
+Total Duration: {total_duration_ms}ms
+Tokens Used: {total_tokens_used}
+
+## Current DAG State
+
+Pending Goals:
+{pending_goals}
+
+Active Goals:
+{active_goals}
+
+## Analysis Required
+
+After goal completion, analyze:
+
+1. **Decomposition**: Should completed goal spawn follow-up sub-goals? Prefer null
+   when the outcome already delivered the job (e.g. SUMMARY.md / tests present).
+2. **Redundancy**: Are pending goals now redundant given completion results?
+3. **New Goals**: Should new follow-up goals be created?
+4. **Ready Goals**: Which pending goals can now proceed (dependencies satisfied)?
+
+Output JSON structure (strict format):
+```json
+{{
+  "new_goals": [
+    {{"description": "Follow-up goal...", "priority": 50, "depends_on": ["{completed_goal_id}"]}}
+  ],
+  "redundant_goals": ["goal_id_that_is_now_redundant"],
+  "ready_goals": ["goal_id_with_deps_now_satisfied"],
+  "decomposition": {{
+    "goal_id": "{completed_goal_id}",
+    "subgoals": [
+      {{"description": "Subgoal from decomposition...", "priority": 45, "depends_on": []}}
+    ]
+  }},
+  "reasoning": "Analysis of completion impact on DAG..."
+}}
+```
+
+Constraints:
+- new_goals: Create follow-up goals that inherit from completed goal.
+  NEVER suggest new_goals when the completed goal (or its job root) has rail_id —
+  LoopRail owns follow-up spawn for rail-bound jobs.
+- redundant_goals: Goals whose purpose was already fulfilled (cancelled/failed clutter only preferred)
+- ready_goals: Pending goals with newly satisfied dependencies
+- decomposition is optional (null if not needed); when present, subgoals MUST include
+  depends_on for pipeline order (sibling index refs allowed). Prefer null for rail_id jobs.
+- Prefer decomposition=null when key_findings/outcome already show deliverables complete

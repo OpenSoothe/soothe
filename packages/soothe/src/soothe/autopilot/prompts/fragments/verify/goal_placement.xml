@@ -1,0 +1,44 @@
+Analyze new goal placement in the existing DAG.
+
+## New Goal
+
+Description: {goal_description}
+
+## Current DAG State
+
+Active Goals: {active_count}
+Pending Goals: {pending_count}
+Recently Completed: {recently_completed}
+
+Existing Goals Detail:
+{existing_goals}
+
+## Analysis Required
+
+Determine optimal placement for new goal:
+
+1. **Priority**: What priority should this goal have given current DAG load and importance?
+2. **Dependencies**: Should this goal depend on any existing goals?
+3. **Informs**: Which goals should be informed by this goal's results?
+4. **Merge**: Is this goal similar to an existing pending goal that could be merged?
+5. **Complexity**: Estimate execution complexity
+
+Output JSON structure (strict format):
+```json
+{{
+  "priority": 50,
+  "depends_on": ["existing_goal_id1"],
+  "informs": ["existing_goal_id2"],
+  "merge_with": null,
+  "complexity": "moderate",
+  "reasoning": "Placement decision reasoning..."
+}}
+```
+
+Constraints:
+- priority: 0-100, higher = more urgent (default 50)
+- depends_on: Hard dependencies (goal won't run until these complete)
+- informs: Soft dependencies (context flows but goal can still run)
+- merge_with: Goal ID if similar to existing (null if unique)
+- complexity: "simple" (~1-3 steps), "moderate" (~4-8 steps), "complex" (>8 steps)
+- All referenced goal IDs MUST exist in current DAG

@@ -292,6 +292,10 @@ class GoalNode(BaseModel):
     branch_status: Literal["active", "pruned", "suspended"] | None = None
     role: str | None = None  # scout | planner | maker | checker | qa | root | …
 
+    # Forced StrangeLoop intake scope for Autopilot dispatch (IG-735).
+    # null (default) → AutopilotConfig.intake_scope, else loop Pass 1+2.
+    intake_scope: Literal["trivial", "simple", "complex"] | None = None
+
     # Cron job tracking (RFC-229)
     cron_job_id: str | None = None  # Cron job that spawned this goal (for recurring rescheduling)
 

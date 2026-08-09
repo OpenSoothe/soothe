@@ -17,6 +17,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from soothe_nano.utils.text_preview import preview_first
 
 from soothe.autopilot.dispatch.models import BackoffDecision, EvidenceBundle
+from soothe.autopilot.prompts import SYSTEM_BACKOFF, render_backoff_prompt
 from soothe.context.models import GoalNode
 
 if TYPE_CHECKING:
@@ -25,63 +26,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# RFC-200 §205-541: Backoff reasoning prompt template
-BACKOFF_REASONING_PROMPT = """Analyze goal execution failure and determine optimal backoff point in goal DAG.
-
-## Current Goal Context
-
-Failed Goal ID: {goal_id}
-Goal Description: {goal_description}
-
-Goal DAG State:
-{goal_dag_state}
-
-Dependency Chain:
-{dependency_chain}
-
-## Failure Evidence
-
-Evidence Type: {evidence_source}
-Execution Metrics: {structured_metrics}
-Narrative Summary: {failure_narrative}
-
-## Decision Required
-
-You must decide WHERE to backoff in the goal DAG. Consider:
-1. Root cause analysis: Is the failure isolated to current goal or systemic?
-2. Dependency validity: Are prerequisite goals still valid?
-3. Recovery strategy: Should we retry current goal, backoff to parent, or create new goals?
-
-Output JSON structure (strict format):
-```json
-{{
-  "backoff_to_goal_id": "<goal_id>",
-  "reason": "<natural language reasoning for backoff decision>",
-  "new_directives": [],
-  "evidence_summary": "<condensed failure analysis>"
-}}
-```
-
-Constraints:
-- backoff_to_goal_id MUST exist in current goal DAG
-- Prefer backing off to parent goal if dependency assumption failed
-- Use new_directives to create corrective goals if needed (optional, leave empty array if not needed)
-- reason should be clear and actionable for operator visibility
-"""
-
-
 class GoalBackoffReasoner:
     """LLM-driven backoff reasoning for goal DAG restructuring.
 
-    RFC-200 §205-541: Analyzes goal context and evidence to decide
-    WHERE to backoff in the goal DAG. Replaces hardcoded retry logic.
+    Analyzes goal context and evidence to decide WHERE to backoff in the goal
+    DAG. Replaces hardcoded retry logic. Prompt text lives in
+    ``soothe.autopilot.prompts``.
 
     Args:
         config: SootheConfig with model provider settings.
 
     Attributes:
         _model: LangChain chat model for reasoning.
-        _prompt_template: Backoff reasoning prompt template.
     """
 
     def __init__(self, config: SootheConfig) -> None:
@@ -94,7 +50,6 @@ class GoalBackoffReasoner:
             config.agent.autopilot.monitor_model_role
         )
         self._soothe_config = config
-        self._prompt_template: str = BACKOFF_REASONING_PROMPT
 
     async def reason_backoff(
         self,
@@ -134,8 +89,7 @@ class GoalBackoffReasoner:
         # Build dependency chain
         dependency_chain = self._format_dependency_chain(goal_id, goals)
 
-        # Construct prompt
-        prompt = self._prompt_template.format(
+        prompt = render_backoff_prompt(
             goal_id=goal_id,
             goal_description=failed_goal.description,
             goal_dag_state=goal_dag_state,
@@ -145,11 +99,8 @@ class GoalBackoffReasoner:
             failure_narrative=failed_evidence.narrative,
         )
 
-        # Invoke LLM
         messages = [
-            SystemMessage(
-                content="You are an expert at analyzing goal execution failures and determining optimal recovery strategies in goal DAGs."
-            ),
+            SystemMessage(content=SYSTEM_BACKOFF),
             HumanMessage(content=prompt),
         ]
 

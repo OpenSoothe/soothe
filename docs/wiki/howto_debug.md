@@ -578,11 +578,13 @@ Recovery:
 
 **Continue / resume jobs:** If a recommended dump (or
 `wave_plan_source_path`) already makes the plan ready at `job_start`,
-`plan_milestones` short-circuits: it completes a synthetic architecture
-goal and calls `spawn_wave_makers` in the same builtin (no long planner
-loop). If you still see a long rediscovery planner with dumps already
-present, restart the daemon so that short-circuit is live. Keep
-`independence` a plain string (not a nested object).
+`plan_milestones` spawns a **pending verify planner** with
+`intake_scope=trivial` (StrangeLoop 1-step: accept via `wave_plan_path` /
+inline `wave_plan`, or rewrite). The host does **not** auto-complete
+architecture or spawn makers from a dump alone — stale workspace dumps from
+prior jobs must be validated first. After the verify planner completes and
+consensus/host ingest accepts a flat WavePlan, `spawn_wave_makers` runs as
+usual. Keep `independence` a plain string (not a nested object).
 
 Forensics: `.agents/skills/inspect-autopilot-job/SKILL.md`.
 

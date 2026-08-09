@@ -241,8 +241,8 @@ async def test_spawn_wave_makers_from_record_wave_plan(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_plan_milestones_reuses_existing_workspace_dump(tmp_path: Path) -> None:
-    """Continue/resume: dump present → completed architecture + makers, no planner loop."""
+async def test_plan_milestones_verifies_existing_workspace_dump(tmp_path: Path) -> None:
+    """Continue/resume: dump present → pending trivial verify planner; no makers yet."""
     import json
 
     ce = ContextEngine()
@@ -266,24 +266,26 @@ async def test_plan_milestones_reuses_existing_workspace_dump(tmp_path: Path) ->
 
     result = await ex.invoke("plan_milestones", job_id=root.id)
     assert result.status == "success"
-    assert "reused existing WavePlan" in result.detail
-    assert len(result.created_goal_ids) == 3  # arch + 2 makers
+    assert "verify existing WavePlan" in result.detail
+    assert "reused" not in result.detail
+    assert len(result.created_goal_ids) == 1  # verify planner only
 
     arch = await ce.get_goal(result.created_goal_ids[0])
     assert arch is not None
-    assert arch.status == "completed"
-    assert arch.findings
-    assert "wave_slices" in arch.findings[0]
+    assert arch.status == "pending"
+    assert arch.intake_scope == "trivial"
+    assert "Verify candidate WavePlan" in (arch.description or "")
+    assert "wave-plan.json" in (arch.description or "")
 
-    makers = [await ce.get_goal(gid) for gid in result.created_goal_ids[1:]]
-    assert all(m is not None and m.status == "pending" for m in makers)
     state = await ex.job_state(root.id)
     assert state is not None
     assert state.wave_slices == ["core", "api"]
     root2 = await ce.get_goal(root.id)
     assert root2 is not None
-    for gid in result.created_goal_ids:
-        assert gid in (root2.depends_on or [])
+    assert arch.id in (root2.depends_on or [])
+    # Makers must wait until the verify planner completes + consensus ingest.
+    children = [g for g in await ce.list_goals() if g.parent_id == root.id]
+    assert len(children) == 1
 
 
 @pytest.mark.asyncio
@@ -295,10 +297,12 @@ async def test_plan_milestones_no_dump_spawns_pending_planner(tmp_path: Path) ->
     result = await ex.invoke("plan_milestones", job_id=root.id)
     assert result.status == "success"
     assert "reused" not in result.detail
+    assert "verify existing" not in result.detail
     assert len(result.created_goal_ids) == 1
     arch = await ce.get_goal(result.created_goal_ids[0])
     assert arch is not None
     assert arch.status == "pending"
+    assert arch.intake_scope is None
 
 
 @pytest.mark.asyncio
@@ -338,7 +342,9 @@ async def test_retry_architecture_does_not_reuse_dump(tmp_path: Path) -> None:
     new_arch = await ce.get_goal(result.created_goal_ids[0])
     assert new_arch is not None
     assert new_arch.status == "pending"
+    assert new_arch.intake_scope is None
     assert "Reused existing WavePlan" not in (new_arch.description or "")
+    assert "Verify candidate WavePlan" not in (new_arch.description or "")
 
 
 @pytest.mark.asyncio

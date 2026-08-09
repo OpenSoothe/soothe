@@ -19,6 +19,7 @@ Import other types from one-level subpackages, e.g.:
     from soothe.autopilot.dispatch.models import EvidenceBundle
     from soothe.autopilot.workers.pool import WorkerPool
     from soothe.autopilot.rail import LoopRailInterpreter
+    from soothe.autopilot.prompts import build_consensus_prompt
 """
 
 from __future__ import annotations

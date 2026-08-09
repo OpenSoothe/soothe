@@ -284,11 +284,13 @@ Pointers to diagnose-loop Workflow B for `autopilot__{job}__*`.
 - **Idle pool, more slices in plan:** not a wave barrier — check
   `spawned_slices` vs catalog and slice `depends_on`; expect
   `merge_branches` after each maker before dependents unlock.
-- **Continue job, dump already ready, long planner:** with a current daemon,
-  `plan_milestones` should reuse the dump and spawn makers immediately. If the
-  planner still rediscovers for tens of minutes, the process predates that
-  short-circuit — restart. Nested `independence` objects also fuel rewrite
-  thrash; keep independence a string.
+- **Continue job, dump already ready:** with a current daemon,
+  `plan_milestones` spawns a **pending verify planner**
+  (`intake_scope=trivial`) — agent must accept (`wave_plan_path` / inline) or
+  rewrite; host does not auto-complete architecture from a dump. If makers
+  appear with a synthetic “Reused existing WavePlan” completed planner, the
+  process predates verify-before-reuse — restart. Nested `independence`
+  objects also fuel rewrite thrash; keep independence a string.
 - Live CLI beats stale `goals:snapshot` when they disagree.
 - Never cite IG-/RFC- ids in user-facing report text.
 - Skipping schedule for rail job root is expected.

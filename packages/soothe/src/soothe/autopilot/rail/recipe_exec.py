@@ -187,6 +187,15 @@ class RecipeRunner:
         # Never depend on job root.
         depends = [d for d in depends if d != ctx.job_id]
 
+        intake_scope = spec.get("intake_scope")
+        intake_scope_s: str | None = None
+        if isinstance(intake_scope, str) and intake_scope.strip():
+            intake_scope_s = intake_scope.strip().lower()
+            if intake_scope_s not in {"trivial", "simple", "complex"}:
+                raise ValueError(
+                    f"spawn_goal.intake_scope must be trivial|simple|complex; got {intake_scope!r}"
+                )
+
         ws = _job_workspace(self._ex._ce, ctx.job_id)
         goal = await self._ex._ce.create_goal(
             brief,
@@ -196,6 +205,7 @@ class RecipeRunner:
             priority=priority,
             workspace=str(ws) if ws else None,
             rail_id=ctx.state.rail_id,
+            intake_scope=intake_scope_s,
         )
         await self._ex.annotate_goal(
             goal.id,

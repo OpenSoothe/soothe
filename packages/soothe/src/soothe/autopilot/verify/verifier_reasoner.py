@@ -19,12 +19,15 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 from soothe_nano.utils.text_preview import preview_first
 
-from soothe.autopilot.verify.verifier_prompts import (
-    DAG_HEALTH_VERIFICATION_PROMPT,
-    GOAL_PLACEMENT_PROMPT,
-    POST_COMPLETION_VERIFICATION_PROMPT,
+from soothe.autopilot.prompts import (
+    SYSTEM_DAG_HEALTH,
+    SYSTEM_GOAL_PLACEMENT,
+    SYSTEM_POST_COMPLETION,
     format_goals_detail,
     format_step_progress,
+    render_dag_health_prompt,
+    render_goal_placement_prompt,
+    render_post_completion_prompt,
 )
 
 if TYPE_CHECKING:
@@ -272,7 +275,7 @@ class DagVerificationReasoner:
         Raises:
             json.JSONDecodeError: If LLM response is not valid JSON.
         """
-        prompt = DAG_HEALTH_VERIFICATION_PROMPT.format(
+        prompt = render_dag_health_prompt(
             total_goals=snapshot.total_goals,
             active_count=snapshot.active_count,
             pending_count=snapshot.pending_count,
@@ -284,7 +287,7 @@ class DagVerificationReasoner:
 
         response_text = await self._invoke_llm(
             prompt,
-            system_prompt="You are an expert at analyzing goal DAGs and identifying optimization opportunities.",
+            system_prompt=SYSTEM_DAG_HEALTH,
             operation="health",
         )
 
@@ -317,7 +320,7 @@ class DagVerificationReasoner:
         Raises:
             json.JSONDecodeError: If LLM response is not valid JSON.
         """
-        prompt = POST_COMPLETION_VERIFICATION_PROMPT.format(
+        prompt = render_post_completion_prompt(
             completed_goal_id=context.completed_goal_id,
             completed_description=context.completed_description,
             outcome_summary=context.outcome_summary,
@@ -331,7 +334,7 @@ class DagVerificationReasoner:
 
         response_text = await self._invoke_llm(
             prompt,
-            system_prompt="You are an expert at analyzing goal completion outcomes and determining follow-up actions.",
+            system_prompt=SYSTEM_POST_COMPLETION,
             operation="post_completion",
         )
 
@@ -363,7 +366,7 @@ class DagVerificationReasoner:
         Raises:
             json.JSONDecodeError: If LLM response is not valid JSON.
         """
-        prompt = GOAL_PLACEMENT_PROMPT.format(
+        prompt = render_goal_placement_prompt(
             goal_description=context.goal_description,
             active_count=context.active_count,
             pending_count=context.pending_count,
@@ -373,7 +376,7 @@ class DagVerificationReasoner:
 
         response_text = await self._invoke_llm(
             prompt,
-            system_prompt="You are an expert at analyzing goal placement in existing DAGs for optimal scheduling.",
+            system_prompt=SYSTEM_GOAL_PLACEMENT,
             operation="placement",
         )
 

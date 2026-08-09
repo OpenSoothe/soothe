@@ -1,12 +1,17 @@
 # IG-730: WavePlan continue short-circuit (plan_milestones)
 
 **Created**: 2026-08-08  
-**Status**: Implemented (+ cleanse)  
+**Status**: Superseded (auto-complete path) — see [IG-735](IG-735-waveplan-verify-before-reuse.md)  
 **Package**: `soothe`  
-**Related**: [IG-722](IG-722-waveplan-multiform-transfer.md),
+**Related**: [IG-735](IG-735-waveplan-verify-before-reuse.md),
+[IG-722](IG-722-waveplan-multiform-transfer.md),
 [IG-721](IG-721-waveplan-flat-semistructured-ingest.md),
 [IG-704](IG-704-autopilot-wave-plan-host-ingest.md),
 [RFC-232](../specs/RFC-232-waveplan-flat-semistructured-ingest.md)
+
+> **Note (IG-735):** Host no longer auto-completes architecture +
+> `spawn_wave_makers` from a dump. Candidate dumps spawn a **pending** verify
+> planner with `intake_scope=trivial`; the agent must accept or rewrite.
 
 ---
 

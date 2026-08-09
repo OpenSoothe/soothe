@@ -1,9 +1,12 @@
 # IG-733: Autopilot Cognition Intake
 
+> **Note:** Package path is `soothe.autopilot.intake` (renamed from the
+> provisional `cognition` name used while drafting this IG).
+
 ## Goal
 
 Make Autopilot intake explicit: **GOAL.md contract**, **user guidance**, and
-**channel guidance** flow through `soothe.autopilot.cognition` into
+**channel guidance** flow through `soothe.autopilot.intake` into
 ContextEngine goal state, then dispatch to StrangeLoop workers. Guidance never
 spawns or injects goals.
 
@@ -11,13 +14,13 @@ spawns or injects goals.
 
 ```text
 GOAL.md / user guidance / channel guidance
-  → autopilot.cognition
+  → autopilot.intake
   → ContextEngine (guidance_accumulated / job GOAL.md artifact)
   → AutopilotService dispatch (collect → operator_guidance on bundle)
   → StrangeLoop exec
 ```
 
-## Package (`soothe.autopilot.cognition`)
+## Package (`soothe.autopilot.intake`)
 
 | Module | Role |
 |--------|------|

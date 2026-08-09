@@ -1376,8 +1376,11 @@ class AutopilotService:
         # the authoritative enforcer — it cancels the worker on overrun.
         deadline_seconds = getattr(self._config, "goal_deadline_seconds", None)
 
-        # AutopilotConfig.intake_scope: null (default) = loop Pass 1+2.
-        intake_scope = getattr(self._config, "intake_scope", None)
+        # Per-goal intake_scope overrides AutopilotConfig (null = Pass 1+2).
+        goal_scope = getattr(goal, "intake_scope", None)
+        intake_scope = (
+            goal_scope if goal_scope is not None else getattr(self._config, "intake_scope", None)
+        )
 
         request = LoopRunRequest(
             loop_id=worker.loop_id,
