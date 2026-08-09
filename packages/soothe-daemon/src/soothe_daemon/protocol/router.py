@@ -3123,8 +3123,8 @@ class MessageRouter:
             )
             return
 
-        # Absorb via Autopilot cognition → CE (RFC-228 / IG-733); does not spawn goals.
-        from soothe.autopilot.cognition import GuidanceScope, absorb_user_guidance
+        # Absorb via Autopilot intake → CE (RFC-228 / IG-733); does not spawn goals.
+        from soothe.autopilot.intake import GuidanceScope, absorb_user_guidance
 
         scope: GuidanceScope = "goal" if goal_id else "job"
         absorbed = await absorb_user_guidance(

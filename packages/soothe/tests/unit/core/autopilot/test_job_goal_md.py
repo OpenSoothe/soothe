@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from soothe.autopilot import AutopilotService
-from soothe.autopilot.cognition import (
+from soothe.autopilot.intake import (
     GOAL_MD_FILENAME,
     load_job_goal_md,
     resolve_job_goal_md_path,

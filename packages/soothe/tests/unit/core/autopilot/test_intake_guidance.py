@@ -1,10 +1,10 @@
-"""Unit tests for Autopilot cognition guidance intake (IG-733)."""
+"""Unit tests for Autopilot guidance intake (IG-733)."""
 
 from __future__ import annotations
 
 import pytest
 
-from soothe.autopilot.cognition import (
+from soothe.autopilot.intake import (
     absorb_channel_guidance,
     absorb_user_guidance,
     collect_operator_guidance,

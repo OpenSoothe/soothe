@@ -1,6 +1,6 @@
 """Job artifacts and autopilot top snapshot helpers.
 
-GOAL.md contract helpers live in ``soothe.autopilot.cognition`` (IG-733).
+GOAL.md contract helpers live in ``soothe.autopilot.intake`` (IG-733).
 """
 
 from soothe.autopilot.jobs.top_snapshot import (

@@ -1,7 +1,7 @@
 """Autopilot — goal lifecycle orchestration and dispatch (RFC-222, RFC-625).
 
 Autopilot manages:
-- Cognition intake (GOAL.md / user / channel guidance → CE; IG-733)
+- Intake (GOAL.md / user / channel guidance → CE; IG-733)
 - Goal DAG orchestration (create, schedule, dependencies)
 - Goal lifecycle (pending, active, completed, failed)
 - Backoff reasoning on failure
@@ -15,7 +15,7 @@ Public API (root exports only):
     from soothe.autopilot import AutopilotService, AutopilotMonitor
 
 Import other types from one-level subpackages, e.g.:
-    from soothe.autopilot.cognition import absorb_user_guidance
+    from soothe.autopilot.intake import absorb_user_guidance
     from soothe.autopilot.dispatch.models import EvidenceBundle
     from soothe.autopilot.workers.pool import WorkerPool
     from soothe.autopilot.rail import LoopRailInterpreter

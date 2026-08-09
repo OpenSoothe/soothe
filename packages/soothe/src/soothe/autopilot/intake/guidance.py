@@ -1,4 +1,4 @@
-"""Guidance absorb/collect façade for Autopilot cognition (IG-733 / RFC-228).
+"""Guidance absorb/collect façade for Autopilot intake (IG-733 / RFC-228).
 
 Absorbs advisory text into ContextEngine ``guidance_accumulated`` for the next
 worker dispatch. Does not create or inject goals.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from soothe.autopilot.cognition.models import (
+from soothe.autopilot.intake.models import (
     GUIDANCE_SCOPES,
     GUIDANCE_SOURCES,
     GuidanceScope,

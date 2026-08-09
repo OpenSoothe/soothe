@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.autopilot.cognition import absorb_user_guidance
+from soothe.autopilot.intake import absorb_user_guidance
 from soothe.autopilot.service import AutopilotService
 from soothe.config import SootheConfig
 from soothe.config.models import AutopilotConfig

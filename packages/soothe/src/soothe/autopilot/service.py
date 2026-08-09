@@ -610,7 +610,7 @@ class AutopilotService:
         if goal.parent_id is None:
             await self._job_loop_index.ensure_job(goal.id)
             # IG-702: durable submit contract under jobs/{job_id}/GOAL.md.
-            from soothe.autopilot.cognition import write_job_goal_md
+            from soothe.autopilot.intake import write_job_goal_md
 
             write_job_goal_md(
                 jobs_root=self._jobs_root,
@@ -1427,7 +1427,7 @@ class AutopilotService:
                 )
                 bundle = GoalDispatchContextBundle()
 
-        from soothe.autopilot.cognition import collect_operator_guidance
+        from soothe.autopilot.intake import collect_operator_guidance
 
         guidance = collect_operator_guidance(goal, self._ce._dag.goals)
         if guidance:

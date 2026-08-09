@@ -1,24 +1,24 @@
-"""Autopilot cognition — contract + guidance intake (IG-733).
+"""Autopilot intake — contract + guidance intake (IG-733).
 
-Pipeline: GOAL.md / user guidance / channel guidance → cognition → CE goals →
+Pipeline: GOAL.md / user guidance / channel guidance → intake → CE goals →
 dispatch → exec. Guidance never spawns goals; it only accumulates on CE nodes.
 """
 
 from __future__ import annotations
 
-from soothe.autopilot.cognition.contract import (
+from soothe.autopilot.intake.contract import (
     GOAL_MD_FILENAME,
     load_job_goal_md,
     resolve_job_goal_md_path,
     write_job_goal_md,
 )
-from soothe.autopilot.cognition.guidance import (
+from soothe.autopilot.intake.guidance import (
     absorb_channel_guidance,
     absorb_guidance,
     absorb_user_guidance,
     collect_operator_guidance,
 )
-from soothe.autopilot.cognition.models import (
+from soothe.autopilot.intake.models import (
     GUIDANCE_SCOPES,
     GUIDANCE_SOURCES,
     GuidanceScope,
