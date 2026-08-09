@@ -2724,4 +2724,3 @@ def _serialize_goal_steps(goal: GoalNode) -> dict[str, Any]:
         "steps_total": len(step_nodes),
         "steps": {"nodes": step_nodes, "edges": step_edges},
     }
-

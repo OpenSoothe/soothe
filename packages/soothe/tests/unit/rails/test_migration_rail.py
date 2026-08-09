@@ -83,7 +83,7 @@ def test_ready_for_next_wave_architecture_path_still_works() -> None:
             "require_plan": True,
             "wave_plan_ready": True,
             "slices_ready_unspawned": True,
-            "wave_below_max": True,
+            "below_slice_budget": True,
         },
     )
     assert isinstance(r, GuardResult)

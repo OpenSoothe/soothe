@@ -127,7 +127,14 @@ def _structural_short_circuit(
     pending = int(structural.get("pending_or_active_count") or 0)
     architecture_done = bool(structural.get("all_architecture_terminal"))
     has_makers = bool(structural.get("implementation_goal_ids"))
-    wave_below_max = bool(structural.get("wave_below_max", True))
+    # Catalog expansion room: spawned_slices < effective_max_slices (IG-732).
+    # Accept legacy structural key from older tests / dumps.
+    below_slice_budget = bool(
+        structural.get(
+            "below_slice_budget",
+            structural.get("wave_below_max", True),
+        )
+    )
     fanout_mode = _fanout_mode(structural)
 
     if name == "architecture_ready":
@@ -176,20 +183,19 @@ def _structural_short_circuit(
         wave_plan_ready = bool(structural.get("wave_plan_ready", False))
         plan_ok = (not require_plan) or wave_plan_ready
         ready = bool(structural.get("slices_ready_unspawned"))
-        below = bool(structural.get("wave_below_max", True))
         ok = (
             event in {"goal_completed", "dag_idle"}
             and architecture_done
             and plan_ok
             and ready
-            and below
+            and below_slice_budget
         )
         return GuardResult(
             matched=ok,
             confidence=1.0,
             reasoning=(
                 f"structural short-circuit: slices_ready_to_spawn ready={ready} "
-                f"plan_ok={plan_ok} below_budget={below} event={event}"
+                f"plan_ok={plan_ok} below_slice_budget={below_slice_budget} event={event}"
             ),
         )
 
@@ -297,7 +303,6 @@ def _structural_short_circuit(
         wave_plan_ready = bool(structural.get("wave_plan_ready", False))
         plan_ok = (not require_plan) or wave_plan_ready
         ready = bool(structural.get("slices_ready_unspawned"))
-        below = bool(structural.get("wave_below_max", True))
         if not fanout_mode:
             return GuardResult(
                 matched=False,
@@ -309,14 +314,14 @@ def _structural_short_circuit(
             and architecture_done
             and plan_ok
             and ready
-            and below
+            and below_slice_budget
         )
         return GuardResult(
             matched=ok,
             confidence=1.0,
             reasoning=(
                 f"structural short-circuit: ready_for_next_wave→slices_ready "
-                f"ready={ready} below_budget={below} event={event}"
+                f"ready={ready} below_slice_budget={below_slice_budget} event={event}"
             ),
         )
 
@@ -477,11 +482,10 @@ def _structural_short_circuit(
         ok = pending == 0 and (not qas or bool(structural.get("all_qa_terminal", True)))
         if reviews and pending == 0 and not qas:
             ok = True
-        # Fan-out: if waves remain, not complete
-        if fanout_mode and wave_below_max and qas:
-            ok = False
-        # Fan-out: host maturity latch required — do not complete on idle DAG
-        # alone when acceptance is unmet.
+        # Fan-out: host maturity / operator accept latch — do not complete on
+        # idle DAG alone when acceptance is unmet. Slice budget no longer
+        # blocks completion once acceptance is latched (IG-732; budget only
+        # gates further spawn via slices_ready_to_spawn).
         if fanout_mode and not acceptance_met:
             ok = False
         return GuardResult(
@@ -489,7 +493,8 @@ def _structural_short_circuit(
             confidence=1.0,
             reasoning=(
                 f"structural short-circuit: pending_or_active_count={pending} "
-                f"qa_ids={qas} reviews={reviews} wave_below_max={wave_below_max} "
+                f"qa_ids={qas} reviews={reviews} "
+                f"below_slice_budget={below_slice_budget} "
                 f"acceptance_met={acceptance_met} fanout={fanout_mode}"
             ),
         )

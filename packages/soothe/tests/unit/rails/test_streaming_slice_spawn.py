@@ -112,7 +112,7 @@ def test_slices_ready_to_spawn_guard() -> None:
         "require_plan": True,
         "wave_plan_ready": True,
         "slices_ready_unspawned": True,
-        "wave_below_max": True,
+        "below_slice_budget": True,
         "implementation_goal_ids": ["m1"],
     }
     r = _structural_short_circuit(

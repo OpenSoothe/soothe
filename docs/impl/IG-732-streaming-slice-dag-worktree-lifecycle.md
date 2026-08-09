@@ -40,7 +40,8 @@ tips were not on `master`; `merge_branches` was unimplemented.
 2. **No wave spawn gate** — `wave_index` / `wave_makers_done` /
    `ready_for_next_wave` MUST NOT withhold ready catalog slices from the DAG
    (RFC-231 §8–§9). Optional `max_slices` (alias `max_waves`) is an expansion
-   budget only.
+   budget only (`below_slice_budget` structural flag; not a `job_complete`
+   veto once `acceptance_met` is latched).
 3. **Spawn-ready** — `spawn_wave_makers` creates makers only for **unspawned**
    slices whose `depends_on` peer slices map to **completed** makers (or have
    no deps). Re-fire on `goal_completed` / `dag_idle` when

@@ -344,7 +344,7 @@ class LoopRailInterpreter:
         from soothe.context.models import TERMINAL_STATES
 
         job_state = await self._builtins.job_state(event.job_id)
-        wave_below_max = True
+        below_slice_budget = True
         feedback_round = 0
         max_feedback_rounds = 8
         rail_acceptance = False
@@ -355,7 +355,8 @@ class LoopRailInterpreter:
         unmerged_maker_ids: list[str] = []
         resolve_inflight_blocks_all = False
         if job_state is not None:
-            wave_below_max = len(job_state.spawned_slices) < job_state.effective_max_slices()
+            # Slice expansion budget (not a wave gate — IG-732).
+            below_slice_budget = len(job_state.spawned_slices) < job_state.effective_max_slices()
             feedback_round = int(job_state.feedback_round)
             max_feedback_rounds = int(job_state.max_feedback_rounds)
             rail_acceptance = bool(job_state.acceptance_met)
@@ -459,7 +460,7 @@ class LoopRailInterpreter:
             "feedback_round": feedback_round,
             "max_feedback_rounds": max_feedback_rounds,
             "acceptance_met": acceptance_met,
-            "wave_below_max": wave_below_max,
+            "below_slice_budget": below_slice_budget,
             "slices_ready_unspawned": slices_ready_unspawned,
             "trigger_needs_merge": trigger_needs_merge,
             "trigger_just_merged": trigger_just_merged,

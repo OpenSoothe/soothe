@@ -355,7 +355,7 @@ def test_dag_idle_needs_feedback_requires_completed_qa() -> None:
         "max_feedback_rounds": 8,
         "acceptance_met": False,
         "pending_or_active_count": 0,
-        "wave_below_max": True,
+        "below_slice_budget": True,
         "any_qa_completed": False,
         "any_verify_completed": False,
     }
@@ -391,6 +391,22 @@ def test_dag_idle_needs_feedback_requires_completed_qa() -> None:
     )
     assert latched is not None and latched.matched is True
 
+    # Acceptance latch wins over open slice budget when QA exists (no wave gate).
+    latched_with_qa = _structural_short_circuit(
+        condition_name="job_complete",
+        event="dag_idle",
+        trigger_tags=[],
+        structural={
+            **base,
+            "acceptance_met": True,
+            "below_slice_budget": True,
+            "qa_goal_ids": ["q1"],
+            "all_qa_terminal": True,
+            "any_qa_completed": True,
+        },
+    )
+    assert latched_with_qa is not None and latched_with_qa.matched is True
+
 
 def test_fanout_gates_ignore_stray_architecture_tags() -> None:
     """Architecture tags alone must not enable fan-out latches."""
@@ -404,7 +420,7 @@ def test_fanout_gates_ignore_stray_architecture_tags() -> None:
         "acceptance_met": False,
         "pending_or_active_count": 0,
         "any_qa_completed": True,
-        "wave_below_max": True,
+        "below_slice_budget": True,
         "qa_goal_ids": ["q1"],
         "all_qa_terminal": True,
     }
