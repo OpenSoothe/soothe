@@ -674,9 +674,9 @@ See [Architecture Overview - StrangeLoop](core/strangeloop.md).
 agent:
   middleware:
     llm_rate_limit:
-      rpm_limit: 120                 # Requests per minute
-      concurrent_limit: 10           # Per-budget concurrent calls
-      global_concurrent_limit: 4     # Process-wide in-flight cap (0 = unlimited)
+      rpm_limit: 180                 # Requests per minute
+      concurrent_limit: 4            # Per-budget concurrent calls
+      global_concurrent_limit: 18    # Process-wide in-flight cap (0 = unlimited)
 ```
 
 **Context window management** (RFC-224):

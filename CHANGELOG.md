@@ -15,8 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plans with the legacy key still load via `extra="ignore"`.
 
 ### Changed
+- Raise packaged `llm_rate_limit` globals for Autopilot + CLI coexistence:
+  `rpm_limit=180`, `concurrent_limit=4`, `global_concurrent_limit=18`
+  (keeps `autopilot.max_parallel_goals=3` and per-loop step/subagent caps).
 - Default LLM rate-limit / loop concurrency to develop-safe caps:
-  `llm_rate_limit.concurrent_limit=2`, `global_concurrent_limit=4`,
   `autopilot.max_parallel_goals=3`, `max_parallel_steps/subagents=3`,
   `global_max_llm_calls=8` (requires `soothe-nano>=1.1.7`).
 - Remove `packages/soothe-nano` git submodule; consume Coding CoreAgent from

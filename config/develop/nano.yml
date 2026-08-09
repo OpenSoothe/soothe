@@ -87,8 +87,16 @@ embedding_profile:
   - model_role: dashscope:text-embedding-v4
     embedding_dims: 1536
 
-# llm_rate_limit defaults (concurrent_limit=2, global_concurrent_limit=4) are
-# product defaults — raise in overlay if the provider tier allows more fan-out.
+# Process-wide LLM headroom for ~2 Autopilot jobs + ~3 CLI StrangeLoops.
+# Job fan-out stays in soothe.yml (autopilot.max_parallel_goals); per-loop
+# step/subagent caps stay under agent.loop.concurrency.
+agent:
+  middleware:
+    llm_rate_limit:
+      enabled: true
+      rpm_limit: 180
+      concurrent_limit: 4
+      global_concurrent_limit: 18
 
 # Local develop defaults to SQLite (one process mode for the whole runtime).
 # Flip to postgresql + pgvector when exercising the Postgres path against

@@ -98,9 +98,10 @@ agent:
       tool_output_max_chars: 10000
     llm_rate_limit:
       enabled: true
-      rpm_limit: 60
-      concurrent_limit: 2
-      global_concurrent_limit: 4
+      # Sized for ~2 Autopilot jobs (max_parallel_goals=3) + ~3 CLI StrangeLoops.
+      rpm_limit: 180
+      concurrent_limit: 4
+      global_concurrent_limit: 18
       call_timeout_seconds: 600
       call_timeout_max_seconds: 900
       retry_on_timeout: true
