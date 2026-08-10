@@ -24,6 +24,11 @@ from soothe_sdk.wire.codec import (
 _TRANSITIONAL_STATES = frozenset({"starting", "warming"})
 _READY_POLL_INTERVAL_S = 0.05
 
+# Align with soothe_daemon.config.models.WebSocketConfig.max_frame_size (default 10 MiB).
+# The websockets library defaults max_size to 1 MiB, which closes the connection (1009)
+# when the daemon replies with larger JSON payloads (e.g. memory_stats, query results).
+_DEFAULT_MAX_FRAME_SIZE = 10 * 1024 * 1024
+
 
 def _client_version() -> str:
     try:
@@ -125,7 +130,11 @@ async def send_admin_request(
     )
 
     try:
-        async with websockets.connect(ws_url, open_timeout=timeout) as ws:
+        async with websockets.connect(
+            ws_url,
+            open_timeout=timeout,
+            max_size=_DEFAULT_MAX_FRAME_SIZE,
+        ) as ws:
             await _perform_handshake(ws, timeout=timeout)
             await ws.send(encode_envelope(envelope))
 
