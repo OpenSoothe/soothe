@@ -94,10 +94,49 @@ def test_run_tui_resume_surfaces_step_index(
     assert "running" in captured.out
 
 
-def test_run_tui_idle_status_starts_fresh(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+def _capture_tui_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    """Record the kwargs the launcher passes to the TUI entrypoint."""
+    captured: dict[str, object] = {}
+
+    def fake_tui(**kwargs: object) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr("soothe_cli.tui.run_textual_tui", fake_tui)
+    return captured
+
+
+@pytest.mark.parametrize("status", ["idle", "created"])
+def test_run_tui_resumes_idle_and_created_loops(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], status: str
 ) -> None:
-    """A terminal/idle loop status starts a fresh session instead of resuming."""
+    """``idle`` and ``created`` are live statuses — resume without prompting."""
+    cfg = MagicMock()
+    cfg.auto_resume = False
+    monkeypatch.setattr(
+        "soothe_cli.cli.execution.launcher.websocket_url_from_config",
+        lambda _cfg: "ws://test",
+    )
+
+    async def fake_rpc(_ws_url, method, params=None, *, mode="request", timeout=30.0):  # noqa: ARG001
+        return {"step_index": 5, "iteration": 1, "status": status, "plan": None, "found": True}
+
+    monkeypatch.setattr("soothe_cli.cli.execution.launcher.protocol1_rpc", fake_rpc)
+    tui_kwargs = _capture_tui_kwargs(monkeypatch)
+
+    run_tui(cfg, resume_loop_id="loop-idle", initial_prompt=None)
+
+    captured = capsys.readouterr()
+    assert "Resuming loop loop-idle" in captured.out
+    assert "starting fresh session" not in captured.out
+    assert "Active loop found" not in captured.out
+    assert tui_kwargs["resume_loop_id"] == "loop-idle"
+
+
+@pytest.mark.parametrize("status", ["finalized", "cancelled", "failed"])
+def test_run_tui_terminal_status_starts_fresh(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], status: str
+) -> None:
+    """A terminal loop status starts a fresh session instead of resuming."""
     cfg = MagicMock()
     cfg.auto_resume = True
     monkeypatch.setattr(
@@ -106,17 +145,43 @@ def test_run_tui_idle_status_starts_fresh(
     )
 
     async def fake_rpc(_ws_url, method, params=None, *, mode="request", timeout=30.0):  # noqa: ARG001
-        return {"step_index": 5, "iteration": 1, "status": "idle", "plan": None}
+        return {"step_index": 5, "iteration": 1, "status": status, "plan": None, "found": True}
 
     monkeypatch.setattr("soothe_cli.cli.execution.launcher.protocol1_rpc", fake_rpc)
-    monkeypatch.setattr("soothe_cli.tui.run_textual_tui", lambda **_kw: None)
+    tui_kwargs = _capture_tui_kwargs(monkeypatch)
 
     run_tui(cfg, resume_loop_id="loop-done", initial_prompt=None)
 
     captured = capsys.readouterr()
-    assert "is idle" in captured.out
+    assert f"is {status}" in captured.out
     assert "starting fresh session" in captured.out
     assert "Resuming loop" not in captured.out
+    assert tui_kwargs["resume_loop_id"] is None
+
+
+def test_run_tui_unknown_loop_starts_fresh(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``found=False`` means the loop id does not exist — do not reattach to it."""
+    cfg = MagicMock()
+    cfg.auto_resume = True
+    monkeypatch.setattr(
+        "soothe_cli.cli.execution.launcher.websocket_url_from_config",
+        lambda _cfg: "ws://test",
+    )
+
+    async def fake_rpc(_ws_url, method, params=None, *, mode="request", timeout=30.0):  # noqa: ARG001
+        return {"step_index": 0, "iteration": 0, "status": "idle", "plan": None, "found": False}
+
+    monkeypatch.setattr("soothe_cli.cli.execution.launcher.protocol1_rpc", fake_rpc)
+    tui_kwargs = _capture_tui_kwargs(monkeypatch)
+
+    run_tui(cfg, resume_loop_id="loop-typo", initial_prompt=None)
+
+    captured = capsys.readouterr()
+    assert "not found" in captured.out
+    assert "starting fresh session" in captured.out
+    assert tui_kwargs["resume_loop_id"] is None
 
 
 def test_run_tui_prompt_confirms_resume(

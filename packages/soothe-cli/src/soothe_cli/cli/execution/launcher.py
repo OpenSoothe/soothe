@@ -13,6 +13,14 @@ from soothe_cli.config import CLIConfig
 # Use Any to avoid circular import issues at module load time
 _last_app_result: Any = None
 
+# Loop statuses that cannot be resumed. The live loop-checkpoint vocabulary is
+# ``created`` / ``idle`` / ``running`` — all resumable, since ``idle`` is the
+# state a loop lands in once a goal finishes or a run is interrupted. Anything
+# below is finished for good, so resuming it would attach to a dead loop.
+_UNRESUMABLE_STATUSES: frozenset[str] = frozenset(
+    {"finalized", "completed", "cancelled", "failed", "error"}
+)
+
 
 def get_last_app_result() -> Any:
     """Return the result from the most recent TUI run.
@@ -87,15 +95,25 @@ def run_tui(
     global _last_app_result
 
     # Resume gate: surface where the loop will pick up from the daemon's
-    # execution state before the TUI attaches.
+    # execution state before the TUI attaches, and drop the resume target when
+    # the loop is gone or finished for good.
     if resume_loop_id:
         state = _resume_gate(cfg, resume_loop_id)
         if state is not None:
             status = state.get("status", "unknown")
-            # Auto-resume loops in running/paused state only; terminal/idle
-            # states fall through to normal startup.
-            if status in ("running", "paused"):
-                should_resume = cfg.auto_resume or _prompt_resume(resume_loop_id, state)
+            if state.get("found") is False:
+                typer.echo(f"Loop {resume_loop_id} not found — starting fresh session.")
+                resume_loop_id = None
+            elif status in _UNRESUMABLE_STATUSES:
+                typer.echo(f"Loop {resume_loop_id} is {status} — starting fresh session.")
+                resume_loop_id = None
+            else:
+                # A ``running`` loop may still have a live worker attached, so
+                # confirm before a second client joins it. Other statuses resume
+                # straight away.
+                should_resume = (
+                    status != "running" or cfg.auto_resume or _prompt_resume(resume_loop_id, state)
+                )
                 if not should_resume:
                     typer.echo("Loop discarded. Starting fresh session.")
                     resume_loop_id = None
@@ -109,9 +127,6 @@ def run_tui(
                     )
                     if plan:
                         typer.echo(f"  Plan: {plan}")
-            else:
-                typer.echo(f"Loop {resume_loop_id} is {status} — starting fresh session.")
-                resume_loop_id = None
 
     try:
         from soothe_cli.tui import run_textual_tui

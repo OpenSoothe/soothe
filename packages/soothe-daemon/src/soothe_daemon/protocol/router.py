@@ -2489,6 +2489,9 @@ class MessageRouter:
         * ``plan`` / ``step_index`` — best-effort from the bound checkpoint
           thread's graph channel values (``current_decision`` /
           ``previous_plan`` / ``completed_step_ids``).
+        * ``found`` — whether a loop metadata row exists, so callers can tell an
+          unknown ``loop_id`` apart from a real loop whose status defaults to
+          ``idle``.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -2522,6 +2525,7 @@ class MessageRouter:
             )
             return
 
+        found = isinstance(metadata, dict)
         if isinstance(metadata, dict):
             # iteration comes from the execution_checkpoint blob; status from
             # the loop metadata row (authoritative, same field loop_get surfaces).
@@ -2599,6 +2603,7 @@ class MessageRouter:
                 "iteration": iteration,
                 "status": loop_status,
                 "active_runner": active_runner,
+                "found": found,
             }
         )
         await self._send_response(client_id, request_id, payload)
