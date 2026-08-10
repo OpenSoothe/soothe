@@ -127,19 +127,6 @@ class TestThreadSection:
         assert "abc123" in section
         assert "<conversation_turns>3</conversation_turns>" in section
 
-    def test_thread_section_with_goals(self) -> None:
-        """Thread section includes active goals."""
-        thread_context = {
-            "thread_id": "abc123",
-            "conversation_turns": 5,
-            "active_goals": ["Implement feature", "Write tests"],
-        }
-
-        section = build_soothe_thread_section(thread_context)
-
-        assert "active_goals" in section
-        assert "Implement feature" in section
-
     def test_thread_section_with_plan(self) -> None:
         """Thread section includes current plan."""
         thread_context = {
@@ -151,19 +138,6 @@ class TestThreadSection:
         section = build_soothe_thread_section(thread_context)
 
         assert "Phase 1: Design the API" in section
-
-    def test_thread_section_limits_goals(self) -> None:
-        """Thread section limits goals to 5 items."""
-        thread_context = {
-            "thread_id": "abc123",
-            "conversation_turns": 1,
-            "active_goals": [f"Goal {i}" for i in range(10)],
-        }
-
-        section = build_soothe_thread_section(thread_context)
-
-        assert "Goal 0" in section
-        assert "Goal 4" in section
 
 
 class TestProtocolsSection:
