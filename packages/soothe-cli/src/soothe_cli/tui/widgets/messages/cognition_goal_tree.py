@@ -123,8 +123,7 @@ class CognitionGoalTreeMessage(Vertical):
     """Two-level Goal → steps tree; one aggregate block updates in place.
 
     Title line matches ``CognitionStepMessage`` / ``CognitionReasonMessage``:
-    stateful card-prefix glyph plus goal text, with optional ``· iter<=N`` when
-    ``max_iterations`` is set.
+    stateful card-prefix glyph plus goal text.
     """
 
     ALLOW_SELECT = True
@@ -167,7 +166,7 @@ class CognitionGoalTreeMessage(Vertical):
 
         Args:
             goal: Primary goal text (clipped for header).
-            max_iterations: Shown in header when greater than 1.
+            max_iterations: Retained for snapshot/restore parity; not rendered.
             **kwargs: Passed to ``Vertical``.
         """
         super().__init__(**kwargs)
@@ -221,8 +220,6 @@ class CognitionGoalTreeMessage(Vertical):
     def _goal_header_content(self) -> Content:
         g = self._clip(self._goal_text, _MAX_GOAL_HEADER)
         body = g
-        if self._max_iterations > 1:
-            body = f"{body} · iter<={self._max_iterations}"
         intake = self._intake_label.strip().lower()
         if intake in ("trivial", "simple", "complex"):
             body = f"{body} · {intake}"

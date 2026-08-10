@@ -344,7 +344,7 @@ def test_collect_cognition_card_replay_dedupes_step_progress_pair() -> None:
 
 
 def test_collect_cognition_card_replay_drops_goal_tree_header() -> None:
-    """Goal-tree header (goal · iter<=N) must not render on resume."""
+    """Goal-tree header must not render on resume."""
     events = [
         {
             "kind": "event",
