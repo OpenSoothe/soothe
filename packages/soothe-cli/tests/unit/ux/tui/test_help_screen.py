@@ -26,9 +26,7 @@ def test_build_command_rows_includes_registry_and_extras() -> None:
 def test_build_keyboard_shortcut_rows_cover_core_bindings() -> None:
     """Help documents the primary chat and app shortcuts."""
     rows = dict(build_keyboard_shortcut_rows())
-    assert rows["Enter"] == (
-        "Submit message; with slash suggestions, run or fill for more input"
-    )
+    assert rows["Enter"] == ("Submit message; with slash suggestions, run or fill for more input")
     assert rows["Tab"] == "Accept slash or @ file autocomplete (never submits)"
     assert rows["Ctrl+D"] == "Type exit, quit, or /quit to exit the TUI"
     assert rows["Ctrl+C"] == "Clear input or interrupt running agent/shell"

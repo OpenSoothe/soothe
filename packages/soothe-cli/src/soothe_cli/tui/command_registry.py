@@ -251,9 +251,7 @@ def resolve_command_head(command: str) -> str:
     return _ALIAS_TO_CANONICAL.get(head, head)
 
 
-_CANONICAL_ENTER_ACTION: dict[str, EnterAction] = {
-    cmd.name: cmd.enter_action for cmd in COMMANDS
-}
+_CANONICAL_ENTER_ACTION: dict[str, EnterAction] = {cmd.name: cmd.enter_action for cmd in COMMANDS}
 
 
 def enter_action_for(command: str) -> EnterAction:
@@ -382,6 +380,4 @@ def build_skill_commands(
     Returns:
         List of `(name, description, hidden_keywords)` tuples.
     """
-    return [
-        (f"/skill:{skill['name']}", skill["description"], skill["name"]) for skill in skills
-    ]
+    return [(f"/skill:{skill['name']}", skill["description"], skill["name"]) for skill in skills]

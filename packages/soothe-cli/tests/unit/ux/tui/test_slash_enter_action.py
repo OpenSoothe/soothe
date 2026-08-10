@@ -8,8 +8,8 @@ import pytest
 
 from soothe_cli.tui.command_registry import (
     COMMANDS,
-    EnterAction,
     SLASH_COMMANDS,
+    EnterAction,
     enter_action_for,
 )
 from soothe_cli.tui.widgets.autocomplete import CompletionResult, SlashCommandController
