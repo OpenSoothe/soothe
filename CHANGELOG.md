@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.4] - 2026-08-10
+
 ### Fixed
+- WebSocket 1009 (message too big) crash on large autopilot command-RPC replies
+  (e.g. `soothe ap goals`). The client `AsyncCommandClient`/`CommandClient` and the
+  daemon `admin_rpc.send_admin_request` now set `max_size=10 MiB` to match the daemon
+  `transport.websocket.max_frame_size` default instead of the `websockets` library's
+  1 MiB default.
 - TUI no longer hangs on a stale "live" loop probe after a turn completes. The
   post-completion re-attach guard (`_daemon_loop_is_live`) now requires the
   daemon's authoritative `active_runner` signal, so a loop whose metadata
@@ -17,11 +24,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   real content, surfacing a benign "no follow-on turn" message instead of an
   indefinite spin.
 
-### Changed
-- Raise `soothe-client-python` floor to `>=1.0.14` in soothe-cli and
-  soothe-daemon (active-runner signal + attach-only idle timeout).
+### Added
+- Autopilot streaming slice DAG spawn + host worktree lifecycle (IG-732).
+- Veritas auto-clarify for rail `pause_for_user`; Superpowers discipline encoded
+  into rail maker briefs (IG-737).
+- Cognition intake module + CLI guide (IG-733).
+- WavePlan continue short-circuit + dispatch intake_scope (IG-730, IG-731).
+- LLM-based rail auto-pick (IG-728).
+- Autopilot report-commit judgment with bounded DAG ops (IG-726).
+- TUI: auto-show/hide plan panel during goal execution; one-stage vs two-stage
+  Enter for slash autocomplete; clarification mode badge in status bar.
 
-## [v0.10.3] - 2026-08-10
+### Changed
+- Convert `soothe-sdk` from workspace submodule to PyPI dependency
+  (`soothe-sdk>=1.0.8,<2.0.0`); release workflow now waits for the pinned floor
+  on PyPI instead of reading the deleted `packages/soothe-sdk/pyproject.toml`.
+- Remove `packages/soothe-nano` git submodule; consume Coding CoreAgent from
+  PyPI (`soothe-nano>=1.1.6`) only. Local Docker builds and release waits use
+  the host pin instead of a vendored nano checkout.
+- Upgrade `soothe-nano` 1.1.8 → 1.1.10.
+- Raise `soothe-client-python` floor to `>=1.0.15` in soothe-cli and
+  soothe-daemon (WebSocket max_frame_size fix).
+- Raise packaged `llm_rate_limit` globals for Autopilot + CLI coexistence:
+  `rpm_limit=180`, `concurrent_limit=4`, `global_concurrent_limit=18`
+  (keeps `autopilot.max_parallel_goals=3` and per-loop step/subagent caps).
+- Default LLM rate-limit / loop concurrency to develop-safe caps:
+  `autopilot.max_parallel_goals=3`, `max_parallel_steps/subagents=3`,
+  `global_max_llm_calls=8` (requires `soothe-nano>=1.1.7`).
+- Rename autopilot `cognition` → `intake` module; collapse redundant
+  bugfix/migration builtins and raise auto-pick timeout (IG-734, IG-736).
+- Rename `wave_below_max` → `below_slice_budget`; decouple budget from
+  `job_complete` (IG-732).
 
 ### Removed
 - `agent.loop.concurrency.max_parallel_goals` — dead after single-goal StrangeLoop
@@ -29,20 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Stale YAML keys are ignored on load.
 - `ConcurrencyPolicy.max_parallel_goals` (soothe-sdk 1.0.8) — same split; persisted
   plans with the legacy key still load via `extra="ignore"`.
+- Autopilot evidence turns; trust StrangeLoop completion signal instead.
 
-### Changed
-- Raise packaged `llm_rate_limit` globals for Autopilot + CLI coexistence:
-  `rpm_limit=180`, `concurrent_limit=4`, `global_concurrent_limit=18`
-  (keeps `autopilot.max_parallel_goals=3` and per-loop step/subagent caps).
-- Default LLM rate-limit / loop concurrency to develop-safe caps:
-  `autopilot.max_parallel_goals=3`, `max_parallel_steps/subagents=3`,
-  `global_max_llm_calls=8` (requires `soothe-nano>=1.1.7`).
-- Remove `packages/soothe-nano` git submodule; consume Coding CoreAgent from
-  PyPI (`soothe-nano>=1.1.6`) only. Local Docker builds and release waits use
-  the host pin instead of a vendored nano checkout.
-- Raise `soothe-client-python` floor to `>=1.0.13` in soothe-cli and soothe-daemon (stale turn-reader terminate fix)
-
-[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.2...v0.10.3
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.2...v0.10.4
 
 ## [v0.10.2] - 2026-08-07
 

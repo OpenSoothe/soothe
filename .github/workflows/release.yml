@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   # soothe-sdk publishes from mirasoth/soothe-sdk (independent repo).
-  # Monorepo release waits for the submodule version on PyPI; does not publish sdk.
+  # Monorepo release waits for the pinned floor on PyPI; does not publish sdk.
   deploy-sdk:
     runs-on: ubuntu-latest
     steps:
@@ -25,7 +25,19 @@ jobs:
 
     - name: Wait for soothe-sdk on PyPI
       run: |
-        VERSION=$(grep '^version = "' packages/soothe-sdk/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        # soothe-sdk is consumed as a PyPI dependency (>=1.0.8,<2.0.0); read the
+        # pinned floor from packages/soothe-cli/pyproject.toml, mirroring the
+        # soothe-nano wait in deploy-core.
+        VERSION=$(python - <<'PY'
+        import re
+        from pathlib import Path
+        text = Path("packages/soothe-cli/pyproject.toml").read_text()
+        match = re.search(r'"soothe-sdk>=([^,<"]+)', text)
+        if not match:
+            raise SystemExit("soothe-sdk pin not found in packages/soothe-cli/pyproject.toml")
+        print(match.group(1))
+        PY
+        )
         for i in {1..30}; do
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://pypi.org/pypi/soothe-sdk/${VERSION}/json" 2>/dev/null || echo "000")
