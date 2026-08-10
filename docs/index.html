@@ -78,16 +78,11 @@
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; }
   .brand img { width: 30px; height: 30px; border-radius: 8px; }
   .brand span { background: linear-gradient(90deg, var(--teal-300), var(--mint-300)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .nav-links { display: flex; gap: 26px; align-items: center; }
-  .nav-links a { color: var(--text-dim); font-size: .94rem; font-weight: 500; }
-  .nav-links a:hover { color: var(--text); }
   .nav-cta {
     padding: 8px 16px; border-radius: 10px; font-weight: 600; font-size: .9rem;
     background: linear-gradient(135deg, var(--teal-500), var(--mint-400));
     color: #02160f !important; box-shadow: 0 6px 20px -8px rgba(20,184,166,.6);
   }
-  .nav-toggle { display: none; background: none; border: 0; color: var(--text); cursor: pointer; padding: 8px; }
-  .nav-toggle svg { width: 24px; height: 24px; }
 
   /* ===== Hero ===== */
   .hero { padding: 96px 0 64px; position: relative; }
@@ -212,9 +207,10 @@
 
   /* Footer */
   footer.foot { border-top: 1px solid var(--border); padding: 40px 0; margin-top: 40px; }
-  .foot-inner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
-  .foot-links { display: flex; gap: 22px; }
+  .foot-inner { display: flex; flex-direction: column; gap: 22px; align-items: center; text-align: center; }
+  .foot-links { display: flex; flex-wrap: wrap; gap: 14px 22px; justify-content: center; }
   .foot-links a { color: var(--text-dim); font-size: .9rem; }
+  .foot-links a:hover { color: var(--teal-300); }
   .foot-meta { color: var(--text-mute); font-size: .85rem; }
 
   /* Reveal animation */
@@ -227,9 +223,6 @@
     .caps { grid-template-columns: 1fr; }
     .flow { grid-template-columns: repeat(2, 1fr); }
     .gs-grid { grid-template-columns: 1fr; }
-    .nav-links { display: none; position: absolute; top: 64px; left: 0; right: 0; flex-direction: column; background: var(--bg-800); border-bottom: 1px solid var(--border); padding: 16px 24px; gap: 14px; }
-    .nav-links.open { display: flex; }
-    .nav-toggle { display: block; }
   }
   @media (max-width: 540px) {
     .flow { grid-template-columns: 1fr; }
@@ -248,21 +241,7 @@
       <img src="assets/soothe-logo.png" alt="Soothe logo">
       <span>Soothe</span>
     </a>
-    <nav class="nav-links" id="navLinks">
-      <a href="/soothe/">Home</a>
-      <a href="/soothe/wiki/">Wiki</a>
-      <a href="/soothe/faq/">FAQ</a>
-      <a href="/soothe/changelog/">CHANGELOG</a>
-      <a href="/soothe/wiki/api-reference/">API Reference</a>
-      <a href="#pillars">Pillars</a>
-      <a href="#capabilities">Capabilities</a>
-      <a href="#how">How It Works</a>
-      <a href="#start">Getting Started</a>
-      <a class="nav-cta" href="https://github.com/mirasoth/soothe" target="_blank" rel="noopener">GitHub</a>
-    </nav>
-    <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-    </button>
+    <a class="nav-cta" href="https://github.com/mirasoth/soothe" target="_blank" rel="noopener">GitHub</a>
   </div>
 </header>
 
@@ -447,6 +426,15 @@ soothe -p &quot;List all Python files in the current directory and count lines o
       <span>Soothe</span>
     </div>
     <div class="foot-links">
+      <a href="/soothe/">Home</a>
+      <a href="/soothe/wiki/">Wiki</a>
+      <a href="/soothe/faq/">FAQ</a>
+      <a href="/soothe/changelog/">CHANGELOG</a>
+      <a href="/soothe/wiki/api-reference/">API Reference</a>
+      <a href="#pillars">Pillars</a>
+      <a href="#capabilities">Capabilities</a>
+      <a href="#how">How It Works</a>
+      <a href="#start">Getting Started</a>
       <a href="https://github.com/mirasoth/soothe" target="_blank" rel="noopener">GitHub</a>
       <a href="https://pypi.org/project/soothe/" target="_blank" rel="noopener">PyPI</a>
       <a href="wiki/">Wiki</a>
@@ -457,12 +445,6 @@ soothe -p &quot;List all Python files in the current directory and count lines o
 </footer>
 
 <script>
-  // Mobile nav toggle
-  const navToggle = document.getElementById('navToggle');
-  const navLinks = document.getElementById('navLinks');
-  navToggle.addEventListener('click', () => navLinks.classList.toggle('open'));
-  navLinks.querySelectorAll('a').forEach(a => a.addEventListener('click', () => navLinks.classList.remove('open')));
-
   // Scroll reveal
   const io = new IntersectionObserver((entries) => {
     entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
@@ -499,9 +481,9 @@ soothe -p &quot;List all Python files in the current directory and count lines o
     }
   });
 
-  // Smooth-scroll active link highlight
+  // Smooth-scroll active link highlight (footer nav)
   const sections = document.querySelectorAll('section[id]');
-  const navAnchors = document.querySelectorAll('.nav-links a[href^="#"]');
+  const navAnchors = document.querySelectorAll('.foot-links a[href^="#"]');
   window.addEventListener('scroll', () => {
     let current = '';
     sections.forEach(s => {
