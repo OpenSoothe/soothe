@@ -2574,6 +2574,7 @@ class AutopilotService:
                 dag=dag,
                 loops=loops,
                 created_at=created_at,
+                started_at=_iso_or_none(root.started_at),
                 updated_at=updated_at,
                 include_terminal=include_terminal,
                 maturity=maturity_wire_fields(root.maturity),
@@ -2614,8 +2615,9 @@ class AutopilotService:
             Dict with ``nodes``, ``edges``, and ``root_id``.
             Nodes contain: id, description, status, priority, depends_on,
             parent_id, assigned_loop_id, steps_completed, steps_total,
-            tool_calls, total_tokens_used, created_at, updated_at,
-            optional ``steps`` StepDAG, summary/findings when completed.
+            tool_calls, total_tokens_used, created_at, started_at (null until
+            the goal first runs), updated_at, optional ``steps`` StepDAG,
+            summary/findings when completed.
             Edges contain: source=parent_id, target=child id.
         """
         goals = await self._ce.list_goals()
@@ -2667,6 +2669,7 @@ class AutopilotService:
                     if hasattr(g.created_at, "isoformat")
                     else str(g.created_at)
                 ),
+                "started_at": _iso_or_none(g.started_at),
                 "updated_at": (
                     g.updated_at.isoformat()
                     if hasattr(g.updated_at, "isoformat")
@@ -2700,6 +2703,13 @@ class AutopilotService:
             "edges": edges,
             "root_id": root_goal_id,
         }
+
+
+def _iso_or_none(value: datetime | None) -> str | None:
+    """Render an optional timestamp as ISO text for wire payloads."""
+    if value is None:
+        return None
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
 def _serialize_goal_steps(goal: GoalNode) -> dict[str, Any]:

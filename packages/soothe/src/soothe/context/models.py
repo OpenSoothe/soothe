@@ -309,6 +309,9 @@ class GoalNode(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     # Set when entering suspended; cleared on reactivate (IG-713 notify timer)
     suspended_at: datetime | None = None
+    # Set on every activation (reset on retry / send-back / crash recovery) so
+    # execution elapsed counts only the current run, not queue wait.
+    started_at: datetime | None = None
 
     # Plan-assess audit (IG-557; not replayed into assess prompts except Phase C inline)
     last_assessment: dict[str, Any] | None = None
@@ -478,8 +481,10 @@ class GoalStepDAG(BaseModel):
         if not deps_met:
             logger.debug("Goal %s claim aborted: dependencies unmet", goal_id)
             return None
+        now = datetime.now(UTC)
         goal.status = "active"
-        goal.updated_at = datetime.now(UTC)
+        goal.started_at = now
+        goal.updated_at = now
         if loop_id:
             goal.assigned_loop_id = loop_id
         logger.debug("Claimed goal %s (loop_id=%s)", goal_id, loop_id)

@@ -638,6 +638,7 @@ interval (CLI default 2.0s) and redraw. Existing `job_status` / `job_dag` /
       "description": "Implement auth",
       "workspace": "/path/to/ws",
       "created_at": "2026-08-04T00:50:00+00:00",
+      "started_at": "2026-08-04T00:52:00+00:00",
       "total_tokens_used": 12500,
       "total_goals": 2,
       "completed_goals": 0,
@@ -653,6 +654,7 @@ interval (CLI default 2.0s) and redraw. Existing `job_status` / `job_dag` /
             "depends_on": [],
             "assigned_loop_id": "autopilot__a1b2c3d4__f47ac10b58cc4372a5670e02b2c3d479",
             "created_at": "2026-08-04T00:50:00+00:00",
+            "started_at": "2026-08-04T00:52:00+00:00",
             "steps_completed": 1,
             "steps_total": 2,
             "tool_calls": 3,
@@ -699,7 +701,10 @@ interval (CLI default 2.0s) and redraw. Existing `job_status` / `job_dag` /
 2. Enumerate root goals (jobs).
 3. For each job, build `dag` via existing `dag_snapshot(job_id)` (includes
    planned `GoalNode.steps` StepDAG + live counts) and load
-   `loops` via `list_job_loops(job_id)`. Include root `created_at`.
+   `loops` via `list_job_loops(job_id)`. Include root `created_at` and
+   `started_at` (goal activation time; the job value is the earliest start
+   across root, goals, and loops, since rail roots stay `pending` while
+   children run — omitted while nothing has started).
    `dag_snapshot` membership is the **`parent_id` subtree** (same as cancel /
    rail descendants). Tree `edges` are `parent → child`. Per-node
    `depends_on` is scheduling metadata only — do not invert it into tree
@@ -737,7 +742,8 @@ interval (CLI default 2.0s) and redraw. Existing `job_status` / `job_dag` /
   `JobLoopEntry.goal_id`. Entity rows share order
   `KIND [id] status  "desc"  <metrics>` (progress, elapsed, tokens, priority).
   JOB shows `goals done/total` from wire counts. Show execution elapsed as
-  `HH:MM:SS` from job `created_at` and loop `started_at`.
+  `HH:MM:SS` from `started_at` — pending jobs/goals (and anything that has not
+  run yet) show no clock; terminal/suspended rows freeze at `updated_at`.
 - Empty `jobs` → header + “No active jobs” (or “No jobs” in all mode).
 - Daemon not live / mid-session RPC failure → error + non-zero exit (same as
   other autopilot CLI commands).

@@ -90,12 +90,67 @@ def derive_top_running_status(
     return root_status
 
 
+def derive_job_started_at(
+    root_started_at: str | None,
+    *,
+    nodes: list[dict[str, Any]],
+    loops: list[dict[str, Any]],
+) -> str | None:
+    """Earliest known execution start for a job, or ``None`` if nothing ran.
+
+    Rail job roots often stay ``pending`` while child goals execute, so the job
+    anchor is the earliest start across the root, its goals, and loop history
+    (``JobLoopEntry.started_at`` is append-only, so it survives goal retries).
+
+    Args:
+        root_started_at: Root goal ``started_at`` (ISO text) or ``None``.
+        nodes: DAG goal nodes, each optionally carrying ``started_at``.
+        loops: JobLoopIndex entries, each carrying ``started_at``.
+
+    Returns:
+        Earliest ISO timestamp, or ``None`` when no start is recorded.
+    """
+    from datetime import UTC, datetime
+
+    candidates: list[str] = []
+    if root_started_at:
+        candidates.append(str(root_started_at))
+    for node in nodes:
+        raw = node.get("started_at")
+        if raw:
+            candidates.append(str(raw))
+    for entry in loops:
+        raw = entry.get("started_at")
+        if raw:
+            candidates.append(str(raw))
+
+    earliest: str | None = None
+    earliest_ts = float("inf")
+    for raw in candidates:
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            continue
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        ts = parsed.timestamp()
+        if ts < earliest_ts:
+            earliest_ts = ts
+            earliest = raw
+    return earliest
+
+
 def apply_top_running_status(
     entry: dict[str, Any],
     *,
     root_id: str | None = None,
 ) -> dict[str, Any]:
-    """Mutate a top job entry so JOB/root GOAL reflect in-flight work."""
+    """Mutate a top job entry so JOB/root GOAL reflect in-flight work.
+
+    Also fills the job (and coordinator root goal) ``started_at`` from the
+    earliest subtree start so elapsed time is anchored on execution rather than
+    submission.
+    """
     dag = entry.get("dag") if isinstance(entry.get("dag"), dict) else {}
     nodes = [n for n in (dag.get("nodes") or []) if isinstance(n, dict)]
     loops = [L for L in (entry.get("loops") or []) if isinstance(L, dict)]
@@ -105,12 +160,25 @@ def apply_top_running_status(
         loops=loops,
     )
     entry["status"] = effective
+    started_at = derive_job_started_at(
+        entry.get("started_at"),
+        nodes=nodes,
+        loops=loops,
+    )
+    if started_at:
+        entry["started_at"] = started_at
+    else:
+        entry.pop("started_at", None)
     rid = str(root_id or dag.get("root_id") or entry.get("id") or "")
     if rid:
         for node in nodes:
-            if str(node.get("id")) == rid and str(node.get("status")) not in TERMINAL_STATES:
+            if str(node.get("id")) != rid:
+                continue
+            if str(node.get("status")) not in TERMINAL_STATES:
                 node["status"] = effective
-                break
+            if started_at and not node.get("started_at") and effective != "pending":
+                node["started_at"] = started_at
+            break
     return entry
 
 
@@ -189,6 +257,7 @@ def build_top_job_entry(
     dag: dict[str, Any],
     loops: list[dict[str, Any]],
     created_at: str | None = None,
+    started_at: str | None = None,
     updated_at: str | None = None,
     include_terminal: bool = False,
     maturity: dict[str, Any] | None = None,
@@ -206,6 +275,8 @@ def build_top_job_entry(
         dag: Full DAG snapshot for the job.
         loops: JobLoopIndex entries (any status).
         created_at: Optional root ``created_at`` ISO timestamp.
+        started_at: Optional root ``started_at`` ISO timestamp; the emitted job
+            value is the earliest start across root, goals, and loops.
         updated_at: Optional root ``updated_at`` ISO timestamp (freeze elapsed
             when the job is terminal).
         include_terminal: When ``False`` (default), drop terminal goals and
@@ -245,6 +316,8 @@ def build_top_job_entry(
         entry["workspace"] = workspace
     if created_at:
         entry["created_at"] = created_at
+    if started_at:
+        entry["started_at"] = started_at
     if updated_at:
         entry["updated_at"] = updated_at
     if maturity:

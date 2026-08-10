@@ -89,6 +89,38 @@ class TestContextEngineGoalLifecycle:
         assert "S1" in resumed.steps.nodes
 
     @pytest.mark.asyncio
+    async def test_started_at_unset_until_activation(self) -> None:
+        engine = ContextEngine()
+        goal = await engine.create_goal("Queued work")
+        assert goal.started_at is None
+        await engine.activate_goal(goal.id, loop_id="loop-1")
+        fetched = await engine.get_goal(goal.id)
+        assert fetched.started_at is not None
+        assert fetched.started_at >= fetched.created_at
+
+    @pytest.mark.asyncio
+    async def test_started_at_resets_on_reactivation(self) -> None:
+        engine = ContextEngine()
+        goal = await engine.create_goal("Rework me")
+        await engine.activate_goal(goal.id, loop_id="loop-1")
+        first_start = goal.started_at
+        assert first_start is not None
+        await engine.send_back_goal(goal.id, reason="needs rework")
+        assert goal.status == "pending"
+        await engine.activate_goal(goal.id, loop_id="loop-2")
+        assert goal.started_at is not None
+        assert goal.started_at > first_start
+
+    @pytest.mark.asyncio
+    async def test_started_at_set_when_claimed(self) -> None:
+        engine = ContextEngine()
+        goal = await engine.create_goal("Claim me")
+        claimed = engine.claim_goal(goal.id, loop_id="loop-1")
+        assert claimed is not None
+        assert claimed.status == "active"
+        assert claimed.started_at is not None
+
+    @pytest.mark.asyncio
     async def test_resume_interrupted_goal_from_cancelled(self) -> None:
         engine = ContextEngine()
         goal = await engine.create_goal("Legacy cancel")

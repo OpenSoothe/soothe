@@ -685,6 +685,22 @@ def _elapsed_end_for_status(status: str, ended_at: Any) -> Any | None:
     return None
 
 
+def format_row_elapsed(status: str, started_at: Any, updated_at: Any) -> str:
+    """Elapsed for a top row, empty until the job/goal actually starts running.
+
+    Args:
+        status: Row status (``pending`` rows never show a clock).
+        started_at: Execution start timestamp; missing means not started yet.
+        updated_at: End timestamp used to freeze terminal/suspended rows.
+
+    Returns:
+        ``HH:MM:SS`` string, or empty when the row has not started.
+    """
+    if not started_at or str(status or "").lower() == "pending":
+        return ""
+    return format_elapsed(started_at, ended_at=_elapsed_end_for_status(status, updated_at))
+
+
 def _created_at_timestamp(raw: Any) -> float | None:
     """Parse a job ``created_at`` to epoch seconds, or ``None`` if invalid."""
     from datetime import UTC, datetime
@@ -1368,7 +1384,8 @@ def _format_top_forest(
 
         KIND [id] status  HH:MM:SS  <name:value…>  "desc"
 
-    Elapsed is bare time right after status. Other metrics use name:value
+    Elapsed is bare time right after status, anchored on ``started_at`` so
+    pending jobs/goals show no clock. Other metrics use name:value
     (progress, tokens, priority, rail). STEP rows put deps after the
     description as ``→id`` arrows (prerequisites).
     """
@@ -1386,10 +1403,7 @@ def _format_top_forest(
         jstat = str(job.get("status", "pending"))
         jpri = job.get("priority", 50)
         jdesc = _preview_desc(job.get("description", ""), _TOP_DESC_JOB)
-        jelapsed = format_elapsed(
-            job.get("created_at"),
-            ended_at=_elapsed_end_for_status(jstat, job.get("updated_at")),
-        )
+        jelapsed = format_row_elapsed(jstat, job.get("started_at"), job.get("updated_at"))
         jtok = int(job.get("total_tokens_used") or 0)
         jrail = _rail_label(job)
         goals_done, goals_total = _job_goal_progress(job)
@@ -1442,10 +1456,7 @@ def _format_top_forest(
             steps_c = int(node.get("steps_completed") or 0)
             steps_t = int(node.get("steps_total") or 0)
             gtok = int(node.get("total_tokens_used") or 0)
-            gelapsed = format_elapsed(
-                node.get("created_at"),
-                ended_at=_elapsed_end_for_status(status, node.get("updated_at")),
-            )
+            gelapsed = format_row_elapsed(status, node.get("started_at"), node.get("updated_at"))
             goal_metrics: list[Text] = []
             if gelapsed:
                 goal_metrics.append(_metric_elapsed(gelapsed))

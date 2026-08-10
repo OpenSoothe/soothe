@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from soothe.autopilot.jobs.top_snapshot import (
     build_top_job_entry,
+    derive_job_started_at,
     filter_active_dag,
     filter_active_loops,
 )
@@ -318,3 +319,89 @@ def test_build_top_job_derives_active_when_child_running() -> None:
     assert entry["status"] == "active"
     root = next(n for n in entry["dag"]["nodes"] if n["id"] == "j1")
     assert root["status"] == "active"
+
+
+def test_derive_job_started_at_picks_earliest_known_start() -> None:
+    started = derive_job_started_at(
+        "2026-08-05T03:00:00+00:00",
+        nodes=[
+            {"id": "j1", "started_at": "2026-08-05T03:00:00+00:00"},
+            {"id": "g2", "started_at": "2026-08-05T02:00:00Z"},
+            {"id": "g3", "started_at": None},
+        ],
+        loops=[{"loop_id": "L1", "started_at": "2026-08-05T01:30:00+00:00"}],
+    )
+    assert started == "2026-08-05T01:30:00+00:00"
+
+
+def test_derive_job_started_at_none_when_nothing_ran() -> None:
+    assert (
+        derive_job_started_at(
+            None,
+            nodes=[{"id": "j1", "started_at": None}, {"id": "g2"}],
+            loops=[{"loop_id": "L1"}],
+        )
+        is None
+    )
+
+
+def test_derive_job_started_at_ignores_unparsable_timestamps() -> None:
+    started = derive_job_started_at(
+        "not-a-timestamp",
+        nodes=[{"id": "g2", "started_at": "2026-08-05T04:00:00+00:00"}],
+        loops=[],
+    )
+    assert started == "2026-08-05T04:00:00+00:00"
+
+
+def test_build_top_job_entry_omits_started_at_while_pending() -> None:
+    entry = build_top_job_entry(
+        job_id="j1",
+        status="pending",
+        priority=50,
+        description="queued",
+        workspace=None,
+        created_at="2026-08-05T00:00:00+00:00",
+        dag={
+            "root_id": "j1",
+            "nodes": [{"id": "j1", "status": "pending", "started_at": None}],
+            "edges": [],
+        },
+        loops=[],
+    )
+    assert entry is not None
+    assert "started_at" not in entry
+    assert entry["dag"]["nodes"][0]["started_at"] is None
+
+
+def test_build_top_job_entry_stamps_started_at_on_coordinator_root() -> None:
+    """Rail roots stay pending in CE — root GOAL row must match the JOB clock."""
+    entry = build_top_job_entry(
+        job_id="j1",
+        status="pending",
+        priority=50,
+        description="job root",
+        workspace=None,
+        created_at="2026-08-05T00:00:00+00:00",
+        dag={
+            "root_id": "j1",
+            "nodes": [
+                {"id": "j1", "status": "pending", "started_at": None},
+                {"id": "g2", "status": "active", "started_at": "2026-08-05T02:00:00+00:00"},
+            ],
+            "edges": [{"source": "j1", "target": "g2"}],
+        },
+        loops=[
+            {
+                "seq": 1,
+                "loop_id": "autopilot__j1__abc",
+                "goal_id": "g2",
+                "status": "active",
+                "started_at": "2026-08-05T01:00:00+00:00",
+            }
+        ],
+    )
+    assert entry is not None
+    assert entry["started_at"] == "2026-08-05T01:00:00+00:00"
+    root = next(n for n in entry["dag"]["nodes"] if n["id"] == "j1")
+    assert root["started_at"] == "2026-08-05T01:00:00+00:00"

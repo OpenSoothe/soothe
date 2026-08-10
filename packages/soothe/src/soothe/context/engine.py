@@ -311,9 +311,11 @@ class ContextEngine:
         if goal.status != "pending":
             msg = f"Goal {goal_id} is {goal.status}, expected pending"
             raise ValueError(msg)
+        now = datetime.now(UTC)
         goal.status = "active"
         goal.assigned_loop_id = loop_id
-        goal.updated_at = datetime.now(UTC)
+        goal.started_at = now
+        goal.updated_at = now
         logger.info("Activated goal %s (loop_id=%s)", goal_id, loop_id)
 
     async def complete_goal(self, goal_id: str) -> None:

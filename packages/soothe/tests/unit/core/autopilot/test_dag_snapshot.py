@@ -53,6 +53,25 @@ async def test_dag_snapshot_includes_parent_id_children() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dag_snapshot_started_at_null_until_activation() -> None:
+    """Elapsed anchors on activation, so pending goals expose no start time."""
+    svc = _service()
+    root = await svc._ce.create_goal("job root")
+    child = await svc._ce.create_goal("child", parent_id=root.id)
+
+    dag = await svc.dag_snapshot(root.id)
+    by_id = {n["id"]: n for n in dag["nodes"]}
+    assert by_id[root.id]["started_at"] is None
+    assert by_id[child.id]["started_at"] is None
+
+    await svc._ce.activate_goal(child.id, loop_id="loop-1")
+    dag = await svc.dag_snapshot(root.id)
+    by_id = {n["id"]: n for n in dag["nodes"]}
+    assert by_id[root.id]["started_at"] is None
+    assert by_id[child.id]["started_at"] is not None
+
+
+@pytest.mark.asyncio
 async def test_dag_snapshot_nested_parent_chain() -> None:
     svc = _service()
     root = await svc._ce.create_goal("root")

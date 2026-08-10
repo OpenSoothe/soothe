@@ -19,6 +19,7 @@ from soothe_cli.cli.commands.autopilot_cmd import (
     apply_top_key,
     decode_top_csi,
     format_elapsed,
+    format_row_elapsed,
     format_tokens,
     render_top_snapshot,
 )
@@ -128,6 +129,7 @@ def test_render_top_completed_goal_elapsed_frozen() -> None:
                 "priority": 50,
                 "description": "Done job",
                 "created_at": created,
+                "started_at": created,
                 "updated_at": updated,
                 "total_goals": 1,
                 "completed_goals": 1,
@@ -140,6 +142,7 @@ def test_render_top_completed_goal_elapsed_frozen() -> None:
                             "status": "completed",
                             "description": "Done job",
                             "created_at": created,
+                            "started_at": created,
                             "updated_at": updated,
                         }
                     ],
@@ -155,6 +158,114 @@ def test_render_top_completed_goal_elapsed_frozen() -> None:
     goal_line = next(ln for ln in text.splitlines() if "GOAL [jobdone0]" in ln)
     assert re.search(r"\b00:05:00\b", job_line)
     assert re.search(r"\b00:05:00\b", goal_line)
+
+
+def test_format_row_elapsed_needs_start_and_non_pending_status() -> None:
+    now = datetime(2026, 8, 5, 12, 0, 0, tzinfo=UTC)
+    started = (now - timedelta(minutes=5)).isoformat()
+    assert format_row_elapsed("pending", None, None) == ""
+    assert format_row_elapsed("pending", started, None) == ""
+    assert format_row_elapsed("active", None, None) == ""
+    assert format_row_elapsed("active", started, None) != ""
+    assert (
+        format_row_elapsed(
+            "completed",
+            "2026-08-05T10:00:00+00:00",
+            "2026-08-05T10:05:00+00:00",
+        )
+        == "00:05:00"
+    )
+
+
+def test_render_top_pending_job_and_goal_show_no_clock() -> None:
+    """Queued work must not tick — elapsed starts when the goal becomes active."""
+    created = "2026-08-05T10:00:00+00:00"
+    snapshot = {
+        "running": True,
+        "dreaming": False,
+        "loop_pool": {"active": 0, "idle": 4, "max": 4},
+        "jobs": [
+            {
+                "id": "waitjob1",
+                "status": "pending",
+                "priority": 50,
+                "description": "Queued job",
+                "created_at": created,
+                "updated_at": created,
+                "total_goals": 1,
+                "completed_goals": 0,
+                "active_goals": 0,
+                "dag": {
+                    "root_id": "waitjob1",
+                    "nodes": [
+                        {
+                            "id": "waitjob1",
+                            "status": "pending",
+                            "description": "Queued job",
+                            "created_at": created,
+                            "started_at": None,
+                            "updated_at": created,
+                        }
+                    ],
+                    "edges": [],
+                },
+                "loops": [],
+            }
+        ],
+    }
+    text = _plain(snapshot, state=TopViewState())
+    job_line = next(ln for ln in text.splitlines() if "JOB  [waitjob1]" in ln)
+    goal_line = next(ln for ln in text.splitlines() if "GOAL [waitjob1]" in ln)
+    assert not re.search(r"\d{2}:\d{2}:\d{2}", job_line)
+    assert not re.search(r"\d{2}:\d{2}:\d{2}", goal_line)
+
+
+def test_render_top_active_goal_counts_from_started_at() -> None:
+    """Elapsed anchors on started_at, ignoring how long the goal sat queued."""
+    # Rendering uses the live clock, so anchor the fixtures on real "now".
+    now = datetime.now(UTC)
+    created = (now - timedelta(hours=5)).isoformat()
+    started = (now - timedelta(minutes=7)).isoformat()
+    snapshot = {
+        "running": True,
+        "dreaming": False,
+        "loop_pool": {"active": 1, "idle": 3, "max": 4},
+        "jobs": [
+            {
+                "id": "runjob01",
+                "status": "active",
+                "priority": 50,
+                "description": "Running job",
+                "created_at": created,
+                "started_at": started,
+                "total_goals": 1,
+                "completed_goals": 0,
+                "active_goals": 1,
+                "dag": {
+                    "root_id": "runjob01",
+                    "nodes": [
+                        {
+                            "id": "runjob01",
+                            "status": "active",
+                            "description": "Running job",
+                            "created_at": created,
+                            "started_at": started,
+                        }
+                    ],
+                    "edges": [],
+                },
+                "loops": [],
+            }
+        ],
+    }
+    text = _plain(snapshot, state=TopViewState())
+    job_line = next(ln for ln in text.splitlines() if "JOB  [runjob01]" in ln)
+    goal_line = next(ln for ln in text.splitlines() if "GOAL [runjob01]" in ln)
+    stamp = re.search(r"\d{2}:\d{2}:\d{2}", job_line)
+    assert stamp is not None
+    # Roughly 7 minutes in, not 5 hours (created_at is ignored).
+    assert stamp.group(0).startswith("00:07:")
+    assert re.search(r"\d{2}:\d{2}:\d{2}", goal_line)
 
 
 def test_format_tokens() -> None:
@@ -360,6 +471,7 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
                     "priority": 50,
                     "description": "Implement auth",
                     "created_at": created,
+                    "started_at": created,
                     "total_tokens_used": 12500,
                     "rail_id": "feature-dev",
                     "dag": {
@@ -370,6 +482,7 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
                                 "status": "active",
                                 "description": "Implement auth",
                                 "created_at": created,
+                                "started_at": created,
                                 "steps_completed": 1,
                                 "steps_total": 2,
                                 "total_tokens_used": 3200,
@@ -441,7 +554,9 @@ def test_render_top_forest_nests_steps_and_loops() -> None:
         goal_line,
     )
     child_goal = next(ln for ln in text.splitlines() if "GOAL [e5f6aaaa]" in ln)
-    assert re.search(r'\d{2}:\d{2}:\d{2}  "Write tests"', child_goal)
+    # Pending goals have not started, so no clock ticks on their row.
+    assert not re.search(r"\d{2}:\d{2}:\d{2}", child_goal)
+    assert child_goal.endswith('pending  "Write tests"')
     # steps=all lists full StepDAG under live goals (including completed).
     assert "STEP [UZH-01]" in text
     assert "STEP [UZH-02]" in text
