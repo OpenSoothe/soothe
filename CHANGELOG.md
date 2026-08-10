@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.3] - 2026-08-10
+
 ### Removed
 - `agent.loop.concurrency.max_parallel_goals` — dead after single-goal StrangeLoop
   workers; use `agent.autopilot.max_parallel_goals` for Autopilot goal fan-out.
@@ -25,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PyPI (`soothe-nano>=1.1.6`) only. Local Docker builds and release waits use
   the host pin instead of a vendored nano checkout.
 - Raise `soothe-client-python` floor to `>=1.0.13` in soothe-cli and soothe-daemon (stale turn-reader terminate fix)
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.2...v0.10.3
 
 ## [v0.10.2] - 2026-08-07
 
