@@ -1,5 +1,9 @@
 """LoopRail runtime: interpreter, guards, builtins, recipes, trace store."""
 
+from soothe.autopilot.rail.autoresearch_exec import (
+    AUTORESEARCH_RAIL_ID,
+    AutoresearchExec,
+)
 from soothe.autopilot.rail.builtins_exec import (
     BuiltinResult,
     GoalAnnotation,
@@ -29,7 +33,9 @@ from soothe.autopilot.rail.wave_plan import (
 )
 
 __all__ = [
+    "AUTORESEARCH_RAIL_ID",
     "AlwaysMatchGuardEvaluator",
+    "AutoresearchExec",
     "BuiltinResult",
     "GoalAnnotation",
     "GuardContext",

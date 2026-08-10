@@ -6,6 +6,7 @@ Built-in rail YAML lives under ``builtin_rails/``. AutopilotService binds
 
 from soothe.rails.builtins import get_builtin_rails_dir, get_rails_paths
 from soothe.rails.catalog import (
+    BUILTIN_RAIL_IDS,
     CE_RAIL_BUILTINS,
     LoopRailCatalog,
     RailCatalogError,
@@ -22,13 +23,18 @@ from soothe.rails.selector import (
 )
 from soothe.rails.verb_defaults import (
     DEFAULT_VERB_BRIEFS,
+    DEFAULT_VERB_ROLES,
+    DEFAULT_VERB_TAGS,
     interpolate_brief,
     resolve_verb_brief,
 )
 
 __all__ = [
+    "BUILTIN_RAIL_IDS",
     "CE_RAIL_BUILTINS",
     "DEFAULT_VERB_BRIEFS",
+    "DEFAULT_VERB_ROLES",
+    "DEFAULT_VERB_TAGS",
     "L0_OPS",
     "LoopRailCatalog",
     "RailAutoPicker",

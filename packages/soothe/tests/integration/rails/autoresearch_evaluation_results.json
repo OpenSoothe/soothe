@@ -1,0 +1,558 @@
+{
+  "scenarios": [
+    {
+      "job_id": "14d63db3",
+      "record_count": 24,
+      "fired_builtins": [
+        "decompose_parallel",
+        "plan_and_implement",
+        "review",
+        "qa_verify",
+        "complete_job"
+      ],
+      "expected_builtins": [
+        "decompose_parallel",
+        "plan_and_implement",
+        "review",
+        "qa_verify",
+        "complete_job"
+      ],
+      "builtins_match_expected": true,
+      "records": [
+        {
+          "timestamp": "2026-08-10T10:59:37.294891+00:00",
+          "rule_id": "flow[0]",
+          "event": "job_start",
+          "condition": null,
+          "guard_result": {
+            "matched": true,
+            "confidence": 1.0,
+            "reasoning": "no when clause"
+          },
+          "builtin": "decompose_parallel",
+          "builtin_result": "success",
+          "goal_id": null,
+          "seq": 0
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.294947+00:00",
+          "rule_id": "flow[1]",
+          "event": "goal_completed",
+          "condition": "ready_to_synthesize",
+          "guard_result": {
+            "matched": true,
+            "confidence": 1.0,
+            "reasoning": "scripted bool"
+          },
+          "builtin": "plan_and_implement",
+          "builtin_result": "success",
+          "goal_id": "2b863094",
+          "seq": 1
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.294999+00:00",
+          "rule_id": "flow[1]",
+          "event": "goal_completed",
+          "condition": "ready_to_synthesize",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "script exhausted"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "b5e285be",
+          "seq": 2
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295011+00:00",
+          "rule_id": "flow[2]",
+          "event": "goal_completed",
+          "condition": "needs_synthesis",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "b5e285be",
+          "seq": 3
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295022+00:00",
+          "rule_id": "flow[3]",
+          "event": "goal_completed",
+          "condition": "needs_review",
+          "guard_result": {
+            "matched": true,
+            "confidence": 1.0,
+            "reasoning": "scripted bool"
+          },
+          "builtin": "review",
+          "builtin_result": "success",
+          "goal_id": "b5e285be",
+          "seq": 4
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295056+00:00",
+          "rule_id": "flow[1]",
+          "event": "goal_completed",
+          "condition": "ready_to_synthesize",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "script exhausted"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "6904df7a",
+          "seq": 5
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295067+00:00",
+          "rule_id": "flow[2]",
+          "event": "goal_completed",
+          "condition": "needs_synthesis",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "6904df7a",
+          "seq": 6
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295079+00:00",
+          "rule_id": "flow[3]",
+          "event": "goal_completed",
+          "condition": "needs_review",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "script exhausted"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "6904df7a",
+          "seq": 7
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295089+00:00",
+          "rule_id": "flow[4]",
+          "event": "goal_completed",
+          "condition": "needs_qa",
+          "guard_result": {
+            "matched": true,
+            "confidence": 1.0,
+            "reasoning": "scripted bool"
+          },
+          "builtin": "qa_verify",
+          "builtin_result": "success",
+          "goal_id": "6904df7a",
+          "seq": 8
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295122+00:00",
+          "rule_id": "flow[1]",
+          "event": "goal_completed",
+          "condition": "ready_to_synthesize",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "script exhausted"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "8f174fde",
+          "seq": 9
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295134+00:00",
+          "rule_id": "flow[2]",
+          "event": "goal_completed",
+          "condition": "needs_synthesis",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "8f174fde",
+          "seq": 10
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295146+00:00",
+          "rule_id": "flow[3]",
+          "event": "goal_completed",
+          "condition": "needs_review",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "script exhausted"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "8f174fde",
+          "seq": 11
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295158+00:00",
+          "rule_id": "flow[4]",
+          "event": "goal_completed",
+          "condition": "needs_qa",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "script exhausted"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "8f174fde",
+          "seq": 12
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295170+00:00",
+          "rule_id": "flow[5]",
+          "event": "goal_completed",
+          "condition": "needs_feedback",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "8f174fde",
+          "seq": 13
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295181+00:00",
+          "rule_id": "flow[8]",
+          "event": "goal_completed",
+          "condition": "needs_human",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "8f174fde",
+          "seq": 14
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295201+00:00",
+          "rule_id": "flow[1]",
+          "event": "goal_completed",
+          "condition": "ready_to_synthesize",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "script exhausted"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "aec8f622",
+          "seq": 15
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295212+00:00",
+          "rule_id": "flow[2]",
+          "event": "goal_completed",
+          "condition": "needs_synthesis",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "aec8f622",
+          "seq": 16
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295224+00:00",
+          "rule_id": "flow[3]",
+          "event": "goal_completed",
+          "condition": "needs_review",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "script exhausted"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "aec8f622",
+          "seq": 17
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295239+00:00",
+          "rule_id": "flow[4]",
+          "event": "goal_completed",
+          "condition": "needs_qa",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "script exhausted"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "aec8f622",
+          "seq": 18
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295255+00:00",
+          "rule_id": "flow[5]",
+          "event": "goal_completed",
+          "condition": "needs_feedback",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "aec8f622",
+          "seq": 19
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295268+00:00",
+          "rule_id": "flow[8]",
+          "event": "goal_completed",
+          "condition": "needs_human",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "aec8f622",
+          "seq": 20
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295285+00:00",
+          "rule_id": "flow[9]",
+          "event": "dag_idle",
+          "condition": "needs_human",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": null,
+          "seq": 21
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295297+00:00",
+          "rule_id": "flow[10]",
+          "event": "dag_idle",
+          "condition": "needs_feedback",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": null,
+          "seq": 22
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.295308+00:00",
+          "rule_id": "flow[11]",
+          "event": "dag_idle",
+          "condition": "job_complete",
+          "guard_result": {
+            "matched": true,
+            "confidence": 1.0,
+            "reasoning": "scripted bool"
+          },
+          "builtin": "complete_job",
+          "builtin_result": "success",
+          "goal_id": null,
+          "seq": 23
+        }
+      ],
+      "evaluated_at": "2026-08-10T10:59:37.295620+00:00",
+      "scenario": "autoresearch-happy"
+    },
+    {
+      "job_id": "1c6033b3",
+      "record_count": 10,
+      "fired_builtins": [
+        "decompose_parallel",
+        "pause_for_user",
+        "complete_job"
+      ],
+      "expected_builtins": [
+        "decompose_parallel",
+        "pause_for_user",
+        "complete_job"
+      ],
+      "builtins_match_expected": true,
+      "records": [
+        {
+          "timestamp": "2026-08-10T10:59:37.298604+00:00",
+          "rule_id": "flow[0]",
+          "event": "job_start",
+          "condition": null,
+          "guard_result": {
+            "matched": true,
+            "confidence": 1.0,
+            "reasoning": "no when clause"
+          },
+          "builtin": "decompose_parallel",
+          "builtin_result": "success",
+          "goal_id": null,
+          "seq": 0
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.298665+00:00",
+          "rule_id": "flow[1]",
+          "event": "goal_completed",
+          "condition": "ready_to_synthesize",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "c4eecaf8",
+          "seq": 1
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.298677+00:00",
+          "rule_id": "flow[2]",
+          "event": "goal_completed",
+          "condition": "needs_synthesis",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "c4eecaf8",
+          "seq": 2
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.298687+00:00",
+          "rule_id": "flow[3]",
+          "event": "goal_completed",
+          "condition": "needs_review",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "c4eecaf8",
+          "seq": 3
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.298697+00:00",
+          "rule_id": "flow[4]",
+          "event": "goal_completed",
+          "condition": "needs_qa",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "c4eecaf8",
+          "seq": 4
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.298706+00:00",
+          "rule_id": "flow[5]",
+          "event": "goal_completed",
+          "condition": "needs_feedback",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": "c4eecaf8",
+          "seq": 5
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.298715+00:00",
+          "rule_id": "flow[8]",
+          "event": "goal_completed",
+          "condition": "needs_human",
+          "guard_result": {
+            "matched": true,
+            "confidence": 1.0,
+            "reasoning": "scripted bool"
+          },
+          "builtin": "pause_for_user",
+          "builtin_result": "success",
+          "goal_id": "c4eecaf8",
+          "seq": 6
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.298796+00:00",
+          "rule_id": "flow[9]",
+          "event": "dag_idle",
+          "condition": "needs_human",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": null,
+          "seq": 7
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.298805+00:00",
+          "rule_id": "flow[10]",
+          "event": "dag_idle",
+          "condition": "needs_feedback",
+          "guard_result": {
+            "matched": false,
+            "confidence": 1.0,
+            "reasoning": "no script for condition"
+          },
+          "builtin": null,
+          "builtin_result": null,
+          "goal_id": null,
+          "seq": 8
+        },
+        {
+          "timestamp": "2026-08-10T10:59:37.298815+00:00",
+          "rule_id": "flow[11]",
+          "event": "dag_idle",
+          "condition": "job_complete",
+          "guard_result": {
+            "matched": true,
+            "confidence": 1.0,
+            "reasoning": "scripted bool"
+          },
+          "builtin": "complete_job",
+          "builtin_result": "success",
+          "goal_id": null,
+          "seq": 9
+        }
+      ],
+      "evaluated_at": "2026-08-10T10:59:37.298877+00:00",
+      "scenario": "autoresearch-human-gate"
+    }
+  ],
+  "passed": true,
+  "scenario_count": 2
+}

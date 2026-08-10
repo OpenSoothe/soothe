@@ -551,7 +551,14 @@ class RailBuiltinExecutor:
         job_id: str,
         trigger_goal_id: str | None = None,
     ) -> BuiltinResult:
-        """Dispatch a catalog verb: prefer YAML ``do:`` recipe, else ``_do_*``."""
+        """Dispatch a catalog verb: prefer YAML ``do:`` recipe, else ``_do_*``.
+
+        Rail-id-aware native dispatch (IG-717): when ``state.rail_id`` matches
+        a rail with a native exec module, route specific verbs to that module
+        before the generic ``_do_*`` fallback. Currently only ``autoresearch``
+        has a native ``plan_and_implement`` (research synthesis plan+writer
+        instead of code planning+implementation).
+        """
         try:
             if builtin == "plan_milestones":
                 await self.ingest_wave_plan(job_id)
@@ -569,6 +576,17 @@ class RailBuiltinExecutor:
 
                 return await RecipeRunner(self).run(
                     steps, job_id=job_id, trigger_goal_id=trigger_goal_id
+                )
+            # Native rail dispatch: autoresearch plan_and_implement.
+            if (
+                state is not None
+                and state.rail_id == "autoresearch"
+                and builtin == "plan_and_implement"
+            ):
+                from soothe.autopilot.rail.autoresearch_exec import AutoresearchExec
+
+                return await AutoresearchExec(self).plan_and_implement(
+                    job_id=job_id, trigger_goal_id=trigger_goal_id
                 )
             handler = getattr(self, f"_do_{builtin}", None)
             if handler is None:

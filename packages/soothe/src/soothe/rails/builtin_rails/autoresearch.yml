@@ -1,0 +1,169 @@
+id: autoresearch
+version: "1.0"
+
+summary: |
+  Iterative autonomous research loop: plan research questions → gather web
+  evidence → reflect on sufficiency → synthesize adaptive report, looping
+  find→optimize→verify until acceptance. Parallel scouts explore independent
+  sub-questions; a dedicated synthesizer composes the final report. Pause for a
+  human only when the topic is blocked or needs scope clarification.
+
+applies_when: |
+  Produce a research report (external facts, comparisons, how-tos, landscape
+  survey, or fact-check) that requires iterative web search and evidence
+  gathering with reflection on sufficiency. Not for local codebase analysis
+  (use feature-dev / spike) or academic literature review (use academic
+  research tooling when available).
+
+fanout:
+  require_plan: true
+
+verbs:
+  decompose_parallel:
+    do:
+      - spawn_goal:
+          id: scout-plan
+          role: planner
+          tags: [research, planning, questions]
+          priority: 80
+          brief: |
+            Research question planner for job {job_id}. Decompose the research
+            topic into 2–4 independent sub-questions, each with one focused
+            web-search query and a done check (what evidence answers it).
+            Partition only into independent domains — no overlapping search
+            intent that would make parallel scouts duplicate effort. Each
+            sub-question must be self-contained (scope, query, evidence bar).
+            Do not search or synthesize here; produce the sub-question list only.
+
+            REQUIRED deliverable: a flat JSON object with a "sub_questions" list
+            (each entry: {"question", "search_query", "scope", "done_check"}).
+            No nested trees. independence must be a plain string describing why
+            the sub-questions are disjoint.
+      - wire_deps:
+          root_waits_on: self
+
+  spawn_feedback_cycle:
+    do:
+      - gate:
+          unless: acceptance_met
+          max: feedback_rounds
+          no_inflight: feedback
+      - bump: feedback_round
+      - spawn_goal:
+          id: diagnose
+          role: researcher
+          tags: [feedback, research, diagnose, "feedback-${feedback_round}"]
+          priority: 82
+          brief: |
+            Research gap diagnosis round {feedback_round} for job {job_id}.
+            Review gathered evidence against the research acceptance contract.
+            Identify unanswered sub-questions, thin source coverage, missing
+            comparisons, or contradictory findings. Produce a concrete gap list
+            with targeted follow-up queries. Do not synthesize the final report
+            here; gather only.
+      - spawn_goal:
+          id: optimize
+          role: researcher
+          tags: [feedback, research, gather, "feedback-${feedback_round}"]
+          priority: 78
+          brief: |
+            Research gather round {feedback_round} for job {job_id}. Execute
+            targeted web searches for the diagnosed gaps. Crawl discovered
+            URLs. Reflect on whether new evidence closes the gaps. Prefer
+            minimal, focused queries; do not broaden scope beyond the gap list.
+      - spawn_goal:
+          id: verify
+          role: qa
+          tags: [feedback, research, verify, "feedback-${feedback_round}"]
+          priority: 85
+          brief: |
+            Research sufficiency verify round {feedback_round} for job {job_id}.
+            Re-check gathered evidence against the research acceptance contract
+            and each sub-question done check. Report remaining gaps; do not
+            re-gather. State whether evidence is sufficient to synthesize.
+
+  review:
+    brief: |
+      Research synthesis review for job {job_id}. Review the gathered evidence
+      and draft adaptive report sections for coverage, accuracy, and source
+      quality. Record findings; block on factual gaps or unsupported claims; do
+      not re-gather web sources here.
+
+  qa_verify:
+    brief: |
+      Research report QA for job {job_id}. Verify cited URLs resolve, claims
+      trace to crawled sources, and the Scope banner (public-web-only) is
+      present. Report pass/fail with fresh evidence checks — never claim success
+      from prior runs.
+
+conditions:
+  ready_to_synthesize: |
+    All research gather/scout goals completed and their findings are sufficient
+    to synthesize an adaptive report covering the acceptance contract.
+  needs_synthesis: |
+    Evidence gathering is complete (or a feedback verify confirmed sufficiency);
+    the adaptive report must be composed from gathered sources.
+  needs_feedback: |
+    Research sufficiency verify finished but acceptance is not yet met —
+    another find→gather→verify round should close remaining evidence gaps.
+  needs_review: |
+    A synthesis draft completed and the report should be reviewed before close.
+  needs_qa: |
+    Synthesis review passed or was skipped by policy, and the report QA
+    (source checks, Scope banner, claim tracing) should run.
+  needs_human: |
+    Research is blocked: topic is ambiguous, sources are exhausted without a
+    verdict, or the request needs scope clarification before continuing.
+  branch_is_stuck: |
+    A research gather or synthesis goal failed, or evidence shows the approach
+    cannot satisfy the acceptance contract.
+  job_complete: |
+    Synthesis, review, and QA passed and no pending research goals remain.
+
+flow:
+  - event: job_start
+    then: decompose_parallel
+
+  - event: goal_completed
+    when: ready_to_synthesize
+    then: plan_and_implement
+
+  - event: goal_completed
+    when: needs_synthesis
+    then: plan_and_implement
+
+  - event: goal_completed
+    when: needs_review
+    then: review
+
+  - event: goal_completed
+    when: needs_qa
+    then: qa_verify
+
+  - event: goal_completed
+    when: needs_feedback
+    then: spawn_feedback_cycle
+
+  - event: goal_failed
+    when: needs_feedback
+    then: spawn_feedback_cycle
+
+  - event: goal_failed
+    when: branch_is_stuck
+    then: retry_branch
+
+  - event: goal_completed
+    when: needs_human
+    then: pause_for_user
+
+  - event: dag_idle
+    when: needs_human
+    then: pause_for_user
+
+  - event: dag_idle
+    when: needs_feedback
+    then: spawn_feedback_cycle
+
+  - event: dag_idle
+    when: job_complete
+    then: complete_job

@@ -33,6 +33,21 @@ CE_RAIL_BUILTINS: frozenset[str] = frozenset(
     }
 )
 
+# Builtin rail ids shipped under ``builtin_rails/``. Rails are discovered by
+# scanning the directory, so this set is for programmatic checks only (e.g.
+# native dispatch routing, test assertions), not for catalog loading.
+BUILTIN_RAIL_IDS: frozenset[str] = frozenset(
+    {
+        "autoresearch",
+        "feature-dev",
+        "greenfield-system",
+        "hotfix",
+        "maker-checker",
+        "pr-review",
+        "spike",
+    }
+)
+
 
 class RailCatalogError(ValueError):
     """Raised when a rail document is missing or invalid."""

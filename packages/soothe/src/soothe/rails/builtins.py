@@ -5,6 +5,10 @@ Precedence (low → high, last wins on duplicate ``id``):
 1. Package ``soothe/rails/builtin_rails/``
 2. ``$SOOTHE_HOME/rails/`` (typically ``~/.soothe/rails/``)
 3. ``<workspace>/.soothe/rails/`` when a workspace is provided
+
+``BUILTIN_RAIL_IDS`` (the set of shipped builtin rail ids) lives in
+``soothe.rails.catalog`` to avoid a circular import (catalog already
+imports ``get_rails_paths`` from here).
 """
 
 from __future__ import annotations

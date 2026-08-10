@@ -18,40 +18,28 @@ fi
 
 python3 - "$LOCK" <<'PY'
 from pathlib import Path
+import re
 import sys
+
+MIRROR_HOSTS = ("mirrors.cloud.tencent.com", "pypi.tuna.tsinghua.edu.cn", "mirrors.aliyun.com")
+HOST_ALT = "|".join(re.escape(host) for host in MIRROR_HOSTS)
 
 lock = Path(sys.argv[1])
 text = lock.read_text()
-repls = (
-    (
-        "https://mirrors.cloud.tencent.com/pypi/packages/",
-        "https://files.pythonhosted.org/packages/",
-    ),
-    (
-        "https://pypi.tuna.tsinghua.edu.cn/packages/",
-        "https://files.pythonhosted.org/packages/",
-    ),
-    (
-        "https://mirrors.aliyun.com/pypi/packages/",
-        "https://files.pythonhosted.org/packages/",
-    ),
-    (
-        'registry = "https://mirrors.cloud.tencent.com/pypi/simple"',
-        'registry = "https://pypi.org/simple"',
-    ),
-    (
-        'registry = "https://pypi.tuna.tsinghua.edu.cn/simple"',
-        'registry = "https://pypi.org/simple"',
-    ),
-    (
-        'registry = "https://mirrors.aliyun.com/pypi/simple"',
-        'registry = "https://pypi.org/simple"',
-    ),
+# Mirrors serve the file store under varying prefixes (e.g. /pypi/packages/,
+# /yun/pypi/packages/), so match any prefix ahead of the packages/ segment.
+text = re.sub(
+    rf"https://(?:{HOST_ALT})/(?:[\w.-]+/)*packages/",
+    "https://files.pythonhosted.org/packages/",
+    text,
 )
-for old, new in repls:
-    text = text.replace(old, new)
+text = re.sub(
+    rf'registry = "https://(?:{HOST_ALT})/(?:[\w.-]+/)*simple/?"',
+    'registry = "https://pypi.org/simple"',
+    text,
+)
 lock.write_text(text)
-bad = [s for s in ("tuna.tsinghua", "mirrors.cloud.tencent", "mirrors.aliyun") if s in text]
+bad = sorted({host for host in MIRROR_HOSTS if host in text})
 if bad:
     raise SystemExit(f"rewrite_uv_lock_to_pypi: leftover mirror hosts: {bad}")
 PY

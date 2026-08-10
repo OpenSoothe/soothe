@@ -265,14 +265,31 @@ DEFAULT_VERB_BRIEFS: dict[str, str] = {
         "Record findings; block on design/security issues; do not "
         "re-implement features."
     ),
+    # Autoresearch rail defaults (defensive; YAML ``brief:`` overrides win).
+    # ``plan_and_implement`` is native-dispatched via autoresearch_exec when
+    # rail_id == "autoresearch", so this default only applies if a custom
+    # rail without a ``do:`` recipe or ``brief:`` override calls it.
+    "plan_and_implement": (
+        "Plan and implement for job {job_id}. Produce a concrete plan with "
+        "file paths, interfaces, and per-task acceptance, then implement "
+        "according to that plan. Stay within planned ownership."
+    ),
 }
 
 DEFAULT_VERB_TAGS: dict[str, list[str]] = {
     "plan_milestones": ["architecture", "planning", "milestones"],
+    # Autoresearch defaults (defensive; YAML overrides win).
+    "plan_and_implement": ["planning", "implementation"],
+    "review": ["review"],
+    "qa_verify": ["qa"],
 }
 
 DEFAULT_VERB_ROLES: dict[str, str] = {
     "plan_milestones": "planner",
+    # Autoresearch defaults (defensive; YAML overrides win).
+    "plan_and_implement": "planner",
+    "review": "checker",
+    "qa_verify": "qa",
 }
 
 
