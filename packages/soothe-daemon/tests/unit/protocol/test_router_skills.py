@@ -100,6 +100,7 @@ async def test_invoke_skill_response_then_queued_input(tmp_path: Any) -> None:
             get_session=AsyncMock(return_value=SimpleNamespace(subscriptions={loop_id}))
         )
         _thread_registry = SimpleNamespace(get_workspace=lambda _tid: None)
+        _persistence_manager = SimpleNamespace(get_loop_metadata=AsyncMock(return_value=None))
         _current_thread_id = "t-inv"
 
         async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
@@ -178,6 +179,7 @@ async def test_invoke_skill_forwards_clarification_mode(
             get_session=AsyncMock(return_value=SimpleNamespace(subscriptions={loop_id}))
         )
         _thread_registry = SimpleNamespace(get_workspace=lambda _tid: None)
+        _persistence_manager = SimpleNamespace(get_loop_metadata=AsyncMock(return_value=None))
         _current_thread_id = "t-mode"
 
         async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
@@ -200,3 +202,69 @@ async def test_invoke_skill_forwards_clarification_mode(
 
     queued = await asyncio.wait_for(q.get(), timeout=2.0)
     assert queued["clarification_mode"] == expected
+
+
+@pytest.mark.asyncio
+async def test_invoke_skill_uses_loop_metadata_workspace_before_dispatch(
+    tmp_path: Any,
+) -> None:
+    """Skills resolve on a freshly created loop that was never dispatched.
+
+    Before the first ``loop_input`` the thread registry has no workspace for
+    the loop, so ``invoke_skill`` must fall back to ``current_workspace`` stored
+    in loop metadata at ``loop_new`` time — otherwise workspace-local skills
+    (``.agents/skills/``) are not found and the call fails with SKILL_NOT_FOUND.
+    """
+    ws = tmp_path / "project"
+    agents_skills = ws / ".agents" / "skills" / "local_skill"
+    agents_skills.mkdir(parents=True)
+    (agents_skills / "SKILL.md").write_text(
+        "---\nname: local_skill\ndescription: local\n---\n# Body\n",
+        encoding="utf-8",
+    )
+    cfg = SootheConfig()
+
+    sent: list[tuple[Any, dict[str, Any]]] = []
+    q: asyncio.Queue = asyncio.Queue()
+    loop_id = "loop-fresh"
+
+    async def enqueue(_lid: str, msg: dict[str, Any]) -> None:
+        await q.put(msg)
+
+    class _FakeDaemon:
+        _config = cfg
+        _active_threads: set[Any] = set()
+        _runner = SimpleNamespace(current_thread_id="t-fresh")
+        _loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
+        _session_manager = SimpleNamespace(
+            get_session=AsyncMock(return_value=SimpleNamespace(subscriptions={loop_id}))
+        )
+        # Thread registry empty: loop created but never dispatched.
+        _thread_registry = SimpleNamespace(get_workspace=lambda _tid: None)
+        _persistence_manager = SimpleNamespace(
+            get_loop_metadata=AsyncMock(
+                return_value={"current_workspace": str(ws)},
+            )
+        )
+        _current_thread_id = "t-fresh"
+
+        async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
+            sent.append((client_id, msg))
+
+    router = _make_router(_FakeDaemon())
+    await router.dispatch(
+        "client-fresh",
+        {
+            "proto": "1",
+            "type": "request",
+            "method": "invoke_skill",
+            "params": {"skill": "local_skill", "args": ""},
+            "id": "rid-fresh",
+        },
+    )
+
+    assert sent
+    resp = next(m[1] for m in sent if m[1].get("type") == "response")
+    assert resp.get("id") == "rid-fresh"
+    # The skill must resolve (not SKILL_NOT_FOUND) via the metadata fallback.
+    assert resp.get("result", {}).get("echo", {}).get("skill_name") == "local_skill"

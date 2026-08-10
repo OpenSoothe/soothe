@@ -1147,6 +1147,20 @@ class MessageRouter:
             ws_path = d._thread_registry.get_workspace(current_thread_id or loop_id)
             if ws_path:
                 workspace = str(ws_path)
+            else:
+                # Thread registry not populated yet (before first loop_input);
+                # read workspace from loop metadata set at loop_new time.
+                # Mirrors the fallback in _handle_skills_list so workspace-local
+                # skills resolve on freshly created, not-yet-dispatched loops.
+                persistence = getattr(d, "_persistence_manager", None)
+                if persistence is not None:
+                    loop_meta = await persistence.get_loop_metadata(loop_id)
+                    if loop_meta:
+                        raw_ws = loop_meta.get("current_workspace") or loop_meta.get(
+                            "client_workspace"
+                        )
+                        if isinstance(raw_ws, str) and raw_ws.strip():
+                            workspace = raw_ws.strip()
 
         meta = resolve_skill_directory(d._config, raw_skill, workspace)
         if meta is None:
