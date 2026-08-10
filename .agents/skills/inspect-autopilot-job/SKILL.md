@@ -50,6 +50,8 @@ sqlite3 ~/.soothe/data/databases/persist.db \
 ```text
 1. Resolve job id (C0)
 2. Live DAG + rail_state annotations (structure)
+   └─ 1a. CE goal DAG analysis + digraph (required)  ← topology, cycles,
+        orphans, root-wiring, ready/blocked, critical path, DOT/mermaid/ASCII
 3. Goal execution history (job_loops + phases)  ← required
 4. Parallelism scorecard
 5. Rail conformance (builtin seq vs rail YAML)
@@ -88,6 +90,38 @@ For each goal with `id == JOB` or `parent_id == JOB` (plus orphans under the job
 Also list **pruned** annotations (`branch_status=pruned`) even if absent from CLI tree — they explain `retry_maker` history.
 
 **Report a mermaid or ASCII DAG** of the live pipeline (root gate → phases).
+
+#### 1a. CE goal DAG analysis + digraph (required)
+
+Run the [reference.md](reference.md) **CE goal DAG: analysis + digraph** script
+on the `autopilot:goals:snapshot` subtree for the job. It produces, in one pass:
+
+| Analysis | What it surfaces |
+|----------|-----------------|
+| **Topology** | Kahn-ranked layers (L0 = roots, Lk = max deps depth); fan-out per goal; leaf set |
+| **Cycles** | `depends_on` edges back into an ancestor (DFS gray/black) — these **deadlock the CE scheduler**; report the exact node cycle |
+| **Orphans / unreachable** | goals with no path to the job root (pruned-branch leftovers, rewritten parents — stale DAG clutter) |
+| **Root-wiring violations** | child `depends_on` the **active** job root (implement pending forever); root `depends_on` a **non-terminal** child (inverted gate) |
+| **Ready / blocked** | pending goals split into ready (all deps terminal, prefer completed) vs blocked, listing each blocker id + status |
+| **Critical path** | longest chain of uncompleted `depends_on` → lower bound on remaining serial work to job completion |
+| **Digraph** | Graphviz **DOT** (status-colored nodes, role/rail labels, color-coded edges: green=completed dep, red=failed, black=unmet) + a mermaid `graph LR` and ASCII tree fallback |
+
+Render the DOT block with `dot -Tsvg` (or `-Tplain` for a terminal layout) to
+get a visual diagram. The ASCII tree is the fallback when Graphviz is absent.
+
+**Must flag in the report** (these are defects, not by-design serial gates):
+
+- Any **cycle** → CE can never schedule it; needs a `wire_depends`/`unwire`
+  dag_op or manual dep fix.
+- Any **root-wiring violation** (child → active root; root → non-terminal child).
+- **Orphans** under the job → health should prune; if they hold
+  `retry_maker` lineage, explain before recommending removal.
+- **Blocked** goals whose blockers are themselves **failed/cancelled** → they
+  will never unblock; needs reset, cancel, or rewire.
+- **Ready** goals sitting idle while the pool is empty → scheduler/dispatch
+  defect (see §3 parallelism), not a DAG defect.
+- **Critical path** depth ≫ 1 on non-terminal goals → remaining serial work;
+  pair with rail phase expectations (some serial depth is by-design).
 
 **Root wiring checks:**
 
@@ -238,6 +272,15 @@ Outcome; by-design serial phase vs defect; current phase; severity.
 ### Goal DAG
 ASCII/mermaid + table (id, role, status, deps, retries/sb/erc).
 Pruned / orphan notes.
+
+#### DAG analysis + digraph
+- Topology: layers, fan-out, leaves.
+- Cycles: list (deadlock) or none.
+- Orphans / unreachable: ids + why.
+- Root-wiring violations: child→root, root→non-terminal child.
+- Ready / blocked counts; blocked blockers.
+- Critical path: depth + top chain.
+- Rendered DOT digraph (or mermaid/ASCII fallback).
 
 ### Execution history
 #### Phase timeline
