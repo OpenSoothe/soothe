@@ -20,6 +20,7 @@ from textual.style import Style as TStyle
 
 from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_connection_error,
+    is_attach_idle_timeout,
     is_daemon_connection_error,
 )
 from soothe_cli.cli.execution.daemon_errors import (
@@ -858,10 +859,19 @@ class _ExecutionMixin:
             await self._mount_message(AppMessage("Agent not configured for this session."))
 
     async def _daemon_loop_is_live(self) -> bool:
-        """Return True when the subscribed daemon loop is already executing.
+        """Return True when the subscribed daemon loop has a live runner now.
 
         Used to attach with ``skip_daemon_send_turn`` instead of enqueueing a
         duplicate ``loop_input`` (stale-reader / ghost follow-on goals).
+
+        The active-runner signal (``active_runner``) is authoritative: a loop's
+        metadata ``status`` field can lag ``"running"`` for up to the 5-minute
+        reconciliation window after its runner exits, so status alone produces
+        false positives that leave the TUI attached to a phantom follow-on turn
+        for minutes. When the daemon exposes ``active_runner`` we require it;
+        only as a fallback for daemons without the field do we fall back to the
+        status check, and even then we treat a ``None`` (unknown) signal as
+        not-live to avoid the stale-status hang.
         """
         session = self._daemon_session
         state = self._session_state
@@ -871,18 +881,27 @@ class _ExecutionMixin:
         if not loop_id:
             return False
         try:
-            history = await session.fetch_loop_history(loop_id)
-            if getattr(history, "live_goal_index", None) is not None:
-                return True
-        except Exception:
-            logger.debug("live probe via fetch_loop_history failed", exc_info=True)
-        try:
             exec_state = await session.fetch_execution_state(loop_id)
-            status = str(getattr(exec_state, "status", "") or "").strip().lower()
-            return status == "running"
         except Exception:
             logger.debug("live probe via fetch_execution_state failed", exc_info=True)
             return False
+        status = str(getattr(exec_state, "status", "") or "").strip().lower()
+        if status != "running":
+            return False
+        active_runner = getattr(exec_state, "active_runner", None)
+        if active_runner is True:
+            return True
+        # ``None`` = daemon older than the field, or probe failed. Only then do
+        # we consult the card-ledger live-goal index — and only as a weak hint
+        # that still requires status=="running" (already checked above).
+        if active_runner is None:
+            try:
+                history = await session.fetch_loop_history(loop_id)
+                if getattr(history, "live_goal_index", None) is not None:
+                    return True
+            except Exception:
+                logger.debug("live probe via fetch_loop_history failed", exc_info=True)
+        return False
 
     async def _run_agent_task(
         self,
@@ -967,23 +986,40 @@ class _ExecutionMixin:
                             pass
                     raise
         except Exception as e:  # Resilient tool rendering
-            logger.exception("Agent execution failed")
-            if is_daemon_connection_error(e):
-                display_err = friendly_daemon_connection_error(e)
-                error_title = "Daemon connection error"
+            # Attach-only idle timeout is benign: the prior turn had already
+            # completed and no follow-on turn materialized. Surface it as an
+            # informational message (not a red error) and fall through to
+            # normal cleanup so the TUI returns to a ready state.
+            if is_attach_idle_timeout(e):
+                logger.info("Attach-only idle timeout: no follow-on turn; returning to ready")
+                try:
+                    await self._mount_message(AppMessage(_friendly_agent_execution_error(e)))
+                except Exception:
+                    logger.debug(
+                        "Could not mount attach-timeout message (app closing?)", exc_info=True
+                    )
             else:
-                display_err = _friendly_agent_execution_error(e)
-                error_title = "Agent error"
-            # Ensure any in-flight tool calls don't remain stuck in "Running..."
-            # when streaming aborts before tool results arrive.
-            if self._ui_adapter:
-                self._ui_adapter.finalize_pending_tools_with_error(f"{error_title}: {display_err}")
-                self._ui_adapter.finalize_pending_steps_with_error(f"{error_title}: {display_err}")
-            await self._try_recover_goal_completion_from_ledger()
-            try:
-                await self._mount_message(ErrorMessage(f"{error_title}. {display_err}"))
-            except Exception:
-                logger.debug("Could not mount error message (app closing?)", exc_info=True)
+                logger.exception("Agent execution failed")
+                if is_daemon_connection_error(e):
+                    display_err = friendly_daemon_connection_error(e)
+                    error_title = "Daemon connection error"
+                else:
+                    display_err = _friendly_agent_execution_error(e)
+                    error_title = "Agent error"
+                # Ensure any in-flight tool calls don't remain stuck in "Running..."
+                # when streaming aborts before tool results arrive.
+                if self._ui_adapter:
+                    self._ui_adapter.finalize_pending_tools_with_error(
+                        f"{error_title}: {display_err}"
+                    )
+                    self._ui_adapter.finalize_pending_steps_with_error(
+                        f"{error_title}: {display_err}"
+                    )
+                await self._try_recover_goal_completion_from_ledger()
+                try:
+                    await self._mount_message(ErrorMessage(f"{error_title}. {display_err}"))
+                except Exception:
+                    logger.debug("Could not mount error message (app closing?)", exc_info=True)
         finally:
             # Merge turn stats before cleanup — _cleanup_agent_task may raise
             # during teardown (widget removal on a torn-down DOM), and stats

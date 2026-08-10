@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- TUI no longer hangs on a stale "live" loop probe after a turn completes. The
+  post-completion re-attach guard (`_daemon_loop_is_live`) now requires the
+  daemon's authoritative `active_runner` signal, so a loop whose metadata
+  `status` still reads `"running"` (lagging the 5-minute reconciliation) can't
+  leave the thinking row spinning for minutes. As a backstop, the attach-only
+  turn read (`iter_turn_chunks(idle_timeout_s=…)`) raises after 45s with no
+  real content, surfacing a benign "no follow-on turn" message instead of an
+  indefinite spin.
+
+### Changed
+- Raise `soothe-client-python` floor to `>=1.0.14` in soothe-cli and
+  soothe-daemon (active-runner signal + attach-only idle timeout).
+
 ## [v0.10.3] - 2026-08-10
 
 ### Removed

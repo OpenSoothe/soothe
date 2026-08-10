@@ -535,6 +535,15 @@ _EXECUTE_WAVE_UI_COALESCE_SEC = 0.2
 _CHUNK_YIELD_INTERVAL = 12
 _CHUNK_YIELD_BUDGET_SEC = 0.016
 
+# Hard cap on how long an attach-only read (``skip_daemon_send_turn``) waits
+# for the first progress event before giving up. A stale ``live`` probe can
+# leave the TUI attached to a phantom follow-on turn whose runner already
+# exited; without this bound the thinking row spins for minutes until the
+# daemon's 5-minute status reconciliation catches up. ``TimeoutError`` raised
+# here is caught by the normal agent-execution error path, which falls back to
+# ``_process_next_from_queue``.
+_ATTACH_ONLY_IDLE_TIMEOUT_S = 45.0
+
 
 class TurnToolUiCoalescer:
     """Batch tool-card repaints, dedupe wire kwargs, and yield during dense streams."""
@@ -3139,7 +3148,9 @@ async def execute_task_textual(
         adapter._clarification_answers_pending = None
     try:
         if skip_daemon_send_turn:
-            chunk_source = daemon_session.iter_turn_chunks()
+            chunk_source = daemon_session.iter_turn_chunks(
+                idle_timeout_s=_ATTACH_ONLY_IDLE_TIMEOUT_S
+            )
         else:
             subagent_name, routed_text = parse_subagent_from_input(final_input)
             if subagent_name is None and sticky_preferred_subagent:

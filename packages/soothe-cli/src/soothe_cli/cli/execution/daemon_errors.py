@@ -23,6 +23,15 @@ _FRIENDLY_DAEMON_CONNECTION_LOST = (
     "Send your message again to reconnect and continue this loop."
 )
 
+# Partial match for the attach-only idle timeout raised by ``iter_turn_chunks``
+# when a stale ``live`` probe attaches to a loop whose runner already exited.
+ATTACH_IDLE_TIMEOUT_MARKER = "attach window"
+
+_FRIENDLY_ATTACH_IDLE_TIMEOUT = (
+    "No follow-on turn started within the attach window; the prior turn had "
+    "already completed. Ready for your next message."
+)
+
 
 def is_daemon_connection_error(exc: BaseException | str) -> bool:
     """Return whether an error indicates the daemon WebSocket is unavailable."""
@@ -51,6 +60,8 @@ def friendly_daemon_execution_error(exc: BaseException | str) -> str:
     """Map known daemon failures to concise, actionable copy."""
     if is_daemon_connection_error(exc):
         return _FRIENDLY_DAEMON_CONNECTION_LOST
+    if is_attach_idle_timeout(exc):
+        return _FRIENDLY_ATTACH_IDLE_TIMEOUT
     if isinstance(exc, RuntimeError) and DAEMON_WORKER_SUBPROCESS_LOST in str(exc):
         return _FRIENDLY_WORKER_SUBPROCESS_LOST
     if isinstance(exc, RuntimeError) and DAEMON_WORKER_THREAD_LOST in str(exc):
@@ -73,3 +84,12 @@ def is_daemon_worker_thread_lost(exc: BaseException | str) -> bool:
     """Return whether an error indicates a pool worker thread exited mid-query."""
     text = str(exc)
     return DAEMON_WORKER_THREAD_LOST in text
+
+
+def is_attach_idle_timeout(exc: BaseException | str) -> bool:
+    """Return whether an error is the attach-only idle timeout.
+
+    Raised by ``iter_turn_chunks`` when a stale ``live`` probe attached to a
+    loop whose runner had already exited (no follow-on turn materialized).
+    """
+    return ATTACH_IDLE_TIMEOUT_MARKER in str(exc)

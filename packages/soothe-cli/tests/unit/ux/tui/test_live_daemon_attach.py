@@ -14,7 +14,13 @@ from soothe_cli.tui.app._execution import _ExecutionMixin
 from soothe_cli.tui.app._module_init import QueuedMessage
 
 
-def _execution_app(*, live: bool = False) -> Any:  # noqa: ANN401
+def _execution_app(
+    *,
+    live: bool = False,
+    # ``active_runner`` controls the authoritative liveness signal. ``None``
+    # mimics a daemon that predates the field (falls back to live_goal_index).
+    active_runner: bool | None = None,
+) -> Any:  # noqa: ANN401
     app = object.__new__(_ExecutionMixin)
     app._ui_adapter = SimpleNamespace()
     app._daemon_session = SimpleNamespace(
@@ -23,7 +29,10 @@ def _execution_app(*, live: bool = False) -> Any:  # noqa: ANN401
             return_value=SimpleNamespace(live_goal_index=0 if live else None)
         ),
         fetch_execution_state=AsyncMock(
-            return_value=SimpleNamespace(status="running" if live else "idle")
+            return_value=SimpleNamespace(
+                status="running" if live else "idle",
+                active_runner=active_runner,
+            )
         ),
     )
     app._assistant_id = "soothe"
@@ -67,7 +76,34 @@ async def test_daemon_loop_is_live_uses_live_goal_index() -> None:
     app = _execution_app(live=True)
     assert await app._daemon_loop_is_live() is True
     app._daemon_session.fetch_loop_history.return_value = SimpleNamespace(live_goal_index=None)
-    app._daemon_session.fetch_execution_state.return_value = SimpleNamespace(status="idle")
+    app._daemon_session.fetch_execution_state.return_value = SimpleNamespace(
+        status="idle", active_runner=None
+    )
+    assert await app._daemon_loop_is_live() is False
+
+
+@pytest.mark.asyncio
+async def test_daemon_loop_is_live_requires_active_runner_when_present() -> None:
+    """status=running but active_runner=False → not live (stale metadata)."""
+    app = _execution_app(live=True, active_runner=False)
+    assert await app._daemon_loop_is_live() is False
+
+
+@pytest.mark.asyncio
+async def test_daemon_loop_is_live_true_when_active_runner() -> None:
+    """status=running and active_runner=True → live, even without cards."""
+    app = _execution_app(live=True, active_runner=True)
+    # No live cards, but active_runner is authoritative.
+    app._daemon_session.fetch_loop_history.return_value = SimpleNamespace(live_goal_index=None)
+    assert await app._daemon_loop_is_live() is True
+
+
+@pytest.mark.asyncio
+async def test_daemon_loop_is_live_active_runner_false_overrides_cards() -> None:
+    """Even if live_goal_index is set, active_runner=False wins (not live)."""
+    app = _execution_app(live=True, active_runner=False)
+    # live_goal_index would say live, but the runner is gone.
+    app._daemon_session.fetch_loop_history.return_value = SimpleNamespace(live_goal_index=2)
     assert await app._daemon_loop_is_live() is False
 
 

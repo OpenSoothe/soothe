@@ -2573,6 +2573,24 @@ class MessageRouter:
             if isinstance(completed, (list, tuple, set)):
                 step_index = len(completed)
 
+        # Active-runner signal so clients can distinguish a loop whose
+        # ``status`` is still ``"running"`` in metadata (lagging the 5-minute
+        # reconciliation) from one with a live runner task actually bound now.
+        # Mirrors the reconciliation's ``_active_stream_loop_ids`` / query
+        # engine ``_active_runners`` checks (server/core.py:1299,
+        # runtime/auto_resume.py:_loop_has_active_runner).
+        active_runner = False
+        try:
+            from soothe_daemon.runtime.auto_resume import _loop_has_active_runner
+
+            active_runner = _loop_has_active_runner(d, loop_id_str)
+        except Exception:
+            logger.debug(
+                "execution_state_fetch: active_runner probe failed for %s",
+                loop_id_str,
+                exc_info=True,
+            )
+
         payload = _serialize_for_json(
             {
                 "loop_id": loop_id_str,
@@ -2580,6 +2598,7 @@ class MessageRouter:
                 "step_index": step_index,
                 "iteration": iteration,
                 "status": loop_status,
+                "active_runner": active_runner,
             }
         )
         await self._send_response(client_id, request_id, payload)
