@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    # First-party: sdk is a workspace submodule; nano is PyPI-only.
+    # First-party: sdk and nano are PyPI-only dependencies.
     "soothe-sdk>=1.0.8,<2.0.0",
     "soothe-nano>=1.1.8,<2.0.0",
     # Host-owned runtime (StrangeLoop / config / identity / checkpointers)

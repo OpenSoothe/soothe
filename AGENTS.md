@@ -52,15 +52,15 @@ Enforcement for owned packages: `scripts/check_module_import_boundaries.sh`
 (wired into `./scripts/verify_finally.sh`).
 
 **This monorepo owns** `soothe`, `soothe-daemon`, and `soothe-cli` only.
-Submodules (`soothe-sdk`, `client/*`) are **consumed as code** — do **not**
-format, lint, test, or release them from this repo. `soothe-nano` and
+Submodules (`client/*`) are **consumed as code** — do **not**
+format, lint, test, or release them from this repo. `soothe-nano`, `soothe-sdk`, and
 `soothe-deepagents` are **PyPI dependencies** (maintain/release in their own
 repositories).
 
 #### Dependency DAG (allowed direction only)
 
 ```text
-soothe-sdk            ← shared contracts (submodule; leaf)
+soothe-sdk            ← shared contracts (PyPI; leaf)
 soothe-deepagents     ← deepagents fork (PyPI; leaf)
         ↓
 soothe-nano           ← Coding CoreAgent (PyPI)
@@ -78,7 +78,7 @@ soothe-cli            ← Typer + Textual TUI                             ← OW
 
 | Concern | Package |
 |---------|---------|
-| Shared events, wire, display, plugin contracts, protocols | `soothe-sdk` (external submodule) |
+| Shared events, wire, display, plugin contracts, protocols | `soothe-sdk` (PyPI; mirasoth/soothe-sdk) |
 | Coding CoreAgent, skills/MCP/backends used in-proc | `soothe-nano` (PyPI; mirasoth/soothe-nano) |
 | StrangeLoop, Autopilot, Context Engine, cron, identity, host runner | `soothe` |
 | Process lifecycle, channels, HTTP/WS server, admin IO | `soothe-daemon` |
@@ -139,7 +139,7 @@ packages/
 └── soothe-cli/         # OWNED — Typer CLI + Textual TUI
 
 # Submodules (consume only — format/lint/test/release in their own repos):
-#   packages/soothe-sdk      mirasoth/soothe-sdk
+
 #   client/{python,go,typescript,rust}
 # PyPI-only (not vendored here): soothe-nano, soothe-deepagents
 ```

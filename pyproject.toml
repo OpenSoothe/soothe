@@ -6,7 +6,6 @@ description = "Soothe monorepo workspace (meta-package, no dependencies)"
 # python_full_version==3.14.* + win32; CI matrix is 3.12/3.13.
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    "soothe-sdk",
     "soothe-nano",
     "soothe-client-python",
     "soothe-cli",
@@ -30,7 +29,6 @@ url = "https://pypi.org/simple"
 default = true
 
 [tool.uv.sources]
-soothe-sdk = { workspace = true }
 # soothe-nano is a PyPI dependency (not a workspace member / submodule).
 soothe-client-python = { workspace = true }
 soothe-cli = { workspace = true }

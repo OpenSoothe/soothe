@@ -10,6 +10,3 @@
 [submodule "client/rust"]
 	path = client/rust
 	url = git@github.com:mirasoth/soothe-client-rust.git
-[submodule "packages/soothe-sdk"]
-	path = packages/soothe-sdk
-	url = git@github.com:mirasoth/soothe-sdk.git

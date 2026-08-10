@@ -23,7 +23,7 @@ classifiers = [
 ]
 dependencies = [
     # First-party: soothe pulls nano; do not re-pin nano (avoids Docker co-install drift).
-    # Wire/events via soothe-sdk only — never soothe-client-python (client sits above daemon).
+    # Wire/events via soothe-sdk (PyPI) only — never soothe-client-python (client sits above daemon).
     "soothe>=0.9.15,<1.0.0",
     "soothe-sdk>=1.0.8,<2.0.0",
     # Daemon process surface
