@@ -78,13 +78,14 @@ def _goal_tree_running_live_stats(adapter: Any) -> dict[str, tuple[int, float | 
 class PlanQuickViewOverlay(Vertical):
     """In-flow plan panel above the thinking row and chat input.
 
-    Auto-shows when a goal plan is active and preferred visibility is on
-    (``CLIConfig.plan_panel_default_visible``, default False). Auto-hides when
-    there is no active plan. Toggle with ``Ctrl+t``. Mounted as a Screen
-    sibling between ``#chat`` and ``#bottom-app-container`` so expanding it
-    shrinks the transcript instead of floating over the sticky bottom chrome.
-    Snapshots in-memory goal tree state on the UI adapter (not mounted in the
-    main message list).
+    Auto-shows while a goal is executing (``_loop_executing()``) when the
+    preferred visibility is on (``CLIConfig.plan_panel_default_visible``,
+    default True). Auto-hides once the loop reaches a terminal footer
+    (``set_loop_finished`` / ``set_interrupted``). Toggle with ``Ctrl+t``.
+    Mounted as a Screen sibling between ``#chat`` and
+    ``#bottom-app-container`` so expanding it shrinks the transcript
+    instead of floating over the sticky bottom chrome. Snapshots in-memory
+    goal tree state on the UI adapter (not mounted in the main message list).
     """
 
     DEFAULT_CSS = """
@@ -137,6 +138,10 @@ class PlanQuickViewOverlay(Vertical):
     def __init__(self, *, default_visible: bool = False, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._preferred_visible: bool = default_visible
+        # True when the user explicitly opened the panel (Ctrl+t). Suppresses
+        # auto-hide-on-completion so a user can view a finished plan; cleared
+        # when the user closes it or a new executing goal appears.
+        self._user_pinned: bool = False
         self._refresh_timer: Timer | None = None
         self._header: Static | None = None
         self._content: Static | None = None
@@ -169,6 +174,9 @@ class PlanQuickViewOverlay(Vertical):
         if self.is_expanded:
             self.collapse(forget_preference=True)
             return
+        # User-initiated open: pin so auto-hide-on-completion is suppressed
+        # until the user closes it or a new executing goal appears.
+        self._user_pinned = True
         self._preferred_visible = True
         if get_live_goal_tree(self.app) is not None:
             self.expand()
@@ -192,6 +200,7 @@ class PlanQuickViewOverlay(Vertical):
         """
         if forget_preference:
             self._preferred_visible = False
+            self._user_pinned = False
         self.remove_class("-expanded")
         self.display = False
         if self._preferred_visible:
@@ -212,14 +221,33 @@ class PlanQuickViewOverlay(Vertical):
             self._refresh_timer = None
 
     def refresh_content(self) -> None:
-        """Sync visibility from the live goal tree and repaint when expanded."""
+        """Sync visibility from the live goal tree and repaint when expanded.
+
+        Lifecycle rules (preferred visibility on, the default):
+        - No live goal tree → hide.
+        - Executing goal (loop open, no terminal footer) → auto-expand.
+        - Completed/interrupted goal (terminal footer visible) → auto-hide,
+          unless the user pinned the panel open with Ctrl+t.
+        """
         tree = get_live_goal_tree(self.app)
         if tree is None:
             if self.is_expanded:
                 self.collapse()
             return
-        if self._preferred_visible and not self.is_expanded:
-            self.expand()
+        executing = tree._loop_executing()
+        if executing:
+            # New executing goal cancels any stale user pin from a prior plan.
+            self._user_pinned = False
+        if self._preferred_visible and executing and not self._user_pinned:
+            if not self.is_expanded:
+                self.expand()
+                return
+        elif not executing and not self._user_pinned:
+            # Goal finished (success/interrupted) — auto-hide. ``collapse``
+            # (forget_preference=False) keeps the refresh timer running so the
+            # panel re-shows when the next executing goal appears.
+            if self.is_expanded:
+                self.collapse()
             return
         if not self.is_expanded or self._content is None:
             return

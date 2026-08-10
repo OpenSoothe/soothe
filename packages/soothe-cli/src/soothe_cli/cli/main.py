@@ -217,11 +217,12 @@ def main(
         typer.Option(
             "--plan-panel/--no-plan-panel",
             help=(
-                "Auto-show the in-flow plan panel when a goal plan is active. "
-                "Ctrl+t toggles thereafter. Default: disabled."
+                "Auto-show the in-flow plan panel while a goal is executing "
+                "and hide it when the goal completes. Ctrl+t toggles "
+                "thereafter. Default: enabled."
             ),
         ),
-    ] = False,
+    ] = True,
     show_version: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--version", help="Show version and exit."),

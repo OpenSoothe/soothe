@@ -16,7 +16,7 @@ def test_load_config_returns_defaults_when_no_runtime_config() -> None:
     assert cfg.logging_level is None
     assert cfg.render_markdown is True
     assert cfg.markdown_theme == "match-app"
-    assert cfg.plan_panel_default_visible is False
+    assert cfg.plan_panel_default_visible is True
 
 
 def test_load_config_returns_runtime_config() -> None:
@@ -85,10 +85,10 @@ def test_global_cli_plan_panel_flag() -> None:
     reset_runtime_config()
     runner = CliRunner()
 
-    # Default is False
+    # Default is True (auto-show while executing)
     result = runner.invoke(app, ["help"])
     assert result.exit_code == 0
-    assert load_config().plan_panel_default_visible is False
+    assert load_config().plan_panel_default_visible is True
     reset_runtime_config()
 
     # --no-plan-panel disables it

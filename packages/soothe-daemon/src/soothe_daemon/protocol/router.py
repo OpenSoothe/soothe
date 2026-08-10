@@ -1025,9 +1025,12 @@ class MessageRouter:
         d = self._daemon
         from soothe_nano.skills.catalog import wire_entries_for_agent_config
 
-        # Use client's loop workspace if subscribed, otherwise cwd
-        workspace: str | None = None
-        loop_id = await self._client_subscribed_loop_id(client_id)
+        # Prefer explicit workspace param (RPC sidecar has no loop subscription),
+        # then fall back to client's subscribed loop workspace, then cwd.
+        workspace: str | None = msg.get("params", {}).get("workspace") or msg.get("workspace")
+        if not (isinstance(workspace, str) and workspace.strip()):
+            workspace = None
+        loop_id = None if workspace else await self._client_subscribed_loop_id(client_id)
         if loop_id:
             current_thread_id = getattr(d, "_current_thread_id", None)
             ws_path = d._thread_registry.get_workspace(current_thread_id or loop_id)

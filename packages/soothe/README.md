@@ -38,6 +38,7 @@ import asyncio
 from soothe.config import SootheConfig
 from soothe.runner import SootheRunner
 
+
 async def main() -> None:
     config = SootheConfig.from_yaml_file("~/.soothe/config/nano.yml")
     runner = SootheRunner(config)
@@ -47,6 +48,7 @@ async def main() -> None:
                 print(data)  # (message, metadata)
     finally:
         await runner.cleanup()
+
 
 asyncio.run(main())
 ```

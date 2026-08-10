@@ -299,9 +299,11 @@ def test_overlay_toggle_expands_and_collapses() -> None:
         overlay.toggle()
         assert overlay.is_expanded
         assert overlay._preferred_visible is True
+        assert overlay._user_pinned is True
         overlay.toggle()
         assert not overlay.is_expanded
         assert overlay._preferred_visible is False
+        assert overlay._user_pinned is False
 
 
 def test_overlay_toggle_without_plan_keeps_preference_collapsed() -> None:
@@ -318,6 +320,7 @@ def test_overlay_toggle_without_plan_keeps_preference_collapsed() -> None:
         overlay.toggle()
 
     assert overlay._preferred_visible is True
+    assert overlay._user_pinned is True
     assert not overlay.is_expanded
     overlay.set_interval.assert_called_once()
 
@@ -344,8 +347,13 @@ def test_overlay_hides_when_no_active_plan() -> None:
 
 
 def test_overlay_auto_expands_when_plan_appears() -> None:
-    """Preferred-visible panel expands as soon as a live goal tree exists."""
+    """Preferred-visible panel expands as soon as an executing goal appears."""
+    from time import time as _time
+
     tree = CognitionGoalTreeMessage(goal="Ship it", id="gt-auto")
+    # Executing goal: loop started, no terminal footer yet.
+    tree.mark_loop_started(_time() - 5)
+    assert tree._loop_executing()
     adapter = MagicMock()
     adapter._goal_tree_message = tree
     adapter._current_step_messages = {}
@@ -447,3 +455,183 @@ def test_soothe_app_compose_places_plan_panel_above_bottom_chrome() -> None:
     assert "thinking-status" in bottom_block
     assert "plan_panel_default_visible" in source
     assert "default_visible=plan_visible" in source
+
+
+def _executing_tree(*, goal: str = "Ship it", id: str = "gt-exec") -> CognitionGoalTreeMessage:
+    """Build a goal tree whose loop is open (executing) with one running step."""
+    from time import time as _time
+
+    tree = CognitionGoalTreeMessage(goal=goal, id=id)
+    tree.mark_loop_started(_time() - 5)
+    tree.sync_plan_steps([{"id": "STEP-1", "description": "Work"}])
+    tree.set_step_phase("STEP-1", "running", description="Work")
+    assert tree._loop_executing()
+    return tree
+
+
+def _finished_tree(*, goal: str = "Ship it", id: str = "gt-done") -> CognitionGoalTreeMessage:
+    """Build a goal tree whose loop has reached a terminal footer."""
+    tree = _executing_tree(goal=goal, id=id)
+    tree.set_loop_finished(
+        status="done",
+        goal_progress="complete",
+        completion_summary="All good",
+        total_steps=1,
+    )
+    assert not tree._loop_executing()
+    return tree
+
+
+def test_overlay_auto_shows_while_goal_executing() -> None:
+    """Default-visible panel expands as soon as a goal is executing."""
+    tree = _executing_tree(id="gt-show")
+    adapter = MagicMock()
+    adapter._goal_tree_message = tree
+    adapter._current_step_messages = {}
+    app = MagicMock()
+    app._ui_adapter = adapter
+    app._lc_loop_id = None
+
+    overlay = PlanQuickViewOverlay(default_visible=True)
+    overlay._content = MagicMock()
+    overlay._header = MagicMock()
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+
+    with patch.object(PlanQuickViewOverlay, "app", new_callable=PropertyMock) as mock_app:
+        mock_app.return_value = app
+        overlay.refresh_content()
+
+    assert overlay.is_expanded
+    assert overlay.display is True
+
+
+def test_overlay_auto_hides_when_goal_completes() -> None:
+    """Panel collapses once the goal reaches a terminal footer."""
+    tree = _finished_tree(id="gt-hide")
+    adapter = MagicMock()
+    adapter._goal_tree_message = tree
+    adapter._current_step_messages = {}
+    app = MagicMock()
+    app._ui_adapter = adapter
+    app._lc_loop_id = None
+
+    overlay = PlanQuickViewOverlay(default_visible=True)
+    overlay._content = MagicMock()
+    overlay._header = MagicMock()
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+    overlay.add_class("-expanded")
+    overlay.display = True
+    assert overlay.is_expanded
+
+    with patch.object(PlanQuickViewOverlay, "app", new_callable=PropertyMock) as mock_app:
+        mock_app.return_value = app
+        overlay.refresh_content()
+
+    assert not overlay.is_expanded
+    assert overlay.display is False
+
+
+def test_overlay_auto_hides_when_goal_interrupted() -> None:
+    """Panel collapses when the goal is interrupted (error footer)."""
+    tree = _executing_tree(id="gt-interrupt")
+    tree.set_interrupted("Stream cancelled")
+    assert not tree._loop_executing()
+
+    adapter = MagicMock()
+    adapter._goal_tree_message = tree
+    adapter._current_step_messages = {}
+    app = MagicMock()
+    app._ui_adapter = adapter
+    app._lc_loop_id = None
+
+    overlay = PlanQuickViewOverlay(default_visible=True)
+    overlay._content = MagicMock()
+    overlay._header = MagicMock()
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+    overlay.add_class("-expanded")
+    overlay.display = True
+
+    with patch.object(PlanQuickViewOverlay, "app", new_callable=PropertyMock) as mock_app:
+        mock_app.return_value = app
+        overlay.refresh_content()
+
+    assert not overlay.is_expanded
+    assert overlay.display is False
+
+
+def test_overlay_user_pin_keeps_completed_plan_visible() -> None:
+    """Ctrl+t open after completion stays until the user closes it."""
+    tree = _finished_tree(id="gt-pin")
+    adapter = MagicMock()
+    adapter._goal_tree_message = tree
+    adapter._current_step_messages = {}
+    app = MagicMock()
+    app._ui_adapter = adapter
+    app._lc_loop_id = None
+
+    overlay = PlanQuickViewOverlay(default_visible=True)
+    overlay._content = MagicMock()
+    overlay._header = MagicMock()
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+    # Simulate the user opening the panel via Ctrl+t on a finished plan.
+    overlay._user_pinned = True
+    overlay._preferred_visible = True
+    overlay.add_class("-expanded")
+    overlay.display = True
+    assert overlay.is_expanded
+
+    with patch.object(PlanQuickViewOverlay, "app", new_callable=PropertyMock) as mock_app:
+        mock_app.return_value = app
+        overlay.refresh_content()
+
+    assert overlay.is_expanded
+    assert overlay.display is True
+    overlay._content.update.assert_called()
+
+
+def test_overlay_new_executing_goal_clears_stale_user_pin() -> None:
+    """A fresh executing goal cancels a pin left over from a prior plan."""
+    tree = _executing_tree(id="gt-fresh")
+    adapter = MagicMock()
+    adapter._goal_tree_message = tree
+    adapter._current_step_messages = {}
+    app = MagicMock()
+    app._ui_adapter = adapter
+    app._lc_loop_id = None
+
+    overlay = PlanQuickViewOverlay(default_visible=True)
+    overlay._content = MagicMock()
+    overlay._header = MagicMock()
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+    # Stale pin from a prior completed plan.
+    overlay._user_pinned = True
+    overlay._preferred_visible = True
+
+    with patch.object(PlanQuickViewOverlay, "app", new_callable=PropertyMock) as mock_app:
+        mock_app.return_value = app
+        overlay.refresh_content()
+
+    assert overlay.is_expanded
+    assert overlay._user_pinned is False
+
+
+def test_overlay_disabled_config_does_not_auto_show() -> None:
+    """When default_visible is False the panel never auto-shows on execution."""
+    tree = _executing_tree(id="gt-noshow")
+    adapter = MagicMock()
+    adapter._goal_tree_message = tree
+    adapter._current_step_messages = {}
+    app = MagicMock()
+    app._ui_adapter = adapter
+    app._lc_loop_id = None
+
+    overlay = PlanQuickViewOverlay(default_visible=False)
+    overlay._content = MagicMock()
+    overlay._header = MagicMock()
+    overlay.set_interval = MagicMock(return_value=MagicMock())
+
+    with patch.object(PlanQuickViewOverlay, "app", new_callable=PropertyMock) as mock_app:
+        mock_app.return_value = app
+        overlay.refresh_content()
+
+    assert not overlay.is_expanded
