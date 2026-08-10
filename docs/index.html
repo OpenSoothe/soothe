@@ -78,6 +78,17 @@
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; }
   .brand img { width: 30px; height: 30px; border-radius: 8px; }
   .brand span { background: linear-gradient(90deg, var(--teal-300), var(--mint-300)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .nav-links { display: flex; align-items: center; gap: 26px; }
+  .nav-links a {
+    color: var(--text-dim); font-size: .92rem; font-weight: 500; position: relative;
+    padding: 6px 0;
+  }
+  .nav-links a:hover { color: var(--teal-300); }
+  .nav-links a.active { color: var(--teal-300); }
+  .nav-links a.active::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -22px; height: 2px;
+    background: linear-gradient(90deg, var(--teal-400), var(--mint-300)); border-radius: 2px;
+  }
   .nav-cta {
     padding: 8px 16px; border-radius: 10px; font-weight: 600; font-size: .9rem;
     background: linear-gradient(135deg, var(--teal-500), var(--mint-400));
@@ -218,6 +229,19 @@
   .reveal.in { opacity: 1; transform: translateY(0); }
 
   /* Responsive */
+  @media (max-width: 760px) {
+    .nav-links { display: none; }
+    .nav-links.open { display: flex; flex-direction: column; position: absolute; top: 64px; left: 0; right: 0; gap: 14px; padding: 18px 24px 22px; background: rgba(10,15,26,.96); border-bottom: 1px solid var(--border); }
+    .nav-links.open a.active::after { display: none; }
+    .nav-toggle { display: inline-flex; }
+    .nav-cta { display: none; }
+  }
+  .nav-toggle {
+    display: none; align-items: center; justify-content: center;
+    width: 38px; height: 38px; border-radius: 10px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--border); cursor: pointer; color: var(--text);
+  }
+  @media (max-width: 760px) { .nav-toggle { display: inline-flex; } }
   @media (max-width: 900px) {
     .pillars { grid-template-columns: 1fr; }
     .caps { grid-template-columns: 1fr; }
@@ -241,7 +265,16 @@
       <img src="assets/soothe-logo.png" alt="Soothe logo">
       <span>Soothe</span>
     </a>
-    <a class="nav-cta" href="https://github.com/mirasoth/soothe" target="_blank" rel="noopener">GitHub</a>
+    <a class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </a>
+    <nav class="nav-links" id="navLinks">
+      <a href="#pillars">Pillars</a>
+      <a href="#capabilities">Capabilities</a>
+      <a href="#how">How It Works</a>
+      <a href="#start">Get Started</a>
+      <a class="nav-cta" href="https://github.com/mirasoth/soothe" target="_blank" rel="noopener">GitHub</a>
+    </nav>
   </div>
 </header>
 
@@ -431,13 +464,7 @@ soothe -p &quot;List all Python files in the current directory and count lines o
       <a href="/soothe/faq/">FAQ</a>
       <a href="/soothe/changelog/">CHANGELOG</a>
       <a href="/soothe/wiki/api-reference/">API Reference</a>
-      <a href="#pillars">Pillars</a>
-      <a href="#capabilities">Capabilities</a>
-      <a href="#how">How It Works</a>
-      <a href="#start">Getting Started</a>
-      <a href="https://github.com/mirasoth/soothe" target="_blank" rel="noopener">GitHub</a>
       <a href="https://pypi.org/project/soothe/" target="_blank" rel="noopener">PyPI</a>
-      <a href="wiki/">Wiki</a>
       <a href="specs/">RFCs</a>
     </div>
     <div class="foot-meta">Goal-driven orchestration for 24/7 autonomous agents</div>
@@ -481,16 +508,22 @@ soothe -p &quot;List all Python files in the current directory and count lines o
     }
   });
 
-  // Smooth-scroll active link highlight (footer nav)
+  // Mobile nav toggle
+  const navToggle = document.getElementById('navToggle');
+  const navLinks = document.getElementById('navLinks');
+  navToggle.addEventListener('click', () => navLinks.classList.toggle('open'));
+  navLinks.querySelectorAll('a').forEach(a => a.addEventListener('click', () => navLinks.classList.remove('open')));
+
+  // Smooth-scroll active link highlight (header nav)
   const sections = document.querySelectorAll('section[id]');
-  const navAnchors = document.querySelectorAll('.foot-links a[href^="#"]');
+  const navAnchors = document.querySelectorAll('.nav-links a[href^="#"]');
   window.addEventListener('scroll', () => {
     let current = '';
     sections.forEach(s => {
       if (window.scrollY >= s.offsetTop - 120) current = s.id;
     });
     navAnchors.forEach(a => {
-      a.style.color = a.getAttribute('href') === '#' + current ? 'var(--teal-300)' : '';
+      a.classList.toggle('active', a.getAttribute('href') === '#' + current);
     });
   });
 </script>
