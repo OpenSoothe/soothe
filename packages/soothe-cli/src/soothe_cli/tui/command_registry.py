@@ -34,6 +34,19 @@ class BypassTier(StrEnum):
     """Must wait in the queue when the app is busy."""
 
 
+class EnterAction(StrEnum):
+    """How Enter behaves when a slash autocomplete suggestion is selected.
+
+    Tab always completes without submitting. Click also completes only.
+    """
+
+    EXECUTE = "execute"
+    """One-stage: insert the command token and submit immediately."""
+
+    COMPLETE = "complete"
+    """Two-stage: insert the command token (with trailing space) for more typing."""
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SlashCommand:
     """A single slash-command definition."""
@@ -53,6 +66,9 @@ class SlashCommand:
     aliases: tuple[str, ...] = ()
     """Alternative names (e.g. `("/q",)` for `/quit`)."""
 
+    enter_action: EnterAction = EnterAction.EXECUTE
+    """Enter key behavior when completing this command from autocomplete."""
+
 
 COMMANDS: tuple[SlashCommand, ...] = (
     SlashCommand(
@@ -60,12 +76,14 @@ COMMANDS: tuple[SlashCommand, ...] = (
         description="Submit autopilot job (usage: /autopilot <task>)",
         bypass_tier=BypassTier.QUEUED,
         hidden_keywords="goals autonomous job submit",
+        enter_action=EnterAction.COMPLETE,
     ),
     SlashCommand(
         name="/cron",
         description="Add scheduled job (usage: /cron <natural language>)",
         bypass_tier=BypassTier.QUEUED,
         hidden_keywords="schedule timer reminder",
+        enter_action=EnterAction.COMPLETE,
     ),
     SlashCommand(
         name="/clear",
@@ -124,22 +142,26 @@ COMMANDS: tuple[SlashCommand, ...] = (
         name="/deep_research",
         description="Route prompt to deep_research subagent (usage: /deep_research <query>)",
         bypass_tier=BypassTier.QUEUED,
+        enter_action=EnterAction.COMPLETE,
     ),
     SlashCommand(
         name="/academic_research",
         description="Route prompt to academic_research subagent (usage: /academic_research <query>)",
         bypass_tier=BypassTier.QUEUED,
+        enter_action=EnterAction.COMPLETE,
     ),
     SlashCommand(
         name="/browser_use",
         description="Route prompt to browser_use subagent (usage: /browser_use <task>)",
         bypass_tier=BypassTier.QUEUED,
         hidden_keywords="browser automation web",
+        enter_action=EnterAction.COMPLETE,
     ),
     SlashCommand(
         name="/plan",
         description="Send input in plan mode (usage: /plan or /plan <prompt>)",
         bypass_tier=BypassTier.QUEUED,
+        enter_action=EnterAction.COMPLETE,
     ),
     SlashCommand(
         name="/reload",
@@ -229,6 +251,31 @@ def resolve_command_head(command: str) -> str:
     return _ALIAS_TO_CANONICAL.get(head, head)
 
 
+_CANONICAL_ENTER_ACTION: dict[str, EnterAction] = {
+    cmd.name: cmd.enter_action for cmd in COMMANDS
+}
+
+
+def enter_action_for(command: str) -> EnterAction:
+    """Resolve Enter autocomplete behavior for a completed slash token.
+
+    Dynamic skill rows (`/skill:<name>`) always use two-stage complete so the
+    operator can append arguments before submitting.
+
+    Args:
+        command: Completed suggestion label (e.g. ``/clear`` or ``/skill:foo``).
+
+    Returns:
+        `EnterAction.EXECUTE` for one-stage submit, or `EnterAction.COMPLETE`
+        for insert-only. Unknown static commands default to execute.
+    """
+    stripped = command.strip()
+    if stripped.startswith(("/skill:", "/skills:")):
+        return EnterAction.COMPLETE
+    head = resolve_command_head(stripped)
+    return _CANONICAL_ENTER_ACTION.get(head, EnterAction.EXECUTE)
+
+
 # ---------------------------------------------------------------------------
 # Derived bypass-tier frozensets
 # ---------------------------------------------------------------------------
@@ -299,15 +346,6 @@ def parse_skill_command(command: str) -> tuple[str, str]:
     return skill_name, args
 
 
-_STATIC_SKILL_ALIASES: frozenset[str] = frozenset()
-"""Skill names that have a dedicated top-level slash command in `COMMANDS`.
-
-Only list skills whose `/skill:<name>` autocomplete entry is redundant because
-a `/<name>` convenience alias exists. Do **not** add every command name here —
-that would suppress unrelated user skills that share a name with a slash command.
-"""
-
-
 def build_skill_commands_from_wire(
     rows: list[dict[str, Any]],
 ) -> list[tuple[str, str, str]]:
@@ -322,7 +360,7 @@ def build_skill_commands_from_wire(
     tuples: list[tuple[str, str, str]] = []
     for row in rows:
         name = str(row.get("name", "")).strip().lower()
-        if not name or name in _STATIC_SKILL_ALIASES:
+        if not name:
             continue
         desc = str(row.get("description", "")).strip()
         tuples.append((f"/skill:{name}", desc, name))
@@ -338,9 +376,6 @@ def build_skill_commands(
     Each skill becomes a `/skill:<name>` entry with its description
     and the skill name as a hidden keyword for fuzzy matching.
 
-    Skills listed in `_STATIC_SKILL_ALIASES` are excluded to avoid duplicate
-    autocomplete entries when a top-level alias exists.
-
     Args:
         skills: List of discovered skill metadata.
 
@@ -348,7 +383,5 @@ def build_skill_commands(
         List of `(name, description, hidden_keywords)` tuples.
     """
     return [
-        (f"/skill:{skill['name']}", skill["description"], skill["name"])
-        for skill in skills
-        if skill["name"] not in _STATIC_SKILL_ALIASES
+        (f"/skill:{skill['name']}", skill["description"], skill["name"]) for skill in skills
     ]

@@ -49,7 +49,8 @@ def build_keyboard_shortcut_rows() -> list[tuple[str, str]]:
     """
     newline = newline_shortcut()
     return [
-        ("Enter", "Submit message"),
+        ("Enter", "Submit message; with slash suggestions, run or fill for more input"),
+        ("Tab", "Accept slash or @ file autocomplete (never submits)"),
         (
             f"{newline}, Shift+Enter, Alt+Enter, Ctrl+Enter",
             "Insert newline in the chat input",

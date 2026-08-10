@@ -153,6 +153,8 @@ def show_cron_add(console: Console, data: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 KEYBOARD_SHORTCUTS: dict[str, str] = {
+    "Enter": "Submit message; with slash suggestions, run or fill for more input",
+    "Tab": "Accept slash or @ file autocomplete (never submits)",
     "Esc": "Dismiss modal, plan overlay, or autocomplete",
     "Ctrl+D": "Type exit, quit, or /quit to exit the TUI",
     "Ctrl+C": "Clear input or interrupt running agent/shell",

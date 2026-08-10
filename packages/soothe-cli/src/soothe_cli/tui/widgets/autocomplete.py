@@ -17,6 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
+from soothe_cli.tui.command_registry import EnterAction, enter_action_for
 from soothe_cli.tui.path_utils import path_is_file
 from soothe_cli.tui.project_utils import find_project_root
 
@@ -39,7 +40,7 @@ class CompletionResult(StrEnum):
 
     IGNORED = "ignored"  # Key not handled, let default behavior proceed
     HANDLED = "handled"  # Key handled, prevent default
-    SUBMIT = "submit"  # Key triggers submission (e.g., Enter on slash command)
+    SUBMIT = "submit"  # Complete + submit (one-stage slash Enter)
 
 
 class CompletionView(Protocol):
@@ -235,6 +236,10 @@ class SlashCommandController:
     def on_key(self, event: events.Key, _text: str, cursor_index: int) -> CompletionResult:
         """Handle key events for navigation and selection.
 
+        Enter follows each command's `enter_action`: one-stage commands submit
+        immediately; two-stage commands (skills, query routers) only complete
+        into the input. Tab always completes without submitting.
+
         Returns:
             CompletionResult indicating how the key was handled.
         """
@@ -247,8 +252,11 @@ class SlashCommandController:
                     return CompletionResult.HANDLED
                 return CompletionResult.IGNORED
             case "enter":
-                if self._apply_selected_completion(cursor_index):
+                selected = self._suggestions[self._selected_index][0]
+                if not self._apply_selected_completion(cursor_index):
                     return CompletionResult.HANDLED
+                if enter_action_for(selected) == EnterAction.EXECUTE:
+                    return CompletionResult.SUBMIT
                 return CompletionResult.HANDLED
             case "down":
                 self._move_selection(1)
