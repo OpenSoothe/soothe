@@ -14,64 +14,62 @@ config:
 ---
 graph TD;
 	__start__([<p>__start__</p>]):::first
-	intent_classify(intent_classify)
-	init_or_resume(init_or_resume)
-	invoke_wired_subagent(invoke_wired_subagent)
-	iteration_gate(iteration_gate)
-	iteration_start(iteration_start)
-	bounded_evidence_gather(bounded_evidence_gather)
-	plan_gap_analysis(plan_gap_analysis)
-	plan_assess(plan_assess)
-	plan_generate(plan_generate)
-	goal_completion(goal_completion)
-	resolve_decision(resolve_decision)
-	validate_evidence_bindings(validate_evidence_bindings)
+	intake(intake)
+	enter_loop(enter_loop)
+	delegate(delegate)
+	check_limits(check_limits)
+	begin_iteration(begin_iteration)
+	gather_evidence(gather_evidence)
+	evaluate(evaluate)
+	generate_plan(generate_plan)
+	finalize(finalize)
+	commit_plan(commit_plan)
+	validate_plan(validate_plan)
 	execute(execute)
-	record_iteration(record_iteration)
-	await_clarification(await_clarification)
+	record_progress(record_progress)
+	await_user(await_user)
 	__end__([<p>__end__</p>]):::last
-	__start__ --> intent_classify;
-	await_clarification -.-> __end__;
-	await_clarification -.-> execute;
-	await_clarification -.-> plan_assess;
-	await_clarification -.-> plan_gap_analysis;
-	await_clarification -.-> plan_generate;
-	bounded_evidence_gather -.-> plan_assess;
-	bounded_evidence_gather -.-> plan_gap_analysis;
-	bounded_evidence_gather -.-> plan_generate;
+	__start__ --> intake;
+	await_user -.-> __end__;
+	await_user -.-> delegate;
+	await_user -.-> evaluate;
+	await_user -.-> execute;
+	await_user -.-> generate_plan;
+	begin_iteration --> gather_evidence;
+	check_limits -.-> __end__;
+	check_limits -.-> begin_iteration;
+	commit_plan -.-> __end__;
+	commit_plan -.-> validate_plan;
+	delegate -.-> __end__;
+	delegate -.-> await_user;
+	delegate -.-> finalize;
+	delegate -.-> generate_plan;
+	enter_loop -.-> __end__;
+	enter_loop -.-> commit_plan;
+	enter_loop -.-> delegate;
+	enter_loop -.-> gather_evidence;
+	evaluate -.-> await_user;
+	evaluate -.-> commit_plan;
+	evaluate -.-> finalize;
+	evaluate -.-> generate_plan;
 	execute -.-> __end__;
-	execute -.-> await_clarification;
-	execute -.-> iteration_gate;
-	execute -.-> record_iteration;
-	init_or_resume -.-> __end__;
-	init_or_resume -.-> bounded_evidence_gather;
-	init_or_resume -.-> invoke_wired_subagent;
-	init_or_resume -.-> iteration_gate;
-	init_or_resume -.-> plan_assess;
-	init_or_resume -.-> plan_generate;
-	init_or_resume -.-> resolve_decision;
-	intent_classify --> init_or_resume;
-	invoke_wired_subagent --> resolve_decision;
-	iteration_gate -.-> __end__;
-	iteration_gate -.-> iteration_start;
-	iteration_start --> bounded_evidence_gather;
-	plan_assess -.-> await_clarification;
-	plan_assess -.-> goal_completion;
-	plan_assess -.-> plan_generate;
-	plan_assess -.-> resolve_decision;
-	plan_gap_analysis -.-> plan_assess;
-	plan_generate -.-> await_clarification;
-	plan_generate -.-> goal_completion;
-	plan_generate -.-> resolve_decision;
-	record_iteration -.-> __end__;
-	record_iteration -.-> goal_completion;
-	record_iteration -.-> iteration_gate;
-	resolve_decision -.-> __end__;
-	resolve_decision -.-> validate_evidence_bindings;
-	validate_evidence_bindings -.-> __end__;
-	validate_evidence_bindings -.-> execute;
-	goal_completion --> __end__;
-	plan_generate -.-> plan_generate;
+	execute -.-> await_user;
+	execute -.-> check_limits;
+	execute -.-> record_progress;
+	gather_evidence -.-> commit_plan;
+	gather_evidence -.-> evaluate;
+	gather_evidence -.-> generate_plan;
+	generate_plan -.-> await_user;
+	generate_plan -.-> commit_plan;
+	generate_plan -.-> finalize;
+	intake --> enter_loop;
+	record_progress -.-> __end__;
+	record_progress -.-> check_limits;
+	record_progress -.-> finalize;
+	validate_plan -.-> __end__;
+	validate_plan -.-> execute;
+	finalize --> __end__;
+	generate_plan -.-> generate_plan;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc

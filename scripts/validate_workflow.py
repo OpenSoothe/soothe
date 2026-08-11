@@ -5,10 +5,25 @@ Workflow validation script for GitHub Actions YAML files.
 Validates syntax and conditional logic for docker.yml and release-docker.yml.
 """
 
+import os
 import sys
 from pathlib import Path
 
 import yaml
+
+
+def _annotate(message: str, file: str | None = None) -> None:
+    """Emit a GitHub Actions error annotation when running in CI.
+
+    In local development this is a no-op so console output stays clean.
+    In CI the annotation surfaces as an inline comment on the PR diff.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    if file:
+        print(f"::error file={file}::{message}")
+    else:
+        print(f"::error::{message}")
 
 
 def check_condition_syntax(condition: str, context: str) -> list[str]:
@@ -249,6 +264,7 @@ def main():
         print(f"\n❌ Found {len(errors_only)} error(s):")
         for path, err in errors_only:
             print(f"  - {path.name}: {err}")
+            _annotate(err, file=str(path))
         return 1
 
     if warnings:

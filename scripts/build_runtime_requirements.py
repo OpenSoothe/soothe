@@ -1,11 +1,12 @@
 """Build runtime dependency requirements for local daemon Docker image.
 
-Generates dependency lines from package metadata (sdk, soothe, daemon) so Docker
+Generates dependency lines from package metadata (soothe, daemon) so Docker
 can cache dependency installation independently from source code changes.
 
-``soothe-sdk`` is a local git submodule. ``soothe-nano`` and
-``soothe-deepagents`` are installed from PyPI; their pins are taken from
-``soothe``'s dependencies.
+``soothe-sdk``, ``soothe-nano`` and ``soothe-deepagents`` are installed from
+PyPI; their pins are taken from ``soothe``'s and ``soothe-daemon``'s
+dependencies. ``soothe`` and ``soothe-daemon`` are installed from local source
+with ``--no-deps``.
 """
 
 from __future__ import annotations
@@ -15,10 +16,9 @@ import re
 import tomllib
 from pathlib import Path
 
-# Installed from local source (submodules / workspace packages) with --no-deps.
+# Installed from local source (workspace packages) with --no-deps.
 SKIP_LOCAL = {
     "soothe",
-    "soothe-sdk",
     "soothe-daemon",
     "soothe-cli",
 }
@@ -46,19 +46,21 @@ def main() -> None:
     args = parser.parse_args()
 
     app_root = Path(args.app_root)
-    sdk = tomllib.loads((app_root / "packages/soothe-sdk/pyproject.toml").read_text())
     core = tomllib.loads((app_root / "packages/soothe/pyproject.toml").read_text())
     daemon = tomllib.loads((app_root / "packages/soothe-daemon/pyproject.toml").read_text())
 
     requirements: list[str] = []
-    add_reqs(requirements, sdk["project"].get("dependencies", []))
-    # Keep soothe-nano / soothe-deepagents pins (PyPI); skip other first-party locals.
+    # Keep first-party PyPI pins (sdk / nano / deepagents); skip local soothe/daemon.
     add_reqs(
         requirements,
         core["project"].get("dependencies", []),
-        keep={"soothe-deepagents", "soothe-nano"},
+        keep={"soothe-sdk", "soothe-nano", "soothe-deepagents"},
     )
-    add_reqs(requirements, daemon["project"].get("dependencies", []))
+    add_reqs(
+        requirements,
+        daemon["project"].get("dependencies", []),
+        keep={"soothe-sdk", "soothe-nano", "soothe-deepagents"},
+    )
 
     if args.include_browser:
         requirements.append("playwright")

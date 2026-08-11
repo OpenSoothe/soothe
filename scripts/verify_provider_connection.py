@@ -26,7 +26,6 @@ from urllib import error, request
 
 from soothe.config.env import _resolve_provider_env
 from soothe.config.settings import SootheConfig
-from soothe.utils.llm.registry import ProviderRegistry
 
 
 @dataclass(slots=True)
@@ -181,7 +180,6 @@ def _http_request(
     timeout: float,
     api_key: str,
     payload: dict[str, Any] | None = None,
-    ssl_context: ssl.SSLContext | None = None,
 ) -> ProbeResult:
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -190,7 +188,7 @@ def _http_request(
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     req = request.Request(url=url, data=data, headers=headers, method=method)
     try:
-        with request.urlopen(req, timeout=timeout, context=ssl_context) as resp:
+        with request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             return ProbeResult(
                 ok=True,
@@ -220,6 +218,19 @@ def _http_request(
         )
 
 
+def _resolve_provider_field(provider: Any, field_name: str) -> str:
+    """Resolve a provider field that may carry ``${ENV}`` references."""
+    raw = getattr(provider, field_name, None)
+    if not raw:
+        return ""
+    resolved = _resolve_provider_env(
+        raw,
+        provider_name=provider.name,
+        field_name=field_name,
+    )
+    return resolved or ""
+
+
 def _pick_model(provider: Any, cli_model: str | None) -> str | None:
     if cli_model:
         return cli_model
@@ -227,28 +238,6 @@ def _pick_model(provider: Any, cli_model: str | None) -> str | None:
     if models:
         return models[0]
     return None
-
-
-def _build_ssl_context(provider: Any) -> ssl.SSLContext | None:
-    """Build SSL context from provider TLS options for urllib probes."""
-    verify_ssl = bool(getattr(provider, "verify_ssl", True))
-    ca_bundle_path = getattr(provider, "ca_bundle_path", None)
-
-    if not verify_ssl:
-        return ssl._create_unverified_context()  # noqa: SLF001
-
-    if not ca_bundle_path:
-        return None
-
-    resolved_ca_bundle = _resolve_provider_env(
-        ca_bundle_path,
-        provider_name=provider.name,
-        field_name="ca_bundle_path",
-    )
-    if not resolved_ca_bundle:
-        return None
-
-    return ssl.create_default_context(cafile=resolved_ca_bundle)
 
 
 def main() -> int:
@@ -265,18 +254,14 @@ def main() -> int:
         print(f"[FAIL] Provider '{args.provider}' not found in config. Available: {names}")
         return 2
 
-    registry = ProviderRegistry(config.providers)
-    provider_type, kwargs = registry.get_provider_kwargs(provider.name)
-    api_key = kwargs.get("api_key")
-    base_url = _normalize_base_url(kwargs.get("base_url"), provider_type)
+    provider_type = provider.provider_type
+    api_key = _resolve_provider_field(provider, "api_key")
+    base_url = _normalize_base_url(_resolve_provider_field(provider, "api_base_url"), provider_type)
 
     print(f"Provider : {provider.name}")
     print(f"Type     : {provider_type}")
     print(f"Base URL : {base_url or '(empty)'}")
     print(f"API key  : {'set' if api_key else 'missing'}")
-    print(f"TLS verify: {provider.verify_ssl}")
-    if provider.ca_bundle_path:
-        print(f"CA bundle: {provider.ca_bundle_path}")
 
     if not api_key:
         print(
@@ -289,14 +274,12 @@ def main() -> int:
         return 1
 
     models_url = f"{base_url}/models"
-    ssl_context = _build_ssl_context(provider)
     print(f"\n[Probe 1] GET {models_url}")
     probe_models = _http_request(
         url=models_url,
         method="GET",
         timeout=args.timeout,
         api_key=api_key,
-        ssl_context=ssl_context,
     )
     if probe_models.ok:
         print(f"[OK] {probe_models.message}")
@@ -330,7 +313,6 @@ def main() -> int:
         timeout=args.timeout,
         api_key=api_key,
         payload=payload,
-        ssl_context=ssl_context,
     )
     if probe_chat.ok:
         print(f"[OK] {probe_chat.message}")

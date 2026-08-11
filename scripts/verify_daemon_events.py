@@ -725,75 +725,33 @@ async def run_verification(
 
         # Wait for daemon ready
         try:
-            ready_event = await client.wait_for_daemon_ready(ready_timeout_s=5.0)
+            ready_event = await client.fetch_daemon_status(timeout=5.0)
             logger.info("Daemon ready: state=%s", ready_event.get("state"))
         except RuntimeError as e:
             logger.warning("Daemon readiness check failed: %s", e)
         except TimeoutError:
             logger.warning("Daemon readiness timeout (continuing anyway)")
 
-        # Create a new loop
-        request_id = "verify_new_loop"
-        await client.send_loop_new(request_id=request_id)
-
-        # Wait for loop_new_response
-        loop_id = None
-        start_time = time.monotonic()
-        while time.monotonic() - start_time < timeout:
-            event = await client.read_event()
-            if event is None:
-                break
-
-            validate_event(event, stats)
-
-            if event.get("request_id") == request_id:
-                if event.get("type") == "loop_new_response":
-                    loop_id = event.get("loop_id")
-                    logger.info("Created loop: %s", loop_id)
-                    break
-                elif event.get("type") == "error":
-                    logger.error("Failed to create loop: %s", event.get("message"))
-                    break
-
-        if not loop_id:
+        # Create a new loop (blocking RPC returns the result directly)
+        result = await client.request("loop_new", {}, timeout=timeout)
+        loop_id = result.get("loop_id")
+        if loop_id:
+            logger.info("Created loop: %s", loop_id)
+        else:
             logger.error("No loop_id received from daemon")
             return stats
 
-        # Subscribe to the loop
-        subscribe_request_id = "verify_subscribe"
-        await client.send_loop_subscribe(
-            loop_id,
-            verbosity="debug",
-            stream_delivery=stream_delivery,
-            request_id=subscribe_request_id,
+        # Subscribe to the loop's event stream
+        await client.subscribe(
+            "loop_events",
+            {"loop_id": loop_id, "stream_delivery": stream_delivery},
+            timeout=timeout,
         )
-
-        # Wait for subscription confirmation
-        subscribed = False
-        start_time = time.monotonic()
-        while time.monotonic() - start_time < timeout:
-            event = await client.read_event()
-            if event is None:
-                break
-
-            validate_event(event, stats)
-
-            if event.get("request_id") == subscribe_request_id:
-                if event.get("type") == "loop_subscribe_response":
-                    subscribed = True
-                    logger.info("Subscribed to loop: %s", loop_id)
-                    break
-                elif event.get("type") == "error":
-                    logger.error("Failed to subscribe to loop: %s", event.get("message"))
-                    break
-
-        if not subscribed:
-            logger.error("Failed to subscribe to loop")
-            return stats
+        logger.info("Subscribed to loop: %s", loop_id)
 
         # Send test input
         logger.info("Sending test prompt: %s", test_prompt[:100])
-        await client.send_loop_input(loop_id, test_prompt, request_id="verify_input")
+        await client.send_input(loop_id=loop_id, text=test_prompt)
 
         # Collect events until timeout or completion
         logger.info("Collecting events for %s seconds...", timeout)

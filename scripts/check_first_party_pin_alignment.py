@@ -12,6 +12,7 @@ Daemon must NOT re-pin ``soothe-nano`` (comes via soothe) or depend on
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 import tomllib
@@ -42,6 +43,9 @@ _PROBE_VERSIONS = tuple(
     )
 )
 
+_DAEMON_PYPROJECT = "packages/soothe-daemon/pyproject.toml"
+_SOOTHE_PYPROJECT = "packages/soothe/pyproject.toml"
+
 
 def _load_deps(rel: str) -> dict[str, Requirement]:
     data = tomllib.loads((ROOT / rel).read_text())
@@ -61,57 +65,84 @@ def _normalize_spec(spec: SpecifierSet) -> str:
     return str(spec) if str(spec) else "(any)"
 
 
+def _annotate(message: str, file: str | None = None) -> None:
+    """Emit a GitHub Actions error annotation when running in CI.
+
+    In local development this is a no-op so console output stays clean.
+    In CI the annotation surfaces as an inline comment on the PR diff.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    if file:
+        print(f"::error file={file}::{message}")
+    else:
+        print(f"::error::{message}")
+
+
 def main() -> int:
     soothe = _load_deps("packages/soothe/pyproject.toml")
     daemon = _load_deps("packages/soothe-daemon/pyproject.toml")
-    errors: list[str] = []
+    errors: list[tuple[str, str | None]] = []
 
     # Daemon must not re-pin nano or depend on the WS client at runtime.
     if "soothe-nano" in daemon:
         errors.append(
-            "soothe-daemon must not declare soothe-nano "
-            "(it comes transitively via soothe; dual pins drift)"
+            (
+                "soothe-daemon must not declare soothe-nano "
+                "(it comes transitively via soothe; dual pins drift)",
+                _DAEMON_PYPROJECT,
+            )
         )
     if "soothe-client-python" in daemon:
         errors.append(
-            "soothe-daemon must not declare soothe-client-python in core deps "
-            "(client sits above daemon; use soothe-sdk wire + admin_rpc)"
+            (
+                "soothe-daemon must not declare soothe-client-python in core deps "
+                "(client sits above daemon; use soothe-sdk wire + admin_rpc)",
+                _DAEMON_PYPROJECT,
+            )
         )
 
     for name in SHARED_FIRST_PARTY:
         if name not in soothe:
-            errors.append(f"soothe is missing dependency on {name}")
+            errors.append((f"soothe is missing dependency on {name}", _SOOTHE_PYPROJECT))
             continue
         if name not in daemon:
-            errors.append(f"soothe-daemon is missing dependency on {name}")
+            errors.append((f"soothe-daemon is missing dependency on {name}", _DAEMON_PYPROJECT))
             continue
         a = soothe[name].specifier
         b = daemon[name].specifier
         if not _ranges_intersect(a, b):
             errors.append(
-                f"{name}: soothe requires {_normalize_spec(a)} but "
-                f"soothe-daemon requires {_normalize_spec(b)} "
-                f"(empty intersection — Docker/PyPI co-install will fail)"
+                (
+                    f"{name}: soothe requires {_normalize_spec(a)} but "
+                    f"soothe-daemon requires {_normalize_spec(b)} "
+                    f"(empty intersection — Docker/PyPI co-install will fail)",
+                    _DAEMON_PYPROJECT,
+                )
             )
 
     soothe_req = daemon.get("soothe")
     if soothe_req is None:
-        errors.append("soothe-daemon is missing dependency on soothe")
+        errors.append(("soothe-daemon is missing dependency on soothe", _DAEMON_PYPROJECT))
     else:
         version_path = ROOT / "VERSION"
         version = version_path.read_text().strip()
         if not re.fullmatch(r"\d+\.\d+\.\d+", version):
-            errors.append(f"VERSION looks invalid: {version!r}")
+            errors.append((f"VERSION looks invalid: {version!r}", "VERSION"))
         elif Version(version) not in soothe_req.specifier:
             errors.append(
-                f"soothe-daemon soothe pin {_normalize_spec(soothe_req.specifier)} "
-                f"does not admit current VERSION {version}"
+                (
+                    f"soothe-daemon soothe pin {_normalize_spec(soothe_req.specifier)} "
+                    f"does not admit current VERSION {version}",
+                    _DAEMON_PYPROJECT,
+                )
             )
 
     if errors:
         print("FAILED: first-party pin alignment")
-        for err in errors:
+        for err, fpath in errors:
             print(f"  - {err}")
+            _annotate(err, file=fpath)
         print(
             "\nAlign pins in packages/soothe/pyproject.toml and "
             "packages/soothe-daemon/pyproject.toml before release."

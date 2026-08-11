@@ -13,6 +13,10 @@
 #
 # Usage: ./scripts/lint_wiki_staleness.sh
 # Exit code: 0 if no issues found, 1 if any stale patterns detected
+#
+# CI annotations: when GITHUB_ACTIONS=true, emits ::error:: workflow commands
+# with file/line metadata so failures surface as inline PR diff comments.
+# No-op in local dev.
 
 set -uo pipefail
 
@@ -25,6 +29,27 @@ ERRORS=0
 #   - archive/:    Archived historical docs; references are intentionally stale.
 #   - .backups/:   Auto-generated backup files from surgical edits; not user-facing.
 EXCLUDE_FILTER="changelog.md\|archive/\|\.backups/"
+
+# Emit a GitHub Actions error annotation (only in CI; silent locally).
+# $1 = message, $2 = grep output (to extract file+line for positioning)
+annotate() {
+    local message="$1"
+    local output="${2:-}"
+    if [ "${GITHUB_ACTIONS:-}" != "true" ]; then
+        return
+    fi
+    local first_line file line
+    first_line=$(echo "$output" | head -1)
+    file=$(echo "$first_line" | cut -d: -f1)
+    line=$(echo "$first_line" | cut -d: -f2)
+    if [ -n "$file" ] && echo "$line" | grep -qE '^[0-9]+$'; then
+        echo "::error file=${file},line=${line}::${message}"
+    elif [ -n "$file" ]; then
+        echo "::error file=${file}::${message}"
+    else
+        echo "::error::${message}"
+    fi
+}
 
 echo "=== Wiki Staleness Lint ==="
 echo "Scanning $WIKI_DIR/**/*.md for known stale patterns..."
@@ -39,6 +64,7 @@ OUTPUT=$(grep -rn --include="*.md" -E "subagent.*explore|explore.*subagent|\"exp
 if [ -n "$OUTPUT" ]; then
     echo "  ERROR: Found 'explore' referenced as a subagent"
     echo "$OUTPUT" | sed 's/^/    /'
+    annotate "Found 'explore' referenced as a subagent (phantom — removed)" "$OUTPUT"
     ERRORS=$((ERRORS + 1))
 else
     echo "  OK"
@@ -52,6 +78,7 @@ OUTPUT=$(grep -rn --include="*.md" "WeaviateStore" "$WIKI_DIR" 2>/dev/null | gre
 if [ -n "$OUTPUT" ]; then
     echo "  ERROR: Found 'WeaviateStore' - use 'WeaviateVectorStore' instead"
     echo "$OUTPUT" | sed 's/^/    /'
+    annotate "Found 'WeaviateStore' — use 'WeaviateVectorStore' instead" "$OUTPUT"
     ERRORS=$((ERRORS + 1))
 else
     echo "  OK"
@@ -65,6 +92,7 @@ OUTPUT=$(grep -rn --include="*.md" -E "soothe config init|soothe config show|soo
 if [ -n "$OUTPUT" ]; then
     echo "  ERROR: Found deprecated CLI commands (config init/show/validate)"
     echo "$OUTPUT" | sed 's/^/    /'
+    annotate "Found deprecated CLI commands (config init/show/validate — removed)" "$OUTPUT"
     ERRORS=$((ERRORS + 1))
 else
     echo "  OK"
@@ -78,6 +106,7 @@ OUTPUT=$(grep -rn --include="*.md" "core/strange_loop/" "$WIKI_DIR" 2>/dev/null 
 if [ -n "$OUTPUT" ]; then
     echo "  ERROR: Found stale path 'core/strange_loop/' - use 'sloop/engine/' instead"
     echo "$OUTPUT" | sed 's/^/    /'
+    annotate "Found stale path 'core/strange_loop/' — use 'sloop/engine/' instead" "$OUTPUT"
     ERRORS=$((ERRORS + 1))
 else
     echo "  OK"
@@ -91,6 +120,7 @@ OUTPUT=$(grep -rn --include="*.md" "soothe\.iteration\." "$WIKI_DIR" 2>/dev/null
 if [ -n "$OUTPUT" ]; then
     echo "  ERROR: Found stale event prefix 'soothe.iteration.' - use 'soothe.cognition.strange_loop.' instead"
     echo "$OUTPUT" | sed 's/^/    /'
+    annotate "Found stale event prefix 'soothe.iteration.' — use 'soothe.cognition.strange_loop.' instead" "$OUTPUT"
     ERRORS=$((ERRORS + 1))
 else
     echo "  OK"
@@ -104,12 +134,14 @@ OUTPUT=$(grep -rn --include="*.md" -E "daemon\.wait_ready|wait_ready\(\)" "$WIKI
 if [ -n "$OUTPUT" ]; then
     echo "  ERROR: Found nonexistent method 'wait_ready()' on daemon"
     echo "$OUTPUT" | sed 's/^/    /'
+    annotate "Found nonexistent method 'wait_ready()' on daemon" "$OUTPUT"
     ERRORS=$((ERRORS + 1))
 fi
 OUTPUT=$(grep -rn --include="*.md" -E "\.status\(\)" "$WIKI_DIR" 2>/dev/null | grep -v "health" | grep -v "get_status" | grep -v "$EXCLUDE_FILTER" || true)
 if [ -n "$OUTPUT" ]; then
     echo "  ERROR: Found nonexistent method 'status()' on daemon (use 'health' or specific status methods)"
     echo "$OUTPUT" | sed 's/^/    /'
+    annotate "Found nonexistent method 'status()' on daemon — use 'health' or specific status methods" "$OUTPUT"
     ERRORS=$((ERRORS + 1))
 else
     echo "  OK"
@@ -126,6 +158,7 @@ for rfc in $PHANTOM_RFCS; do
     if [ -n "$OUTPUT" ]; then
         echo "  ERROR: Found phantom RFC number RFC-$rfc (does not exist)"
         echo "$OUTPUT" | sed 's/^/    /'
+        annotate "Found phantom RFC number RFC-$rfc (does not exist)" "$OUTPUT"
         PHANTOM_FOUND=1
     fi
 done

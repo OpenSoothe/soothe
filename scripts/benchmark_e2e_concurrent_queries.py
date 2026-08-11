@@ -279,42 +279,35 @@ class ConcurrentQueryBenchmark:
         query_start = time.perf_counter()
 
         try:
-            # First, create a new loop for this query
-            await client.send_loop_new()
+            # Create a new loop (blocking RPC returns the result directly)
+            loop_result = await client.request("loop_new", {}, timeout=10.0)
+            loop_id = loop_result.get("loop_id")
+            if not loop_id:
+                raise Exception("No loop_id received from loop_new")
+            logger.debug(f"Query {query_id} created loop {loop_id[:8]}")
 
-            # Wait for events and process sequentially:
-            # 1. loop_new_response -> get loop_id, then subscribe
-            # 2. loop_subscribe_response -> then send input
-            # 3. message/output/status -> query completed
-            loop_id = None
-            input_sent = False
+            # Subscribe to the loop's event stream
+            await client.subscribe(
+                "loop_events",
+                {"loop_id": loop_id, "stream_delivery": "adaptive"},
+                timeout=10.0,
+            )
+
+            # Send the benchmark query input
+            unique_question = (
+                f"Benchmark query {query_id}: Calculate {query_id} + {query_id * 2}"
+            )
+            await client.send_input(loop_id=loop_id, text=unique_question)
+
+            # Collect events until response or timeout
             received_response = False
             timeout_seconds = 30.0 if not is_warmup else 10.0
 
-            async for event in client.receive():
+            while time.perf_counter() - query_start < timeout_seconds:
+                event = await client.read_event()
+                if event is None:
+                    break
                 event_type = event.get("type")
-
-                # Capture loop_id from loop_new_response
-                if event_type == "loop_new_response" and not loop_id:
-                    loop_id = event.get("loop_id")
-                    logger.debug(
-                        f"Query {query_id} created loop {loop_id[:8] if loop_id else 'None'}"
-                    )
-                    # Subscribe to the loop for events
-                    await client.send_loop_subscribe(loop_id, verbosity="normal")
-
-                # Handle subscribe confirmation - send input after subscribed
-                if (
-                    event_type in ["loop_subscribe_response", "subscription_confirmed"]
-                    and not input_sent
-                ):
-                    logger.debug(f"Query {query_id} subscribed to loop, sending input")
-                    # Generate unique query
-                    unique_question = (
-                        f"Benchmark query {query_id}: Calculate {query_id} + {query_id * 2}"
-                    )
-                    await client.send_input(loop_id=loop_id, text=unique_question)
-                    input_sent = True
 
                 # Check for response events
                 if event_type == "status":
@@ -345,9 +338,6 @@ class ConcurrentQueryBenchmark:
                 elapsed = time.perf_counter() - query_start
                 if elapsed > timeout_seconds:
                     break
-
-            if not loop_id:
-                raise Exception("No loop_id received from loop_new")
 
             query_latency_ms = (time.perf_counter() - query_start) * 1000
 
