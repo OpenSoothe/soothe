@@ -787,40 +787,63 @@ class _MessagesMixin:
         copy_selection_to_clipboard(self, notify_if_empty=True)
 
     def action_quit_or_interrupt(self) -> None:
-        """Handle Ctrl+C - clear input or interrupt running work.
+        """Handle Ctrl+C — clear input, interrupt work, or exit on double-press.
 
-        Priority order when task is running (agent/shell):
-        1. If input has pending text, clear it (first Ctrl+C)
-        2. If input is empty, interrupt the running task
+        Priority order when a task is running (agent/shell):
+        1. If input has pending text, clear it (first Ctrl+C).
+        2. If input is empty, interrupt the running task.
+        Interrupting a task resets the idle double-press exit state.
 
-        When idle, Ctrl+C never exits the TUI. Type `exit`, `quit`, or `/quit` to exit.
+        When idle, Ctrl+C arms a double-press exit:
+        1. First press clears any pending draft and shows a hint.
+        2. Second press within the timeout window exits the TUI.
 
         Note: Copying selected text is bound to Ctrl+Y (`action_copy_selection`)
-        so Ctrl+C is reserved for interrupt behavior.
+        so Ctrl+C is reserved for interrupt/exit behavior.
         """
-        # Check if input has pending content (text, mode, or completion)
+        current_time = time.monotonic()
+
+        # Check if input has pending content (text, mode, or completion).
         has_pending_input = self._has_pending_chat_input()
 
-        # If shell command is running: clear input first, then kill shell
+        # If shell command is running: clear input first, then kill shell.
+        # A running task always takes priority over the idle double-press exit.
         if self._shell_running and self._shell_worker:
+            self._ctrl_c_pressed_time = None
             if has_pending_input:
                 self._chat_input.clear_input()
                 return
             self._cancel_worker(self._shell_worker, discard_queue=False)
             return
 
-        # If agent is running: clear input first, then interrupt
+        # If agent is running: clear input first, then interrupt.
         if self._agent_running and self._agent_worker:
+            self._ctrl_c_pressed_time = None
             if has_pending_input:
                 self._chat_input.clear_input()
                 return
             self._interrupt_running_goal_preserving_queue()
             return
 
-        # Idle path: clear any pending draft, but never quit via keyboard shortcut.
+        # Idle path: a second press within the window exits the TUI.
+        if self._ctrl_c_pressed_time is not None:
+            elapsed = current_time - self._ctrl_c_pressed_time
+            if elapsed < self._CTRL_C_EXIT_TIMEOUT:
+                self._ctrl_c_pressed_time = None
+                self._detach_or_exit()
+                return
+            # Window expired — fall through to first-press behavior.
+
+        # First press (or expired window): clear any pending draft and arm
+        # the double-press exit. A second press within the window exits.
         if self._chat_input:
             self._chat_input.clear_input()
-        self.notify("Type exit, quit, or /quit to exit the TUI", timeout=2, markup=False)
+        self._ctrl_c_pressed_time = current_time
+        self.notify(
+            "Press Ctrl+C again to exit, or type exit/quit",
+            timeout=2,
+            markup=False,
+        )
 
     def _get_plan_quick_view_overlay(self) -> Any:
         """Return the cached plan panel, querying the widget tree on first use."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections import deque
 from unittest.mock import AsyncMock, MagicMock, PropertyMock
 
@@ -11,8 +12,8 @@ from soothe_cli.tui.app._messages_mixin import _MessagesMixin
 from soothe_cli.tui.app._module_init import QueuedMessage
 
 
-def test_ctrl_c_idle_clears_input_and_shows_quit_command_hint() -> None:
-    """Ctrl+C when idle should not arm quit; it hints `/quit` instead."""
+def test_ctrl_c_idle_clears_input_and_arms_double_press_exit() -> None:
+    """First Ctrl+C when idle clears draft and arms a double-press exit."""
 
     class _AppStub(_MessagesMixin):
         def __init__(self) -> None:
@@ -26,13 +27,18 @@ def test_ctrl_c_idle_clears_input_and_shows_quit_command_hint() -> None:
             self._shell_worker = None
             self.notify = MagicMock()
             self.set_timer = MagicMock()
+            self._ctrl_c_pressed_time = None
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
+            self._detach_or_exit = MagicMock()
 
     app = _AppStub()
     app.action_quit_or_interrupt()
 
     app._chat_input.clear_input.assert_called_once()
     app.notify.assert_called_once()
-    assert "exit, quit, or /quit" in app.notify.call_args.args[0]
+    assert "Press Ctrl+C again to exit" in app.notify.call_args.args[0]
+    assert app._ctrl_c_pressed_time is not None
+    app._detach_or_exit.assert_not_called()
 
 
 def test_ctrl_c_clears_input_first_when_agent_running() -> None:
@@ -52,6 +58,9 @@ def test_ctrl_c_clears_input_first_when_agent_running() -> None:
             self.notify = MagicMock()
             self.set_timer = MagicMock()
             self.run_worker = MagicMock()
+            self._ctrl_c_pressed_time = None
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
+            self._detach_or_exit = MagicMock()
 
     app = _AppStub()
     app.action_quit_or_interrupt()
@@ -81,6 +90,9 @@ def test_ctrl_c_interrupts_agent_when_input_empty() -> None:
             self.notify = MagicMock()
             self.set_timer = MagicMock()
             self.run_worker = MagicMock()
+            self._ctrl_c_pressed_time = None
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
+            self._detach_or_exit = MagicMock()
 
     app = _AppStub()
     app.action_quit_or_interrupt()
@@ -108,6 +120,9 @@ def test_ctrl_c_clears_input_first_when_shell_running() -> None:
             self.notify = MagicMock()
             self.set_timer = MagicMock()
             self.run_worker = MagicMock()
+            self._ctrl_c_pressed_time = None
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
+            self._detach_or_exit = MagicMock()
 
     app = _AppStub()
     app.action_quit_or_interrupt()
@@ -136,6 +151,9 @@ def test_ctrl_c_interrupts_shell_when_input_empty() -> None:
             self.notify = MagicMock()
             self.set_timer = MagicMock()
             self.run_worker = MagicMock()
+            self._ctrl_c_pressed_time = None
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
+            self._detach_or_exit = MagicMock()
 
     app = _AppStub()
     app.action_quit_or_interrupt()
@@ -163,6 +181,9 @@ def test_ctrl_c_clears_input_when_in_command_mode() -> None:
             self.notify = MagicMock()
             self.set_timer = MagicMock()
             self.run_worker = MagicMock()
+            self._ctrl_c_pressed_time = None
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
+            self._detach_or_exit = MagicMock()
 
     app = _AppStub()
     app.action_quit_or_interrupt()
@@ -189,6 +210,9 @@ def test_ctrl_c_clears_input_when_completion_active() -> None:
             self.notify = MagicMock()
             self.set_timer = MagicMock()
             self.run_worker = MagicMock()
+            self._ctrl_c_pressed_time = None
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
+            self._detach_or_exit = MagicMock()
 
     app = _AppStub()
     app.action_quit_or_interrupt()
@@ -198,8 +222,8 @@ def test_ctrl_c_clears_input_when_completion_active() -> None:
     app._agent_worker.cancel.assert_not_called()
 
 
-def test_double_ctrl_c_no_longer_quits_when_idle() -> None:
-    """Ctrl+C never exits; it should keep hinting `/quit`."""
+def test_double_ctrl_c_when_idle_exits_tui() -> None:
+    """Second Ctrl+C within the timeout window exits the TUI."""
 
     class _AppStub(_MessagesMixin):
         def __init__(self) -> None:
@@ -213,15 +237,80 @@ def test_double_ctrl_c_no_longer_quits_when_idle() -> None:
             self._shell_worker = None
             self.notify = MagicMock()
             self.set_timer = MagicMock()
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
             self._detach_or_exit = MagicMock()
+            # Simulate a recent first press.
+            self._ctrl_c_pressed_time = time.monotonic()
+
+    app = _AppStub()
+    app.action_quit_or_interrupt()
+
+    app._detach_or_exit.assert_called_once()
+    assert app._ctrl_c_pressed_time is None
+    app._chat_input.clear_input.assert_not_called()
+
+
+def test_second_ctrl_c_after_timeout_re_arms_instead_of_exiting() -> None:
+    """A second press after the window expires re-arms instead of exiting."""
+
+    class _AppStub(_MessagesMixin):
+        def __init__(self) -> None:
+            self._chat_input = MagicMock()
+            self._chat_input.value = ""
+            self._chat_input.mode = "normal"
+            self._chat_input._current_suggestions = []
+            self._agent_running = False
+            self._agent_worker = None
+            self._shell_running = False
+            self._shell_worker = None
+            self.notify = MagicMock()
+            self.set_timer = MagicMock()
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
+            self._detach_or_exit = MagicMock()
+            # First press well outside the timeout window.
+            self._ctrl_c_pressed_time = time.monotonic() - 10.0
 
     app = _AppStub()
     app.action_quit_or_interrupt()
 
     app._detach_or_exit.assert_not_called()
     app._chat_input.clear_input.assert_called_once()
-    app.notify.assert_called_once()
-    assert "exit, quit, or /quit" in app.notify.call_args.args[0]
+    # Re-armed for a fresh window.
+    assert app._ctrl_c_pressed_time is not None
+
+
+def test_ctrl_c_interrupt_resets_double_press_exit_timer() -> None:
+    """Interrupting a running task resets the idle double-press state."""
+
+    class _AppStub(_MessagesMixin):
+        def __init__(self) -> None:
+            self._chat_input = MagicMock()
+            self._chat_input.value = ""
+            self._chat_input.mode = "normal"
+            self._chat_input._current_suggestions = []
+            self._agent_running = True
+            self._agent_worker = MagicMock()
+            self._shell_running = False
+            self._shell_worker = None
+            self._daemon_session = None
+            self._pending_messages = []
+            self._queued_widgets = []
+            self._deferred_actions = []
+            self.notify = MagicMock()
+            self.set_timer = MagicMock()
+            self.run_worker = MagicMock()
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
+            self._detach_or_exit = MagicMock()
+            self._ctrl_c_pressed_time = time.monotonic()
+
+    app = _AppStub()
+    app.action_quit_or_interrupt()
+    if app.run_worker.call_args:
+        app.run_worker.call_args[0][0].close()
+
+    app._agent_worker.cancel.assert_called_once()
+    assert app._ctrl_c_pressed_time is None
+    app._detach_or_exit.assert_not_called()
 
 
 def test_ctrl_d_hints_use_quit_command() -> None:
@@ -260,6 +349,9 @@ def test_ctrl_c_preserves_queued_goal_when_interrupting_agent() -> None:
             self.notify = MagicMock()
             self.set_timer = MagicMock()
             self.run_worker = MagicMock()
+            self._ctrl_c_pressed_time = None
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
+            self._detach_or_exit = MagicMock()
 
     app = _AppStub()
     app.action_quit_or_interrupt()
@@ -291,6 +383,9 @@ def test_ctrl_c_preserves_queue_when_interrupting_via_daemon() -> None:
             self.notify = MagicMock()
             self.set_timer = MagicMock()
             self.run_worker = MagicMock()
+            self._ctrl_c_pressed_time = None
+            self._CTRL_C_EXIT_TIMEOUT = 3.0
+            self._detach_or_exit = MagicMock()
 
     app = _AppStub()
     app.action_quit_or_interrupt()

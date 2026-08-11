@@ -29,8 +29,8 @@ from soothe_cli.tui.preview_limits import (
 )
 from soothe_cli.tui.tool_display import (
     compact_arg_text,
-    format_step_tool_activity_command,
-    format_step_tool_activity_status_tail,
+    display_width,
+    format_step_tool_activity_line,
 )
 
 # Todo item status → phase_icon input (IG-664).
@@ -581,8 +581,15 @@ def append_tool_activity_lines(
     colors: Any,
     spinner_position: int,
     animate_running: bool,
+    max_cols: int | None = None,
 ) -> None:
-    """Append capped per-tool activity lines under a task or step branch."""
+    """Append capped per-tool activity lines under a task or step branch.
+
+    ``max_cols`` is the available terminal width for one tool line. When set,
+    the prefix (``gutter + icon + " "``) is subtracted and the remainder is
+    passed to :func:`format_step_tool_activity_line` so each row fits on one
+    line without wrapping.
+    """
     for row in rows:
         if parts:
             parts.append("\n")
@@ -593,14 +600,20 @@ def append_tool_activity_lines(
             spinner_position=spinner_position,
             animate_running=animate_running and phase == "running",
         )
-        command = format_step_tool_activity_command(row.tool_name, row.args or {})
-        tail = format_step_tool_activity_status_tail(
+        line_max = None
+        if max_cols is not None and max_cols > 0:
+            prefix_width = display_width(f"{gutter}{icon} ")
+            line_max = max(0, max_cols - prefix_width)
+        body = format_step_tool_activity_line(
+            row.tool_name,
+            row.args or {},
             row.phase or "pending",
             duration_ms=row.duration_ms,
             error=str(row.output or "") if phase == "error" else "",
+            max_cols=line_max,
         )
         tone = task_tool_row_tone(row, colors)
-        parts.append(Content.styled(f"{gutter}{icon} {command}{tail}", tone))
+        parts.append(Content.styled(f"{gutter}{icon} {body}", tone))
 
 
 # ---------------------------------------------------------------------------
@@ -671,8 +684,13 @@ class StepActivityTree:
         g: Any,
         preview_limit: int = STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
         todos: list[dict[str, str]] | None = None,
+        max_cols: int | None = None,
     ) -> Content:
-        """To-do section then Tool-use section (task markers + main tool preview)."""
+        """To-do section then Tool-use section (task markers + main tool preview).
+
+        ``max_cols`` bounds each rendered line to the terminal width so tool
+        rows never wrap; ``None`` preserves the prior fixed-cap behavior.
+        """
         section_gutter = f"{g.output_prefix}  "
         item_gutter = f"{g.output_prefix}    "
         parts: list[object] = []
@@ -762,6 +780,7 @@ class StepActivityTree:
                     colors=colors,
                     spinner_position=spinner_position,
                     animate_running=step_status == "running",
+                    max_cols=max_cols,
                 )
                 hidden_tools = len(main_source) - len(main_preview)
                 if hidden_tools > 0:

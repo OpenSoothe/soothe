@@ -14,6 +14,7 @@ from soothe_cli.runtime.presentation.id_format import abbreviate_compact_id
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
+from soothe_cli.tui.tool_display import display_width, truncate_to_width
 from soothe_cli.tui.widgets.messages._helpers import _RUNNING_SPINNER_INTERVAL_SECONDS
 
 if TYPE_CHECKING:
@@ -30,6 +31,7 @@ def _plan_quick_view_header(
     *,
     show_enter_hint: bool = False,
     elapsed: str | None = None,
+    max_cols: int | None = None,
 ) -> Content:
     """Build the quick-view header: bold title, optional elapsed, dim hints.
 
@@ -37,6 +39,10 @@ def _plan_quick_view_header(
     `SECONDARY_TEXT_STYLE` dim style used by the welcome-area Loop ID, then
     bolded via `bold dim` so the title stands out while staying de-emphasized.
     Live loop elapsed (``12s``) sits in the title row while the goal is open.
+
+    ``max_cols`` truncates the whole header to one line so it never wraps.
+    Hints are dropped first (right-to-left) to preserve the title; if even the
+    title exceeds the budget it is ellipsized.
     """
     dim_style = theme.SECONDARY_TEXT_STYLE
     title = "Orchestrate"
@@ -49,6 +55,22 @@ def _plan_quick_view_header(
     if show_enter_hint:
         hints.append("Enter runs queued goal")
     hints.append("Ctrl+t to close")
+
+    if max_cols is not None and max_cols > 0:
+        # Drop hints right-to-left until the title + remaining hints fit.
+        hint_str = f"  ·  {'  ·  '.join(hints)}"
+        while hints and display_width(title) + display_width(hint_str) > max_cols:
+            hints.pop()
+            hint_str = f"  ·  {'  ·  '.join(hints)}" if hints else ""
+        # If still too long (title alone exceeds budget), ellipsize the title.
+        if display_width(title) > max_cols:
+            title = truncate_to_width(title, max_cols)
+            hint_str = ""
+        return Content.assemble(
+            Content.styled(title, f"bold {dim_style}"),
+            Content.styled(hint_str, dim_style) if hint_str else Content(""),
+        )
+
     return Content.assemble(
         Content.styled(title, f"bold {dim_style}"),
         Content.styled(f"  ·  {'  ·  '.join(hints)}", dim_style),
@@ -116,6 +138,7 @@ class PlanQuickViewOverlay(Vertical):
         color: $text-muted;
         margin: 0;
         padding: 0;
+        overflow: hidden;
     }
 
     PlanQuickViewOverlay .plan-quick-view-body {
@@ -265,6 +288,7 @@ class PlanQuickViewOverlay(Vertical):
                     getattr(self.app, "_lc_loop_id", None),
                     show_enter_hint=show_enter_hint,
                     elapsed=elapsed,
+                    max_cols=self._plan_quick_view_line_width(),
                 )
             )
         try:

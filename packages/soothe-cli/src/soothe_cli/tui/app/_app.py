@@ -260,6 +260,11 @@ class SootheApp(
 
         self._shell_running = False
 
+        # Double Ctrl+C exit tracking: timestamp of the first idle Ctrl+C.
+        # Second press within the timeout window exits the TUI.
+        self._ctrl_c_pressed_time: float | None = None
+        self._CTRL_C_EXIT_TIMEOUT = 3.0
+
         self._loading_widget: LoadingWidget | None = None
 
         self._connect_spinner_start_mono: float | None = None

@@ -24,6 +24,57 @@ _SKIP_ARG_KEYS = frozenset({"_raw", "_subgraph_tool", "value"})
 _GENERIC_ERROR_TAILS = frozenset({"", "error", "failed", "tool error"})
 
 
+def display_width(text: str) -> int:
+    """Terminal display width of *text* (wide chars count as 2 columns).
+
+    Thin wrapper over the canonical ``termaid.utils.display_width`` so callers
+    in this module don't each need a lazy import. Falls back to ``len()`` if
+    termaid is unavailable (e.g. minimal test environments).
+    """
+    try:
+        from termaid.utils import display_width as _dw
+
+        return _dw(text)
+    except ImportError:
+        return len(text)
+
+
+def _char_width(ch: str) -> int:
+    """Display width of a single character (2 for East-Asian wide / emoji)."""
+    try:
+        from termaid.utils import _is_wide
+
+        return 2 if _is_wide(ch) else 1
+    except ImportError:
+        return 1
+
+
+def truncate_to_width(text: str, max_cols: int, *, ellipsis: str = "…") -> str:
+    """Truncate *text* to ``max_cols`` terminal columns, appending an ellipsis.
+
+    The ellipsis itself counts toward the budget, so the returned string never
+    exceeds ``max_cols``. Slices by character count using display-width
+    accounting so East-Asian wide / emoji characters (2 columns each) are not
+    split mid-cell. When ``max_cols`` is non-positive, returns *text* unchanged.
+    """
+    if max_cols <= 0 or display_width(text) <= max_cols:
+        return text
+    ellipsis_width = display_width(ellipsis)
+    target = max_cols - ellipsis_width
+    if target <= 0:
+        # Budget too small for content + ellipsis; return just the ellipsis.
+        return ellipsis[:max_cols] if ellipsis_width > max_cols else ellipsis
+    out: list[str] = []
+    width = 0
+    for ch in text:
+        w = _char_width(ch)
+        if width + w > target:
+            break
+        out.append(ch)
+        width += w
+    return "".join(out) + ellipsis
+
+
 def compact_arg_text(text: str) -> str:
     """Collapse whitespace/newlines so activity lines stay on one row."""
     return " ".join(text.split())
@@ -50,14 +101,15 @@ def _arg_preview_max_chars(key: str) -> int:
     return _ARG_PREVIEW_MAX_CHARS
 
 
-def _format_arg_value(tool_name: str, key: str, value: Any) -> str:
+def _format_arg_value(tool_name: str, key: str, value: Any, *, max_chars: int | None = None) -> str:
     text = _coerce_arg_text(value)
     if not text:
         return ""
     meta = get_tool_meta(_normalize_tool_name_for_arg_map(tool_name))
     if meta and key in meta.path_arg_keys:
         return convert_and_abbreviate_path(text)
-    return preview_first(text, _arg_preview_max_chars(key))
+    cap = max_chars if max_chars is not None else _arg_preview_max_chars(key)
+    return preview_first(text, cap)
 
 
 def _ordered_arg_keys(tool_name: str, clean: dict[str, Any]) -> list[str]:
@@ -72,8 +124,13 @@ def _ordered_arg_keys(tool_name: str, clean: dict[str, Any]) -> list[str]:
     return ordered
 
 
-def _args_preview(tool_name: str, args: dict[str, Any]) -> str:
-    """Comma-separated arg summary: primary value bare, extras as ``key=value``."""
+def _args_preview(tool_name: str, args: dict[str, Any], *, max_chars: int | None = None) -> str:
+    """Comma-separated arg summary: primary value bare, extras as ``key=value``.
+
+    ``max_chars`` bounds each value's width (falls back to the per-key default
+    when ``None``). The caller may further truncate the whole command line to a
+    terminal-column budget via :func:`format_step_tool_activity_line`.
+    """
     normalized = extract_tool_args_dict(args or {})
     if not normalized and isinstance(args, dict):
         raw_value = args.get("value")
@@ -91,7 +148,7 @@ def _args_preview(tool_name: str, args: dict[str, Any]) -> str:
     segments: list[str] = []
     primary_emitted = False
     for key in _ordered_arg_keys(tool_name, clean):
-        text = _format_arg_value(tool_name, key, clean[key])
+        text = _format_arg_value(tool_name, key, clean[key], max_chars=max_chars)
         if not text:
             continue
         if not primary_emitted:
@@ -102,14 +159,36 @@ def _args_preview(tool_name: str, args: dict[str, Any]) -> str:
     return ", ".join(segments)
 
 
-def format_step_tool_activity_command(tool_name: str, args: dict[str, Any]) -> str:
-    """One-line invocation summary: ``DisplayName(arg)`` or ``DisplayName``."""
+def format_step_tool_activity_command(
+    tool_name: str, args: dict[str, Any], *, max_cols: int | None = None
+) -> str:
+    """One-line invocation summary: ``DisplayName(arg)`` or ``DisplayName``.
+
+    ``max_cols`` is an optional terminal-column budget for the *whole* command
+    (display name + parens + args). When set, args are first capped per-value
+    to the remaining width, then the assembled command is width-truncated with
+    an ellipsis so it never exceeds ``max_cols``. When ``None`` (tests / unmounted),
+    the fixed per-key caps apply and no whole-line truncation occurs.
+    """
     canonical = _normalize_tool_name_for_arg_map((tool_name or "").strip() or "tool")
     display = get_tool_display_name(canonical)
-    preview = _args_preview(canonical, args or {})
+    if max_cols is not None and max_cols > 0:
+        # Reserve "DisplayName(" + ")" overhead for the arg budget.
+        overhead = display_width(display) + 2  # "(" and ")"
+        arg_budget = max(0, max_cols - overhead)
+        preview = _args_preview(canonical, args or {}, max_chars=arg_budget)
+    else:
+        preview = _args_preview(canonical, args or {})
     if preview:
-        return f"{display}({preview})"
-    return display
+        command = f"{display}({preview})"
+    else:
+        command = display
+    if max_cols is not None and max_cols > 0:
+        command = truncate_to_width(command, max_cols)
+    elif max_cols is not None and max_cols <= 0:
+        # No room for even the command; drop it so only the tail shows.
+        return ""
+    return command
 
 
 def abbreviate_tool_error_message(
@@ -185,12 +264,31 @@ def format_step_tool_activity_line(
     *,
     duration_ms: int = 0,
     error: str = "",
+    max_cols: int | None = None,
 ) -> str:
-    """Full activity text without gutter or phase icon."""
-    command = format_step_tool_activity_command(tool_name, args)
+    """Full activity text without gutter or phase icon.
+
+    ``max_cols`` is an optional terminal-column budget for the *whole* line
+    (command + status tail). When set, the tail is reserved first (it carries
+    duration/error info the user needs), then the command is truncated to fit
+    so the assembled line never exceeds ``max_cols`` — one row, no wrap. If
+    the tail alone exceeds the budget (e.g. a long error summary on a narrow
+    terminal), the tail is truncated too. When ``None``, no whole-line
+    truncation occurs (preserves prior behavior for tests and unmounted widgets).
+    """
     tail = format_step_tool_activity_status_tail(
         phase,
         duration_ms=duration_ms,
         error=error,
     )
+    command_max = None
+    if max_cols is not None and max_cols > 0:
+        # If the tail alone exceeds the budget, truncate it first.
+        tail_width = display_width(tail)
+        if tail_width >= max_cols:
+            tail = truncate_to_width(tail.strip(), max_cols)
+            command_max = 0
+        else:
+            command_max = max(0, max_cols - tail_width)
+    command = format_step_tool_activity_command(tool_name, args, max_cols=command_max)
     return f"{command}{tail}"

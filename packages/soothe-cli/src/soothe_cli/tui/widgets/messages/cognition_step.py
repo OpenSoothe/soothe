@@ -7,6 +7,7 @@ import logging
 from time import monotonic, time
 from typing import TYPE_CHECKING, Any, NamedTuple
 
+import textual.events as events
 from soothe_sdk.ux.task_namespace import (
     is_step_level_task_tool_id,
     normalize_step_task_tool_call_id,
@@ -21,7 +22,10 @@ from soothe_cli.runtime.presentation.duration_format import format_duration_ms
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import STEP_CARD_SHOW_TOOL_ROW_DETAILS
-from soothe_cli.tui.tool_display import format_step_tool_activity_line
+from soothe_cli.tui.tool_display import (
+    display_width,
+    format_step_tool_activity_line,
+)
 from soothe_cli.tui.widgets.clipboard import (
     screen_has_text_selection,
 )
@@ -110,18 +114,21 @@ class CognitionStepMessage(Vertical):
     CognitionStepMessage .step-tools {
         height: auto;
         color: $text-muted;
+        overflow-x: hidden;
     }
 
     CognitionStepMessage .step-subagent-notes {
         margin-top: 0;
         color: $text-muted;
         height: auto;
+        overflow-x: hidden;
     }
 
     CognitionStepMessage .step-detail {
         margin-top: 0;
         color: $text-muted;
         height: auto;
+        overflow-x: hidden;
     }
 
     CognitionStepMessage .step-status {
@@ -358,6 +365,24 @@ class CognitionStepMessage(Vertical):
             self._refresh_execute_assistant_running_display()
         self._flush_deferred_state_on_mount()
 
+    def on_resize(self, event: events.Resize) -> None:  # noqa: ARG002
+        """Re-truncate tool activity lines when the terminal width changes.
+
+        Tool line content is now width-dependent, so a resize must repaint the
+        activity panel and the optional tools panel so rows fit the new width
+        instead of wrapping. Skipped when the card is off-screen (the next
+        visibility-bound surface sync will re-render it) and throttled by the
+        standard refresh guard to avoid repaint storms during drag-resize.
+        """
+        if not getattr(self, "is_mounted", False):
+            return
+        if not _is_widget_animation_visible(self):
+            return
+        # Width affects line content; force a refresh of both render paths.
+        self._sync_step_card_surface()
+        if STEP_CARD_SHOW_TOOL_ROW_DETAILS:
+            self._refresh_tools_display(force=True)
+
     def on_click(self, event: Click) -> None:  # noqa: ARG002
         """Toggle tool-row folding or card collapse."""
         event.stop()
@@ -520,6 +545,36 @@ class CognitionStepMessage(Vertical):
                     todos = loaded
         return self._apply_todos_payload(todos)
 
+    def _available_line_width(self) -> int | None:
+        """Terminal columns available for one step-card line, or ``None`` if unknown.
+
+        Subtracts the card's horizontal padding (``padding: 0 2`` → 4 columns)
+        so tool activity lines truncate to the real visible width instead of
+        wrapping. Falls back through the app size, then the terminal, then
+        ``None`` (preserves prior fixed-cap behavior for unmounted widgets and
+        tests).
+        """
+        width = 0
+        try:
+            width = self.size.width
+        except Exception:  # noqa: BLE001  # Not mounted / no app
+            width = 0
+        if width <= 0:
+            try:
+                size = getattr(self.app, "size", None)
+                width = getattr(size, "width", 0) or 0
+            except Exception:  # noqa: BLE001  # No active app (tests / unmounted)
+                width = 0
+        if width <= 0:
+            try:
+                import shutil
+
+                cols = shutil.get_terminal_size().columns
+                return max(0, cols - 4) or None
+            except Exception:  # noqa: BLE001
+                return None
+        return max(0, width - 4)
+
     def _step_task_activity_content(self) -> Content:
         """To-do then Tool-use (task markers, tool preview, notes) under the step title."""
         g = get_glyphs()
@@ -538,6 +593,7 @@ class CognitionStepMessage(Vertical):
             colors=colors,
             g=g,
             todos=self._todos,
+            max_cols=self._available_line_width(),
         )
 
     def _sync_step_card_surface(self) -> None:
@@ -693,12 +749,18 @@ class CognitionStepMessage(Vertical):
             g,
             animate_running=phase == "running",
         )
+        max_cols = self._available_line_width()
+        line_max = None
+        if max_cols is not None and max_cols > 0:
+            prefix_width = display_width(f"{gutter}{icon} ")
+            line_max = max(0, max_cols - prefix_width)
         body = format_step_tool_activity_line(
             row.tool_name,
             row.args or {},
             row.phase or "pending",
             duration_ms=row.duration_ms,
             error=str(row.output or "") if phase == "error" else "",
+            max_cols=line_max,
         )
         tone = task_tool_row_tone(row, colors)
         return Content.styled(f"{gutter}{icon} {body}", tone)
