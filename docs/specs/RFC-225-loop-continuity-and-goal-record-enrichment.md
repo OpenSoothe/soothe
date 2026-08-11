@@ -2,7 +2,7 @@
 
 **RFC**: 225
 **Title**: Loop Continuity and Goal Record Enrichment
-**Status**: Draft
+**Status**: Implemented — continuation derivation in sloop/intention/, prior_progress field in LoopState, ContinuationAssessment model shipped.
 **Kind**: Architecture Design
 **Authors**: xiaming
 **Created**: 2026-05-29

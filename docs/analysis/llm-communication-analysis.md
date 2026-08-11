@@ -5,6 +5,17 @@
 **Last Updated**: 2026-04-09 (Layer 1/Layer 2 message flow analysis added)
 **Scope**: Analysis of how and what is sent to LLM in each execution thread across Soothe's three-layer architecture, including detailed message flow between layers
 
+> **⚠️ Path Restructure Notice (2026-08)**: This doc predates the `core/` → flat package restructure. Current paths:
+> - `core/strange_loop/core/` → `sloop/engine/` (strange_loop.py, executor.py, synthesis.py)
+> - `core/strange_loop/cognition/` → `sloop/cognition/` (planner.py)
+> - `core/strange_loop/state/` → `sloop/state/` (schemas.py)
+> - `core/intention/` → `sloop/intention/` (classifier.py)
+> - `core/runner/` → `runner/` (_runner_phases.py, _runner_strange_loop.py)
+> - `core/agent/` → `coreagent/` (builder.py, core_agent.py, factory.py)
+> - `core/prompts/` → `prompts/` (context_xml.py, system_templates.py, loader.py)
+> - `core/goal_engine/` → `autopilot/`
+> - Middleware modules (`core/middleware/`) moved to the `soothe_nano` PyPI package (`soothe_nano.middleware.*`), except `IdentityMiddleware` which lives in `soothe/identity/middleware.py`. The middleware builder is `soothe_nano.middleware._builder`.
+
 ---
 
 ## Executive Summary

@@ -2,7 +2,7 @@
 
 **RFC**: 217
 **Title**: Goal Context Management for StrangeLoop
-**Status**: Draft
+**Status**: Implemented (GoalContextManager wired into sloop/engine; body marks implementation completed)
 **Kind**: Architecture Design
 **Created**: 2026-04-17
 **Last Updated**: 2026-08-08

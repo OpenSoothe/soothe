@@ -5,7 +5,7 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-06-15
-**Updated**: 2026-08-08
+**Updated**: 2026-08-11
 **Dependencies**: RFC-624 (Context Engine), RFC-222 (Autopilot and Goal Engine Architecture), RFC-200 (Autonomous Goal Management)
 **Related**: RFC-204 (Autopilot Mode — user-facing surface + report-commit judgment §1.3; RFC-625 defines runtime: AutopilotMonitor, ContextEngine integration, proactive DAG monitoring, `GoalNode.report` commit), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-678](../impl/IG-678-autopilot-ce-rails-production-readiness.md), [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
 **Supersedes**: RFC-200 (Goal Management) — GoalEngine deleted, features migrated to ContextEngine
@@ -16,6 +16,8 @@
 ## Abstract
 
 This RFC unifies goal management under ContextEngine, deletes GoalEngine entirely (~1821 lines), and introduces AutopilotMonitor as a proactive DAG monitoring submodule within AutopilotService. ContextEngine becomes the sole source of truth for goal/step/ledger state, with AutopilotMonitor handling LLM-driven verification, proactive goal intake, and multi-mode memory distillation. The design enables live mode switching between solo and autopilot modes while preserving the CE DAG across goals in both modes.
+
+> **Implementation Note (2026-08-11):** `class GoalEngine` has been fully deleted — no class definition remains in the codebase. `class AutopilotMonitor` is shipped at `packages/soothe/src/soothe/autopilot/monitor/monitor.py:49`. However, 8 stale `GoalEngine` references persist in docstrings/comments across 5 files: `soothe_daemon/server/core.py`, `soothe_daemon/tests/unit/protocol/test_router_rfc228.py`, `soothe/context/models.py`, `soothe/context/planning_scheduling.py`, and `soothe/runner/_runner_autopilot_worker.py`. These are historical references only — no runtime imports of `GoalEngine` exist.
 
 ---
 

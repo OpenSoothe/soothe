@@ -35,7 +35,7 @@ CLI (ux/cli/main.py, Typer)
   └─ Entry point, config loading, command routing
 Execution Surfaces
   └─ Textual TUI (ux/tui/app.py), Headless CLI (ux/cli/execution/*), daemon-backed flows
-Daemon (daemon/server.py + transports/*)
+Daemon (daemon/server/ + channels/*)
   └─ SootheDaemon lifecycle, event routing, DaemonClient connections
 SootheRunner (core/runner/*)
   └─ Protocol orchestration, LangGraph astream() pass-through, interrupt auto-resume, thread lifecycle

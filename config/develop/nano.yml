@@ -14,16 +14,6 @@ providers:
       - MiniMax-M3
       - text-embedding-v4
 
-  - name: coding-plan
-    provider_type: openai
-    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
-    api_key: "${DASHSCOPE_CP_API_KEY}"
-    models:
-      - glm-5
-      - kimi-k2.5
-      - MiniMax-M2.5
-      - qwen3.7-plus
-
   - name: agnes
     provider_type: openai
     api_base_url: "https://apihub.agnes-ai.com/v1"
@@ -39,6 +29,7 @@ providers:
     api_base_url: "http://100.75.70.86:9642/v1"
     api_key: "mirasoth"
     models:
+      - Muse-Glimmer-30B-4bit
       - Qwen3.6-27B-OptiQ-4bit
       - GLM-4.6V-Flash-4bit
       - PaddleOCR-VL-1.5-4bit
@@ -54,14 +45,7 @@ router_profiles:
       image: "dashscope:qwen3.7-plus"
       ocr: "omlx,PaddleOCR-VL-1.5-4bit"
 
-  - name: coding-plan
-    router:
-      default: "coding-plan:glm-5"
-      fast: "coding-plan:kimi-k2.5"
-      image: "coding-plan:qwen3.7-plus"
-      ocr: "omlx,PaddleOCR-VL-1.5-4bit"
-
-  - name: production-minimax
+  - name: minimax
     router:
       default: "dashscope:MiniMax-M3"
       fast: "dashscope:qwen3.6-flash"
@@ -69,16 +53,22 @@ router_profiles:
       image: "dashscope:MiniMax-M3"
       ocr: "omlx,PaddleOCR-VL-1.5-4bit"
 
-  - name: agnes-eval
+  - name: agnes
     router:
       default: "agnes:agnes-2.0-flash"
       image: "agnes:agnes-image-2.0-flash"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
-  - name: local-deploy
+  - name: qwen
     router:
       default: "omlx:Qwen3.6-27B-OptiQ-4bit"
       image: "omlx:GLM-4.6V-Flash-4bit"
+      ocr: "omlx:DeepSeek-OCR-4bit"
+
+  - name: muse-glimmer
+    router:
+      default: "omlx:Muse-Glimmer-30B-4bit"
+      image: "omlx:Muse-Glimmer-30B-4bit"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
 active_router_profile: production

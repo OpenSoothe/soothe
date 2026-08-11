@@ -327,7 +327,7 @@ Every message SHALL be validated against a Pydantic model **at the transport bou
 │                                                                  │
 │  - Business logic only                                           │
 │  - Trusts params are schema-valid (no re-validation)             │
-│  - Returns result dict or raises ProtocolError                   │
+│  - Returns result dict or raises RpcProtocolError                │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -560,7 +560,7 @@ The protocol SHALL use JSON-RPC 2.0's structured error object:
 | `data` | No | Machine-parseable details (any JSON value: field errors, context, diagnostic info) |
 
 **Rules**:
-1. The `error` object MUST always contain `code` and `message`. It is structurally impossible to send a malformed error when using the `ProtocolError` helper (§7.4).
+1. The `error` object MUST always contain `code` and `message`. It is structurally impossible to send a malformed error when using the `RpcProtocolError` helper (§7.4).
 2. The response MUST echo the request `id` when the original request had one. If the request had no `id` (notification), the error is sent without `id`.
 3. **Error terminates the operation**: for subscriptions, an `error` message ends the stream — no further `next` events SHALL be sent for that `id`.
 
@@ -649,7 +649,7 @@ The protocol SHALL use JSON-RPC's numeric code scheme with reserved ranges:
 
 ### 7.4 Error Helper Implementation
 
-All error responses SHALL be constructed via the `ProtocolError` helper, making it structurally impossible to produce a malformed error. Handlers raise `ProtocolError` or call the convenience constructors; the transport layer catches and serializes them.
+All error responses SHALL be constructed via the `RpcProtocolError` helper, making it structurally impossible to produce a malformed error. Handlers raise `RpcProtocolError` or call the convenience constructors; the transport layer catches and serializes them. (The implementation consolidated the error helper into `error_codes.py` — no separate `errors.py` exists — and renamed the class `ProtocolError` → `RpcProtocolError`.)
 
 ```python
 # packages/soothe-daemon/src/soothe_daemon/protocol/error_codes.py
@@ -721,7 +721,9 @@ class ErrorCode(IntEnum):
 ```
 
 ```python
-# packages/soothe-daemon/src/soothe_daemon/protocol/errors.py
+# packages/soothe-daemon/src/soothe_daemon/protocol/error_codes.py
+# (consolidated: ErrorCode enum + RpcProtocolError + convenience constructors
+#  all live here; no separate errors.py module exists)
 
 from __future__ import annotations
 from typing import Any
@@ -729,7 +731,7 @@ from typing import Any
 from soothe_daemon.protocol.error_codes import ErrorCode
 
 
-class ProtocolError(Exception):
+class RpcProtocolError(Exception):
     """Structured protocol error with numeric code and severity."""
 
     def __init__(
@@ -764,15 +766,15 @@ class ProtocolError(Exception):
 
 
 # Convenience constructors
-def loop_not_found(loop_id: str) -> ProtocolError:
-    return ProtocolError(
+def loop_not_found(loop_id: str) -> RpcProtocolError:
+    return RpcProtocolError(
         ErrorCode.LOOP_NOT_FOUND,
         f"Loop {loop_id} not found",
         data={"loop_id": loop_id},
     )
 
-def invalid_params(field: str, reason: str) -> ProtocolError:
-    return ProtocolError(
+def invalid_params(field: str, reason: str) -> RpcProtocolError:
+    return RpcProtocolError(
         ErrorCode.INVALID_PARAMS,
         f"Invalid parameter: {field}",
         data={"field": field, "reason": reason},
@@ -1272,14 +1274,14 @@ components:
 - **Wire**: WebSocket text frames (RFC 6455)
 - **URL**: `ws://127.0.0.1:8765` (configurable)
 - **Flow**: WebSocket upgrade → `connection_init`/`connection_ack` handshake → JSON exchange → `disconnect` → Close frame
-- **Status**: ✅ Implemented (`packages/soothe-daemon/src/soothe_daemon/transports/websocket.py`)
+- **Status**: ✅ Implemented (`packages/soothe-daemon/src/soothe_daemon/channels/websocket.py`)
 
 ### HTTP REST
 
 - **Wire**: HTTP/1.1 with JSON bodies
 - **URL**: `http://localhost:8766/api/v1`
 - **Use**: Health checks, CRUD, thread listing, config, historical data
-- **Status**: ✅ Implemented (`packages/soothe-daemon/src/soothe_daemon/transports/http_rest.py`)
+- **Status**: ⚠️ Not implemented as a standalone channel — no `http_rest.py` exists. Only a simple `/healthz` endpoint is served on the WebSocket FastAPI app (see RFC-620). A dedicated `HttpRestChannel` remains future work.
 
 **Integration**: WebSocket for streaming, HTTP REST for CRUD.
 

@@ -75,7 +75,7 @@ agent:
       profile: standard    # readonly, standard, or privileged
 ```
 
-Source: `packages/soothe/src/soothe/core/security/config_policy.py`
+Source: `soothe_nano.security.policy_profiles` (`ConfigDrivenPolicy`) · `packages/soothe/src/soothe/security/operation_security.py` (operation security integration)
 
 ---
 

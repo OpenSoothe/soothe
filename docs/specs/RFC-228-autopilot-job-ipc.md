@@ -2,7 +2,7 @@
 
 **RFC**: 228
 **Title**: Autopilot Job IPC Commands
-**Status**: Proposed
+**Status**: Implemented (partial) — autopilot_commands.py shipped; full command set incomplete
 **Kind**: Protocol Specification
 **Created**: 2026-06-04
 **Updated**: 2026-08-08

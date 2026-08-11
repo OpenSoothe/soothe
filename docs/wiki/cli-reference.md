@@ -69,16 +69,17 @@ soothe loop list --status archived
 
 ### soothe loop show
 
-Show thread details.
+Show detailed loop information including status, branches, and checkpoint anchors.
 
-**Usage**: `soothe loop show <thread-id> [options]`
+**Usage**: `soothe loop show <loop-id> [options]`
 
 **Options**:
-- `--config <file>` - Use custom configuration file
+- `--verbose, -v` - Show detailed branch analysis
 
 **Examples**:
 ```bash
-soothe loop show abc123
+soothe loop show loop_abc123
+soothe loop show loop_abc123 --verbose
 ```
 
 ### soothe loop continue
@@ -143,25 +144,6 @@ soothe loop delete abc123
 
 # Delete without confirmation
 soothe loop delete abc123 --yes
-```
-
-### soothe loop show
-
-Export thread conversation to a file.
-
-**Usage**: `soothe loop show <thread-id> [options]`
-
-**Options**:
-- `--output, -o <file>` - Output file path
-- `--format, -f <fmt>` - Export format: jsonl or md (default: jsonl)
-
-**Examples**:
-```bash
-# Export to JSONL (default)
-soothe loop show abc123 --output thread.json
-
-# Export to Markdown
-soothe loop show abc123 --output thread.md --format md
 ```
 
 ### soothe loop stats
@@ -307,42 +289,48 @@ soothe config reload
 soothe config reload --config custom.yml
 ```
 
-## Agent Management
+## Cron Management
 
-### soothe agent list
+Manage scheduled cron jobs via natural language. Requires a running daemon
+(`soothed start`). Cron jobs are daemon-side; the CLI sends commands over
+WebSocket.
 
-List available agents and their status.
+### soothe cron add
 
-**Usage**: `soothe agent list [options]`
+Add a scheduled cron job via natural language.
+
+**Usage**: `soothe cron add <text> [options]`
+
+**Arguments**:
+- `text` - Natural language schedule and task (e.g. "every day at 9am check
+  for updates")
 
 **Options**:
-- `--enabled` - Show only enabled agents
-- `--disabled` - Show only disabled agents
-- `--config <file>` - Use custom configuration file
+- `--priority, -p <n>` - Job priority (0–100)
 
 **Examples**:
 ```bash
-# List all agents
-soothe agent list
-
-# Filter by status
-soothe agent list --enabled
-soothe agent list --disabled
+soothe cron add "every weekday at 8am summarize overnight logs"
+soothe cron add "daily standup at 9am" --priority 80
 ```
 
-### soothe agent status
+### soothe cron list
 
-Show detailed agent status.
+List all scheduled cron jobs.
 
-**Usage**: `soothe agent status [options]`
+**Usage**: `soothe cron list`
 
-**Options**:
-- `--config <file>` - Use custom configuration file
+### soothe cron show
 
-**Examples**:
-```bash
-soothe agent status
-```
+Show details for a specific cron job.
+
+**Usage**: `soothe cron show <job-id>`
+
+### soothe cron cancel
+
+Cancel a scheduled cron job.
+
+**Usage**: `soothe cron cancel <job-id>`
 
 ## Daemon Management
 
@@ -449,38 +437,89 @@ soothed restart
 
 ## Autopilot Mode
 
-Run tasks in autonomous mode without user interaction.
+Run tasks in autonomous mode without user interaction. Submit tasks to the
+daemon's autopilot scheduler and manage goals/jobs. Requires a running daemon
+(`soothed start`). Alias: `soothe ap ...`.
 
-### soothe autopilot run
+### soothe autopilot submit
 
-Run autonomous agent loop for complex tasks.
+Submit a task for asynchronous autonomous execution.
 
-**Usage**: `soothe autopilot run <prompt> [options]`
+**Usage**: `soothe autopilot submit [task] [options]`
 
 **Arguments**:
-- `prompt` - Task for autonomous execution
+- `task` - Task description (omit to use `--file` or `GOAL.md` in cwd; `-` for stdin)
 
 **Options**:
-- `--format <fmt>` - Output format: text or jsonl (default: text)
-- `--config <file>` - Use custom configuration file
+- `--file, -f <path>` - Read task from a file (default: `GOAL.md` when task omitted)
+- `--priority, -p <n>` - Goal priority (0–100, default: 50)
+- `--workspace, -w <dir>` - Workspace directory (default: cwd)
+- `--rail <id>` - LoopRail id (e.g. `feature-dev`, `greenfield-system`, `spike`)
+- `--wait` - Wait until the goal completes (synchronous)
 
 **Examples**:
 ```bash
-# Basic autonomous execution
-soothe autopilot run "Research AI safety and summarize findings"
-
-# Use custom config with JSON output
-soothe autopilot run "Analyze codebase" --config custom.yml --format jsonl
-
-# Long-running research task (iteration budget: agent.loop.max_iterations)
-soothe autopilot run "Investigate performance bottlenecks"
+soothe autopilot submit "Refactor the auth module and add tests"
+soothe ap submit --file goal.md --rail feature-dev
+soothe autopilot submit "Run benchmarks" --wait
 ```
 
-**Use Cases**:
-- Long-running tasks that don't need user input
-- Background execution of complex workflows
-- Batch processing or research tasks
-- Automated testing and validation
+### soothe autopilot status
+
+Show autopilot state and job summary.
+
+**Usage**: `soothe autopilot status`
+
+### soothe autopilot jobs
+
+List all autopilot jobs.
+
+**Usage**: `soothe autopilot jobs`
+
+### soothe autopilot goals
+
+List all autopilot goals.
+
+**Usage**: `soothe autopilot goals`
+
+### soothe autopilot job
+
+Show job details and goal DAG for a specific job.
+
+**Usage**: `soothe autopilot job <job-id>`
+
+### soothe autopilot goal
+
+Show details for a specific goal.
+
+**Usage**: `soothe autopilot goal <goal-id>`
+
+### soothe autopilot stop
+
+Stop a goal, a job subtree, or all open goals. Specify exactly one of:
+`goal-id`, `--all`, or `--job <id>`.
+
+**Usage**: `soothe autopilot stop [goal-id] [options]`
+
+**Options**:
+- `--all` - Stop all open goals
+- `--job <job-id>` - Stop a job and its descendants
+
+### soothe autopilot resume
+
+Resume a suspended or blocked goal.
+
+**Usage**: `soothe autopilot resume <goal-id>`
+
+### soothe autopilot guide
+
+Absorb operator guidance into ContextEngine for the next dispatch. Does not
+create or inject goals.
+
+**Usage**: `soothe autopilot guide <job-id> <text> [options]`
+
+**Options**:
+- `--goal, -g <goal-id>` - Optional goal under the job (default: job-wide scope)
 
 ## Global Options
 
@@ -501,7 +540,7 @@ soothe -p "Analyze the performance bottlenecks in this codebase"
 ### Autonomous Optimization
 
 ```bash
-soothe autopilot run "Optimize the database queries"
+soothe autopilot submit "Optimize the database queries"
 ```
 
 ### Resume Previous Work
@@ -557,9 +596,7 @@ If you were using the old flat command syntax, here's how to migrate:
 | `soothe thread -d <id>` | `soothe loop delete <id>` |
 | `soothe thread -e <id>` | `soothe loop show <id>` |
 | `soothe config` | `soothe config reload` |
-| `soothe agent` | `soothe agent list` |
-| `soothe agent --status` | `soothe agent status` |
-| `soothe autopilot "task"` | `soothe autopilot run "task"` |
+| `soothe autopilot "task"` | `soothe autopilot submit "task"` |
 
 ## Related Guides
 

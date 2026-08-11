@@ -19,6 +19,7 @@ These articles explain the *why* and *how* of each Soothe package — architectu
 | [Core API](core-api.md) | `soothe` | CoreAgent & SootheRunner: configuration, protocols, agent construction, runner | ⚠️ Beta |
 | [Daemon API](daemon-api.md) | `soothe_daemon` | SootheDaemon: background server, multi-transport, goal dispatch | ⚠️ Alpha |
 | [SDK API](sdk-api.md) | `soothe_sdk` | Plugin & contracts: decorators, events, wire, paths | ✅ Stable |
+| [TS Client API](ts-client/) | `@mirasoth/soothe-client` | TypeScript WebSocket client: DaemonSession, CommandClient, ConnectionPool | ✅ Stable |
 
 ### Core (`soothe`) — Framework Foundation
 

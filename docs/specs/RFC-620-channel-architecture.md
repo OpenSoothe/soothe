@@ -2,10 +2,10 @@
 
 **RFC**: 620
 **Title**: Unified Channel Architecture for Extensible Communication Endpoints
-**Status**: Draft
+**Status**: Implemented (core migration complete; plugin discovery deferred)
 **Kind**: Architecture Design
 **Created**: 2026-05-29
-**Updated**: 2026-05-29
+**Updated**: 2026-08-11
 **Dependencies**: RFC-450, RFC-0015, RFC-000
 **Author**: Xiaming Chen
 
@@ -14,6 +14,8 @@
 Evolve soothe-daemon's `TransportManager` into a unified `ChannelManager` that treats WebSocket and HTTP REST as channels rather than special transports. Establish a two-layer message system separating channel routing from agent event processing, enabling integration of external chat platforms (Telegram, Discord, Matrix, Slack, WhatsApp, etc.) as first-class channels with plugin discovery support.
 
 This RFC supersedes the hardcoded transport pattern in RFC-450 §"WebSocket Server" and §"HTTP REST Server", replacing special-case transports with a plugin-friendly `Channel` abstraction while preserving EventBus routing and ClientSession semantics.
+
+> **Implementation Note (2026-08-11):** The `TransportManager` → `ChannelManager` migration is complete. `class ChannelManager` is shipped at `packages/soothe-daemon/src/soothe_daemon/channel_manager.py:29`. The legacy `TransportManager` class has been fully removed — no identifier reference remains in the codebase. External platform plugin discovery (Telegram, Discord, Matrix, etc.) remains future work.
 
 ## Problem & Solution
 
@@ -244,7 +246,7 @@ Entry points registration:
 ```toml
 [project.entry-points."soothe.channels"]
 websocket = "soothe_daemon.channels.websocket:WebSocketChannel"
-http_rest = "soothe_daemon.channels.http_rest:HttpRestChannel"
+# http_rest = "soothe_daemon.channels.http_rest:HttpRestChannel"  # not yet implemented
 ```
 
 ### 8. Configuration
@@ -259,7 +261,7 @@ channels:
     port: 8765
 
   http_rest:
-    enabled: true
+    enabled: true  # ⚠️ not yet implemented; HttpRestChannel does not exist
 
   telegram:
     enabled: false
@@ -300,10 +302,10 @@ def is_allowed(self, sender_id: str) -> bool:
 | Task | File |
 |------|------|
 | WebSocketChannel | `soothe_daemon/channels/websocket.py` (from transports/) |
-| HttpRestChannel | `soothe_daemon/channels/http_rest.py` (from transports/) |
+| HttpRestChannel | `soothe_daemon/channels/http_rest.py` — ⚠️ not yet implemented; only `/healthz` on the WS FastAPI app exists |
 | ChannelManager | `soothe_daemon/channel_manager.py` (rename from transport_manager.py) |
-| Config update | `soothe_daemon/config.py` |
-| Server update | `soothe_daemon/server.py` |
+| Config update | `soothe_daemon/config/` (package: `models.py`, `settings.py`) |
+| Server update | `soothe_daemon/server/` (package: `core.py`, `handlers.py`) |
 
 ### Phase 3: External Channels
 

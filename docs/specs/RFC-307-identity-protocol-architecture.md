@@ -632,20 +632,16 @@ soothed identity status
 
 ```
 packages/soothe/src/soothe/
-├── core/security/
+├── identity/
 │   ├── identity_service.py    # IdentityProtocol impl
-│   ├── tokens.py              # JWT handling
+│   ├── tokens.py              # JWT handling (JWTManager)
 │   ├── credentials.py         # AKSK generation/hashing
-│   ├── models.py              # Data models
-│   └── errors.py              # Error classes
-├── protocols/
-│   └── identity.py            # Protocol definition
-├── middleware/
-│   └── identity.py            # IdentityMiddleware
+│   ├── runtime.py             # IdentityConfig, TokenConfig, AKSKConfig, IdentityRuntime
+│   ├── db.py                 # Persistence
+│   └── middleware.py          # IdentityMiddleware
 
 packages/soothe-daemon/src/soothe_daemon/
-├── cli/
-│   └── identity.py            # CLI commands
+├── identity_cli.py            # CLI commands (soothed identity ...)
 ├── server/
 │   └── auth_handler.py        # WebSocket auth handler
 ├── config/

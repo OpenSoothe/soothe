@@ -2,7 +2,7 @@
 
 **RFC**: 624
 **Title**: Context Engine — Unified Context Management for Goals, Steps, and Projection
-**Status**: Draft
+**Status**: Implemented (Phases 1, 3a–3d, 4 Stage 1 done; Phase 4 Stage 2 in progress)
 **Kind**: Architecture Design
 **Created**: 2026-06-12
 **Updated**: 2026-08-08 (report-commit API addendum; workspace inherit 2026-08-04)
@@ -16,6 +16,8 @@
 This RFC introduces `ContextEngine`, a unified interface for context management across Soothe's GoalEngine (goal-level) and StrangeLoop (execution-level). ContextEngine consolidates scattered context handling — goal DAG, step DAG, message ledger, working memory, and project instructions — into a single module with clear ownership boundaries. It provides a unified Goal+Step DAG data structure with lineage tracking, a bounded projection mechanism that outputs structured data for prompt templates, and pluggable persistence.
 
 Phase 1 delivers ContextEngine as a standalone module in `soothe.context` with no changes to existing code. Phase 2 wires it into GoalEngine. Phase 3 wires it into StrangeLoop via an adapter pattern that guarantees behavioral equivalence with the existing Plan-Exec loop. Phase 4 makes CE the sole data source for goal/step/ledger state, deleting all adapters and trimming LoopState to a thin `ExecutionState` facade holding only execution-only fields.
+
+> **Implementation Note (2026-08-11):** Phase 2 is moot — RFC-625 deleted `GoalEngine` entirely; `ContextEngine` is now the sole source of truth for goal/step/ledger state. Phase 4 Stage 2 (LoopState → `ExecutionState` elimination per RFC-626) has **not yet started**: `class LoopState` persists at `sloop/state/schemas.py:1106` across 49 source files; `ExecutionState` does not exist in the codebase. Five files retain stale `GoalEngine` docstring references (see RFC-625 implementation note).
 
 ---
 
@@ -58,13 +60,13 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 | Phase | Scope | Existing code changes | Status |
 |-------|-------|-----------------------|--------|
 | 1 | Standalone `soothe.context` module | None | Done |
-| 2 | GoalEngine reads/writes through ContextEngine | GoalEngine internal storage replaced | Future |
+| 2 | GoalEngine reads/writes through ContextEngine | GoalEngine internal storage replaced | Moot (GoalEngine deleted by RFC-625) |
 | 3a | CE Engine Completeness (Sub-project 1) | CE internal: public API, state transitions, callbacks, lossless persistence, compaction | Done |
 | 3b | Adapter Hardening + Projection Wiring (Sub-project 2) | Adapters use public API; ContextBundle wired into prompts | Done |
 | 3c | CE Planning Submodule (Sub-project 3) | `soothe.context` submodule: StepPlanningSubengine, GoalPlanningSubengine, GoalScheduler, PlanningFacade; eliminates adapter heuristic duplication | Done |
 | 3d | CE-StrangeLoop Full Integration (Sub-project 4) | Wire CE into StrangeLoop as fully functional parallel path; close 5 integration gaps | Done |
 | 4 Stage 1 | CE-backed properties + loop-scoped CE lifecycle | Property migration, persistence polish, loop-scoped CE, projection config | Done |
-| 4 Stage 2 | Remaining cleanup + deeper integration | Slim GER, CE-only ledger writes, delete deprecated functions, replace goal_history reads with CE queries | This update |
+| 4 Stage 2 | Remaining cleanup + deeper integration | Slim GER, CE-only ledger writes, delete deprecated functions, replace goal_history reads with CE queries | In progress (LoopState elimination deferred — see RFC-626) |
 
 ### StrangeLoop Context Integration Philosophy
 

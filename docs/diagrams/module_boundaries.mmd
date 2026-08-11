@@ -1,0 +1,102 @@
+---
+title: Soothe Module Boundaries & Slice Ownership (AGENTS.md §7b)
+config:
+  flowchart:
+    curve: linear
+  theme: base
+  themeVariables:
+    primaryColor: "#e1f5fe"
+    primaryTextColor: "#01579b"
+    primaryBorderColor: "#0288d1"
+    lineColor: "#0288d1"
+    secondaryColor: "#fff3e0"
+    tertiaryColor: "#f3e5f5"
+---
+graph TD
+
+  %% ── PyPI dependencies (external to monorepo) ──
+  subgraph PyPI["PyPI dependencies (consumed, not owned)"]
+    SDK["<b>soothe-sdk</b><br/>shared contracts: events · wire · display · plugin protocols<br/>leaf — no internal deps"]
+    NANO["<b>soothe-nano</b><br/>Coding CoreAgent · in-proc skills / MCP / backends<br/>← soothe-sdk · soothe-deepagents"]
+    DEEP["<b>soothe-deepagents</b><br/>deepagents fork · MemoryMiddleware<br/>leaf"]
+    CLIENT["<b>soothe-client-python</b><br/>WebSocket transport (submodule)<br/>runtime dep of CLI only"]
+  end
+
+  %% ── Monorepo-owned packages ──
+  subgraph OWNED["Monorepo-owned packages (packages/)"]
+
+    subgraph SOOTHE["soothe — host orchestration"]
+      SLICE_SLOOP["sloop/ — StrangeLoop graph<br/>engine · orchestrator · state · stages · cognition · intention · clarification · plans · nodes · checkpoints · prompts"]
+      SLICE_AUTO["autopilot/ — Autopilot / GoalEngine (L3)<br/>service · cognition · dispatch · intake · monitor · notify · rail · schedule · verify · workers · jobs"]
+      SLICE_COREAG["coreagent/ — CoreAgent runtime<br/>core_agent · factory · builder · lazy — delegates to soothe-nano"]
+      SLICE_RUNNER["runner/ — host runner<br/>_runner_strange_loop · _runner_autopilot_worker · _thread_manager · resolver"]
+      SLICE_CTX["context/ — Context Engine<br/>engine · ledger · retrieval · projection · semantic · store_{base,sqlite,pgsql,factory}"]
+      SLICE_PROTO["protocols/ — abstract contracts<br/>loop_working_memory · loop_planner · runner · operation_security"]
+      SLICE_RAILS["rails/ — execution discipline<br/>catalog · builtins · selector · l0_schema · verb_defaults"]
+      SLICE_CRON["cron/ — scheduler<br/>service · store{_postgres,_factory} · extraction · models · messages"]
+      SLICE_PERSIST["persistence/ — unified stores<br/>unified · sqlite_runtime · postgres_pool · loop_writer · checkpoint_split · db_init"]
+      SLICE_ID["identity/ — auth & tokens<br/>identity_service · db · credentials · tokens · runtime · middleware"]
+      SLICE_SEC["security/ — operation security · edit locks · kill guards"]
+      SLICE_EVT["events/ — internal bus · catalog · visibility"]
+      SLICE_WS["workspace/ — loop workspace · resolution · scoped"]
+      SLICE_MCP["mcp/ — progressive_registry"]
+      SLICE_MISC["config · subagents · utils · prompts · logging · diagnose"]
+    end
+
+    subgraph DAEMON["soothe-daemon — soothed process"]
+      D_SERVER["server/ — WS + HTTP core<br/>core · handlers · session · auth_handler · commands"]
+      D_CHANNELS["channels/ — IM adapters<br/>telegram · discord · slack · matrix · msteams · feishu · dingtalk · qq · wecom · weixin · whatsapp · signal · email · mochat · websocket<br/>+ registry · base · message · events"]
+      D_SERVICES["services/ — memory_profiler · intent_hint_turn · image_understanding"]
+      D_TOP["cli.py (Typer 'soothed') · __main__ · admin_rpc · channel_manager · identity_cli"]
+      D_MISC["bootstrap · config · runtime · setup · health · query · display · events · notify · persistence · runner · protocol · skillify"]
+    end
+
+    subgraph CLI["soothe-cli — human interface"]
+      C_CLI["cli/ — main.py (Typer) · commands/ · execution/"]
+      C_TUI["tui/ — Textual app · widgets · commands · sessions · hooks · card_wire · composer_mode · tool_display · mermaid_render · markdown_theme"]
+      C_MISC["config · runtime"]
+    end
+
+  end
+
+  %% ── Dependency DAG (allowed direction only) ──
+  SDK --> DEEP
+  SDK --> NANO
+  DEEP --> NANO
+  SDK --> SOOTHE
+  NANO --> SOOTHE
+  SDK --> DAEMON
+  SOOTHE --> DAEMON
+  SDK --> CLI
+  CLIENT --> CLI
+
+  %% ── Hard import bans (dashed red) ──
+  SOOTHE -. "must NOT import" .-> CLI
+  SOOTHE -. "must NOT import" .-> DAEMON
+  DAEMON -. "must NOT import" .-> CLI
+  DAEMON -. "must NOT import (runtime)" .-> CLIENT
+  SOOTHE -. "must NOT import" .-> SLICE_NANO_PRIV["soothe_nano.middleware._*"]
+
+  %% ── Communication boundary: CLI → daemon via WebSocket only ──
+  CLI == "WebSocket only<br/>(wire contracts in sdk + client)" ==> DAEMON
+
+  %% ── Cross-cutting (all levels consume) ──
+  SLICE_CTX -.-> SOOTHE
+  SLICE_PERSIST -.-> SOOTHE
+  SLICE_ID -.-> SOOTHE
+  SLICE_CRON -.-> SOOTHE
+  SLICE_RAILS -.-> SOOTHE
+  SLICE_EVT -.-> SOOTHE
+
+  %% ── Styling ──
+  classDef owned fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,line-height:1.2
+  classDef pypi fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,line-height:1.2
+  classDef ban fill:#ffebee,stroke:#c62828,stroke-dasharray:5 5,line-height:1.2
+
+  class SOOTHE,DAEMON,CLI owned
+  class SDK,NANO,DEEP,CLIENT pypi
+  class SLICE_NANO_PRIV ban
+
+  linkStyle 0,1,2,3,4,5,6,7,8,9 stroke:#2e7d32,stroke-width:2px
+  linkStyle 10,11,12,13,14 stroke:#c62828,stroke-dasharray:5 5
+  linkStyle 15 stroke:#1565c0,stroke-width:3px

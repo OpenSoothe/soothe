@@ -5,6 +5,15 @@
 > **Date**: 2026-05-11
 > **Scope**: CLI → Daemon → Runner → StrangeLoop → CoreAgent
 
+> **⚠️ Path Restructure Notice (2026-08)**: This doc predates the `core/` → flat package restructure. Current paths:
+> - `core/strange_loop/core/` → `sloop/engine/` (strange_loop.py, executor.py)
+> - `core/strange_loop/state/` → `sloop/state/` (schemas.py)
+> - `core/loop/orchestrator/` → `sloop/orchestrator/` (routing.py, builder.py)
+> - `core/runner/` → `runner/` (factory → coreagent/factory.py, _runner_strange_loop.py)
+> - `core/goal_engine/` → `autopilot/`
+> - `core/agent/` → `coreagent/` (core_agent.py)
+> - Daemon paths: `packages/soothe/src/soothe/daemon/server.py` → `packages/soothe-daemon/src/soothe_daemon/server/core.py`
+
 ---
 
 ## Changelog

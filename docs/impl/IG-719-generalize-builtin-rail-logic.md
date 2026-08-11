@@ -3,7 +3,7 @@
 **Created**: 2026-08-07  
 **Status**: Implemented  
 **Related**: [RFC-231](../specs/RFC-231-looprail-rail-exec.md),
-[RFC-630](../specs/RFC-630-no-keyword-heuristics.md),
+[RFC-630](../specs/RFC-630-start-phase-llm-intake-and-branch-routing.md),
 [IG-700](../archive/impl/IG-700-greenfield-fanout-closeout.md),
 [IG-715](IG-715-migration-wave-fanout.md),
 [IG-718](IG-718-fanout-slice-terminology.md)

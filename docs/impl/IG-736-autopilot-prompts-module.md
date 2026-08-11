@@ -5,7 +5,7 @@
 **Package**: `soothe`  
 **Related**: [IG-705](IG-705-autopilot-one-level-layout.md),
 [RFC-625](../specs/RFC-625-autopilot-monitor-context-engine-unification.md),
-[RFC-204](../specs/RFC-204-strange-loop-protocol.md) (report-commit),
+[RFC-204](../specs/RFC-204-autopilot-mode.md) (report-commit),
 StrangeLoop mirror: `soothe.sloop.prompts`
 
 ---

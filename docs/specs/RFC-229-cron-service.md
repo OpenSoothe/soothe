@@ -2,7 +2,7 @@
 
 **RFC**: 229
 **Title**: Cron Service for Autopilot — Natural Language Scheduled Jobs
-**Status**: Proposed
+**Status**: Implemented (partial) — cron/service.py + cron_cmd.py shipped; TUI /cron and full CLI integration incomplete
 **Kind**: Architecture Design
 **Created**: 2026-06-24
 **Updated**: 2026-07-03
@@ -816,7 +816,7 @@ This ensures a client cannot escalate privileges by sending an arbitrary `user_i
 
 ### 11. HTTP REST Endpoints (CLI Management)
 
-**Location**: `packages/soothe-daemon/src/soothe_daemon/channels/http_rest.py`
+**Location**: `packages/soothe-daemon/src/soothe_daemon/channels/http_rest.py` — ⚠️ **not yet implemented**. No `http_rest.py` channel exists; HTTP REST endpoints for cron management are not currently served. See RFC-620 (HttpRestChannel deferred).
 
 All endpoints follow JSON request/response convention. `user_id` is derived per channel (see User Identity Derivation below).
 

@@ -2,7 +2,7 @@
 
 **RFC**: 223
 **Title**: Thread Inheritance with LangGraph Checkpoint Forking
-**Status**: Draft (revised 2026-05-28)
+**Status**: Implemented (partial) — fork_thread_id wiring in executor.py for thread fork inheritance; CheckpointFork class not yet extracted as standalone.
 **Kind**: Architecture Design
 **Created**: 2026-05-27
 **Last Updated**: 2026-08-08

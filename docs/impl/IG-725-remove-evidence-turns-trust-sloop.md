@@ -4,7 +4,7 @@
 **Status**: Implemented  
 **Related**: [RFC-204](../specs/RFC-204-autopilot-mode.md),
 [RFC-222](../specs/RFC-222-autopilot-goal-engine-architecture.md),
-[RFC-625](../specs/RFC-625-autopilot-monitor.md) (Monitor / DAG verify),
+[RFC-625](../specs/RFC-625-autopilot-monitor-context-engine-unification.md) (Monitor / DAG verify),
 [IG-707](IG-707-autopilot-automatic-consensus-no-operator-suspend.md),
 [IG-710](IG-710-consensus-trust-sloop-response.md),
 [IG-724](../archive/impl/IG-724-engine-driven-trivial-evidence-turns.md) (archived)

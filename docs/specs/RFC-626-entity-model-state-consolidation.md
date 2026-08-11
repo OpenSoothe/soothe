@@ -2,10 +2,10 @@
 
 **RFC**: 626
 **Title**: Entity Model and State Management Consolidation — LoopState Elimination
-**Status**: Draft
+**Status**: Draft (not yet implemented)
 **Kind**: Architecture Design
 **Created**: 2026-06-16
-**Updated**: 2026-06-16
+**Updated**: 2026-08-11
 **Dependencies**: RFC-624 (Context Engine), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-203 (StrangeLoop State & Memory), RFC-201 (StrangeLoop Plan-Execute Loop)
 **Related**: RFC-228 (Autopilot Job IPC), RFC-222 (Autopilot Architecture), RFC-207 (Thread Lifecycle & Goal Context)
 **Extends**: RFC-625 — entity model consolidation, LoopState elimination, job abstraction refinement
@@ -15,6 +15,8 @@
 ## Abstract
 
 This RFC consolidates all entity models under ContextEngine, eliminates the `LoopState` model, unifies ledger management, and refines the Job abstraction to operate directly on CE GoalNode entities. It completes the state management unification started in RFC-625 by (1) replacing `LoopState` with a thin `ExecutionState` facade backed by CE properties, (2) eliminating the split between GoalEngine goal storage and ContextEngine DAG, (3) making Job operate directly on GoalNode without intermediate containers, and (4) trimming StrangeLoop checkpoint schema to execution-only fields.
+
+> **Implementation Note (2026-08-11):** This RFC has **not been implemented**. `class LoopState(BaseModel)` persists at `packages/soothe/src/soothe/sloop/state/schemas.py:1106` with its full field set, referenced across 49 source files and 102 test files (667 total references). The proposed `ExecutionState` replacement class does not exist anywhere in the codebase. RFC-624 §Phase 4 Stage 2 and RFC-625 §11 reference this RFC as "in progress" or "future" — the actual migration has not begun.
 
 ---
 

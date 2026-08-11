@@ -2,9 +2,10 @@
 
 **RFC**: 220
 **Title**: LangGraph Agent Loop Orchestrator
-**Status**: Draft
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-05-05
+**Implemented**: 2026-08-11
 **Dependencies**: RFC-000, RFC-001, RFC-100, RFC-604, RFC-803, RFC-218, RFC-219
 **Supersedes**: RFC-201 §loop driver (imperative Plan → Execute driver)
 **Related**: RFC-203, RFC-207, RFC-211, RFC-213, RFC-214, RFC-217  
@@ -19,6 +20,8 @@ The Loop Graph orchestrates assess → optional bounded evidence gathering → p
 
 This RFC also mandates **evidence-bound plan steps**: every planned step references validated evidence identifiers before Execute proceeds.
 It also defines graph-entry **intent classification** so conversational fast paths and normal loop execution share one topology.
+
+> **Implementation Note (2026-08-11):** The LangGraph `StateGraph` orchestrator is fully implemented at `packages/soothe/src/soothe/sloop/orchestrator/builder.py` (`graph = StateGraph(LoopGraphState)`). No imperative `while`-loop driver remains — all `while` keyword occurrences in `sloop/` are iterators, network retries, and stream normalization. No backward-compatible execution path, feature flag, or dual orchestrator exists.
 
 ---
 

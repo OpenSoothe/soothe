@@ -16,7 +16,7 @@ This RFC proposes a comprehensive deprecation list and number segment reclassifi
 
 This RFC has been fully implemented with the following outcomes:
 
-1. **Deprecated RFCs Archived**: 6 RFCs (RFC-200, RFC-203, RFC-216, RFC-300, RFC-411, RFC-605) moved to `docs/specs/archive/`
+1. **Deprecated RFCs Archived**: 8 RFCs (RFC-200, RFC-203, RFC-216, RFC-300, RFC-411, RFC-505, RFC-605, RFC-700) moved to `docs/specs/archive/`
 2. **Protocol RFCs Migrated**: 5 RFCs (RFC-302-306) moved from 4xx to 3xx series
 3. **Persistence RFCs Organized**: RFC-801, RFC-802 remained in 8xx; RFC-215 renamed to RFC-803 and moved to 8xx
 4. **Security RFCs Organized**: RFC-901 moved to 9xx series
@@ -92,6 +92,8 @@ The following RFCs should be marked as **Deprecated**:
 | RFC-300 | Archived | RFC-302, RFC-303 | 2026-06-19 | Combined spec split into separate ContextProtocol and MemoryProtocol specs |
 | RFC-411 | Archived | RFC-413 | 2026-06-19 | Event stream replay replaced by server-owned display card ledger |
 | RFC-605 | Archived | RFC-613 | 2026-06-19 | Fixed wave-based search replaced by LLM-orchestrated iterative search |
+| RFC-505 | Archived | — | 2026-06-04 | Desktop client architecture removed from monorepo (separate archival process) |
+| RFC-700 | Archived | — | 2026-06-04 | Desktop app product redesign removed from monorepo (separate archival process) |
 
 All archived RFCs have been moved to `docs/specs/archive/` with detailed archive documentation.
 
@@ -689,7 +691,7 @@ This section provides the complete renumbering roadmap for migrating RFCs to the
     ```
   - [ ] Update `rfc-index.md` with both entries (transition period)
   - [ ] Update all referencing RFCs and documents
-  - [ ] Run reference validation: `scripts/verify_rfc_references.py`
+  - [ ] Run reference validation (manual audit: grep for RFC-XXX references across docs/specs/ and packages/)
   - [ ] Commit changes with message: `rfc: migrate RFC-XXX to RFC-YYY (protocol reorganization)`
 
 - [ ] **Archive** (after 90-day deprecation):
@@ -741,8 +743,8 @@ Security architecture specs should use RFC-901+.
 
 ##### **Phase 4: Validation and Cleanup (Week 11)**
 
-- [ ] Run `scripts/verify_rfc_references.py` - verify no broken references
-- [ ] Run `scripts/validate_rfc_status.py` - verify all status transitions
+- [ ] Run reference validation (manual audit: grep for RFC-XXX references across docs/specs/ and packages/)
+- [ ] Run status validation (manual audit: verify all RFC headers match rfc-index.md status entries)
 - [ ] Update `rfc-index.md` with final structure
 - [ ] Create series README files (see §5 Phase 6)
 - [ ] Update `rfc-namings.md` with series-specific naming
@@ -864,7 +866,7 @@ If renumbering causes critical issues:
 Renumbering is considered successful when:
 
 1. ✅ All RFCs are in their semantically correct series
-2. ✅ No broken cross-references (verified by `scripts/verify_rfc_references.py`)
+2. ✅ No broken cross-references (verified by manual grep audit)
 3. ✅ `rfc-index.md` reflects new structure
 4. ✅ All deprecated RFCs archived after 90-day period
 5. ✅ Series README files created and populated
@@ -873,6 +875,8 @@ Renumbering is considered successful when:
 8. ✅ Team sign-off on new organization
 
 ### 9. Automated Checks
+
+> **Note (2026-08-11):** The validation scripts referenced in the original design (`scripts/verify_rfc_references.py`, `scripts/validate_rfc_status.py`, `scripts/check_rfc_references.py`, `scripts/verify_rfc_index.py`) have **not been created**. The CI workflow below is aspirational. Reference validation is currently performed via manual grep audits.
 
 Add CI checks to enforce RFC standards:
 
@@ -887,13 +891,16 @@ jobs:
       - uses: actions/checkout@v3
       - name: Check RFC status consistency
         run: |
-          python scripts/validate_rfc_status.py
+          # TODO: scripts/validate_rfc_status.py not yet created
+          echo "Manual audit required"
       - name: Check for broken references
         run: |
-          python scripts/check_rfc_references.py
+          # TODO: scripts/check_rfc_references.py not yet created
+          echo "Manual audit required"
       - name: Verify index sync
         run: |
-          python scripts/verify_rfc_index.py
+          # TODO: scripts/verify_rfc_index.py not yet created
+          echo "Manual audit required"
 ```
 
 **Validation Rules:**

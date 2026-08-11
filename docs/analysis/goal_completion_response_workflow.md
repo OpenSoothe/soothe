@@ -4,6 +4,16 @@
 > **Implementation Guides**: IG-199 (Adaptive Final Response), IG-268 (Response Length Intelligence), IG-273 (Structural Richness)
 > **Last Updated**: 2026-05-04
 
+> **⚠️ Path Restructure Notice (2026-08)**: This doc predates the `core/` → flat package restructure. Current paths:
+> - `core/strange_loop/core/` → `sloop/engine/` (strange_loop.py, executor.py, synthesis.py, scenario_classifier.py)
+> - `core/strange_loop/cognition/` → `sloop/cognition/` (planner.py)
+> - `core/strange_loop/state/` → `sloop/state/` (schemas.py)
+> - `core/strange_loop/utils/` → `sloop/utils/` (stream_normalize.py)
+> - `core/goal_engine/` → `autopilot/` (service.py, dispatch/models.py, verify/consensus.py)
+> - `core/runner/` → `runner/` (_runner_phases.py, _runner_strange_loop.py)
+>
+> Several classes (PlanManager, PlanDAG) were refactored into stage modules under `sloop/stages/`. `SynthesisGenerator` and `generate_user_fallback_summary` now live in `sloop/engine/synthesis.py`. `EvidenceBundle` now lives in `autopilot/dispatch/models.py`.
+
 ---
 
 ## Overview

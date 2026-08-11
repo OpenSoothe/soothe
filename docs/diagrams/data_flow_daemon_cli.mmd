@@ -1,0 +1,103 @@
+---
+title: Soothe Data Flow — CLI ↔ Daemon ↔ Host (soothe) Communication
+config:
+  flowchart:
+    curve: linear
+  theme: base
+  themeVariables:
+    primaryColor: "#e1f5fe"
+    primaryTextColor: "#01579b"
+    primaryBorderColor: "#0288d1"
+    lineColor: "#0288d1"
+    secondaryColor: "#fff3e0"
+    tertiaryColor: "#f3e5f5"
+---
+graph TD
+  %% ─────────── CLI process (soothe-cli) ───────────
+  subgraph CLI["soothe-cli (Typer + Textual TUI)"]
+    direction TB
+    Cmd["CLI command<br/>(loop, autopilot, cron, config, status)"]
+    Tui["Textual TUI app<br/>tui/app · widgets · commands"]
+    DaemonSession["TuiDaemonSession<br/>wraps soothe_client.appkit.DaemonSession"]
+    CmdClient["AsyncCommandClient / CommandClient<br/>soothe_client.command_client (RPC sidecar)"]
+    EventProc["EventProcessor / PresentationEngine<br/>runtime/headless · presentation"]
+  end
+
+  %% ─────────── Wire boundary (soothe-sdk + soothe-client-python) ───────────
+  subgraph Wire["Wire boundary — soothe-sdk + soothe-client-python"]
+    direction TB
+    Codec["soothe_sdk.wire.codec<br/>WireEnvelope / MessageType<br/>encode_envelope / decode_envelope"]
+    Proto["soothe_sdk.wire.protocol<br/>encode_websocket_text / decode_websocket_text<br/>_serialize_for_json (LangChain-aware)"]
+    WsClient["WebSocketClient<br/>soothe_client.websocket<br/>priority-aware inbound queue"]
+    Handshake["connection_init / connection_ack<br/>protocol-1 handshake (RFC-450 §8)"]
+  end
+
+  %% ─────────── Daemon process (soothed — soothe-daemon) ───────────
+  subgraph Daemon["soothe-daemon (soothed process)"]
+    direction TB
+    Auth["AuthHandler<br/>server/auth_handler"]
+    SessionMgr["ClientSessionManager<br/>server/session — create/subscribe/send"]
+    Router["MessageRouter<br/>protocol/router — dispatch by type/method"]
+    Handlers["DaemonHandlersMixin<br/>server/handlers — loop worker input queue"]
+    Disp["LoopInputDispatcher<br/>runtime/loop_dispatcher — per-loop asyncio queue"]
+    EventBus["EventBus<br/>event/bus — lock-free pub/sub, topic = loop:{id} | global | autopilot"]
+    Sender["_sender_loop<br/>session.py — batch + HIGH/CRITICAL flush (IG-436)"]
+    Cmds["RPC commands<br/>server/commands — cancel/resume/cron/autopilot/..."]
+  end
+
+  %% ─────────── Host (soothe) ───────────
+  subgraph Host["soothe (host — in-proc)"]
+    direction TB
+    Query["QueryEngine<br/>query/engine — run_query, admit, cancel"]
+    Runner["SootheRunner<br/>runner/_runner_strange_loop + _runner_autopilot_worker"]
+    Sloop["StrangeLoop graph<br/>sloop/engine · orchestrator · nodes"]
+    Persist["PersistenceManager<br/>persistence — unified (PG | SQLite)"]
+  end
+
+  %% ─────────── Request path (CLI → Daemon → Host) ───────────
+  Cmd -->|"loop_input / slash_command<br/>rpc_command (method+params+id)"| DaemonSession
+  Tui -->|"user turn text"| DaemonSession
+  Cmd -->|"cron/autopilot/jobs RPC"| CmdClient
+  DaemonSession --> WsClient
+  CmdClient --> WsClient
+  WsClient -->|"encode_envelope"| Codec
+  Codec --> Proto
+  Proto -->|"ws.send (text frame)"| Handshake
+  Handshake -.->|"connection_ack<br/>(capabilities: streaming,batch,<br/>heartbeat,receipts)"| WsClient
+  Handshake --> Auth
+  Auth --> SessionMgr
+  SessionMgr --> Router
+  Router -->|"request/notification<br/>subscribe/unsubscribe"| Router
+  Router -->|"slash_command<br/>disconnect<br/>loop_events / autopilot_events<br/>rpc_command"| Handlers
+  Router --> Cmds
+  Handlers -->|"enqueue loop_input"| Disp
+  Disp -->|"bind_execution_thread_for_loop<br/>(checkpoint thread = loop_id)"| Persist
+  Disp -->|"_process_loop_input_message"| Query
+  Query -->|"stream_turn_overrides"| Runner
+  Runner --> Sloop
+
+  %% ─────────── Response path (Host → Daemon → CLI) ───────────
+  Sloop -->|"stream events + status"| Runner
+  Runner -->|"_broadcast(status/event)"| Query
+  Query -->|"publish loop:{loop_id}"| EventBus
+  Sloop -.->|"internal_to_client_event<br/>autopilot bridge"| EventBus
+  EventBus -->|"subscriber queue"| Sender
+  Sender -->|"translate → next envelope<br/>event_batch wrapper"| SessionMgr
+  SessionMgr -->|"send_to_client<br/>session.transport.send"| Proto
+  Proto -->|"ws text frame"| WsClient
+  WsClient -->|"decode_envelope<br/>unwrap_next"| DaemonSession
+  DaemonSession -->|"iter_turn_chunks<br/>(turn-boundary, drain, early-drop)"| EventProc
+  EventProc -->|"rendered cards / stdout"| Tui
+  Cmds -->|"command_response (id match)"| SessionMgr
+
+  %% ─────────── Styling ───────────
+  classDef cliNode fill:#e1f5fe,stroke:#0288d1,color:#01579b
+  classDef wireNode fill:#fff3e0,stroke:#fb8c00,color:#e65100
+  classDef daemonNode fill:#e8f5e9,stroke:#43a047,color:#1b5e20
+  classDef hostNode fill:#f3e5f5,stroke:#8e24aa,color:#4a148c
+  classDef boundary fill:#fafafa,stroke:#9e9e9e,color:#424242,stroke-dasharray: 4 2
+
+  class Cmd,Tui,DaemonSession,CmdClient,EventProc cliNode
+  class Codec,Proto,WsClient,Handshake wireNode
+  class Auth,SessionMgr,Router,Handlers,Disp,EventBus,Sender,Cmds daemonNode
+  class Query,Runner,Sloop,Persist hostNode

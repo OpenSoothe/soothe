@@ -2,7 +2,7 @@
 
 **RFC**: 632  
 **Title**: Loop-Scoped Router Profile Override  
-**Status**: Draft  
+**Status**: Implemented — TUI /model-router command, client session override (_router_profile_override), daemon LoopRunRequest.router_profile all wired through pool_runner/thread_runner/ray_actor  
 **Kind**: Architecture Design  
 **Created**: 2026-07-14  
 **Authors**: xiaming (with Cursor)  

@@ -64,7 +64,7 @@ SootheDaemon._is_socket_live()?
     ↓              ↓
 Connect via    Auto-start daemon
 DaemonClient      ↓
-    ↓         daemon_cmd.py:daemon_start()
+    ↓         daemon.py:auto-start daemon
 run_headless_via_daemon()
 ```
 
@@ -97,9 +97,9 @@ Broadcast events → EventBus → Subscribed clients
 ```
 
 **Key files:**
-- `packages/soothe/src/soothe/daemon/server.py` — `SootheDaemon` class
-- `packages/soothe/src/soothe/daemon/_handlers.py` — Query handling logic
-- `packages/soothe/src/soothe/daemon/event_bus.py` — Event routing
+- `packages/soothe-daemon/src/soothe_daemon/server/core.py` — `SootheDaemon` class
+- `packages/soothe-daemon/src/soothe_daemon/server/handlers.py` — Query handling logic
+- `packages/soothe-daemon/src/soothe_daemon/event/bus.py` — Event routing (EventBus)
 
 ## 3. Runner Orchestration
 
@@ -425,13 +425,13 @@ User Query
 | CLI | `packages/soothe-cli/src/soothe_cli/cli/main.py` | Entry point |
 | CLI | `packages/soothe-cli/src/soothe_cli/cli/commands/run_cmd.py` | Run command |
 | CLI | `packages/soothe-cli/src/soothe_cli/cli/execution/headless.py` | Headless mode |
-| Daemon | `packages/soothe/src/soothe/daemon/server.py` | Daemon server |
-| Daemon | `packages/soothe/src/soothe/daemon/_handlers.py` | Query handling |
+| Daemon | `packages/soothe-daemon/src/soothe_daemon/server/core.py` | Daemon server |
+| Daemon | `packages/soothe-daemon/src/soothe_daemon/server/handlers.py` | Query handling |
 | Runner | `packages/soothe/src/soothe/runner/__init__.py` | Runner package |
 | Runner | `packages/soothe/src/soothe/runner/_runner_strange_loop.py` | Agentic loop |
 | Runner | `packages/soothe/src/soothe/runner/_runner_phases.py` | Pre-stream (thread, policy, memory, plan bootstrap) |
 | Planning | `packages/soothe/src/soothe/sloop/cognition/planner.py` | `LLMPlanner` (RFC-604) |
-| Agent | `packages/soothe/src/soothe/coreagent/_builder.py` | CoreAgent factory |
+| Agent | `packages/soothe/src/soothe/coreagent/builder.py` | CoreAgent factory (`AgentBuilder`, `create_soothe_agent`) |
 
 ### RFC References
 

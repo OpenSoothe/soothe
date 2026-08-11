@@ -119,5 +119,9 @@ defaults:
       path: "wiki/development"
     values:
       parent: Development & Contributing
+  - scope:
+      path: "wiki/api-reference/ts-client"
+    values:
+      parent: TS Client API
   # API Reference children declare `parent: API Reference` in frontmatter.
   # Do not set a path-wide parent default — that would nest the section index under itself.

@@ -2,6 +2,12 @@
 
 This document describes **how subagents are exposed**, **what ships with deepagents**, and **which first-party subagents Soothe wires in** at agent construction time. For how subagents appear inside StrangeLoop plan steps, see [subagent-in-plan-steps-analysis.md](./subagent-in-plan-steps-analysis.md).
 
+> **⚠️ Path Restructure Notice (2026-08)**: Paths below use the pre-restructure `core/` prefix. Current locations:
+> - `soothe/core/agent/_patch.py` → no longer exists; the runtime.config propagation patch is handled in `soothe_nano.middleware._builder` (PyPI package) or via `soothe_deepagents` hooks.
+> - `soothe/core/agent/_builder.py` → `soothe/coreagent/builder.py`
+> - `soothe/core/agent/_core.py` → `soothe/coreagent/core_agent.py`
+> - `soothe/core/resolver/_resolver_tools.py` → `soothe/runner/resolver/_resolver_infra.py`
+
 ---
 
 ## How every subagent is reached

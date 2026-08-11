@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## Versioned API Changelogs
+
+In addition to the human-curated narrative below, per-version **API diff
+changelogs** are generated automatically from git release tags. Each entry
+lists added/removed modules and exported symbols between consecutive tags.
+
+👉 **[Browse versioned changelogs →](../changelogs/)**
+
+---
+
 ## Version Overview
 
 | Version | Release Date | Summary |

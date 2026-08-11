@@ -2,7 +2,7 @@
 
 **RFC**: 413
 **Title**: Server-Owned Display Card Ledger
-**Status**: Draft (Phases 1–4 shipped; structural live path via ``soothe.card.*`` — IG-655)
+**Status**: Implemented — `LoopCardLedger` class in `display/loop_card_ledger.py`, `LoopCardManager` owning per-loop ledger instances in `display/loop_card_manager.py`, `DisplayCardStore` at `display/display_store.py`, structural live path via `soothe.card.*` (IG-655).
 **Kind**: Architecture Design
 **Created**: 2026-06-04
 **Updated**: 2026-08-08
@@ -20,25 +20,28 @@
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| Phase 1 | CardBinder + DisplayCardLedger core | ✅ Shipped |
+| Phase 1 | LoopCardLedger + LoopCardManager core | ✅ Shipped |
 | Phase 2 | `soothe.card.*` wire frames | ✅ Shipped |
 | Phase 3 | Persistence backend integration | ✅ Shipped |
 | Phase 4 | Live `soothe.card.*` cutover | ✅ Shipped (IG-655) |
+
+> **Implementation Note (2026-08-11):** The design names `CardBinder` and `DisplayCardLedger` in the RFC body map to the shipped classes `LoopCardLedger` (`display/loop_card_ledger.py`) and `LoopCardManager` (`display/loop_card_manager.py`) respectively. The `DisplayCardStore` persistence layer ships at `display/display_store.py` (not `store.py`).
 
 ### Key Components Delivered
 
 | Component | Location | Status |
 |-----------|----------|--------|
-| `CardBinder` | `soothe_daemon/display/card_binder.py` | ✅ Implemented |
-| `DisplayCardLedger` | `soothe_daemon/display/ledger.py` | ✅ Implemented |
+| `LoopCardLedger` | `soothe_daemon/display/loop_card_ledger.py` | ✅ Implemented |
+| `LoopCardManager` | `soothe_daemon/display/loop_card_manager.py` | ✅ Implemented |
 | `soothe.card.*` wire | `soothe_sdk/wire/cards.py` | ✅ Implemented |
-| DisplayCardStore | `soothe_daemon/display/store.py` | ✅ Implemented |
+| `DisplayCardStore` | `soothe_daemon/display/display_store.py` | ✅ Implemented |
+| `DisplayCardStore` (PostgreSQL) | `soothe_daemon/display/display_store_postgres.py` | ✅ Implemented |
 | Goal snapshots | RFC-631 integration | ✅ Implemented |
 | Resume card rendering | IG-577 | ✅ Fixed |
 
 ### Testing Coverage
 
-- Unit tests: `tests/unit/display/test_card_binder.py`, `test_ledger.py`
+- Unit tests: `tests/unit/display/test_loop_card_ledger.py`, `test_loop_card_manager.py`
 - Integration: `tests/integration/test_display_card_flow.py`
 
 ---
@@ -114,6 +117,8 @@ The two paths have drifted. Coverage holes in persistence make some cards unreco
 A patch (wire `/loops` switch to existing `_load_loop_history`, audit persistence holes, delete dead daemon code) closes today's symptoms but preserves the architectural split: two stores, two code paths, future card types still need plumbing in both. Other protocol-1 clients would need to duplicate the TUI's binding logic without a server-owned ledger.
 
 The fix here is to **collapse live and replay onto one binding source**, owned by the daemon, with a wire schema designed for replay.
+
+> **Naming Note (2026-08-11):** This RFC uses the design names `CardBinder` and `DisplayCardLedger` throughout the body. The shipped classes are named `LoopCardLedger` and `LoopCardManager` respectively. The `DisplayCardStore` persistence layer ships at `display/display_store.py`. See the Implementation Status table above for the authoritative class-to-file mapping.
 
 ---
 

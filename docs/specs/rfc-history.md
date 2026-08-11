@@ -2,8 +2,8 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-08-08
-**Total RFCs**: 85
+**Last Updated**: 2026-08-11
+**Total RFCs**: 86
 
 ## Summary Statistics
 
@@ -11,14 +11,14 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Draft | 56 | 65.9% |
-| Implemented | 16 | 18.8% |
-| Archived | 6 | 7.1% |
-| Proposed | 2 | 2.4% |
+| Draft | 56 | 65.1% |
+| Implemented | 16 | 18.6% |
+| Archived | 6 | 7.0% |
+| Proposed | 3 | 3.5% |
 | Accepted | 1 | 1.2% |
 | Implemented (Partially Superseded) | 1 | 1.2% |
 | Implemented — runtime architecture refined | 1 | 1.2% |
-| Unknown | 2 | 2.4% |
+| Unknown | 2 | 2.3% |
 
 ### By Kind
 
@@ -33,10 +33,21 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 | Protocol Specification | 1 |
 | Feature Enhancement | 1 |
 | Product Specification | 1 |
-| Process Specification | 1 |
+| Process Specification | 2 |
 | Unknown | 2 |
 
 ## Recent Changes
+
+### 2026-08-11
+
+- **RFC-903** drafted: Quarterly RFC Audit Cycle — process specification
+  defining a quarterly audit of the RFC corpus. Establishes audit scope
+  (lifecycle accuracy, dependency integrity, DAG boundary compliance,
+  deprecation cadence), cadence (Q1/Q2/Q3/Q4 with fixed anchor weeks and
+  ~10 business-day window), and tracking metrics (lifecycle accuracy %,
+  stale RFC count, DAG violations, path-conformance %, archive backlog).
+  Operationalizes RFC-900 lifecycle states on a recurring schedule.
+  Status: Proposed.
 
 ### 2026-08-08
 
@@ -82,6 +93,21 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **RFC-413** Phase 4 complete (IG-655): append-oriented DisplayCardStore ledger, live `soothe.card.*` via `event`/`custom`, TUI always prefers daemon projection for structural cards; inline tool rows remain live-only on step widgets. Design draft `docs/drafts/2026-07-27-tui-card-replay-source-of-truth-design.md`.
 
 ## Chronological Timeline
+
+### Major Changes - 2026-08-11
+
+**RFC-903**: Quarterly RFC Audit Cycle
+
+- Process specification establishing a recurring quarterly audit of the RFC
+  corpus. Scope covers lifecycle-state accuracy, dependency-integrity
+  verification, package-DAG boundary compliance, deprecation/archive cadence,
+  and spec-vs-codebase drift reconciliation. Cadence anchors on the second
+  week of each calendar quarter (Q1: Feb W2, Q2: May W2, Q3: Aug W2, Q4: Nov
+  W2) with a ~10 business-day audit window. Tracking metrics: lifecycle
+  accuracy %, stale RFC count, DAG boundary violations, path-conformance %,
+  archive backlog, dependency-cycle count, and audit-to-remediation lead time.
+- Operationalizes RFC-900 lifecycle states (Draft → Proposed → Accepted →
+  Implemented → Deprecated → Archived) on a fixed cadence rather than ad-hoc.
 
 ### Major Changes - 2026-08-08
 

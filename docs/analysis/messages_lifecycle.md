@@ -2,6 +2,11 @@
 
 This document describes the complete lifecycle of messages in Soothe, including front-end/back-end communication, persistence mechanisms, and data relationships.
 
+> **⚠️ Path Restructure Notice (2026-08)**: Some inline references use the pre-restructure `core/` prefix. Current locations:
+> - `core/events.py` → `soothe/events/catalog.py` (event type taxonomy) + `soothe/events/internal_events.py`
+> - `daemon/server.py` (inline code comments) → `soothe_daemon/server/core.py`
+> - The File Reference Summary table at the end has been updated to current paths.
+
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
@@ -1119,21 +1124,19 @@ sequenceDiagram
 
 | Component | File Path | Purpose |
 |-----------|-----------|---------|
-| Daemon Server | `packages/soothe/src/soothe/daemon/server.py` | Multi-transport daemon |
-| Message Handlers | `packages/soothe/src/soothe/daemon/_handlers.py` | Client message routing |
-| Message Router | `packages/soothe/src/soothe/daemon/message_router.py` | In-daemon message routing |
-| Query Engine | `packages/soothe/src/soothe/daemon/query_engine.py` | Query execution entry |
-| Protocol Validation | `packages/soothe/src/soothe/daemon/protocol_v2.py` | Message type validation |
-| Transport Manager | `packages/soothe/src/soothe/daemon/transport_manager.py` | Multi-transport coordination |
-| Unix Socket Transport | `packages/soothe/src/soothe/daemon/transports/` | Transport implementations |
-| Daemon Client Session | `packages/soothe/src/soothe/daemon/client_session.py` | Client-side session wiring |
-| Runner Core | `packages/soothe/src/soothe/core/runner/__init__.py` | Protocol orchestration |
-| Runner Phases | `packages/soothe/src/soothe/core/runner/_runner_phases.py` | Pre/post-stream logic |
-| Event Types | `packages/soothe/src/soothe/core/events/constants.py` | Event type constants |
+| Daemon Server | `packages/soothe-daemon/src/soothe_daemon/server/` | WebSocket server + session management |
+| Message Handlers | `packages/soothe-daemon/src/soothe_daemon/server/handlers.py` | Client message routing |
+| Message Router | `packages/soothe-daemon/src/soothe_daemon/protocol/router.py` | In-daemon message routing |
+| Query Engine | `packages/soothe-daemon/src/soothe_daemon/query/engine.py` | Query execution entry |
+| Protocol Validation | `packages/soothe-daemon/src/soothe_daemon/protocol/validation.py` | Message type validation |
+| Channel Manager | `packages/soothe-daemon/src/soothe_daemon/channel_manager.py` | Multi-channel coordination |
+| WebSocket Channel | `packages/soothe-daemon/src/soothe_daemon/channels/websocket.py` | WebSocket transport implementation |
+| Runner Core | `packages/soothe/src/soothe/runner/__init__.py` | Protocol orchestration |
+| Runner Phases | `packages/soothe/src/soothe/runner/_runner_phases.py` | Pre/post-stream logic |
+| Event Types | `packages/soothe/src/soothe/events/catalog.py` | Event type definitions |
 | Loop working memory | `packages/soothe/src/soothe/protocols/loop_working_memory.py` | Plan–Execute scratchpad (`LoopWorkingMemoryProtocol`, RFC-203) |
-| Memory Protocol | `packages/soothe/src/soothe/protocols/memory.py` | Long-term memory interface |
-| Durability Protocol | `packages/soothe/src/soothe/protocols/durability.py` | Thread metadata interface |
-| Persist Store | `packages/soothe/src/soothe/protocols/persistence.py` | Generic persistence interface |
+| Planner Protocol | `packages/soothe/src/soothe/protocols/loop_planner.py` | `PlannerProtocol` (RFC-001) |
+| Runner Protocol | `packages/soothe/src/soothe/protocols/runner.py` | Runner + durability interfaces |
 | TUI App | `packages/soothe-cli/src/soothe_cli/tui/app.py` | Textual TUI application |
 
 ---
@@ -1141,8 +1144,8 @@ sequenceDiagram
 ## References
 
 - [RFC-000: System Conceptual Design](../specs/RFC-000-system-conceptual-design.md)
-- [RFC-300: Context and Memory Architecture Design](../specs/RFC-300-context-memory-protocols.md)
+- [RFC-300: Context and Memory Architecture Design](../archive/specs/RFC-300-context-memory-protocols.md) (archived)
 - [RFC-201: StrangeLoop Plan–Execute Loop](../specs/RFC-201-strangeloop-plan-execute-loop.md)
-- [RFC-200: Autonomous Goal Management](../specs/RFC-200-autonomous-goal-management.md)
+- [RFC-200: Autonomous Goal Management](../archive/specs/RFC-200-autonomous-goal-management.md) (archived)
 - [RFC-450: Daemon Communication Protocol](../specs/RFC-450-daemon-communication-protocol.md)
 - [RFC-452: Unified Thread Management](../specs/RFC-452-unified-thread-management.md)

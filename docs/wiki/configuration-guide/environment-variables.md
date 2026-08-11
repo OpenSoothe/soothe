@@ -128,7 +128,6 @@ Daemon transport, concurrency, and paths use prefix `SOOTHE_DAEMON_` and nested 
 | YAML path (`daemon.yml`) | Env var |
 |--------------------------|---------|
 | `transports.websocket.host` | `SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST` |
-| `transports.http_rest.enabled` | `SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__ENABLED` |
 | `thread_pool.request_timeout_seconds` | `SOOTHE_DAEMON_THREAD_POOL__REQUEST_TIMEOUT_SECONDS` |
 | `worker_pool.request_timeout_seconds` | `SOOTHE_DAEMON_WORKER_POOL__REQUEST_TIMEOUT_SECONDS` |
 | `soothe_config_path` | `SOOTHE_DAEMON_SOOTHE_CONFIG_PATH` |
@@ -140,7 +139,7 @@ Agent config (`nano.yml`) nested autopilot deadline:
 |-----------|---------|
 | `agent.autopilot.goal_deadline_seconds` | `SOOTHE_AGENT__AUTOPILOT__GOAL_DEADLINE_SECONDS` |
 
-The production Docker image sets `SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST=0.0.0.0` and enables HTTP REST by default.
+The production Docker image sets `SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST=0.0.0.0`. WebSocket is the sole transport; HTTP REST was removed in 0.6.x.
 
 If `soothe_config_path` points to a missing file, the daemon loads agent defaults (zero-config bootstrap). Do **not** mount a config file when running env-only.
 
@@ -184,6 +183,7 @@ Not `SOOTHE_*` — used by zero-config bootstrap, `${VAR}` in YAML, or LangChain
 | Variable | Purpose |
 |----------|---------|
 | `SOOTHE_HOME` | Base dir (default `~/.soothe`; `/var/lib/soothe` in Docker) |
+| `SOOTHE_DATA_DIR` | Data dir for databases, job artifacts, history (default: `$SOOTHE_HOME/data`; `/var/lib/soothe/data` in Docker) |
 | `SOOTHE_CONFIG_FILE` | Override agent config path (CLI `--config` wins first) |
 | `SOOTHE_JWT_KEY` | Identity JWT signing key |
 | `SOOTHE_WORKSPACE` | Daemon fallback workspace (`resolve_daemon_workspace`); also used in tests |

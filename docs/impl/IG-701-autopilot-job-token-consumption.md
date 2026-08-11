@@ -2,7 +2,7 @@
 
 **Created**: 2026-08-06  
 **Status**: Implemented  
-**Related**: [RFC-624](../specs/RFC-624-context-engine.md), [RFC-625](../specs/RFC-625-autopilot-monitor-context-engine-unification.md), [IG-689](IG-689-autopilot-top-step-mirror.md)
+**Related**: [RFC-624](../specs/RFC-624-context-engine.md), [RFC-625](../specs/RFC-625-autopilot-monitor-context-engine-unification.md), [IG-689](../archive/impl/IG-689-autopilot-top-step-mirror.md)
 
 ---
 
