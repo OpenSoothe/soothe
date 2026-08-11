@@ -123,7 +123,7 @@ class ExecutionCheckpoint(BaseModel):
     worker_id: str | None = Field(default=None, description="Assigned worker loop_id if executing")
 
     # Loop status
-    status: Literal["running", "idle", "finalized", "cancelled"] = Field(
+    status: Literal["running", "idle", "finalized", "cancelled", "interrupted"] = Field(
         default="idle", description="Loop status"
     )
     thread_switch_pending: bool = Field(
@@ -250,7 +250,7 @@ class GoalIndexEntry(BaseModel):
     goal_id: str = Field(description="Goal identifier (CE lookup key)")
 
     # Status (for loop-level tracking, CE GoalNode has full status)
-    status: Literal["running", "completed", "failed", "cancelled"] = Field(
+    status: Literal["running", "completed", "failed", "cancelled", "interrupted"] = Field(
         default="running", description="Goal execution status"
     )
 

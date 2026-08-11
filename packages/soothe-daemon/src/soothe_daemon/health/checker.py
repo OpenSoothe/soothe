@@ -286,10 +286,6 @@ class HealthChecker:
 
         return await check_config(self.config)
 
-    async def check_tool_deps(self) -> CategoryResult:
-        """Check host tool binaries via nano diagnose."""
-        return await self._single_nano("tool_deps")
-
     async def check_daemon(self, *, require_running: bool = False) -> CategoryResult:
         """Check daemon health."""
         from soothe_daemon.health.checks.daemon_check import check_daemon
@@ -305,65 +301,11 @@ class HealthChecker:
 
         return await check_persistence(self.config)
 
-    async def check_protocols(self) -> CategoryResult:
-        """Check protocol backends via nano diagnose."""
-        return await self._single_nano("protocols")
-
-    async def check_vector_stores(self) -> CategoryResult:
-        """Check vector store backends via nano diagnose."""
-        return await self._single_nano("vector_stores")
-
-    async def check_providers(self, *, live_llm: bool = False) -> CategoryResult:
-        """Check LLM provider credentials via nano diagnose."""
-        return await self._single_nano("providers", live_llm=live_llm)
-
-    async def check_mcp_servers(self) -> CategoryResult:
-        """Check MCP servers via nano diagnose."""
-        return await self._single_nano("mcp_servers")
-
-    async def check_models(self) -> CategoryResult:
-        """Check embedding router role via nano diagnose."""
-        return await self._single_nano("models")
-
-    async def check_host(self) -> CategoryResult:
-        """Check host orchestration features via soothe diagnose."""
-        host = await self._ensure_host(["host"])
-        result = host.get("host")
-        if result is not None:
-            return result
-        return CategoryResult(
-            category="host",
-            status=CheckStatus.ERROR,
-            checks=[],
-            message="host diagnose did not return category: host",
-        )
-
     async def check_external_apis(self) -> CategoryResult:
         """Check config-gated optional external API reachability."""
         from soothe_daemon.health.checks.external_apis_check import check_external_apis
 
         return await check_external_apis(self.config)
-
-    async def check_observability(self) -> CategoryResult:
-        """Check observability via nano diagnose."""
-        return await self._single_nano("observability")
-
-    async def _single_nano(
-        self,
-        category: str,
-        *,
-        live_llm: bool = False,
-    ) -> CategoryResult:
-        nano = await self._ensure_nano([category], live_llm=live_llm)
-        result = nano.get(category)
-        if result is not None:
-            return result
-        return CategoryResult(
-            category=category,
-            status=CheckStatus.ERROR,
-            checks=[],
-            message=f"nano diagnose did not return category: {category}",
-        )
 
 
 def _upgrade_offline_daemon_to_error(result: CategoryResult) -> CategoryResult:

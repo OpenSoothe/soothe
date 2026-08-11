@@ -26,8 +26,6 @@ transports:
 # ============================================================================
 # Bind address/port live under transports.websocket; channel-global knobs here.
 channels:
-  transcription_provider: groq
-  transcription_language: null
   send_progress: true
   send_tool_hints: false
   show_reasoning: true
@@ -52,7 +50,6 @@ thread_max_age_hours: 24
 cancel_retry_count: 3
 cancel_retry_interval_seconds: 2.0
 cancel_force_kill_timeout_seconds: 10.0
-query_timeout_action: cancel  # cancel | terminate
 auto_cancel_on_startup: true
 
 # ============================================================================
@@ -170,10 +167,3 @@ worker_pool:
 # Distributed - Ray cluster
 distributed:
   enabled: false
-  ray:
-    address: null  # null = auto-detect
-    num_cpus: 0.0  # 0 = auto
-    object_store_memory: 0  # 0 = auto
-    max_concurrent_actors: 10
-    actor_lifetime: detached
-    log_to_driver: true

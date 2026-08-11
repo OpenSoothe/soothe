@@ -31,7 +31,15 @@ def _get_rate_limit_threshold(ctx: LoopRuntimeContext) -> int:
 
 async def node_iteration_gate(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Stop with terminal completion when the iteration budget is exhausted."""
-    if ctx.loop_state.iteration >= ctx.loop_state.max_iterations:
+    # Resumable interrupt edge case: when a goal was just resumed in place
+    # from an ``interrupted``/``cancelled`` cursor (recovery_valid_resume) and
+    # the persisted iteration happens to sit exactly at the budget boundary,
+    # the gate must not emit max_iterations before the resumed run does any
+    # work. Grant one grace iteration so the resumed goal can make progress
+    # before the budget check applies again. Without this, a cancel-then-retry
+    # at the final iteration would immediately terminalize the goal.
+    _resumed = bool(getattr(ctx, "recovery_valid_resume", False))
+    if not _resumed and ctx.loop_state.iteration >= ctx.loop_state.max_iterations:
         await emit_max_iterations_terminal(ctx)
         return {"last_outcome": "max_iterations"}
 

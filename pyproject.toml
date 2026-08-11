@@ -70,7 +70,6 @@ paths = [
     "packages/soothe/src",
     "packages/soothe-daemon/src",
     "packages/soothe-cli/src",
-    "scripts/vulture_whitelist.py",
 ]
 exclude = ["*/.backups/*", "*/tests/*", "*/__pycache__/*"]
 min_confidence = 90

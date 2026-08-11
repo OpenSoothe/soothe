@@ -30,7 +30,6 @@ class MockDaemonConfig:
         "ChannelsConfig",
         (),
         {
-            "transcription_provider": "groq",
             "send_max_retries": 3,
             "send_progress": True,
             "send_tool_hints": False,

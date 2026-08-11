@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 
-_SLOOP_CHECKPOINT_STATUSES = frozenset({"running", "idle", "finalized", "cancelled"})
+_SLOOP_CHECKPOINT_STATUSES = frozenset({"running", "idle", "finalized", "cancelled", "interrupted"})
 
 # Terminal statuses that a loop reaches after any execution path completes.
 # Once in a terminal state, the loop will not accept new goals until reset.
@@ -97,7 +97,7 @@ class StrangeLoopCheckpoint(BaseModel):
     current_thread_id: str  # Active thread
 
     # Status (RFC-216: loop-scoped)
-    status: Literal["running", "idle", "finalized", "cancelled"]
+    status: Literal["running", "idle", "finalized", "cancelled", "interrupted"]
 
     # Goal execution history (RFC-216: across all threads)
     # RFC-626 Phase 3: goal_history is now a lightweight index (GoalIndexEntry-like)

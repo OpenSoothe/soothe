@@ -537,7 +537,11 @@ class StrangeLoop:
                     and is_loop_control_signal(user_line_early)
                 ):
                     goal_record = checkpoint.goal_history[checkpoint.current_goal_index]
-                    if goal_record.status == "cancelled":
+                    if goal_record.status in ("cancelled", "interrupted"):
+                        # Re-activate a cancelled (hard kill) or interrupted
+                        # (user cancel via mark_goal_interrupted) goal so the
+                        # loop resumes in place from the persisted iteration
+                        # cursor rather than starting a fresh goal.
                         goal_record.status = "running"
                         goal_record.completed_at = None
                     exec_cp = checkpoint.execution_checkpoint or {}
@@ -1074,6 +1078,23 @@ class StrangeLoop:
                 pump_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await pump_task
+                # Persist a resumable interruption cursor so ``retry`` / ``resume``
+                # restores the iteration counter instead of restarting the goal.
+                # Marking is best-effort: a second cancel during the save must not
+                # mask the original cancellation propagating to the caller.
+                if runtime_ctx is not None and runtime_ctx.goal_record is not None:
+                    try:
+                        await runtime_ctx.state_manager.mark_goal_interrupted(
+                            runtime_ctx.goal_record,
+                            iteration=runtime_ctx.loop_state.iteration,
+                            reason="user_cancelled",
+                        )
+                    except Exception:
+                        logger.warning(
+                            "[run_with_progress] mark_goal_interrupted failed (loop=%s)",
+                            runtime_ctx.state_manager.loop_id,
+                            exc_info=True,
+                        )
                 raise
             finally:
                 if not pump_task.done():

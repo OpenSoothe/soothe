@@ -1048,6 +1048,67 @@ class StrangeLoopStateManager:
         # Save checkpoint
         await self.save(checkpoint)
 
+    async def mark_goal_interrupted(
+        self,
+        goal_record: GoalIndexEntry | None,
+        *,
+        iteration: int,
+        reason: str = "interrupted",
+    ) -> None:
+        """Persist a resumable interruption cursor on the in-flight goal.
+
+        Sets the active goal's status to ``interrupted`` (NOT terminal ``cancelled``)
+        and records the current iteration cursor in ``execution_checkpoint`` so a
+        subsequent ``retry`` / ``resume`` turn restores the same iteration counter
+        instead of restarting from zero. Called when the loop is cancelled
+        mid-Execute (user cancel / infra event) before the goal reaches
+        ``goal_completion``.
+
+        Args:
+            goal_record: Goal index entry to mark interrupted. ``None`` → no-op
+                (caller had no in-flight goal).
+            iteration: Current iteration counter at the interrupt point. This is
+                persisted as-is (not ``+1``) because the in-progress iteration did
+                not complete its ``record_iteration`` flush.
+            reason: Short discriminator for logs (e.g. ``user_cancelled``).
+        """
+        if self._checkpoint is None:
+            logger.warning("mark_goal_interrupted: no checkpoint to update")
+            return
+
+        checkpoint = self._checkpoint
+        if goal_record is not None:
+            target_goal = self._resolve_goal_in_history(checkpoint, goal_record)
+            if target_goal is not None and target_goal.status == "running":
+                target_goal.status = "interrupted"
+                logger.info(
+                    "mark_goal_interrupted: goal=%s iter=%d reason=%s",
+                    target_goal.goal_id,
+                    iteration,
+                    reason,
+                )
+            elif target_goal is not None:
+                logger.debug(
+                    "mark_goal_interrupted: goal=%s already %s; leaving status",
+                    target_goal.goal_id,
+                    target_goal.status,
+                )
+
+        # Persist the cursor so resume restores the iteration counter.
+        exec_cp = dict(checkpoint.execution_checkpoint or {})
+        exec_cp["iteration"] = iteration
+        exec_cp.setdefault("loop_id", checkpoint.loop_id)
+        exec_cp.setdefault("thread_id", checkpoint.current_thread_id)
+        checkpoint.execution_checkpoint = exec_cp
+
+        # Loop checkpoint stays resumable (not terminal): ``idle`` so the next
+        # turn can re-enter via the idle-resume branch, while the goal index
+        # row carries the ``interrupted`` discriminator.
+        if checkpoint.status == "running":
+            checkpoint.status = "idle"
+        checkpoint.updated_at = datetime.now(UTC)
+        await self.save(checkpoint, include_goal_history=True)
+
     async def finalize_loop(self, status: str) -> None:
         """Mark loop finalized (no more goals accepted).
 

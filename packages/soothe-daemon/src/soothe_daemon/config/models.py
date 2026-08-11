@@ -79,7 +79,6 @@ class ChannelsConfig(BaseModel):
     Built-in WebSocket channel plus external plugins.
 
     Global settings apply to all channels:
-    - transcription_provider: Audio transcription backend ("groq" or "openai")
     - send_progress: Show progress indicators
     - send_tool_hints: Show tool execution hints
     - show_reasoning: Show model reasoning (where supported)
@@ -87,8 +86,6 @@ class ChannelsConfig(BaseModel):
 
     Args:
         websocket: WebSocket channel configuration (required).
-        transcription_provider: Transcription backend.
-        transcription_language: Optional transcription language.
         send_progress: Show progress indicators.
         send_tool_hints: Show tool hints.
         show_reasoning: Show reasoning content.
@@ -101,10 +98,6 @@ class ChannelsConfig(BaseModel):
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
 
     # Global channel settings
-    transcription_provider: str = Field(default="groq", description="Audio transcription provider")
-    transcription_language: str | None = Field(
-        default=None, description="Transcription language code"
-    )
     send_progress: bool = Field(default=True, description="Show progress indicators")
     send_tool_hints: bool = Field(default=False, description="Show tool execution hints")
     show_reasoning: bool = Field(default=True, description="Show model reasoning content")
@@ -223,51 +216,6 @@ class WorkerPoolConfig(BaseModel):
         return max(self.min_pool_size, self.max_pool_size)
 
 
-class RayClusterConfig(BaseModel):
-    """Ray cluster configuration for distributed loop execution (RFC-221).
-
-    When distributed.enabled=true, loops are executed as Ray actors. This config
-    controls Ray cluster connection and actor lifecycle.
-
-    Args:
-        address: Ray cluster address (None = start local cluster).
-        num_cpus: CPUs per actor (0 = auto).
-        object_store_memory: Object store memory per actor (bytes, 0 = auto).
-        max_concurrent_actors: Max concurrent loop actors.
-        actor_lifetime: Actor lifetime policy ('detached' or 'non_detached').
-        log_to_driver: Route actor logs to driver process.
-    """
-
-    address: str | None = Field(
-        default=None,
-        description="Ray cluster address (None = start local cluster, or 'auto' for existing)",
-    )
-    num_cpus: float = Field(
-        default=0,
-        ge=0,
-        description="CPUs allocated per loop actor (0 = auto)",
-    )
-    object_store_memory: int = Field(
-        default=0,
-        ge=0,
-        description="Object store memory per actor in bytes (0 = auto)",
-    )
-    max_concurrent_actors: int = Field(
-        default=10,
-        ge=1,
-        le=100,
-        description="Maximum concurrent loop actors",
-    )
-    actor_lifetime: str = Field(
-        default="detached",
-        description="Actor lifetime: 'detached' (survives driver) or 'non_detached'",
-    )
-    log_to_driver: bool = Field(
-        default=True,
-        description="Route actor logs to driver process",
-    )
-
-
 class DistributedConfig(BaseModel):
     """Distributed loop execution configuration (RFC-221).
 
@@ -277,16 +225,11 @@ class DistributedConfig(BaseModel):
 
     Args:
         enabled: Enable distributed mode (Ray actors).
-        ray: Ray cluster configuration.
     """
 
     enabled: bool = Field(
         default=False,
         description="Enable distributed mode (Ray actors). Set SOOTHE_DISTRIBUTED=true to enable.",
-    )
-    ray: RayClusterConfig = Field(
-        default_factory=RayClusterConfig,
-        description="Ray cluster configuration for distributed loop execution",
     )
 
 
@@ -535,7 +478,6 @@ __all__ = [
     "LoopStatusReconciliationConfig",
     "MemoryProfilingConfig",
     "StaleWorkerReapConfig",
-    "RayClusterConfig",
     "ThreadPoolConfig",
     "TokenConfig",
     "TransportConfig",

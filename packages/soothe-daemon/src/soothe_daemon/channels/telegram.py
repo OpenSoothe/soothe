@@ -36,7 +36,6 @@ logger = logging.getLogger(__name__)
 # Telegram message limits
 TELEGRAM_MAX_MESSAGE_LEN = 4000  # Split raw markdown at 4000 for safety margin
 TELEGRAM_HTML_MAX_LEN = 4096  # Telegram's actual API limit
-TELEGRAM_REPLY_CONTEXT_MAX_LEN = 4000
 
 # Retry configuration
 _SEND_MAX_RETRIES = 3
@@ -224,7 +223,6 @@ class _QueuedTelegramUpdate:
     kind: Literal["command", "message"]
     update: Update
     context: Any
-    sort_key: tuple[int, int]
 
 
 class TelegramConfig:
@@ -308,7 +306,6 @@ class TelegramChannel(Channel):
         self._typing_tasks: dict[str, asyncio.Task] = {}
         self._media_group_buffers: dict[str, dict] = {}
         self._media_group_tasks: dict[str, asyncio.Task] = {}
-        self._message_threads: dict[tuple[str, int], int] = {}
         self._bot_user_id: int | None = None
         self._bot_username: str | None = None
         self._stream_bufs: dict[str, _StreamBuf] = {}

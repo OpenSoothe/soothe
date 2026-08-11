@@ -89,6 +89,9 @@ def test_has_resumable_interrupted_goal() -> None:
     assert has_resumable_interrupted_goal(_checkpoint(status="idle", goal_status="running"))
     assert has_resumable_interrupted_goal(_checkpoint(status="running", goal_status="running"))
     assert has_resumable_interrupted_goal(_checkpoint(status="idle", goal_status="cancelled"))
+    # Regression: an interrupted goal (user cancel via mark_goal_interrupted) is
+    # resumable so a retry/continue/resume re-activates it in place.
+    assert has_resumable_interrupted_goal(_checkpoint(status="idle", goal_status="interrupted"))
     assert not has_resumable_interrupted_goal(_checkpoint(status="idle", goal_status="completed"))
 
 

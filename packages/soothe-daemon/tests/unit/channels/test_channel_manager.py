@@ -53,7 +53,6 @@ class MockDaemonConfig:
     """Mock daemon config for testing."""
 
     channels = MagicMock()
-    channels.transcription_provider = "groq"
     channels.send_max_retries = 3
 
     transports = MagicMock()

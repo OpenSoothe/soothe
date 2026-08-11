@@ -43,60 +43,6 @@ class ProjectContext:
             msg = f"project_root must be absolute, got {self.project_root!r}"
             raise ValueError(msg)
 
-    @classmethod
-    def from_user_cwd(cls, user_cwd: str | Path) -> ProjectContext:
-        """Build a project context from an explicit user working directory.
-
-        Args:
-            user_cwd: User invocation directory.
-
-        Returns:
-            Resolved project context.
-        """
-        resolved_cwd = Path(user_cwd).expanduser().resolve()
-        return cls(
-            user_cwd=resolved_cwd,
-            project_root=find_project_root(resolved_cwd),
-        )
-
-    def resolve_user_path(self, path: str | Path) -> Path:
-        """Resolve a path relative to the explicit user working directory.
-
-        Args:
-            path: Absolute or relative user-facing path.
-
-        Returns:
-            Absolute resolved path.
-        """
-        candidate = Path(path).expanduser()
-        if candidate.is_absolute():
-            return candidate.resolve()
-        return (self.user_cwd / candidate).resolve()
-
-    def project_agent_md_paths(self) -> list[Path]:
-        """Return project-level `AGENTS.md` files for this context."""
-        if self.project_root is None:
-            return []
-        return find_project_agent_md(self.project_root)
-
-    def project_skills_dir(self) -> Path | None:
-        """Return the project `SOOTHE_HOME/skills` directory, if any."""
-        if self.project_root is None:
-            return None
-        return self.project_root / ".soothe" / "skills"
-
-    def project_agents_dir(self) -> Path | None:
-        """Return the project `SOOTHE_HOME/agents` directory, if any."""
-        if self.project_root is None:
-            return None
-        return self.project_root / ".soothe" / "agents"
-
-    def project_agent_skills_dir(self) -> Path | None:
-        """Return the project `.agents/skills` directory, if any."""
-        if self.project_root is None:
-            return None
-        return self.project_root / ".agents" / "skills"
-
 
 def get_server_project_context(
     env: Mapping[str, str] | None = None,
@@ -155,35 +101,3 @@ def find_project_root(start_path: str | Path | None = None) -> Path | None:
             return parent
 
     return None
-
-
-def find_project_agent_md(project_root: Path) -> list[Path]:
-    """Find project-specific AGENTS.md file(s).
-
-    Checks two locations and returns ALL that exist:
-    1. project_root/SOOTHE_HOME/AGENTS.md
-    2. project_root/AGENTS.md
-
-    Both files will be loaded and combined if both exist.
-
-    Args:
-        project_root: Path to the project root directory.
-
-    Returns:
-        Existing AGENTS.md paths.
-
-            Empty if neither file exists, one entry if only one is present, or
-            two entries if both locations have the file.
-    """
-    candidates = [
-        project_root / "SOOTHE_HOME" / "AGENTS.md",
-        project_root / "AGENTS.md",
-    ]
-    paths: list[Path] = []
-    for candidate in candidates:
-        try:
-            if candidate.exists():
-                paths.append(candidate)
-        except OSError:
-            pass
-    return paths

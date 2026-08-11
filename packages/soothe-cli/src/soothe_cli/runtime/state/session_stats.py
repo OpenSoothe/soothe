@@ -126,13 +126,23 @@ class TurnLatencyStats:
     goal_completion_applied: bool = False
 
     def record_first_chunk(self) -> None:
-        """Record time-to-first-chunk once per turn."""
+        """Record time-to-first-chunk once per turn.
+
+        Part of the ``SupportsTurnLatency`` protocol consumed by the external
+        turn pipeline (client/python); cannot be inlined without breaking the
+        submodule contract.
+        """
         if self.time_to_first_chunk_ms is not None or self.turn_start_monotonic <= 0:
             return
         self.time_to_first_chunk_ms = (time.monotonic() - self.turn_start_monotonic) * 1000.0
 
     def record_goal_completion(self) -> None:
-        """Record synthesis-visible latency once per turn."""
+        """Record synthesis-visible latency once per turn.
+
+        Part of the ``SupportsTurnLatency`` protocol consumed by the external
+        turn pipeline (client/python); cannot be inlined without breaking the
+        submodule contract.
+        """
         if self.goal_completion_applied or self.turn_start_monotonic <= 0:
             return
         self.goal_completion_applied = True

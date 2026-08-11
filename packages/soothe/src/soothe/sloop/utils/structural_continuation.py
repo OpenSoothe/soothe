@@ -63,7 +63,10 @@ def has_resumable_interrupted_goal(checkpoint: Any | None) -> bool:
 
     Covers ``status=running`` mid-flight recovery and the post-cancel case where
     loop metadata was marked ``idle`` while the StrangeLoop goal index entry is
-    still ``running`` (interrupt touch).
+    still ``running`` (interrupt touch). Also covers the ``interrupted`` goal
+    index status written by ``mark_goal_interrupted`` on a user cancel, so that
+    a retry/continue/resume re-activates that goal in place rather than
+    starting a fresh goal.
     """
     if checkpoint is None:
         return False
@@ -71,7 +74,7 @@ def has_resumable_interrupted_goal(checkpoint: Any | None) -> bool:
     if goal is None:
         return False
     status = getattr(goal, "status", None)
-    return status in ("running", "cancelled")
+    return status in ("running", "cancelled", "interrupted")
 
 
 def should_bypass_pass1_social_fast_path(

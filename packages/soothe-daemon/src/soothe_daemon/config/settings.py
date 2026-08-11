@@ -114,9 +114,6 @@ class SootheDaemonConfig(BaseSettings):
         le=60.0,
         description="Maximum seconds to wait before force killing unresponsive worker",
     )
-    query_timeout_action: str = Field(
-        default="cancel", description="Action on timeout: cancel | suspend"
-    )
     thread_max_age_hours: int = Field(
         default=24, ge=0, description="Auto-cancel incomplete threads older than N hours"
     )

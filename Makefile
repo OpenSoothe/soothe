@@ -77,7 +77,6 @@ help:
 	@echo "  make lint-fix         - Auto-fix linting issues"
 	@echo "  make autofix          - Run all auto-fixes (format + lint-fix)"
 	@echo "  make vulture          - Dead-code analysis (vulture, min 90% confidence)"
-	@echo "  make vulture-whitelist - Regenerate scripts/vulture_whitelist.py"
 	@echo "  make test             - Run all tests"
 	@echo "  make test-unit        - Run unit tests"
 	@echo "  make test-integration - Run integration tests"
@@ -285,23 +284,6 @@ vulture: sync
 	@echo "Running vulture dead-code analysis..."
 	@.venv/bin/vulture
 	@echo "OK — no new high-confidence dead code"
-
-vulture-whitelist: sync
-	@echo "Regenerating scripts/vulture_whitelist.py (review diff before commit)..."
-	@{ \
-		echo '"""Vulture whitelist — known false positives and tracked dead-code debt.'; \
-		echo ''; \
-		echo 'Regenerate (then review diff) with::'; \
-		echo ''; \
-		echo '    make vulture-whitelist'; \
-		echo ''; \
-		echo 'Each entry suppresses a specific high-confidence finding until the code is'; \
-		echo 'fixed or removed.'; \
-		echo '"""'; \
-		echo ''; \
-		.venv/bin/vulture --make-whitelist; \
-	} > scripts/vulture_whitelist.py
-	@echo "Wrote scripts/vulture_whitelist.py"
 
 # ============================================================================
 # Tests

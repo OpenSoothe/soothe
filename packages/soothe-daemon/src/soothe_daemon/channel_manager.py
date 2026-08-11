@@ -105,11 +105,6 @@ class ChannelManager:
         self._message_handler: Callable[[str, dict[str, Any]], None] | None = None
         self._handshake_callback: Callable[[Any], list[dict[str, Any]]] | None = None
 
-        # Transcription config (global)
-        self._transcription_provider = getattr(config.channels, "transcription_provider", "groq")
-        self._transcription_api_key = ""
-        self._transcription_api_base = ""
-
     def set_message_handler(self, handler: Callable[[str, dict[str, Any]], None]) -> None:
         """Set the unified message handler for all channels.
 

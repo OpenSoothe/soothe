@@ -22,57 +22,6 @@ from soothe_daemon.health.models import (
 
 
 @pytest.mark.asyncio
-async def test_tool_deps_via_nano_diagnose(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_nano(_config=None, **kwargs):
-        assert kwargs.get("categories") == ["tool_deps"]
-        return [
-            {
-                "category": "tool_deps",
-                "status": "ok",
-                "checks": [
-                    {"name": "rg", "status": "ok", "message": "rg ok", "details": {}},
-                    {"name": "fd", "status": "ok", "message": "fd ok", "details": {}},
-                    {"name": "git", "status": "ok", "message": "git ok", "details": {}},
-                ],
-                "message": None,
-            }
-        ]
-
-    monkeypatch.setattr("soothe_nano.diagnose.diagnose", fake_nano)
-    checker = HealthChecker()
-    result = await checker.check_tool_deps()
-    assert result.category == "tool_deps"
-    assert {c.name for c in result.checks} == {"rg", "fd", "git"}
-
-
-@pytest.mark.asyncio
-async def test_host_via_soothe_diagnose(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_host(_config=None, **kwargs):
-        assert kwargs.get("categories") == ["host"]
-        return [
-            {
-                "category": "host",
-                "status": "ok",
-                "checks": [
-                    {
-                        "name": "autopilot",
-                        "status": "ok",
-                        "message": "ok",
-                        "details": {},
-                    }
-                ],
-                "message": None,
-            }
-        ]
-
-    monkeypatch.setattr("soothe.diagnose.diagnose", fake_host)
-    checker = HealthChecker()
-    result = await checker.check_host()
-    assert result.category == "host"
-    assert result.checks[0].name == "autopilot"
-
-
-@pytest.mark.asyncio
 async def test_persistence_sqlite_skips_postgres_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -117,58 +66,6 @@ async def test_persistence_postgresql_requires_dsn() -> None:
     result_conn = mod._check_postgresql_connection(cfg)
     assert result_conn.status == CheckStatus.ERROR
     assert "postgres_base_dsn" in result_conn.message
-
-
-@pytest.mark.asyncio
-async def test_providers_delegates_to_nano(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_nano(_config=None, **kwargs):
-        assert kwargs.get("live_llm") is False
-        return [
-            {
-                "category": "providers",
-                "status": "ok",
-                "checks": [
-                    {
-                        "name": "openrouter",
-                        "status": "ok",
-                        "message": "ok",
-                        "details": {},
-                    }
-                ],
-                "message": None,
-            }
-        ]
-
-    monkeypatch.setattr("soothe_nano.diagnose.diagnose", fake_nano)
-    checker = HealthChecker()
-    result = await checker.check_providers(live_llm=False)
-    assert result.checks[0].name == "openrouter"
-
-
-@pytest.mark.asyncio
-async def test_observability_delegates_to_nano(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_nano(_config=None, **_kwargs):
-        return [
-            {
-                "category": "observability",
-                "status": "skipped",
-                "checks": [
-                    {
-                        "name": "langfuse",
-                        "status": "skipped",
-                        "message": "disabled",
-                        "details": {},
-                    }
-                ],
-                "message": None,
-            }
-        ]
-
-    monkeypatch.setattr("soothe_nano.diagnose.diagnose", fake_nano)
-    checker = HealthChecker()
-    result = await checker.check_observability()
-    assert result.checks[0].name == "langfuse"
-    assert result.checks[0].status == CheckStatus.SKIPPED
 
 
 @pytest.mark.asyncio
