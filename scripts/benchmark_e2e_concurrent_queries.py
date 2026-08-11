@@ -294,9 +294,7 @@ class ConcurrentQueryBenchmark:
             )
 
             # Send the benchmark query input
-            unique_question = (
-                f"Benchmark query {query_id}: Calculate {query_id} + {query_id * 2}"
-            )
+            unique_question = f"Benchmark query {query_id}: Calculate {query_id} + {query_id * 2}"
             await client.send_input(loop_id=loop_id, text=unique_question)
 
             # Collect events until response or timeout

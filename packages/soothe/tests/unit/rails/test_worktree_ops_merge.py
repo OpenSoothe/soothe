@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from soothe.autopilot.rail import worktree_ops
-from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
-from soothe.autopilot.rail.guards import _structural_short_circuit
+from soothe.autopilot.rails import worktree_ops
+from soothe.autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.autopilot.rails.guards import _structural_short_circuit
 from soothe.context import ContextEngine
 
 
@@ -294,7 +294,7 @@ async def test_merge_branches_happy_path_marks_merged(tmp_path: Path) -> None:
 
 
 def test_greenfield_has_dag_idle_merge_rule() -> None:
-    from soothe.rails import LoopRailCatalog
+    from soothe.autopilot.rails import LoopRailCatalog
 
     rail = LoopRailCatalog().resolve("greenfield-system")
     idle_merge = [

@@ -22,12 +22,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.autopilot.rail.builtins_exec import (
+from soothe.autopilot.rails.builtins_exec import (
     BuiltinResult,
 )
 
 if TYPE_CHECKING:
-    from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
+    from soothe.autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
 
 logger = logging.getLogger(__name__)
 

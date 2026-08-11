@@ -12,6 +12,11 @@ applies_when: |
   Build or change functionality in an existing codebase, or fix a bug,
   regression, failing test, or unexpected behavior.
 
+worktrees:
+  enabled: true
+  recycle_on_merge: true
+  recycle_on_complete: true
+
 conditions:
   ready_to_plan: |
     All exploration scouts for the current effort have completed,

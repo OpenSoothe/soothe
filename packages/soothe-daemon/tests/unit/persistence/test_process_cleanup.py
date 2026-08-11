@@ -1,10 +1,12 @@
-"""Stale multiprocessing.spawn worker cleanup."""
+"""Stale multiprocessing.spawn worker + orphaned worktree-grandchild cleanup."""
 
 from __future__ import annotations
 
+import signal
 from unittest.mock import patch
 
 from soothe_daemon.persistence.process_cleanup import (
+    _looks_like_orphaned_worktree_spawn,
     _looks_like_soothe_spawn,
     reap_stale_soothe_worker_processes,
 )
@@ -19,9 +21,25 @@ def test_looks_like_soothe_spawn() -> None:
     assert _looks_like_soothe_spawn("python -c 'print(1)'", None) is False
 
 
+def test_looks_like_orphaned_worktree_spawn() -> None:
+    assert (
+        _looks_like_orphaned_worktree_spawn(
+            "/bin/sh -c cd /repo/.soothe/worktrees/w1-auth && npm test"
+        )
+        is True
+    )
+    assert (
+        _looks_like_orphaned_worktree_spawn("node /repo/.soothe/background/bg-123.log jest") is True
+    )
+    assert _looks_like_orphaned_worktree_spawn("python -c 'print(1)'") is False
+
+
+# ps -ax -o pid=,pgid=,ppid=,command=  → 4 fields per row.
+
+
 def test_reap_skips_live_daemon_child() -> None:
-    ps_out = " 100   50 /venv/python -m soothe_daemon --detached\n"
-    ps_out += " 200   100 /venv/python -c from multiprocessing.spawn import spawn_main\n"
+    ps_out = " 100 100 50 /venv/python -m soothe_daemon --detached\n"
+    ps_out += " 200 200 100 /venv/python -c from multiprocessing.spawn import spawn_main\n"
 
     with (
         patch(
@@ -31,7 +49,7 @@ def test_reap_skips_live_daemon_child() -> None:
                 type("R", (), {"stdout": "soothe_daemon", "returncode": 0})(),
             ],
         ),
-        patch("soothe_daemon.persistence.process_cleanup.os.kill") as mock_kill,
+        patch("soothe_daemon.persistence.process_cleanup.os.killpg") as mock_kill,
         patch("soothe_daemon.persistence.process_cleanup._parent_alive", return_value=True),
     ):
         count = reap_stale_soothe_worker_processes(dry_run=False)
@@ -40,14 +58,14 @@ def test_reap_skips_live_daemon_child() -> None:
 
 
 def test_reap_skips_worker_whose_parent_is_daemon_pid() -> None:
-    ps_out = " 200   100 /venv/python -c from multiprocessing.spawn import spawn_main\n"
+    ps_out = " 200 200 100 /venv/python -c from multiprocessing.spawn import spawn_main\n"
 
     with (
         patch(
             "soothe_daemon.persistence.process_cleanup.subprocess.run",
             return_value=type("R", (), {"stdout": ps_out, "returncode": 0})(),
         ),
-        patch("soothe_daemon.persistence.process_cleanup.os.kill") as mock_kill,
+        patch("soothe_daemon.persistence.process_cleanup.os.killpg") as mock_kill,
     ):
         count = reap_stale_soothe_worker_processes(daemon_pid=100, dry_run=False)
     assert count == 0
@@ -55,14 +73,14 @@ def test_reap_skips_worker_whose_parent_is_daemon_pid() -> None:
 
 
 def test_reap_skips_protect_pids() -> None:
-    ps_out = " 300     1 /venv/python -c from multiprocessing.spawn import spawn_main\n"
+    ps_out = " 300 300 1 /venv/python -c from multiprocessing.spawn import spawn_main\n"
 
     with (
         patch(
             "soothe_daemon.persistence.process_cleanup.subprocess.run",
             return_value=type("R", (), {"stdout": ps_out, "returncode": 0})(),
         ),
-        patch("soothe_daemon.persistence.process_cleanup.os.kill") as mock_kill,
+        patch("soothe_daemon.persistence.process_cleanup.os.killpg") as mock_kill,
         patch("soothe_daemon.persistence.process_cleanup._parent_alive", return_value=False),
     ):
         count = reap_stale_soothe_worker_processes(
@@ -74,16 +92,50 @@ def test_reap_skips_protect_pids() -> None:
 
 
 def test_reap_orphan_spawn_worker() -> None:
-    ps_out = " 300     1 /venv/python -c from multiprocessing.spawn import spawn_main\n"
+    ps_out = " 300 300 1 /venv/python -c from multiprocessing.spawn import spawn_main\n"
 
     with (
         patch(
             "soothe_daemon.persistence.process_cleanup.subprocess.run",
             return_value=type("R", (), {"stdout": ps_out, "returncode": 0})(),
         ),
-        patch("soothe_daemon.persistence.process_cleanup.os.kill") as mock_kill,
+        patch("soothe_daemon.persistence.process_cleanup.os.killpg") as mock_kill,
         patch("soothe_daemon.persistence.process_cleanup._parent_alive", return_value=False),
     ):
         count = reap_stale_soothe_worker_processes(dry_run=False)
     assert count == 1
-    mock_kill.assert_called_once()
+    mock_kill.assert_called_once_with(300, signal.SIGTERM)
+
+
+def test_reap_orphaned_worktree_grandchild() -> None:
+    """Orphaned jest/pytest whose parent is dead and cwd under a worktree."""
+    ps_out = " 4230 4230 1 /bin/sh -c cd /repo/.soothe/worktrees/w1-auth && npm test\n"
+
+    with (
+        patch(
+            "soothe_daemon.persistence.process_cleanup.subprocess.run",
+            return_value=type("R", (), {"stdout": ps_out, "returncode": 0})(),
+        ),
+        patch("soothe_daemon.persistence.process_cleanup.os.killpg") as mock_kill,
+        patch("soothe_daemon.persistence.process_cleanup._parent_alive", return_value=False),
+    ):
+        count = reap_stale_soothe_worker_processes(dry_run=False)
+    assert count == 1
+    mock_kill.assert_called_once_with(4230, signal.SIGTERM)
+
+
+def test_reap_skips_live_worktree_process() -> None:
+    """A worktree process whose parent is alive is NOT reaped."""
+    ps_out = " 4230 4230 200 /bin/sh -c cd /repo/.soothe/worktrees/w1-auth && npm test\n"
+
+    with (
+        patch(
+            "soothe_daemon.persistence.process_cleanup.subprocess.run",
+            return_value=type("R", (), {"stdout": ps_out, "returncode": 0})(),
+        ),
+        patch("soothe_daemon.persistence.process_cleanup.os.killpg") as mock_kill,
+        patch("soothe_daemon.persistence.process_cleanup._parent_alive", return_value=True),
+    ):
+        count = reap_stale_soothe_worker_processes(dry_run=False)
+    assert count == 0
+    mock_kill.assert_not_called()

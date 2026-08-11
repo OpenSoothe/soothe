@@ -461,7 +461,7 @@ After a successful host merge of maker M:
 
 Three-tier precedence (low → high, last wins), unchanged:
 
-1. `packages/soothe/src/soothe/rails/builtin_rails/`
+1. `packages/soothe/src/soothe/autopilot/rails/builtin_rails/`
 2. `$SOOTHE_HOME/rails/`
 3. `<workspace>/.soothe/rails/`
 
@@ -593,15 +593,15 @@ worktree / feedback macro extract; **M4** intent expand.
 
 | Module | Path |
 |--------|------|
-| Catalog + `RailDefinition` | `soothe/rails/catalog.py` |
-| Path tiers | `soothe/rails/builtins.py` |
-| Builtin / override recipes | `soothe/rails/builtin_rails/*.yml` + `verbs:` |
-| Rail selection / auto-pick | `soothe/rails/selector.py` (+ picker helper) |
-| Interpreter (L2) | `soothe/autopilot/rail/interpreter.py` |
-| Rail Exec (L1→L0) | `soothe/autopilot/rail/` (evolve `builtins_exec.py` → exec + primitives) |
-| Guards | `soothe/autopilot/rail/guards.py` |
-| WavePlan | `soothe/autopilot/rail/wave_plan.py` |
-| Trace | `soothe/autopilot/rail/trace_store.py` |
+| Catalog + `RailDefinition` | `soothe/autopilot/rails/catalog.py` |
+| Path tiers | `soothe/autopilot/rails/builtins.py` |
+| Builtin / override recipes | `soothe/autopilot/rails/builtin_rails/*.yml` + `verbs:` |
+| Rail selection / auto-pick | `soothe/autopilot/rails/selector.py` (+ picker helper) |
+| Interpreter (L2) | `soothe/autopilot/rails/interpreter.py` |
+| Rail Exec (L1→L0) | `soothe/autopilot/rails/` (evolve `builtins_exec.py` → exec + primitives) |
+| Guards | `soothe/autopilot/rails/guards.py` |
+| WavePlan | `soothe/autopilot/rails/wave_plan.py` |
+| Trace | `soothe/autopilot/rails/trace_store.py` |
 | Submit bind | `soothe/autopilot/service.py` (`submit_goal` → resolve → `_bind_rail_for_job`) |
 | Protocol reference | `soothe_nano` skill `looprail-creator` references |
 

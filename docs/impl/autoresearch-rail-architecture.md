@@ -320,12 +320,12 @@ entry. This lets tests script exact multi-turn decision sequences.
 
 | File | Purpose |
 |------|---------|
-| `packages/soothe/src/soothe/rails/builtin_rails/autoresearch.yml` | Rail YAML (verbs, conditions, flow, `do:` recipes) |
-| `packages/soothe/src/soothe/autopilot/rail/autoresearch_exec.py` | Native exec module (synthesis plan + writer) |
-| `packages/soothe/src/soothe/autopilot/rail/builtins_exec.py` | `invoke()` dispatch (routes to AutoresearchExec) |
-| `packages/soothe/src/soothe/autopilot/rail/recipe_exec.py` | `RecipeRunner` (executes YAML `do:` recipes) |
-| `packages/soothe/src/soothe/autopilot/rail/verb_defaults.py` | Defensive defaults for `plan_and_implement`, `review`, `qa_verify` |
-| `packages/soothe/src/soothe/autopilot/rail/catalog.py` | `BUILTIN_RAIL_IDS` + `CE_RAIL_BUILTINS` |
+| `packages/soothe/src/soothe/autopilot/rails/builtin_rails/autoresearch.yml` | Rail YAML (verbs, conditions, flow, `do:` recipes) |
+| `packages/soothe/src/soothe/autopilot/rails/autoresearch_exec.py` | Native exec module (synthesis plan + writer) |
+| `packages/soothe/src/soothe/autopilot/rails/builtins_exec.py` | `invoke()` dispatch (routes to AutoresearchExec) |
+| `packages/soothe/src/soothe/autopilot/rails/recipe_exec.py` | `RecipeRunner` (executes YAML `do:` recipes) |
+| `packages/soothe/src/soothe/autopilot/rails/verb_defaults.py` | Defensive defaults for `plan_and_implement`, `review`, `qa_verify` |
+| `packages/soothe/src/soothe/autopilot/rails/catalog.py` | `BUILTIN_RAIL_IDS` + `CE_RAIL_BUILTINS` |
 | `packages/soothe/src/soothe/autopilot/prompts/fragments/rail/autoresearch_loop.xml` | Core loop prompt fragment |
 | `packages/soothe/src/soothe/autopilot/prompts/fragments/rail/*.xml` | 14 subcommand prompt fragments |
 | `packages/soothe/tests/unit/rails/test_autoresearch_rail.py` | Unit tests (35) |

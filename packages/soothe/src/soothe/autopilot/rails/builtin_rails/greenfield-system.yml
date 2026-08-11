@@ -18,6 +18,11 @@ fanout:
   require_plan: true
   max_waves: 32
 
+worktrees:
+  enabled: true
+  recycle_on_merge: true
+  recycle_on_complete: true
+
 verbs:
   plan_milestones:
     do:

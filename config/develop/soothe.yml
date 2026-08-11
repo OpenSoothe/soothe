@@ -91,6 +91,8 @@ agent:
     workspace_reservation:
       enabled: true
       strict_overlap: true
+    lifecycle_drain_grace_seconds: 2.0
+    lifecycle_worktree_recycle_enabled: true
 
   loop:
     enabled: true

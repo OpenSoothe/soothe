@@ -84,7 +84,7 @@ tips were not on `master`; `merge_branches` was unimplemented.
 
 ### P1 — Host git / worktree manager
 
-- [x] `soothe/autopilot/rail/worktree_ops.py`
+- [x] `soothe/autopilot/rails/worktree_ops.py`
 - [x] Ensure `job/<id>/_base` from detected `base_branch` (`main`/`master`)
 - [x] Maker WT from job-branch tip; `job/<id>/<slug>` (no nested ref clash)
 - [x] merge / refresh / land helpers
@@ -163,12 +163,12 @@ After upgrading the daemon and `soothed restart`:
 ## Suggested module layout
 
 ```text
-packages/soothe/src/soothe/autopilot/rail/
+packages/soothe/src/soothe/autopilot/rails/
   wave_plan.py           # + depends_on, max_slices, validation
   builtins_exec.py       # RailJobState fields; spawn-ready; merge/land hooks
   worktree_ops.py        # NEW: ensure job branch, merge, refresh, land
   guards.py / predicates # slices_ready_to_spawn, maker_merged, …
-packages/soothe/src/soothe/rails/builtin_rails/
+packages/soothe/src/soothe/autopilot/rails/builtin_rails/
   greenfield-system.yml
   migration.yml
   README.md

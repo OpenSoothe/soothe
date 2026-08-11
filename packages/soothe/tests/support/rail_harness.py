@@ -8,18 +8,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from soothe.autopilot.rail import (
+from soothe.autopilot.rails import (
+    LoopRailCatalog,
     LoopRailInterpreter,
     MemoryRailTraceStore,
     RailEvent,
     ScriptedGuardEvaluator,
     export_trace_evaluation,
 )
-from soothe.autopilot.rail.builtins_exec import RailJobState
-from soothe.autopilot.rail.guards import GuardResult
+from soothe.autopilot.rails.builtins_exec import RailJobState
+from soothe.autopilot.rails.guards import GuardResult
 from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode
-from soothe.rails import LoopRailCatalog
 
 OnReady = Callable[[GoalNode, int], Awaitable[None]]
 

@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 _SPAWN_MARKERS = ("multiprocessing.spawn", "spawn_main")
 _SOOTHE_MARKERS = ("soothe", "soothe_daemon", "Soothe", "soothe_daemon")
+# Paths that mark a process as a worktree/background spawn of a soothe job.
+_WORKTREE_PATH_MARKERS = (".soothe/worktrees/", ".soothe/background/bg-")
 
 
 def _read_cmdline(pid: int) -> str:
@@ -57,6 +59,18 @@ def _looks_like_soothe_spawn(cmdline: str, soothe_root: Path | None) -> bool:
     return "spawn_main" in cmdline
 
 
+def _looks_like_orphaned_worktree_spawn(cmdline: str) -> bool:
+    """True when a process references a leaked worktree/background path.
+
+    These are agent ``run_background`` grandchildren (jest/pytest/npm/…)
+    whose parent worker died, leaving them reparented to PID 1 with a
+    command line still pointing at a ``.soothe/worktrees/`` workspace or a
+    ``.soothe/background/bg-`` log path. Bounded to soothe-workspace paths,
+    not a global match.
+    """
+    return any(marker in cmdline for marker in _WORKTREE_PATH_MARKERS)
+
+
 def reap_stale_soothe_worker_processes(
     *,
     dry_run: bool = False,
@@ -87,7 +101,7 @@ def reap_stale_soothe_worker_processes(
 
     try:
         out = subprocess.run(
-            ["ps", "-ax", "-o", "pid=,ppid=,command="],
+            ["ps", "-ax", "-o", "pid=,pgid=,ppid=,command="],
             capture_output=True,
             text=True,
             check=False,
@@ -104,52 +118,64 @@ def reap_stale_soothe_worker_processes(
         line = line.strip()
         if not line:
             continue
-        parts = line.split(None, 2)
-        if len(parts) < 3:
+        parts = line.split(None, 3)
+        if len(parts) < 4:
             continue
         try:
             pid = int(parts[0])
-            ppid = int(parts[1])
+            pgid = int(parts[1])
+            ppid = int(parts[2])
         except ValueError:
             continue
-        cmd = parts[2]
+        cmd = parts[3]
         if pid == current_pid or pid <= 1:
             continue
-        if pid in protected:
-            continue
-        if not _looks_like_soothe_spawn(cmd, root):
+        if pid in protected or pgid in protected:
             continue
 
-        if ppid == effective_daemon_pid:
+        is_spawn = _looks_like_soothe_spawn(cmd, root)
+        is_wt_spawn = _looks_like_orphaned_worktree_spawn(cmd)
+        if not is_spawn and not is_wt_spawn:
             continue
 
-        parent_cmd = _read_cmdline(ppid) if _parent_alive(ppid) else ""
-        parent_is_daemon = "soothe_daemon" in parent_cmd
-        parent_dead = not _parent_alive(ppid)
+        # Worktree/background grandchildren are only reaped when orphaned
+        # (parent dead / reparented to init) so live workers are untouched.
+        if is_wt_spawn:
+            parent_dead = not _parent_alive(ppid)
+            if not parent_dead and ppid != 1:
+                continue
+        else:
+            if ppid == effective_daemon_pid:
+                continue
+            parent_cmd = _read_cmdline(ppid) if _parent_alive(ppid) else ""
+            parent_is_daemon = "soothe_daemon" in parent_cmd
+            parent_dead = not _parent_alive(ppid)
+            if parent_is_daemon and not parent_dead:
+                continue
 
-        if parent_is_daemon and not parent_dead:
+        if dry_run:
+            logger.info(
+                "Would reap stale soothe process pid=%d pgid=%d ppid=%d cmd=%s",
+                pid,
+                pgid,
+                ppid,
+                cmd[:120],
+            )
             continue
-
-        if parent_dead or ppid == 1 or not parent_is_daemon:
-            if dry_run:
-                logger.info(
-                    "Would reap stale soothe worker pid=%d ppid=%d cmd=%s",
-                    pid,
-                    ppid,
-                    cmd[:120],
-                )
-            else:
-                try:
-                    os.kill(pid, signal.SIGTERM)
-                    reaped += 1
-                    logger.info("Sent SIGTERM to stale soothe worker pid=%d", pid)
-                except ProcessLookupError:
-                    pass
-                except PermissionError:
-                    logger.warning("No permission to terminate pid=%d", pid)
+        # Kill the whole process group — run_background spawns with
+        # start_new_session=True, so the shell leader and its children
+        # (jest workers, pytest, node) share the pgid.
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+            reaped += 1
+            logger.info("Sent SIGTERM to stale soothe process pid=%d pgid=%d", pid, pgid)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            logger.warning("No permission to terminate pid=%d pgid=%d", pid, pgid)
 
     if reaped:
-        logger.info("Reaped %d stale soothe multiprocessing worker process(es)", reaped)
+        logger.info("Reaped %d stale soothe process(es)", reaped)
     return reaped
 
 

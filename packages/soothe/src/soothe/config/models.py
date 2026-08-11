@@ -500,6 +500,29 @@ class AutopilotConfig(BaseModel):
         description="Workspace-prefix conflict gate config",
     )
 
+    # === Lifecycle reclamation ===
+    # Tearing down a goal's runtime resources (spawned background processes,
+    # slice worktrees) when the goal reaches a terminal state so jobs do not
+    # leak grandchildren or stale worktrees. The drain runs in the runner
+    # before the completion chunk is emitted; worktree recycle runs on merge
+    # and on job completion.
+    lifecycle_drain_grace_seconds: float = Field(
+        default=2.0,
+        ge=0.0,
+        description=(
+            "Grace period (SIGTERM → SIGKILL) when draining a goal's "
+            "spawned background processes at completion/cancel."
+        ),
+    )
+    lifecycle_worktree_recycle_enabled: bool = Field(
+        default=True,
+        description=(
+            "When True (default), remove slice/job worktrees under "
+            ".soothe/worktrees/ once their branch is merged or the job "
+            "completes. Set False to retain worktrees for forensics."
+        ),
+    )
+
 
 class ContextProjectionConfig(BaseModel):
     """Bounds for GoalDispatchContextBundle merging (RFC-222 revised).

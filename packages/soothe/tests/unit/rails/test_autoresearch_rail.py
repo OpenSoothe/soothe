@@ -21,7 +21,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe.autopilot.rail.autoresearch_exec import (
+from soothe.autopilot.rails import LoopRailCatalog
+from soothe.autopilot.rails.autoresearch_exec import (
     AUTORESEARCH_RAIL_ID,
     RESEARCH_SCOPE_BANNER,
     RESEARCH_TAGS_FEEDBACK,
@@ -35,13 +36,12 @@ from soothe.autopilot.rail.autoresearch_exec import (
     research_scout_inform_ids,
     research_synthesis_brief,
 )
-from soothe.autopilot.rail.builtins_exec import (
+from soothe.autopilot.rails.builtins_exec import (
     BuiltinResult,
     RailBuiltinExecutor,
     RailJobState,
 )
 from soothe.context import ContextEngine
-from soothe.rails import LoopRailCatalog
 
 # ---------------------------------------------------------------------------
 # Catalog & YAML contract

@@ -8,8 +8,8 @@ lifecycle workflows.
 
 ## Constraints
 
-- One-level subpackages only under `soothe.autopilot` (e.g. `soothe.autopilot.rail.*`
-  is allowed; `soothe.autopilot.rail.foo.*` is not).
+- One-level subpackages only under `soothe.autopilot` (e.g. `soothe.autopilot.rails.*`
+  is allowed; `soothe.autopilot.rails.foo.*` is not).
 - No backward-compat shims for old flat import paths — update all in-repo importers.
 - Keep `AutopilotService` as the root facade (`service.py`); do not split it in this pass.
 
@@ -22,7 +22,7 @@ soothe/autopilot/
 
   intake/                     # GOAL.md contract + guidance absorb/collect (IG-733)
   prompts/                    # LLM fragments + builders (IG-736; like sloop.prompts)
-  rail/                       # LoopRail runtime
+  rails/                      # LoopRail catalog + runtime (merged)
   monitor/                    # AutopilotMonitor + models
   verify/                     # consensus, maturity, DAG health, backoff, verifiers
   workers/                    # pool, job loop index, workspace reservation

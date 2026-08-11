@@ -8,17 +8,17 @@ from pathlib import Path
 import pytest
 from support.rail_harness import catalog_rail_job_state
 
-from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
-from soothe.autopilot.rail.guards import GuardResult, _structural_short_circuit
-from soothe.autopilot.rail.interpreter import LoopRailInterpreter
-from soothe.autopilot.rail.wave_plan import (
+from soothe.autopilot.rails import LoopRailCatalog
+from soothe.autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.autopilot.rails.guards import GuardResult, _structural_short_circuit
+from soothe.autopilot.rails.interpreter import LoopRailInterpreter
+from soothe.autopilot.rails.wave_plan import (
     WavePlan,
     clamp_slice_list,
     parse_wave_plan_payload,
     resolve_fanout_slices,
 )
 from soothe.context import ContextEngine
-from soothe.rails import LoopRailCatalog
 
 
 def test_greenfield_rail_declares_llm_fanout_contract() -> None:
@@ -107,21 +107,21 @@ def test_legacy_module_keys_rejected() -> None:
 
 
 def test_catalog_rejects_default_modules(tmp_path: Path) -> None:
-    from soothe.rails.catalog import RailCatalogError, _normalize_fanout
+    from soothe.autopilot.rails.catalog import RailCatalogError, _normalize_fanout
 
     with pytest.raises(RailCatalogError, match="default_modules"):
         _normalize_fanout({"default_modules": ["core", "api"]}, path=tmp_path / "x.yml")
 
 
 def test_catalog_rejects_fanout_artifact(tmp_path: Path) -> None:
-    from soothe.rails.catalog import RailCatalogError, _normalize_fanout
+    from soothe.autopilot.rails.catalog import RailCatalogError, _normalize_fanout
 
     with pytest.raises(RailCatalogError, match="fanout.artifact"):
         _normalize_fanout({"artifact": "{job_id}/wave-plan.json"}, path=tmp_path / "x.yml")
 
 
 def test_waveplan_efficiency_hint_idempotent() -> None:
-    from soothe.rails.verb_defaults import (
+    from soothe.autopilot.rails.verb_defaults import (
         WAVEPLAN_EFFICIENCY_HINT,
         ensure_waveplan_efficiency_hint,
     )
@@ -407,7 +407,7 @@ def test_architecture_failed_guard() -> None:
 
 
 def test_parse_wave_plan_from_nested_embed() -> None:
-    from soothe.autopilot.rail.wave_plan import parse_wave_plan_from_findings
+    from soothe.autopilot.rails.wave_plan import parse_wave_plan_from_findings
 
     text = (
         "Here is the plan:\n"
@@ -422,7 +422,7 @@ def test_parse_wave_plan_from_nested_embed() -> None:
 
 
 def test_parse_wave_plan_unwraps_nested_wave_plan_key() -> None:
-    from soothe.autopilot.rail.wave_plan import parse_wave_plan_payload
+    from soothe.autopilot.rails.wave_plan import parse_wave_plan_payload
 
     wrapped = {
         "job_id": "85fce19d",
@@ -439,7 +439,7 @@ def test_parse_wave_plan_unwraps_nested_wave_plan_key() -> None:
 
 
 def test_wave_plan_to_findings_json_roundtrip() -> None:
-    from soothe.autopilot.rail.wave_plan import (
+    from soothe.autopilot.rails.wave_plan import (
         parse_wave_plan_payload,
         wave_plan_to_findings_json,
     )
@@ -648,7 +648,7 @@ async def test_spawn_rich_slices_use_description_and_list_order(tmp_path: Path) 
 
 
 def test_diagnose_ignores_wire_priority_on_rich_slices() -> None:
-    from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_payload
+    from soothe.autopilot.rails.wave_plan import diagnose_wave_plan_payload
 
     result = diagnose_wave_plan_payload(
         {
@@ -677,7 +677,7 @@ def test_diagnose_ignores_wire_priority_on_rich_slices() -> None:
 
 
 def test_prefer_ingest_detail_keeps_schema_over_findings_noise() -> None:
-    from soothe.autopilot.rail.wave_plan import _prefer_ingest_detail
+    from soothe.autopilot.rails.wave_plan import _prefer_ingest_detail
 
     schema = "slices.0.priority: Input should be a valid integer (source=workspace_dump:x)"
     noise = "not a JSON object (source=findings[2])"
@@ -686,7 +686,7 @@ def test_prefer_ingest_detail_keeps_schema_over_findings_noise() -> None:
 
 
 def test_diagnose_rejects_wave_slices_dict_nesting() -> None:
-    from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_payload
+    from soothe.autopilot.rails.wave_plan import diagnose_wave_plan_payload
 
     result = diagnose_wave_plan_payload(
         {
@@ -703,7 +703,7 @@ def test_diagnose_rejects_wave_slices_dict_nesting() -> None:
 
 
 def test_diagnose_rejects_wave_object_list_nesting() -> None:
-    from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_payload
+    from soothe.autopilot.rails.wave_plan import diagnose_wave_plan_payload
 
     result = diagnose_wave_plan_payload(
         {
@@ -722,7 +722,7 @@ def test_diagnose_rejects_wave_object_list_nesting() -> None:
 
 
 def test_diagnose_rejects_object_rationale() -> None:
-    from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_payload
+    from soothe.autopilot.rails.wave_plan import diagnose_wave_plan_payload
 
     result = diagnose_wave_plan_payload(
         {
@@ -736,7 +736,7 @@ def test_diagnose_rejects_object_rationale() -> None:
 
 
 def test_coerce_flat_slice_name_alias() -> None:
-    from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_payload
+    from soothe.autopilot.rails.wave_plan import diagnose_wave_plan_payload
 
     result = diagnose_wave_plan_payload(
         {
@@ -750,7 +750,7 @@ def test_coerce_flat_slice_name_alias() -> None:
 
 
 def test_architecture_send_back_reason_includes_detail() -> None:
-    from soothe.autopilot.rail.wave_plan import architecture_wave_plan_send_back_reason
+    from soothe.autopilot.rails.wave_plan import architecture_wave_plan_send_back_reason
 
     text = architecture_wave_plan_send_back_reason(
         "nested waves forbidden (wave_slices is an object/dict)"

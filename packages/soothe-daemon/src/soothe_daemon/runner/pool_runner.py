@@ -16,11 +16,14 @@ process spawn time.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import math
 import multiprocessing
 import multiprocessing.context
+import os
 import queue
+import signal
 import threading
 import time
 import uuid
@@ -1637,6 +1640,22 @@ class WorkerPool:
 
         loop = asyncio.get_event_loop()
 
+        # SIGTERM the worker's whole process group so its direct children
+        # (including agent-spawned helpers) die with it. Grandchildren that
+        # called setsid via run_background are caught by the workspace-scoped
+        # drain in the runner; this is the backstop for the worker's own group.
+        pid = worker.process.pid
+        if pid:
+            try:
+                pgid = os.getpgid(pid)
+            except ProcessLookupError:
+                pgid = None
+            except OSError:
+                pgid = None
+            if pgid is not None:
+                with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
+                    os.killpg(pgid, signal.SIGTERM)
+
         # SIGTERM first (graceful termination)
         try:
             worker.process.terminate()
@@ -1647,9 +1666,19 @@ class WorkerPool:
         except TimeoutError:
             pass
 
-        # SIGKILL if still alive
+        # SIGKILL the process group if the worker is still alive
         if worker.process.is_alive():
             logger.warning("Worker %s did not respond to terminate, killing", worker_id)
+            if pid:
+                try:
+                    pgid = os.getpgid(pid)
+                except ProcessLookupError:
+                    pgid = None
+                except OSError:
+                    pgid = None
+                if pgid is not None:
+                    with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
+                        os.killpg(pgid, signal.SIGKILL)
             worker.process.kill()
             try:
                 await asyncio.wait_for(

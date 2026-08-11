@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.autopilot.jobs.rail_selection import write_rail_selection
-from soothe.rails.catalog import LoopRailCatalog, RailDefinition, load_rail_file
-from soothe.rails.selector import (
+from soothe.autopilot.rails.catalog import LoopRailCatalog, RailDefinition, load_rail_file
+from soothe.autopilot.rails.selector import (
     RailAutoPicker,
     RailAutoPickResponse,
     RailPickResult,

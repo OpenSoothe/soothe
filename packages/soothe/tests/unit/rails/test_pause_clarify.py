@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
-from soothe.autopilot.rail.pause_clarify import (
+from soothe.autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.autopilot.rails.pause_clarify import (
     PauseClarifyDecision,
     parse_gate_answer_token,
 )

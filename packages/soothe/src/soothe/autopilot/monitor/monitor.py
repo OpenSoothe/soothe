@@ -79,6 +79,8 @@ class AutopilotMonitor:
         self._shutdown_event = asyncio.Event()
         self._placement_tasks: set[asyncio.Task[None]] = set()
         self._dag_persist: Callable[[], Awaitable[None]] | None = None
+        self._suspend_notify_scan: Any = None
+        self._resource_reconcile: Any = None
 
         # Subscribe to internal bus topics (IG-678 P0-3).
         self._bus.subscribe(INTERNAL_GOAL_COMPLETED, self._on_goal_completed)
@@ -404,10 +406,30 @@ class AutopilotMonitor:
                     await scan()
             except Exception:
                 logger.debug("Suspend notify scan failed", exc_info=True)
+            # Resource watchdog: reconcile runtime resources for terminal goals
+            # (drain orphaned processes, recycle leaked worktrees).
+            try:
+                reconcile = getattr(self, "_resource_reconcile", None)
+                if reconcile is not None:
+                    count = await reconcile()
+                    if count:
+                        logger.info("Resource watchdog reconciled %d resource(s)", count)
+            except Exception:
+                logger.debug("Resource reconcile failed", exc_info=True)
 
     def bind_suspend_notify_scan(self, scan_fn: Any) -> None:
         """Wire AutopilotService.scan_notify_suspend_timeouts into the verify loop."""
         self._suspend_notify_scan = scan_fn
+
+    def bind_resource_reconcile(self, reconcile_fn: Any) -> None:
+        """Wire AutopilotService.reconcile_goal_resources into the verify loop.
+
+        The watchdog pass catches runtime resources (spawned background
+        processes, leaked worktrees) that survive past a goal's terminal
+        transition due to daemon crash, silent lifecycle-hook failure, or
+        race windows. It runs on the same cadence as DAG verification.
+        """
+        self._resource_reconcile = reconcile_fn
 
     async def _dreaming_timer_loop(self) -> None:
         """Background dreaming timer."""

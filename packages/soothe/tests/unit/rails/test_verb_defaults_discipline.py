@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.rails.verb_defaults import (
+from soothe.autopilot.rails.verb_defaults import (
     apply_maker_discipline,
     apply_planner_waveplan_hints,
     implement_goal_brief,

@@ -77,7 +77,7 @@ normative enough to implement and updates RFC-231 §10 afterward.
 | Abstain | High-confidence `null` skips workspace/config defaults (configurable) |
 | Low confidence | Apply `.rail-default` then config then `None` |
 | `greenfield-system` | YAML `auto_pick: false` (still `--rail`able) |
-| Placement | Extend `soothe.rails.selector`; call from `AutopilotService.submit_goal` |
+| Placement | Extend `soothe.autopilot.rails.selector`; call from `AutopilotService.submit_goal` |
 
 ---
 
@@ -262,7 +262,7 @@ Suggested `rail_auto_pick_min_confidence`: `0.6` (historical draft).
 ## API sketch
 
 ```python
-# soothe/rails/selector.py
+# soothe/autopilot/rails/selector.py
 
 class RailPickResult(BaseModel):
     rail_id: str | None

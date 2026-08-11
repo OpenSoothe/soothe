@@ -109,6 +109,10 @@ agent:
     workspace_reservation:
       enabled: true
       strict_overlap: true
+    # Lifecycle reclamation — tear down a goal's runtime (spawned background
+    # processes, slice worktrees) when it reaches a terminal state.
+    lifecycle_drain_grace_seconds: 2.0
+    lifecycle_worktree_recycle_enabled: true
 
   loop:
     enabled: true

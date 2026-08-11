@@ -8,7 +8,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from soothe.autopilot.rail.trace_store import GuardResult
+from soothe.autopilot.rails.trace_store import GuardResult
 
 logger = logging.getLogger(__name__)
 

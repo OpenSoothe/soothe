@@ -35,7 +35,7 @@ rail with `--rail` / `rail_id`, set `.rail-default`, or exclude ids via
 ### Maker / scout discipline (IG-737)
 
 Goal briefs from Rail Exec append shared SoT fragments in
-`soothe.rails.verb_defaults`:
+`soothe.autopilot.rails.verb_defaults`:
 
 - **Scouts** (`decompose_parallel`): systematic debugging — evidence only, no fixes
 - **Planners** (`plan_milestones` / plan goals): parallel dispatch — independent domains only
@@ -44,7 +44,23 @@ Goal briefs from Rail Exec append shared SoT fragments in
 - **QA / feedback verify**: fresh command evidence; never claim pass without running checks
 
 Host-created `.soothe/worktrees/<slug>` counts as already-approved isolation
-(skill Step 0: reuse; do not nest).
+(skill Step 0: reuse; do not nest). Worktree lifecycle is rail-declared via
+the optional `worktrees:` section (see below) — slice worktrees are recycled
+on merge and on job completion by default, so merged worktrees do not leak.
+
+### `worktrees:` section (optional)
+
+Declares per-rail worktree lifecycle policy. All keys default to `true`, so
+omitting the section keeps the safe defaults (create worktrees, recycle on
+merge and on job completion). A rail that wants to retain worktrees for
+forensics sets `recycle_on_merge: false` / `recycle_on_complete: false`.
+
+```yaml
+worktrees:
+  enabled: true              # create slice worktrees for makers
+  recycle_on_merge: true     # remove a maker's worktree after its branch merges
+  recycle_on_complete: true  # sweep all slice/job worktrees when the job completes
+```
 
 Removed (hard cut; use replacements above):
 

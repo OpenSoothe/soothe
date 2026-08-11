@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.autopilot.rail.builtins_exec import (
+from soothe.autopilot.rails.builtins_exec import (
     BuiltinResult,
     RailBuiltinExecutor,
     RailJobState,
@@ -19,15 +19,15 @@ from soothe.autopilot.rail.builtins_exec import (
 
 if TYPE_CHECKING:
     from soothe.config.models import SootheConfig
-from soothe.autopilot.rail.guards import GuardContext, GuardEvaluator
-from soothe.autopilot.rail.trace_store import (
+from soothe.autopilot.rails.catalog import LoopRailCatalog, RailDefinition
+from soothe.autopilot.rails.guards import GuardContext, GuardEvaluator
+from soothe.autopilot.rails.trace_store import (
     GuardResult,
     MemoryRailTraceStore,
     RailTraceStore,
     RuleFireRecord,
 )
 from soothe.context.engine import ContextEngine, InvalidGoalTransitionError
-from soothe.rails.catalog import LoopRailCatalog, RailDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -142,8 +142,13 @@ class LoopRailInterpreter:
             self._rules[job_id] = _normalize_rules(rail)
 
         fanout = dict(rail.fanout or {})
+        wt_policy = dict(rail.worktrees or {})
         verb_overrides = dict(rail.verbs or {})
         budget = int(engine_max_parallel_goals) if engine_max_parallel_goals is not None else 32
+        # Worktree lifecycle policy from rail YAML ``worktrees:`` (defaults True).
+        wt_enabled = bool(wt_policy.get("enabled", True))
+        wt_recycle_merge = bool(wt_policy.get("recycle_on_merge", True))
+        wt_recycle_complete = bool(wt_policy.get("recycle_on_complete", True))
         # Fan-out / wave fields only when the rail declares ``fanout:``.
         if fanout:
             scout = int(fanout["scout_count"]) if "scout_count" in fanout else 2
@@ -159,6 +164,9 @@ class LoopRailInterpreter:
                 max_waves=max_waves,
                 engine_max_parallel_goals=budget,
                 verb_overrides=verb_overrides,
+                worktrees_enabled=wt_enabled,
+                worktree_recycle_on_merge=wt_recycle_merge,
+                worktree_recycle_on_complete=wt_recycle_complete,
             )
         else:
             state = RailJobState(
@@ -169,6 +177,9 @@ class LoopRailInterpreter:
                 engine_max_parallel_goals=budget,
                 require_plan=False,
                 verb_overrides=verb_overrides,
+                worktrees_enabled=wt_enabled,
+                worktree_recycle_on_merge=wt_recycle_merge,
+                worktree_recycle_on_complete=wt_recycle_complete,
             )
         await self._builtins.bind_job(state)
         if fanout:

@@ -17,8 +17,8 @@ from pathlib import Path
 import pytest
 from support.rail_harness import RailHarness, write_evaluation_report
 
-from soothe.autopilot.rail import LLMGuardEvaluator, export_trace_evaluation
-from soothe.autopilot.rail.guards import GuardContext
+from soothe.autopilot.rails import LLMGuardEvaluator, export_trace_evaluation
+from soothe.autopilot.rails.guards import GuardContext
 from soothe.config import SootheConfig
 from soothe.context.models import GoalNode
 

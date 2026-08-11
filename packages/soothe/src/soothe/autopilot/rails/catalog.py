@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 
-from soothe.rails.builtins import get_rails_paths
+from soothe.autopilot.rails.builtins import get_rails_paths
 
 # CE built-ins referenced by rail ``then:`` (LoopRail design draft §5).
 CE_RAIL_BUILTINS: frozenset[str] = frozenset(
@@ -83,6 +83,11 @@ class RailDefinition:
             ``require_plan``, ``scout_count``, ``max_waves``. WavePlan slices
             come from the architecture goal completion report; ``artifact`` is
             rejected. Engine must not invent fan-out — it lives in rail YAML.
+        worktrees: Optional rail-declared worktree lifecycle policy. Keys:
+            ``enabled`` (bool, default True), ``recycle_on_merge`` (bool,
+            default True), ``recycle_on_complete`` (bool, default True).
+            Declares whether slice worktrees are created for makers and when
+            they are recycled — keeps worktree lifecycle a rail concern.
         verbs: Optional catalog-verb body overrides (RFC-231 M2). Keys are
             CE builtin names; values may include ``brief``, ``tags``, ``role``.
         auto_pick: When False, omit from LLM auto-pick candidates (still
@@ -100,9 +105,46 @@ class RailDefinition:
     rules: list[dict[str, Any]] = field(default_factory=list)
     fanout: dict[str, Any] = field(default_factory=dict)
     verbs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    worktrees: dict[str, Any] = field(default_factory=dict)
     auto_pick: bool = True
     source_path: Path | None = None
     integrity_hash: str = ""
+
+
+def _normalize_worktrees(raw: Any, *, path: Path) -> dict[str, Any]:
+    """Validate optional ``worktrees:`` mapping from rail YAML.
+
+    Declares per-rail worktree lifecycle policy so worktree creation and
+    recycling are a rail-level concern, not scattered imperative hooks.
+
+    Keys:
+        enabled: bool (default True) — create slice worktrees for makers.
+        recycle_on_merge: bool (default True) — remove a maker's worktree
+            once its branch is host-merged into the job branch.
+        recycle_on_complete: bool (default True) — sweep all remaining
+            slice/job worktrees when the job completes.
+    """
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise RailCatalogError(f"{path}: 'worktrees' must be a mapping when present")
+    out: dict[str, Any] = {}
+    allowed = {"enabled", "recycle_on_merge", "recycle_on_complete"}
+    unknown = set(raw) - allowed
+    if unknown:
+        raise RailCatalogError(
+            f"{path}: worktrees unknown key(s) {sorted(unknown)}; allowed: {sorted(allowed)}"
+        )
+    if "enabled" in raw and raw["enabled"] is not None:
+        if not isinstance(raw["enabled"], bool):
+            raise RailCatalogError(f"{path}: worktrees.enabled must be a bool")
+        out["enabled"] = bool(raw["enabled"])
+    for key in ("recycle_on_merge", "recycle_on_complete"):
+        if key in raw and raw[key] is not None:
+            if not isinstance(raw[key], bool):
+                raise RailCatalogError(f"{path}: worktrees.{key} must be a bool")
+            out[key] = bool(raw[key])
+    return out
 
 
 def _normalize_fanout(raw: Any, *, path: Path) -> dict[str, Any]:
@@ -160,7 +202,7 @@ def _normalize_auto_pick(raw: Any, *, path: Path) -> bool:
 
 def _normalize_verbs(raw: Any, *, path: Path) -> dict[str, dict[str, Any]]:
     """Validate optional ``verbs:`` catalog-verb body overrides (RFC-231 M2/M3)."""
-    from soothe.rails.l0_schema import normalize_do_steps
+    from soothe.autopilot.rails.l0_schema import normalize_do_steps
 
     if raw is None:
         return {}
@@ -322,6 +364,7 @@ def load_rail_file(path: Path) -> RailDefinition:
     rules = _normalize_list_of_maps(data.get("rules"), field_name="rules", path=path)
     fanout = _normalize_fanout(data.get("fanout"), path=path)
     verbs = _normalize_verbs(data.get("verbs"), path=path)
+    worktrees = _normalize_worktrees(data.get("worktrees"), path=path)
     auto_pick = _normalize_auto_pick(data.get("auto_pick"), path=path)
 
     if not flow and not rules:
@@ -343,6 +386,7 @@ def load_rail_file(path: Path) -> RailDefinition:
         rules=rules,
         fanout=fanout,
         verbs=verbs,
+        worktrees=worktrees,
         auto_pick=auto_pick,
         source_path=path,
         integrity_hash=compute_rail_hash(text),

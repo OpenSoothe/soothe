@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from soothe.rails.catalog import LoopRailCatalog, RailCatalogError, RailDefinition
+from soothe.autopilot.rails.catalog import LoopRailCatalog, RailCatalogError, RailDefinition
 
 logger = logging.getLogger(__name__)
 

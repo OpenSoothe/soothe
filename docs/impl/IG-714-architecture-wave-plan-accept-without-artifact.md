@@ -154,8 +154,8 @@ makers, rail_trace only `plan_milestones`):
 - Host gate / ingest: `soothe.autopilot.service` —
   `_architecture_wave_plan_consensus_gate`, `_try_ingest_architecture_wave_plan`,
   `_ensure_rail_bound_for_job`
-- Apply / ready: `soothe.autopilot.rail.builtins_exec` —
+- Apply / ready: `soothe.autopilot.rails.builtins_exec` —
   `record_wave_plan`, `is_wave_plan_ready`, `_do_plan_milestones`
-- Schema: `soothe.autopilot.rail.wave_plan` (IG-720: no file I/O helpers)
+- Schema: `soothe.autopilot.rails.wave_plan` (IG-720: no file I/O helpers)
 - Guard: `architecture_ready` + `wave_plan_ready` in
-  `soothe.autopilot.rail.guards`
+  `soothe.autopilot.rails.guards`

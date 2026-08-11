@@ -13,7 +13,7 @@ Done.
 
 ## Scope
 
-- [x] Shared SoT fragments in `soothe.rails.verb_defaults`
+- [x] Shared SoT fragments in `soothe.autopilot.rails.verb_defaults`
 - [x] Wire into `RailBuiltinExecutor` (decompose, plan_and_implement, makers,
       QA, feedback, retry_maker) and planner `do:` recipes
 - [x] Strengthen `feature-dev` conditions; bump `greenfield-system` summary

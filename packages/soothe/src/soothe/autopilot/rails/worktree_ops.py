@@ -350,3 +350,101 @@ def land_job_branch(
         source_branch=job_branch,
         base_branch=base_branch,
     )
+
+
+_WORKTREES_REL = Path(".soothe") / "worktrees"
+
+
+def _worktree_branch_for(repo: Path, worktree_path: Path) -> str | None:
+    """Best-effort branch name checked out in ``worktree_path``."""
+    cur = _run_git(worktree_path, "rev-parse", "--abbrev-ref", "HEAD")
+    name = (cur.stdout or "").strip()
+    if name and name != "HEAD" and _ref_exists(repo, f"refs/heads/{name}"):
+        return name
+    return None
+
+
+def remove_worktree(repo: Path, worktree_path: Path) -> GitOpResult:
+    """Remove a job/slice worktree and its branch (best-effort, force).
+
+    Only operates on paths under ``repo/.soothe/worktrees/`` — rejects
+    anything else so the primary workspace or arbitrary dirs are never
+    touched. Force-removes the linked worktree, then best-effort deletes
+    its slice branch (merged branches delete cleanly; unmerged force-delete
+    is safe because the caller only invokes this after a merge or on cancel).
+    Never raises; returns a ``GitOpResult``.
+    """
+    try:
+        rel = worktree_path.relative_to((repo / _WORKTREES_REL).resolve())
+    except (ValueError, OSError) as exc:
+        return GitOpResult(
+            ok=False,
+            detail=(
+                f"refuse remove_worktree: {worktree_path} not under {repo / _WORKTREES_REL} ({exc})"
+            ),
+        )
+    if not worktree_path.exists() and not (repo / _WORKTREES_REL / rel).exists():
+        return GitOpResult(ok=True, detail=f"worktree absent: {worktree_path}")
+
+    branch = _worktree_branch_for(repo, worktree_path)
+    rm = _run_git(repo, "worktree", "remove", "--force", str(worktree_path))
+    if rm.returncode != 0:
+        # Prune broken metadata as a last resort.
+        _run_git(repo, "worktree", "prune")
+        if worktree_path.exists():
+            return GitOpResult(
+                ok=False,
+                needs_agent=True,
+                detail=(f"worktree remove failed: {(rm.stderr or rm.stdout or '').strip()[:300]}"),
+            )
+
+    if branch:
+        del_branch = _run_git(repo, "branch", "-D", branch)
+        if del_branch.returncode != 0:
+            return GitOpResult(
+                ok=True,
+                detail=(
+                    f"removed worktree {worktree_path.name}; branch {branch} "
+                    f"kept: {(del_branch.stderr or del_branch.stdout or '').strip()[:200]}"
+                ),
+            )
+    return GitOpResult(ok=True, detail=f"removed worktree {worktree_path.name}")
+
+
+def recycle_job_worktrees(repo: Path, *, job_id: str) -> int:
+    """Sweep all worktrees under ``repo/.soothe/worktrees/`` for ``job_id``.
+
+    Removes slice worktrees whose branch is merged into the base branch and
+    any leftover job worktree dirs after the job lands. Best-effort: logs
+    each removal, never raises. Returns the count removed.
+    """
+    base = detect_base_branch(repo)
+    wt_root = repo / _WORKTREES_REL
+    if not wt_root.is_dir():
+        return 0
+    removed = 0
+    for entry in sorted(wt_root.iterdir()):
+        if not entry.is_dir():
+            continue
+        # Only touch worktrees whose name or branch references this job.
+        branch = _worktree_branch_for(repo, entry)
+        owns_job = job_id[:8] in (entry.name + " " + (branch or ""))
+        if not owns_job and branch is None:
+            continue
+        merged = (
+            branch is not None
+            and _run_git(repo, "merge-base", "--is-ancestor", branch, base).returncode == 0
+        )
+        if not merged and not owns_job:
+            continue
+        result = remove_worktree(repo, entry)
+        if result.ok:
+            removed += 1
+            logger.info("recycle_job_worktrees: %s (job=%s)", result.detail, job_id[:8])
+        else:
+            logger.warning(
+                "recycle_job_worktrees: %s kept (job=%s)",
+                result.detail,
+                job_id[:8],
+            )
+    return removed

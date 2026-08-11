@@ -17,15 +17,20 @@ from pathlib import Path
 
 import pytest
 
-from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor
-from soothe.autopilot.rail.trace_store import (
+from soothe.autopilot.rails import (
+    LoopRailCatalog,
+    RailCatalogError,
+    compute_rail_hash,
+    load_rail_file,
+)
+from soothe.autopilot.rails.builtins_exec import RailBuiltinExecutor
+from soothe.autopilot.rails.trace_store import (
     GuardResult,
     JsonlRailTraceStore,
     RuleFireRecord,
     _sanitize_job_id,
 )
 from soothe.context.engine import ContextEngine
-from soothe.rails import LoopRailCatalog, RailCatalogError, compute_rail_hash, load_rail_file
 
 # ── SC-01: Rail config integrity verification ──────────────────────────
 
@@ -241,7 +246,7 @@ async def test_builtin_runtime_error_sanitize_detail() -> None:
     ce = ContextEngine()
     executor = RailBuiltinExecutor(ce)
     # Bind a job state so _require doesn't fail; _do_review will call CE
-    from soothe.autopilot.rail.builtins_exec import RailJobState
+    from soothe.autopilot.rails.builtins_exec import RailJobState
 
     await executor.bind_job(RailJobState(job_id="job-x", rail_id="test", rail_version="1.0"))
     # _do_retry_branch iterates list_goals — if CE has no goals for this
@@ -265,7 +270,7 @@ def test_guard_error_reasoning_uses_type_name() -> None:
     # We verify by reading the source and asserting the pattern.
     import inspect
 
-    from soothe.autopilot.rail.guards import LLMGuardEvaluator
+    from soothe.autopilot.rails.guards import LLMGuardEvaluator
 
     source = inspect.getsource(LLMGuardEvaluator)
     # Must NOT contain f"structured guard failed: {exc}"
@@ -299,7 +304,7 @@ def test_llm_guard_evaluator_delegates_to_prompt_builder() -> None:
     """LLMGuardEvaluator.evaluate must assemble prompts via build_guard_messages."""
     import inspect
 
-    from soothe.autopilot.rail.guards import LLMGuardEvaluator
+    from soothe.autopilot.rails.guards import LLMGuardEvaluator
 
     source = inspect.getsource(LLMGuardEvaluator.evaluate)
     assert "build_guard_messages" in source, (

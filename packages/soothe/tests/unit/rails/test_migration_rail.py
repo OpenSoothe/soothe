@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
-from soothe.autopilot.rail.guards import GuardResult, _structural_short_circuit
-from soothe.autopilot.rail.interpreter import LoopRailInterpreter
+from soothe.autopilot.rails import LoopRailCatalog
+from soothe.autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.autopilot.rails.guards import GuardResult, _structural_short_circuit
+from soothe.autopilot.rails.interpreter import LoopRailInterpreter
 from soothe.context import ContextEngine
-from soothe.rails import LoopRailCatalog
 
 
 def test_greenfield_declares_fanout_and_human_gate() -> None:

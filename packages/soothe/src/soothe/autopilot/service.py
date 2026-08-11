@@ -150,6 +150,7 @@ class AutopilotService:
             self._monitor.bind_service_cancel(self.cancel_goal)
             self._monitor.bind_suspend_notify_scan(self.scan_notify_suspend_timeouts)
             self._monitor.bind_dag_persist(self._persist_goals)
+            self._monitor.bind_resource_reconcile(self.reconcile_goal_resources)
 
         # RFC-222 revised (Phase C): WorkerPool-driven dispatch.
         # Capacity: ``max_loops`` (pool size) and ``max_parallel_goals``
@@ -168,6 +169,9 @@ class AutopilotService:
         self._context_store: Any = None
         self._context_projector: Any = None
         self._dispatch_tasks: dict[str, asyncio.Task] = {}  # goal_id → consumer task
+        # goal_ids whose worker slot + reservation have already been released
+        # (idempotency guard so early-release and the tail block don't double-free).
+        self._released_goals: set[str] = set()
         # Per-goal cursor for LoopState cumulative tokens on step_completed
         # progress (IG-701). Reset to 0 on each goal_started / attempt.
         self._goal_loop_token_cursor: dict[str, int] = {}
@@ -248,9 +252,9 @@ class AutopilotService:
 
             from soothe_sdk.paths import SOOTHE_DATA_DIR
 
-            from soothe.autopilot.rail.guards import LLMGuardEvaluator
-            from soothe.autopilot.rail.interpreter import LoopRailInterpreter
-            from soothe.autopilot.rail.trace_store import JsonlRailTraceStore
+            from soothe.autopilot.rails.guards import LLMGuardEvaluator
+            from soothe.autopilot.rails.interpreter import LoopRailInterpreter
+            from soothe.autopilot.rails.trace_store import JsonlRailTraceStore
 
             guards = None
             if self._consensus_model is not None:
@@ -406,6 +410,20 @@ class AutopilotService:
                 "[Autopilot] crash recovery: interrupted %d active loop assignment(s)",
                 len(interrupted),
             )
+            # Reconcile runtime resources for goals whose loops was just
+            # interrupted — drain orphaned processes + recycle worktrees
+            # so a crash-then-restart doesn't leak the prior run's resources.
+            try:
+                reconciled = await self.reconcile_goal_resources()
+                if reconciled:
+                    logger.info(
+                        "[Autopilot] crash recovery: reconciled %d resource(s)",
+                        reconciled,
+                    )
+            except Exception:
+                logger.warning(
+                    "[Autopilot] crash recovery: resource reconcile failed", exc_info=True
+                )
 
         if self._monitor is not None:
             await self._monitor.start()
@@ -541,8 +559,8 @@ class AutopilotService:
             resolved_workspace = str(validate_client_workspace(workspace))
 
         from soothe.autopilot.jobs.rail_selection import write_rail_selection
-        from soothe.rails.catalog import LoopRailCatalog
-        from soothe.rails.selector import (
+        from soothe.autopilot.rails.catalog import LoopRailCatalog
+        from soothe.autopilot.rails.selector import (
             RailAutoPicker,
             RailPickResult,
             resolve_rail_for_job,
@@ -663,7 +681,7 @@ class AutopilotService:
         if self._rail_interpreter is None or not goal.rail_id:
             return
         try:
-            from soothe.autopilot.rail.interpreter import RailEvent
+            from soothe.autopilot.rails.interpreter import RailEvent
 
             await self._rail_interpreter.bind_job(
                 goal.id,
@@ -721,7 +739,7 @@ class AutopilotService:
             ``(ready, detail)`` — ready when a usable wave plan is applied;
             ``detail`` is a parse/nesting reject reason when not ready.
         """
-        from soothe.autopilot.rail.wave_plan import diagnose_wave_plan_from_sources
+        from soothe.autopilot.rails.wave_plan import diagnose_wave_plan_from_sources
 
         if self._rail_interpreter is None:
             return False, "rail interpreter unset"
@@ -849,7 +867,7 @@ class AutopilotService:
         if root is None or not root.rail_id:
             return None
 
-        from soothe.autopilot.rail.wave_plan import architecture_wave_plan_send_back_reason
+        from soothe.autopilot.rails.wave_plan import architecture_wave_plan_send_back_reason
 
         if self._rail_interpreter is None:
             logger.warning(
@@ -952,7 +970,7 @@ class AutopilotService:
                 logger.debug("Rail rebind failed for %s", job_id, exc_info=True)
                 return
         try:
-            from soothe.autopilot.rail.interpreter import RailEvent
+            from soothe.autopilot.rails.interpreter import RailEvent
 
             await self._rail_interpreter.handle(
                 RailEvent(
@@ -1002,56 +1020,103 @@ class AutopilotService:
                 exc_info=True,
             )
 
-    async def _release_worker_after_cancel(self, goal_id: str, loop_id: str | None) -> None:
-        """Release the worker slot and dispatch task after goal cancellation.
+    async def _drain_goal_workspace(self, goal: GoalNode) -> None:
+        """Drain spawned background processes for a goal (cancel / deadline).
 
-        The stream consumer (``_consume_worker_stream``) normally calls
-        ``mark_idle`` when the runner stream terminates.  But when a goal is
-        cancelled externally (WebSocket/CLI), the consumer task may still be
-        blocked on the stream — leaving the worker slot in ``active`` status
-        indefinitely (a dead worker).  This method proactively returns the
-        slot to idle and cancels the consumer task so no dead workers remain.
+        On the normal completion path the runner drains its own workspace
+        before emitting the completion chunk. This covers the cancel /
+        deadline paths where the runner stream is aborted before natural
+        completion — it calls the same workspace-scoped drain so the goal's
+        run_background grandchildren die with the goal.
         """
-        if loop_id and self._worker_pool is not None:
-            await self._worker_pool.mark_idle(loop_id, success=False)
-            logger.info(
-                "[Autopilot] cancel_goal: returned worker %s to idle after cancelling goal %s",
-                loop_id,
-                goal_id,
-            )
+        workspace = goal.workspace
+        if not workspace:
+            return
+        try:
+            from soothe.runner._runner_autopilot_worker import drain_goal_runtime
+
+            await asyncio.to_thread(drain_goal_runtime, workspace)
+        except Exception:
+            logger.debug("drain_goal_runtime failed for goal %s", goal.id, exc_info=True)
+
+    async def _release_worker_after_cancel(self, goal_id: str, loop_id: str | None) -> None:
+        """Cancel the dispatch consumer task after goal cancellation.
+
+        The stream consumer (``_consume_worker_stream``) normally drains and
+        releases the worker slot via ``_release_goal_runtime`` when the runner
+        stream terminates. But when a goal is cancelled externally
+        (WebSocket/CLI), the consumer task may still be blocked on the
+        stream. This method cancels that task so no dead consumer lingers.
+        Worker-slot release is owned by ``_release_goal_runtime`` (called
+        before this in ``_cancel_open_goal_node``).
+        """
         task = self._dispatch_tasks.pop(goal_id, None)
         if task is not None and not task.done():
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
 
+    async def _release_goal_runtime(
+        self,
+        goal_id: str,
+        *,
+        loop_id: str | None,
+        success: bool,
+        end_status: str = "completed",
+    ) -> None:
+        """Release the worker slot, loop index, and workspace reservation.
+
+        Idempotent: a second call for an already-released goal is a no-op.
+        Called at goal-completion time **before** the rail sees
+        ``goal_completed`` so the worker is drained before ``job_complete``
+        can fire (lifecycle alignment). Also called on cancel / deadline.
+        """
+        if goal_id in self._released_goals:
+            return
+        self._released_goals.add(goal_id)
+        if loop_id:
+            try:
+                await self._job_loop_index.record_end(
+                    loop_id,
+                    status=end_status,  # type: ignore[arg-type]
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to record job loop end for goal %s loop %s",
+                    goal_id,
+                    loop_id,
+                    exc_info=True,
+                )
+        if self._worker_pool is not None and loop_id:
+            await self._worker_pool.mark_idle(loop_id, success=success)
+        if self._workspace_reservation is not None:
+            self._workspace_reservation.release(goal_id)
+
     async def _cancel_open_goal_node(self, goal: GoalNode, *, reason: str) -> None:
         """Cancel one non-terminal goal: stop worker, CE transition, release workspace.
 
         Ensures the worker slot is returned to idle and the dispatch consumer
         task is cancelled so no dead workers remain after ``cancel_goal``.
+        Also drains the goal's spawned background processes via the runner's
+        workspace-scoped drain so cancelled goals do not orphan run_background
+        grandchildren.
         """
         loop_id = goal.assigned_loop_id
         await self._cancel_goal_worker(goal)
+        # Drain spawned background processes before the CE transition so the
+        # goal's runtime resources are torn down with the goal (lifecycle bound).
+        await self._drain_goal_workspace(goal)
         await self._ce.cancel_goal(goal.id, reason=reason)
-        if loop_id:
-            try:
-                await self._job_loop_index.record_end(loop_id, status="cancelled")
-            except Exception:
-                logger.warning(
-                    "Failed to record cancelled loop %s for goal %s",
-                    loop_id,
-                    goal.id,
-                    exc_info=True,
-                )
-        if self._workspace_reservation is not None:
-            self._workspace_reservation.release(goal.id)
         if goal.parent_id is None:
             try:
                 await self._job_loop_index.mark_job_status(goal.id, "cancelled")
             except Exception:
                 logger.debug("Failed to mark job %s cancelled", goal.id, exc_info=True)
 
+        # Release worker slot, loop index, and workspace reservation (idempotent).
+        await self._release_goal_runtime(
+            goal.id, loop_id=loop_id, success=False, end_status="cancelled"
+        )
         # Return worker slot to idle pool and cancel the dispatch consumer task
         # so no dead workers are left behind after cancel_goal invocation.
         await self._release_worker_after_cancel(goal.id, loop_id)
@@ -1174,18 +1239,10 @@ class AutopilotService:
         loop_id = goal.assigned_loop_id
         await self._cancel_goal_worker(goal)
         await self._ce.suspend_goal(goal.id, reason=reason)
-        if loop_id:
-            try:
-                await self._job_loop_index.record_end(loop_id, status="cancelled")
-            except Exception:
-                logger.warning(
-                    "Failed to record paused loop %s for goal %s",
-                    loop_id,
-                    goal.id,
-                    exc_info=True,
-                )
-        if self._workspace_reservation is not None:
-            self._workspace_reservation.release(goal.id)
+        # Release worker slot, loop index, and workspace reservation (idempotent).
+        await self._release_goal_runtime(
+            goal.id, loop_id=loop_id, success=False, end_status="cancelled"
+        )
         await self._release_worker_after_cancel(goal.id, loop_id)
         await self._maybe_notify_job_root(goal.id)
 
@@ -1785,6 +1842,20 @@ class AutopilotService:
                             exc_info=True,
                         )
 
+                # Release the worker slot + reservation BEFORE finalizing so
+                # the worker is drained (mark_idle) before the rail sees
+                # goal_completed — keeps runtime teardown ahead of CE/job
+                # completion (lifecycle alignment). The spawn-tree teardown
+                # already ran in the runner before this chunk was emitted.
+                await self._release_goal_runtime(
+                    goal_id,
+                    loop_id=worker.loop_id,
+                    success=outcome == "completed",
+                    end_status=outcome
+                    if outcome in ("completed", "failed", "cancelled")
+                    else "failed",
+                )
+
                 # React to outcome by transitioning the goal.
                 if outcome == "completed":
                     await self._apply_consensus_and_finalize(
@@ -1881,7 +1952,8 @@ class AutopilotService:
             except Exception:
                 logger.debug("fail_goal raised on missing completion", exc_info=True)
 
-        # Always release worker + reservation, even on errors.
+        # Always release worker + reservation, even on errors. Idempotent —
+        # no-ops when the early release (completion path above) already ran.
         end_status = "completed" if completion_seen else "failed"
         # Prefer outcome from CE if available.
         finished = await self._ce.get_goal(goal_id)
@@ -1890,22 +1962,12 @@ class AutopilotService:
                 end_status = "completed"
             elif finished.status in ("cancelled", "failed", "suspended"):
                 end_status = "failed" if finished.status != "cancelled" else "cancelled"
-        try:
-            await self._job_loop_index.record_end(
-                worker.loop_id,
-                status=end_status,  # type: ignore[arg-type]
-            )
-        except Exception:
-            logger.warning(
-                "Failed to record job loop end for goal %s loop %s",
-                goal_id,
-                worker.loop_id,
-                exc_info=True,
-            )
-        if self._worker_pool is not None:
-            await self._worker_pool.mark_idle(worker.loop_id, success=completion_seen)
-        if self._workspace_reservation is not None:
-            self._workspace_reservation.release(goal_id)
+        await self._release_goal_runtime(
+            goal_id,
+            loop_id=worker.loop_id,
+            success=completion_seen,
+            end_status=end_status,
+        )
 
         self._dispatch_tasks.pop(goal_id, None)
         await self._persist_goals()
@@ -1961,7 +2023,7 @@ class AutopilotService:
         goal = await self._ce.get_goal(goal_id)
         if goal is not None and findings:
             try:
-                from soothe.autopilot.rail.wave_plan import (
+                from soothe.autopilot.rails.wave_plan import (
                     WAVE_PLAN_FINDING_CAP,
                     parse_wave_plan_payload,
                 )
@@ -2238,7 +2300,6 @@ class AutopilotService:
             return
         if root.status in ("completed", "cancelled", "failed"):
             return
-        from soothe.context.models import TERMINAL_STATES
 
         open_desc = [
             g
@@ -2339,6 +2400,12 @@ class AutopilotService:
             except Exception:
                 logger.debug("worker.runner.cancel() raised for %s", worker.loop_id, exc_info=True)
 
+            # Drain the goal's spawned background processes before failing so
+            # deadline-exceeded goals do not orphan run_background grandchildren.
+            deadline_goal = await self._ce.get_goal(goal_id)
+            if deadline_goal is not None:
+                await self._drain_goal_workspace(deadline_goal)
+
             # Transition the goal to failed so backoff/retry logic can react.
             try:
                 await self._ce.fail_goal(
@@ -2372,6 +2439,100 @@ class AutopilotService:
                 elapsed = (now - worker.idle_since).total_seconds()
                 if elapsed > timeout:
                     await self._release_worker(worker.loop_id, reason="idle_timeout")
+
+    async def reconcile_goal_resources(self) -> int:
+        """Reconcile runtime resources against goal state (watchdog pass).
+
+        Scans goals in terminal or interrupted states and ensures their
+        runtime resources are actually torn down:
+        - Drains spawned background processes for goals whose workspace still
+          has a ``.soothe/background/`` dir (catches crash-then-restart or
+          silent lifecycle-hook failures).
+        - Recycles worktrees under ``.soothe/worktrees/`` for terminal job
+          roots whose branch is merged (catches crash-then-restart).
+
+        This is the belt-and-suspenders layer over the lifecycle hooks; the
+        hooks at goal terminal transition are the primary mechanism. Returns
+        the count of resources reconciled (drained + recycled).
+        """
+        reconciled = 0
+        try:
+            goals = await self._ce.list_goals()
+        except Exception:
+            logger.debug("reconcile_goal_resources: list_goals failed", exc_info=True)
+            return 0
+        # Drain spawned processes for terminal/interrupted goals whose
+        # workspace still has a background log dir.
+        for goal in goals:
+            if goal.status not in TERMINAL_STATES and goal.status != "suspended":
+                continue
+            if not goal.workspace:
+                continue
+            try:
+                from soothe.runner._runner_autopilot_worker import drain_goal_runtime
+
+                drained = await asyncio.to_thread(drain_goal_runtime, goal.workspace)
+                if drained:
+                    reconciled += drained
+                    logger.info(
+                        "reconcile: drained %d process group(s) for %s goal %s",
+                        drained,
+                        goal.status,
+                        goal.id,
+                    )
+            except Exception:
+                logger.debug("reconcile: drain failed for goal %s", goal.id, exc_info=True)
+        # Recycle worktrees for terminal job roots (rail jobs with a workspace
+        # under .soothe/worktrees/).
+        recycled_worktrees = await self._reconcile_terminal_job_worktrees()
+        reconciled += recycled_worktrees
+        return reconciled
+
+    async def _reconcile_terminal_job_worktrees(self) -> int:
+        """Recycle worktrees for terminal rail job roots (crash recovery)."""
+        from soothe.autopilot.rails import worktree_ops
+
+        recycled = 0
+        try:
+            goals = await self._ce.list_goals()
+        except Exception:
+            return 0
+        for goal in goals:
+            if goal.parent_id is not None or not goal.rail_id:
+                continue
+            if goal.status not in TERMINAL_STATES:
+                continue
+            workspace = goal.workspace
+            if not workspace:
+                continue
+            repo = None
+            try:
+                ws = Path(workspace).expanduser()
+                # The workspace may be the primary repo or a worktree under it.
+                if ".soothe" in ws.parts:
+                    repo = ws.parent if "worktrees" in ws.parts else ws
+                else:
+                    repo = ws
+            except Exception:
+                continue
+            if repo is None or not (repo / ".git").exists():
+                continue
+            try:
+                count = worktree_ops.recycle_job_worktrees(repo, job_id=goal.id)
+                if count:
+                    recycled += count
+                    logger.info(
+                        "reconcile: recycled %d worktree(s) for terminal job %s",
+                        count,
+                        goal.id,
+                    )
+            except Exception:
+                logger.debug(
+                    "reconcile: worktree recycle failed for job %s",
+                    goal.id,
+                    exc_info=True,
+                )
+        return recycled
 
     async def _enter_dreaming_mode(self) -> None:
         """Enter dreaming mode when no goals active."""

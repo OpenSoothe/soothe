@@ -22,26 +22,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.autopilot.rail import worktree_ops
-from soothe.autopilot.rail.pause_clarify import (
+from soothe.autopilot.rails import worktree_ops
+from soothe.autopilot.rails.pause_clarify import (
     PauseClarifyDecision,
     decision_to_audit,
     run_rail_pause_clarify,
 )
-from soothe.autopilot.rail.wave_plan import (
-    WavePlan,
-    apply_wave_plan_to_state_fields,
-    build_wave_plan,
-    diagnose_wave_plan_from_sources,
-    dump_wave_plan,
-    jobs_wave_plan_path,
-    parse_wave_plan_payload,
-    resolve_fanout_slices,
-    workspace_wave_plan_path,
-)
-from soothe.context.engine import ContextEngine
-from soothe.context.models import TERMINAL_STATES, GoalNode
-from soothe.rails.verb_defaults import (
+from soothe.autopilot.rails.verb_defaults import (
     DEFAULT_VERB_ROLES,
     DEFAULT_VERB_TAGS,
     apply_maker_discipline,
@@ -54,6 +41,19 @@ from soothe.rails.verb_defaults import (
     slice_maker_brief,
     waveplan_verify_existing_brief,
 )
+from soothe.autopilot.rails.wave_plan import (
+    WavePlan,
+    apply_wave_plan_to_state_fields,
+    build_wave_plan,
+    diagnose_wave_plan_from_sources,
+    dump_wave_plan,
+    jobs_wave_plan_path,
+    parse_wave_plan_payload,
+    resolve_fanout_slices,
+    workspace_wave_plan_path,
+)
+from soothe.context.engine import ContextEngine
+from soothe.context.models import TERMINAL_STATES, GoalNode
 
 if TYPE_CHECKING:
     from soothe.config.models import SootheConfig
@@ -126,6 +126,11 @@ class RailJobState:
     # Path that supplied the WavePlan when ingested from a file (optional).
     wave_plan_source_path: str | None = None
     worktrees_enabled: bool = True
+    # Rail-declared worktree recycling policy (from rail YAML ``worktrees:``).
+    # Defaults mirror the rail-level defaults so jobs bound before the policy
+    # existed still recycle on merge/complete.
+    worktree_recycle_on_merge: bool = True
+    worktree_recycle_on_complete: bool = True
     # True when bind declared rail YAML ``fanout:`` (structure signal for guards).
     fanout_enabled: bool = False
     # When True, makers require WavePlan applied into job state (multi-form ingest).
@@ -201,6 +206,21 @@ class RailBuiltinExecutor:
         self._rail_pause_auto_clarify = bool(rail_pause_auto_clarify)
         self._on_user_intervention = on_user_intervention
         self._pause_clarify_fn = pause_clarify_fn
+
+    def _global_worktree_recycle_enabled(self) -> bool:
+        """Global config override for worktree recycling.
+
+        When ``autopilot.lifecycle_worktree_recycle_enabled`` is False, all
+        recycling is skipped (forensics retention). Rail-level policy still
+        gates per-rail, but the global flag is a hard off-switch.
+        """
+        cfg = self._soothe_config
+        if cfg is None:
+            return True
+        ap = getattr(cfg, "autopilot", None)
+        if ap is None:
+            return True
+        return bool(getattr(ap, "lifecycle_worktree_recycle_enabled", True))
 
     async def bind_job(self, state: RailJobState) -> None:
         """Register or replace job state for a root goal id.
@@ -348,6 +368,8 @@ class RailBuiltinExecutor:
             if base.wave_plan_source_path is not None
             else donor.wave_plan_source_path,
             worktrees_enabled=donor.worktrees_enabled,
+            worktree_recycle_on_merge=donor.worktree_recycle_on_merge,
+            worktree_recycle_on_complete=donor.worktree_recycle_on_complete,
             fanout_enabled=base.fanout_enabled or donor.fanout_enabled,
             require_plan=base.require_plan or donor.require_plan,
             engine_max_parallel_goals=base.engine_max_parallel_goals
@@ -399,6 +421,8 @@ class RailBuiltinExecutor:
                 "base_branch": state.base_branch,
                 "wave_plan_source_path": state.wave_plan_source_path,
                 "worktrees_enabled": state.worktrees_enabled,
+                "worktree_recycle_on_merge": state.worktree_recycle_on_merge,
+                "worktree_recycle_on_complete": state.worktree_recycle_on_complete,
                 "fanout_enabled": state.fanout_enabled,
                 "require_plan": state.require_plan,
                 "engine_max_parallel_goals": state.engine_max_parallel_goals,
@@ -461,6 +485,8 @@ class RailBuiltinExecutor:
                 str(raw["wave_plan_source_path"]) if raw.get("wave_plan_source_path") else None
             ),
             worktrees_enabled=bool(raw.get("worktrees_enabled", True)),
+            worktree_recycle_on_merge=bool(raw.get("worktree_recycle_on_merge", True)),
+            worktree_recycle_on_complete=bool(raw.get("worktree_recycle_on_complete", True)),
             fanout_enabled=bool(raw.get("fanout_enabled", raw.get("require_plan", False))),
             require_plan=bool(raw.get("require_plan", False)),
             engine_max_parallel_goals=(
@@ -572,7 +598,7 @@ class RailBuiltinExecutor:
                 if isinstance(raw_do, list) and raw_do:
                     steps = raw_do
             if steps is not None:
-                from soothe.autopilot.rail.recipe_exec import RecipeRunner
+                from soothe.autopilot.rails.recipe_exec import RecipeRunner
 
                 return await RecipeRunner(self).run(
                     steps, job_id=job_id, trigger_goal_id=trigger_goal_id
@@ -583,7 +609,7 @@ class RailBuiltinExecutor:
                 and state.rail_id == "autoresearch"
                 and builtin == "plan_and_implement"
             ):
-                from soothe.autopilot.rail.autoresearch_exec import AutoresearchExec
+                from soothe.autopilot.rails.autoresearch_exec import AutoresearchExec
 
                 return await AutoresearchExec(self).plan_and_implement(
                     job_id=job_id, trigger_goal_id=trigger_goal_id
@@ -1943,6 +1969,34 @@ class RailBuiltinExecutor:
             merge_detail = "annotated merged (git worktrees disabled or unavailable)"
 
         await self.annotate_goal(maker_id, job_id, branch_status="merged")
+        # Recycle the maker's worktree now that its branch is merged into the
+        # job branch — the slice worktree is dead weight after merge. Gated by
+        # the rail-declared worktree lifecycle policy (worktrees.recycle_on_merge)
+        # and the global autopilot.lifecycle_worktree_recycle_enabled off-switch.
+        if (
+            state.worktrees_enabled
+            and state.worktree_recycle_on_merge
+            and self._global_worktree_recycle_enabled()
+            and maker.workspace
+            and repo is not None
+            and _is_git_repo(repo)
+        ):
+            maker_wt_path = Path(maker.workspace)
+            if maker_wt_path.is_dir() and ".soothe" in Path(maker.workspace).parts:
+                try:
+                    recycle = worktree_ops.remove_worktree(repo, maker_wt_path)
+                    if recycle.ok:
+                        logger.info(
+                            "merge_branches: recycled worktree %s (%s)",
+                            maker_wt_path.name,
+                            recycle.detail,
+                        )
+                except Exception:
+                    logger.warning(
+                        "merge_branches: worktree recycle failed for %s",
+                        maker_wt_path,
+                        exc_info=True,
+                    )
         await self._persist_job(state)
 
         # Per-maker review (does not block unrelated makers).
@@ -2145,6 +2199,32 @@ class RailBuiltinExecutor:
             return BuiltinResult(status="error", detail="job root missing")
         if root.status not in TERMINAL_STATES:
             await self._ce.complete_goal(job_id)
+        # Sweep any remaining slice/job worktrees now that the job is landed.
+        # Gated by the rail-declared worktree lifecycle policy
+        # (worktrees.recycle_on_complete) and the global
+        # autopilot.lifecycle_worktree_recycle_enabled off-switch.
+        repo = _job_workspace(self._ce, job_id)
+        if (
+            state.worktrees_enabled
+            and state.worktree_recycle_on_complete
+            and self._global_worktree_recycle_enabled()
+            and repo is not None
+            and _is_git_repo(repo)
+        ):
+            try:
+                recycled = worktree_ops.recycle_job_worktrees(repo, job_id=job_id)
+                if recycled:
+                    logger.info(
+                        "complete_job: recycled %d worktree(s) for job %s",
+                        recycled,
+                        job_id[:8],
+                    )
+            except Exception:
+                logger.warning(
+                    "complete_job: worktree recycle failed for job %s",
+                    job_id[:8],
+                    exc_info=True,
+                )
         state.completed = True
         state.suspended = False
         await self._persist_job(state)

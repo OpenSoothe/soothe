@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
 from soothe.context.engine import ContextEngine
 
 

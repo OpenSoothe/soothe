@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.rails import (
+from soothe.autopilot.rails import (
     LoopRailCatalog,
     RailCatalogError,
     get_builtin_rails_dir,

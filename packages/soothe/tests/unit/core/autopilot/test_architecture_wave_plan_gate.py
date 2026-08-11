@@ -10,7 +10,7 @@ from support.rail_harness import catalog_rail_job_state
 
 from soothe.autopilot import AutopilotService
 from soothe.autopilot.dispatch.models import Finding, GoalDispatchContextContribution
-from soothe.autopilot.rail.builtins_exec import RailBuiltinExecutor
+from soothe.autopilot.rails.builtins_exec import RailBuiltinExecutor
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.events.internal_bus import InternalEventBus

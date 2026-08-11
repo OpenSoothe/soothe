@@ -357,6 +357,7 @@ class GoalStepDAG(BaseModel):
         goal = self.goals.get(goal_id)
         if goal is not None:
             goal.status = "completed"
+            goal.assigned_loop_id = None
             goal.updated_at = datetime.now(UTC)
 
     def fail_goal(self, goal_id: str, error: str) -> None:

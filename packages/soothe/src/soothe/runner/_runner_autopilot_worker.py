@@ -29,7 +29,13 @@ from prose alone.
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
+import re
+import signal
+import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.protocols.planner import GoalDirective
@@ -60,6 +66,103 @@ logger = logging.getLogger(__name__)
 
 _GOAL_COMPLETION_TYPE = "soothe.internal.autopilot.goal_completion"
 _MAX_PRIOR_EFFECTS_IN_GOAL_TEXT = 12
+
+# Default SIGTERM→SIGKILL grace period when draining background spawns.
+_DRAIN_GRACE_SECONDS = 2.0
+_BG_LOG_PID_RE = re.compile(r"bg-(\d+)\.log$")
+
+
+def _kill_pgid(pgid: int, *, sig: int) -> bool:
+    """Send ``sig`` to a process group. True if delivered, False if gone."""
+    try:
+        os.killpg(pgid, sig)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        logger.warning("drain_goal_runtime: no permission to signal pgid=%d", pgid)
+        return False
+    except OSError as exc:
+        logger.debug("drain_goal_runtime: killpg(%d, %d) failed: %s", pgid, sig, exc)
+        return False
+    return True
+
+
+def _pid_alive(pid: int) -> bool:
+    """True if ``pid`` exists."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    else:
+        return True
+
+
+def drain_goal_runtime(workspace: str, *, grace_seconds: float = _DRAIN_GRACE_SECONDS) -> int:
+    """Kill background processes this goal spawned, via their bg-logs.
+
+    ``soothe_nano``'s ``RunBackgroundTool`` writes
+    ``{workspace}/.soothe/background/bg-{pid}.log`` for each spawn
+    (``start_new_session=True`` → each spawn is its own process group).
+    This enumerates those logs, parses the PIDs, and terminates each
+    process group: SIGTERM → grace → SIGKILL.
+
+    Workspace-scoped: only touches PIDs whose bg-log lives under THIS
+    goal's workspace. Not a global ``ps`` scan — a PID appears here only
+    because the agent spawned it for this workspace. Safe to call at goal
+    completion (in the runner, before emitting the completion chunk) and
+    on cancel.
+
+    Returns the count of process groups reaped.
+    """
+    if not workspace:
+        return 0
+    bg_dir = Path(workspace).expanduser() / ".soothe" / "background"
+    if not bg_dir.is_dir():
+        return 0
+    reaped = 0
+    for log_file in bg_dir.glob("bg-*.log"):
+        match = _BG_LOG_PID_RE.search(log_file.name)
+        if match is None:
+            continue
+        pid = int(match.group(1))
+        try:
+            pgid = os.getpgid(pid)
+        except ProcessLookupError:
+            continue
+        except (OSError, PermissionError):
+            continue
+        if not _pid_alive(pid):
+            continue
+        if not _kill_pgid(pgid, sig=signal.SIGTERM):
+            continue
+        reaped += 1
+        deadline = time.monotonic() + grace_seconds
+        while time.monotonic() < deadline and _pid_alive(pid):
+            time.sleep(0.05)
+        if _pid_alive(pid):
+            _kill_pgid(pgid, sig=signal.SIGKILL)
+        with contextlib.suppress(OSError):
+            log_file.unlink(missing_ok=True)
+    if reaped:
+        logger.info(
+            "drain_goal_runtime: reaped %d background process group(s) under %s",
+            reaped,
+            workspace,
+        )
+    return reaped
+
+
+def _runner_grace_seconds(config: Any) -> float:
+    """Read the drain grace from autopilot config, defaulting on miss."""
+    try:
+        value = getattr(config, "autopilot", None)
+        if value is not None:
+            return float(getattr(value, "lifecycle_drain_grace_seconds", _DRAIN_GRACE_SECONDS))
+    except (TypeError, ValueError, AttributeError):
+        pass
+    return _DRAIN_GRACE_SECONDS
 
 
 class AutopilotWorkerMixin:
@@ -205,6 +308,13 @@ class AutopilotWorkerMixin:
                     )
         except Exception as exc:
             logger.exception("[Autopilot worker] goal %s raised", job.goal_id)
+            # Drain spawned background processes before reporting completion so
+            # a failed goal does not orphan its run_background grandchildren.
+            with contextlib.suppress(Exception):
+                drain_goal_runtime(
+                    workspace,
+                    grace_seconds=_runner_grace_seconds(self._config),  # type: ignore[attr-defined]
+                )
             yield self._goal_completion_chunk(
                 job,
                 outcome="failed",
@@ -219,6 +329,14 @@ class AutopilotWorkerMixin:
 
         # Reflection may attach GoalDirectives (create / adjust / …) for CE.
         reflection_directives = _extract_reflection_directives(plan_result)
+
+        # Drain spawned background processes before emitting completion so the
+        # goal's run_background grandchildren die with the goal, workspace-scoped.
+        with contextlib.suppress(Exception):
+            drain_goal_runtime(
+                workspace,
+                grace_seconds=_runner_grace_seconds(self._config),  # type: ignore[attr-defined]
+            )
 
         yield self._goal_completion_chunk(
             job,
@@ -281,7 +399,7 @@ class AutopilotWorkerMixin:
         if plan_result is None:
             return GoalDispatchContextContribution()
 
-        from soothe.autopilot.rail.wave_plan import (
+        from soothe.autopilot.rails.wave_plan import (
             WAVE_PLAN_FINDING_CAP,
             WavePlan,
             extract_wave_plan_from_plan_result_texts,

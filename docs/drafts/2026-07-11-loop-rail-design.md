@@ -566,7 +566,7 @@ Three-tier layout, **mirrors skills precedence** (last wins for duplicate `id`):
 
 | Tier | Path |
 |------|------|
-| Built-in | `packages/soothe/src/soothe/rails/builtin_rails/` |
+| Built-in | `packages/soothe/src/soothe/autopilot/rails/builtin_rails/` |
 | User / daemon-wide | `~/.soothe/rails/` |
 | Project | `<workspace>/.soothe/rails/` |
 
@@ -575,7 +575,7 @@ Three-tier layout, **mirrors skills precedence** (last wins for duplicate `id`):
 **Built-in (source tree)**
 
 ```
-packages/soothe/src/soothe/rails/
+packages/soothe/src/soothe/autopilot/rails/
 ├── __init__.py
 ├── catalog.py
 ├── builtins.py                 # get_rails_paths(workspace) — mirrors skills/builtins.py
@@ -618,7 +618,7 @@ ContextEngine opportunistic behavior. A rail ships only when its policy
 **Consolidated layout reference:**
 
 ```
-packages/soothe/src/soothe/rails/builtin_rails/   ← shipped (lowest precedence)
+packages/soothe/src/soothe/autopilot/rails/builtin_rails/   ← shipped (lowest precedence)
 
 ~/.soothe/
 ├── config/
@@ -885,18 +885,18 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 
 | Module | Path (proposed) |
 |--------|-----------------|
-| `LoopRailCatalog` | `soothe/rails/catalog.py` (shipped) |
-| `get_rails_paths` | `soothe/rails/builtins.py` (shipped) |
-| `LoopRailInterpreter` | `soothe/autopilot/rail/interpreter.py` |
-| `RailSelector` | `soothe/autopilot/rail/selector.py` |
+| `LoopRailCatalog` | `soothe/autopilot/rails/catalog.py` (shipped) |
+| `get_rails_paths` | `soothe/autopilot/rails/builtins.py` (shipped) |
+| `LoopRailInterpreter` | `soothe/autopilot/rails/interpreter.py` |
+| `RailSelector` | `soothe/autopilot/rails/selector.py` |
 | CE branch builtins | `soothe/context/branch_manager.py` |
-| Guard schemas | `soothe/autopilot/rail/guards/` |
+| Guard schemas | `soothe/autopilot/rails/guards/` |
 | `rail-distiller` subagent | `soothe/subagents/rail_distiller/` |
-| Built-in rails | `soothe/rails/builtin_rails/*.yml` (shipped; no `default.yml`) |
+| Built-in rails | `soothe/autopilot/rails/builtin_rails/*.yml` (shipped; no `default.yml`) |
 | Postgres DDL | `soothe/persistence/sql/soothe_rails/init.sql` |
-| Trace writer (SQLite) | `soothe/autopilot/rail/trace_store.py` |
-| Trace writer (Postgres) | `soothe/autopilot/rail/trace_store.py` (same interface, backend-selected) |
-| Retention sweeper | `soothe/autopilot/rail/retention.py` |
+| Trace writer (SQLite) | `soothe/autopilot/rails/trace_store.py` |
+| Trace writer (Postgres) | `soothe/autopilot/rails/trace_store.py` (same interface, backend-selected) |
+| Retention sweeper | `soothe/autopilot/rails/retention.py` |
 
 ---
 
@@ -924,7 +924,7 @@ Next: implementation guides for RFC-231 migration phases M1–M4.
 submit text. Opportunistic placement, verifier suggest-decompose/merge, backoff,
 and consensus `send_back` are **no-rail** Monitor/CE behavior — not a rail.
 
-Shipped under `packages/soothe/src/soothe/rails/builtin_rails/`:
+Shipped under `packages/soothe/src/soothe/autopilot/rails/builtin_rails/`:
 
 | Rail | Differs from no-rail by |
 |------|-------------------------|
