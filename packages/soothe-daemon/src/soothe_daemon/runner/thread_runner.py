@@ -1375,6 +1375,24 @@ class ThreadPool:
 
         logger.info("ThreadPool: shutting down %d workers", len(self._workers))
 
+        # Signal cooperative cancel on any worker mid-request so the in-flight
+        # stream unwinds as a cancelled terminal (not the spurious "unexpected
+        # cancellation" RuntimeError that event-loop teardown would otherwise
+        # produce). ``emit_terminal_for_cancelled_error`` classifies based on
+        # ``cancel_event.is_set()``, so without this the dying run is reported
+        # as a stream error instead of a clean cooperative cancel.
+        for worker in self._workers.values():
+            if worker.is_alive() and worker.current_request_id is not None:
+                if not worker.cancel_event.is_set():
+                    worker.cancel_event.set()
+                    logger.info(
+                        "ThreadPool: cooperative cancel on shutdown for worker %s "
+                        "(loop_id=%s, request_id=%s)",
+                        worker.worker_id,
+                        worker.current_loop_id,
+                        worker.current_request_id,
+                    )
+
         # Send shutdown sentinel to all workers
         for worker in self._workers.values():
             if worker.is_alive():
