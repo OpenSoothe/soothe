@@ -1,53 +1,50 @@
 <PLAN_GENERATE>
-Output wire JSON only: ``steps``, optional ``clarify``.
+Output wire JSON ONLY: ``steps``, optional ``clarify``. No prose, no markdown fences.
 
-If ledger ends with ``plan_assess`` AI, use its ``status`` / ``goal_progress``; else
-``ASSESSMENT:`` in the user message. Goal is in GOAL:. When ``Status: continue`` and DAG
-STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh plan only when needed.
+If ledger ends with ``plan_assess`` AI, use its ``status`` / ``goal_progress``; else read ``ASSESSMENT:`` in the user message. Goal is in ``GOAL:``. When ``Status: continue`` and DAG STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh plan ONLY when needed.
 
-**Step count**: Return at most 10 steps per plan wave; prefer fewer, focused steps.
-- CoreAgent is powerful: one StrangeLoop step is one CoreAgent execute (tools,
-  write_todos, task). Prefer exactly one step when a single execute can finish
-  the remaining deliverable — do not invent discover / edit / verify plan steps.
-- Split only for durable phase gates, parallel independent workstreams, or
-  explicit ordered phases (multi_phase). Not for overlapping discovery.
-- If one remaining actionable gap can be completed in one execute wave using projected prior context, emit exactly one step.
-- Do not split overlapping discovery (enumerate / search / confirm) across multiple steps when the goal or prior evidence already scopes the work — merge into one execute step.
+**Step count**: AT MOST 10 steps per wave; prefer fewer.
+- One StrangeLoop step = one CoreAgent execute (tools, write_todos, task). CoreAgent is powerful.
+- ONE step when a single execute finishes the remaining deliverable — do NOT invent discover/edit/verify plan steps.
+- Split ONLY for: durable phase gates, parallel independent workstreams, explicit ordered phases (``multi_phase``). NEVER for overlapping discovery.
+- If one remaining gap completes in one execute wave using projected context → emit exactly ONE step.
+- Merge overlapping discovery (enumerate/search/confirm) into ONE step when goal or prior evidence scopes the work.
 
-**Top-level fields** (only these — never put field names inside ``steps[]``):
+**Top-level fields** (ONLY these — NEVER put field names inside ``steps[]``):
 - ``steps``: Non-empty array of step objects when executing work.
-- ``clarify``: Optional ``{ "questions": ["...?"] }`` when user input is required — mutually
-  exclusive with non-empty ``steps`` (at most one clarify wave; no action steps alongside).
+- ``clarify``: Optional ``{ "questions": ["...?"] }`` when user input required — EXCLUSIVE with non-empty ``steps``. At most ONE clarify wave; no action steps alongside.
 
-**steps[]** objects (action path):
-- ``description``: Milestone line (&lt;20 words).
-- ``dependencies``: REQUIRED on every step — use ``[]`` when none; sibling ids or cross-wave
-  composite ids from STEP ANCHOR REGISTRY when ordering matters (simple and complex goals).
-- ``expected_output``: Checkable completion signal.
-- ``id``: Optional short token (``01``, ``02``) or per STEP ID HINT.
-- ``delegate``: Leave null. Built-in wire specialists (``planner``, ``browser_use``,
-  ``deep_research``, ``academic_research``) are intake/slash routed only —
-  never plan-wave delegates. **Default: omit / null** on every step —
-  execute CoreAgent already has ``task`` and local tools and chooses per hop.
+**steps[] objects** (action path):
+- ``description``: Milestone line (≤20 words). Telegraphic — no preamble, no restating the goal.
+- ``dependencies``: REQUIRED on EVERY step — use ``[]`` when none; sibling ids or cross-wave composite ids from STEP ANCHOR REGISTRY when ordering matters (simple AND complex goals).
+- ``expected_output``: Checkable completion signal — concrete artifact or verifiable state.
+- ``id``: Optional short token (``01``, ``02``) per STEP ID HINT.
+- ``delegate``: Default: OMIT / null. Built-in wire specialists (``planner``, ``browser_use``, ``deep_research``, ``academic_research``) are intake/slash routed ONLY — NEVER plan-wave delegates. Leave ``delegate`` null on every step so execute CoreAgent chooses (it has ``task`` and local tools per hop).
 
 **``delegate`` rules**:
-- Leave ``delegate`` null for all steps: workspace/codebase work uses local tools;
-  built-in specialists are intake-only (not plan-wave ``delegate``).
-- Never set ``delegate`` on every step in a wave; leave null so execute CoreAgent chooses.
+- Leave ``delegate`` = null for all steps: workspace/codebase work uses local tools; built-in specialists are intake-only.
+- NEVER set ``delegate`` on every step in a wave — leave null so execute CoreAgent chooses.
 
-Runtime derives ``execution_mode`` from ``dependencies`` (``dependency`` when any step lists deps,
-else ``parallel``). Do not emit ``reasoning``, ``type``, ``execution_mode``, ``full_description``, or ``kind``.
+Runtime derives ``execution_mode`` from ``dependencies`` (``dependency`` when any step lists deps, else ``parallel``). DO NOT emit: ``reasoning``, ``type``, ``execution_mode``, ``full_description``, ``kind``.
 
 **clarify** (PRIMARY clarification — executor will NOT ask the user for you):
-- REQUIRED when: goal ambiguous; essential context missing; user preference needed; iteration 0
-  and you cannot proceed without answers.
-- NOT when: goal is concrete/actionable; context suffices; intent inferable; or you could act.
-- Put question text in ``clarify.questions`` (each ending in ``?``). Do not use action steps to ask.
+- REQUIRED when: goal ambiguous; essential context missing; user preference needed; iteration 0 and cannot proceed without answers.
+- NOT when: goal concrete/actionable; context suffices; intent inferable; or you could act.
+- Put question text in ``clarify.questions`` (each ends ``?``). Do NOT use action steps to ask.
 
-**On failure**: If prior steps failed, propose a different approach — do not repeat same step text.
+**On failure**: If prior steps failed, propose a DIFFERENT approach — never repeat same step text.
 
-**Loop continuation** (``continue_loop_mode`` or continue/resume/proceed in the same loop):
+**Loop continuation** (``continue_loop_mode`` or continue/resume/proceed in same loop):
 - Read ``PRIOR GOAL COMPLETION`` — prior goal synthesis with recommended next actions.
-- Plan implementation for those actions; do NOT re-run prior discovery unless a new gap appears.
+- Plan implementation for those actions; do NOT re-run prior discovery unless a NEW gap appears.
 - Use ``dependencies`` when steps build on prior output; cite concrete modules, files, or design-doc items.
+
+**Anti-patterns** (REJECT these shapes):
+- ``delegate`` set to a specialist on plan-wave steps.
+- ``steps`` AND ``clarify`` both non-empty in one wave.
+- Splitting one CoreAgent-executable deliverable across multiple steps.
+- Restating the goal or assessment in ``description``.
+- ``expected_output`` that is a vague verb ("investigate", "review") instead of a checkable signal.
+- Emitting ``reasoning`` / ``type`` / ``execution_mode`` / ``full_description`` / ``kind`` fields.
+- Overlapping discovery steps (read/search/confirm) when prior evidence scopes the work.
 </PLAN_GENERATE>

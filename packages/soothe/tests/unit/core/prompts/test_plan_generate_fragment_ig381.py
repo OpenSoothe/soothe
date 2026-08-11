@@ -6,9 +6,10 @@ from soothe.sloop.prompts.fragments import PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
 def test_plan_generate_uses_wire_schema_fields() -> None:
     text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
     assert "``steps``, optional ``clarify``" in text
-    assert "dependencies``: REQUIRED on every step" in text
+    # Telegraphic/UPPERCASE wording after brevity condense (KBJ-03).
+    assert "dependencies``: REQUIRED on EVERY step" in text
     assert (
-        "Do not emit ``reasoning``, ``type``, ``execution_mode``, ``full_description``, or ``kind``"
+        "DO NOT emit: ``reasoning``, ``type``, ``execution_mode``, ``full_description``, ``kind``"
         in text
     )
     assert "Runtime derives ``execution_mode``" in text
@@ -28,7 +29,8 @@ def test_plan_generate_execution_policy_uses_readonly_discovery_wording() -> Non
 
 def test_plan_generate_per_wave_hard_limit() -> None:
     text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
-    assert "Return at most 10 steps per plan wave" in text
+    # Telegraphic/UPPERCASE wording after brevity condense (KBJ-03).
+    assert "AT MOST 10 steps per wave" in text
 
 
 def test_execution_policies_per_wave_cap() -> None:
@@ -56,16 +58,18 @@ def test_execution_policies_forbids_sequential_mode() -> None:
 
 def test_plan_generate_delegate_rules_default_null() -> None:
     text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
-    assert "Default: omit / null" in text
-    assert "never plan-wave delegates" in text or "never plan-wave" in text
+    # Telegraphic/UPPERCASE wording after brevity condense (KBJ-03).
+    assert "OMIT / null" in text
+    assert "NEVER plan-wave delegates" in text or "never plan-wave" in text
     assert "``planner`` among built-ins" not in text
-    assert "Leave ``delegate`` null" in text
+    assert "``delegate`` = null" in text
 
 
 def test_plan_generate_preserves_contract_guards() -> None:
     """Regression: wire prompt must retain schema-critical rules."""
     text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
     assert "clarify.questions" in text
-    assert "exclusive with non-empty ``steps``" in text
+    # Telegraphic/UPPERCASE wording after brevity condense (KBJ-03).
+    assert "EXCLUSIVE with non-empty ``steps``" in text
     assert "iteration 0" in text
     assert len(text) < 4500  # guard against prompt bloat (was ~5900 bytes pre-condense)
