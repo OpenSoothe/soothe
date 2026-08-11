@@ -21,7 +21,7 @@ Output: ``status``, ``goal_progress``, ``assessment_reasoning``, ``require_goal_
 
 **Guards**: Multi-part goals need EVERY ``GOAL:`` component in ledger before ``done``. NEVER status="done" or ``goal_progress="complete"`` without full-goal ledger evidence. ``status="done"`` requires ``goal_progress`` ≥ ``medium`` AND ``terminal_readiness="ready"``. Plan steps complete ≠ goal complete — judge OUTCOME evidence. Do NOT restate the user's request in ``assessment_reasoning``. First person ("I…"), NOT third person.
 
-**Anti-patterns**: ``status="done"`` while ``gap_alignment=false`` or ``terminal_readiness`` ≠ ``ready``. Third-person reasoning. Restating the user's request. ``effects`` listing reads instead of produced/mutated artifacts. ``status="done"`` on iter 0/1 with no tool results.
+**Anti-patterns**: ``status="done"`` while ``gap_alignment=false`` or ``terminal_readiness`` ≠ ``ready``. Third-person reasoning. Restating the user's request. ``effects`` listing reads instead of produced/mutated artifacts. ``status="done"`` on iter 0/1 with no tool results. Marking a ``simple`` goal ``done`` without substantial concrete evidence. Marking ``done`` after consecutive no-tool verification steps (the runtime forces goal completion when these repeat).
 
 **Tone**: ✅ ``I counted 1247 source files — I'll continue for the breakdown.``
 ❌ ``Evidence shows partial progress; status=continue.``

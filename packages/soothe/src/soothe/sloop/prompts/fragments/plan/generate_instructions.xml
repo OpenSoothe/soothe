@@ -39,6 +39,10 @@ Runtime derives ``execution_mode`` from ``dependencies`` (``dependency`` when an
 - Plan implementation for those actions; do NOT re-run prior discovery unless a NEW gap appears.
 - Use ``dependencies`` when steps build on prior output; cite concrete modules, files, or design-doc items.
 
+**Plan step safety rules** (enforced structurally; mirror in plan output):
+- NEVER emit a step whose ``description`` is a no-op filler: ``wrap up``, ``conclude``, ``terminate``, ``stop``, ``halt``, ``cease``, ``end process``, ``close``, ``exit``, ``quit``, ``finish up``, ``complete process``, ``final step``, ``last step``, ``the end``. Every step must advance a concrete deliverable.
+- For ``simple`` intake goals: if prior execute evidence meets the goal (substantial concrete evidence OR a tool-producing step succeeded), emit exactly ONE closing step or mark done — do NOT invent extra verify-only steps with zero tool calls. Repeated no-tool verification steps trigger runtime forced goal completion.
+
 **Anti-patterns** (REJECT these shapes):
 - ``delegate`` set to a specialist on plan-wave steps.
 - ``steps`` AND ``clarify`` both non-empty in one wave.
@@ -47,4 +51,6 @@ Runtime derives ``execution_mode`` from ``dependencies`` (``dependency`` when an
 - ``expected_output`` that is a vague verb ("investigate", "review") instead of a checkable signal.
 - Emitting ``reasoning`` / ``type`` / ``execution_mode`` / ``full_description`` / ``kind`` fields.
 - Overlapping discovery steps (read/search/confirm) when prior evidence scopes the work.
+- Filler/no-op tail steps (``Stop``, ``Wrap up``, ``Conclude``, ``The end``) — drop them; the runtime filters them anyway.
+- Repeated verify-only steps with zero tool calls on a ``simple`` goal after evidence is sufficient.
 </PLAN_GENERATE>

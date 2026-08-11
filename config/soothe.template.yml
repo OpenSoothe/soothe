@@ -23,11 +23,11 @@ agent:
     dreaming_consolidation_interval: 300
     dreaming_health_check_interval: 60
     monitor_model_role: think
-    # Report-commit judgment (RFC-204 §1.3); empty deny spawn/cancel dag_ops.
+    # Report-commit judgment; empty deny spawn/cancel dag_ops.
     consensus_model_role: think
     judge_allow_structural_dag_ops: []
     default_rail: null
-    # LLM LoopRail auto-pick when submit omits rail_id (RFC-231 §10 / IG-728).
+    # LLM LoopRail auto-pick when submit omits rail_id.
     rail_auto_pick: true
     rail_auto_pick_min_confidence: 0.6
     rail_auto_pick_model_role: null
@@ -238,7 +238,7 @@ agent:
     max_defer_age_hours: 168
     default_mode: auto
     # StrangeLoop plan_generate/plan_assess are *not* listed here.
-    # Default: planner *subagent* human review only (RFC-633).
+    # Default: planner *subagent* human review only.
     force_manual_origins:
       - planner_subagent_review
 

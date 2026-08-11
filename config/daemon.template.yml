@@ -22,7 +22,7 @@ transports:
     heartbeat_timeout_ms: 10000
 
 # ============================================================================
-# CHANNELS (RFC-620 global channel settings)
+# CHANNELS (global channel settings)
 # ============================================================================
 # Bind address/port live under transports.websocket; channel-global knobs here.
 channels:
@@ -38,8 +38,8 @@ max_concurrent_threads: 100
 max_concurrent_dispatches: 50
 max_concurrent_vision_preflight: 8  # 0 = unlimited
 max_in_flight_broadcasts_per_loop: 80  # 0 = unlimited; blocks only that loop's stream
-card_ingest_queue_maxsize: 2000  # IG-534 §2.3: async card binding backlog per loop
-card_flush_debounce_ms: 200  # IG-546: coalesce card binds during dense tool streams
+card_ingest_queue_maxsize: 2000  # async card binding backlog per loop
+card_flush_debounce_ms: 200  # coalesce card binds during dense tool streams
 max_input_queue_size: 1000
 
 # ============================================================================
@@ -123,9 +123,9 @@ identity:
 # distributed: Ray cluster for horizontal scaling
 
 # Thread pool (DEFAULT) - Lightweight async, fast startup
-# IG-534: Each concurrent synthesis loop occupies one thread for the full turn.
-# IG-535: Defaults tuned for 32 concurrent loops (production multi-tenant workloads).
-# IG-553: For 50–100 concurrent loops, raise max_pool_size to 96–100 and align
+# Each concurrent synthesis loop occupies one thread for the full turn.
+# Defaults tuned for 32 concurrent loops (production multi-tenant workloads).
+# For 50–100 concurrent loops, raise max_pool_size to 96–100 and align
 # persistence.postgres.checkpoints_pool_size / metadata_pool_size / vectors_pool_size behind PgBouncer.
 # - max_pool_size ≥ concurrent loops for full parallelism
 # - min_pool_size pre-warms threads for fast initial dispatch
@@ -137,8 +137,8 @@ identity:
 # two multi-second compiles (~7s primary + ~7s execute twin).
 thread_pool:
   enabled: true
-  min_pool_size: 16  # IG-553: Pre-warm baseline for 50–100 loop bursts
-  max_pool_size: 96  # IG-553: Support up to 96 concurrent synthesis loops
+  min_pool_size: 16  # Pre-warm baseline for 50–100 loop bursts
+  max_pool_size: 96  # Support up to 96 concurrent synthesis loops
   idle_timeout_seconds: 300
   max_requests_per_thread: 100
   request_timeout_seconds: 1209600  # 14d default; 0 = no timeout
