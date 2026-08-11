@@ -30,14 +30,6 @@ jobs:
           ruby-version: '3.3.6'
           bundler-cache: true
 
-      - name: Sync TS client API docs
-        run: |
-          cd client/typescript
-          npm ci
-          npm run docs:api:all
-          cd ../..
-          node scripts/sync-ts-api-docs.mjs
-
       - name: Build with Jekyll
         run: |
           bundle exec jekyll build -s docs -d _site
@@ -50,7 +42,6 @@ jobs:
           test -f _site/faq/index.html
           test -f _site/changelog/index.html
           test -f _site/wiki/api-reference/index.html
-          test -f _site/wiki/api-reference/ts-client/index.html
           test -f _site/changelogs/index.html
           test -f _site/.nojekyll
           test ! -e _site/specs
