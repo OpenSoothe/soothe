@@ -2,57 +2,262 @@
 # ------------------------------------------------------------
 # Host-only configuration overlay. Compose with nano.yml.
 # This file must not contain nano-owned/shared keys.
-#
-# This template contains only critical, user-configurable settings.
-# All omitted keys fall back to dataclass defaults (see
-# soothe.config.models.AgentConfig / AutopilotConfig / StrangeLoopConfig).
-# Full tuning reference: soothed config docs
 
 agent:
-  # === DAG safety bounds ===
+  goal_completion_mode: llm_only
+  final_response: auto
+
   autopilot:
     enabled: true
     max_retries: 2
     max_total_goals: 99
     max_goal_depth: 5
+    # Cap goal fan-out under typical provider concurrency quotas.
     max_parallel_goals: 3
     max_send_backs: 3
     max_engine_recoveries: 2
-    # Loop lifecycle bounds
+    checkpoint_interval: 10
+    # Dreaming is automatic (DAG complete / timer) and config-driven — no CLI dream/wake.
+    # Wake happens on submit or scheduled task. Set dreaming_enabled: false to disable.
+    dreaming_enabled: true
+    dreaming_consolidation_interval: 300
+    dreaming_health_check_interval: 60
+    monitor_model_role: think
+    # Report-commit judgment; empty deny spawn/cancel dag_ops.
+    consensus_model_role: think
+    judge_allow_structural_dag_ops: []
+    default_rail: null
+    # LLM LoopRail auto-pick when submit omits rail_id.
+    rail_auto_pick: true
+    rail_auto_pick_min_confidence: 0.6
+    rail_auto_pick_model_role: null
+    rail_auto_pick_timeout_s: 120
+    rail_auto_pick_deny: []
+    rail_auto_pick_max_candidates: 32
+    rail_auto_pick_skip_if_workspace_default: false
+    rail_auto_pick_abstain_overrides_defaults: true
+    # Veritas auto-clarify before pause_for_user CE suspend.
+    # PROCEED skips suspend and fires user_intervention; false = always suspend.
+    rail_pause_auto_clarify: true
+    # Forced StrangeLoop intake for dispatched goals (null|trivial|simple|complex).
+    # null (default) lets the loop classify; simple/trivial/complex skip Pass 1+2.
+    intake_scope: null
+    verify_interval: 30
+    dreaming_interval: 300
+    dreaming_scope: workspace
+    dreaming_modes:
+      episodic:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+      procedure:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+      semantic:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+      profile:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+    webhooks: {}
+    notify:
+      enabled: false
+      suspend_after_seconds: 2700
+      events:
+        job_completed: true
+        job_failed: true
+        job_suspended_timeout: true
+      targets: []
+      sinks:
+        email:
+          enabled: false
+          smtp_host: ""
+          smtp_port: 587
+          # Plain string or ${ENV_VAR} (same dual rule as providers[].api_key).
+          smtp_username: "${SMTP_USERNAME}"
+          smtp_password: "${SMTP_PASSWORD}"
+          smtp_use_tls: true
+          smtp_use_ssl: false
+          from_address: ""
+          targets: []
+        webhook:
+          enabled: false
+          urls:
+            job_completed: null
+            job_failed: null
+            job_suspended_timeout: null
+        feishu:
+          enabled: false
+          # Plain string or ${ENV_VAR}.
+          app_id: "${FEISHU_APP_ID}"
+          app_secret: "${FEISHU_APP_SECRET}"
+          targets: []
     max_loops: 16
     loop_idle_timeout: 300
     poll_interval: 5
-    # Wall-clock budget per dispatched goal (None disables; default 14d)
-    # goal_deadline_seconds: 1209600
+    dreaming_poll_interval: 60
+    goal_deadline_seconds: 1209600
+    context_projection:
+      max_findings: 20
+      max_effects: 50
+      max_plan_steps: 30
+      context_retention_hours: 168
+      max_context_entries: 1000
+    workspace_reservation:
+      enabled: true
+      strict_overlap: true
 
-    # === Notify (multi-channel job lifecycle push) ===
-    # Set enabled: true and configure sinks to receive job-completed/failed/suspended events.
-    notify:
-      enabled: false
-      # targets: [...]               # recipient identifiers
-      # sinks:
-      #   email:   {enabled: true, smtp_host: smtp.example.com, ...}
-      #   webhook: {enabled: true, urls: {job_completed: https://..., ...}}
-      #   feishu:  {enabled: true, app_id: "${FEISHU_APP_ID}", ...}
-
-  # === StrangeLoop loop budget (shared: interactive + Autopilot workers) ===
   loop:
     enabled: true
+    # Shared StrangeLoop budget (interactive + Autopilot workers). Do not redefine under autopilot.
     max_iterations: 99
+    max_plan_steps_per_wave: 10
+    max_tool_calls_per_step: 100
+    dispatch_idle_seconds: 300
+    dispatch_tool_timeout_seconds: 0
+    execute_action_retry_max: 1
+    execute_min_answer_chars: 20
+    execute_deliverable_assess: auto
+    step_completion_report_max_words: 50
+    max_subagent_tasks_per_wave: 4
+    general_purpose_subagent: false
+    strange_loop_output_contract_enabled: true
+    goal_completion_mode: llm_only
+    final_response: auto
+    step_brief_hydration_enabled: true
+    prior_conversation_limit: 10
+    context_window_limit: 200000
+    context_overflow_threshold_pct: 0.8
+    context_compaction_target_pct: 0.6
+    step_context_check_enabled: false
+    plan_evaluate_assess_model_role: fast
+    plan_evaluate_gap_model_role: fast
+    plan_evaluate_gap_mode: sequential
+    plan_evaluate_gap_max_concurrency: 4
+    plan_evaluate_gap_min_facets: 2
+    plan_evaluate_gap_wall_clock_seconds: 90
+    plan_evaluate_gap_leg_timeout_seconds: 45
+    plan_generate_model_role: think
+    plan_generate_model_role_simple: fast
+    plan_generate_model_role_near_gap: fast
+    plan_structural_keep_enabled: true
+    plan_structural_keep_max_streak: 3
+    goal_synthesis_model_role: default
+    rules:
+      completion:
+        dag_dependency_threshold: 3
+        low_success_rate_threshold: 0.6
+        simple_ledger_direct_max_steps: 1
+        ledger_direct_max_tool_calls: 50
+      scenario:
+        skip_llm_when_single_step: true
+        skip_llm_when_all_failed: true
+        high_step_count_threshold: 4
+        low_evidence_volume_threshold: 2000
+      plan_safety:
+        banned_step_patterns:
+          - "^(wrap up|conclude|terminate|stop|halt|cease|end process|close|exit|quit|finish up|complete process|final step|last step|the end)$"
+        simple_evidence_min_chars: 200
+        no_tool_evidence_retry_limit: 2
+    output_streaming:
+      mode: adaptive
+      streaming_interval_ms: 100
+      tui_flush_interval_ms: 200
+      tui_first_flush_interval_ms: 50
+      adaptive_threshold_chars: 500
+      adaptive_block_chars: 500
+      adaptive_block_interval_ms: 250
+      file_output_threshold_chars: 0
+      file_output_preview_chars: 500
+      file_output_dir: null
+      message_coalesce_enabled: true
+      tool_batch_enabled: true
+      tool_batch_interval_ms: 500
+      suppress_redundant_stream_tool_updates: true
+      skip_redundant_tool_message_wire: true
+    working_memory:
+      enabled: true
+      max_inline_chars: 4000
+      max_entry_chars_before_spill: 1500
+    goal_context:
+      plan_limit: 10
+      execute_limit: 10
+      enabled: true
+    context_engine:
+      projection_max_goals: 5
+      projection_max_steps_per_goal: 10
+      projection_max_ledger_chars: 4000
+      projection_max_ledger_messages: 20
+      projection_max_lineage_chars: 2000
+      projection_max_project_instructions_chars: 8000
+    plan_prompt_ledger:
+      plan_ledger_max_messages: 40
+      plan_ledger_max_total_chars: 24000
+      plan_ledger_max_message_chars: 3000
+    plan_evaluate_prompt:
+      ledger_max_messages: 24
+      execute_ai_max_chars: 2048
+      keep_head_tail_execute_ai: true
+      omit_prior_progress_hint: true
+      include_plan_coverage: true
+    execute_prompt_ledger:
+      cross_goal_completion_tail: 3
+      predecessor_max_messages: 96
+      execute_ai_ledger_max_tokens: 65536
+    report_output:
+      display_threshold: 20000
+      preview_chars: 500
+      synthesis_max_chars: 0
+    checkpoint:
+      progressive: true
+      auto_resume_on_start: false
+      auto_resume_max_loops: 16
+      auto_resume_max_age_hours: 24
+      auto_resume_clarifications: skip
+    concurrency:
+      # Keep below provider in-flight quota; pair with nano
+      # llm_rate_limit.global_concurrent_limit (template: 18 for AP+CLI headroom).
+      # Goal fan-out: agent.autopilot.max_parallel_goals (not a loop concurrency key).
+      max_parallel_steps: 3
+      max_parallel_subagents: 3
+      global_max_llm_calls: 8
+      step_parallelism: dependency
+      max_parallel_tools: 99
+      checkpoint:
+        flush_interval: 5.0
+        close_timeout_seconds: 30
+        durable_flush_timeout: 10
+    loop_orchestrator_evidence_validate: true
 
-  # === Clarification relay ===
   clarification:
-    # auto = veritas auto-answerer; manual = interactive TUI relay
+    auto_policy: veritas
+    auto_min_confidence: 0.4
+    max_defer_age_hours: 168
     default_mode: auto
+    # StrangeLoop plan_generate/plan_assess are *not* listed here.
+    # Default: planner *subagent* human review only.
+    force_manual_origins:
+      - planner_subagent_review
 
-  # === Veritas auto-answerer ===
   veritas:
     model_role: think
+    max_context_steps: 8
 
-# ============================================================================
-# CRON — natural language scheduled job submission for Autopilot
-# ============================================================================
+skillify:
+  enabled: false
+  model_role: embedding
+  warehouse_paths: []
+  index_collection: soothe_skillify
+  index_interval_seconds: 300
+  retrieval_top_k: 10
+
 cron:
   max_jobs: 100
   poll_interval: 60
+  extraction_model: fast
+  extraction_timeout: 30
+  default_priority: 50
   timezone: local

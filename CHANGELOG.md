@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.5] - 2026-08-11
+
+### Fixed
+- Runner ThreadPool shutdown now sets `cancel_event` on busy in-flight workers
+  before the join wait, so daemon restart/stop unwinds dying `astream()` runs
+  through the cooperative-cancel pipeline instead of leaking a spurious
+  "unexpected cancellation" RuntimeError to the client.
+- Workspace-local skills (`.agents/skills`) resolve on freshly created loops
+  before the first `loop_input`. The router now falls back to the
+  `current_workspace` stored in loop metadata at `loop_new` time, mirroring the
+  existing `_handle_skills_list` fallback, instead of returning `SKILL_NOT_FOUND`.
+- Autopilot `soothe ap top` no longer ticks an elapsed clock for queued goals;
+  elapsed is now anchored on `started_at` so pending work shows no running timer.
+
+### Added
+- Resumable interrupted-goal cursor for cancel-then-retry. A mid-Execute cancel
+  now marks the in-flight goal `interrupted` (distinct from terminal
+  `cancelled`) and persists the current iteration cursor; a subsequent resume
+  re-activates the goal in place with one grace iteration at the budget
+  boundary, so retry no longer restarts from iteration 0.
+- Autoresearch loop rail with native exec and 15 prompt fragments: an
+  iterative autonomous research loop that decomposes questions, gathers web
+  evidence, reflects on sufficiency, and synthesizes an adaptive report via
+  find→optimize→verify.
+- CE goal DAG analysis + digraph to the `inspect-autopilot-job` skill.
+
+### Changed
+- Loop `continue` always resumes via the launcher gate (single resume path)
+  instead of the legacy direct-continue path.
+- Plan prompt fragments condensed to telegraphic wording; unused structured
+  plan parser, fatal-error transition, and step-alignment helpers removed.
+- `iter<=N` suffix dropped from the TUI goal-tree header.
+- Packaged daemon/soothe config templates polished (slimmed defaults).
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.4...v0.10.5
+
 ## [v0.10.4] - 2026-08-10
 
 ### Fixed
