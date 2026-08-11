@@ -7,8 +7,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Constants for goal alignment and default decision generation
-_GOAL_ALIGN_SNIP_LEN = 400
+# Constant for default decision generation
 _DEFAULT_DECISION_GOAL_SNIP_LEN = 350
 
 
@@ -35,60 +34,6 @@ def _extract_text_content(content: Any) -> str:
                 parts.append(block.get("text", ""))
         return "\n".join(parts)
     return str(content)
-
-
-def _align_step_descriptions(goal: str, steps: list[Any]) -> None:
-    """Rewrite step text that only echoes the user goal without concrete actions."""
-    from soothe.sloop.state.schemas import StepAction
-
-    g = (goal or "").strip().casefold()
-    if not g:
-        return
-    for s in steps:
-        if not isinstance(s, StepAction):
-            continue
-        d = (s.description or "").strip()
-        if d.casefold() == g:
-            lim = _GOAL_ALIGN_SNIP_LEN
-            tail = goal if len(goal) <= lim else goal[: lim - 3] + "…"
-            s.description = (
-                "Using tools in the open workspace, take concrete actions toward this goal "
-                f"(do not use the goal text alone as the step): {tail}"
-            )
-
-
-def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
-    """Build AgentDecision from a parsed JSON object (step list at top level)."""
-    from soothe.sloop.state.schemas import AgentDecision, StepAction
-
-    steps = []
-    for i, step_data in enumerate(data.get("steps", [])):
-        if not isinstance(step_data, dict):
-            continue
-        deps = step_data.get("dependencies")
-        deps = (
-            []
-            if deps is None or not isinstance(deps, list)
-            else [str(d) for d in deps if d is not None]
-        )
-
-        steps.append(
-            StepAction(
-                id=str(i + 1),
-                description=step_data.get("description", ""),
-                expected_output=step_data.get("expected_output", ""),
-                dependencies=deps,
-            )
-        )
-
-    _align_step_descriptions(_goal, steps)
-
-    return AgentDecision(
-        type=data.get("type", "execute_steps"),
-        steps=steps,
-        execution_mode=data.get("execution_mode", "parallel"),
-        reasoning=data.get("reasoning", ""),
-    )
 
 
 def _default_agent_decision(goal: str, iteration: int = 0) -> Any:
