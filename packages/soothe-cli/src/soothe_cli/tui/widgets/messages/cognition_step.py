@@ -101,7 +101,7 @@ class CognitionStepMessage(Vertical):
     DEFAULT_CSS = """
     CognitionStepMessage {
         height: auto;
-        padding: 0 2;
+        padding: 0 1;
         margin: 0 0 1 0;
         background: transparent;
     }
@@ -549,11 +549,12 @@ class CognitionStepMessage(Vertical):
     def _available_line_width(self) -> int | None:
         """Terminal columns available for one step-card line, or ``None`` if unknown.
 
-        Subtracts the card's horizontal padding (``padding: 0 2`` → 4 columns)
-        so tool activity lines truncate to the real visible width instead of
-        wrapping. Falls back through the app size, then the terminal, then
-        ``None`` (preserves prior fixed-cap behavior for unmounted widgets and
-        tests).
+        ``Widget.size`` is the content area, so only a 2 column safety slack is
+        reserved to keep tool activity lines truncating instead of wrapping. The
+        terminal fallback also subtracts the card's horizontal padding
+        (``padding: 0 1`` → 2 columns). Falls back through the app size, then the
+        terminal, then ``None`` (preserves prior fixed-cap behavior for unmounted
+        widgets and tests).
         """
         width = 0
         try:
@@ -574,7 +575,7 @@ class CognitionStepMessage(Vertical):
                 return max(0, cols - 4) or None
             except Exception:  # noqa: BLE001
                 return None
-        return max(0, width - 4)
+        return max(0, width - 2)
 
     def _step_task_activity_content(self) -> Content:
         """To-do then Tool-use (task markers, tool preview, notes) under the step title."""

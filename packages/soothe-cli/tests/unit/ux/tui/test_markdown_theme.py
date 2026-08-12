@@ -8,6 +8,7 @@ from soothe_cli.tui import theme
 from soothe_cli.tui.markdown_theme import (
     DEFAULT_MARKDOWN_THEME,
     REGISTRY,
+    StyleRecipe,
     ThemedMarkdownRenderer,
     _markdown_styles_from_colors,
     build_markdown,
@@ -78,6 +79,22 @@ def test_accent_recipe_light_uses_darkened_rainbow() -> None:
     h3 = styles["markdown.h3"].color
     assert h3 is not None
     assert h3.triplet == Color.parse(theme.LC_LIGHT_PURPLE).triplet
+
+
+def test_inline_code_uses_warm_literal_color() -> None:
+    from rich.color import Color
+
+    recipes: tuple[StyleRecipe, ...] = ("accent", "standard")
+    for recipe in recipes:
+        dark = _markdown_styles_from_colors(theme.DARK_COLORS, recipe=recipe)
+        light = _markdown_styles_from_colors(theme.LIGHT_COLORS, recipe=recipe)
+        for key in ("markdown.code", "markdown.code_inline"):
+            dark_color = dark[key].color
+            assert dark_color is not None
+            assert dark_color.triplet == Color.parse(theme.LC_CODE).triplet
+            light_color = light[key].color
+            assert light_color is not None
+            assert light_color.triplet == Color.parse(theme.LC_LIGHT_CODE).triplet
 
 
 def test_minimal_recipe_subdues_links() -> None:

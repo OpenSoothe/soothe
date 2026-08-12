@@ -247,6 +247,11 @@ def _heading_rainbow(colors: theme.ThemeColors) -> tuple[str, str, str, str, str
     )
 
 
+def _code_accent(colors: theme.ThemeColors) -> str:
+    """Return the warm literal color used for inline `code` spans."""
+    return theme.LC_CODE if _is_dark_palette(colors) else theme.LC_LIGHT_CODE
+
+
 def _markdown_styles_from_colors(
     colors: theme.ThemeColors,
     *,
@@ -284,6 +289,7 @@ def _markdown_styles_from_colors(
 
     h1, h2, h3, h4, h5, h6 = _heading_rainbow(colors)
     cyan = h2
+    code = _code_accent(colors)
 
     if recipe == "standard":
         return {
@@ -297,8 +303,8 @@ def _markdown_styles_from_colors(
             "markdown.em": Style(color=colors.foreground, italic=True),
             "markdown.strong": Style(color=colors.foreground, bold=True),
             "markdown.s": Style(color=colors.muted, strike=True),
-            "markdown.code_inline": Style(color=colors.secondary),
-            "markdown.code": Style(color=colors.secondary),
+            "markdown.code_inline": Style(color=code),
+            "markdown.code": Style(color=code),
             "markdown.code_block": Style(color=colors.foreground),
             "markdown.block_quote": Style(color=colors.muted, italic=True),
             "markdown.hr": Style(color=colors.card_border),
@@ -325,8 +331,8 @@ def _markdown_styles_from_colors(
         "markdown.em": Style(color=colors.secondary, italic=True),
         "markdown.strong": Style(color=colors.foreground, bold=True),
         "markdown.s": Style(color=colors.muted, strike=True),
-        "markdown.code_inline": Style(color=cyan),
-        "markdown.code": Style(color=cyan),
+        "markdown.code_inline": Style(color=code),
+        "markdown.code": Style(color=code),
         "markdown.code_block": Style(color=colors.foreground),
         "markdown.block_quote": Style(color=colors.secondary, italic=True),
         "markdown.hr": Style(color=colors.card_border),

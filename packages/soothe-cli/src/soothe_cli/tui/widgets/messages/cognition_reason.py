@@ -25,7 +25,7 @@ class CognitionReasonMessage(Vertical):
     DEFAULT_CSS = """
     CognitionReasonMessage {
         height: auto;
-        padding: 0 2;
+        padding: 0 1;
         margin: 0 0 1 0;
         background: transparent;
     }

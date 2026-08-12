@@ -77,6 +77,10 @@ LC_AMBER = "#EB8B46"
 LC_PINK = "#F7768E"
 """Error / destructive actions."""
 
+LC_CODE = "#E5A672"
+"""Inline code / literals — softer, desaturated amber so `code` spans read as
+distinct from warning amber without shouting inside body prose."""
+
 LC_MUTED = "#545C7E"
 """Muted / secondary text."""
 
@@ -223,6 +227,9 @@ LC_LIGHT_AMBER = "#B45309"
 
 LC_LIGHT_PINK = "#BE185D"
 """Error / destructive (darkened for light bg contrast)."""
+
+LC_LIGHT_CODE = "#A8531F"
+"""Inline code / literals (darkened for light bg contrast)."""
 
 LC_LIGHT_MUTED = "#6B7280"
 """Muted / secondary text on light backgrounds."""

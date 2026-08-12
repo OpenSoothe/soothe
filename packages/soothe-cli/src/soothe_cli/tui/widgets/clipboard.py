@@ -109,18 +109,9 @@ def _prefer_tty_osc52() -> bool:
 
 def _clipboard_copy_methods(app: App) -> list[Callable[[str], None]]:
     """Return clipboard backends in priority order for the current environment."""
-    methods: list[Callable[[str], None]] = []
-
-    try:
-        import pyperclip
-
-        methods.append(pyperclip.copy)
-    except ImportError:
-        pass
-
     # Native OS clipboard (pbcopy on macOS, xclip/xsel on Linux) — most
     # reliable for local sessions where OSC 52 may not be supported.
-    methods.append(_copy_native)
+    methods: list[Callable[[str], None]] = [_copy_native]
 
     if _prefer_tty_osc52():
         methods.append(_copy_osc52)

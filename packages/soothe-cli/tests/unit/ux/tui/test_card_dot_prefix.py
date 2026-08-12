@@ -60,19 +60,18 @@ def test_glyph_sets_define_distinct_card_prefix_symbols() -> None:
 
 
 def test_stream_cards_use_horizontal_inset_padding() -> None:
-    """Agent cards inset from the chat edges; user/input gutters stay separate.
+    """Agent cards share one 1-col inset so their prefix dots line up.
 
-    The assistant (AI message) card uses a wider inset (``padding: 0 1``) than
-    step/clarification cards (``padding: 0 2``) so its prose body gets +1 col of
-    content width on each side (2 cols total). All three remain borderless and
-    inset from the chat edges.
+    Step, assistant (AI message) and clarification cards all use ``padding: 0 1``
+    from the chat edges, keeping the dot column identical across card types. All
+    three remain borderless.
     """
     step_css = CognitionStepMessage.DEFAULT_CSS
     assistant_css = AssistantMessage.DEFAULT_CSS
     clarification_css = ClarificationInputMessage.DEFAULT_CSS
-    assert "padding: 0 2;" in step_css
+    assert "padding: 0 1;" in step_css
     assert "padding: 0 1;" in assistant_css
-    assert "padding: 0 2;" in clarification_css
+    assert "padding: 0 1;" in clarification_css
     assert "border-left:" not in step_css
     assert "border-left:" not in assistant_css
     assert "border-left:" not in clarification_css

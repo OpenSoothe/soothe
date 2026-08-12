@@ -128,8 +128,7 @@ class AssistantMessage(Vertical):
     DEFAULT_CSS = """
     AssistantMessage {
         height: auto;
-        /* Wider than step/clarification cards: prose body uses +1 col of
-           content width on each side (2 cols total) for longer line wrap. */
+        /* Shared 1-col inset: every stream card's prefix dot lines up. */
         padding: 0 1;
         margin: 0 0 1 0;
         background: transparent;
