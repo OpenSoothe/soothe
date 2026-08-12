@@ -69,7 +69,13 @@ def test_create_chat_model_for_spec_with_params_streaming():
 
 
 def test_model_cache_includes_streaming_key():
-    """Verify cache keys include streaming parameter for proper invalidation."""
+    """Verify cached models have streaming enabled (RFC-627 LLMFactory).
+
+    nano 1.1.16 resolves streaming from the provider config and passes it
+    to the model constructor; streaming is no longer part of the cache key
+    string. The contract under test is that cached instances carry
+    ``streaming=True``, not the literal key format.
+    """
     config = config_with_router(
         ModelRouter(default="test-provider:gpt-4o-mini"),
         providers=[
@@ -88,14 +94,18 @@ def test_model_cache_includes_streaming_key():
     # Should be the same cached instance
     assert model1 is model2
 
-    # Check cache key format includes streaming (now in llm_factory._cache)
-    cache_keys = list(config.llm_factory._cache.keys())
-    assert len(cache_keys) == 1
-    assert "streaming" in cache_keys[0]
+    # Cached instance must have streaming enabled
+    assert hasattr(model1, "streaming")
+    assert model1.streaming is True
 
 
 def test_create_chat_model_for_spec_cache_key_streaming():
-    """Verify spec model cache keys include streaming parameter."""
+    """Verify spec models with different params are cached separately and stream.
+
+    nano 1.1.16 resolves streaming from provider config (not the cache key),
+    so we assert that each distinct param set yields a distinct cached
+    instance and that all cached instances carry ``streaming=True``.
+    """
     config = config_with_router(
         ModelRouter(default="test-provider:gpt-4o-mini"),
         providers=[
@@ -126,9 +136,10 @@ def test_create_chat_model_for_spec_cache_key_streaming():
     )
     assert model2 is model4
 
-    # Check all cache keys include streaming (now in llm_factory._cache)
-    for cache_key in config.llm_factory._cache.keys():
-        assert "streaming" in cache_key
+    # All cached instances must have streaming enabled
+    for model in (model1, model2, model3):
+        assert hasattr(model, "streaming")
+        assert model.streaming is True
 
 
 def test_multiple_roles_all_streaming():

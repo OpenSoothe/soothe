@@ -29,12 +29,22 @@ providers:
     api_base_url: "http://100.75.70.86:9642/v1"
     api_key: "mirasoth"
     models:
-      - Muse-Glimmer-30B-4bit
       - Qwen3.6-27B-OptiQ-4bit
       - GLM-4.6V-Flash-4bit
       - PaddleOCR-VL-1.5-4bit
       - DeepSeek-OCR-4bit
       - nomicai-modernbert-embed-base-bf16
+
+  - name: vllm
+    provider_type: openai
+    api_base_url: "http://localhost:9543/v1"
+    api_key: "mirasoth"
+    # vLLM-Metal 0.1.0 ignores `stream: true` and returns a single non-SSE JSON
+    # body, which makes LangChain's streaming path fail. Disable streaming so
+    # nano routes through the non-streaming _generate path instead.
+    streaming: false
+    models:
+      - mlx-community/Muse-Glimmer-30B-4bit
 
 router_profiles:
   - name: production
@@ -65,10 +75,10 @@ router_profiles:
       image: "omlx:GLM-4.6V-Flash-4bit"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
-  - name: muse-glimmer
+  - name: vllm
     router:
-      default: "omlx:Muse-Glimmer-30B-4bit"
-      image: "omlx:Muse-Glimmer-30B-4bit"
+      default: "vllm:mlx-community/Muse-Glimmer-30B-4bit"
+      image: "vllm:mlx-community/Muse-Glimmer-30B-4bit"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
 active_router_profile: production
