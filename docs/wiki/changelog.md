@@ -27,6 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.8] - 2026-08-12
+
+### Fixed
+- Goal cancel no longer orphans in-flight `run_command` shells.
+  `drain_goal_runtime` now reaps both foreground (`fg-*.session`) and
+  background (`bg-*.log`) process groups on StrangeLoop `user_cancelled` and
+  daemon cancel (SIGTERM → grace → SIGKILL, with marker cleanup on
+  already-dead PIDs). Previously only `run_background` drained at goal
+  completion, leaving interactive-cancelled foreground shells orphaned.
+
 ### Changed
 - Upgrade `soothe-nano` 1.1.13 → 1.1.14. Drop host re-export of
   `PolicyCheckedEvent` (nano no longer emits `soothe.internal.policy.checked`;
@@ -34,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`--plan-panel` to auto-show).
 - GitHub Pages CHANGELOG is generated from repository root `CHANGELOG.md`
   via `scripts/sync_wiki_changelog.sh` (no more hand-maintained wiki copy).
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.7...v0.10.8
 
 ## [v0.10.7] - 2026-08-12
 
