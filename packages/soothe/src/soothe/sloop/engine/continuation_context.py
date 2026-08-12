@@ -11,13 +11,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from soothe.config.constants import CONTINUATION_ASSESS_REASONING_MAX_CHARS
 from soothe.sloop.engine.step_predecessor_context import ExecuteStepEnvelopeBody
 from soothe.sloop.utils.continue_keyword import is_continue_keyword
 
 if TYPE_CHECKING:
     from soothe.sloop.state.schemas import LoopState
-
-CONTINUATION_ASSESS_REASONING_MAX_CHARS = 240
 
 _CONTINUE_KEYWORD_DESCRIPTION = "Continue prior goal completion recommendations"
 _CONTINUE_KEYWORD_FULL_DESCRIPTION = (

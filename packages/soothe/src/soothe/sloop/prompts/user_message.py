@@ -14,6 +14,10 @@ import re
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
+from soothe.config.constants import (
+    PRIOR_PROGRESS_MAX_CHARS,
+    PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS,
+)
 from soothe.context.projection import PriorGoalSummary
 from soothe.sloop.state.schemas import PlanGapAnalysis
 from soothe.sloop.utils.vision_context import merge_vision_instructions
@@ -30,10 +34,6 @@ _GOAL_ITERATION_SUFFIX_RE = re.compile(
 
 # Pattern for @server:uri references in user messages
 _MCP_RESOURCE_REF_RE = re.compile(r"@(\w+):(\S+)")
-
-# Hard cap on the rendered PRIOR PROGRESS section (RFC-227).
-PRIOR_PROGRESS_MAX_CHARS = 600
-PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS = 160
 
 # Execute-step envelope label (distinct from plan-phase GOAL / GOAL RECAP).
 EXECUTION_TASK_LABEL = "EXECUTION TASK"

@@ -16,6 +16,8 @@ from soothe_nano.utils.llm.invoke_policy import (
 )
 from soothe_nano.utils.llm.structured import invoke_structured_chat
 
+from soothe.config.constants import _PASS2_PRIOR_MAX_CHARS, _PASS2_REASONING_MAX_CHARS
+
 from .models import IntakePass2LLMResult, IntakeScope
 from .prompts import INTAKE_PASS2_HUMAN_TASK, INTAKE_PASS2_SYSTEM_PROMPT
 from .structured_methods import INTAKE_JSON_FIRST_METHODS
@@ -26,12 +28,6 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
-
-# Mid-loop prior goal_completion dumps can be multi-k tokens; Pass 2 only needs
-# enough context for reference resolution ("apply it"), not the full report.
-_PASS2_PRIOR_MAX_CHARS = 2400
-# Schema asks ≤25 words; clip runaway model dumps before TUI / IntentClassification.
-_PASS2_REASONING_MAX_CHARS = 200
 
 
 def clip_pass2_prior_projection(prior_projection: str | None) -> str | None:

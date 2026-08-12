@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from soothe.config.constants import GOAL_PREVIEW_MAX_CHARS
 from soothe.sloop.prompts.plan_ledger_projection import (
     PlannerProjectionMode,
     projected_ledger_has_goal_completion,
@@ -11,8 +12,6 @@ from soothe.sloop.prompts.plan_ledger_projection import (
 )
 
 PlannerCallKind = Literal["continuation", "assess", "generate", "gap"]
-
-GOAL_PREVIEW_MAX_CHARS = 120
 
 
 def goal_preview_text(goal: str, *, max_chars: int = GOAL_PREVIEW_MAX_CHARS) -> str:

@@ -14,10 +14,13 @@ from __future__ import annotations
 
 import re
 
+from soothe.config.constants import (
+    VISION_BRIEF_IMAGE_FACTS_MAX_CHARS,
+    VISION_CONTEXT_MAX_CHARS,
+)
+
 # Must match soothe_daemon.services.image_understanding.enrich_user_text_with_vision.
 VISION_SUMMARY_HEADER = "--- Vision summary ---"
-VISION_CONTEXT_MAX_CHARS = 4000
-VISION_BRIEF_IMAGE_FACTS_MAX_CHARS = 800
 
 _VISION_BLOCK_RE = re.compile(
     rf"{re.escape(VISION_SUMMARY_HEADER)}\n(?P<body>.*?)\n---\s*(?:\n|$)",

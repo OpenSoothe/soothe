@@ -7,11 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_nano.utils.text_preview import log_preview
 
+from soothe.config.constants import _EVIDENCE_SUMMARY_MAX_CHARS
 from soothe.sloop.state.schemas import LoopState, PlanResult, StatusAssessment
 from soothe.sloop.utils.plan_action_text import resolve_plan_action_text
-
-# Maximum evidence summary length before truncating model-supplied evidence
-_EVIDENCE_SUMMARY_MAX_CHARS = 600
 
 if TYPE_CHECKING:
     from soothe_sdk.protocols.planner import PlanContext

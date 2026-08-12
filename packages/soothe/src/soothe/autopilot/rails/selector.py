@@ -20,11 +20,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from soothe.autopilot.rails.catalog import LoopRailCatalog, RailCatalogError, RailDefinition
+from soothe.config.constants import DEFAULT_MAX_DESCRIPTION_CHARS, DEFAULT_MAX_FIELD_CHARS
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MAX_FIELD_CHARS = 400
-DEFAULT_MAX_DESCRIPTION_CHARS = 2000
 DEFAULT_MIN_CONFIDENCE = 0.6
 DEFAULT_MAX_CANDIDATES = 32
 # Structured pick over several rail cards routinely exceeds a low tens-of-seconds

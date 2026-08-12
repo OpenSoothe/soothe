@@ -15,6 +15,10 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import BaseMessage
 from soothe_sdk.protocols.planner import planner_outcome_text_preview
 
+from soothe.config.constants import (
+    PRIOR_STEP_EVIDENCE_MAX_CHARS,
+    PRIOR_STEPS_SUMMARY_OUTCOME_PREVIEW_CHARS,
+)
 from soothe.sloop.engine.predecessor_branch_context import (
     predecessor_execute_messages_for_branch,
     transitive_dependency_step_ids,
@@ -22,9 +26,6 @@ from soothe.sloop.engine.predecessor_branch_context import (
 
 if TYPE_CHECKING:
     from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction
-
-PRIOR_STEP_EVIDENCE_MAX_CHARS = 4000
-PRIOR_STEPS_SUMMARY_OUTCOME_PREVIEW_CHARS = 160
 
 _GENERIC_BRIEF_RE = re.compile(
     r"^(fix|apply|resolve|address|handle|complete|implement)\b",
