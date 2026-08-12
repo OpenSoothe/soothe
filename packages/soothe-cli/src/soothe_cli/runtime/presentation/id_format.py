@@ -35,3 +35,19 @@ def abbreviate_compact_id(
     if len(compact) <= max_len:
         return compact
     return f"{compact[:head]}...{compact[-tail:]}"
+
+
+def compact_id_suffix(value: str, *, length: int = 4) -> str:
+    """Render the trailing characters of a UUID-like id for tight UI surfaces.
+
+    Args:
+        value: Raw id (loop id, etc.).
+        length: Number of trailing characters to keep.
+
+    Returns:
+        Short display string such as ``8d26``, or empty when ``value`` is blank.
+    """
+    raw = str(value or "").strip().strip("[]").replace("-", "")
+    if not raw:
+        return ""
+    return raw[-length:] if length > 0 else ""

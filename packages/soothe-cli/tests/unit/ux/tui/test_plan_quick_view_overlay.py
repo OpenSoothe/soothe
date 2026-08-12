@@ -6,6 +6,7 @@ import re
 from time import time
 from unittest.mock import MagicMock, PropertyMock, patch
 
+from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.widgets.messages.cognition_goal_tree import CognitionGoalTreeMessage
 from soothe_cli.tui.widgets.plan_quick_view_overlay import (
     PlanQuickViewOverlay,
@@ -27,25 +28,22 @@ def test_get_live_goal_tree_reads_adapter() -> None:
 
 def test_plan_quick_view_header_includes_loop_id_when_available() -> None:
     bare = _plan_quick_view_header(None)
-    assert bare.plain == "Orchestrate  ·  Ctrl+t to close"
+    assert bare.plain == "Orchestrating  ·  Ctrl+t to close"
 
     with_loop = _plan_quick_view_header("019f17e6-1234-5678-9abc-def012346543")
-    assert with_loop.plain == "Orchestrate (019f17e6...6543)  ·  Ctrl+t to close"
+    assert with_loop.plain == "Orchestrating [6543]  ·  Ctrl+t to close"
 
     with_hint = _plan_quick_view_header(
         "019f17e6-1234-5678-9abc-def012346543",
         show_enter_hint=True,
     )
-    assert (
-        with_hint.plain
-        == "Orchestrate (019f17e6...6543)  ·  Enter runs queued goal  ·  Ctrl+t to close"
-    )
+    assert with_hint.plain == "Orchestrating [6543]  ·  Enter runs queued goal  ·  Ctrl+t to close"
 
     with_elapsed = _plan_quick_view_header(
         "019f17e6-1234-5678-9abc-def012346543",
         elapsed="12s",
     )
-    assert with_elapsed.plain == "Orchestrate (019f17e6...6543)  ·  12s  ·  Ctrl+t to close"
+    assert with_elapsed.plain == "Orchestrating [6543] · 12s  ·  Ctrl+t to close"
 
     with_both = _plan_quick_view_header(
         "019f17e6-1234-5678-9abc-def012346543",
@@ -54,20 +52,41 @@ def test_plan_quick_view_header_includes_loop_id_when_available() -> None:
     )
     assert (
         with_both.plain
-        == "Orchestrate (019f17e6...6543)  ·  12s  ·  Enter runs queued goal  ·  Ctrl+t to close"
+        == "Orchestrating [6543] · 12s  ·  Enter runs queued goal  ·  Ctrl+t to close"
     )
 
 
-def test_plan_quick_view_goal_header_uses_target_glyph() -> None:
-    """Goal header in plan quick-view renders the subagent glyph instead of the dot."""
+def test_plan_quick_view_header_carries_glyph_and_intake() -> None:
+    """Title row is one line: glyph, short loop id, intake, elapsed, hint."""
     tree = CognitionGoalTreeMessage(goal="Ship feature", id="gt-glyph")
-    content = tree.plan_quick_view_content()
-    assert content.plain.startswith("◆")
-    assert "Ship feature" in content.plain
+    tree.set_intake_label("complex")
+
+    header = _plan_quick_view_header(
+        "019ff5a0-1234-5678-9abc-def012348d26",
+        prefix=tree.plan_panel_prefix_content(),
+        intake=tree.intake_label(),
+        elapsed="37s",
+    )
+
+    assert header.plain == "◆ Orchestrating [8d26] · complex · 37s  ·  Ctrl+t to close"
+
+
+def test_plan_quick_view_body_omits_goal_text() -> None:
+    """Panel body holds step rows only; the goal lives in the title row above."""
+    tree = CognitionGoalTreeMessage(goal="Ship feature", id="gt-body")
+    tree.set_intake_label("complex")
+    tree.sync_plan_steps([{"id": "STEP-1", "description": "Read files"}])
+
+    plain = tree.plan_quick_view_content().plain
+
+    assert "Ship feature" not in plain
+    assert "complex" not in plain
+    assert plain.startswith(get_glyphs().output_prefix)
+    assert "1: Read files" in plain
 
 
 def test_plan_quick_view_content_shows_pending_and_running() -> None:
-    """Goal tree snapshot includes planned steps and intake label."""
+    """Goal tree snapshot includes planned steps."""
     tree = CognitionGoalTreeMessage(goal="Refactor module", max_iterations=3, id="gt-2")
     tree.sync_plan_steps(
         [
@@ -80,8 +99,6 @@ def test_plan_quick_view_content_shows_pending_and_running() -> None:
 
     content = tree.plan_quick_view_content()
 
-    assert "Refactor module" in content.plain
-    assert "complex" in content.plain
     assert "dependency" not in content.plain
     assert "parallel" not in content.plain
     assert "1:" in content.plain
@@ -89,15 +106,15 @@ def test_plan_quick_view_content_shows_pending_and_running() -> None:
 
 
 def test_plan_quick_view_ignores_invalid_intake_label() -> None:
-    """Only trivial/simple/complex appear in the goal header."""
+    """Only trivial/simple/complex reach the panel title."""
     tree = CognitionGoalTreeMessage(goal="Ship feature", id="gt-intake")
     tree.set_intake_label("chitchat")
     tree.set_intake_label("dependency")
-    assert "chitchat" not in tree.plan_quick_view_content().plain
-    assert "dependency" not in tree.plan_quick_view_content().plain
+    assert tree.intake_label() == ""
 
     tree.set_intake_label("simple")
-    assert "simple" in tree.plan_quick_view_content().plain
+    assert tree.intake_label() == "simple"
+    assert "simple" in _plan_quick_view_header(None, intake=tree.intake_label()).plain
 
 
 def test_plan_quick_view_hides_tool_error_summary_on_successful_step() -> None:
@@ -160,7 +177,7 @@ def test_plan_panel_title_ticks_elapsed_while_loop_open() -> None:
     tree._loop_started_at = time() - 13
     assert tree.loop_elapsed_label() == "13s"
     header = _plan_quick_view_header("019f17e6-1234-5678-9abc-def012346543", elapsed="13s")
-    assert header.plain == "Orchestrate (019f17e6...6543)  ·  13s  ·  Ctrl+t to close"
+    assert header.plain == "Orchestrating [6543] · 13s  ·  Ctrl+t to close"
 
 
 def test_plan_panel_elapsed_ticks_between_steps_then_clears_on_done() -> None:
@@ -221,25 +238,28 @@ def test_plan_quick_view_keeps_meaningful_summary() -> None:
 
 
 def test_plan_quick_view_header_has_no_tree_gutter() -> None:
-    """Panel title has no tree-branch gutter; it starts flush at column 0.
+    """Panel title carries the goal glyph, never the ``⎿`` body gutter.
 
-    The ``⎿`` body gutter was removed so the header reads as a plain title
-    row (``Orchestrate (id) · …``), distinct from the step/body rows that
-    still carry the tree glyph.
+    Step/body rows keep the tree glyph; the title row starts flush at column 0
+    with the goal status glyph so it reads as a card header.
     """
     header = _plan_quick_view_header(
         "019f17e6-1234-5678-9abc-def012346543",
     )
-    from soothe_cli.tui.config import get_glyphs
 
     assert not header.plain.startswith(get_glyphs().output_prefix)
     assert not header.plain.startswith(" ")
-    assert header.plain.startswith("Orchestrate")
+    assert header.plain.startswith("Orchestrating")
+
+    tree = CognitionGoalTreeMessage(goal="Ship it", id="gt-gutter")
+    with_glyph = _plan_quick_view_header(
+        "019f17e6-1234-5678-9abc-def012346543",
+        prefix=tree.plan_panel_prefix_content(),
+    )
+    assert with_glyph.plain.startswith(f"{get_glyphs().subagent_prefix} Orchestrating")
 
 
 def test_plan_quick_view_clips_long_description_to_line_width() -> None:
-    from soothe_cli.tui.config import get_glyphs
-
     tree = CognitionGoalTreeMessage(goal="Clip", id="gt-clip")
     long_desc = "Inspect and refactor the authentication middleware thoroughly"
     tree.sync_plan_steps([{"id": "STEP-1", "description": long_desc}])

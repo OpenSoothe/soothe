@@ -10,7 +10,7 @@ from textual.containers import Vertical, VerticalScroll
 from textual.content import Content
 from textual.widgets import Static
 
-from soothe_cli.runtime.presentation.id_format import abbreviate_compact_id
+from soothe_cli.runtime.presentation.id_format import compact_id_suffix
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
@@ -30,57 +30,73 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _plan_quick_view_title(
+    loop_id: str | None,
+    *,
+    intake: str | None = None,
+    elapsed: str | None = None,
+) -> str:
+    """Compose the panel title: ``Orchestrating [8d26] · complex · 37s``."""
+    title = "Orchestrating"
+    short_id = compact_id_suffix(loop_id or "")
+    if short_id:
+        title = f"{title} [{short_id}]"
+    label = (intake or "").strip().lower()
+    if label:
+        title = f"{title} · {label}"
+    if elapsed:
+        title = f"{title} · {elapsed}"
+    return title
+
+
 def _plan_quick_view_header(
     loop_id: str | None,
     *,
+    prefix: Content | None = None,
+    intake: str | None = None,
     show_enter_hint: bool = False,
     elapsed: str | None = None,
     max_cols: int | None = None,
 ) -> Content:
-    """Build the quick-view header: bold title, optional elapsed, dim hints.
+    """Build the quick-view title row: status glyph, bold title, dim hints.
 
-    The title (including the abbreviated loop id) is rendered with the same
-    `SECONDARY_TEXT_STYLE` dim style used by the welcome-area Loop ID, then
-    bolded via `bold dim` so the title stands out while staying de-emphasized.
-    Live loop elapsed (``12s``) sits in the title row while the goal is open.
+    The title carries everything that identifies the running goal — short loop
+    id, intake complexity, and live elapsed — so the panel needs no separate
+    goal line. It is rendered with the same `SECONDARY_TEXT_STYLE` dim style
+    used by the welcome-area Loop ID, then bolded via `bold dim` so the title
+    stands out while staying de-emphasized. ``prefix`` is the goal lifecycle
+    glyph from the live goal tree.
 
     ``max_cols`` truncates the whole header to one line so it never wraps.
     Hints are dropped first (right-to-left) to preserve the title; if even the
     title exceeds the budget it is ellipsized.
     """
     dim_style = theme.SECONDARY_TEXT_STYLE
-    title = "Orchestrate"
-    abbreviated = abbreviate_compact_id(loop_id or "")
-    if abbreviated:
-        title = f"Orchestrate ({abbreviated})"
+    title = _plan_quick_view_title(loop_id, intake=intake, elapsed=elapsed)
     hints: list[str] = []
-    if elapsed:
-        hints.append(elapsed)
     if show_enter_hint:
         hints.append("Enter runs queued goal")
     hints.append("Ctrl+t to close")
+    hint_str = f"  ·  {'  ·  '.join(hints)}"
 
     if max_cols is not None and max_cols > 0:
+        budget = max_cols - (display_width(prefix.plain) if prefix is not None else 0)
         # Drop hints right-to-left until the title + remaining hints fit.
-        hint_str = f"  ·  {'  ·  '.join(hints)}"
-        while hints and display_width(title) + display_width(hint_str) > max_cols:
+        while hints and display_width(title) + display_width(hint_str) > budget:
             hints.pop()
             hint_str = f"  ·  {'  ·  '.join(hints)}" if hints else ""
         # If still too long (title alone exceeds budget), ellipsize the title.
-        if display_width(title) > max_cols:
-            title = truncate_to_width(title, max_cols)
+        if display_width(title) > budget:
+            title = truncate_to_width(title, max(0, budget))
             hint_str = ""
-        parts: list[object] = [
-            Content.styled(title, f"bold {dim_style}"),
-        ]
-        if hint_str:
-            parts.append(Content.styled(hint_str, dim_style))
-        return Content.assemble(*parts)
 
-    return Content.assemble(
-        Content.styled(title, f"bold {dim_style}"),
-        Content.styled(f"  ·  {'  ·  '.join(hints)}", dim_style),
-    )
+    parts: list[object] = []
+    if prefix is not None:
+        parts.append(prefix)
+    parts.append(Content.styled(title, f"bold {dim_style}"))
+    if hint_str:
+        parts.append(Content.styled(hint_str, dim_style))
+    return Content.assemble(*parts)
 
 
 def get_live_goal_tree(app: Any) -> CognitionGoalTreeMessage | None:
@@ -287,14 +303,21 @@ class PlanQuickViewOverlay(Vertical):
                 with suppress(Exception):
                     show_enter_hint = bool(can_run_queued())
             elapsed: str | None = None
+            prefix: Content | None = None
+            intake: str | None = None
             with suppress(Exception):
                 elapsed = tree.loop_elapsed_label()
+            with suppress(Exception):
+                prefix = tree.plan_panel_prefix_content()
+                intake = tree.intake_label()
             self._header.update(
                 _plan_quick_view_header(
                     getattr(self.app, "_lc_loop_id", None),
+                    prefix=prefix,
+                    intake=intake,
                     show_enter_hint=show_enter_hint,
                     elapsed=elapsed,
-                    max_cols=self._plan_quick_view_line_width(),
+                    max_cols=self._panel_content_width(),
                 )
             )
         try:
@@ -309,15 +332,19 @@ class PlanQuickViewOverlay(Vertical):
             gutter = _card_body_gutter(get_glyphs().subagent_prefix)
             self._content.update(Content.styled(f"{gutter}(plan view unavailable)", "dim"))
 
+    def _panel_content_width(self, reserved: int = 0) -> int:
+        """Columns available inside the overlay chrome, minus ``reserved``.
+
+        Expanded chrome takes the left tall border (1) plus horizontal
+        padding (2).
+        """
+        overlay_padding = 3
+        width = self.size.width if self.size.width else 0
+        return max(PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS, width - overlay_padding - reserved)
+
     def _plan_quick_view_line_width(self) -> int:
         """Available columns for one plan step row inside the overlay."""
-        # Expanded chrome: left tall border (1) + horizontal padding (2).
-        overlay_padding = 3
-        # The goal tree renders step rows under the goal header's subagent
-        # glyph; the body gutter pads to that prefix width, so the line-width
-        # budget must subtract the same width (not just the raw glyph + 1).
-        gutter_len = _card_prefix_width(get_glyphs().subagent_prefix)
-        width = self.size.width if self.size.width else 0
-        if width > overlay_padding + gutter_len:
-            return max(PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS, width - overlay_padding - gutter_len)
-        return PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
+        # Step rows sit under the title row's subagent glyph; the body gutter
+        # pads to that prefix width, so the line-width budget must subtract the
+        # same width (not just the raw glyph + 1).
+        return self._panel_content_width(_card_prefix_width(get_glyphs().subagent_prefix))

@@ -21,8 +21,8 @@ from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
 from soothe_cli.tui.widgets.messages._helpers import (
-    _assemble_card_header,
     _card_body_gutter,
+    _card_dot_prefix_content,
 )
 
 if TYPE_CHECKING:
@@ -220,20 +220,37 @@ class CognitionGoalTreeMessage(Vertical):
             return "queued"
         return "pending"
 
-    def _goal_header_content(self) -> Content:
-        g = self._clip(self._goal_text, _MAX_GOAL_HEADER)
-        body = g
-        intake = self._intake_label.strip().lower()
-        if intake in ("trivial", "simple", "complex"):
-            body = f"{body} · {intake}"
-        status = self._goal_tree_status()
-        return _assemble_card_header(
+    def plan_panel_prefix_content(self) -> Content:
+        """Goal lifecycle glyph for the plan panel title (and restored tree header)."""
+        return _card_dot_prefix_content(
             self,
-            body,
-            status=status,
+            self._goal_tree_status(),
             glyph_override=get_glyphs().subagent_prefix,
             spinner_position=self._spinner_position,
             animate_running=self._loop_executing(),
+        )
+
+    def intake_label(self) -> str:
+        """Intake complexity (``trivial``/``simple``/``complex``), or empty."""
+        return self._intake_label
+
+    def _goal_header_content(self) -> Content:
+        """Goal title for restored/mounted tree cards (not the live plan panel).
+
+        Live trees stay unmounted; the Ctrl+t panel title uses
+        `plan_panel_prefix_content` + `_plan_quick_view_header` instead.
+        """
+        body = self._clip(self._goal_text, _MAX_GOAL_HEADER)
+        intake = self.intake_label()
+        if intake:
+            body = f"{body} · {intake}"
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        return Content.assemble(
+            self.plan_panel_prefix_content(),
+            Content.styled(body, colors.foreground),
         )
 
     def _goal_footer_styled_content(self) -> Content:
@@ -241,7 +258,7 @@ class CognitionGoalTreeMessage(Vertical):
 
         The ``done`` (success) footer shares the title line's de-emphasized
         ``SECONDARY_TEXT_STYLE`` so the completion status blends with the
-        "Orchestrate ..." header instead of using the cognition accent.
+        "Orchestrating ..." header instead of using the cognition accent.
         """
         try:
             colors = theme.get_theme_colors(self)
@@ -424,13 +441,19 @@ class CognitionGoalTreeMessage(Vertical):
             logger.debug("goal tree header refresh failed", exc_info=True)
 
     def plan_quick_view_content(self, *, max_line_width: int | None = None) -> Content:
-        """Full goal tree snapshot for the Ctrl+t plan panel."""
-        parts: list[object] = [self._goal_header_content()]
+        """Step rows (plus terminal footer) for the Ctrl+t plan panel body.
+
+        Omits the goal title line: the overlay header carries the short loop
+        id, intake complexity, and elapsed time via `_plan_quick_view_header`.
+        """
+        parts: list[object] = []
         steps = self._assemble_steps_content(max_line_width=max_line_width)
         if steps.plain.strip():
-            parts.extend([Content("\n"), steps])
+            parts.append(steps)
         if self._footer_visible and self._footer_plain:
-            parts.extend([Content("\n"), self._goal_footer_styled_content()])
+            if parts:
+                parts.append(Content("\n"))
+            parts.append(self._goal_footer_styled_content())
         return Content.assemble(*parts)
 
     def sync_running_live_stats(

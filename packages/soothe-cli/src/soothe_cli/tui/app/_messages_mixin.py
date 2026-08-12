@@ -594,7 +594,7 @@ class _MessagesMixin:
 
         The plan panel is backed by adapter state outside ``#messages``, so a
         transcript wipe must also drop the live goal tree or /clear leaves a
-        stale Orchestrate panel.
+        stale plan panel.
         """
         self._loop_history_loaded_for = None
         # Clear the message store first
