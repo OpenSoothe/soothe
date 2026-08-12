@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.7] - 2026-08-12
+
+### Fixed
+- TUI dynamic (built-in) themes no longer crash the synthesis card with
+  `TypeError`: `_colors_from_textual_theme` now supplies `card_running` /
+  `card_running_muted`, and a static AST guard over every `ThemeColors()`
+  constructor site prevents regressions across all themes.
+- Autopilot job-maturity assessor now sees full contract context instead of
+  truncated fragments: removed tight char caps on `verification_rules`,
+  `GOAL.md`, DAG summary, workspace inventory, and QA response inputs; bumped
+  `probe_summary`, `load_goal_md_excerpt`, `acceptance_contract_brief`,
+  `format_job_dag_summary`, and snapshot probe truncation limits.
+- Inline `code` spans render in a dedicated warm amber (`LC_CODE` /
+  `LC_LIGHT_CODE`) instead of competing with heading/warning accents, so
+  literals read as literals in assistant prose.
+- Stream cards share a single 1-column inset so every card type's prefix dot
+  lines up; step-card truncation accounts for the narrower padding.
+- Clipboard copy starts with the native OS backend and drops the
+  opportunistic `pyperclip` import that duplicated `pbcopy`/`xclip`/`xsel`.
+
+### Changed
+- Prompt/render char-cap sentinels (`*_MAX_CHARS`) scattered across selector,
+  job_maturity, phase, continuation_context, step_predecessor_context,
+  pass2_classifier, planner_assembly, user_message, and vision_context modules
+  centralized into a single Character-Cap Registry in
+  `soothe/config/constants.py` so truncation budgets are auditable in one place.
+- Removed unused `hooks.py` stub and its `dispatch_hook` call sites in
+  `_execution.py` and `textual_adapter.py` (no hooks were ever registered).
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.6...v0.10.7
+
 ## [v0.10.6] - 2026-08-12
 
 ### Changed
