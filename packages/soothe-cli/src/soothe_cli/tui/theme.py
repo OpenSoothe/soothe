@@ -56,8 +56,8 @@ LC_BORDER_DK = "#25283B"
 LC_BORDER_LT = "#3A3E57"
 """Borders on lighter / hovered backgrounds."""
 
-LC_BODY = "#C0CAF5"
-"""Body text — high contrast on dark backgrounds."""
+LC_BODY = "#FFFFFF"
+"""Body text — plain message prose is white by default on dark backgrounds."""
 
 LC_BLUE = "#7AA2F7"
 """Primary accent blue."""
@@ -174,6 +174,18 @@ CARD_ERROR_DARK = "#F7768E"
 
 CARD_ERROR_LIGHT = "#BE185D"
 """Error state in light theme — deeper red."""
+
+CARD_RUNNING_DARK = "#E0AF68"
+"""Running state in dark theme — warm amber/yellow, signals in-flight work."""
+
+CARD_RUNNING_LIGHT = "#B45309"
+"""Running state in light theme — deeper amber for contrast on light bg."""
+
+CARD_RUNNING_MUTED_DARK = "#8B6E3E"
+"""Dim amber for the running dot's flash-off frame in dark theme."""
+
+CARD_RUNNING_MUTED_LIGHT = "#92650A"
+"""Dim amber for the running dot's flash-off frame in light theme."""
 
 
 # ---------------------------------------------------------------------------
@@ -388,6 +400,12 @@ class ThemeColors:
     card_error: str
     """Error state color — prominent red for visibility."""
 
+    card_running: str
+    """Card prefix dot color for running lifecycle — yellow, flashes to card_running_muted."""
+
+    card_running_muted: str
+    """Dimmer yellow used for the running dot's flash-off frame (spinner tick)."""
+
     def __post_init__(self) -> None:
         """Validate that every field is a valid hex color.
 
@@ -449,6 +467,8 @@ DARK_COLORS = ThemeColors(
     card_activity_muted=CARD_ACTIVITY_MUTED_DARK,
     card_success=CARD_SUCCESS_DARK,
     card_error=CARD_ERROR_DARK,
+    card_running=CARD_RUNNING_DARK,
+    card_running_muted=CARD_RUNNING_MUTED_DARK,
 )
 """Color set for the dark LangChain theme."""
 
@@ -475,6 +495,8 @@ LIGHT_COLORS = ThemeColors(
     card_activity_muted=CARD_ACTIVITY_MUTED_LIGHT,
     card_success=CARD_SUCCESS_LIGHT,
     card_error=CARD_ERROR_LIGHT,
+    card_running=CARD_RUNNING_LIGHT,
+    card_running_muted=CARD_RUNNING_MUTED_LIGHT,
 )
 """Color set for the light LangChain theme."""
 

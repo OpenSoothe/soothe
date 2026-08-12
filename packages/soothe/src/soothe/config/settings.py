@@ -566,6 +566,17 @@ class SootheConfig(BaseSettings):
     tui_debug: bool = False
     """Emit structured TUI trace logs (logger ``soothe.ux.tui.trace``) for EventProcessor + TuiRenderer."""
 
+    hide_thinking_tokens: bool = True
+    """Strip inline ``<think>``/``<thinking>``/``<reasoning>`` reasoning blocks
+    from local-model LLM output before it surfaces to the agent/UI.
+
+    When ``True`` (default), reasoning tokens emitted inline by local thinking
+    models (DeepSeek-R1, QwQ, GLM with thinking enabled, etc.) are removed by
+    :mod:`soothe_nano.utils.llm.thinking_filter` and recorded at ``DEBUG`` level
+    first ("record before strip" rule). Set ``False`` to pass raw model output
+    through unchanged. The env var override is ``SOOTHE_HIDE_THINKING_TOKENS``.
+    """
+
     ui: UIConfig = Field(default_factory=UIConfig)
     """UI preferences configuration (theme, etc.)."""
 

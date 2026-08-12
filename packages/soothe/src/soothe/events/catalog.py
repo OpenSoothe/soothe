@@ -913,7 +913,6 @@ _reg(AUTOPILOT_GOAL_BLOCKED, _AutopilotGoalBlocked, verbosity=VerbosityTier.NORM
 import soothe_nano.events.catalog as _nano_events_catalog  # noqa: F401, E402
 import soothe_nano.mcp.mcp_events as _mcp_events  # noqa: F401, E402
 import soothe_nano.plugin.events as _plugin_events  # noqa: F401, E402
-import soothe_nano.skills.events as _skill_events  # noqa: F401, E402
 import soothe_nano.subagents.academic_research.events as _academic_research_events  # noqa: F401, E402
 import soothe_nano.subagents.browser_use.events as _browser_use_events  # noqa: F401, E402
 import soothe_nano.subagents.deep_research.events as _deep_research_events  # noqa: F401, E402

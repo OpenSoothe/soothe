@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.6] - 2026-08-12
+
+### Changed
+- Upgrade `soothe-nano` 1.1.11 → 1.1.12. Nano excised several host-owned
+  helpers back to the host packages; the host now owns the implementations
+  inline (persistence metrics, unified persistence validation, model catalog
+  payload, daemon error-format). Added `hide_thinking_tokens` config field
+  (mirrors nano) for the new thinking-token stripping feature.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.5...v0.10.6
+
 ## [v0.10.5] - 2026-08-11
 
 ### Fixed

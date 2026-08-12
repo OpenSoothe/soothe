@@ -2071,6 +2071,17 @@ wheels = [
 ]
 
 [[package]]
+name = "mouseinfo"
+version = "0.1.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyperclip" },
+    { name = "python3-xlib", marker = "sys_platform == 'linux'" },
+    { name = "rubicon-objc", marker = "sys_platform == 'darwin'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/28/fa/b2ba8229b9381e8f6381c1dcae6f4159a7f72349e414ed19cfbbd1817173/MouseInfo-0.1.3.tar.gz", hash = "sha256:2c62fb8885062b8e520a3cce0a297c657adcc08c60952eb05bc8256ef6f7f6e7" }
+
+[[package]]
 name = "msgpack"
 version = "1.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3000,6 +3011,22 @@ wheels = [
 ]
 
 [[package]]
+name = "pyautogui"
+version = "0.9.54"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mouseinfo" },
+    { name = "pygetwindow" },
+    { name = "pymsgbox" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
+    { name = "pyscreeze" },
+    { name = "python3-xlib", marker = "sys_platform == 'linux'" },
+    { name = "pytweening" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/65/ff/cdae0a8c2118a0de74b6cf4cbcdcaf8fd25857e6c3f205ce4b1794b27814/PyAutoGUI-0.9.54.tar.gz", hash = "sha256:dd1d29e8fd118941cb193f74df57e5c6ff8e9253b99c7b04f39cfc69f3ae04b2" }
+
+[[package]]
 name = "pycparser"
 version = "3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3140,6 +3167,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pygetwindow"
+version = "0.0.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyrect" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e1/70/c7a4f46dbf06048c6d57d9489b8e0f9c4c3d36b7479f03c5ca97eaa2541d/PyGetWindow-0.0.9.tar.gz", hash = "sha256:17894355e7d2b305cd832d717708384017c1698a90ce24f6f7fbf0242dd0a688" }
+
+[[package]]
 name = "pygments"
 version = "2.20.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3236,6 +3272,15 @@ wheels = [
 [package.optional-dependencies]
 crypto = [
     { name = "cryptography" },
+]
+
+[[package]]
+name = "pymsgbox"
+version = "2.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ae/6a/e80da7594ee598a776972d09e2813df2b06b3bc29218f440631dfa7c78a8/pymsgbox-2.0.1.tar.gz", hash = "sha256:98d055c49a511dcc10fa08c3043e7102d468f5e4b3a83c6d3c61df722c7d798d" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6f/3e/08c8cac81b2b2f7502746e6b9c8e5b0ec6432cd882c605560fc409aaf087/pymsgbox-2.0.1-py3-none-any.whl", hash = "sha256:5de8ec19bca2ca7e6c09d39c817c83f17c75cee80275235f43a9931db699f73b" },
 ]
 
 [[package]]
@@ -5880,6 +5925,30 @@ wheels = [
 ]
 
 [[package]]
+name = "pyperclip"
+version = "1.11.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/52/d87eba7cb129b81563019d1679026e7a112ef76855d6159d24754dbd2a51/pyperclip-1.11.0.tar.gz", hash = "sha256:244035963e4428530d9e3a6101a1ef97209c6825edab1567beac148ccc1db1b6" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/80/fc9d01d5ed37ba4c42ca2b55b4339ae6e200b456be3a1aaddf4a9fa99b8c/pyperclip-1.11.0-py3-none-any.whl", hash = "sha256:299403e9ff44581cb9ba2ffeed69c7aa96a008622ad0c46cb575ca75b5b84273" },
+]
+
+[[package]]
+name = "pyrect"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cb/04/2ba023d5f771b645f7be0c281cdacdcd939fe13d1deb331fc5ed1a6b3a98/PyRect-0.2.0.tar.gz", hash = "sha256:f65155f6df9b929b67caffbd57c0947c5ae5449d3b580d178074bffb47a09b78" }
+
+[[package]]
+name = "pyscreeze"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pillow", marker = "python_full_version < '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ee/f0/cb456ac4f1a73723d5b866933b7986f02bacea27516629c00f8e7da94c2d/pyscreeze-1.0.1.tar.gz", hash = "sha256:cf1662710f1b46aa5ff229ee23f367da9e20af4a78e6e365bee973cad0ead4be" }
+
+[[package]]
 name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -6006,6 +6075,18 @@ socks = [
 webhooks = [
     { name = "tornado" },
 ]
+
+[[package]]
+name = "python3-xlib"
+version = "0.15"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/c6/2c5999de3bb1533521f1101e8fe56fd9c266732f4d48011c7c69b29d12ae/python3-xlib-0.15.tar.gz", hash = "sha256:dc4245f3ae4aa5949c1d112ee4723901ade37a96721ba9645f2bfa56e5b383f8" }
+
+[[package]]
+name = "pytweening"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/79/0c/c16bc93ac2755bac0066a8ecbd2a2931a1735a6fffd99a2b9681c7e83e90/pytweening-1.2.0.tar.gz", hash = "sha256:243318b7736698066c5f362ec5c2b6434ecf4297c3c8e7caa8abfe6af4cac71b" }
 
 [[package]]
 name = "pywin32"
@@ -6330,6 +6411,15 @@ wheels = [
 ]
 
 [[package]]
+name = "rubicon-objc"
+version = "0.5.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0d/26/3e6bb0bfd41ff446d29931205088556055ec18c31bf099d6719c281c448c/rubicon_objc-0.5.6.tar.gz", hash = "sha256:0d3b0a9889f72916c095a58e7e1c275c260cb8a86b8ef8b909e60cb002fd54d5" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/a6/cf07f7f931a7fab57b866ed086b15e75bff4a908084b71e74b42798207bf/rubicon_objc-0.5.6-py3-none-any.whl", hash = "sha256:b53f6fc458d78ddf2ce82365c34e234ae85cd8217c983438ae4bf9e1bd1252b3" },
+]
+
+[[package]]
 name = "ruff"
 version = "0.16.2"
 source = { registry = "https://pypi.org/simple" }
@@ -6486,7 +6576,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
-    { name = "soothe-nano", specifier = ">=1.1.11,<2.0.0" },
+    { name = "soothe-nano", specifier = ">=1.1.12,<2.0.0" },
     { name = "soothe-sdk", specifier = ">=1.0.8,<2.0.0" },
     { name = "watchdog", specifier = ">=3.0.0,<5.0.0" },
 ]
@@ -6672,7 +6762,7 @@ wheels = [
 
 [[package]]
 name = "soothe-nano"
-version = "1.1.11"
+version = "1.1.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -6700,6 +6790,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pathspec" },
     { name = "psycopg", extra = ["binary", "pool"] },
+    { name = "pyautogui" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pymupdf" },
@@ -6712,9 +6803,9 @@ dependencies = [
     { name = "tarzi" },
     { name = "wcmatch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8c/bb/094cedc46dde3c92066a2c37cefd781a817395ca09e3b63b5194b3ade478/soothe_nano-1.1.11.tar.gz", hash = "sha256:5e474863b0e65df516c35b220fbe5721203e8a801a0118e67d0b9bccf75f9409" }
+sdist = { url = "https://files.pythonhosted.org/packages/59/fb/37c42d2062aa97c5714cf66238f926d0fa9d2dd9314f7aa49bc99f288f2c/soothe_nano-1.1.12.tar.gz", hash = "sha256:8cf3ee1ca69b7d162ce31fb43a1373da13084b89d712cbff4d583f774e7e8089" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8f/86/6ce9a8058f660faa180dae251082cca545f9d747d809def2d31d382d32e5/soothe_nano-1.1.11-py3-none-any.whl", hash = "sha256:b28b3afcecfc48fce671ff77b8fc43b9c3883eaf96cb56329d9097758c130e0c" },
+    { url = "https://files.pythonhosted.org/packages/1d/2f/de990e60ee84a02ce1df0f6dafdfe1e3a451c02a74aee115759ae7c9dc0d/soothe_nano-1.1.12-py3-none-any.whl", hash = "sha256:fa9bfaf18f8e321ea7076e04d0d95b3ec9209cfca8bdf1f2eb2ee2c475ec63e0" },
 ]
 
 [[package]]

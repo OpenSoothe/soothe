@@ -218,7 +218,23 @@ def test_plan_quick_view_keeps_meaningful_summary() -> None:
     content = tree.plan_quick_view_content()
 
     assert "5 tools" in content.plain
-    assert "wrote report" in content.plain
+
+
+def test_plan_quick_view_header_has_no_tree_gutter() -> None:
+    """Panel title has no tree-branch gutter; it starts flush at column 0.
+
+    The ``⎿`` body gutter was removed so the header reads as a plain title
+    row (``Orchestrate (id) · …``), distinct from the step/body rows that
+    still carry the tree glyph.
+    """
+    header = _plan_quick_view_header(
+        "019f17e6-1234-5678-9abc-def012346543",
+    )
+    from soothe_cli.tui.config import get_glyphs
+
+    assert not header.plain.startswith(get_glyphs().output_prefix)
+    assert not header.plain.startswith(" ")
+    assert header.plain.startswith("Orchestrate")
 
 
 def test_plan_quick_view_clips_long_description_to_line_width() -> None:

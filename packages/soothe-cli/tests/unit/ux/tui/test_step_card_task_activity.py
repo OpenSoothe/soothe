@@ -123,6 +123,39 @@ def test_append_subagent_activity_attaches_to_task_branch() -> None:
     assert "Found 3 modules" in text
 
 
+def test_subagent_notes_render_as_bulleted_prose() -> None:
+    """Loose subagent notes show a ``·`` bullet so they read as prose, not tool rows."""
+    card = CognitionStepMessage("ABC-02", "Scan", id="stp-note-bullet")
+    card.add_tool_call("ABC_02:s:grep:0", "grep", {"pattern": "x"})
+    card.append_subagent_activity("Found 3 relevant files")
+    card.append_subagent_activity("Summary attached")
+
+    lines = _plain(card._step_task_activity_content()).split("\n")
+    note_lines = [ln for ln in lines if "Found 3 relevant files" in ln or "Summary attached" in ln]
+    assert len(note_lines) == 2
+    for ln in note_lines:
+        assert ln.lstrip().startswith("· ")
+    # Tool rows keep their lifecycle icon, not the bullet.
+    tool_line = next(ln for ln in lines if "Grep" in ln)
+    assert not tool_line.lstrip().startswith("· ")
+
+
+def test_task_attached_notes_render_as_bulleted_prose() -> None:
+    """Notes attached to a task delegation also use the ``·`` bullet prefix."""
+    card = CognitionStepMessage("ABC-03", "Scan", id="stp-task-note-bullet")
+    card.add_tool_call(
+        "ABC_03:s:task:0",
+        "task",
+        {"subagent_type": "deep_research", "description": "scan"},
+        is_task_row=True,
+    )
+    card.append_subagent_activity("Found 3 modules", task_tool_call_id="ABC_03:s:task:0")
+
+    lines = _plain(card._step_task_activity_content()).split("\n")
+    note_line = next(ln for ln in lines if "Found 3 modules" in ln)
+    assert note_line.lstrip().startswith("· ")
+
+
 def test_step_compose_places_status_after_task_activity() -> None:
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-order")
     widget_ids = [getattr(w, "id", None) for w in card.compose()]

@@ -238,6 +238,7 @@ memory: []
 debug: false
 activity_max_lines: 300
 tui_debug: false
+hide_thinking_tokens: true
 ui:
   theme: null
 update:

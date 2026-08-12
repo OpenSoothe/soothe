@@ -20,7 +20,10 @@ from soothe_cli.runtime.presentation.step_id_format import numeric_step_prefix
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
-from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
+from soothe_cli.tui.widgets.messages._helpers import (
+    _assemble_card_header,
+    _card_body_gutter,
+)
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -267,8 +270,13 @@ class CognitionGoalTreeMessage(Vertical):
             self._loop_started_at = started_at if started_at is not None else time()
 
     def _indent_prefix(self) -> str:
-        g = get_glyphs()
-        return f"{g.output_prefix} "
+        """Body gutter aligned to the right of the goal header prefix dot.
+
+        The goal header uses the subagent glyph, so the body gutter pads to that
+        prefix width (see :func:`_card_body_gutter`); every step row therefore
+        left-aligns at the right side of the dot space.
+        """
+        return _card_body_gutter(get_glyphs().subagent_prefix)
 
     def _step_icon(self, st: _StepLineState) -> str:
         g = get_glyphs()

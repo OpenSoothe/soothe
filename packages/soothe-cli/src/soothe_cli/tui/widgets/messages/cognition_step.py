@@ -33,6 +33,7 @@ from soothe_cli.tui.widgets.messages._helpers import (
     _RUNNING_SPINNER_INTERVAL_SECONDS,
     _STEP_TOOL_PREVIEW_ROWS,
     _assemble_card_header,
+    _card_body_gutter,
     _is_widget_animation_visible,
     _should_refresh_now,
     _strip_success_exit_line,
@@ -594,6 +595,7 @@ class CognitionStepMessage(Vertical):
             g=g,
             todos=self._todos,
             max_cols=self._available_line_width(),
+            glyph_override=self._step_header_glyph() if self._is_orphan_subagent_card() else None,
         )
 
     def _sync_step_card_surface(self) -> None:
@@ -731,14 +733,26 @@ class CognitionStepMessage(Vertical):
             return
         self._header_widget.update(self._step_header_content())
 
+    def _step_header_glyph(self) -> str:
+        """Glyph used for this card's header prefix (subagent glyph for orphan cards)."""
+        return (
+            get_glyphs().subagent_prefix
+            if self._is_orphan_subagent_card()
+            else get_glyphs().tool_prefix
+        )
+
     def _step_goal_tree_gutter(self) -> str:
-        """Left column matching :meth:`CognitionGoalTreeMessage._indent_prefix`."""
-        return f"{get_glyphs().output_prefix} "
+        """Left column matching :meth:`CognitionGoalTreeMessage._indent_prefix`.
+
+        Pads to the card header prefix width so body lines align to the right
+        of the dot space (see :func:`_card_body_gutter`).
+        """
+        return _card_body_gutter(self._step_header_glyph())
 
     def _row_to_content(self, row: _StepToolRow) -> Content:
         """One CLI-style tool activity row for the optional full tools panel."""
         g = get_glyphs()
-        gutter = f"{g.output_prefix} "
+        gutter = _card_body_gutter(self._step_header_glyph())
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
@@ -775,7 +789,7 @@ class CognitionStepMessage(Vertical):
         style = colors.muted if muted else colors.success
         return branched_prose_body(
             body,
-            gutter=f"{g.output_prefix} ",
+            gutter=_card_body_gutter(self._step_header_glyph()),
             circle_empty=g.circle_empty,
             style=style,
         )
@@ -799,7 +813,7 @@ class CognitionStepMessage(Vertical):
             if i == 0:
                 parts.append(Content.styled(f"{gutter}{g.error} {ln}", colors.error))
             else:
-                sub = f"{g.output_prefix} {g.circle_empty} "
+                sub = f"{_card_body_gutter(self._step_header_glyph())}{g.circle_empty} "
                 parts.append(Content.styled(f"{sub}{ln}", colors.error))
         return Content.assemble(*parts)
 
@@ -1236,7 +1250,7 @@ class CognitionStepMessage(Vertical):
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
         g = get_glyphs()
-        gutter = f"{g.output_prefix} "
+        gutter = _card_body_gutter(self._step_header_glyph())
         self._status_widget.update(
             StepCardStatusLine.footer_pending(
                 gutter=gutter,
@@ -1421,7 +1435,7 @@ class CognitionStepMessage(Vertical):
         if self._detail_widget is None:
             return
         g = get_glyphs()
-        sub = f"{g.output_prefix} {g.circle_empty} "
+        sub = f"{_card_body_gutter(self._step_header_glyph())}{g.circle_empty} "
         assembled: list[object] = []
         if self._last_success is not None:
             dur_str = format_duration_ms(self._last_duration_ms)
@@ -1463,7 +1477,7 @@ class CognitionStepMessage(Vertical):
             colors = theme.DARK_COLORS
         if self._status_widget is not None:
             g = get_glyphs()
-            gutter = f"{g.output_prefix} "
+            gutter = _card_body_gutter(self._step_header_glyph())
             line = f"{gutter}{g.circle_empty} Awaiting your answer..."
             self._status_widget.update(Content.styled(line, colors.warning))
             self._status_widget.display = True

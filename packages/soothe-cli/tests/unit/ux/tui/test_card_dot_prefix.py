@@ -17,7 +17,7 @@ def test_card_dot_tone_maps_lifecycle_phases() -> None:
     colors = DARK_COLORS
     assert _card_dot_tone("success", colors) == colors.card_success
     assert _card_dot_tone("error", colors) == colors.card_error
-    assert _card_dot_tone("running", colors) == colors.muted
+    assert _card_dot_tone("running", colors) == colors.card_running
     assert _card_dot_tone("pending", colors) == colors.muted
 
 
@@ -25,8 +25,8 @@ def test_card_dot_tone_flashes_running_dot() -> None:
     colors = DARK_COLORS
     bright = _card_dot_tone("running", colors, spinner_position=0, animate_running=True)
     dim = _card_dot_tone("running", colors, spinner_position=1, animate_running=True)
-    assert bright == colors.muted
-    assert dim == colors.card_activity_muted
+    assert bright == colors.card_running
+    assert dim == colors.card_running_muted
     assert bright != dim
 
 
@@ -60,12 +60,18 @@ def test_glyph_sets_define_distinct_card_prefix_symbols() -> None:
 
 
 def test_stream_cards_use_horizontal_inset_padding() -> None:
-    """Agent cards inset from the chat edges; user/input gutters stay separate."""
+    """Agent cards inset from the chat edges; user/input gutters stay separate.
+
+    The assistant (AI message) card uses a wider inset (``padding: 0 1``) than
+    step/clarification cards (``padding: 0 2``) so its prose body gets +1 col of
+    content width on each side (2 cols total). All three remain borderless and
+    inset from the chat edges.
+    """
     step_css = CognitionStepMessage.DEFAULT_CSS
     assistant_css = AssistantMessage.DEFAULT_CSS
     clarification_css = ClarificationInputMessage.DEFAULT_CSS
     assert "padding: 0 2;" in step_css
-    assert "padding: 0 2;" in assistant_css
+    assert "padding: 0 1;" in assistant_css
     assert "padding: 0 2;" in clarification_css
     assert "border-left:" not in step_css
     assert "border-left:" not in assistant_css

@@ -32,6 +32,10 @@ from soothe_cli.tui.tool_display import (
     display_width,
     format_step_tool_activity_line,
 )
+from soothe_cli.tui.widgets.messages._helpers import (
+    _card_body_gutter,
+    _card_item_indent,
+)
 
 # Todo item status → phase_icon input (IG-664).
 _TODO_STATUS_TO_PHASE: dict[str, str] = {
@@ -685,14 +689,22 @@ class StepActivityTree:
         preview_limit: int = STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
         todos: list[dict[str, str]] | None = None,
         max_cols: int | None = None,
+        glyph_override: str | None = None,
     ) -> Content:
         """To-do section then Tool-use section (task markers + main tool preview).
 
         ``max_cols`` bounds each rendered line to the terminal width so tool
         rows never wrap; ``None`` preserves the prior fixed-cap behavior.
+        ``glyph_override`` is the card header glyph (subagent glyph for orphan
+        SubAgent cards) so the activity gutters align to the right of that dot.
+
+        Layout: the section header (``To-do`` / ``Tool-use``) sits on a ``⎿``
+        body-gutter line; its items (tool rows, todo markers, notes, ``+N
+        more``) are indented one column beyond the section label so they nest
+        under the header without a tree glyph.
         """
-        section_gutter = f"{g.output_prefix}  "
-        item_gutter = f"{g.output_prefix}    "
+        section_gutter = _card_body_gutter(glyph_override)
+        item_gutter = _card_item_indent(1, glyph_override=glyph_override)
         parts: list[object] = []
         todo_items = list(todos or [])
 
@@ -769,7 +781,9 @@ class StepActivityTree:
                     if not text:
                         continue
                     parts.append("\n")
-                    parts.append(Content.styled(f"{item_gutter}{text}", theme.SECONDARY_TEXT_STYLE))
+                    parts.append(
+                        Content.styled(f"{item_gutter}· {text}", theme.SECONDARY_TEXT_STYLE)
+                    )
 
             if main_preview:
                 append_tool_activity_lines(
@@ -795,6 +809,6 @@ class StepActivityTree:
                 if not t:
                     continue
                 parts.append("\n")
-                parts.append(Content.styled(f"{item_gutter}{t}", theme.SECONDARY_TEXT_STYLE))
+                parts.append(Content.styled(f"{item_gutter}· {t}", theme.SECONDARY_TEXT_STYLE))
 
         return Content.assemble(*parts) if parts else Content("")

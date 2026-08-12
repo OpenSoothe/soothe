@@ -128,7 +128,9 @@ class AssistantMessage(Vertical):
     DEFAULT_CSS = """
     AssistantMessage {
         height: auto;
-        padding: 0 2;
+        /* Wider than step/clarification cards: prose body uses +1 col of
+           content width on each side (2 cols total) for longer line wrap. */
+        padding: 0 1;
         margin: 0 0 1 0;
         background: transparent;
     }

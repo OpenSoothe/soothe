@@ -15,7 +15,11 @@ from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
 from soothe_cli.tui.tool_display import display_width, truncate_to_width
-from soothe_cli.tui.widgets.messages._helpers import _RUNNING_SPINNER_INTERVAL_SECONDS
+from soothe_cli.tui.widgets.messages._helpers import (
+    _RUNNING_SPINNER_INTERVAL_SECONDS,
+    _card_body_gutter,
+    _card_prefix_width,
+)
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -66,10 +70,12 @@ def _plan_quick_view_header(
         if display_width(title) > max_cols:
             title = truncate_to_width(title, max_cols)
             hint_str = ""
-        return Content.assemble(
+        parts: list[object] = [
             Content.styled(title, f"bold {dim_style}"),
-            Content.styled(hint_str, dim_style) if hint_str else Content(""),
-        )
+        ]
+        if hint_str:
+            parts.append(Content.styled(hint_str, dim_style))
+        return Content.assemble(*parts)
 
     return Content.assemble(
         Content.styled(title, f"bold {dim_style}"),
@@ -300,13 +306,17 @@ class PlanQuickViewOverlay(Vertical):
             self._content.update(tree.plan_quick_view_content(max_line_width=max_line_width))
         except Exception:  # noqa: BLE001
             logger.debug("Failed to render plan quick view", exc_info=True)
-            self._content.update(Content.styled("(plan view unavailable)", "dim"))
+            gutter = _card_body_gutter(get_glyphs().subagent_prefix)
+            self._content.update(Content.styled(f"{gutter}(plan view unavailable)", "dim"))
 
     def _plan_quick_view_line_width(self) -> int:
         """Available columns for one plan step row inside the overlay."""
         # Expanded chrome: left tall border (1) + horizontal padding (2).
         overlay_padding = 3
-        gutter_len = len(get_glyphs().output_prefix) + 1
+        # The goal tree renders step rows under the goal header's subagent
+        # glyph; the body gutter pads to that prefix width, so the line-width
+        # budget must subtract the same width (not just the raw glyph + 1).
+        gutter_len = _card_prefix_width(get_glyphs().subagent_prefix)
         width = self.size.width if self.size.width else 0
         if width > overlay_padding + gutter_len:
             return max(PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS, width - overlay_padding - gutter_len)
