@@ -151,7 +151,6 @@ from soothe_cli.tui.file_change_notify import (
     handle_file_change_result_without_active_track,
     mount_file_change_preview,
 )
-from soothe_cli.tui.hooks import dispatch_hook
 from soothe_cli.tui.input import MediaTracker, parse_file_mentions
 from soothe_cli.tui.spinner_labels import (
     SPINNER_LABEL_EXECUTING,
@@ -3056,8 +3055,6 @@ async def execute_task_textual(
         workspace=workspace,
     )
 
-    await dispatch_hook("session.start", {"loop_id": loop_id})
-
     if turn_stats is None:
         turn_stats = SessionStats()
     ev_stats = TurnEventStats()
@@ -3317,10 +3314,6 @@ async def execute_task_textual(
                                     else:
                                         step_w.set_tool_error(
                                             row_key, output_str or "Error", duration_ms=dur_ms
-                                        )
-                                        await dispatch_hook(
-                                            "tool.error",
-                                            {"tool_names": [tool_result.tool_name or "tool"]},
                                         )
 
                             # Reshow spinner only when all in-flight tools have
@@ -4688,8 +4681,6 @@ async def execute_task_textual(
                 _clear_adapter_step_tool_registry(adapter)
             if adapter._set_spinner and not clarification_pending:
                 await adapter._set_spinner(None)
-
-        await dispatch_hook("task.complete", {"loop_id": loop_id})
 
     except (asyncio.CancelledError, KeyboardInterrupt):
         app_exiting = bool(is_shutting_down()) if is_shutting_down is not None else False

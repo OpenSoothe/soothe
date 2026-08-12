@@ -924,6 +924,8 @@ def _colors_from_textual_theme(app: object) -> ThemeColors:
         card_activity_muted=base.card_activity_muted,
         card_success=base.card_success,
         card_error=base.card_error,
+        card_running=base.card_running,
+        card_running_muted=base.card_running_muted,
     )
 
 

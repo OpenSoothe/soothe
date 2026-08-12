@@ -116,8 +116,7 @@ async def test_bare_quit_word_exits_immediately(word: str) -> None:
     app = _SubmitQuitStub()
     event = ChatInput.Submitted(word, mode="normal")
 
-    with patch("soothe_cli.tui.app._execution.dispatch_hook", new_callable=AsyncMock):
-        await app.on_chat_input_submitted(event)
+    await app.on_chat_input_submitted(event)
 
     app._detach_or_exit.assert_called_once_with()
     app._process_message.assert_not_awaited()
@@ -130,8 +129,7 @@ async def test_non_exact_quit_text_is_not_bare_quit(text: str) -> None:
     app = _SubmitQuitStub()
     event = ChatInput.Submitted(text, mode="normal")
 
-    with patch("soothe_cli.tui.app._execution.dispatch_hook", new_callable=AsyncMock):
-        await app.on_chat_input_submitted(event)
+    await app.on_chat_input_submitted(event)
 
     app._detach_or_exit.assert_not_called()
     app._process_message.assert_awaited_once()
@@ -144,8 +142,7 @@ async def test_slash_quit_aliases_exit_immediately(cmd: str) -> None:
     app = _SubmitQuitStub()
     event = ChatInput.Submitted(cmd, mode="command")
 
-    with patch("soothe_cli.tui.app._execution.dispatch_hook", new_callable=AsyncMock):
-        await app.on_chat_input_submitted(event)
+    await app.on_chat_input_submitted(event)
 
     app._detach_or_exit.assert_called_once_with()
     app._process_message.assert_not_awaited()

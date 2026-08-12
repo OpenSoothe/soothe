@@ -35,7 +35,6 @@ from soothe_cli.tui.app._module_init import (
     QueuedMessage,
     _extract_model_params_flag,
 )
-from soothe_cli.tui.hooks import dispatch_hook
 from soothe_cli.tui.shell_color import shell_subprocess_env, wrap_shell_command_for_color
 from soothe_cli.tui.widgets.chat_input import ChatInput
 from soothe_cli.tui.widgets.messages import (
@@ -170,8 +169,6 @@ class _ExecutionMixin:
         """Handle submitted input from ChatInput widget."""
         value = event.value
         mode: InputMode = event.mode  # type: ignore[assignment]  # Textual event mode is str at type level but InputMode at runtime
-
-        await dispatch_hook("user.prompt", {})
 
         # /quit, /q, /exit, and bare exit/quit always execute immediately,
         # even mid-loop-switch or while the agent is busy.
