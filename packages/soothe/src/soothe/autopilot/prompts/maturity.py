@@ -38,16 +38,16 @@ def build_maturity_prompt(
     """
     parts = [MATURITY_ASSESS_INSTRUCTIONS]
     if verification_rules.strip():
-        parts.append(f"\nverification_rules:\n{verification_rules.strip()[:2000]}")
+        parts.append(f"\nverification_rules:\n{verification_rules.strip()}")
     if goal_md.strip():
-        parts.append(f"\nGOAL.md:\n{goal_md.strip()[:2000]}")
+        parts.append(f"\nGOAL.md:\n{goal_md.strip()}")
     if not verification_rules.strip() and not goal_md.strip():
         parts.append(_NO_CONTRACT_NOTE)
     if dag_summary.strip():
-        parts.append(f"\nJob DAG:\n{dag_summary.strip()[:3000]}")
+        parts.append(f"\nJob DAG:\n{dag_summary.strip()}")
     if workspace_inventory.strip():
-        parts.append(f"\nWorkspace inventory (shallow):\n{workspace_inventory.strip()[:2500]}")
+        parts.append(f"\nWorkspace inventory (shallow):\n{workspace_inventory.strip()}")
     if qa_response.strip():
-        parts.append(f"\nLatest QA/verify response:\n{qa_response.strip()[:2000]}")
+        parts.append(f"\nLatest QA/verify response:\n{qa_response.strip()}")
     parts.append(f"\n{MATURITY_ASSESS_CLOSING}")
     return "\n".join(parts)

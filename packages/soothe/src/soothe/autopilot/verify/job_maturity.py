@@ -42,7 +42,7 @@ RailSignal = Literal[
 ]
 
 _WORKSPACE_INVENTORY_MAX_ENTRIES = 80
-_WORKSPACE_INVENTORY_MAX_CHARS = 2500
+_WORKSPACE_INVENTORY_MAX_CHARS = 25000
 _DAG_SUMMARY_MAX_CHILDREN = 40
 
 
@@ -169,7 +169,7 @@ def maturity_wire_fields(maturity: dict[str, Any] | None) -> dict[str, Any] | No
         "acceptance_met": snap.acceptance_met,
         "blockers": list(snap.blockers[:8]),
         "suggested_rail_signal": snap.suggested_rail_signal,
-        "probe_summary": snap.probe_summary[:500],
+        "probe_summary": snap.probe_summary[:25000],
         "assessed_at": snap.assessed_at.isoformat(),
     }
 
@@ -179,7 +179,7 @@ def load_goal_md_excerpt(
     *,
     jobs_root: Path | None = None,
     job_id: str | None = None,
-    max_chars: int = 800,
+    max_chars: int = 25000,
 ) -> str:
     """Read GOAL.md excerpt: workspace first, else job artifact.
 
@@ -217,17 +217,17 @@ def acceptance_contract_brief(
     jobs_root: Path | None = None,
     job_id: str | None = None,
     maturity: dict[str, Any] | None = None,
-    max_chars: int = 600,
+    max_chars: int = 25000,
 ) -> str:
     """Build a short acceptance contract blurb for QA / verify goal descriptions."""
     parts: list[str] = []
     if verification_rules and verification_rules.strip():
-        parts.append(f"verification_rules: {verification_rules.strip()[:400]}")
+        parts.append(f"verification_rules: {verification_rules.strip()[:25000]}")
     goal_excerpt = load_goal_md_excerpt(
         workspace,
         jobs_root=jobs_root,
         job_id=job_id,
-        max_chars=400,
+        max_chars=25000,
     )
     if goal_excerpt:
         parts.append(f"GOAL.md:\n{goal_excerpt}")
@@ -322,14 +322,14 @@ def format_job_dag_summary(
     parts: list[str] = []
     if root is not None:
         parts.append(
-            f"root id={root.id} status={root.status} desc={(root.description or '')[:200]}"
+            f"root id={root.id} status={root.status} desc={(root.description or '')[:25000]}"
         )
     for child in (children or [])[:max_children]:
         tags = ",".join(child.rail_tags or []) or "-"
         role = child.role or "-"
         parts.append(
             f"- {child.id} status={child.status} role={role} tags={tags} "
-            f"desc={(child.description or '')[:160]}"
+            f"desc={(child.description or '')[:25000]}"
         )
     if children and len(children) > max_children:
         parts.append(f"... ({len(children) - max_children} more children omitted)")
@@ -380,7 +380,7 @@ def _snapshot_from_verdict(verdict: MaturityAssessmentVerdict) -> JobMaturitySna
         criteria=criteria,
         blockers=list(verdict.blockers),
         suggested_rail_signal=signal,
-        probe_summary=summary[:500],
+        probe_summary=summary[:25000],
     )
 
 
@@ -430,7 +430,7 @@ class JobMaturityAssessor:
             LLM invoke failure so callers can log without latching true.
         """
         rules = (verification_rules or "").strip()
-        goal_text = (goal_md or "").strip() or load_goal_md_excerpt(workspace, max_chars=2000)
+        goal_text = (goal_md or "").strip() or load_goal_md_excerpt(workspace, max_chars=25000)
         dag = (dag_summary or "").strip() or format_job_dag_summary(root, children)
         inventory = shallow_workspace_inventory(workspace)
         qa = (qa_response or "").strip()
