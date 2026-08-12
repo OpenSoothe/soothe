@@ -4,7 +4,7 @@
 
 agent:
   goal_completion_mode: llm_only
-  final_response: auto
+  final_response: always_synthesize
 
   autopilot:
     enabled: true
@@ -110,7 +110,7 @@ agent:
     general_purpose_subagent: false
     strange_loop_output_contract_enabled: true
     goal_completion_mode: llm_only
-    final_response: auto
+    final_response: always_synthesize
     step_brief_hydration_enabled: true
     prior_conversation_limit: 10
     context_window_limit: 200000
