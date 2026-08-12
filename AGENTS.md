@@ -126,6 +126,17 @@ See [IG-567](docs/impl/IG-567-heuristic-to-rules-migration.md) for the StrangeLo
 - New persistence features MUST branch on `persistence.default_backend` (or a shared `configure_*` / factory) — never hard-code SQLite when Postgres is configured.
 - Leftover SQLite files under `$SOOTHE_DATA_DIR` in Postgres mode are legacy only; do not write new runtime state to them.
 
+### 11. No AI Co-Authors (MUST)
+AI agents MUST NOT add AI tools or assistants as co-authors, reviewers, or attributions in commits, PRs, or any git metadata. This includes (but is not limited to) tools such as **Cursor**, **Claude**, **Grok**, **GitHub Copilot**, **ChatGPT**, **Gemini**, **Cody**, **Continue**, **Cline**, and similar.
+
+- Do **not** add `Co-authored-by:` trailers (e.g. `Co-authored-by: Cursor <noreply@cursor.com>`, `Co-authored-by: Claude <noreply@anthropic.com>`) to commit messages.
+- Do **not** add `Generated-with:`, `Assisted-by:`, `Reviewed-by:` (for AI), or any equivalent trailer attributing authorship or review to an AI tool.
+- Do **not** add AI-tool names to `AUTHORS`, `CONTRIBUTORS`, `.mailmap`, release notes, or changelog author lines.
+- Do **not** use `--trailer` / `git commit --trailer` to attribute any AI tool.
+- Authorship in `git log` reflects **human contributors only**. AI assistance is fine to disclose in PR description prose, but **never** in commit metadata or author/co-author fields.
+
+If a hook or template inserts an AI co-author trailer, remove it before committing.
+
 ---
 
 ## 📁 Structure

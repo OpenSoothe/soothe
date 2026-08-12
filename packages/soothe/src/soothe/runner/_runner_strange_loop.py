@@ -177,6 +177,23 @@ async def _mark_interrupted_goal_ledger(config: Any, loop_id: str) -> None:
         logger.debug("Interrupted-goal ledger marker failed for %s", loop_id, exc_info=True)
 
 
+async def _drain_workspace_shells_on_cancel(workspace: str | None) -> None:
+    """Best-effort kill of in-flight ``run_command`` / ``run_background`` on cancel."""
+    ws = str(workspace or "").strip()
+    if not ws:
+        return
+    try:
+        from soothe.runner._runner_autopilot_worker import drain_goal_runtime
+
+        await asyncio.to_thread(drain_goal_runtime, ws)
+    except Exception:
+        logger.warning(
+            "Failed to drain shell processes after cancel (workspace=%s)",
+            ws,
+            exc_info=True,
+        )
+
+
 def _is_tool_stream_chunk(chunk: object) -> bool:
     """Return True if chunk is a ``messages``-mode LangGraph chunk carrying a tool result.
 
@@ -964,6 +981,9 @@ class StrangeLoopMixin:
                 # this, but a hard client disconnect lands here too. Swallowed on
                 # failure.
                 await _mark_interrupted_goal_ledger(self._config, strange_loop_id)
+                # Kill in-flight run_command / run_background children for this
+                # workspace so cancel does not leave orphaned shells.
+                await _drain_workspace_shells_on_cancel(workspace)
             if increment_ai_message_count:
                 await _increment_loop_ai_message_count(self._config, strange_loop_id)
             await heartbeat_handle.stop()

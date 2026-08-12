@@ -1,8 +1,8 @@
-"""Tests for workspace-scoped background process draining at goal completion.
+"""Tests for workspace-scoped shell process draining at goal completion/cancel.
 
-Covers ``drain_goal_runtime`` — the lifecycle-bound teardown that kills a
-goal's ``run_background`` grandchildren via their bg-logs before the
-completion chunk is emitted.
+Covers ``drain_goal_runtime`` — lifecycle teardown that kills a goal's
+``run_command`` (foreground sessions) and ``run_background`` (bg-logs)
+grandchildren before the completion/cancel path finishes.
 """
 
 from __future__ import annotations
@@ -21,6 +21,15 @@ def _make_bg_logs(workspace: Path, pids: list[int]) -> Path:
     for pid in pids:
         (bg_dir / f"bg-{pid}.log").write_text(f"[soothe] command: sleep {pid}\n")
     return bg_dir
+
+
+def _make_fg_sessions(workspace: Path, pids: list[int]) -> Path:
+    """Create {workspace}/.soothe/foreground/fg-{pid}.session for each pid."""
+    fg_dir = workspace / ".soothe" / "foreground"
+    fg_dir.mkdir(parents=True, exist_ok=True)
+    for pid in pids:
+        (fg_dir / f"fg-{pid}.session").write_text("[soothe] run_command started\n")
+    return fg_dir
 
 
 def test_drain_no_workspace_returns_zero() -> None:
@@ -76,6 +85,67 @@ def test_drain_kills_process_groups_sigterm_then_sigkill(tmp_path: Path) -> None
     bg_dir = workspace / ".soothe" / "background"
     assert not (bg_dir / "bg-111.log").exists()
     assert not (bg_dir / "bg-222.log").exists()
+
+
+def test_drain_kills_foreground_run_command_sessions(tmp_path: Path) -> None:
+    """In-flight run_command markers are reaped the same way as bg logs."""
+    workspace = tmp_path / "ws"
+    _make_fg_sessions(workspace, [777, 888])
+
+    killpg_calls: list[tuple[int, int]] = []
+
+    def _fake_getpgid(pid: int) -> int:
+        return pid
+
+    def _fake_killpg(pgid: int, sig: int) -> None:
+        killpg_calls.append((pgid, sig))
+
+    def _pid_alive(pid: int) -> bool:
+        already_killed = any(p == pid and s == signal.SIGKILL for p, s in killpg_calls)
+        return not already_killed
+
+    with (
+        patch("soothe.runner._runner_autopilot_worker.os.getpgid", side_effect=_fake_getpgid),
+        patch("soothe.runner._runner_autopilot_worker.os.killpg", side_effect=_fake_killpg),
+        patch("soothe.runner._runner_autopilot_worker._pid_alive", side_effect=_pid_alive),
+        patch("soothe.runner._runner_autopilot_worker.time.sleep"),
+    ):
+        reaped = drain_goal_runtime(str(workspace), grace_seconds=0.0)
+
+    assert reaped == 2
+    assert {c[0] for c in killpg_calls if c[1] == signal.SIGTERM} == {777, 888}
+    fg_dir = workspace / ".soothe" / "foreground"
+    assert not (fg_dir / "fg-777.session").exists()
+    assert not (fg_dir / "fg-888.session").exists()
+
+
+def test_drain_reaps_foreground_and_background_together(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    _make_fg_sessions(workspace, [101])
+    _make_bg_logs(workspace, [202])
+
+    killed: list[int] = []
+
+    def _fake_getpgid(pid: int) -> int:
+        return pid
+
+    def _fake_killpg(pgid: int, sig: int) -> None:
+        if sig == signal.SIGTERM:
+            killed.append(pgid)
+
+    def _pid_alive(pid: int) -> bool:
+        return pid not in killed
+
+    with (
+        patch("soothe.runner._runner_autopilot_worker.os.getpgid", side_effect=_fake_getpgid),
+        patch("soothe.runner._runner_autopilot_worker.os.killpg", side_effect=_fake_killpg),
+        patch("soothe.runner._runner_autopilot_worker._pid_alive", side_effect=_pid_alive),
+        patch("soothe.runner._runner_autopilot_worker.time.sleep"),
+    ):
+        reaped = drain_goal_runtime(str(workspace), grace_seconds=0.0)
+
+    assert reaped == 2
+    assert set(killed) == {101, 202}
 
 
 def test_drain_skips_dead_processes(tmp_path: Path) -> None:

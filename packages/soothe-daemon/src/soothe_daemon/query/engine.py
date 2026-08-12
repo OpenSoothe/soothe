@@ -8,6 +8,7 @@ handlers).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -180,6 +181,7 @@ class AsyncCancelOrchestrator:
                                 await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
                             except (TimeoutError, asyncio.CancelledError):
                                 pass
+                    await self._drain_loop_shells_on_cancel(loop_id)
                     self._query_engine._clear_loop_cancel_armed_state(loop_id)
                     return  # Success
 
@@ -201,6 +203,7 @@ class AsyncCancelOrchestrator:
             max_retries,
         )
         await self._force_kill_worker(worker_id, loop_id, timeout=force_timeout)
+        await self._drain_loop_shells_on_cancel(loop_id)
 
         # Cleanup bookkeeping (runner unregister is turn-scoped in stream finally).
         self._query_engine._clear_loop_cancel_armed_state(loop_id)
@@ -228,6 +231,47 @@ class AsyncCancelOrchestrator:
         if pool is not None and hasattr(pool, "is_worker_idle"):
             return pool.is_worker_idle(worker_id)
         return False
+
+    async def _drain_loop_shells_on_cancel(self, loop_id: str) -> None:
+        """Kill in-flight ``run_command`` / ``run_background`` for the loop workspace."""
+        lid = str(loop_id or "").strip()
+        if not lid:
+            return
+        d = self._daemon
+        workspace: str | None = None
+        registry = getattr(d, "_thread_registry", None)
+        if registry is not None and hasattr(registry, "get_workspace"):
+            with contextlib.suppress(Exception):
+                raw_ws = registry.get_workspace(lid)
+                if raw_ws:
+                    workspace = str(raw_ws).strip() or None
+        if not workspace:
+            loop_meta: dict[str, Any] | None = None
+            persistence = getattr(d, "_persistence_manager", None)
+            if persistence is not None and hasattr(persistence, "get_loop_metadata"):
+                with contextlib.suppress(Exception):
+                    loop_meta = await persistence.get_loop_metadata(lid)
+            if not isinstance(loop_meta, dict):
+                runner = getattr(d, "_runner", None)
+                if runner is not None and hasattr(runner, "get_loop_metadata"):
+                    with contextlib.suppress(Exception):
+                        loop_meta = await runner.get_loop_metadata(lid)
+            if isinstance(loop_meta, dict):
+                raw = loop_meta.get("current_workspace") or loop_meta.get("client_workspace")
+                workspace = str(raw).strip() if raw else None
+        if not workspace:
+            return
+        try:
+            from soothe.runner._runner_autopilot_worker import drain_goal_runtime
+
+            await asyncio.to_thread(drain_goal_runtime, workspace)
+        except Exception:
+            logger.warning(
+                "Failed to drain shell processes on cancel for loop %s (workspace=%s)",
+                lid[:16],
+                workspace,
+                exc_info=True,
+            )
 
     async def _force_kill_worker(self, worker_id: str | None, loop_id: str, timeout: float) -> None:
         """Force terminate worker - guarantees cancel succeeds."""

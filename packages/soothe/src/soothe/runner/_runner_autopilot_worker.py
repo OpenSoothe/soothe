@@ -67,9 +67,10 @@ logger = logging.getLogger(__name__)
 _GOAL_COMPLETION_TYPE = "soothe.internal.autopilot.goal_completion"
 _MAX_PRIOR_EFFECTS_IN_GOAL_TEXT = 12
 
-# Default SIGTERM→SIGKILL grace period when draining background spawns.
+# Default SIGTERM→SIGKILL grace period when draining shell spawns.
 _DRAIN_GRACE_SECONDS = 2.0
 _BG_LOG_PID_RE = re.compile(r"bg-(\d+)\.log$")
+_FG_SESSION_PID_RE = re.compile(r"fg-(\d+)\.session$")
 
 
 def _kill_pgid(pgid: int, *, sig: int) -> bool:
@@ -99,41 +100,33 @@ def _pid_alive(pid: int) -> bool:
         return True
 
 
-def drain_goal_runtime(workspace: str, *, grace_seconds: float = _DRAIN_GRACE_SECONDS) -> int:
-    """Kill background processes this goal spawned, via their bg-logs.
-
-    ``soothe_nano``'s ``RunBackgroundTool`` writes
-    ``{workspace}/.soothe/background/bg-{pid}.log`` for each spawn
-    (``start_new_session=True`` → each spawn is its own process group).
-    This enumerates those logs, parses the PIDs, and terminates each
-    process group: SIGTERM → grace → SIGKILL.
-
-    Workspace-scoped: only touches PIDs whose bg-log lives under THIS
-    goal's workspace. Not a global ``ps`` scan — a PID appears here only
-    because the agent spawned it for this workspace. Safe to call at goal
-    completion (in the runner, before emitting the completion chunk) and
-    on cancel.
-
-    Returns the count of process groups reaped.
-    """
-    if not workspace:
-        return 0
-    bg_dir = Path(workspace).expanduser() / ".soothe" / "background"
-    if not bg_dir.is_dir():
+def _reap_tracked_shell_pids(
+    marker_dir: Path,
+    *,
+    glob_pattern: str,
+    pid_re: re.Pattern[str],
+    grace_seconds: float,
+) -> int:
+    """SIGTERM→SIGKILL process groups named by marker files under ``marker_dir``."""
+    if not marker_dir.is_dir():
         return 0
     reaped = 0
-    for log_file in bg_dir.glob("bg-*.log"):
-        match = _BG_LOG_PID_RE.search(log_file.name)
+    for marker in marker_dir.glob(glob_pattern):
+        match = pid_re.search(marker.name)
         if match is None:
             continue
         pid = int(match.group(1))
         try:
             pgid = os.getpgid(pid)
         except ProcessLookupError:
+            with contextlib.suppress(OSError):
+                marker.unlink(missing_ok=True)
             continue
         except (OSError, PermissionError):
             continue
         if not _pid_alive(pid):
+            with contextlib.suppress(OSError):
+                marker.unlink(missing_ok=True)
             continue
         if not _kill_pgid(pgid, sig=signal.SIGTERM):
             continue
@@ -144,10 +137,44 @@ def drain_goal_runtime(workspace: str, *, grace_seconds: float = _DRAIN_GRACE_SE
         if _pid_alive(pid):
             _kill_pgid(pgid, sig=signal.SIGKILL)
         with contextlib.suppress(OSError):
-            log_file.unlink(missing_ok=True)
+            marker.unlink(missing_ok=True)
+    return reaped
+
+
+def drain_goal_runtime(workspace: str, *, grace_seconds: float = _DRAIN_GRACE_SECONDS) -> int:
+    """Kill shell processes this goal spawned (``run_command`` + ``run_background``).
+
+    ``soothe_nano`` tracks:
+
+    - ``run_background`` → ``{workspace}/.soothe/background/bg-{pid}.log``
+    - in-flight ``run_command`` → ``{workspace}/.soothe/foreground/fg-{pid}.session``
+
+    Both use ``start_new_session=True`` (own process group). This enumerates
+    those markers and terminates each group: SIGTERM → grace → SIGKILL.
+
+    Workspace-scoped: only touches PIDs whose markers live under THIS
+    workspace. Not a global ``ps`` scan. Safe at goal completion and on cancel.
+
+    Returns the count of process groups reaped.
+    """
+    if not workspace:
+        return 0
+    root = Path(workspace).expanduser() / ".soothe"
+    reaped = _reap_tracked_shell_pids(
+        root / "foreground",
+        glob_pattern="fg-*.session",
+        pid_re=_FG_SESSION_PID_RE,
+        grace_seconds=grace_seconds,
+    )
+    reaped += _reap_tracked_shell_pids(
+        root / "background",
+        glob_pattern="bg-*.log",
+        pid_re=_BG_LOG_PID_RE,
+        grace_seconds=grace_seconds,
+    )
     if reaped:
         logger.info(
-            "drain_goal_runtime: reaped %d background process group(s) under %s",
+            "drain_goal_runtime: reaped %d shell process group(s) under %s",
             reaped,
             workspace,
         )
