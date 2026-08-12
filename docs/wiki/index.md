@@ -93,7 +93,7 @@ Welcome to the Soothe documentation. This wiki provides comprehensive guides for
 Top-level docs (also in the site sidebar):
 
 - **[FAQ](faq.md)** ⭐ - Frequently asked questions organized by topic
-- **[CHANGELOG](changelog.md)** - Version history and release notes
+- **[CHANGELOG](changelog.md)** - Release notes (synced from root `CHANGELOG.md`)
 - **[API Reference](api-reference/index.md)** - Core, daemon, and SDK package APIs
 
 Also in this wiki:

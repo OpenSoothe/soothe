@@ -29,11 +29,11 @@ from typing import Any, Literal
 
 # Protocol-primitive event models (stream-end, memory, policy) are owned by
 # nano. Re-exported here for ``soothe.events`` consumers. Nano registers them;
-# host must not re-_reg them.
+# host must not re-_reg them. ``PolicyCheckedEvent`` was removed in nano 1.1.14
+# (checked telemetry no longer emitted; denials still use PolicyDeniedEvent).
 from soothe_nano.events.catalog import (  # noqa: F401
     MemoryRecalledEvent,
     MemoryStoredEvent,
-    PolicyCheckedEvent,
     PolicyDeniedEvent,
     StreamEndEvent,
 )

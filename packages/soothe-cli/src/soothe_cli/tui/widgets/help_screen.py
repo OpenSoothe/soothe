@@ -66,7 +66,7 @@ def build_keyboard_shortcut_rows() -> list[tuple[str, str]]:
         ("Ctrl+V", "Paste image from clipboard as [image N] attachment"),
         (
             "Ctrl+T",
-            "Toggle plan panel (auto-shown when a plan is active; --no-plan-panel disables)",
+            "Toggle plan panel (hidden by default; --plan-panel auto-shows while active)",
         ),
         ("Ctrl+O", "Toggle expand/collapse of the most recent skill or tool card"),
         ("Shift+Tab", "Cycle composer mode (Auto → Manual → Plan)"),

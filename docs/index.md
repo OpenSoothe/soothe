@@ -43,7 +43,8 @@ soothe -p "List all Python files in the current directory and count lines of cod
 |---------|------------------|
 | [Wiki](wiki/) | Guides for users, developers, and operators |
 | [FAQ](faq/) | Frequently asked questions by topic |
-| [CHANGELOG](changelog/) | Version history and release notes |
+| [CHANGELOG](changelog/) | Release notes (synced from root `CHANGELOG.md`) |
+| [Versioned Changelogs](changelogs/) | Per-tag API surface diffs |
 | [API Reference](wiki/api-reference/) | Core, daemon, and SDK package APIs |
 
 ### Wiki knowledge base

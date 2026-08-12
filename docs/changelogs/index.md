@@ -30,5 +30,11 @@ Click any version for the full diff (added/removed modules and symbols).
    to `docs/changelogs/`.
 3. The Pages workflow rebuilds the site on push.
 
-See also the [human-curated CHANGELOG](../wiki/changelog.md) for release
-narratives and the [API Reference](../wiki/api-reference/).
+## Human release notes
+
+Release narratives live in the repository root
+[`CHANGELOG.md`](https://github.com/mirasoth/soothe/blob/main/CHANGELOG.md).
+The Pages build syncs that file into the published
+[CHANGELOG](../changelog/) page via `scripts/sync_wiki_changelog.sh`.
+
+See also the [API Reference](../wiki/api-reference/).

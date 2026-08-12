@@ -7,7 +7,8 @@
 # stale paths, or nonexistent RFC numbers are introduced.
 #
 # Exclusions:
-#   - changelog.md: Documents historical state; old names/paths are expected.
+#   - changelog.md: Auto-synced from root CHANGELOG.md (historical names/paths
+#     are expected; do not hand-edit — run scripts/sync_wiki_changelog.sh).
 #   - archive/:    Archived historical docs; references are intentionally stale.
 #   - .backups/:   Auto-generated backup files; not user-facing.
 #
@@ -25,7 +26,7 @@ ERRORS=0
 
 # Files/dirs that legitimately contain historical references and are excluded
 # from all checks. grep filters through these via invert-match (-v).
-#   - changelog.md: Documents historical state; old names/paths are expected.
+#   - changelog.md: Auto-synced from root CHANGELOG.md; historical names expected.
 #   - archive/:    Archived historical docs; references are intentionally stale.
 #   - .backups/:   Auto-generated backup files from surgical edits; not user-facing.
 EXCLUDE_FILTER="changelog.md\|archive/\|\.backups/"

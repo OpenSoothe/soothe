@@ -128,7 +128,6 @@ from .catalog import (
     PlanCreatedEvent,
     PlanDagSnapshotEvent,
     PlanReflectedEvent,
-    PolicyCheckedEvent,
     PolicyDeniedEvent,
     RecoveryResumedEvent,
     # StrangeLoop events
@@ -271,7 +270,6 @@ __all__ = [
     "PlanBatchStartedEvent",
     "PlanReflectedEvent",
     "PlanDagSnapshotEvent",
-    "PolicyCheckedEvent",
     "PolicyDeniedEvent",
     "GoalCreatedEvent",
     "GoalCompletedEvent",

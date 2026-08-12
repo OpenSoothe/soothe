@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Upgrade `soothe-nano` 1.1.13 → 1.1.14. Drop host re-export of
+  `PolicyCheckedEvent` (nano no longer emits `soothe.internal.policy.checked`;
+  denials still use `PolicyDeniedEvent`). TUI plan panel is off by default
+  (`--plan-panel` to auto-show).
+- GitHub Pages CHANGELOG is generated from repository root `CHANGELOG.md`
+  via `scripts/sync_wiki_changelog.sh` (no more hand-maintained wiki copy).
+
 ## [v0.10.7] - 2026-08-12
 
 ### Fixed

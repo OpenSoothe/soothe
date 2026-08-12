@@ -4,11 +4,13 @@ on:
   push:
     branches: [main]
     paths:
+      - 'CHANGELOG.md'
       - 'docs/**'
       - 'Gemfile'
       - 'Gemfile.lock'
       - '.ruby-version'
       - '.github/workflows/pages.yml'
+      - 'scripts/sync_wiki_changelog.sh'
   workflow_dispatch:
 
 permissions:
@@ -29,6 +31,11 @@ jobs:
         with:
           ruby-version: '3.3.6'
           bundler-cache: true
+
+      - name: Sync wiki CHANGELOG from repository root
+        run: |
+          ./scripts/sync_wiki_changelog.sh
+          ./scripts/sync_wiki_changelog.sh --check
 
       - name: Build with Jekyll
         run: |
@@ -58,6 +65,11 @@ jobs:
           cl = Path("_site/changelogs/index.html").read_text()
           assert "Versioned Changelogs" in cl, "changelogs index missing title"
           print("Versioned changelogs landing page present")
+          # Human CHANGELOG page must mirror root CHANGELOG.md content.
+          page = Path("_site/changelog/index.html").read_text()
+          assert "Changelog" in page
+          assert "Source of truth" in page
+          print("Wiki CHANGELOG page present and sourced from root CHANGELOG.md")
           PY
 
       - name: Deploy to gh-pages branch

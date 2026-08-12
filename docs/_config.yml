@@ -3,8 +3,10 @@
 # Publishes docs/ as the user-facing site at:
 # https://mirasoth.github.io/soothe/
 #
-# Top-level nav: Home, Wiki, FAQ, CHANGELOG, API Reference
+# Top-level nav: Home, Wiki, FAQ, CHANGELOG, Versioned Changelogs, API Reference
 # Wiki remains the knowledge-base hub for guides and architecture.
+# CHANGELOG page is generated from repository root CHANGELOG.md
+# (scripts/sync_wiki_changelog.sh) during the Pages build.
 
 title: Soothe Docs
 description: >-

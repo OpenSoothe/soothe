@@ -11,7 +11,8 @@
 # 3. Code formatting check (ruff format, parallel per package)
 # 4. Linting (ruff check, parallel per package)
 # 5. Dead-code analysis (vulture, min 90% confidence)
-# 6. Unit tests (all packages, parallel execution)
+# 6. AsyncAPI drift + wiki CHANGELOG sync (root CHANGELOG.md)
+# 7. Unit tests (all packages, parallel execution)
 #
 # Exit codes:
 #   0 - All checks passed
@@ -927,6 +928,41 @@ check_asyncapi_drift() {
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# WIKI CHANGELOG SYNC (root CHANGELOG.md → docs/wiki/changelog.md)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+check_wiki_changelog_sync() {
+  print_section "docs"
+
+  cd "$WORKSPACE_ROOT"
+
+  if [ ! -x "scripts/sync_wiki_changelog.sh" ]; then
+    print_warn "sync_wiki_changelog.sh not found, skipping"
+    return 0
+  fi
+
+  if $AUTO_FIX; then
+    ./scripts/sync_wiki_changelog.sh >/dev/null
+  fi
+
+  local output
+  local exit_code
+  output=$(./scripts/sync_wiki_changelog.sh --check 2>&1) && exit_code=0 || exit_code=$?
+  if [ $exit_code -eq 0 ]; then
+    print_ok "wiki changelog ↔ root CHANGELOG.md"
+    record_check_outcome "docs" "wiki changelog sync" "pass"
+  else
+    print_fail "docs/wiki/changelog.md out of sync with CHANGELOG.md"
+    record_failure_log "Wiki changelog sync" "$output"
+    record_check_outcome "docs" "wiki changelog sync" "fail"
+    print_note "run: ./scripts/sync_wiki_changelog.sh"
+    return 1
+  fi
+
+  return 0
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # DEAD-CODE ANALYSIS (VULTURE)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1141,7 +1177,7 @@ print_results_overview() {
     return 0
   fi
 
-  local -a section_order=(workspace dependencies format lint vulture asyncapi tests)
+  local -a section_order=(workspace dependencies format lint vulture asyncapi docs tests)
   local section label status entry printed_any pkg
 
   for section in "${section_order[@]}"; do
@@ -1346,6 +1382,7 @@ if $SKIP_TESTS; then
   check_linting || true
   check_vulture || true
   check_asyncapi_drift || true
+  check_wiki_changelog_sync || true
 else
   # Full mode: parallelize independent checks
   tmpdir=$(mktemp -d)
@@ -1373,6 +1410,11 @@ else
     echo $? >"$tmpdir/asyncapi.exit"
   ) >"$tmpdir/asyncapi.out" 2>&1 &
   pids+=($!)
+  (
+    check_wiki_changelog_sync
+    echo $? >"$tmpdir/docs.exit"
+  ) >"$tmpdir/docs.out" 2>&1 &
+  pids+=($!)
 
   for pid in "${pids[@]}"; do
     wait "$pid" || true
@@ -1383,6 +1425,7 @@ else
   cat "$tmpdir/lint.out" 2>/dev/null || true
   cat "$tmpdir/vulture.out" 2>/dev/null || true
   cat "$tmpdir/asyncapi.out" 2>/dev/null || true
+  cat "$tmpdir/docs.out" 2>/dev/null || true
 
   _load_recorded_outcomes "$tmpdir/outcomes.log"
   _load_recorded_warnings "$tmpdir/warnings.log"
@@ -1394,6 +1437,7 @@ else
   _collect_parallel_check_result "$tmpdir" "lint" "lint"
   _collect_parallel_check_result "$tmpdir" "vulture" "vulture"
   _collect_parallel_check_result "$tmpdir" "asyncapi" "asyncapi"
+  _collect_parallel_check_result "$tmpdir" "docs" "docs"
 
   VERIFY_RESULTS_DIR=""
   rm -rf "$tmpdir"
