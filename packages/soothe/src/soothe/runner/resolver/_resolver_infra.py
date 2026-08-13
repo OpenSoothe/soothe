@@ -36,11 +36,6 @@ def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Che
     )
 
 
-# Re-export helpers used by tests / callers that imported from this module.
-_resolve_sqlite_checkpointer = _nano_infra._resolve_sqlite_checkpointer
-_resolve_postgres_checkpointer = _nano_infra._resolve_postgres_checkpointer
-_mask_dsn = _nano_infra._mask_dsn
-
 __all__ = [
     "resolve_checkpointer",
     "resolve_durability",

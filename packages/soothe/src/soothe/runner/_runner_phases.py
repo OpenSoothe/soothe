@@ -282,21 +282,7 @@ class PhasesMixin:
 
         try:
             if is_sqlite:
-                import aiosqlite
-                from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-                from soothe_sdk.utils.serde import create_soothe_serde
-
-                # Create async connection from path
-                conn = await aiosqlite.connect(self._checkpointer_pool)
-                checkpointer = AsyncSqliteSaver(conn, serde=create_soothe_serde())
-                await checkpointer.setup()
-
-                self._checkpointer = checkpointer
-                agent.graph.checkpointer = checkpointer
-                self._checkpointer_initialized = True
-                logger.info(
-                    "AsyncSqliteSaver created and tables initialized at %s", self._checkpointer_pool
-                )
+                await self._init_sqlite_checkpointer_with_retry()
             else:
                 # PostgreSQL: wrap initialization with retry for DB restart resilience
                 await self._init_postgres_checkpointer_with_retry()
@@ -314,6 +300,101 @@ class PhasesMixin:
                 f"Checkpointer initialization failed: {exc}\n"
                 f"Persistent storage required - no fallback available."
             )
+
+    async def _init_sqlite_checkpointer_with_retry(
+        self,
+        max_attempts: int = 3,
+        base_delay: float = 1.0,
+        max_delay: float = 4.0,
+    ) -> None:
+        """Initialize SQLite checkpointer with directory safety and retry.
+
+        Ensures the parent directory exists before connecting (defensive
+        against cleanup races and worker-subprocess directory absence),
+        wraps ``aiosqlite.connect`` + ``AsyncSqliteSaver.setup`` in a
+        try/except that closes the connection on failure (prevents leaked
+        aiosqlite background threads), and retries transient SQLite errors
+        (WAL contention, file-lock races) with exponential backoff.
+
+        Args:
+            max_attempts: Maximum retry attempts (default: 3).
+            base_delay: Initial retry delay in seconds (default: 1.0).
+            max_delay: Maximum retry delay cap (default: 4.0).
+
+        Raises:
+            ConfigurationError if all retries exhausted or error is unrecoverable.
+        """
+        import aiosqlite
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+        from soothe_sdk.utils.serde import create_soothe_serde
+
+        from soothe.sloop.checkpoints.retry_utils import is_recoverable_sqlite_error
+
+        db_path = Path(self._checkpointer_pool)
+        delay = base_delay
+        for attempt in range(1, max_attempts + 1):
+            # Defensive: ensure parent directory exists before connecting.
+            # The nano resolver creates it at init, but worker subprocesses
+            # or post-cleanup re-inits may encounter a missing directory.
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+
+            conn = None
+            try:
+                conn = await aiosqlite.connect(str(db_path))
+                checkpointer = AsyncSqliteSaver(conn, serde=create_soothe_serde())
+                await checkpointer.setup()
+
+                self._checkpointer = checkpointer
+                self._materialized_core_agent().graph.checkpointer = checkpointer
+                self._checkpointer_initialized = True
+                logger.info(
+                    "AsyncSqliteSaver created and tables initialized at %s",
+                    db_path,
+                )
+                return
+            except Exception as exc:
+                # Close the connection if it was opened but setup failed,
+                # preventing a leaked aiosqlite background thread whose
+                # __del__ would emit a ResourceWarning + asyncio traceback.
+                if conn is not None:
+                    try:
+                        await conn.close()
+                    except Exception:
+                        logger.debug(
+                            "Failed to close aiosqlite connection after error", exc_info=True
+                        )
+
+                if not is_recoverable_sqlite_error(exc):
+                    logger.error(
+                        "[checkpointer_init] Unrecoverable SQLite error: %s: %s",
+                        type(exc).__name__,
+                        exc,
+                    )
+                    raise
+
+                if attempt >= max_attempts:
+                    logger.error(
+                        "[checkpointer_init] All %d SQLite retries exhausted, last error: %s: %s",
+                        max_attempts,
+                        type(exc).__name__,
+                        exc,
+                    )
+                    raise
+
+                logger.warning(
+                    "[checkpointer_init] Recoverable SQLite error on attempt %d/%d: %s. "
+                    "Retrying in %.1fs...",
+                    attempt,
+                    max_attempts,
+                    type(exc).__name__,
+                    delay,
+                )
+
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, max_delay)
+
+        # Should never reach here
+        raise RuntimeError("Unexpected retry loop exit for SQLite checkpointer initialization")
 
     async def _init_postgres_checkpointer_with_retry(
         self,
