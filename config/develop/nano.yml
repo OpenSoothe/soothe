@@ -12,6 +12,8 @@ providers:
       - kimi-k2.5
       - kimi-k2.7-code
       - MiniMax-M3
+      - deepseek-v4-pro
+      - deepseek-v4-flash
       - text-embedding-v4
 
   - name: agnes
