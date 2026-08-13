@@ -83,8 +83,9 @@ class CognitionStepMessage(Vertical):
     Header is the full step description plus compact live meta while running
     (`` · 45s · 12/1 · ↑8.1K ↓2.0K``). Activity nests under To-do then Tool-use.
     The Running footer line is omitted; Completed/Failed/Pending footers remain.
-    Optional full tool lists use ``STEP_CARD_SHOW_TOOL_ROW_DETAILS``. Click toggles
-    manual whole-card collapse; cards do not auto-collapse.
+    Optional full tool lists use ``STEP_CARD_SHOW_TOOL_ROW_DETAILS``. Cards
+    auto-collapse to title + status on terminal status (success / error);
+    click toggles manual expand / collapse.
 
     Intake-only orphan SubAgent cards reuse this widget with ``_subagent_type``
     set: same header meta / activity tree / footers, with a subagent glyph and
@@ -138,7 +139,6 @@ class CognitionStepMessage(Vertical):
     }
 
     CognitionStepMessage.-collapsed .step-tools,
-    CognitionStepMessage.-collapsed .step-status,
     CognitionStepMessage.-collapsed .step-subagent-notes,
     CognitionStepMessage.-collapsed .step-detail {
         display: none;
@@ -201,6 +201,8 @@ class CognitionStepMessage(Vertical):
         """If True, skip auto-folding the tool-row preview (user expanded the list)."""
         self._has_clarification_details: bool = False
         """Whether detail panel currently holds clarification Q/A content."""
+        self._has_result_preview: bool = False
+        """Whether detail panel currently holds a goal_completion result preview."""
         # Intake-only orphan SubAgent card (IG-602); empty on normal step cards.
         self._subagent_type: str = ""
         self._subagent_task_idx: int = 0
@@ -394,6 +396,11 @@ class CognitionStepMessage(Vertical):
         if self._card_collapsed:
             self.toggle_collapse()
             return
+        # Terminal cards: click collapses the card back to title + status.
+        if self._status in ("success", "error"):
+            self.toggle_collapse()
+            return
+        # Running cards: toggle tool-row folding for long tool lists.
         if (
             STEP_CARD_SHOW_TOOL_ROW_DETAILS
             and self._rows
@@ -409,7 +416,6 @@ class CognitionStepMessage(Vertical):
             (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows)
             or self._has_task_activity_body()
             or self._execute_assistant_buffer.strip()
-            or self._status in ("success", "error")
         )
         if has_collapsible_content:
             self.toggle_collapse()
@@ -420,37 +426,86 @@ class CognitionStepMessage(Vertical):
         self._refresh_collapse_state()
 
     def _refresh_collapse_state(self) -> None:
-        """Update CSS classes and completion footer when manual collapse toggles."""
+        """Update CSS classes and body visibility when collapse state toggles.
+
+        When collapsed, only the header (title) and status footer remain
+        visible — all body sections (tools, activity tree, detail) are hidden
+        via inline ``display = False``.  CSS ``display: none`` alone is
+        insufficient because Textual's inline styles take priority over
+        cascade rules, so a prior ``display = True`` set during running would
+        keep body widgets visible.
+
+        When expanded, the surface is re-synced to re-show body widgets that
+        have content, and detail content (execute prose, clarification Q&A,
+        result preview, or error text) is rendered along with the full footer.
+        """
         if self._card_collapsed:
             self.add_class("-collapsed")
+            # Hide ALL body widgets via inline style.  CSS display:none on the
+            # -collapsed class cannot override an inline display=True that was
+            # set during the running phase (e.g. by _sync_step_card_surface).
+            for w in (
+                self._tools_widget,
+                self._activity_widget,
+                self._detail_widget,
+            ):
+                if w is not None:
+                    w.display = False
         else:
             self.remove_class("-collapsed")
-        if self._status in ("success", "error") and self._detail_widget:
-            dur_str = format_duration_ms(self._last_duration_ms)
-            tool_part = self._status_tool_stats_suffix(self._last_tool_call_count)
+            # Re-sync surface so body widgets with content become visible again.
+            self._sync_step_card_surface()
+        if self._status not in ("success", "error"):
+            return
+        if self._detail_widget is None:
+            return
+        dur_str = format_duration_ms(self._last_duration_ms)
+        tool_part = self._status_tool_stats_suffix(self._last_tool_call_count)
+        if self._card_collapsed:
+            # Body widgets already hidden above; just update the footer.
+            if self._interrupt_message:
+                return  # Preserve interrupt message already in status widget.
             if self._last_success:
                 self._update_step_footer_status_line(
                     f"Completed ({dur_str})",
                     success=True,
                     suffix=tool_part,
                 )
-                prose = (self._last_completed_execute_prose or "").strip()
-                if prose:
-                    self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
-                    self._detail_widget.display = True
-                elif self._has_clarification_details:
-                    # Preserve non-prose detail content (e.g. clarification Q/A)
-                    # when toggling collapsed state on completed cards.
-                    self._detail_widget.display = True
-                else:
-                    self._detail_widget.display = False
             else:
-                err_text = self._last_summary.strip() or "Step failed"
                 self._update_step_footer_status_line(
                     f"Failed · {dur_str}",
                     success=False,
                 )
-                self._detail_widget.update(self._step_branched_error_detail(err_text))
+            return
+        # Expanded: render detail content and full footer.
+        if self._interrupt_message:
+            self._detail_widget.update(self._step_branched_error_detail(self._interrupt_message))
+            self._detail_widget.display = True
+            return
+        if self._last_success:
+            self._update_step_footer_status_line(
+                f"Completed ({dur_str})",
+                success=True,
+                suffix=tool_part,
+            )
+            prose = (self._last_completed_execute_prose or "").strip()
+            if prose:
+                self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
+                self._detail_widget.display = True
+            elif self._has_clarification_details:
+                self._detail_widget.display = True
+            elif self._has_result_preview:
+                self._detail_widget.display = True
+            else:
+                self._detail_widget.display = False
+        else:
+            err_text = self._last_summary.strip() or "Step failed"
+            self._update_step_footer_status_line(
+                f"Failed · {dur_str}",
+                success=False,
+            )
+            self._detail_widget.update(self._step_branched_error_detail(err_text))
+            self._detail_widget.display = True
 
     def append_execute_assistant_delta(self, delta: str) -> None:
         """Accumulate per-step LoopAIMessage (``phase=execute_step``) prose into this card."""
@@ -619,7 +674,7 @@ class CognitionStepMessage(Vertical):
             show = has_task_activity_body(
                 index, self._subagent_notes, self._subagent_notes_by_task, self._todos
             )
-            if show:
+            if show and not self._card_collapsed:
                 activity_widget.update(self._step_task_activity_content())
                 activity_widget.display = True
             else:
@@ -631,7 +686,10 @@ class CognitionStepMessage(Vertical):
             self._refresh_pending_display(index)
 
         if STEP_CARD_SHOW_TOOL_ROW_DETAILS:
-            self._refresh_tools_display()
+            if self._card_collapsed and self._tools_widget is not None:
+                self._tools_widget.display = False
+            else:
+                self._refresh_tools_display()
 
         self._maybe_start_running_timer()
 
@@ -1327,6 +1385,27 @@ class CognitionStepMessage(Vertical):
         self._refresh_header_title()
         self._sync_step_card_surface()
 
+    def _auto_collapse_on_terminal(self) -> None:
+        """Collapse card body to title + status when reaching terminal status.
+
+        Called at the end of ``set_complete`` / ``set_interrupted`` so the card
+        shows only the header (title) and status footer. Clicking expands the
+        card to reveal full detail (activity tree, execute prose, error text).
+        Does not override a prior manual collapse.
+        """
+        if self._card_collapsed:
+            return
+        self._card_collapsed = True
+        for w in (
+            self._tools_widget,
+            self._activity_widget,
+            self._detail_widget,
+        ):
+            if w is not None:
+                w.display = False
+        if getattr(self, "is_mounted", False):
+            self.add_class("-collapsed")
+
     def set_complete(
         self,
         success: bool,
@@ -1370,9 +1449,7 @@ class CognitionStepMessage(Vertical):
             self._sync_step_card_surface()
             if prose:
                 self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
-                self._detail_widget.display = True
-            else:
-                self._detail_widget.display = False
+            self._auto_collapse_on_terminal()
             return
 
         err_text = summary.strip() or "Step failed"
@@ -1380,8 +1457,8 @@ class CognitionStepMessage(Vertical):
         if prose:
             err_text = f"{err_text}\n\n{prose}"
         self._detail_widget.update(self._step_branched_error_detail(err_text))
-        self._detail_widget.display = True
         self._sync_step_card_surface()
+        self._auto_collapse_on_terminal()
 
     def set_clarification_details(
         self,
@@ -1420,12 +1497,14 @@ class CognitionStepMessage(Vertical):
                 lines.append(f"A{i + 1}: (no answer)")
         body = "\n".join(lines)
         self._detail_widget.update(self._step_branched_execute_body(body, muted=True))
-        self._detail_widget.display = True
+        if not self._card_collapsed:
+            self._detail_widget.display = True
 
     def set_result_preview(self, text: str) -> None:
         """Show a short preview of the goal_completion result in the detail area."""
         if not text.strip():
             return
+        self._has_result_preview = True
         lines = text.strip().splitlines()
         preview_lines = lines[:8]
         preview = "\n".join(preview_lines)
@@ -1454,7 +1533,8 @@ class CognitionStepMessage(Vertical):
             first_pv = False
             assembled.append(Content.styled(f"{sub}{ln}", "dim"))
         self._detail_widget.update(Content.assemble(*assembled))
-        self._detail_widget.display = True
+        if not self._card_collapsed:
+            self._detail_widget.display = True
 
     def set_awaiting_clarification(self, questions: list[str]) -> None:
         """Pause the running animation and show the pending questions.
@@ -1511,8 +1591,7 @@ class CognitionStepMessage(Vertical):
                 self._status_widget.display = True
             else:
                 self._status_widget.display = False
-        if self._detail_widget:
-            self._detail_widget.display = False
+        self._auto_collapse_on_terminal()
 
     def _sync_task_row_status_from_subagent(self, task_key: str, success: bool) -> None:
         """Update task row icon when a delegated task completes.

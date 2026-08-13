@@ -20,8 +20,8 @@ class _StepCardHarnessApp(App[None]):
 
 
 @pytest.mark.asyncio
-async def test_click_expands_collapsed_card_before_toggling_tool_list() -> None:
-    """Collapsed cards with long tool lists must expand on first click."""
+async def test_click_expands_auto_collapsed_card_with_clarification() -> None:
+    """Auto-collapsed terminal cards expand on first click to reveal detail."""
     async with _StepCardHarnessApp().run_test() as pilot:
         card = pilot.app.card
         for i in range(5):
@@ -29,20 +29,26 @@ async def test_click_expands_collapsed_card_before_toggling_tool_list() -> None:
             card.set_tool_success(f"ASK_01:s:grep:{i}", "ok", duration_ms=10)
         card.set_running()
         card.set_complete(True, 800, 5, "Done")
+        await pilot.pause()
+
+        # set_complete auto-collapses to title + status only.
+        assert card.has_class("-collapsed")
+        assert card._detail_widget is not None
+        assert card._detail_widget.display is False
+
+        # Clarification Q&A content is set but stays hidden while collapsed.
         card.set_clarification_details(
             questions=["What output format do you want?"],
             answers=["Markdown table"],
             source="human",
             confidence=None,
         )
-        card.toggle_collapse()
         await pilot.pause()
+        assert card._detail_widget.display is False
 
-        assert card.has_class("-collapsed")
-
+        # Clicking expands the card and reveals the clarification detail.
         await pilot.click("#step-card")
         await pilot.pause()
 
         assert not card.has_class("-collapsed")
-        assert card._detail_widget is not None
         assert card._detail_widget.display is True
