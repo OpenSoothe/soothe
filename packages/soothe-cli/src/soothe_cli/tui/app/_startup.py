@@ -123,6 +123,10 @@ class _StartupMixin:
         # prevents clicks in the message area from stealing the chat prompt caret.
         chat.can_focus = False
         chat.anchor()
+        # Watch scroll position to show/hide the pinned goal bar: the bar
+        # appears when the user scrolls away from the bottom (latest message
+        # no longer in view) and hides when they scroll back.
+        self.watch(chat, "scroll_y", self._on_chat_scroll_y_changed)
 
         self._status_bar = self.query_one("#status-bar", StatusBar)
         self._chat_input = self.query_one("#input-area", ChatInput)

@@ -22,6 +22,16 @@ Screen {
 
 /* Main content goes on base layer by default */
 
+/* Pinned goal bar — docks to the top of the screen, mirroring
+   #bottom-app-container's dock: bottom. Hidden by default; shown when the
+   user scrolls away from the bottom and hidden when they scroll back. */
+#pinned-goal {
+    dock: top;
+    height: auto;
+    width: 100%;
+    display: none;
+}
+
 /* Chat area - main scrollable messages area */
 #chat {
     height: 1fr;

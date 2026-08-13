@@ -18,7 +18,8 @@ from soothe_cli.runtime.state.session_stats import SpinnerStatus
 from soothe_cli.runtime.token_events_debug import TokenEventTrace
 from soothe_cli.tui.spinner_labels import SPINNER_LABEL_INPUT
 from soothe_cli.tui.widgets.loading import LoadingWidget
-from soothe_cli.tui.widgets.messages import AssistantMessage
+from soothe_cli.tui.widgets.messages import AssistantMessage, UserMessage
+from soothe_cli.tui.widgets.pinned_goal_bar import PinnedGoalBar
 
 logger = logging.getLogger(__name__)
 _monotonic = time.monotonic
@@ -485,3 +486,112 @@ class _UIMixin:
         if overlay is None:
             return
         overlay.toggle()
+
+    def action_toggle_pinned_goal(self) -> None:
+        """Force-hide or re-enable the pinned goal bar (Ctrl+g).
+
+        When force-hidden, scroll-driven visibility is suppressed until
+        toggled back.
+        """
+        if self.screen.is_modal:
+            return
+        try:
+            bar = self.query_one("#pinned-goal", PinnedGoalBar)
+        except NoMatches:
+            return
+        if bar.toggle_user_override():
+            return  # bar is now force-hidden
+        # Re-enabled: evaluate visibility and content from the current
+        # scroll position.
+        self._sync_pinned_goal_visibility()
+
+    def _on_chat_scroll_y_changed(self, _old: float, _new: float) -> None:
+        """React to chat scroll position changes to show/hide the pinned bar.
+
+        The bar appears when the user scrolls away from the bottom, showing
+        the goal belonging to the content currently on screen — not
+        necessarily the absolute latest goal in the conversation. When
+        scrolled back to the bottom, the bar hides.
+        """
+        if self._pinned_goal_check_scheduled:
+            return
+        self._pinned_goal_check_scheduled = True
+        self.call_later(self._sync_pinned_goal_visibility)
+
+    def _sync_pinned_goal_visibility(self) -> None:
+        """Evaluate scroll position and update the pinned goal bar.
+
+        Deferred from ``_on_chat_scroll_y_changed`` so that widget regions
+        are up to date after the scroll-layout pass.
+        """
+        self._pinned_goal_check_scheduled = False
+        try:
+            chat = self.query_one("#chat", VerticalScroll)
+            bar = self.query_one("#pinned-goal", PinnedGoalBar)
+        except NoMatches:
+            return
+
+        if chat.is_vertical_scroll_end:
+            # At the bottom — latest message is visible in the chat flow.
+            bar.set_visible(False)
+            return
+
+        # Find the most recent UserMessage at or above the viewport bottom.
+        content = self._find_visible_user_goal(chat)
+        if content is not None:
+            bar.set_message(content)
+            bar.set_visible(True)
+        else:
+            bar.set_visible(False)
+
+    def _find_visible_user_goal(self, chat: VerticalScroll) -> str | None:
+        """Find the most recent UserMessage at or above the viewport bottom.
+
+        This identifies the goal that triggered the content the user is
+        currently looking at, rather than the absolute latest goal in the
+        conversation.
+
+        Args:
+            chat: The chat VerticalScroll widget.
+
+        Returns:
+            The content of the most recent in-view UserMessage, or ``None``.
+        """
+        try:
+            messages = self.query_one("#messages", Container)
+        except NoMatches:
+            return None
+
+        chat_bottom = chat.region.y + chat.region.height
+        latest_content: str | None = None
+
+        for widget in messages.children:
+            if not isinstance(widget, UserMessage):
+                continue
+            # Skip widgets that haven't been laid out yet (zero-size region).
+            if widget.region.height == 0:
+                continue
+            # A widget at or above the viewport bottom is either visible
+            # in the viewport or has been scrolled past. Either way, it's
+            # the goal that "owns" the content currently on screen.
+            if widget.region.y <= chat_bottom:
+                latest_content = widget._content
+
+        return latest_content
+
+    def _update_pinned_goal(self, text: str) -> None:
+        """Store the latest user message as fallback content on the bar.
+
+        When the user scrolls up, `_sync_pinned_goal_visibility` overrides
+        this with the goal belonging to the content currently on screen.
+        This fallback is used when no UserMessage widget is in the DOM
+        (e.g., all pruned during aggressive scroll).
+
+        Args:
+            text: The user message content to pin at the top.
+        """
+        try:
+            bar = self.query_one("#pinned-goal", PinnedGoalBar)
+        except NoMatches:
+            return
+        bar.set_message(text)

@@ -46,6 +46,7 @@ from soothe_cli.tui.widgets.messages import (
     AssistantMessage,
     QueuedUserMessage,
 )
+from soothe_cli.tui.widgets.pinned_goal_bar import PinnedGoalBar
 from soothe_cli.tui.widgets.plan_quick_view_overlay import PlanQuickViewOverlay
 from soothe_cli.tui.widgets.status import StatusBar
 from soothe_cli.tui.widgets.welcome import WelcomeBanner
@@ -122,6 +123,13 @@ class SootheApp(
             "ctrl+t",
             "toggle_plan_quick_view",
             "Plan View",
+            show=False,
+            priority=True,
+        ),
+        Binding(
+            "ctrl+g",
+            "toggle_pinned_goal",
+            "Toggle Pinned Goal",
             show=False,
             priority=True,
         ),
@@ -335,6 +343,9 @@ class SootheApp(
         self._last_hydration_check_mono: float = 0.0
         """Monotonic timestamp of the last scroll-triggered hydration check."""
 
+        self._pinned_goal_check_scheduled = False
+        """Whether a pinned-goal visibility check has been queued via `call_later`."""
+
         self._deferred_assistant_renders: deque[tuple[AssistantMessage, str]] = deque()
         """Queue of hydrated assistant cards pending markdown render."""
 
@@ -471,6 +482,9 @@ class SootheApp(
         Yields:
             UI components for the main chat area and status bar.
         """
+        # Pinned goal bar — docks to the top of the screen. Hidden by
+        # default; appears when the user scrolls away from the bottom.
+        yield PinnedGoalBar(id="pinned-goal")
         # Main chat area with scrollable messages
         # VerticalScroll tracks user scroll intent for better auto-scroll behavior
         with VerticalScroll(id="chat"):

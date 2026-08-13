@@ -796,6 +796,7 @@ class _ExecutionMixin:
         """
         # Mount the user message
         await self._mount_message(UserMessage(message))
+        self._update_pinned_goal(message)
         await self._send_to_agent(message)
 
     async def _send_to_agent(
