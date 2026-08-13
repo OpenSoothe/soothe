@@ -2455,7 +2455,6 @@ async def _try_mount_instant_loop_assistant_phase(
     repaired = RendererBase.repair_concatenated_output(text)
     output_widget = AssistantMessage(
         id=f"asst-{uuid.uuid4().hex[:8]}",
-        render_markdown=False,
     )
     await adapter._mount_message(output_widget)
     assistant_message_by_namespace[ns_key] = output_widget
