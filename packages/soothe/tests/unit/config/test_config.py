@@ -875,7 +875,7 @@ class TestYamlEnvExpansion:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Notify sink secrets accept ${ENV} or a plain string (host overlay)."""
-        monkeypatch.setenv("SMTP_PASSWORD", "from-env-secret")
+        monkeypatch.setenv("SOOTHE_SMTP_PASSWORD", "from-env-secret")
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
@@ -895,7 +895,7 @@ class TestYamlEnvExpansion:
             "    notify:\n"
             "      sinks:\n"
             "        email:\n"
-            "          smtp_password: ${SMTP_PASSWORD}\n",
+            "          smtp_password: ${SOOTHE_SMTP_PASSWORD}\n",
             encoding="utf-8",
         )
         cfg_env = SootheConfig.from_split_yaml_files(

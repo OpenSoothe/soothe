@@ -1043,7 +1043,6 @@ class StrangeLoop:
                                 "fatal_error",
                                 {
                                     "error": f"Database connection lost: {type(e).__name__}",
-                                    "recoverable": True,
                                 },
                             )
                         )
@@ -1057,7 +1056,7 @@ class StrangeLoop:
                         await queue.put(
                             (
                                 "fatal_error",
-                                {"error": str(e), "recoverable": False},
+                                {"error": str(e)},
                             )
                         )
                 finally:

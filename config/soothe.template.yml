@@ -77,8 +77,8 @@ agent:
           smtp_host: ""
           smtp_port: 587
           # Plain string or ${ENV_VAR} (same dual rule as providers[].api_key).
-          smtp_username: "${SMTP_USERNAME}"
-          smtp_password: "${SMTP_PASSWORD}"
+          smtp_username: "${SOOTHE_SMTP_USERNAME}"
+          smtp_password: "${SOOTHE_SMTP_PASSWORD}"
           smtp_use_tls: true
           smtp_use_ssl: false
           from_address: ""

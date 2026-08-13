@@ -16,6 +16,7 @@ from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.events import (
+    ERROR,
     IntentClassifiedEvent,  # IG-518
     StrangeLoopCompletedEvent,
     StrangeLoopPlanDecisionEvent,
@@ -935,6 +936,29 @@ class StrangeLoopMixin:
                     )
 
                     increment_ai_message_count = True
+
+                elif event_type == "fatal_error":
+                    # Surface fatal loop errors (e.g. LLM auth failures) to
+                    # the TUI so the user sees the actual cause instead of a
+                    # generic "Stream ended unexpectedly" safety-net message.
+                    error_msg = str(event_data.get("error") or "Fatal error")
+                    yield _custom({"type": ERROR, "error": error_msg})
+                    yield _custom(
+                        StrangeLoopCompletedEvent(
+                            thread_id=tid,
+                            status="fatal",
+                            goal_progress="none",
+                            evidence_summary=error_msg[:500],
+                            goal=display_goal,
+                            completion_summary=error_msg[:240],
+                            total_steps=0,
+                        ).to_dict()
+                    )
+                    logger.error(
+                        "[Runner] Fatal error surfaced to TUI: %s (loop=%s)",
+                        error_msg,
+                        strange_loop_id,
+                    )
 
             if pending_chitchat_persist is not None:
                 try:

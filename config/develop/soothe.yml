@@ -72,8 +72,8 @@ agent:
           enabled: true
           smtp_host: smtp.qq.com
           smtp_port: 465
-          smtp_username: "${SMTP_USERNAME}"
-          smtp_password: "${SMTP_PASSWORD}"
+          smtp_username: "${SOOTHE_SMTP_USERNAME}"
+          smtp_password: "${SOOTHE_SMTP_PASSWORD}"
           smtp_use_tls: false
           smtp_use_ssl: true
           from_address: "413245279@qq.com"

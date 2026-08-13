@@ -147,11 +147,13 @@ class StrangeLoopCheckpoint(BaseModel):
     ) -> bool:
         """Force a running checkpoint into a terminal state (fatal_error handler).
 
-        This is the missing callback on the error path. When ``pump_graph``
-        emits ``fatal_error`` or the graph fails before ``node_goal_completion``,
-        the loop checkpoint stays ``status="running"`` forever. This method
-        transitions the loop to a terminal status and marks the active goal as
-        cancelled/failed so recovery and reconciliation can proceed.
+        When ``pump_graph`` crashes or a graph node sets
+        ``last_outcome="fatal"``, the runner now emits a wire-visible
+        ``fatal_error`` event, but the checkpoint may still be left
+        ``status="running"`` if the crash bypassed ``finalize_goal``.
+        This method transitions the loop to a terminal status and marks
+        the active goal as cancelled/failed so recovery and
+        reconciliation can proceed.
 
         Args:
             terminal_status: Terminal loop status. Defaults to ``idle`` so the
@@ -295,8 +297,8 @@ def normalize_checkpoint_data(
 def _repair_orphaned_running_loop(out: dict[str, Any]) -> None:
     """Repair an orphaned ``status="running"`` checkpoint on load.
 
-    When ``pump_graph`` emits ``fatal_error`` but the runner's event loop has
-    no handler for it, the checkpoint is flushed to disk with
+    When ``pump_graph`` crashes before the graph can transition the
+    checkpoint to ``idle``, the checkpoint is flushed to disk with
     ``status="running"`` and the active goal stays ``status="running"``
     forever. This function marks the active goal as ``cancelled`` and sets
     the loop status to ``idle``.

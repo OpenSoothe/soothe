@@ -51,7 +51,7 @@ def test_split_templates_compose(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    monkeypatch.delenv("SMTP_PASSWORD", raising=False)
+    monkeypatch.delenv("SOOTHE_SMTP_PASSWORD", raising=False)
     monkeypatch.delenv("FEISHU_APP_SECRET", raising=False)
 
     loaded = SootheConfig.from_split_yaml_files(
@@ -62,5 +62,5 @@ def test_split_templates_compose(monkeypatch: pytest.MonkeyPatch) -> None:
     assert loaded.agent.loop.enabled is True
     assert loaded.cron.max_jobs == 100
     assert loaded.vector_store_router.default == "sqlite_vec_default:soothe_default"
-    assert loaded.agent.autopilot.notify.sinks.email.smtp_password == "${SMTP_PASSWORD}"
+    assert loaded.agent.autopilot.notify.sinks.email.smtp_password == "${SOOTHE_SMTP_PASSWORD}"
     assert loaded.agent.autopilot.notify.sinks.feishu.app_secret == "${FEISHU_APP_SECRET}"

@@ -335,15 +335,15 @@ Sensitive YAML fields accept **either** a plain string **or** `${ENV_VAR}` (expa
 | `observability.langfuse.public_key` / `secret_key` / `host` | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` | Unresolved/`null` also reads env at Langfuse init |
 | `tools.deepxiv.token` | `DEEPXIV_API_KEY` / `DEEPXIV_TOKEN` | Unresolved/`null` falls back to env |
 | `vector_stores[].dsn` / `api_key` / `url` | (operator-chosen) | Plain or `${ENV}` |
-| `agent.autopilot.notify.sinks.email.smtp_username` | `SMTP_USERNAME` | Host overlay (`soothe.yml`) |
-| `agent.autopilot.notify.sinks.email.smtp_password` | `SMTP_PASSWORD` | Host overlay |
+| `agent.autopilot.notify.sinks.email.smtp_username` | `SOOTHE_SMTP_USERNAME` | Host overlay (`soothe.yml`) |
+| `agent.autopilot.notify.sinks.email.smtp_password` | `SOOTHE_SMTP_PASSWORD` | Host overlay |
 | `agent.autopilot.notify.sinks.feishu.app_id` | `FEISHU_APP_ID` | Host overlay |
 | `agent.autopilot.notify.sinks.feishu.app_secret` | `FEISHU_APP_SECRET` | Host overlay |
 | `identity.tokens.jwt_signing_key` | `SOOTHE_JWT_KEY` | Daemon; dedicated env fallback when YAML is null |
 
 ```yaml
 # Env (recommended for shared templates)
-smtp_password: "${SMTP_PASSWORD}"
+smtp_password: "${SOOTHE_SMTP_PASSWORD}"
 
 # Or plain (private/local config only)
 smtp_password: "hunter2"
