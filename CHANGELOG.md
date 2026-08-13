@@ -8,7 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Upgrade `soothe-nano` 1.1.15 → 1.1.16.
+- _(none yet)_
+
+## [v0.10.9] - 2026-08-13
+
+### Fixed
+- SQLite checkpointer initialization now retries transient errors (WAL
+  contention, file-lock races) with exponential backoff via a new
+  `is_recoverable_sqlite_error`, mirroring the PostgreSQL retry path. The
+  setup ensures the parent directory exists before connecting (defense
+  against worker-subprocess and post-cleanup races) and closes the
+  aiosqlite connection on setup failure to prevent leaked background
+  threads and `ResourceWarning`. Dead resolver re-export shims
+  (`_resolve_sqlite_checkpointer`, `_resolve_postgres_checkpointer`,
+  `_mask_dsn`) were removed.
+- Drop unused `render_markdown=False` argument from the instant-loop
+  assistant message; it was not a valid `AssistantMessage` option.
+
+### Changed
+- Default `final_response` switched from `auto` to `always_synthesize`
+  for both the agent and StrangeLoop, so a final CoreAgent report is
+  always produced on goal completion. Synced across the template, develop
+  config, packaged daemon template, and config models.
+- TUI plan panel title now folds the goal line into the overlay title row
+  (`Orchestrating [8d26] · complex · 37s` with the live goal-tree glyph as
+  prefix), leaving the panel body for step rows only. New
+  `compact_id_suffix()` renders trailing UUID chars for tight surfaces.
+- Upgrade `soothe-nano` 1.1.15 → 1.1.16. Adds a vLLM provider (streaming
+  disabled; vLLM-Metal 0.1.0 ignores `stream=True` and returns non-SSE
+  JSON), and replaces the muse-glimmer router profile with a vllm profile.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.8...v0.10.9
 
 ## [v0.10.8] - 2026-08-12
 
