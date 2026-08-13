@@ -47,7 +47,7 @@ providers:
       - mlx-community/Muse-Glimmer-30B-4bit
 
 router_profiles:
-  - name: production
+  - name: glm
     router:
       default: "dashscope:glm-5.2"
       fast: "dashscope:qwen3.6-flash"
@@ -75,13 +75,13 @@ router_profiles:
       image: "omlx:GLM-4.6V-Flash-4bit"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
-  - name: vllm
+  - name: muse-glimmer
     router:
       default: "vllm:mlx-community/Muse-Glimmer-30B-4bit"
       image: "vllm:mlx-community/Muse-Glimmer-30B-4bit"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
-active_router_profile: production
+active_router_profile: glm
 
 embedding_profile:
   - model_role: dashscope:text-embedding-v4
