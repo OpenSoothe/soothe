@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- _(none yet)_
+- Upgrade `soothe-nano` 1.1.16 → 1.1.19.
 
 ## [v0.10.9] - 2026-08-13
 
