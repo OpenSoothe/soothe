@@ -2,7 +2,7 @@
 
 Monitors ContextEngine goal DAG, handles:
 - Goal intake (fast create; LLM placement refine runs async)
-- Background DAG verification (health checks)
+- Background DAG verification (dynamic health LLM gating — IG-743)
 - Post-completion verification (decomposition)
 - Backoff reasoning on goal failure
 - Dreaming coordination (multi-mode distillation)
@@ -21,6 +21,7 @@ from soothe.autopilot.monitor.models import (
 from soothe.autopilot.verify.backoff_reasoner import GoalBackoffReasoner
 from soothe.autopilot.verify.goal_dag_verifier import GoalDAGVerifier
 from soothe.context.engine import ContextEngine
+from soothe.context.models import TERMINAL_STATES
 from soothe.events.internal_events import (
     INTERNAL_GOAL_COMPLETED,
     INTERNAL_GOAL_FAILED,
@@ -81,8 +82,12 @@ class AutopilotMonitor:
         self._dag_persist: Callable[[], Awaitable[None]] | None = None
         self._suspend_notify_scan: Any = None
         self._resource_reconcile: Any = None
+        self._verify_task: asyncio.Task[None] | None = None
+        self._dreaming_task: asyncio.Task[None] | None = None
+        # Last DAG fingerprint that triggered a health LLM call.
+        self._last_health_llm_fingerprint: str | None = None
 
-        # Subscribe to internal bus topics (IG-678 P0-3).
+        # Subscribe to internal bus topics.
         self._bus.subscribe(INTERNAL_GOAL_COMPLETED, self._on_goal_completed)
         self._bus.subscribe(INTERNAL_GOAL_FAILED, self._on_goal_failed)
 
@@ -112,10 +117,12 @@ class AutopilotMonitor:
         if self._placement_tasks:
             await asyncio.gather(*self._placement_tasks, return_exceptions=True)
         self._placement_tasks.clear()
-        if hasattr(self, "_verify_task"):
+        if self._verify_task is not None:
             self._verify_task.cancel()
-        if hasattr(self, "_dreaming_task"):
+            self._verify_task = None
+        if self._dreaming_task is not None:
             self._dreaming_task.cancel()
+            self._dreaming_task = None
         logger.info("AutopilotMonitor stopped")
 
     # ── Goal Intake ────────────────────────────────────────────────────────
@@ -380,39 +387,124 @@ class AutopilotMonitor:
 
     # ── Background Loops ────────────────────────────────────────────────────────
 
+    def _autopilot_cfg(self) -> Any:
+        """Resolved ``agent.autopilot`` config (with safe defaults)."""
+        return getattr(getattr(self._config, "agent", None), "autopilot", None)
+
+    @staticmethod
+    def _nonterminal_goals(goals: list[Any]) -> list[Any]:
+        """Goals not in completed/failed/cancelled."""
+        return [g for g in goals if getattr(g, "status", None) not in TERMINAL_STATES]
+
+    @staticmethod
+    def _health_dag_fingerprint(goals: list[Any]) -> str:
+        """Stable fingerprint for health-LLM debounce.
+
+        Includes id/status/priority/deps/informs/engine recovery so structural
+        changes invalidate the debounce cache without hashing free text.
+        """
+        rows: list[str] = []
+        for g in sorted(goals, key=lambda x: str(getattr(x, "id", ""))):
+            deps = ",".join(sorted(str(d) for d in (getattr(g, "depends_on", None) or [])))
+            informs = ",".join(sorted(str(i) for i in (getattr(g, "informs", None) or [])))
+            rows.append(
+                "|".join(
+                    (
+                        str(getattr(g, "id", "")),
+                        str(getattr(g, "status", "")),
+                        str(getattr(g, "priority", "")),
+                        deps,
+                        informs,
+                        str(getattr(g, "engine_recovery_count", 0)),
+                        str(getattr(g, "parent_id", "") or ""),
+                        str(getattr(g, "rail_id", "") or ""),
+                    )
+                )
+            )
+        return "\n".join(rows)
+
+    def _verify_tick_interval(self, *, has_open_work: bool) -> float:
+        """Seconds to sleep before the next health tick."""
+        ap = self._autopilot_cfg()
+        active = int(getattr(ap, "verify_interval", 30) or 30) if ap is not None else 30
+        if has_open_work:
+            return float(active)
+        idle = int(getattr(ap, "verify_idle_interval", 300) or 0) if ap is not None else 300
+        if idle <= 0:
+            return float(active)
+        return float(idle)
+
+    def _should_call_health_llm(self, goals: list[Any], *, fingerprint: str) -> bool:
+        """Whether this tick should invoke the monitor health LLM."""
+        ap = self._autopilot_cfg()
+        if ap is not None and not bool(getattr(ap, "verify_llm_enabled", True)):
+            return False
+        min_nt = int(getattr(ap, "verify_llm_min_nonterminal", 1) or 0) if ap is not None else 1
+        nonterminal = self._nonterminal_goals(goals)
+        if len(nonterminal) < min_nt:
+            return False
+        debounce = bool(getattr(ap, "verify_llm_debounce", True)) if ap is not None else True
+        if debounce and fingerprint == self._last_health_llm_fingerprint:
+            return False
+        return True
+
+    async def _run_health_tick(self) -> None:
+        """One verification tick: optional LLM, then apply + watchdogs."""
+        goals = self._ce.get_goals_by_status(None)
+        fingerprint = self._health_dag_fingerprint(goals)
+        use_llm = self._should_call_health_llm(goals, fingerprint=fingerprint)
+        report = await self._verifier.verify_dag_health(use_llm=use_llm)
+        if use_llm:
+            self._last_health_llm_fingerprint = fingerprint
+            logger.debug(
+                "DAG health LLM tick goals=%d nonterminal=%d",
+                len(goals),
+                len(self._nonterminal_goals(goals)),
+            )
+        else:
+            logger.debug(
+                "DAG health structural tick goals=%d nonterminal=%d",
+                len(goals),
+                len(self._nonterminal_goals(goals)),
+            )
+        await self._verifier.apply_health_report(report)
+        if (
+            report.suggest_remove
+            or report.suggest_merge
+            or report.suggest_decompose
+            or report.suggest_reset
+        ):
+            logger.info("DAG health report: %s", report.reasoning)
+
+    async def _run_watchdog_tick(self) -> None:
+        """Suspend-notify scan + resource reconcile (always, even when LLM skipped)."""
+        try:
+            if self._suspend_notify_scan is not None:
+                await self._suspend_notify_scan()
+        except Exception:
+            logger.debug("Suspend notify scan failed", exc_info=True)
+        try:
+            if self._resource_reconcile is not None:
+                count = await self._resource_reconcile()
+                if count:
+                    logger.info("Resource watchdog reconciled %d resource(s)", count)
+        except Exception:
+            logger.debug("Resource reconcile failed", exc_info=True)
+
     async def _verification_loop(self) -> None:
-        """Background DAG health verification."""
-        interval = getattr(self._config.agent.autopilot, "verify_interval", 30)
+        """Background DAG health verification with dynamic LLM gating."""
         while not self._shutdown_event.is_set():
+            goals = self._ce.get_goals_by_status(None)
+            has_open_work = bool(self._nonterminal_goals(goals))
+            interval = self._verify_tick_interval(has_open_work=has_open_work)
             await asyncio.sleep(interval)
+            if self._shutdown_event.is_set():
+                break
             try:
-                report = await self._verifier.verify_dag_health()
-                await self._verifier.apply_health_report(report)
-                if (
-                    report.suggest_remove
-                    or report.suggest_merge
-                    or report.suggest_decompose
-                    or report.suggest_reset
-                ):
-                    logger.info("DAG health report: %s", report.reasoning)
+                await self._run_health_tick()
             except Exception:
                 logger.exception("DAG verification failed")
-            try:
-                scan = getattr(self, "_suspend_notify_scan", None)
-                if scan is not None:
-                    await scan()
-            except Exception:
-                logger.debug("Suspend notify scan failed", exc_info=True)
-            # Resource watchdog: reconcile runtime resources for terminal goals
-            # (drain orphaned processes, recycle leaked worktrees).
-            try:
-                reconcile = getattr(self, "_resource_reconcile", None)
-                if reconcile is not None:
-                    count = await reconcile()
-                    if count:
-                        logger.info("Resource watchdog reconciled %d resource(s)", count)
-            except Exception:
-                logger.debug("Resource reconcile failed", exc_info=True)
+            await self._run_watchdog_tick()
 
     def bind_suspend_notify_scan(self, scan_fn: Any) -> None:
         """Wire AutopilotService.scan_notify_suspend_timeouts into the verify loop."""

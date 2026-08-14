@@ -164,12 +164,8 @@ async def test_deadlock_detector_queues_and_recovers(mock_config: MagicMock) -> 
     verifier = GoalDAGVerifier(ce, mock_config)
     assert verifier.find_deadlocked_failed_goals() == [integrate.id]
 
-    # Heuristic path (no LLM): verify_dag_health merges deadlock + apply recovers.
-    async def _boom(_snapshot):  # noqa: ANN001
-        raise RuntimeError("llm down")
-
-    verifier._reasoner.verify_health = _boom  # type: ignore[method-assign]
-    report = await verifier.verify_dag_health()
+    # Heuristic path (no LLM): structural merge + apply recovers deadlock.
+    report = await verifier.verify_dag_health(use_llm=False)
     assert integrate.id in report.suggest_reset
     await verifier.apply_health_report(report)
 

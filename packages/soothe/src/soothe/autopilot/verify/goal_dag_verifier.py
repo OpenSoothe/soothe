@@ -1,11 +1,11 @@
-"""GoalDAGVerifier - LLM-driven DAG verification coordinator (RFC-625).
+"""GoalDAGVerifier - DAG verification coordinator (RFC-625 / IG-743).
 
 Coordinates:
-1. Background health verification (periodic)
+1. Periodic health verification (LLM when gated on; else structural/heuristic)
 2. Post-completion verification (event-triggered)
 3. Placement analysis for new goal intake
 
-Uses DagVerificationReasoner for structured LLM calls.
+Uses DagVerificationReasoner for structured LLM calls when enabled.
 IG-680: health remove guardrails, wire_dependencies, decompose budget.
 """
 
@@ -44,10 +44,10 @@ CancelGoalFn = Callable[[str, str], Awaitable[Any]]
 
 
 class GoalDAGVerifier:
-    """LLM-driven goal DAG verification and restructuring suggestions.
+    """Goal DAG verification and restructuring suggestions.
 
-    Uses DagVerificationReasoner for structured LLM calls. Falls back to
-    heuristics when LLM fails or is disabled.
+    Uses DagVerificationReasoner for structured LLM calls when ``use_llm`` is
+    True. Falls back to heuristics when LLM fails or is skipped (IG-743).
 
     Args:
         ce: ContextEngine instance for goal access.
@@ -79,24 +79,31 @@ class GoalDAGVerifier:
         """Wire AutopilotService.cancel_goal for health removals that need cascade."""
         self._cancel_goal = cancel_goal
 
-    async def verify_dag_health(self) -> DagHealthReport:
-        """LLM-driven periodic background verification.
+    async def verify_dag_health(self, *, use_llm: bool = True) -> DagHealthReport:
+        """Periodic DAG verification (RFC-625 / IG-743).
 
-        Falls back to heuristics on LLM failure. Always merges structural
-        deadlock recoveries (IG-697) into ``suggest_reset``.
+        When ``use_llm`` is True, runs the monitor health LLM (falls back to
+        heuristics on failure). When False, uses heuristics only. Always merges
+        structural deadlock recoveries (IG-697) into ``suggest_reset``.
+
+        Args:
+            use_llm: Whether to invoke the health LLM for this tick.
 
         Returns:
             DagHealthReport with restructuring suggestions.
         """
         goals = self._ce.get_goals_by_status(None)
-        snapshot = DagSnapshot.from_goals(goals)
-
-        try:
-            response = await self._reasoner.verify_health(snapshot)
-            report = self._convert_health_response(response)
-        except Exception:
-            logger.exception("LLM health verification failed, using heuristics")
+        if use_llm:
+            snapshot = DagSnapshot.from_goals(goals)
+            try:
+                response = await self._reasoner.verify_health(snapshot)
+                report = self._convert_health_response(response)
+            except Exception:
+                logger.exception("LLM health verification failed, using heuristics")
+                report = self._heuristic_health_check(goals)
+        else:
             report = self._heuristic_health_check(goals)
+            report.reasoning = "Structural/heuristic health (LLM skipped)"
 
         self._merge_deadlock_resets(report, goals)
         return report

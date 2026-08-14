@@ -727,7 +727,8 @@ When `agent.autopilot.enabled=true` (the default), the following wiring is requi
 | `agent.autopilot.enabled` | `true` (default) | Master switch; scheduling loop does not start when `false` |
 | `goal_deadline_seconds` | `1209600` (14 days) | AutopilotMonitor cancels workers past this wall-clock budget; `null` disables |
 | `max_parallel_goals` | tuned to capacity | Service + runner semaphores |
-| `verify_interval` | `30` | AutopilotMonitor DAG health cadence |
+| `verify_interval` | `30` | Active DAG health tick; idle uses `verify_idle_interval` + LLM gate |
+| `verify_idle_interval` | `300` | Idle/empty tick; health LLM skipped while idle |
 
 Pydantic default for `enabled` is **`true`** — set `agent.autopilot.enabled: false` to disable the scheduling loop.
 

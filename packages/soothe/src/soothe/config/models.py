@@ -264,6 +264,12 @@ class AutopilotConfig(BaseModel):
         intake_scope: Forced StrangeLoop intake scope for dispatched goals
             (``trivial``|``simple``|``complex``). Default ``None`` lets the
             loop run Pass 1+2 intake classification.
+        verify_interval: Background verification tick while non-terminal goals exist.
+        verify_idle_interval: Tick when DAG empty/complete (``0`` reuses
+            ``verify_interval``); health LLM is skipped while idle.
+        verify_llm_enabled: Kill-switch for periodic health LLM.
+        verify_llm_min_nonterminal: Min non-terminal goals before health LLM runs.
+        verify_llm_debounce: Skip health LLM when DAG fingerprint unchanged.
         webhooks: Webhook URLs by event type (legacy; prefer ``notify.sinks.webhook``).
         notify: Job lifecycle multi-channel notify (IG-713).
 
@@ -413,14 +419,45 @@ class AutopilotConfig(BaseModel):
         ),
     )
 
-    # RFC-625: AutopilotMonitor settings
+    # RFC-625 / IG-743: AutopilotMonitor verification cadence + LLM gating
     verify_interval: int = Field(
         default=30,
         ge=5,
         le=300,
-        description="Background verification loop interval (seconds)",
+        description=("Background verification tick when non-terminal goals exist (seconds)"),
     )
-    """Seconds between DAG health verification cycles."""
+    """Seconds between DAG health ticks while work is open."""
+
+    verify_idle_interval: int = Field(
+        default=300,
+        ge=0,
+        le=3600,
+        description=(
+            "Verification tick when the DAG is empty or all goals are terminal. "
+            "Zero reuses verify_interval. Health LLM is skipped while idle; "
+            "structural deadlock merge and resource watchdogs still run."
+        ),
+    )
+    verify_llm_enabled: bool = Field(
+        default=True,
+        description="When False, periodic DAG health never calls the monitor LLM.",
+    )
+    verify_llm_min_nonterminal: int = Field(
+        default=1,
+        ge=0,
+        le=500,
+        description=(
+            "Minimum non-terminal goals required before the periodic health LLM runs. "
+            "Below this threshold, only structural/heuristic health applies."
+        ),
+    )
+    verify_llm_debounce: bool = Field(
+        default=True,
+        description=(
+            "When True, skip the health LLM if the DAG fingerprint is unchanged "
+            "since the last LLM health call."
+        ),
+    )
 
     dreaming_interval: int = Field(
         default=300,

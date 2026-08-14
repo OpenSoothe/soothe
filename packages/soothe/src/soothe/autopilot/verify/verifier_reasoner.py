@@ -1,7 +1,7 @@
 """DagVerificationReasoner - LLM-based DAG verification (RFC-625 §4).
 
 Provides structured LLM calls for:
-- Background health verification (periodic)
+- Background health verification (when AutopilotMonitor gates LLM on — IG-743)
 - Post-completion analysis (event-triggered)
 - Placement analysis for new goal intake
 
@@ -241,7 +241,7 @@ class DagVerificationReasoner:
     """LLM-based reasoning for DAG verification (RFC-625 §4).
 
     Provides structured LLM calls for:
-    - Background health verification
+    - Health verification (invoked only when AutopilotMonitor gates LLM on)
     - Post-completion analysis
     - Placement analysis for goal intake
 
@@ -264,7 +264,7 @@ class DagVerificationReasoner:
         self._soothe_config = config
 
     async def verify_health(self, snapshot: DagSnapshot) -> DagHealthResponse:
-        """Call LLM for background health verification.
+        """Call LLM for DAG health verification (monitor-gated; IG-743).
 
         Args:
             snapshot: DAG snapshot with goal states and step progress.

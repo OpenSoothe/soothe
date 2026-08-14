@@ -38,6 +38,11 @@ agent:
     # Develop: force simple intake (skip Pass 1+2). Product default is null.
     intake_scope: null
     verify_interval: 30
+    # Idle tick (empty/all-terminal). 0 = reuse verify_interval. LLM skipped while idle.
+    verify_idle_interval: 300
+    verify_llm_enabled: true
+    verify_llm_min_nonterminal: 1
+    verify_llm_debounce: true
     dreaming_interval: 300
     dreaming_scope: workspace
     dreaming_modes:

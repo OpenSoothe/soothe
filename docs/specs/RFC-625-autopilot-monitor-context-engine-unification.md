@@ -319,9 +319,11 @@ class AutopilotMonitor:
         await self._apply_backoff_decision(decision)
 
     async def _verification_loop(self) -> None:
+        # Dynamic gating (IG-743): idle/empty ticks use structural health only;
+        # LLM runs when non-terminal goals exist and fingerprint changed.
         while not self._shutdown_event.is_set():
-            await asyncio.sleep(self._config.verify_interval)
-            await self._verifier.verify_dag_health()
+            await asyncio.sleep(self._next_verify_interval())
+            await self._verifier.verify_dag_health(use_llm=self._should_call_health_llm())
 
     async def _dreaming_timer_loop(self) -> None:
         while not self._shutdown_event.is_set():
@@ -336,7 +338,9 @@ class AutopilotMonitor:
 
 **GoalDAGVerifier responsibilities:**
 
-1. **LLM-driven background health verification** — periodic check using LLM to analyze DAG health, detect stale goals, suggest restructuring
+1. **Background health verification** — periodic tick; LLM analyzes DAG health when
+   non-terminal work exists (and debounce allows). Idle/empty ticks use
+   structural/heuristic health only (IG-743). Detects stale goals, suggests restructuring.
 2. **LLM-driven post-completion verification** — triggered by `goal_completed` event, LLM analyzes decomposition opportunities and redundancy
 3. **LLM-driven placement refine** — after create-first intake, LLM may adjust priority / dependencies / merge suggestions while the goal is still pending
 
@@ -897,8 +901,12 @@ agent:
   autonomous:
     enabled_by_default: false
 
-    # AutopilotMonitor settings
-    verify_interval: 30          # Background verification loop (seconds)
+    # AutopilotMonitor settings (IG-743 dynamic health LLM)
+    verify_interval: 30          # Tick when non-terminal goals exist (seconds)
+    verify_idle_interval: 300    # Tick when empty/all-terminal (0 = reuse verify_interval)
+    verify_llm_enabled: true     # Kill-switch for periodic health LLM
+    verify_llm_min_nonterminal: 1
+    verify_llm_debounce: true    # Skip LLM when DAG fingerprint unchanged
     dreaming_interval: 300       # Time-based dreaming trigger (seconds)
 
     # Dreaming modes (all enabled by default)
@@ -1039,7 +1047,7 @@ class AutopilotService:
 
 All LLM-driven verification and distillation reasoners are fully implemented:
 
-- `GoalDAGVerifier.verify_dag_health()` — LLM-based health verification
+- `GoalDAGVerifier.verify_dag_health(use_llm=...)` — health verification (LLM or structural)
 - `GoalDAGVerifier.analyze_placement()` — LLM-based placement analysis
 - `DreamingCoordinator._run_mode()` — all 4 distillation modes operational
 - `AutopilotMonitor._analyze_placement()` — LLM integration complete

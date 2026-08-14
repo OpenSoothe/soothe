@@ -58,7 +58,7 @@ class WireDependencySuggestion:
 
 @dataclass
 class DagHealthReport:
-    """LLM-driven DAG health verification report."""
+    """DAG health verification report (LLM and/or structural)."""
 
     suggest_reset: list[str] = field(default_factory=list)  # Goal IDs to reset
     suggest_remove: list[str] = field(default_factory=list)  # Goal IDs to remove
