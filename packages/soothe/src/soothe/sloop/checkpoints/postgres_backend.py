@@ -806,7 +806,12 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         idle_before: datetime,
         limit: int = 50,
     ) -> list[dict]:
-        """Return ephemeral loops idle since ``idle_before`` (excludes running)."""
+        """Return ephemeral loops idle since ``idle_before``.
+
+        Includes rows still marked ``status="running"``: the GC purge gate
+        performs a live-runner check (``_loop_has_active_runner``), so a
+        stale ``running`` status (zombie) is reclaimable.
+        """
         idle_iso = idle_before.isoformat()
         pool = await self._ensure_pool()
 
@@ -818,7 +823,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                            checkpoint_data, client_workspace, created_at, updated_at
                     FROM agentloop_checkpoints
                     WHERE COALESCE((checkpoint_data->>'is_ephemeral')::boolean, false) = true
-                      AND status != 'running'
                       AND COALESCE(
                             checkpoint_data->>'last_message_at',
                             checkpoint_data->>'created_at',
@@ -866,7 +870,12 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         idle_before: datetime,
         limit: int = 50,
     ) -> list[dict]:
-        """Return loops with zero human/AI messages idle since ``idle_before``."""
+        """Return loops with zero human/AI messages idle since ``idle_before``.
+
+        Includes rows still marked ``status="running"``: the GC purge gate
+        performs a live-runner check (``_loop_has_active_runner``), so a
+        stale ``running`` status (zombie) is reclaimable.
+        """
         idle_iso = idle_before.isoformat()
         pool = await self._ensure_pool()
 
@@ -879,7 +888,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     FROM agentloop_checkpoints
                     WHERE COALESCE((checkpoint_data->>'human_message_count')::int, 0) = 0
                       AND COALESCE((checkpoint_data->>'ai_message_count')::int, 0) = 0
-                      AND status != 'running'
                       AND COALESCE(
                             checkpoint_data->>'last_message_at',
                             checkpoint_data->>'created_at',

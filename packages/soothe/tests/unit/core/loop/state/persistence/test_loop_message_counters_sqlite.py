@@ -174,9 +174,14 @@ async def test_list_empty_loops_excludes_loop_with_ai_counter(
 
 
 @pytest.mark.asyncio
-async def test_list_empty_loops_excludes_running_loop(
+async def test_list_empty_loops_includes_running_zombie(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
+    """Stale ``running`` rows are listed so GC can reclaim zombies.
+
+    The purge gate performs a live-runner check (``_loop_has_active_runner``),
+    not a status-string check, so listing must surface running rows.
+    """
     loop_id = "loop-running-empty"
     old = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
     await sqlite_backend.register_loop(loop_id, [], "", status="running")
@@ -184,7 +189,7 @@ async def test_list_empty_loops_excludes_running_loop(
 
     idle_before = datetime.now(UTC) - timedelta(hours=24)
     empty = await sqlite_backend.list_empty_loops(idle_before, limit=10)
-    assert not any(r["loop_id"] == loop_id for r in empty)
+    assert any(r["loop_id"] == loop_id for r in empty)
 
 
 @pytest.mark.asyncio

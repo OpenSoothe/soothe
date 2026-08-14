@@ -30,33 +30,12 @@ async def _connect_client(port: int) -> WebSocketClient:
 
 
 async def run_reconciliation_once(daemon: SootheDaemon) -> int:
-    """Mirror the body of ``_periodic_loop_status_reconciliation`` for one tick."""
-    cfg = daemon._daemon_config.loop_status_reconciliation
-    stale_before = datetime.now(UTC) - timedelta(seconds=cfg.stale_running_seconds)
+    """Run one status-reconciliation tick; return the number of demoted loops.
 
-    rows = await daemon._persistence_manager.list_loops(
-        status_filter="running", limit=cfg.batch_size
-    )
-    active_set = set(daemon._active_stream_loop_ids)
-    demoted = 0
-    for row in rows:
-        loop_id = str(row.get("loop_id") or "").strip()
-        if not loop_id or loop_id in active_set:
-            continue
-        updated_at_raw = row.get("updated_at")
-        if not isinstance(updated_at_raw, str) or not updated_at_raw:
-            continue
-        try:
-            updated_at = datetime.fromisoformat(updated_at_raw.replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if updated_at.tzinfo is None:
-            updated_at = updated_at.replace(tzinfo=UTC)
-        if updated_at >= stale_before:
-            continue
-        await daemon._persistence_manager.update_loop_metadata(loop_id, status="idle")
-        demoted += 1
-    return demoted
+    Delegates to ``_reconcile_stale_running_loops`` (the one-shot body shared
+    by both the periodic reconciliation task and the pre-GC sweep).
+    """
+    return await daemon._reconcile_stale_running_loops()
 
 
 @pytest_asyncio.fixture

@@ -67,9 +67,17 @@ async def purge_loop_execution_data(daemon: Any, loop_id: str, metadata: dict[st
 
     Returns:
         True if purge completed, False if skipped (e.g. still running).
+
+    The purge gate is liveness-aware: a row still marked ``status="running"``
+    is only protected when an active runner can be confirmed for the loop.
+    This reclaims zombie loops whose persisted status was never flipped to
+    ``idle`` because the runner died without a teardown hook. The liveness
+    check mirrors ``auto_resume._loop_has_active_runner``.
     """
-    if metadata.get("status") == "running":
-        logger.debug("Skipping ephemeral GC for running loop %s", loop_id)
+    from soothe_daemon.runtime.auto_resume import _loop_has_active_runner
+
+    if _loop_has_active_runner(daemon, loop_id):
+        logger.debug("Skipping ephemeral GC for loop with active runner: %s", loop_id)
         return False
 
     thread_ids = list(metadata.get("thread_ids") or [])

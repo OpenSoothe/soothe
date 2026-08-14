@@ -1242,6 +1242,18 @@ class SootheDaemon(DaemonHandlersMixin):
             if not self._running:
                 break
             try:
+                # Demote stale running zombies before GC candidate selection.
+                # This flips status to ``idle`` so the row reflects reality,
+                # and ensures the purge gate's liveness check sees a
+                # consistent status. Even without this, the purge gate
+                # checks ``_loop_has_active_runner`` directly, but running
+                # the reconciler first keeps list_loops accurate and avoids
+                # purging under a transient status.
+                try:
+                    await self._reconcile_stale_running_loops()
+                except Exception:
+                    logger.debug("Pre-GC status reconciliation failed", exc_info=True)
+
                 now = datetime.now(UTC)
                 idle_before_ephemeral = now - timedelta(hours=gc_cfg.ephemeral_idle_hours)
                 idle_before_empty = now - timedelta(hours=gc_cfg.empty_idle_hours)
@@ -1296,22 +1308,92 @@ class SootheDaemon(DaemonHandlersMixin):
             except Exception:
                 logger.warning("Loop GC failed", exc_info=True)
 
-    async def _periodic_loop_status_reconciliation(self) -> None:
-        """Demote stale ``status="running"`` rows whose runner is no longer active.
+    async def _reconcile_stale_running_loops(self) -> int:
+        """One-shot: demote stale ``status="running"`` rows whose runner is gone.
 
         A loop row qualifies as stale when ALL hold:
           * ``status == "running"``
           * ``updated_at`` older than ``stale_running_seconds``
-          * ``loop_id`` is NOT in this daemon's ``_active_stream_loop_ids``
+          * ``loop_id`` is NOT in this daemon's active sets
 
         The runner heartbeat (see ``_runner_strange_loop._start_loop_heartbeat``)
         ticks ``updated_at`` every ~30s while a goal is in flight, so loops
         that miss multiple heartbeat windows are presumed orphaned (daemon
         crash + restart, runner subprocess crash, etc.) and are demoted to
         ``idle`` so list_loops reflects reality.
+
+        Returns the count of demoted loops. Called both by the periodic
+        reconciliation task and by the GC tick (before candidate selection)
+        so zombies are demoted before GC discovery, not only on the
+        reconciler's own interval.
         """
         from datetime import UTC, datetime, timedelta
 
+        from soothe_daemon.runtime.auto_resume import _loop_has_active_runner
+
+        cfg = self._daemon_config.loop_status_reconciliation
+        stale_before = datetime.now(UTC) - timedelta(seconds=cfg.stale_running_seconds)
+        rows = await self._persistence_manager.list_loops(
+            status_filter="running",
+            limit=cfg.batch_size,
+        )
+        if not rows:
+            return 0
+
+        protected: set[str] = set(self._active_stream_loop_ids)
+        protected.update(getattr(self, "_auto_resume_protected_loop_ids", set()) or set())
+        demoted = 0
+        for row in rows:
+            loop_id = str(row.get("loop_id") or "").strip()
+            if not loop_id or loop_id in protected:
+                continue
+            # Double-check liveness: a loop may have started streaming since
+            # the list_loops snapshot, or be protected by the query engine's
+            # active-runner set even though it's not in the stream set.
+            if _loop_has_active_runner(self, loop_id):
+                continue
+            updated_at_raw = row.get("updated_at")
+            if not isinstance(updated_at_raw, str) or not updated_at_raw:
+                continue
+            try:
+                # SQLite stores ISO with offset; PG list_loops returns isoformat too.
+                updated_at = datetime.fromisoformat(updated_at_raw.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=UTC)
+            if updated_at >= stale_before:
+                continue
+            try:
+                await self._persistence_manager.update_loop_metadata(loop_id, status="idle")
+                demoted += 1
+                logger.info(
+                    "Reconciled stale loop status: %s running -> idle "
+                    "(last updated %s, threshold %ds, no active runner)",
+                    loop_id,
+                    updated_at_raw,
+                    cfg.stale_running_seconds,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to demote stale loop %s",
+                    loop_id,
+                    exc_info=True,
+                )
+        if demoted:
+            logger.info(
+                "Loop status reconciliation: demoted %d stale running loop(s)",
+                demoted,
+            )
+        return demoted
+
+    async def _periodic_loop_status_reconciliation(self) -> None:
+        """Periodic task wrapper for ``_reconcile_stale_running_loops``.
+
+        Runs the one-shot reconciliation on its own interval. The GC tick
+        also calls the one-shot method before candidate selection, so this
+        task is the backstop for status correction when GC is not due.
+        """
         cfg = self._daemon_config.loop_status_reconciliation
         interval = float(cfg.interval_seconds)
         while self._running:
@@ -1319,54 +1401,7 @@ class SootheDaemon(DaemonHandlersMixin):
             if not self._running:
                 break
             try:
-                stale_before = datetime.now(UTC) - timedelta(seconds=cfg.stale_running_seconds)
-                rows = await self._persistence_manager.list_loops(
-                    status_filter="running",
-                    limit=cfg.batch_size,
-                )
-                if not rows:
-                    continue
-
-                active_set: set[str] = set(self._active_stream_loop_ids)
-                active_set.update(getattr(self, "_auto_resume_protected_loop_ids", set()) or set())
-                demoted = 0
-                for row in rows:
-                    loop_id = str(row.get("loop_id") or "").strip()
-                    if not loop_id or loop_id in active_set:
-                        continue
-                    updated_at_raw = row.get("updated_at")
-                    if not isinstance(updated_at_raw, str) or not updated_at_raw:
-                        continue
-                    try:
-                        # SQLite stores ISO with offset; PG list_loops returns isoformat too.
-                        updated_at = datetime.fromisoformat(updated_at_raw.replace("Z", "+00:00"))
-                    except ValueError:
-                        continue
-                    if updated_at.tzinfo is None:
-                        updated_at = updated_at.replace(tzinfo=UTC)
-                    if updated_at >= stale_before:
-                        continue
-                    try:
-                        await self._persistence_manager.update_loop_metadata(loop_id, status="idle")
-                        demoted += 1
-                        logger.info(
-                            "Reconciled stale loop status: %s running -> idle "
-                            "(last updated %s, threshold %ds, no active runner)",
-                            loop_id,
-                            updated_at_raw,
-                            cfg.stale_running_seconds,
-                        )
-                    except Exception:
-                        logger.warning(
-                            "Failed to demote stale loop %s",
-                            loop_id,
-                            exc_info=True,
-                        )
-                if demoted:
-                    logger.info(
-                        "Loop status reconciliation: demoted %d stale running loop(s)",
-                        demoted,
-                    )
+                await self._reconcile_stale_running_loops()
             except Exception:
                 logger.warning("Loop status reconciliation failed", exc_info=True)
 

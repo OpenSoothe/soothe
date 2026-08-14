@@ -35,7 +35,17 @@ async def _connect_client(port: int) -> WebSocketClient:
 
 
 async def run_loop_gc_once(daemon: SootheDaemon) -> tuple[int, int]:
-    """Run one GC tick (both passes) and return ``(purged_ephemeral, purged_empty)``."""
+    """Run one GC tick (both passes) and return ``(purged_ephemeral, purged_empty)``.
+
+    Mirrors ``_periodic_loop_gc``, including the pre-GC status reconciliation
+    that demotes stale ``running`` zombies to ``idle`` before candidate selection.
+    """
+    # Demote stale running zombies before GC selection (matches _periodic_loop_gc).
+    try:
+        await daemon._reconcile_stale_running_loops()
+    except Exception:
+        pass
+
     gc_cfg = daemon._daemon_config.loop_gc
     now = datetime.now(UTC)
     idle_before_ephemeral = now - timedelta(hours=gc_cfg.ephemeral_idle_hours)

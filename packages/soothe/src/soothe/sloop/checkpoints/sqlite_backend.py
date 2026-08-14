@@ -429,7 +429,13 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         idle_before_iso: str,
         limit: int,
     ) -> list[dict]:
-        """Sync list empty loops idle past threshold."""
+        """Sync list empty loops idle past threshold.
+
+        Includes rows still marked ``status="running"``: the GC purge gate
+        performs a live-runner check (``_loop_has_active_runner``), so a
+        stale ``running`` status (zombie) is reclaimable. Excluding them
+        here would hide zombies from GC discovery entirely.
+        """
         cursor = conn.execute(
             """
             SELECT loop_id, thread_ids, current_thread_id, status,
@@ -438,7 +444,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             FROM agentloop_loops
             WHERE human_message_count = 0
               AND ai_message_count = 0
-              AND status != 'running'
               AND COALESCE(last_message_at, created_at) < ?
             ORDER BY COALESCE(last_message_at, created_at) ASC
             LIMIT ?
@@ -484,7 +489,12 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         idle_before_iso: str,
         limit: int,
     ) -> list[dict]:
-        """Sync list expired ephemeral loops."""
+        """Sync list expired ephemeral loops.
+
+        Includes rows still marked ``status="running"``: the GC purge gate
+        performs a live-runner check (``_loop_has_active_runner``), so a
+        stale ``running`` status (zombie) is reclaimable.
+        """
         cursor = conn.execute(
             """
             SELECT loop_id, thread_ids, current_thread_id, status,
@@ -492,7 +502,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                    last_message_at, created_at
             FROM agentloop_loops
             WHERE is_ephemeral = 1
-              AND status != 'running'
               AND COALESCE(last_message_at, created_at) < ?
             ORDER BY COALESCE(last_message_at, created_at) ASC
             LIMIT ?

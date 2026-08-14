@@ -233,7 +233,11 @@ class StrangeLoopCheckpointPersistenceManager:
         idle_before: datetime,
         limit: int = 50,
     ) -> list[dict]:
-        """Return ephemeral loops idle since ``idle_before`` (excludes running)."""
+        """Return ephemeral loops idle since ``idle_before``.
+
+        Includes stale ``running`` rows; the GC purge gate performs a
+        live-runner check to protect truly active loops.
+        """
         return await self._backend.list_expired_ephemeral_loops(idle_before, limit)
 
     async def list_empty_loops(
@@ -241,7 +245,11 @@ class StrangeLoopCheckpointPersistenceManager:
         idle_before: datetime,
         limit: int = 50,
     ) -> list[dict]:
-        """Return loops with zero human/AI messages idle since ``idle_before``."""
+        """Return loops with zero human/AI messages idle since ``idle_before``.
+
+        Includes stale ``running`` rows; the GC purge gate performs a
+        live-runner check to protect truly active loops.
+        """
         return await self._backend.list_empty_loops(idle_before, limit)
 
     async def purge_loop_execution_data(self, loop_id: str) -> None:

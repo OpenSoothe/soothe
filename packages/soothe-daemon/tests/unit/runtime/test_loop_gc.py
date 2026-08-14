@@ -11,12 +11,44 @@ from soothe_daemon.runtime.loop_gc import purge_loop_execution_data
 
 
 @pytest.mark.asyncio
-async def test_purge_skips_running_loop() -> None:
+async def test_purge_skips_loop_with_active_runner() -> None:
+    """A loop with a live runner is protected regardless of persisted status.
+
+    The purge gate checks ``_loop_has_active_runner``, not the ``status``
+    string, so a zombie (status=running but no runner) is reclaimable
+    while a genuinely active loop is skipped.
+    """
     daemon = MagicMock()
+    daemon._active_stream_loop_ids = {"loop-1"}
     metadata = {"status": "running", "thread_ids": []}
     ok = await purge_loop_execution_data(daemon, "loop-1", metadata)
     assert ok is False
     daemon._query_engine.cancel_loop.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_purge_reclaims_running_zombie() -> None:
+    """A loop marked status=running with NO active runner is purged (zombie)."""
+    daemon = MagicMock()
+    daemon._active_stream_loop_ids = set()
+    daemon._loops_with_active_query = set()
+    daemon._query_engine = MagicMock()
+    daemon._query_engine._active_runners = {}
+    daemon._query_engine._loops_turn_starting = set()
+    daemon._query_engine.cancel_loop = AsyncMock()
+    daemon._session_manager._sessions = {}
+    daemon._loop_input_dispatcher.cleanup_loop = AsyncMock()
+    daemon._thread_registry.cleanup_loop.return_value = []
+    daemon._runner = None
+    daemon._persistence_manager.purge_loop_execution_data = AsyncMock()
+
+    metadata: dict[str, Any] = {
+        "status": "running",
+        "thread_ids": [],
+    }
+    ok = await purge_loop_execution_data(daemon, "loop-zombie", metadata)
+    assert ok is True
+    daemon._persistence_manager.purge_loop_execution_data.assert_awaited_once_with("loop-zombie")
 
 
 @pytest.mark.asyncio
