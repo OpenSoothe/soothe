@@ -1,4 +1,4 @@
-"""Tests for job-scoped GOAL.md artifact (IG-702)."""
+"""Tests for job-scoped GOAL.md artifact (IG-702 / IG-742)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from soothe.autopilot.intake import (
     resolve_job_goal_md_path,
     write_job_goal_md,
 )
-from soothe.autopilot.verify.job_maturity import acceptance_contract_brief, load_goal_md_excerpt
+from soothe.autopilot.verify.job_maturity import acceptance_contract_brief
 from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.events.internal_bus import InternalEventBus
@@ -88,8 +88,9 @@ class TestSubmitWritesGoalMd:
         assert not (jobs / child.id / "GOAL.md").exists()
 
 
-class TestMaturityFallback:
-    def test_workspace_wins_over_job_artifact(self, tmp_path: Path) -> None:
+class TestJobArtifactOnly:
+    def test_workspace_goal_md_ignored(self, tmp_path: Path) -> None:
+        """Acceptance brief uses job artifact only, not workspace GOAL.md (IG-742)."""
         ws = tmp_path / "ws"
         jobs = tmp_path / "jobs"
         ws.mkdir()
@@ -99,20 +100,9 @@ class TestMaturityFallback:
             job_id="j1",
             description="job artifact contract",
         )
-        excerpt = load_goal_md_excerpt(ws, jobs_root=jobs, job_id="j1")
-        assert excerpt == "workspace contract"
-
-    def test_falls_back_to_job_artifact(self, tmp_path: Path) -> None:
-        ws = tmp_path / "ws"
-        jobs = tmp_path / "jobs"
-        ws.mkdir()
-        write_job_goal_md(
-            jobs_root=jobs,
-            job_id="j1",
-            description="job artifact contract",
-        )
-        excerpt = load_goal_md_excerpt(ws, jobs_root=jobs, job_id="j1")
-        assert excerpt == "job artifact contract"
+        brief = acceptance_contract_brief(jobs_root=jobs, job_id="j1")
+        assert "job artifact contract" in brief
+        assert "workspace contract" not in brief
 
     def test_acceptance_brief_includes_job_goal_md(self, tmp_path: Path) -> None:
         jobs = tmp_path / "jobs"
@@ -124,3 +114,11 @@ class TestMaturityFallback:
         brief = acceptance_contract_brief(jobs_root=jobs, job_id="j1")
         assert "GOAL.md" in brief
         assert "return N" in brief
+
+    def test_empty_without_job_artifact(self, tmp_path: Path) -> None:
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        (ws / "GOAL.md").write_text("orphan workspace contract", encoding="utf-8")
+        brief = acceptance_contract_brief(jobs_root=tmp_path / "jobs", job_id="missing")
+        assert "orphan workspace contract" not in brief
+        assert "acceptance contract" in brief.lower()

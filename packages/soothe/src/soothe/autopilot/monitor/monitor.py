@@ -132,7 +132,6 @@ class AutopilotMonitor:
         max_retries: int | None = None,
         max_send_backs: int | None = None,
         informs: list[str] | None = None,
-        source_file: str | None = None,
     ) -> GoalIntakeResult:
         """Create a goal immediately; schedule LLM placement refine in the background.
 
@@ -150,7 +149,6 @@ class AutopilotMonitor:
             max_retries: Optional retry budget override
             max_send_backs: Optional consensus send-back budget override
             informs: Soft dependency goal IDs
-            source_file: Optional GOAL.md path when file-sourced
 
         Returns:
             GoalIntakeResult with status and goal_id
@@ -165,7 +163,6 @@ class AutopilotMonitor:
             max_send_backs=max_send_backs,
             depends_on=base_deps,
             informs=base_informs,
-            source_file=source_file,
             workspace=workspace,
             source=source,
         )

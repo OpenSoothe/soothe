@@ -14,7 +14,6 @@ __all__ = [
     "acceptance_contract_brief",
     "evaluate_goal_completion",
     "latch_acceptance_met",
-    "load_goal_md_excerpt",
     "maturity_wire_fields",
 ]
 
@@ -28,7 +27,6 @@ _LAZY: dict[str, tuple[str, str]] = {
     "JobMaturitySnapshot": (".job_maturity", "JobMaturitySnapshot"),
     "acceptance_contract_brief": (".job_maturity", "acceptance_contract_brief"),
     "latch_acceptance_met": (".job_maturity", "latch_acceptance_met"),
-    "load_goal_md_excerpt": (".job_maturity", "load_goal_md_excerpt"),
     "maturity_wire_fields": (".job_maturity", "maturity_wire_fields"),
 }
 

@@ -561,10 +561,8 @@ class RailBuiltinExecutor:
         from soothe.autopilot.verify.job_maturity import acceptance_contract_brief
 
         root = self._ce._dag.get_goal(job_id)
-        ws = _job_workspace(self._ce, job_id)
         return acceptance_contract_brief(
             verification_rules=root.verification_rules if root else None,
-            workspace=str(ws) if ws else (root.workspace if root else None),
             jobs_root=self._jobs_root,
             job_id=job_id,
             maturity=root.maturity if root else None,

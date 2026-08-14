@@ -224,13 +224,27 @@ class TestAcceptanceMetPersist:
 
 
 class TestAcceptanceContractBrief:
-    def test_includes_goal_md(self, tmp_path: Path) -> None:
+    def test_includes_job_goal_md(self, tmp_path: Path) -> None:
+        from soothe.autopilot.intake import write_job_goal_md
+        from soothe.autopilot.verify.job_maturity import acceptance_contract_brief
+
+        jobs = tmp_path / "jobs"
+        write_job_goal_md(
+            jobs_root=jobs,
+            job_id="j1",
+            description="Task: pass return N\n",
+        )
+        brief = acceptance_contract_brief(jobs_root=jobs, job_id="j1")
+        assert "GOAL.md" in brief
+        assert "return N" in brief
+
+    def test_ignores_workspace_goal_md(self, tmp_path: Path) -> None:
         from soothe.autopilot.verify.job_maturity import acceptance_contract_brief
 
         (tmp_path / "GOAL.md").write_text("Task: pass return N\n", encoding="utf-8")
-        brief = acceptance_contract_brief(workspace=tmp_path)
-        assert "GOAL.md" in brief
-        assert "return N" in brief
+        brief = acceptance_contract_brief()
+        assert "return N" not in brief
+        assert "acceptance contract" in brief.lower()
 
     def test_includes_verification_rules(self) -> None:
         from soothe.autopilot.verify.job_maturity import acceptance_contract_brief

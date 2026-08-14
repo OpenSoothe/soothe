@@ -42,16 +42,15 @@ job artifact alongside `rail_trace.jsonl` / `rail_state.json`
 - Fail soft: log warning on I/O error; do not fail submit.
 - Child / decomposed goals do **not** get their own `GOAL.md` under a separate tree.
 
-### Maturity fallback (RFC-230)
+### Maturity contract source (RFC-230; IG-742)
 
-`load_goal_md_excerpt` resolution order:
+Acceptance / maturity reads **only** `jobs/{job_id}/GOAL.md` (via
+`load_job_goal_md`). The host never opens a workspace-tree `GOAL.md` for
+job maturity or QA briefs — that path is operator input only when the CLI
+passes `--file` (content is snapshotted into the job artifact at submit).
 
-1. `{workspace}/GOAL.md` when present (operator workspace contract)
-2. Else `jobs/{job_id}/GOAL.md` when `jobs_root` + `job_id` provided
-3. Else empty
-
-Assessor and acceptance briefs pass job identity so inline submits still feed
-maturity without requiring a workspace copy.
+Assessor and acceptance briefs pass `jobs_root` + `job_id` so inline submits
+still feed maturity without requiring a workspace copy.
 
 ### Out of scope
 

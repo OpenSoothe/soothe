@@ -77,14 +77,16 @@ the tree with tools; `dag_idle` / resolve completion retries the host merge.
 
 ### Submit with `greenfield-system`
 
-From a repo that has a `GOAL.md`. With no TASK / `--file`, submit reads
-`./GOAL.md`:
+From a repo that has a `GOAL.md`, pass it explicitly with ``--file``:
 
 ```bash
 cd /path/to/repo
-soothe autopilot submit --rail greenfield-system
+soothe autopilot submit -f GOAL.md --rail greenfield-system
 soothe autopilot top
 ```
+
+Inline tasks (`soothe autopilot submit "…"`) never auto-load a workspace
+`GOAL.md`; the durable contract is `$SOOTHE_DATA_DIR/jobs/{id}/GOAL.md`.
 
 ## Format
 

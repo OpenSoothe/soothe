@@ -50,7 +50,7 @@ def test_submit_help_documents_async_and_wait() -> None:
     assert "-w" in output
     assert "--file" in output
     assert "-f" in output
-    assert "GOAL.md" in output
+    assert "TASK" in output or "task" in output.lower()
     assert "max-iterations" not in output
 
 
@@ -181,29 +181,18 @@ def test_stop_job(mock_autopilot_client: MagicMock) -> None:
     assert "Stop job:" in result.output
 
 
-def test_submit_defaults_to_cwd_goal_md(
+def test_submit_without_task_or_file_errors(
     mock_autopilot_client: MagicMock,
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Bare submit fails even when cwd has GOAL.md (IG-742)."""
     goal = tmp_path / "GOAL.md"
-    goal.write_text("Default cwd goal\n", encoding="utf-8")
-    monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["autopilot", "submit"])
-    assert result.exit_code == 0, result.output
-    args, _kwargs = mock_autopilot_client.autopilot_submit.call_args
-    assert args[0] == "Default cwd goal"
-
-
-def test_submit_without_task_errors_when_goal_md_missing(
-    mock_autopilot_client: MagicMock,
-    tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    goal.write_text("Should not be auto-loaded\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["autopilot", "submit"])
     assert result.exit_code == 1
-    assert "GOAL.md" in result.output
+    assert "Specify a task" in result.output
     mock_autopilot_client.autopilot_submit.assert_not_called()
 
 

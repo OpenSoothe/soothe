@@ -511,7 +511,6 @@ class AutopilotService:
         max_send_backs: int | None = None,
         depends_on: list[str] | None = None,
         informs: list[str] | None = None,
-        source_file: str | None = None,
         workspace: str | None = None,
         cron_job_id: str | None = None,  # RFC-229: Cron job tracking for recurring rescheduling
         rail_id: str | None = None,
@@ -537,8 +536,6 @@ class AutopilotService:
             depends_on: Hard dependencies — goal won't run until these complete.
             informs: Soft dependencies — context flows from these but the
                 child can still run if they haven't completed yet.
-            source_file: Optional file path for goal-file-discovery use cases
-                (RFC-204).
             workspace: Optional client workspace path. When set, workers execute
                 in this directory and scheduling-time reservation uses it.
             cron_job_id: Optional cron job ID for tracking recurring job goals (RFC-229).
@@ -602,7 +599,6 @@ class AutopilotService:
                 max_retries=max_retries,
                 max_send_backs=max_send_backs,
                 informs=informs,
-                source_file=source_file,
             )
             if intake.status != "accepted" or not intake.goal_id:
                 msg = intake.reason or f"Goal intake {intake.status}"
@@ -620,7 +616,6 @@ class AutopilotService:
                 max_send_backs=max_send_backs,
                 depends_on=depends_on,
                 informs=informs,
-                source_file=source_file,
                 workspace=resolved_workspace,
             )
         # RFC-229: Set cron_job_id on goal for recurring job rescheduling
@@ -2229,11 +2224,11 @@ class AutopilotService:
         qa_response: str | None = None,
     ) -> None:
         """Run LLM job maturity assessor after verify-class goals (RFC-230)."""
+        from soothe.autopilot.intake import load_job_goal_md
         from soothe.autopilot.verify.job_maturity import (
             JobMaturityAssessor,
             MaturityAssessmentError,
             is_verify_class_goal,
-            load_goal_md_excerpt,
         )
 
         goal = await self._ce.get_goal(goal_id)
@@ -2261,8 +2256,7 @@ class AutopilotService:
             snapshot = await JobMaturityAssessor(model=self._consensus_model).assess(
                 workspace,
                 verification_rules=root.verification_rules,
-                goal_md=load_goal_md_excerpt(
-                    workspace,
+                goal_md=load_job_goal_md(
                     jobs_root=self._jobs_root,
                     job_id=job_id,
                 ),

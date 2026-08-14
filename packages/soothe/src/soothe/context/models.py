@@ -210,7 +210,7 @@ class GoalNode(BaseModel):
 
     Migrated fields from Goal model (autopilot/models.py) per RFC-625:
     - retry_count, max_retries, send_back_count, max_send_backs (RFC-204)
-    - source_file, workspace, attempts_after_crash (RFC-222)
+    - workspace, attempts_after_crash (RFC-222)
     - pending_clarification (RFC-622)
     - guidance_accumulated (RFC-228)
     - report (GoalReport on completion)
@@ -264,8 +264,8 @@ class GoalNode(BaseModel):
     # Engine liveness recovery after retry/send_back budgets (IG-697)
     engine_recovery_count: int = 0
 
-    # Workspace/source (from Goal, RFC-222)
-    source_file: str | None = None  # GOAL.md path if file-sourced
+    # Workspace (from Goal, RFC-222). Submit contract lives in
+    # jobs/{job_id}/GOAL.md (IG-702/IG-742), not a GoalNode path field.
     workspace: str | None = None  # Autopilot dispatch workspace
 
     # Completion/completion state (from Goal)

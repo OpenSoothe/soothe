@@ -180,59 +180,27 @@ def maturity_wire_fields(maturity: dict[str, Any] | None) -> dict[str, Any] | No
     }
 
 
-def load_goal_md_excerpt(
-    workspace: str | Path | None,
-    *,
-    jobs_root: Path | None = None,
-    job_id: str | None = None,
-    max_chars: int = _MATURITY_GOAL_MD_MAX_CHARS,
-) -> str:
-    """Read GOAL.md excerpt: workspace first, else job artifact.
-
-    Args:
-        workspace: Project workspace that may contain ``GOAL.md``.
-        jobs_root: Optional ``$SOOTHE_DATA_DIR/jobs`` root for job fallback.
-        job_id: Root job id when falling back to ``jobs/{job_id}/GOAL.md``.
-        max_chars: Truncation limit.
-
-    Returns:
-        Excerpt text, or empty string when neither source is readable.
-    """
-    if workspace and str(workspace).strip():
-        path = Path(workspace).expanduser() / "GOAL.md"
-        if path.is_file():
-            try:
-                return path.read_text(encoding="utf-8")[:max_chars].strip()
-            except OSError:
-                pass
-    if jobs_root is not None and job_id:
-        from soothe.autopilot.intake import load_job_goal_md
-
-        return load_job_goal_md(
-            jobs_root=jobs_root,
-            job_id=job_id,
-            max_chars=max_chars,
-        )
-    return ""
-
-
 def acceptance_contract_brief(
     *,
     verification_rules: str | None = None,
-    workspace: str | Path | None = None,
     jobs_root: Path | None = None,
     job_id: str | None = None,
     maturity: dict[str, Any] | None = None,
     max_chars: int = _MATURITY_VERIFICATION_RULES_MAX_CHARS,
 ) -> str:
-    """Build a short acceptance contract blurb for QA / verify goal descriptions."""
+    """Build a short acceptance contract blurb for QA / verify goal descriptions.
+
+    Reads the durable job artifact ``jobs/{job_id}/GOAL.md`` only — never a
+    workspace-tree ``GOAL.md`` (IG-742).
+    """
+    from soothe.autopilot.intake import load_job_goal_md
+
     parts: list[str] = []
     if verification_rules and verification_rules.strip():
         parts.append(
             f"verification_rules: {verification_rules.strip()[:_MATURITY_VERIFICATION_RULES_MAX_CHARS]}"
         )
-    goal_excerpt = load_goal_md_excerpt(
-        workspace,
+    goal_excerpt = load_job_goal_md(
         jobs_root=jobs_root,
         job_id=job_id,
         max_chars=_MATURITY_GOAL_MD_MAX_CHARS,
@@ -246,8 +214,8 @@ def acceptance_contract_brief(
     if not parts:
         return (
             "Verify the job acceptance contract: deliverables and success "
-            "criteria in GOAL.md / verification_rules (or the job description) "
-            "must be satisfied for this workspace domain."
+            "criteria in the job GOAL.md / verification_rules (or the job "
+            "description) must be satisfied for this workspace domain."
         )
     text = "\n\n".join(parts)
     if len(text) > max_chars:
@@ -438,9 +406,7 @@ class JobMaturityAssessor:
             LLM invoke failure so callers can log without latching true.
         """
         rules = (verification_rules or "").strip()
-        goal_text = (goal_md or "").strip() or load_goal_md_excerpt(
-            workspace, max_chars=_MATURITY_GOAL_MD_MAX_CHARS
-        )
+        goal_text = (goal_md or "").strip()
         dag = (dag_summary or "").strip() or format_job_dag_summary(root, children)
         inventory = shallow_workspace_inventory(workspace)
         qa = (qa_response or "").strip()
