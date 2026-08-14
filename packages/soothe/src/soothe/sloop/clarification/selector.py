@@ -22,6 +22,7 @@ def build_default_clarification_policy(
     min_confidence: float = 0.4,
     interactive_fallback: ClarificationPolicy | None = None,
     force_manual_origins: tuple[str, ...] | list[str] | None = None,
+    degrade_low_confidence: bool = False,
 ) -> ClarificationPolicy:
     """Return the appropriate policy for the runtime mode.
 
@@ -38,6 +39,9 @@ def build_default_clarification_policy(
             human is wired. Ignored for manual mode.
         force_manual_origins: Origins that skip veritas and use the interactive
             relay (or defer when no human is attached).
+        degrade_low_confidence: When True, route low-confidence veritas
+            results to the interactive fallback (auto→manual upgrade) instead
+            of a hard defer. Ignored for manual mode.
 
     Raises:
         ValueError: if ``mode == "auto"`` but ``veritas_answer`` is not provided.
@@ -53,6 +57,7 @@ def build_default_clarification_policy(
             min_confidence=min_confidence,
             interactive_fallback=interactive_fallback,
             force_manual_origins=force_manual_origins,
+            degrade_low_confidence=degrade_low_confidence,
         )
     msg = f"unknown clarification mode: {mode!r}"
     raise ValueError(msg)

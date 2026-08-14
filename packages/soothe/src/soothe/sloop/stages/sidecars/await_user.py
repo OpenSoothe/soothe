@@ -127,6 +127,7 @@ async def node_await_clarification(
                 "reason": exc.reason,
                 "defer_kind": exc.kind,
                 "question_summary": _summary(request.questions),
+                "questions": list(request.questions),
             },
         )
         await ctx.mark_goal_status("awaiting_clarification", reason=exc.reason)

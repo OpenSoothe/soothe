@@ -1533,6 +1533,12 @@ class ClarificationConfig(BaseModel):
     auto_min_confidence: float = Field(default=0.4, ge=0.0, le=1.0)
     """Below this confidence, ``AutoClarificationPolicy`` defers rather than answers."""
 
+    degrade_to_manual_on_low_confidence: bool = True
+    """When True and a human is attached, route low-confidence veritas results to
+    the interactive TUI relay (auto→manual upgrade) instead of a hard defer.
+    Mirrors the structured_output_failed fallback path. Ignored for autopilot
+    (headless) runs which always hard-defer."""
+
     max_defer_age_hours: int = Field(default=168, ge=1)
     """Autopilot scrubs goals stuck in ``awaiting_clarification`` past this age."""
 

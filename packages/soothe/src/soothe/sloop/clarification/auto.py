@@ -36,6 +36,11 @@ class AutoClarificationPolicy:
        The fallback is only present in interactive runs (``emit`` wired);
        autopilot has no human at the other end and keeps the hard-defer path.
 
+    When ``degrade_low_confidence`` is True and a human is attached, the same
+    auto→manual upgrade applies to ``low_confidence`` defers — veritas wasn't
+    confident, so surface the questions to the human instead of parking the
+    loop silently. Ignored for autopilot (headless) runs.
+
     Origins listed in ``force_manual_origins`` skip veritas entirely and use
     the interactive relay (or defer when no human is attached).
     """
@@ -47,15 +52,21 @@ class AutoClarificationPolicy:
         min_confidence: float = 0.4,
         interactive_fallback: ClarificationPolicy | None = None,
         force_manual_origins: Collection[ClarificationOrigin] | None = None,
+        degrade_low_confidence: bool = False,
     ) -> None:
         self._veritas_answer = veritas_answer
         self._min_confidence = min_confidence
         self._interactive_fallback = interactive_fallback
         self._force_manual_origins: frozenset[str] = frozenset(force_manual_origins or ())
+        self._degrade_low_confidence = degrade_low_confidence
 
     @property
     def min_confidence(self) -> float:
         return self._min_confidence
+
+    @property
+    def degrade_low_confidence(self) -> bool:
+        return self._degrade_low_confidence
 
     @property
     def force_manual_origins(self) -> frozenset[str]:
@@ -82,8 +93,16 @@ class AutoClarificationPolicy:
         result = await self._veritas_answer(request)
         kind = self._classify(result)
 
-        if kind == "structured_output_failed" and self._interactive_fallback is not None:
-            logger.warning("[veritas] structured output failed; falling back to interactive relay")
+        if self._interactive_fallback is not None and self._should_fallback(kind):
+            if kind == "structured_output_failed":
+                logger.warning(
+                    "[veritas] structured output failed; falling back to interactive relay"
+                )
+            else:
+                logger.info(
+                    "[veritas] low confidence (%.2f); degrading to interactive relay",
+                    result.confidence,
+                )
             fallback = self._interactive_fallback
             upgrade = getattr(fallback, "answer_as_manual_fallback", None)
             if callable(upgrade):
@@ -116,6 +135,14 @@ class AutoClarificationPolicy:
         if result.confidence < self._min_confidence:
             return "low_confidence"
         return None
+
+    def _should_fallback(self, kind: DeferKind | None) -> bool:
+        """Whether this defer kind should route to the interactive fallback."""
+        if kind is None:
+            return False
+        if kind == "structured_output_failed":
+            return True
+        return kind == "low_confidence" and self._degrade_low_confidence
 
     def _reason_for(self, kind: DeferKind, result: VeritasAnswerSchema) -> str:
         if kind == "explicit":

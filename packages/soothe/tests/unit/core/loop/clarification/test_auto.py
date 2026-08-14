@@ -296,3 +296,124 @@ async def test_force_manual_does_not_apply_to_strange_loop_plan_origins() -> Non
     for origin in (ORIGIN_PLAN_GENERATE, ORIGIN_PLAN_EVALUATE):
         ans = await policy.answer(_request(origin_node=origin))
         assert ans.source == "veritas"
+
+
+# ---- degrade_low_confidence (auto→manual upgrade on low confidence) ----
+
+
+@pytest.mark.asyncio
+async def test_low_confidence_degrades_to_fallback_when_enabled() -> None:
+    """With degrade_low_confidence=True, low-confidence routes to interactive fallback."""
+    fallback_answer = ClarificationAnswer(
+        answers=("operator says X",), source="human", confidence=None
+    )
+
+    class _AnnounceFallback:
+        def __init__(self) -> None:
+            self.answer_calls = 0
+            self.upgrade_calls = 0
+
+        async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
+            self.answer_calls += 1
+            return fallback_answer
+
+        async def answer_as_manual_fallback(
+            self, request: ClarificationRequest
+        ) -> ClarificationAnswer:
+            self.upgrade_calls += 1
+            return fallback_answer
+
+    fallback = _AnnounceFallback()
+    policy = AutoClarificationPolicy(
+        _veritas_returning(VeritasAnswerSchema(answers=["guess"], confidence=0.2, defer=False)),
+        interactive_fallback=fallback,  # type: ignore[arg-type]
+        degrade_low_confidence=True,
+    )
+    ans = await policy.answer(_request())
+    assert ans is fallback_answer
+    assert fallback.upgrade_calls == 1
+    assert fallback.answer_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_low_confidence_still_defers_when_degrade_enabled_but_no_fallback() -> None:
+    """Without a fallback wired, degrade_low_confidence has no effect."""
+    policy = AutoClarificationPolicy(
+        _veritas_returning(VeritasAnswerSchema(answers=["guess"], confidence=0.2, defer=False)),
+        degrade_low_confidence=True,
+    )
+    with pytest.raises(ClarificationDeferredError) as exc_info:
+        await policy.answer(_request())
+    assert exc_info.value.kind == "low_confidence"
+
+
+@pytest.mark.asyncio
+async def test_low_confidence_does_not_degrade_when_disabled() -> None:
+    """Default behavior: low-confidence hard-defers even with a fallback."""
+    fallback_answer = ClarificationAnswer(answers=("x",), source="human", confidence=None)
+    fallback = _RecordingFallback(fallback_answer)
+    policy = AutoClarificationPolicy(
+        _veritas_returning(VeritasAnswerSchema(answers=["guess"], confidence=0.2, defer=False)),
+        interactive_fallback=fallback,
+        degrade_low_confidence=False,
+    )
+    with pytest.raises(ClarificationDeferredError) as exc_info:
+        await policy.answer(_request())
+    assert exc_info.value.kind == "low_confidence"
+    assert fallback.calls == []
+
+
+@pytest.mark.asyncio
+async def test_explicit_defer_does_not_degrade_even_when_enabled() -> None:
+    """Only low_confidence is affected by degrade_low_confidence, not explicit."""
+    fallback_answer = ClarificationAnswer(answers=("x",), source="human", confidence=None)
+    fallback = _RecordingFallback(fallback_answer)
+    policy = AutoClarificationPolicy(
+        _veritas_returning(
+            VeritasAnswerSchema(
+                answers=[], confidence=0.0, defer=True, rationale="real uncertainty"
+            )
+        ),
+        interactive_fallback=fallback,
+        degrade_low_confidence=True,
+    )
+    with pytest.raises(ClarificationDeferredError) as exc_info:
+        await policy.answer(_request())
+    assert exc_info.value.kind == "explicit"
+    assert fallback.calls == []
+
+
+@pytest.mark.asyncio
+async def test_answer_was_question_does_not_degrade_even_when_enabled() -> None:
+    """answer_was_question stays a hard defer regardless of degrade flag."""
+    fallback_answer = ClarificationAnswer(answers=("x",), source="human", confidence=None)
+    fallback = _RecordingFallback(fallback_answer)
+    policy = AutoClarificationPolicy(
+        _veritas_returning(
+            VeritasAnswerSchema(
+                answers=[],
+                confidence=0.0,
+                defer=True,
+                rationale="answer_was_question",
+            )
+        ),
+        interactive_fallback=fallback,
+        degrade_low_confidence=True,
+    )
+    with pytest.raises(ClarificationDeferredError) as exc_info:
+        await policy.answer(_request())
+    assert exc_info.value.kind == "answer_was_question"
+    assert fallback.calls == []
+
+
+def test_degrade_low_confidence_property() -> None:
+    policy = AutoClarificationPolicy(
+        _veritas_returning(VeritasAnswerSchema(answers=["x"], confidence=0.9, defer=False)),
+        degrade_low_confidence=True,
+    )
+    assert policy.degrade_low_confidence is True
+
+    policy2 = AutoClarificationPolicy(
+        _veritas_returning(VeritasAnswerSchema(answers=["x"], confidence=0.9, defer=False)),
+    )
+    assert policy2.degrade_low_confidence is False

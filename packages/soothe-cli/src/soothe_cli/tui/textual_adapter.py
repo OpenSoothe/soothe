@@ -4136,6 +4136,18 @@ async def execute_task_textual(
                                         )
                                         if adapter._pause_spinner:
                                             await adapter._pause_spinner(SPINNER_LABEL_INPUT)
+                                elif event_type == LOOP_CLARIFICATION_DEFERRED:
+                                    deferred_reason = str(data.get("reason") or "")
+                                    raw_qs = data.get("questions") or []
+                                    deferred_questions = [str(q) for q in raw_qs if str(q).strip()]
+                                    for step_widget in adapter._current_step_messages.values():
+                                        if step_widget._status == "running":  # noqa: SLF001
+                                            step_widget.set_clarification_deferred(
+                                                deferred_reason, deferred_questions
+                                            )
+                                            break
+                                    if adapter._pause_spinner:
+                                        await adapter._pause_spinner(SPINNER_LABEL_INPUT)
                                 continue
 
                             if event_type == LOOP_CLARIFICATION_ANSWERED:

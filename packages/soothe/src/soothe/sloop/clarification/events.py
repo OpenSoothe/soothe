@@ -47,6 +47,7 @@ class ClarificationDeferredEvent(SootheEvent):
     type: Literal["soothe.loop.clarification.deferred"] = LOOP_CLARIFICATION_DEFERRED  # type: ignore[assignment]
     reason: str = ""
     question_summary: str = ""
+    questions: list[str] = []
 
     model_config = ConfigDict(extra="allow")
 

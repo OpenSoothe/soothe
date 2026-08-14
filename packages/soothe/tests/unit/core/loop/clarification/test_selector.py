@@ -41,3 +41,17 @@ def test_auto_passes_min_confidence_through() -> None:
     )
     assert isinstance(policy, AutoClarificationPolicy)
     assert policy.min_confidence == pytest.approx(0.75)
+
+
+def test_auto_passes_degrade_low_confidence_through() -> None:
+    policy = build_default_clarification_policy(
+        "auto", veritas_answer=_stub_veritas, degrade_low_confidence=True
+    )
+    assert isinstance(policy, AutoClarificationPolicy)
+    assert policy.degrade_low_confidence is True
+
+
+def test_auto_degrade_low_confidence_defaults_false() -> None:
+    policy = build_default_clarification_policy("auto", veritas_answer=_stub_veritas)
+    assert isinstance(policy, AutoClarificationPolicy)
+    assert policy.degrade_low_confidence is False

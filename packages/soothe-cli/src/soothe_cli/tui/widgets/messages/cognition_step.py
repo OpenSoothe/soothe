@@ -1568,6 +1568,36 @@ class CognitionStepMessage(Vertical):
             self._detail_widget.update(self._step_branched_execute_body(body, muted=False))
             self._detail_widget.display = True
 
+    def set_clarification_deferred(self, reason: str, questions: list[str]) -> None:
+        """Show the deferred clarification notice on the step card.
+
+        Called when a ``soothe.loop.clarification.deferred`` event arrives.
+        The loop has terminated (no live ``interrupt()``), so this is
+        informational only — the user should provide more detail in their
+        next message. Stops the spinner and renders the questions so the
+        user knows what was asked.
+        """
+        clean = [q.strip() for q in questions if q and q.strip()]
+        self._stop_animation()
+        self._status = "pending"
+        self._refresh_header_title()
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001  # Unmounted widget (tests / no Textual app)
+            colors = theme.DARK_COLORS
+        if self._status_widget is not None:
+            g = get_glyphs()
+            gutter = _card_body_gutter(self._step_header_glyph())
+            short_reason = reason[:120] + "…" if len(reason) > 120 else reason
+            line = f"{gutter}{g.circle_empty} Clarification deferred: {short_reason}"
+            self._status_widget.update(Content.styled(line, colors.warning))
+            self._status_widget.display = True
+        if self._detail_widget is not None and clean:
+            lines = [f"Q{i + 1}: {q}" for i, q in enumerate(clean)]
+            body = "\n".join(lines)
+            self._detail_widget.update(self._step_branched_execute_body(body, muted=False))
+            self._detail_widget.display = True
+
     def set_interrupted(self, message: str) -> None:
         """Mark step as aborted (stream error / cancel) while still running."""
         self._stop_animation()
