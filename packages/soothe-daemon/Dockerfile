@@ -23,8 +23,8 @@
 # Optional: use a custom Python base (e.g. internal mirror):
 #   --build-arg PYTHON_BASE=registry.example.com/python:3.12-bookworm
 #
-# Run (unified listener on 8765: WebSocket + REST):
-#   docker run --rm -p 8765:8765 \
+# Run (unified listener on 18765: WebSocket + REST /healthz):
+#   docker run --rm -p 18765:18765 \
 #     -e OPENAI_API_KEY=... \
 #     -v soothe-data:/var/lib/soothe \
 #     soothed:latest
@@ -104,8 +104,7 @@ ENV PYTHONUNBUFFERED=1 \
     SOOTHE_HOME=/var/lib/soothe \
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
     SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST=0.0.0.0 \
-    SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__ENABLED=true \
-    SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__HOST=0.0.0.0
+    SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__PORT=18765
 
 WORKDIR /app
 
@@ -130,10 +129,10 @@ RUN useradd --create-home --system soothe \
 USER soothe
 WORKDIR /var/lib/soothe
 
-EXPOSE 8765/tcp
+EXPOSE 18765/tcp
 
 # HTTP healthcheck via /healthz endpoint (more reliable than socket probe)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3)" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18765/healthz', timeout=3)" || exit 1
 
 CMD ["python", "-m", "soothe_daemon"]

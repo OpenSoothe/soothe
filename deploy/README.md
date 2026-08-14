@@ -35,7 +35,7 @@ soothe-pgvector (PostgreSQL 17 + pgvector)
 └── soothe_memory        → Long-term memory
 
 soothed (daemon)
-└── Port 8765 (WebSocket/HTTP API)
+└── Port 18765 (WebSocket/HTTP unified listener)
 ```
 
 All services bound to localhost only. PostgreSQL uses default credentials (postgres/postgres).

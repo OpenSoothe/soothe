@@ -76,10 +76,10 @@ services:
       SOOTHE_POSTGRES_BASE_DSN: postgresql://postgres:postgres@soothe-pgvector:5432
       SOOTHE_POSTGRES_VECTORS_DSN: postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors
       SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST: 0.0.0.0
-      SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__HOST: 0.0.0.0
+      SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__PORT: 18765
       SOOTHE_DEBUG: ${SOOTHE_DEBUG:-false}
     ports:
-      - "127.0.0.1:8765:8765"
+      - "127.0.0.1:18765:18765"
     volumes:
       - soothe_daemon_data:/var/lib/soothe
       - ./nano.yml:/var/lib/soothe/config/nano.yml:ro
@@ -93,7 +93,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=5)" || exit 1
+        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18765/healthz', timeout=5)" || exit 1
       interval: 60s
       timeout: 15s
       retries: 5

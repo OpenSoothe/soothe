@@ -167,7 +167,7 @@ docker-prod-up:
 	@echo "Stack running. Check status: make docker-prod-ps"
 	@echo ""
 	@echo "Services:"
-	@echo "  Daemon API:  http://localhost:8765"
+	@echo "  Daemon API:  http://localhost:18765"
 	@echo "  PostgreSQL:  internal (soothe-pgvector)"
 	@echo ""
 	@echo "Config: deploy/.env (copy from deploy/env-example if missing)"
@@ -179,10 +179,10 @@ docker-prod-down:
 docker-prod-ps:
 	@$(DOCKER_PROD_COMPOSE) ps
 	@echo ""
-	@if curl -sf -m 2 http://127.0.0.1:8765/healthz >/dev/null 2>&1; then \
+	@if curl -sf -m 2 http://127.0.0.1:18765/healthz >/dev/null 2>&1; then \
 		echo "API healthz: ok"; \
 	else \
-		echo "API healthz: unreachable (is soothed up? local soothed holding :8765?)"; \
+		echo "API healthz: unreachable (is soothed up? local soothed holding :18765?)"; \
 	fi
 	@# Surface Autopilot construction failures that leave the container "healthy"
 	@$(DOCKER_PROD_COMPOSE) logs --tail=300 soothed 2>/dev/null \
