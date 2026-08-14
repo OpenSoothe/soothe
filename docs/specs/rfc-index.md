@@ -5,6 +5,11 @@
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
+> **📋 Methodology Guide**: Before authoring a new RFC, transitioning an RFC's
+> status, or running a quarterly audit, consult the
+> [RFC Methodology Guide](../rfc-methodology-guide.md) — a reusable playbook
+> synthesizing lifecycle rules, gap-triage scoring, and audit checklists.
+
 > **⚠️ Path Restructure Notice (2026-08)**: RFCs written before the 2026-07
 > `core/` → flat package restructure contain file paths that no longer match the
 > current codebase. The canonical path mappings are:

@@ -111,6 +111,7 @@ method(params): ReturnType
 
 - [RFC Standard](./rfc-standard.md)
 - [RFC Index](./rfc-index.md)
+- [RFC Methodology Guide](../../rfc-methodology-guide.md) - Authoring checklist (§2), status transition checklist (§15.2), and terminology discipline (§5) before submitting an RFC.
 
 ---
 

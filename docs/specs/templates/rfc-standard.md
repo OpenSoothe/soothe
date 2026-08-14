@@ -111,3 +111,4 @@ Draft → Proposed → Accepted → Implemented → Deprecated → Archived
 - `rfc-history.md` - Change history
 - `rfc-namings.md` - Terminology reference
 - `templates/` - RFC templates
+- [`docs/rfc-methodology-guide.md`](../rfc-methodology-guide.md) - Reusable methodology playbook for RFC authoring, lifecycle transitions, gap triage, and quarterly audits. **Normative reference** for all RFC update work: consult this guide before authoring, transitioning status, or running an audit cycle.

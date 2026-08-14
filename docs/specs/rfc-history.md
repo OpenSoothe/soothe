@@ -38,6 +38,22 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ## Recent Changes
 
+### 2026-08-14
+
+- **RFC Methodology Guide** published at `docs/rfc-methodology-guide.md`.
+  Synthesizes the methodology scattered across RFC-900, RFC-903, the RFC
+  template, `rfc-namings.md`, `rfc-index.md`, IG-744, the gap-inventory/triage
+  IGs, and the Q3 2026 audit report into a single reusable playbook (15
+  sections + appendix). Covers RFC lifecycle, authoring, kinds, number
+  segments, terminology discipline, index/catalog hygiene, dependency
+  tracking, deprecation/archival, path-restructure drift management,
+  quarterly audit cycle, spec-vs-code gap inventory method, gap triage
+  scoring (C1–C6 × I1–I5 → P0–P3), audit metrics reference, series
+  consolidation triggers, and four reusable checklists. Wired into the RFC
+  update flow via `rfc-standard.md`, `templates/rfc-template.md`, and
+  `rfc-index.md` as a normative reference for all RFC authoring, status
+  transitions, and audit work.
+
 ### 2026-08-11
 
 - **RFC-903** drafted: Quarterly RFC Audit Cycle — process specification
