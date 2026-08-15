@@ -111,30 +111,41 @@ class SharedPostgreSQLPool:
         async with self._init_lock:
             if self._pool is not None and self._initialized:
                 return self._pool
+            return await self._open_locked()
 
-            pool_kwargs: dict[str, Any] = {
-                "max_size": self.pool_size,
-                "open": False,
-            }
-            if self._pool_timing:
-                pool_kwargs.update(self._pool_timing)
-            else:
-                pool_kwargs["min_size"] = min(4, self.pool_size)
-            self._pool = AsyncConnectionPool(self.dsn, **apply_row_factory(pool_kwargs))
+    async def _open_locked(self) -> AsyncConnectionPool:
+        """Build, open, and schema-init the pool. Caller MUST hold ``_init_lock``.
 
-            # Open pool
-            await self._pool.open()
+        IG-706: extracted from ``open`` so ``reset_pool`` can reopen without
+        re-entering ``open`` (``asyncio.Lock`` is not reentrant — the prior
+        ``await self.open()`` while holding ``_init_lock`` deadlocked the
+        recovery path, leaving ``_pool=None`` and every subsequent
+        ``for_shared_checkpoint_pool`` caller raising "Shared checkpoint pool
+        not initialized" (loop 0041).
+        """
+        pool_kwargs: dict[str, Any] = {
+            "max_size": self.pool_size,
+            "open": False,
+        }
+        if self._pool_timing:
+            pool_kwargs.update(self._pool_timing)
+        else:
+            pool_kwargs["min_size"] = min(4, self.pool_size)
+        self._pool = AsyncConnectionPool(self.dsn, **apply_row_factory(pool_kwargs))
 
-            # Initialize schema (agentloop_checkpoints, checkpoint_anchors, etc.)
-            await self._initialize_schema(self._pool)
+        # Open pool
+        await self._pool.open()
 
-            self._initialized = True
-            logger.info(
-                "Shared PostgreSQL pool opened for StrangeLoop persistence (size=%d, DSN masked)",
-                self.pool_size,
-            )
+        # Initialize schema (agentloop_checkpoints, checkpoint_anchors, etc.)
+        await self._initialize_schema(self._pool)
 
-            return self._pool
+        self._initialized = True
+        logger.info(
+            "Shared PostgreSQL pool opened for StrangeLoop persistence (size=%d, DSN masked)",
+            self.pool_size,
+        )
+
+        return self._pool
 
     async def _initialize_schema(self, pool: AsyncConnectionPool) -> None:
         """Recreate StrangeLoop tables using the canonical PostgreSQL schema."""
@@ -179,8 +190,10 @@ class SharedPostgreSQLPool:
                 except Exception:
                     logger.debug("Error closing stale pool during reset", exc_info=True)
 
-            # Reopen pool with fresh connections
-            await self.open()
+            # Reopen pool with fresh connections. IG-706: call the lock-free
+            # builder directly — re-entering ``open`` would deadlock on
+            # ``_init_lock`` (asyncio.Lock is not reentrant).
+            await self._open_locked()
             logger.info("Shared PostgreSQL pool reset complete (fresh connections)")
 
         if writer is not None:
@@ -191,8 +204,30 @@ class SharedPostgreSQLPool:
 
         Returns:
             AsyncConnectionPool if initialized, None otherwise.
+
+        Note:
+            Snapshot only. Callers that need a non-None pool (e.g. checkpoint
+            persistence) must use ``await_pool`` to avoid observing a
+            transiently-None pool during ``reset_pool`` reopen.
         """
         return self._pool
+
+    async def await_pool(self) -> AsyncConnectionPool | None:
+        """Return the underlying pool, waiting for any in-flight reset to finish.
+
+        ``reset_pool`` nulls ``_pool`` before reopening (close + ``open`` +
+        schema setup), so a concurrent ``get_pool`` snapshot can observe
+        ``None`` mid-recovery. This accessor acquires ``_init_lock`` — the same
+        lock ``open``/``reset_pool`` hold while mutating the pool — so a caller
+        arriving during the reopen window blocks until the new pool is ready
+        (or ``reset_pool`` has cleared it for shutdown).
+
+        Returns:
+            ``AsyncConnectionPool`` when initialized, or ``None`` when the
+            singleton is closed (registry-backed close / shutdown).
+        """
+        async with self._init_lock:
+            return self._pool
 
     @classmethod
     async def bind_registry_pool(

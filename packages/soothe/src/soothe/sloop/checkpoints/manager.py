@@ -107,7 +107,11 @@ class StrangeLoopCheckpointPersistenceManager:
         if shared is None:
             return cls(config=config)
 
-        pool = shared.get_pool()
+        # IG-706: Wait for any in-flight reset_pool reopen to finish. reset_pool
+        # nulls _pool before reopening (close + open + schema), so a snapshot via
+        # get_pool() can transiently observe None mid-recovery — the original
+        # "Shared checkpoint pool not initialized" failure (loop 0041).
+        pool = await shared.await_pool()
         if pool is None:
             msg = "Shared checkpoint pool not initialized"
             raise RuntimeError(msg)

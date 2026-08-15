@@ -174,8 +174,11 @@ class StrangeLoopStateManager:
 
                     async with self._init_lock:
                         if self._postgres_backend is None:
-                            # Create lightweight backend wrapper using shared pool
-                            pool = self._shared_pool.get_pool()
+                            # Create lightweight backend wrapper using shared pool.
+                            # IG-706: await_pool() waits out any in-flight
+                            # reset_pool reopen so we don't observe a
+                            # transiently-None pool (loop 0041 race).
+                            pool = await self._shared_pool.await_pool()
                             if pool is not None:
                                 self._postgres_backend = PostgreSQLPersistenceBackend(
                                     dsn=self._postgres_dsn,
