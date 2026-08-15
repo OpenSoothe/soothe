@@ -1,0 +1,744 @@
+"""Tests for Autopilot host-owned architecture WavePlan ingest and gate."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from soothe.config.models import AutopilotConfig
+from soothe.context import ContextEngine
+from soothe.events.internal_bus import InternalEventBus
+from soothe.goal_contracts import Finding, GoalDispatchContextContribution
+from support.rail_harness import catalog_rail_job_state
+
+from soothe_autopilot import AutopilotService
+from soothe_autopilot.rails.builtins_exec import RailBuiltinExecutor
+
+from .fakes import IdleFakeFactory
+
+
+def _mock_consensus_model(*, decision: str, reasoning: str) -> MagicMock:
+    from soothe_autopilot.verify.consensus import ConsensusVerdict
+
+    verdict = ConsensusVerdict(decision=decision, reasoning=reasoning)  # type: ignore[arg-type]
+    structured = MagicMock()
+    structured.ainvoke = AsyncMock(return_value=verdict.model_dump())
+    mock_model = MagicMock()
+    mock_model.with_structured_output = MagicMock(return_value=structured)
+    return mock_model
+
+
+@pytest.mark.asyncio
+async def test_architecture_gate_accepts_nested_wave_plan_in_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nested ``wave_plan`` wrapper in completion evidence must apply slices."""
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    jobs_root = tmp_path / "jobs"
+    jobs_root.mkdir(parents=True)
+
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(
+            decision="send_back",
+            reasoning="should not be consulted",
+        ),
+        runner_factory=IdleFakeFactory(),
+    )
+    if svc._rail_interpreter is not None:
+        svc._jobs_root = jobs_root
+        svc._rail_interpreter.builtins._jobs_root = jobs_root
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(tmp_path / "ws"),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    ex = svc._rail_interpreter.builtins
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+            engine_max_parallel_goals=4,
+        )
+    )
+    spawned = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = spawned.created_goal_ids[0]
+    ce.claim_goal(arch_id, loop_id="w1")
+
+    evidence = (
+        "Architecture done.\n"
+        '{"job_id":"x","wave_plan":{"wave_slices":["core","api","tests"],'
+        '"independence":"disjoint","rationale":"layers"}}'
+    )
+    await svc._apply_consensus_and_finalize(
+        arch_id,
+        evidence_summary=evidence,
+        contribution=GoalDispatchContextContribution(),
+    )
+
+    arch = await ce.get_goal(arch_id)
+    assert arch is not None
+    assert arch.status == "completed"
+    state = await ex.job_state(root.id)
+    assert state is not None
+    assert state.wave_slices == ["core", "api", "tests"]
+    assert ex.is_wave_plan_ready(root.id)
+
+
+@pytest.mark.asyncio
+async def test_architecture_gate_accepts_when_wave_plan_in_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    jobs_root = tmp_path / "jobs"
+    jobs_root.mkdir(parents=True)
+
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(
+            decision="send_back",
+            reasoning="should not be consulted",
+        ),
+        runner_factory=IdleFakeFactory(),
+    )
+    # Force jobs_root onto the rail executor (service may have created its own).
+    if svc._rail_interpreter is not None:
+        svc._jobs_root = jobs_root
+        svc._rail_interpreter.builtins._jobs_root = jobs_root
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(tmp_path / "ws"),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    ex: RailBuiltinExecutor = svc._rail_interpreter.builtins
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+            engine_max_parallel_goals=4,
+        )
+    )
+    spawned = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = spawned.created_goal_ids[0]
+    ce.claim_goal(arch_id, loop_id="w1")
+
+    wave_json = (
+        '{"wave_slices":["frontend","ir","passes","backend","driver","tests"],'
+        '"independence":"disjoint write-sets",'
+        '"rationale":"crate boundaries"}'
+    )
+    contribution = GoalDispatchContextContribution(
+        findings=[Finding(summary=wave_json, relevance_score=1.0)],
+    )
+
+    await svc._apply_consensus_and_finalize(
+        arch_id,
+        evidence_summary="Architecture complete with WavePlan in completion report.",
+        contribution=contribution,
+    )
+
+    arch = await ce.get_goal(arch_id)
+    assert arch is not None
+    assert arch.status == "completed"
+    state = await ex.job_state(root.id)
+    assert state is not None
+    assert state.wave_slices
+    assert ex.is_wave_plan_ready(root.id)
+    assert (jobs_root / root.id / "wave-plan.json").is_file()
+
+
+@pytest.mark.asyncio
+async def test_architecture_gate_send_back_without_wave_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    jobs_root = tmp_path / "jobs"
+    jobs_root.mkdir(parents=True)
+
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(
+            decision="accept",
+            reasoning="should not accept without WavePlan",
+        ),
+        runner_factory=IdleFakeFactory(),
+    )
+    if svc._rail_interpreter is not None:
+        svc._jobs_root = jobs_root
+        svc._rail_interpreter.builtins._jobs_root = jobs_root
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(tmp_path / "ws"),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    ex = svc._rail_interpreter.builtins
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+        )
+    )
+    spawned = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = spawned.created_goal_ids[0]
+    ce.claim_goal(arch_id, loop_id="w1")
+
+    await svc._apply_consensus_and_finalize(
+        arch_id,
+        evidence_summary="Step LDK-01: read_file only — no WavePlan JSON.",
+        contribution=GoalDispatchContextContribution(
+            findings=[Finding(summary="Step LDK-01: read_file", relevance_score=0.5)],
+        ),
+    )
+
+    arch = await ce.get_goal(arch_id)
+    assert arch is not None
+    assert arch.status == "pending"
+    assert arch.send_back_count == 1
+    assert not ex.is_wave_plan_ready(root.id)
+
+
+@pytest.mark.asyncio
+async def test_architecture_gate_never_calls_llm_consensus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """require_plan architecture finalize must not fall through to LLM."""
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    jobs_root = tmp_path / "jobs"
+    jobs_root.mkdir(parents=True)
+
+    consensus = _mock_consensus_model(
+        decision="accept",
+        reasoning="LLM would wrongly accept",
+    )
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=consensus,
+        runner_factory=IdleFakeFactory(),
+    )
+    if svc._rail_interpreter is not None:
+        svc._jobs_root = jobs_root
+        svc._rail_interpreter.builtins._jobs_root = jobs_root
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(tmp_path / "ws"),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    ex = svc._rail_interpreter.builtins
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+        )
+    )
+    spawned = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = spawned.created_goal_ids[0]
+    ce.claim_goal(arch_id, loop_id="w1")
+
+    called: list[str] = []
+
+    async def _boom(*_a: object, **_k: object) -> tuple[str, str]:
+        called.append("evaluate")
+        return "accept", "should not run"
+
+    monkeypatch.setattr(
+        "soothe_autopilot.verify.consensus.evaluate_goal_completion",
+        _boom,
+    )
+
+    await svc._apply_consensus_and_finalize(
+        arch_id,
+        evidence_summary="Wrote docs/wave-plan.json in the project tree.",
+        contribution=GoalDispatchContextContribution(
+            findings=[
+                Finding(
+                    summary="Step EKK-01: write_file docs/wave-plan.json",
+                    relevance_score=0.5,
+                )
+            ],
+        ),
+    )
+
+    assert called == []
+    consensus.with_structured_output.assert_not_called()
+    arch = await ce.get_goal(arch_id)
+    assert arch is not None
+    assert arch.status == "pending"
+    assert arch.send_back_count == 1
+
+
+@pytest.mark.asyncio
+async def test_workspace_and_jobs_wave_plan_dumps_are_authoritative(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Recommended dumps satisfy is_wave_plan_ready after ingest."""
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    jobs_root = tmp_path / "jobs"
+    jobs_root.mkdir(parents=True)
+    ws = tmp_path / "ws"
+    (ws / ".soothe").mkdir(parents=True)
+    (ws / ".soothe" / "wave-plan.json").write_text(
+        '{"wave_slices":["dot-soothe"],"rationale":"recommended"}',
+        encoding="utf-8",
+    )
+
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(decision="accept", reasoning="n/a"),
+        runner_factory=IdleFakeFactory(),
+    )
+    assert svc._rail_interpreter is not None
+    svc._jobs_root = jobs_root
+    svc._rail_interpreter.builtins._jobs_root = jobs_root
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(ws),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    ex = svc._rail_interpreter.builtins
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+        )
+    )
+    await ex.ingest_wave_plan(root.id)
+    assert ex.is_wave_plan_ready(root.id)
+    state = await ex.job_state(root.id)
+    assert state is not None
+    assert state.wave_slices == ["dot-soothe"]
+    assert state.wave_plan_source_path is not None
+    assert state.wave_plan_source_path.endswith(".soothe/wave-plan.json")
+
+
+@pytest.mark.asyncio
+async def test_architecture_gate_accepts_jobs_dump_and_mirrors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Jobs dump alone accepts architecture; record mirrors both recommended dumps."""
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    jobs_root = tmp_path / "jobs"
+    jobs_root.mkdir(parents=True)
+    ws = tmp_path / "ws"
+    ws.mkdir(parents=True)
+
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(
+            decision="send_back",
+            reasoning="should not be consulted",
+        ),
+        runner_factory=IdleFakeFactory(),
+    )
+    assert svc._rail_interpreter is not None
+    svc._jobs_root = jobs_root
+    svc._rail_interpreter.builtins._jobs_root = jobs_root
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(ws),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    ex = svc._rail_interpreter.builtins
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+            engine_max_parallel_goals=4,
+        )
+    )
+    spawned = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = spawned.created_goal_ids[0]
+    ce.claim_goal(arch_id, loop_id="w1")
+
+    dump = jobs_root / root.id / "wave-plan.json"
+    dump.parent.mkdir(parents=True, exist_ok=True)
+    dump.write_text(
+        '{"wave_slices":["from-jobs"],"independence":"disjoint","rationale":"dump"}',
+        encoding="utf-8",
+    )
+
+    await svc._apply_consensus_and_finalize(
+        arch_id,
+        evidence_summary="Architecture done without wire blob.",
+        contribution=GoalDispatchContextContribution(),
+    )
+
+    arch = await ce.get_goal(arch_id)
+    assert arch is not None
+    assert arch.status == "completed"
+    state = await ex.job_state(root.id)
+    assert state is not None
+    assert state.wave_slices == ["from-jobs"]
+    assert (ws / ".soothe" / "wave-plan.json").is_file()
+
+
+@pytest.mark.asyncio
+async def test_architecture_gate_accepts_structured_wave_plan_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Custom under-workspace path works when contribution.wave_plan_path is set."""
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    jobs_root = tmp_path / "jobs"
+    jobs_root.mkdir(parents=True)
+    ws = tmp_path / "ws"
+    custom = ws / "docs" / "architecture" / "wp.json"
+    custom.parent.mkdir(parents=True)
+    custom.write_text(
+        '{"wave_slices":["custom-a","custom-b"],"rationale":"path"}',
+        encoding="utf-8",
+    )
+
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(
+            decision="send_back",
+            reasoning="should not be consulted",
+        ),
+        runner_factory=IdleFakeFactory(),
+    )
+    assert svc._rail_interpreter is not None
+    svc._jobs_root = jobs_root
+    svc._rail_interpreter.builtins._jobs_root = jobs_root
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(ws),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    ex = svc._rail_interpreter.builtins
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+            engine_max_parallel_goals=4,
+        )
+    )
+    spawned = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = spawned.created_goal_ids[0]
+    ce.claim_goal(arch_id, loop_id="w1")
+
+    await svc._apply_consensus_and_finalize(
+        arch_id,
+        evidence_summary="Wrote custom WavePlan path.",
+        contribution=GoalDispatchContextContribution(
+            wave_plan_path="docs/architecture/wp.json",
+        ),
+    )
+
+    arch = await ce.get_goal(arch_id)
+    assert arch is not None
+    assert arch.status == "completed"
+    state = await ex.job_state(root.id)
+    assert state is not None
+    assert state.wave_slices == ["custom-a", "custom-b"]
+    assert state.wave_plan_source_path is not None
+    assert state.wave_plan_source_path.endswith("docs/architecture/wp.json")
+
+
+@pytest.mark.asyncio
+async def test_architecture_gate_accepts_inline_wave_plan_field(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Inline contribution.wave_plan accepts without findings or files."""
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    jobs_root = tmp_path / "jobs"
+    jobs_root.mkdir(parents=True)
+    ws = tmp_path / "ws"
+    ws.mkdir(parents=True)
+
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(
+            decision="send_back",
+            reasoning="should not be consulted",
+        ),
+        runner_factory=IdleFakeFactory(),
+    )
+    assert svc._rail_interpreter is not None
+    svc._jobs_root = jobs_root
+    svc._rail_interpreter.builtins._jobs_root = jobs_root
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(ws),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    ex = svc._rail_interpreter.builtins
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+            engine_max_parallel_goals=4,
+        )
+    )
+    spawned = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = spawned.created_goal_ids[0]
+    ce.claim_goal(arch_id, loop_id="w1")
+
+    await svc._apply_consensus_and_finalize(
+        arch_id,
+        evidence_summary="done",
+        contribution=GoalDispatchContextContribution(
+            wave_plan={
+                "wave_slices": ["inline-core", "inline-api"],
+                "rationale": "structured",
+            },
+        ),
+    )
+
+    arch = await ce.get_goal(arch_id)
+    assert arch is not None
+    assert arch.status == "completed"
+    state = await ex.job_state(root.id)
+    assert state is not None
+    assert state.wave_slices == ["inline-core", "inline-api"]
+    assert (jobs_root / root.id / "wave-plan.json").is_file()
+    assert (ws / ".soothe" / "wave-plan.json").is_file()
+
+
+@pytest.mark.asyncio
+async def test_wave_plan_path_escape_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Paths outside workspace/jobs must not accept."""
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    jobs_root = tmp_path / "jobs"
+    jobs_root.mkdir(parents=True)
+    ws = tmp_path / "ws"
+    ws.mkdir(parents=True)
+    outside = tmp_path / "outside" / "wave-plan.json"
+    outside.parent.mkdir(parents=True)
+    outside.write_text(
+        '{"wave_slices":["escaped"],"rationale":"bad"}',
+        encoding="utf-8",
+    )
+
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(
+            decision="accept",
+            reasoning="should not run for architecture",
+        ),
+        runner_factory=IdleFakeFactory(),
+    )
+    assert svc._rail_interpreter is not None
+    svc._jobs_root = jobs_root
+    svc._rail_interpreter.builtins._jobs_root = jobs_root
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(ws),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    ex = svc._rail_interpreter.builtins
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+        )
+    )
+    spawned = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = spawned.created_goal_ids[0]
+    ce.claim_goal(arch_id, loop_id="w1")
+
+    await svc._apply_consensus_and_finalize(
+        arch_id,
+        evidence_summary="bad path",
+        contribution=GoalDispatchContextContribution(
+            wave_plan_path=str(outside),
+        ),
+    )
+
+    arch = await ce.get_goal(arch_id)
+    assert arch is not None
+    assert arch.status == "pending"
+    assert arch.send_back_count == 1
+    assert not ex.is_wave_plan_ready(root.id)
+
+
+@pytest.mark.asyncio
+async def test_architecture_gate_fail_closed_without_rail_interpreter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Missing rail interpreter must send_back, not LLM-accept."""
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(
+            decision="accept",
+            reasoning="would accept without WavePlan",
+        ),
+        runner_factory=IdleFakeFactory(),
+    )
+    svc._rail_interpreter = None
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(tmp_path / "ws"),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    arch = await ce.create_goal(
+        "Architecture map",
+        parent_id=root.id,
+        source="decomposition",
+        priority=80,
+        workspace=str(tmp_path / "ws"),
+        rail_id="greenfield-system",
+    )
+    arch.role = "planner"
+    arch.rail_tags = ["architecture", "planning", "milestones"]
+    ce.claim_goal(arch.id, loop_id="w1")
+
+    called: list[str] = []
+
+    async def _boom(*_a: object, **_k: object) -> tuple[str, str]:
+        called.append("evaluate")
+        return "accept", "should not run"
+
+    monkeypatch.setattr(
+        "soothe_autopilot.verify.consensus.evaluate_goal_completion",
+        _boom,
+    )
+
+    await svc._apply_consensus_and_finalize(
+        arch.id,
+        evidence_summary="prose only",
+        contribution=None,
+    )
+
+    assert called == []
+    updated = await ce.get_goal(arch.id)
+    assert updated is not None
+    assert updated.status == "pending"
+    assert updated.send_back_count == 1
+
+
+@pytest.mark.asyncio
+async def test_architecture_gate_send_back_includes_nesting_detail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nested WAVE dict must send_back with nesting Detail (RFC-232 / IG-721)."""
+    monkeypatch.setenv("SOOTHE_DATA_DIR", str(tmp_path))
+    jobs_root = tmp_path / "jobs"
+    jobs_root.mkdir(parents=True)
+
+    bus = InternalEventBus()
+    ce = ContextEngine()
+    svc = AutopilotService(
+        ce=ce,
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=4),
+        internal_bus=bus,
+        consensus_model=_mock_consensus_model(
+            decision="accept",
+            reasoning="should not accept nested WavePlan",
+        ),
+        runner_factory=IdleFakeFactory(),
+    )
+    if svc._rail_interpreter is not None:
+        svc._jobs_root = jobs_root
+        svc._rail_interpreter.builtins._jobs_root = jobs_root
+
+    root = await ce.create_goal(
+        "Build scaffold",
+        workspace=str(tmp_path / "ws"),
+        priority=80,
+        rail_id="greenfield-system",
+    )
+    root.role = "root"
+    ex = svc._rail_interpreter.builtins
+    await ex.bind_job(
+        catalog_rail_job_state(
+            root.id,
+            require_plan=True,
+        )
+    )
+    spawned = await ex.invoke("plan_milestones", job_id=root.id)
+    arch_id = spawned.created_goal_ids[0]
+    ce.claim_goal(arch_id, loop_id="w1")
+
+    nested = (
+        '{"wave_slices":{"WAVE-0":{"name":"Foundation","slices":["a","b"]}},'
+        '"rationale":"nested schedule"}'
+    )
+    await svc._apply_consensus_and_finalize(
+        arch_id,
+        evidence_summary="Architecture done with nested waves.",
+        contribution=GoalDispatchContextContribution(
+            findings=[Finding(summary=nested, relevance_score=1.0)],
+        ),
+    )
+
+    arch = await ce.get_goal(arch_id)
+    assert arch is not None
+    assert arch.status == "pending"
+    assert arch.send_back_count == 1
+    assert not ex.is_wave_plan_ready(root.id)
+    guidance = " ".join(str(item.get("text") or "") for item in (arch.guidance_accumulated or []))
+    assert "Detail:" in guidance
+    assert "nested" in guidance.lower()

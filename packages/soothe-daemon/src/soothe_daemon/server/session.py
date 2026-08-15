@@ -347,7 +347,7 @@ class ClientSessionManager:
         loops (``subscribe_thread`` on ``autopilot__*`` ids).
         """
         try:
-            from soothe.autopilot.workers.pool import is_autopilot_worker_loop_id
+            from soothe_autopilot.workers.pool import is_autopilot_worker_loop_id
 
             if is_autopilot_worker_loop_id(loop_id):
                 # RFC-228: Check if client has autopilot subscription bypass

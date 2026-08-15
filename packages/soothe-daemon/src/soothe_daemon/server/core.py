@@ -634,14 +634,14 @@ class SootheDaemon(DaemonHandlersMixin):
             #
             # RFC-625: Uses ContextEngine + AutopilotMonitor instead of GoalEngine.
             try:
-                from soothe.autopilot import AutopilotMonitor, AutopilotService
-                from soothe.autopilot.dispatch.durability_store import (
-                    DurabilityGoalDispatchContextStore,
-                )
-                from soothe.autopilot.dispatch.projector import ContextProjector
-                from soothe.autopilot.workers.workspace_reservation import WorkspaceReservation
                 from soothe.context import ContextEngine
                 from soothe.events.internal_bus import InternalEventBus
+                from soothe_autopilot import AutopilotMonitor, AutopilotService
+                from soothe_autopilot.dispatch.durability_store import (
+                    DurabilityGoalDispatchContextStore,
+                )
+                from soothe_autopilot.dispatch.projector import ContextProjector
+                from soothe_autopilot.workers.workspace_reservation import WorkspaceReservation
                 from soothe_nano.backends.persistence import create_persist_store
                 from soothe_sdk.paths import SOOTHE_DATA_DIR
 
@@ -746,7 +746,7 @@ class SootheDaemon(DaemonHandlersMixin):
                         context_persist_store
                     )
                 else:
-                    from soothe.autopilot.dispatch.store import InMemoryGoalDispatchContextStore
+                    from soothe_autopilot.dispatch.store import InMemoryGoalDispatchContextStore
 
                     cp = self._config.agent.autopilot.context_projection
                     self._autopilot_service._context_store = InMemoryGoalDispatchContextStore(
@@ -775,8 +775,8 @@ class SootheDaemon(DaemonHandlersMixin):
 
                 # RFC-229: Create daemon-owned CronService for scheduled jobs
                 try:
-                    from soothe.cron import CronService
-                    from soothe.cron.store_factory import create_cron_job_store
+                    from soothe_daemon.cron import CronService
+                    from soothe_daemon.cron.store_factory import create_cron_job_store
 
                     self._cron_service = CronService(
                         config=self._config,

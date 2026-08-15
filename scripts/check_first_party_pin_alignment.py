@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Ensure soothe and soothe-daemon declare compatible first-party pins.
+"""Ensure soothe, soothe-autopilot, and soothe-daemon declare compatible pins.
 
-The Docker image installs ``soothe==VERSION`` and ``soothe-daemon==VERSION``
-together from PyPI. Daemon must pin ``soothe`` to a range that admits the
-current monorepo VERSION. When daemon also declares ``soothe-sdk``, that range
-must intersect soothe's ``soothe-sdk`` pin (empty intersection fails resolve).
+The Docker image installs ``soothe==VERSION``, ``soothe-autopilot==VERSION``,
+and ``soothe-daemon==VERSION`` together from PyPI. Daemon and autopilot must
+pin ``soothe`` to a range that admits the current monorepo VERSION. When a
+package also declares ``soothe-sdk``, that range must intersect soothe's
+``soothe-sdk`` pin (empty intersection fails resolve).
 
 Daemon must NOT re-pin ``soothe-nano`` (comes via soothe) or depend on
-``soothe-client-python`` at runtime (client sits above the daemon).
+``soothe-client-python`` at runtime (client sits above the daemon). Autopilot
+must not depend on ``soothe-daemon`` / ``soothe-cli`` / ``soothe-client-python``
+(it sits above the daemon).
 """
 
 from __future__ import annotations
@@ -45,6 +48,7 @@ _PROBE_VERSIONS = tuple(
 
 _DAEMON_PYPROJECT = "packages/soothe-daemon/pyproject.toml"
 _SOOTHE_PYPROJECT = "packages/soothe/pyproject.toml"
+_AUTOPILOT_PYPROJECT = "packages/soothe-autopilot/pyproject.toml"
 
 
 def _load_deps(rel: str) -> dict[str, Requirement]:
@@ -82,6 +86,7 @@ def _annotate(message: str, file: str | None = None) -> None:
 def main() -> int:
     soothe = _load_deps("packages/soothe/pyproject.toml")
     daemon = _load_deps("packages/soothe-daemon/pyproject.toml")
+    autopilot = _load_deps("packages/soothe-autopilot/pyproject.toml")
     errors: list[tuple[str, str | None]] = []
 
     # Daemon must not re-pin nano or depend on the WS client at runtime.
@@ -138,19 +143,75 @@ def main() -> int:
                 )
             )
 
+    # Autopilot must not depend on the daemon, CLI, or the WS client (it sits
+    # above the daemon, below the host).
+    for name in ("soothe-daemon", "soothe-cli", "soothe-client-python"):
+        if name in autopilot:
+            errors.append(
+                (f"soothe-autopilot must not declare {name} in core deps", _AUTOPILOT_PYPROJECT)
+            )
+
+    # Autopilot's soothe pin must admit VERSION; its soothe-sdk pin must
+    # intersect soothe's (Docker/PyPI co-install).
+    ap_soothe_req = autopilot.get("soothe")
+    if ap_soothe_req is None:
+        errors.append(("soothe-autopilot is missing dependency on soothe", _AUTOPILOT_PYPROJECT))
+    else:
+        version = (ROOT / "VERSION").read_text().strip()
+        if Version(version) not in ap_soothe_req.specifier:
+            errors.append(
+                (
+                    f"soothe-autopilot soothe pin {_normalize_spec(ap_soothe_req.specifier)} "
+                    f"does not admit current VERSION {version}",
+                    _AUTOPILOT_PYPROJECT,
+                )
+            )
+
+    if "soothe-sdk" in soothe and "soothe-sdk" in autopilot:
+        a = soothe["soothe-sdk"].specifier
+        b = autopilot["soothe-sdk"].specifier
+        if not _ranges_intersect(a, b):
+            errors.append(
+                (
+                    f"soothe-sdk: soothe requires {_normalize_spec(a)} but "
+                    f"soothe-autopilot requires {_normalize_spec(b)} "
+                    f"(empty intersection — Docker/PyPI co-install will fail)",
+                    _AUTOPILOT_PYPROJECT,
+                )
+            )
+
+    # Daemon must pin soothe-autopilot to a range admitting the current VERSION.
+    daemon_ap_req = daemon.get("soothe-autopilot")
+    if daemon_ap_req is None:
+        errors.append(
+            ("soothe-daemon is missing dependency on soothe-autopilot", _DAEMON_PYPROJECT)
+        )
+    else:
+        version = (ROOT / "VERSION").read_text().strip()
+        if Version(version) not in daemon_ap_req.specifier:
+            errors.append(
+                (
+                    f"soothe-daemon soothe-autopilot pin {_normalize_spec(daemon_ap_req.specifier)} "
+                    f"does not admit current VERSION {version}",
+                    _DAEMON_PYPROJECT,
+                )
+            )
+
     if errors:
         print("FAILED: first-party pin alignment")
         for err, fpath in errors:
             print(f"  - {err}")
             _annotate(err, file=fpath)
         print(
-            "\nAlign pins in packages/soothe/pyproject.toml and "
+            "\nAlign pins in packages/soothe/pyproject.toml, "
+            "packages/soothe-autopilot/pyproject.toml, and "
             "packages/soothe-daemon/pyproject.toml before release."
         )
         return 1
 
-    print("OK: soothe and soothe-daemon first-party pins aligned")
+    print("OK: soothe, soothe-autopilot, and soothe-daemon first-party pins aligned")
     print(f"  soothe: daemon pin {_normalize_spec(soothe_req.specifier)} admits VERSION")
+    print(f"  soothe: autopilot pin {_normalize_spec(ap_soothe_req.specifier)} admits VERSION")
     for name in SHARED_FIRST_PARTY:
         if name in daemon and name in soothe:
             print(

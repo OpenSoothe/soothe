@@ -29,9 +29,10 @@ from soothe.events import (
     WiredSubagentCompletedEvent,
     WiredSubagentFailedEvent,
     WiredSubagentStartedEvent,
+    custom_event,
 )
 from soothe.events.visibility import is_custom_stream_payload_client_visible
-from soothe.runner._runner_shared import StreamChunk, _custom
+from soothe.runner._runner_shared import StreamChunk
 from soothe.sloop.clarification.events import (
     ClarificationAnsweredEvent,
     ClarificationDeferredEvent,
@@ -184,7 +185,7 @@ async def _drain_workspace_shells_on_cancel(workspace: str | None) -> None:
     if not ws:
         return
     try:
-        from soothe.runner._runner_autopilot_worker import drain_goal_runtime
+        from soothe.runner.shell_drain import drain_goal_runtime
 
         await asyncio.to_thread(drain_goal_runtime, ws)
     except Exception:
@@ -493,7 +494,7 @@ class StrangeLoopMixin:
 
         # Emit loop started event (Level 1)
         display_goal = preview_first(user_input, 100)
-        yield _custom(
+        yield custom_event(
             StrangeLoopStartedEvent(
                 thread_id=tid,
                 goal=display_goal,
@@ -590,7 +591,7 @@ class StrangeLoopMixin:
                     payload = event_data if isinstance(event_data, dict) else {}
                     reasoning = str(payload.get("reasoning", "")).strip()
                     if reasoning:
-                        yield _custom(
+                        yield custom_event(
                             IntentClassifiedEvent(
                                 reasoning=reasoning,
                             ).to_dict()
@@ -606,7 +607,7 @@ class StrangeLoopMixin:
                         intake_label or "unknown",
                     )
                     if intake_label:
-                        yield _custom(
+                        yield custom_event(
                             IntentClassifiedEvent(
                                 intent_type=str(payload.get("intent_type") or "agentic"),
                                 intake_label=intake_label,
@@ -664,7 +665,7 @@ class StrangeLoopMixin:
                         event_data.get("total_steps", 0),
                         event_data.get("done_steps", 0),
                     )
-                    yield _custom(
+                    yield custom_event(
                         StrangeLoopPlanDecisionEvent(
                             iteration=int(event_data.get("iteration", 0)),
                             steps=list(event_data.get("steps") or []),
@@ -677,7 +678,7 @@ class StrangeLoopMixin:
 
                 elif event_type == "step_started":
                     # Level 2: Step description (clip — Reason can embed a full brief; avoids TUI duplicate wall)
-                    yield _custom(
+                    yield custom_event(
                         StrangeLoopStepStartedEvent(
                             step_id=str(event_data.get("step_id", "")),
                             description=_clip_sloop_step_description(event_data["description"]),
@@ -685,7 +686,7 @@ class StrangeLoopMixin:
                     )
 
                 elif event_type == "step_queued":
-                    yield _custom(
+                    yield custom_event(
                         StrangeLoopStepQueuedEvent(
                             step_id=str(event_data.get("step_id", "")),
                             description=_clip_sloop_step_description(event_data["description"]),
@@ -695,7 +696,7 @@ class StrangeLoopMixin:
                 elif event_type == "step_completion_report":
                     summary = str(event_data.get("summary", "")).strip()
                     if summary:
-                        yield _custom(
+                        yield custom_event(
                             LoopAgentReasonEvent(
                                 status="",
                                 progress="",
@@ -716,7 +717,7 @@ class StrangeLoopMixin:
                     total_tokens_used = coerce_total_tokens_used(
                         event_data.get("total_tokens_used")
                     )
-                    yield _custom(
+                    yield custom_event(
                         StrangeLoopStepCompletedEvent(
                             step_id=str(event_data.get("step_id", "")),
                             success=success,
@@ -735,7 +736,7 @@ class StrangeLoopMixin:
                     # can suppress the stream-end "Stream ended unexpectedly" safety net.
                     # RFC-633: forward plan_path / plan_markdown for the planner review card.
                     payload = event_data if isinstance(event_data, dict) else {}
-                    yield _custom(
+                    yield custom_event(
                         ClarificationRequestedEvent(
                             questions=list(payload.get("questions") or []),
                             origin_node=str(payload.get("origin_node") or ""),
@@ -753,7 +754,7 @@ class StrangeLoopMixin:
                     if source not in ("human", "veritas", "fallback"):
                         source = "human"
                     confidence = payload.get("confidence")
-                    yield _custom(
+                    yield custom_event(
                         ClarificationAnsweredEvent(
                             source=source,
                             confidence=float(confidence)
@@ -765,7 +766,7 @@ class StrangeLoopMixin:
 
                 elif event_type == "clarification_deferred":
                     payload = event_data if isinstance(event_data, dict) else {}
-                    yield _custom(
+                    yield custom_event(
                         ClarificationDeferredEvent(
                             reason=str(payload.get("reason") or ""),
                             question_summary=str(payload.get("question_summary") or ""),
@@ -788,7 +789,7 @@ class StrangeLoopMixin:
                         total_tokens_used = coerce_total_tokens_used(
                             event_data.get("total_tokens_used")
                         )
-                        yield _custom(
+                        yield custom_event(
                             StrangeLoopPlanPhaseStatusEvent(
                                 label=label,
                                 total_tokens_used=total_tokens_used,
@@ -797,7 +798,7 @@ class StrangeLoopMixin:
 
                 elif event_type == "wired_subagent_started":
                     payload = event_data if isinstance(event_data, dict) else {}
-                    yield _custom(
+                    yield custom_event(
                         WiredSubagentStartedEvent(
                             subagent=str(payload.get("subagent") or ""),
                             invocation_id=str(payload.get("invocation_id") or ""),
@@ -808,7 +809,7 @@ class StrangeLoopMixin:
 
                 elif event_type == "wired_subagent_completed":
                     payload = event_data if isinstance(event_data, dict) else {}
-                    yield _custom(
+                    yield custom_event(
                         WiredSubagentCompletedEvent(
                             subagent=str(payload.get("subagent") or ""),
                             invocation_id=str(payload.get("invocation_id") or ""),
@@ -820,7 +821,7 @@ class StrangeLoopMixin:
 
                 elif event_type == "wired_subagent_failed":
                     payload = event_data if isinstance(event_data, dict) else {}
-                    yield _custom(
+                    yield custom_event(
                         WiredSubagentFailedEvent(
                             subagent=str(payload.get("subagent") or ""),
                             invocation_id=str(payload.get("invocation_id") or ""),
@@ -833,7 +834,7 @@ class StrangeLoopMixin:
 
                 elif event_type == "wired_subagent_cancelled":
                     payload = event_data if isinstance(event_data, dict) else {}
-                    yield _custom(
+                    yield custom_event(
                         WiredSubagentCancelledEvent(
                             subagent=str(payload.get("subagent") or ""),
                             invocation_id=str(payload.get("invocation_id") or ""),
@@ -846,7 +847,7 @@ class StrangeLoopMixin:
                 elif event_type == "assess":
                     reasoning = str(event_data.get("assessment_reasoning", "")).strip()
                     if _is_displayable_assessment_reasoning(reasoning):
-                        yield _custom(
+                        yield custom_event(
                             LoopAgentReasonEvent(
                                 status="",
                                 progress="",
@@ -861,7 +862,7 @@ class StrangeLoopMixin:
                     if _should_emit_loop_reason_event(
                         assessment_reasoning=assessment_reasoning,
                     ):
-                        yield _custom(
+                        yield custom_event(
                             LoopAgentReasonEvent(
                                 status=str(event_data.get("status", "")),
                                 progress=event_data["progress"],
@@ -917,7 +918,7 @@ class StrangeLoopMixin:
                             iteration=None,
                         )
 
-                    yield _custom(
+                    yield custom_event(
                         StrangeLoopCompletedEvent(
                             thread_id=tid,
                             status=final_result.status,
@@ -942,8 +943,8 @@ class StrangeLoopMixin:
                     # the TUI so the user sees the actual cause instead of a
                     # generic "Stream ended unexpectedly" safety-net message.
                     error_msg = str(event_data.get("error") or "Fatal error")
-                    yield _custom({"type": ERROR, "error": error_msg})
-                    yield _custom(
+                    yield custom_event({"type": ERROR, "error": error_msg})
+                    yield custom_event(
                         StrangeLoopCompletedEvent(
                             thread_id=tid,
                             status="fatal",

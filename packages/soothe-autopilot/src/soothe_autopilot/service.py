@@ -1,0 +1,2907 @@
+"""AutopilotService orchestration (RFC-222, RFC-625).
+
+Manages:
+- Loop pool (StrangeLoop worker creation, assignment, release)
+- Scheduling loop (goal → loop assignment with lineage reuse)
+- Internal EventBus integration (AL ↔ CE ↔ AP coordination)
+- Dreaming mode transitions
+
+Roles:
+- AutopilotService: Loop management, scheduling, job lifecycle notify
+- ContextEngine: Goal lifecycle, DAG (sole source of truth per RFC-625)
+- AutopilotMonitor: DAG verification, dreaming coordination
+
+Solo mode preserved — AutopilotService only active when autopilot.enabled
+is true.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import logging
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from soothe.context.engine import ContextEngine
+from soothe.context.models import TERMINAL_STATES, GoalNode, StepExecution, StepNode
+from soothe.events.internal_bus import InternalEventBus
+from soothe.events.internal_events import (
+    INTERNAL_GOAL_STATE_CHANGED,
+    INTERNAL_GOAL_UNBLOCKED,
+    INTERNAL_GOALS_READY,
+    InternalAutopilotAwakeEvent,
+    InternalAutopilotDreamingEvent,
+    InternalAutopilotStartedEvent,
+    InternalAutopilotStoppedEvent,
+    InternalGoalCompletedEvent,
+    InternalGoalFailedEvent,
+    InternalGoalReportCommittedEvent,
+    InternalGoalsReadyEvent,
+    InternalGoalStateChangedEvent,
+    InternalGoalUnblockedEvent,
+    InternalLoopAssignedEvent,
+    InternalLoopIdleEvent,
+    InternalLoopPoolChangedEvent,
+    InternalLoopReleasedEvent,
+)
+
+if TYPE_CHECKING:
+    from soothe.config.models import AutopilotConfig
+
+    from soothe_autopilot import AutopilotMonitor
+
+logger = logging.getLogger(__name__)
+
+
+class AutopilotService:
+    """Autopilot orchestration service (RFC-222, RFC-625).
+
+    Manages StrangeLoop worker pool and goal scheduling with
+    lineage-aware loop reuse. Uses ContextEngine as the sole
+    source of truth for goal/step state.
+
+    Responsibilities:
+    - Spawn and manage StrangeLoop workers (loop pool)
+    - Schedule ready goals to available loops
+    - Lineage-aware loop assignment (reuse parent's loop)
+    - Emit job lifecycle notify intents (email / webhook / …)
+    - Enter dreaming mode when no goals active
+
+    NOT responsible for:
+    - Single-goal execution logic (StrangeLoop owns this)
+    - Goal DAG management (ContextEngine owns this per RFC-625)
+    - Tool/subagent execution (CoreAgent owns this)
+
+    Args:
+        ce: ContextEngine instance for goal management (RFC-625).
+        config: AutopilotConfig (RFC-222 fields live in this unified config).
+        internal_bus: Internal EventBus for coordination.
+        monitor: Optional AutopilotMonitor for proactive DAG monitoring.
+    """
+
+    def __init__(
+        self,
+        ce: ContextEngine,
+        config: AutopilotConfig,
+        internal_bus: Any | None = None,
+        *,
+        monitor: AutopilotMonitor | None = None,
+        subscribe_to_bus: bool = True,
+        runner_factory: Any,
+        workspace_reservation: Any | None = None,
+        consensus_model: Any | None = None,
+        auto_pick_model: Any | None = None,
+        goal_persist_store: Any | None = None,
+        soothe_config: Any | None = None,
+    ) -> None:
+        """Initialize AutopilotService.
+
+        Args:
+            ce: ContextEngine instance for goal management (RFC-625).
+            config: Project-level AutopilotConfig carrying RFC-222 loop pool
+                fields (``max_loops``, ``loop_idle_timeout``, ``poll_interval``,
+                ``dreaming_poll_interval``). StrangeLoop iteration budget lives
+                on ``agent.loop.max_iterations`` (not AutopilotConfig).
+            internal_bus: Internal EventBus (uses singleton if None).
+            monitor: Optional AutopilotMonitor for proactive DAG monitoring.
+                When provided (daemon mode), handles goal intake, verification,
+                and dreaming coordination.
+            subscribe_to_bus: When True (default), subscribe handlers to the
+                bus immediately. RFC-222 (revised): the daemon constructs a
+                daemon-owned ``AutopilotService`` alongside the per-runner
+                one — they share the singleton bus, so the daemon instance
+                must pass ``subscribe_to_bus=False`` to avoid
+                double-handling every event.
+            runner_factory: ``LoopRunnerFactory``-shaped object exposing
+                ``create_runner(loop_id) -> LoopRunnerProtocol``. Required for
+                worker-pool dispatch (RFC-222 Phase C+).
+            workspace_reservation: Optional ``WorkspaceReservation`` gate.
+                When provided, the scheduling loop refuses to dispatch a
+                goal whose workspace overlaps an active reservation. When
+                ``None``, no workspace gating is applied.
+            consensus_model: Optional LLM for RFC-204 report-commit judgment.
+                When ``None``, completed goals fail consensus (host recovery)
+                rather than parking for an operator (IG-707).
+            auto_pick_model: Optional LLM for LoopRail auto-pick when submit
+                omits ``rail_id`` (RFC-231 §10 / IG-728). Falls back to
+                ``consensus_model`` when unset.
+            goal_persist_store: Optional ``AsyncPersistStore`` for persisting
+                the ContextEngine DAG snapshot across daemon restarts.
+                Also backs the job↔loop membership index (IG-677).
+            soothe_config: Optional full ``SootheConfig`` for Veritas on rail
+                ``pause_for_user`` (IG-737). When unset, pause fails open to
+                CE suspend.
+        """
+        if runner_factory is None:
+            msg = "runner_factory is required"
+            raise ValueError(msg)
+        self._ce = ce
+        self._monitor = monitor
+        self._config = config
+        self._soothe_config = soothe_config
+        self._internal_bus = internal_bus if internal_bus is not None else InternalEventBus()
+        self._running = False
+        self._dreaming = False
+        self._scheduling_task: asyncio.Task | None = None
+        self._subscribed = False
+        # IG-680: health removals cascade through service cancel when monitor is wired.
+        if self._monitor is not None:
+            self._monitor.bind_service_cancel(self.cancel_goal)
+            self._monitor.bind_suspend_notify_scan(self.scan_notify_suspend_timeouts)
+            self._monitor.bind_dag_persist(self._persist_goals)
+            self._monitor.bind_resource_reconcile(self.reconcile_goal_resources)
+
+        # RFC-222 revised (Phase C): WorkerPool-driven dispatch.
+        # Capacity: ``max_loops`` (pool size) and ``max_parallel_goals``
+        # (schedule cap in ``_schedule_via_worker_pool``). Assignment locking
+        # lives on ``WorkerPool``.
+        self._runner_factory = runner_factory
+        from soothe_autopilot.workers.job_loop_index import JobLoopIndex
+        from soothe_autopilot.workers.pool import WorkerPool
+
+        self._worker_pool = WorkerPool(factory=runner_factory, max_loops=self._config.max_loops)
+        self._workspace_reservation = workspace_reservation
+        self._consensus_model = consensus_model
+        self._auto_pick_model = auto_pick_model if auto_pick_model is not None else consensus_model
+        self._goal_persist_store = goal_persist_store
+        self._job_loop_index = JobLoopIndex(store=goal_persist_store)
+        self._context_store: Any = None
+        self._context_projector: Any = None
+        self._dispatch_tasks: dict[str, asyncio.Task] = {}  # goal_id → consumer task
+        # goal_ids whose worker slot + reservation have already been released
+        # (idempotency guard so early-release and the tail block don't double-free).
+        self._released_goals: set[str] = set()
+        # Per-goal cursor for LoopState cumulative tokens on step_completed
+        # progress (IG-701). Reset to 0 on each goal_started / attempt.
+        self._goal_loop_token_cursor: dict[str, int] = {}
+        self._persist_fail_count = 0
+        self._jobs_root: Path | None = None
+        self._rail_interpreter: Any = None
+        self._notification_router: Any = None
+        self._init_rail_interpreter()
+        self._init_notification_router()
+
+        if subscribe_to_bus:
+            self._setup_subscriptions()
+            self._subscribed = True
+
+    def _init_notification_router(self) -> None:
+        """Construct host NotificationRouter (daemon injects dispatch later)."""
+        try:
+            from soothe_autopilot.notify import NotificationRouter
+
+            self._notification_router = NotificationRouter(
+                self._config.notify,
+                persist_store=self._goal_persist_store,
+            )
+        except Exception:
+            logger.warning("NotificationRouter unavailable", exc_info=True)
+            self._notification_router = None
+
+    def set_notify_dispatch(self, dispatch_fn: Any) -> None:
+        """Inject daemon NotifyDispatcher.dispatch (avoids host→daemon import)."""
+        if self._notification_router is None:
+            return
+        self._notification_router.set_dispatch_fn(dispatch_fn)
+
+    async def _maybe_notify_job_root(self, goal_id: str) -> None:
+        """Emit job.completed / job.failed when ``goal_id`` is a job root."""
+        router = self._notification_router
+        if router is None:
+            return
+        goal = await self._ce.get_goal(goal_id)
+        if goal is None or goal.parent_id is not None:
+            return
+        progress = await self._notify_progress_for_job(goal_id)
+        try:
+            await router.on_job_root_status(goal, progress=progress)
+        except Exception:
+            logger.debug("Job notify failed for %s", goal_id, exc_info=True)
+
+    async def _notify_progress_for_job(self, job_id: str) -> dict[str, Any] | None:
+        """Load compact DAG progress for notify (fail-soft; never a full goal dump)."""
+        try:
+            from soothe_autopilot.notify.progress import build_job_notify_progress
+
+            dag = await self.dag_snapshot(job_id)
+            return build_job_notify_progress(dag)
+        except Exception:
+            logger.debug("Notify progress snapshot failed for %s", job_id, exc_info=True)
+            return None
+
+    async def scan_notify_suspend_timeouts(self) -> None:
+        """Scan suspended job roots for notify.suspend_after_seconds (IG-713)."""
+        router = self._notification_router
+        if router is None:
+            return
+        try:
+            goals = await self._ce.list_goals(status="suspended")
+            roots = [g for g in goals if g.parent_id is None]
+            progress_by_job: dict[str, dict[str, Any] | None] = {}
+            for root in roots:
+                progress_by_job[root.id] = await self._notify_progress_for_job(root.id)
+            await router.scan_suspended_timeouts(roots, progress_by_job=progress_by_job)
+        except Exception:
+            logger.debug("Notify suspend scan failed", exc_info=True)
+
+    def _init_rail_interpreter(self) -> None:
+        """Construct LoopRail interpreter with job-scoped JSONL traces (IG-708)."""
+        try:
+            from pathlib import Path
+
+            from soothe_sdk.paths import SOOTHE_DATA_DIR
+
+            from soothe_autopilot.rails.guards import LLMGuardEvaluator
+            from soothe_autopilot.rails.interpreter import LoopRailInterpreter
+            from soothe_autopilot.rails.trace_store import JsonlRailTraceStore
+
+            guards = None
+            if self._consensus_model is not None:
+                guards = LLMGuardEvaluator(model=self._consensus_model)
+            data_dir = Path(SOOTHE_DATA_DIR)
+            trace_root = data_dir / "jobs"
+            legacy_root = data_dir / "loops"
+            trace_root.mkdir(parents=True, exist_ok=True)
+            self._jobs_root = trace_root
+            self._rail_interpreter = LoopRailInterpreter(
+                self._ce,
+                guards=guards,
+                trace=JsonlRailTraceStore(root=trace_root, legacy_root=legacy_root),
+                jobs_root=trace_root,
+                soothe_config=self._soothe_config,
+                rail_pause_auto_clarify=bool(self._config.rail_pause_auto_clarify),
+                on_user_intervention=self._on_rail_pause_user_intervention,
+            )
+        except Exception:
+            logger.warning("LoopRail interpreter unavailable", exc_info=True)
+            self._rail_interpreter = None
+            if self._jobs_root is None:
+                try:
+                    from pathlib import Path
+
+                    from soothe_sdk.paths import SOOTHE_DATA_DIR
+
+                    self._jobs_root = Path(SOOTHE_DATA_DIR) / "jobs"
+                    self._jobs_root.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    logger.warning("Job artifact root unavailable", exc_info=True)
+
+    def _setup_subscriptions(self) -> None:
+        """Subscribe to InternalEventBus events."""
+        self._internal_bus.subscribe(
+            INTERNAL_GOAL_STATE_CHANGED,
+            self._handle_goal_state_changed,
+        )
+        self._internal_bus.subscribe(
+            INTERNAL_GOALS_READY,
+            self._handle_goals_ready,
+        )
+        self._internal_bus.subscribe(
+            INTERNAL_GOAL_UNBLOCKED,
+            self._handle_goal_unblocked,
+        )
+
+    async def _handle_goal_state_changed(self, event: InternalGoalStateChangedEvent) -> None:
+        """Handle goal state change from ContextEngine.
+
+        Triggers scheduling re-evaluation and loop cleanup.
+
+        Args:
+            event: Goal state change event.
+        """
+        terminal = {"completed", "failed", "cancelled"}
+        log = (
+            logger.info
+            if event.new_status in terminal or event.old_status in terminal
+            else logger.debug
+        )
+        log(
+            "Goal state changed goal_id=%s %s → %s loop_id=%s",
+            event.goal_id,
+            event.old_status,
+            event.new_status,
+            event.loop_id or "-",
+        )
+
+        # Release loop if goal completed
+        if event.new_status == "completed" and event.loop_id:
+            await self._mark_loop_idle(event.loop_id, event.goal_id)
+
+        # Trigger scheduling if new active goal
+        if event.new_status == "active" and self._running and not self._dreaming:
+            await self._schedule_ready_goals()
+
+    async def _handle_goals_ready(self, event: InternalGoalsReadyEvent) -> None:
+        """Handle goals ready for scheduling.
+
+        Args:
+            event: Goals ready event.
+        """
+        logger.info("Goals ready for scheduling: %d", event.count)
+
+        if self._running and not self._dreaming:
+            for goal_id in event.goal_ids:
+                await self._schedule_goal(goal_id)
+
+    async def _handle_goal_unblocked(self, event: InternalGoalUnblockedEvent) -> None:
+        """Handle goal unblocked event (e.g., clarification resolved).
+
+        Immediately triggers scheduling for the unblocked goal to avoid
+        waiting for the next poll cycle. This ensures responsive autopilot
+        when clarification questions are answered by the user.
+
+        Args:
+            event: Goal unblocked event with goal_id and optional loop_id.
+        """
+        logger.info(
+            "Goal %s unblocked (%s → %s), triggering scheduling",
+            event.goal_id,
+            event.old_status,
+            event.new_status,
+        )
+
+        if self._running and not self._dreaming:
+            await self._schedule_goal(event.goal_id)
+
+    async def _mark_loop_idle(self, loop_id: str, goal_id: str) -> None:
+        """Mark worker idle after goal completion (idempotent with stream consumer).
+
+        Args:
+            loop_id: Worker loop id.
+            goal_id: Completed goal.
+        """
+        worker = self._worker_pool.get_worker(loop_id)
+        if worker is not None and worker.current_goal_id == goal_id:
+            await self._worker_pool.mark_idle(loop_id, success=True)
+
+        await self._internal_bus.emit(
+            InternalLoopIdleEvent(
+                loop_id=loop_id,
+                last_goal_id=goal_id,
+                goal_history_count=len(worker.last_goal_ids) if worker else 0,
+            )
+        )
+
+        await self._internal_bus.emit(
+            InternalLoopPoolChangedEvent(
+                active_count=self._worker_pool.active_count(),
+                idle_count=self._worker_pool.idle_count(),
+                total_count=self._worker_pool.total_count(),
+                change_type="idle",
+                loop_id=loop_id,
+            )
+        )
+
+    async def start(self) -> None:
+        """Start AutopilotService.
+
+        Initializes loop pool, starts scheduling loop,
+        emits started event.
+        """
+        if self._running:
+            logger.warning("AutopilotService already running")
+            return
+
+        await self._restore_persisted_goals()
+        interrupted = await self._job_loop_index.interrupt_active_loops()
+        if interrupted:
+            logger.warning(
+                "[Autopilot] crash recovery: interrupted %d active loop assignment(s)",
+                len(interrupted),
+            )
+            # Reconcile runtime resources for goals whose loops was just
+            # interrupted — drain orphaned processes + recycle worktrees
+            # so a crash-then-restart doesn't leak the prior run's resources.
+            try:
+                reconciled = await self.reconcile_goal_resources()
+                if reconciled:
+                    logger.info(
+                        "[Autopilot] crash recovery: reconciled %d resource(s)",
+                        reconciled,
+                    )
+            except Exception:
+                logger.warning(
+                    "[Autopilot] crash recovery: resource reconcile failed", exc_info=True
+                )
+
+        if self._monitor is not None:
+            await self._monitor.start()
+
+        self._running = True
+        self._dreaming = False
+
+        await self._internal_bus.emit(
+            InternalAutopilotStartedEvent(max_loops=self._config.max_loops)
+        )
+
+        await self._internal_bus.emit(
+            InternalLoopPoolChangedEvent(
+                active_count=0,
+                idle_count=0,
+                total_count=0,
+                change_type="spawn",
+            )
+        )
+
+        # Start scheduling loop
+        self._scheduling_task = asyncio.create_task(self._run_scheduling_loop())
+
+        logger.info("AutopilotService started with max_loops=%d", self._config.max_loops)
+
+    async def stop(self, reason: str = "user_request") -> None:
+        """Stop AutopilotService.
+
+        Releases all loops, stops scheduling, emits stopped event.
+
+        Args:
+            reason: Why the service stopped.
+        """
+        if not self._running:
+            return
+
+        self._running = False
+        self._dreaming = False
+
+        # Cancel scheduling task
+        if self._scheduling_task:
+            self._scheduling_task.cancel()
+            try:
+                await self._scheduling_task
+            except asyncio.CancelledError:
+                pass
+            self._scheduling_task = None
+
+        if self._monitor is not None:
+            await self._monitor.stop()
+
+        await self._persist_goals()
+
+        # Cancel any in-flight dispatch consumer tasks (RFC-222 Phase C).
+        for goal_id, task in list(self._dispatch_tasks.items()):
+            if task and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await task
+            self._dispatch_tasks.pop(goal_id, None)
+
+        # Release all workers
+        for worker in list(self._worker_pool.workers()):
+            await self._release_worker(worker.loop_id, reason="shutdown")
+
+        await self._internal_bus.emit(
+            InternalAutopilotStoppedEvent(
+                reason=reason,
+                active_loops=self._worker_pool.active_count(),
+                goals_completed=sum(1 for g in self._ce.get_all_goals() if g.status == "completed"),
+            )
+        )
+
+        logger.info("AutopilotService stopped: %s", reason)
+
+    # ---- Public submission API (RFC-222 revised, Phase C) -------------
+
+    async def submit_task(
+        self,
+        description: str,
+        *,
+        priority: int = 50,
+        parent_id: str | None = None,
+        max_retries: int | None = None,
+        max_send_backs: int | None = None,
+        depends_on: list[str] | None = None,
+        informs: list[str] | None = None,
+        workspace: str | None = None,
+        cron_job_id: str | None = None,  # RFC-229: Cron job tracking for recurring rescheduling
+        rail_id: str | None = None,
+        verification_rules: str | None = None,
+    ) -> GoalNode:
+        """Create a goal in this service's ContextEngine (RFC-222 revised, RFC-625).
+
+        Public entry point for callers (HTTP ``/autopilot/submit`` and other
+        programmatic clients) to add a
+        new goal to the DAG. The scheduling loop will pick it up on its
+        next tick when ``self._running`` is True.
+
+        When a monitor is wired, intake creates the goal immediately and
+        schedules LLM placement refine asynchronously (priority / deps may
+        update while the goal is still ``pending``).
+
+        Args:
+            description: Goal description text.
+            priority: 0-100, higher schedules earlier.
+            parent_id: Optional parent goal id for hierarchical decomposition.
+            max_retries: Override default max retries.
+            max_send_backs: Override default max consensus send-backs.
+            depends_on: Hard dependencies — goal won't run until these complete.
+            informs: Soft dependencies — context flows from these but the
+                child can still run if they haven't completed yet.
+            workspace: Optional client workspace path. When set, workers execute
+                in this directory and scheduling-time reservation uses it.
+            cron_job_id: Optional cron job ID for tracking recurring job goals (RFC-229).
+            rail_id: Optional LoopRail id (IG-678 / RFC-231 §10). When None,
+                resolved via LLM auto-pick then workspace/config defaults.
+            verification_rules: Optional operator criteria (RFC-228; stored on goal).
+
+        Returns:
+            The newly-created ``GoalNode``. Callers can read ``.id`` to track it.
+
+        Raises:
+            ValueError: If goal depth limit would be exceeded or workspace invalid.
+        """
+        resolved_workspace: str | None = None
+        if workspace is not None and str(workspace).strip():
+            from soothe.workspace import validate_client_workspace
+
+            resolved_workspace = str(validate_client_workspace(workspace))
+
+        from soothe_autopilot.jobs.rail_selection import write_rail_selection
+        from soothe_autopilot.rails.catalog import LoopRailCatalog
+        from soothe_autopilot.rails.selector import (
+            RailAutoPicker,
+            RailPickResult,
+            resolve_rail_for_job,
+        )
+
+        # Rail selection applies to job roots only (RFC-231 §10 / IG-728).
+        rail_pick: RailPickResult | None = None
+        resolved_rail: str | None = None
+        if parent_id is None:
+            cfg = self._config
+            picker = None
+            if cfg.rail_auto_pick and self._auto_pick_model is not None:
+                picker = RailAutoPicker(self._auto_pick_model)
+            rail_pick = await resolve_rail_for_job(
+                rail_id,
+                description=description,
+                workspace=resolved_workspace,
+                catalog=LoopRailCatalog(workspace=resolved_workspace),
+                picker=picker,
+                default_rail=cfg.default_rail,
+                auto_pick=cfg.rail_auto_pick,
+                min_confidence=cfg.rail_auto_pick_min_confidence,
+                deny=list(cfg.rail_auto_pick_deny),
+                max_candidates=cfg.rail_auto_pick_max_candidates,
+                timeout_s=cfg.rail_auto_pick_timeout_s,
+                skip_llm_if_workspace_default=cfg.rail_auto_pick_skip_if_workspace_default,
+                abstain_overrides_defaults=cfg.rail_auto_pick_abstain_overrides_defaults,
+            )
+            resolved_rail = rail_pick.rail_id
+
+        if self._monitor is not None:
+            intake = await self._monitor.intake_goal(
+                description,
+                priority=priority,
+                workspace=resolved_workspace,
+                depends_on=depends_on,
+                source="user",
+                parent_id=parent_id,
+                max_retries=max_retries,
+                max_send_backs=max_send_backs,
+                informs=informs,
+            )
+            if intake.status != "accepted" or not intake.goal_id:
+                msg = intake.reason or f"Goal intake {intake.status}"
+                raise ValueError(msg)
+            goal = await self._ce.get_goal(intake.goal_id)
+            if goal is None:
+                msg = f"Intake accepted but goal {intake.goal_id} missing from ContextEngine"
+                raise RuntimeError(msg)
+        else:
+            goal = await self._ce.create_goal(
+                description,
+                priority=priority,
+                parent_id=parent_id,
+                max_retries=max_retries,
+                max_send_backs=max_send_backs,
+                depends_on=depends_on,
+                informs=informs,
+                workspace=resolved_workspace,
+            )
+        # RFC-229: Set cron_job_id on goal for recurring job rescheduling
+        if cron_job_id is not None:
+            goal.cron_job_id = cron_job_id
+            logger.debug("Goal %s linked to cron job %s", goal.id, cron_job_id)
+        if verification_rules and verification_rules.strip():
+            goal.verification_rules = verification_rules.strip()
+        if resolved_rail and goal.parent_id is None:
+            goal.rail_id = resolved_rail
+            goal.role = goal.role or "root"
+        # IG-677: root goals are jobs — ensure membership record exists.
+        if goal.parent_id is None:
+            await self._job_loop_index.ensure_job(goal.id)
+            # IG-702: durable submit contract under jobs/{job_id}/GOAL.md.
+            from soothe_autopilot.intake import write_job_goal_md
+
+            write_job_goal_md(
+                jobs_root=self._jobs_root,
+                job_id=goal.id,
+                description=goal.description,
+            )
+            if rail_pick is not None:
+                write_rail_selection(
+                    jobs_root=self._jobs_root,
+                    job_id=goal.id,
+                    pick=rail_pick,
+                )
+            await self._bind_rail_for_job(goal)
+        if self._dreaming:
+            await self.wake_from_dreaming(trigger="new_task")
+        await self._persist_goals()
+        logger.info(
+            "Goal submitted goal_id=%s parent_id=%s rail_id=%s rail_source=%s "
+            "rail_confidence=%s priority=%s workspace=%s",
+            goal.id,
+            goal.parent_id or "-",
+            getattr(goal, "rail_id", None) or "-",
+            rail_pick.source if rail_pick is not None else "-",
+            (
+                f"{rail_pick.confidence:.2f}"
+                if rail_pick is not None and rail_pick.confidence is not None
+                else "-"
+            ),
+            goal.priority,
+            (goal.workspace or "-")[:80],
+        )
+        return goal
+
+    async def _bind_rail_for_job(self, goal: GoalNode) -> None:
+        """Bind LoopRail for a root job; engine only injects spawn budget.
+
+        Fan-out slice lists / scout counts come from the rail YAML ``fanout:``
+        block and WavePlan applied from the architecture goal completion
+        report (host ingest) — not from Autopilot submit fields, nano tools,
+        filesystem plan files, or the project workspace tree.
+        """
+        if self._rail_interpreter is None or not goal.rail_id:
+            return
+        try:
+            from soothe_autopilot.rails.interpreter import RailEvent
+
+            await self._rail_interpreter.bind_job(
+                goal.id,
+                rail_id=goal.rail_id,
+                workspace=goal.workspace,
+                engine_max_parallel_goals=int(
+                    getattr(self._config, "max_parallel_goals", 16) or 16
+                ),
+            )
+            await self._rail_interpreter.handle(
+                RailEvent(name="job_start", job_id=goal.id, goal_id=goal.id)
+            )
+            logger.info(
+                "Rail bound job_id=%s rail_id=%s event=job_start",
+                goal.id,
+                goal.rail_id,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to bind/start rail %s for job %s",
+                goal.rail_id,
+                goal.id,
+                exc_info=True,
+            )
+
+    @staticmethod
+    def _is_architecture_planner_goal(goal: GoalNode) -> bool:
+        """True when the goal is the rail architecture / planner deliverable.
+
+        Requires the ``architecture`` tag (not bare ``planning``) so scout/plan
+        rails are not mistaken for fan-out planners.
+        """
+        tags = list(goal.rail_tags or [])
+        if "architecture" in tags:
+            return True
+        # Role alone is enough for explicitly annotated planners; bare
+        # ``planning`` tags (scout/plan rails) must not trigger the gate.
+        return (goal.role or "") == "planner"
+
+    async def _try_ingest_architecture_wave_plan(
+        self,
+        goal: GoalNode,
+        *,
+        evidence_summary: str,
+        contribution: Any | None,
+    ) -> tuple[bool, str]:
+        """Parse WavePlan from multi-form sources and apply to rail state.
+
+        Prefers structured contribution fields, then recommended dumps /
+        findings. Nano/StrangeLoop never call Autopilot APIs —
+        the host interprets opaque completion payloads and applies slices
+        into ``RailJobState``.
+
+        Returns:
+            ``(ready, detail)`` — ready when a usable wave plan is applied;
+            ``detail`` is a parse/nesting reject reason when not ready.
+        """
+        from soothe_autopilot.rails.wave_plan import diagnose_wave_plan_from_sources
+
+        if self._rail_interpreter is None:
+            return False, "rail interpreter unset"
+        job_id = self._job_id_for_goal(goal.id)
+        if job_id is None:
+            return False, "job id unresolved"
+        builtins = self._rail_interpreter.builtins
+        state = await builtins.job_state(job_id)
+        if state is None or not state.require_plan:
+            return False, "rail unbound or require_plan false"
+
+        candidates: list[Any] = []
+        if evidence_summary and evidence_summary.strip():
+            candidates.append(evidence_summary.strip())
+        findings = getattr(contribution, "findings", None) if contribution else None
+        if findings:
+            for item in findings:
+                summary = getattr(item, "summary", None)
+                if summary:
+                    candidates.append(str(summary))
+                elif isinstance(item, dict):
+                    candidates.append(item)
+                else:
+                    candidates.append(str(item))
+        if goal.findings:
+            candidates.extend(list(goal.findings))
+
+        wave_plan = getattr(contribution, "wave_plan", None) if contribution else None
+        wave_plan_path = getattr(contribution, "wave_plan_path", None) if contribution else None
+        workspace = goal.workspace or None
+        if not workspace:
+            root = self._ce._dag.get_goal(job_id)
+            workspace = root.workspace if root else None
+
+        diagnosed = diagnose_wave_plan_from_sources(
+            wave_plan=wave_plan if isinstance(wave_plan, dict) else None,
+            wave_plan_path=str(wave_plan_path) if wave_plan_path else None,
+            workspace=workspace,
+            jobs_root=getattr(builtins, "_jobs_root", None) or self._jobs_root,
+            job_id=job_id,
+            findings=candidates or None,
+        )
+        if diagnosed.plan is not None:
+            recorded = await builtins.record_wave_plan(
+                job_id,
+                plan=diagnosed.plan,
+                source_path=diagnosed.source_path,
+            )
+            if recorded is not None:
+                names = recorded.resolved_slice_ids()
+                note = f"WavePlan recorded ({len(names)} slices): {', '.join(names)}"
+                if note not in goal.findings:
+                    goal.findings.append(note[:500])
+                logger.info(
+                    "Ingested wave plan for architecture goal %s job=%s slices=%s source=%s",
+                    goal.id,
+                    job_id[:8],
+                    names,
+                    diagnosed.source_path,
+                )
+
+        await builtins.ingest_wave_plan(job_id)
+        if builtins.is_wave_plan_ready(job_id):
+            return True, ""
+        return False, diagnosed.detail
+
+    async def _ensure_rail_bound_for_job(self, job_id: str) -> bool:
+        """Rebind LoopRail for ``job_id`` when interpreter exists but job unbound.
+
+        Returns:
+            True when the job has rail state available after this call.
+        """
+        if self._rail_interpreter is None:
+            return False
+        builtins = self._rail_interpreter.builtins
+        if await builtins.job_state(job_id) is not None:
+            return True
+        root = self._ce._dag.get_goal(job_id)
+        if root is None or not root.rail_id:
+            return False
+        try:
+            await self._rail_interpreter.bind_job(
+                job_id,
+                rail_id=root.rail_id,
+                workspace=root.workspace,
+                engine_max_parallel_goals=int(
+                    getattr(self._config, "max_parallel_goals", 16) or 16
+                ),
+            )
+        except Exception:
+            logger.warning(
+                "Rail rebind failed for architecture gate job=%s rail_id=%s",
+                job_id[:8],
+                root.rail_id,
+                exc_info=True,
+            )
+            return False
+        return await builtins.job_state(job_id) is not None
+
+    async def _architecture_wave_plan_consensus_gate(
+        self,
+        goal: GoalNode,
+        *,
+        evidence_summary: str,
+        contribution: Any | None,
+    ) -> tuple[str, str] | None:
+        """Deterministic accept/send_back for require_plan architecture goals.
+
+        Returns:
+            ``(decision, reasoning)`` when this goal is under the architecture
+            fan-out gate; ``None`` to fall through to LLM consensus.
+
+        Fail closed: architecture planners on a rail job with ``require_plan``
+        must never fall through to free-form LLM accept when the rail
+        interpreter is missing or unbound (that completed architecture without
+        applying WavePlan slices into rail state).
+        """
+        if not self._is_architecture_planner_goal(goal):
+            return None
+
+        job_id = self._job_id_for_goal(goal.id)
+        if job_id is None:
+            return None
+        root = self._ce._dag.get_goal(job_id)
+        if root is None or not root.rail_id:
+            return None
+
+        from soothe_autopilot.rails.wave_plan import architecture_wave_plan_send_back_reason
+
+        if self._rail_interpreter is None:
+            logger.warning(
+                "Architecture wave-plan gate fail-closed: rail interpreter unset job=%s goal=%s",
+                job_id[:8],
+                goal.id,
+            )
+            return (
+                "send_back",
+                "Architecture WavePlan gate unavailable (rail not initialized); "
+                "restart the daemon after upgrading, then retry with a flat "
+                "WavePlan (structured fields, recommended dump, or completion JSON).",
+            )
+
+        if not await self._ensure_rail_bound_for_job(job_id):
+            logger.warning(
+                "Architecture wave-plan gate fail-closed: rail unbound job=%s goal=%s",
+                job_id[:8],
+                goal.id,
+            )
+            return (
+                "send_back",
+                "Architecture WavePlan gate unavailable (rail unbound for job); "
+                "retry with a flat WavePlan after the job rail is bound.",
+            )
+
+        state = await self._rail_interpreter.builtins.job_state(job_id)
+        if state is None:
+            return ("send_back", architecture_wave_plan_send_back_reason())
+        if not state.require_plan:
+            return None
+
+        ready, detail = await self._try_ingest_architecture_wave_plan(
+            goal,
+            evidence_summary=evidence_summary,
+            contribution=contribution,
+        )
+        if ready:
+            return (
+                "accept",
+                "Valid WavePlan recorded into job rail state",
+            )
+        return ("send_back", architecture_wave_plan_send_back_reason(detail))
+
+    def _job_id_for_goal(self, goal_id: str) -> str | None:
+        """Walk parents to the root job id."""
+        goal = self._ce._dag.get_goal(goal_id)
+        if goal is None:
+            return None
+        seen: set[str] = set()
+        while goal is not None and goal.parent_id and goal.parent_id not in seen:
+            seen.add(goal.id)
+            parent = self._ce._dag.get_goal(goal.parent_id)
+            if parent is None:
+                break
+            goal = parent
+        return goal.id if goal is not None else None
+
+    async def _on_rail_pause_user_intervention(self, job_id: str) -> None:
+        """Fire ``user_intervention`` after Veritas auto-proceeds a pause gate."""
+        await self._notify_rail("user_intervention", job_id)
+
+    async def _notify_rail(self, event_name: str, goal_id: str, **payload: Any) -> None:
+        if self._rail_interpreter is None:
+            logger.debug(
+                "Rail notify skipped event=%s goal_id=%s reason=no_interpreter",
+                event_name,
+                goal_id,
+            )
+            return
+        job_id = self._job_id_for_goal(goal_id)
+        if job_id is None:
+            logger.debug(
+                "Rail notify skipped event=%s goal_id=%s reason=no_job",
+                event_name,
+                goal_id,
+            )
+            return
+        root = self._ce._dag.get_goal(job_id)
+        if root is None or not root.rail_id:
+            logger.debug(
+                "Rail notify skipped event=%s goal_id=%s job_id=%s reason=no_rail",
+                event_name,
+                goal_id,
+                job_id,
+            )
+            return
+        # Rebind after restore if needed
+        if job_id not in getattr(self._rail_interpreter, "_rails", {}):
+            try:
+                await self._rail_interpreter.bind_job(
+                    job_id,
+                    rail_id=root.rail_id,
+                    workspace=root.workspace,
+                    engine_max_parallel_goals=int(
+                        getattr(self._config, "max_parallel_goals", 16) or 16
+                    ),
+                )
+            except Exception:
+                logger.debug("Rail rebind failed for %s", job_id, exc_info=True)
+                return
+        try:
+            from soothe_autopilot.rails.interpreter import RailEvent
+
+            await self._rail_interpreter.handle(
+                RailEvent(
+                    name=event_name,
+                    job_id=job_id,
+                    goal_id=goal_id,
+                    payload=dict(payload),
+                )
+            )
+            logger.info(
+                "Rail event handled event=%s job_id=%s goal_id=%s",
+                event_name,
+                job_id,
+                goal_id,
+            )
+            # Rail builtins may complete/fail the job root without a worker emit.
+            await self._maybe_notify_job_root(job_id)
+        except Exception:
+            logger.warning("Rail handle %s failed for goal %s", event_name, goal_id, exc_info=True)
+
+    async def list_goals(self, *, status: str | None = None) -> list[GoalNode]:
+        """Read-through to ContextEngine for HTTP/CLI surfaces."""
+        return await self._ce.list_goals(status=status)
+
+    async def get_goal(self, goal_id: str) -> GoalNode | None:
+        """Read-through to ContextEngine for HTTP/CLI surfaces."""
+        return await self._ce.get_goal(goal_id)
+
+    async def _cancel_goal_worker(self, goal: GoalNode) -> None:
+        """Stop the worker for an active goal if one is assigned (RFC-222 H8)."""
+        if self._worker_pool is None or not goal.assigned_loop_id:
+            return
+        worker = self._worker_pool.get_worker(goal.assigned_loop_id)
+        if worker is None or worker.current_goal_id != goal.id:
+            return
+        try:
+            await worker.runner.cancel()
+            logger.info(
+                "[Autopilot] cancel_goal: requested cancel of worker %s for goal %s",
+                worker.loop_id,
+                goal.id,
+            )
+        except Exception:
+            logger.warning(
+                "worker.runner.cancel() raised during cancel_goal(%s)",
+                goal.id,
+                exc_info=True,
+            )
+
+    async def _drain_goal_workspace(self, goal: GoalNode) -> None:
+        """Drain spawned background processes for a goal (cancel / deadline).
+
+        On the normal completion path the runner drains its own workspace
+        before emitting the completion chunk. This covers the cancel /
+        deadline paths where the runner stream is aborted before natural
+        completion — it calls the same workspace-scoped drain so the goal's
+        run_background grandchildren die with the goal.
+        """
+        workspace = goal.workspace
+        if not workspace:
+            return
+        try:
+            from soothe.runner.shell_drain import drain_goal_runtime
+
+            await asyncio.to_thread(drain_goal_runtime, workspace)
+        except Exception:
+            logger.debug("drain_goal_runtime failed for goal %s", goal.id, exc_info=True)
+
+    async def _release_worker_after_cancel(self, goal_id: str, loop_id: str | None) -> None:
+        """Cancel the dispatch consumer task after goal cancellation.
+
+        The stream consumer (``_consume_worker_stream``) normally drains and
+        releases the worker slot via ``_release_goal_runtime`` when the runner
+        stream terminates. But when a goal is cancelled externally
+        (WebSocket/CLI), the consumer task may still be blocked on the
+        stream. This method cancels that task so no dead consumer lingers.
+        Worker-slot release is owned by ``_release_goal_runtime`` (called
+        before this in ``_cancel_open_goal_node``).
+        """
+        task = self._dispatch_tasks.pop(goal_id, None)
+        if task is not None and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+
+    async def _release_goal_runtime(
+        self,
+        goal_id: str,
+        *,
+        loop_id: str | None,
+        success: bool,
+        end_status: str = "completed",
+    ) -> None:
+        """Release the worker slot, loop index, and workspace reservation.
+
+        Idempotent: a second call for an already-released goal is a no-op.
+        Called at goal-completion time **before** the rail sees
+        ``goal_completed`` so the worker is drained before ``job_complete``
+        can fire (lifecycle alignment). Also called on cancel / deadline.
+        """
+        if goal_id in self._released_goals:
+            return
+        self._released_goals.add(goal_id)
+        if loop_id:
+            try:
+                await self._job_loop_index.record_end(
+                    loop_id,
+                    status=end_status,  # type: ignore[arg-type]
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to record job loop end for goal %s loop %s",
+                    goal_id,
+                    loop_id,
+                    exc_info=True,
+                )
+        if self._worker_pool is not None and loop_id:
+            await self._worker_pool.mark_idle(loop_id, success=success)
+        if self._workspace_reservation is not None:
+            self._workspace_reservation.release(goal_id)
+
+    async def _cancel_open_goal_node(self, goal: GoalNode, *, reason: str) -> None:
+        """Cancel one non-terminal goal: stop worker, CE transition, release workspace.
+
+        Ensures the worker slot is returned to idle and the dispatch consumer
+        task is cancelled so no dead workers remain after ``cancel_goal``.
+        Also drains the goal's spawned background processes via the runner's
+        workspace-scoped drain so cancelled goals do not orphan run_background
+        grandchildren.
+        """
+        loop_id = goal.assigned_loop_id
+        await self._cancel_goal_worker(goal)
+        # Drain spawned background processes before the CE transition so the
+        # goal's runtime resources are torn down with the goal (lifecycle bound).
+        await self._drain_goal_workspace(goal)
+        await self._ce.cancel_goal(goal.id, reason=reason)
+        if goal.parent_id is None:
+            try:
+                await self._job_loop_index.mark_job_status(goal.id, "cancelled")
+            except Exception:
+                logger.debug("Failed to mark job %s cancelled", goal.id, exc_info=True)
+
+        # Release worker slot, loop index, and workspace reservation (idempotent).
+        await self._release_goal_runtime(
+            goal.id, loop_id=loop_id, success=False, end_status="cancelled"
+        )
+        # Return worker slot to idle pool and cancel the dispatch consumer task
+        # so no dead workers are left behind after cancel_goal invocation.
+        await self._release_worker_after_cancel(goal.id, loop_id)
+
+    async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> GoalNode | None:
+        """Cancel a goal and all non-terminal descendants.
+
+        RFC-222 H8: when a goal is currently dispatched, resolve the assigned
+        worker via ``WorkerPool`` and call ``worker.runner.cancel()`` to abort
+        the subprocess via RFC-221's cooperative cancellation.
+
+        RFC-626 / RFC-228: job cancel is root-goal cancel with descendant
+        cascade. Already-terminal goals in the subtree are skipped so canceling
+        a cancelled root still cleans pending children.
+
+        Args:
+            goal_id: Goal (or job root) to cancel.
+            reason: Logged with the cancellation for audit.
+
+        Returns:
+            The GoalNode if it existed, else None.
+        """
+        goal = await self._ce.get_goal(goal_id)
+        if goal is None:
+            return None
+
+        for gid in self._ce.collect_subtree_ids(goal_id):
+            node = await self._ce.get_goal(gid)
+            if node is None or node.status in TERMINAL_STATES:
+                continue
+            await self._cancel_open_goal_node(node, reason=reason)
+
+        await self._persist_goals()
+        await self._maybe_notify_job_root(goal_id)
+        return await self._ce.get_goal(goal_id)
+
+    async def cancel_all_open_goals(self, *, reason: str = "user_cancelled") -> dict[str, Any]:
+        """Cancel every non-terminal goal with a single persist.
+
+        Args:
+            reason: Logged with each cancellation for audit.
+
+        Returns:
+            Dict with ``cancelled_count`` and ``goal_ids``.
+        """
+        cancelled_ids: list[str] = []
+        for goal in await self.list_goals():
+            if goal.status in TERMINAL_STATES:
+                continue
+            await self._cancel_open_goal_node(goal, reason=reason)
+            cancelled_ids.append(goal.id)
+
+        await self._persist_goals()
+        return {"cancelled_count": len(cancelled_ids), "goal_ids": cancelled_ids}
+
+    async def pause_job(self, job_id: str, *, reason: str = "user_pause") -> GoalNode | None:
+        """Suspend a job root and all non-terminal descendants; stop workers.
+
+        IG-678 P1-1: unlike a bare ``CE.suspend_goal`` on the root, this
+        cancels in-flight child workers so pause actually stops work.
+
+        Args:
+            job_id: Root goal id (job).
+            reason: Audit reason stored on suspended goals.
+
+        Returns:
+            Updated root GoalNode, or None if missing.
+        """
+        root = await self._ce.get_goal(job_id)
+        if root is None:
+            return None
+
+        for gid in self._ce.collect_subtree_ids(job_id):
+            node = await self._ce.get_goal(gid)
+            if node is None or node.status in TERMINAL_STATES:
+                continue
+            if node.status == "suspended":
+                continue
+            await self._pause_open_goal_node(node, reason=reason)
+
+        if root.parent_id is None:
+            try:
+                await self._job_loop_index.mark_job_status(job_id, "paused")
+            except Exception:
+                logger.debug("Failed to mark job %s paused", job_id, exc_info=True)
+
+        await self._persist_goals()
+        return await self._ce.get_goal(job_id)
+
+    async def resume_job(self, job_id: str) -> GoalNode | None:
+        """Reactivate a paused job and fire rail ``user_intervention`` (IG-678 P2).
+
+        Reactivates the root and any suspended descendants paused with it.
+        """
+        root = await self._ce.get_goal(job_id)
+        if root is None:
+            return None
+        if root.status not in ("suspended", "blocked"):
+            msg = f"Job {job_id} is not paused (status: {root.status})"
+            raise ValueError(msg)
+
+        for gid in self._ce.collect_subtree_ids(job_id):
+            node = await self._ce.get_goal(gid)
+            if node is None or node.status not in ("suspended", "blocked"):
+                continue
+            await self._ce.reactivate_goal(gid)
+
+        if root.parent_id is None:
+            try:
+                await self._job_loop_index.mark_job_status(job_id, "running")
+            except Exception:
+                logger.debug("Failed to mark job %s running", job_id, exc_info=True)
+
+        await self._notify_rail("user_intervention", job_id)
+        await self._persist_goals()
+        return await self._ce.get_goal(job_id)
+
+    async def _pause_open_goal_node(self, goal: GoalNode, *, reason: str) -> None:
+        """Suspend one non-terminal goal and stop its worker if assigned."""
+        loop_id = goal.assigned_loop_id
+        await self._cancel_goal_worker(goal)
+        await self._ce.suspend_goal(goal.id, reason=reason)
+        # Release worker slot, loop index, and workspace reservation (idempotent).
+        await self._release_goal_runtime(
+            goal.id, loop_id=loop_id, success=False, end_status="cancelled"
+        )
+        await self._release_worker_after_cancel(goal.id, loop_id)
+        await self._maybe_notify_job_root(goal.id)
+
+    # ---- Internals ----------------------------------------------------
+
+    async def _release_worker(self, loop_id: str, reason: str = "idle_timeout") -> None:
+        """Release a worker from the pool.
+
+        Args:
+            loop_id: Worker to release.
+            reason: Why the worker is released.
+        """
+        worker = await self._worker_pool.release_worker(loop_id)
+        if worker is not None:
+            await self._internal_bus.emit(
+                InternalLoopReleasedEvent(
+                    loop_id=loop_id,
+                    reason=reason if reason in ("idle_timeout", "shutdown", "error") else "error",
+                    goals_processed=len(worker.last_goal_ids),
+                )
+            )
+
+            logger.info(
+                "Released worker %s: %s (processed %d goals)",
+                loop_id,
+                reason,
+                len(worker.last_goal_ids),
+            )
+
+    async def _run_scheduling_loop(self) -> None:
+        """Main scheduling loop coroutine.
+
+        Polls ContextEngine for ready goals, assigns loops,
+        monitors loop health, releases idle loops.
+        """
+        poll_interval = self._config.poll_interval
+
+        while self._running:
+            try:
+                # 1. Schedule ready goals
+                await self._schedule_ready_goals()
+
+                # 1b. Rail jobs with no open children → dag_idle (RFC-230)
+                await self._emit_dag_idle_for_idle_rail_jobs()
+
+                # 2. Monitor active loops
+                await self._monitor_loop_health()
+
+                # 3. Release idle loops past timeout
+                await self._release_idle_loops()
+
+                # 4. Check for dreaming transition
+                if self._ce.is_dag_complete():
+                    await self._enter_dreaming_mode()
+
+                # 5. Sleep for next tick
+                await asyncio.sleep(
+                    self._config.dreaming_poll_interval if self._dreaming else poll_interval
+                )
+
+            except asyncio.CancelledError:
+                logger.debug("Scheduling loop cancelled")
+                break
+            except Exception:
+                logger.exception("Scheduling loop error")
+                await asyncio.sleep(poll_interval)
+
+    async def _emit_dag_idle_for_idle_rail_jobs(self) -> None:
+        """Scan rail job roots and emit ``dag_idle`` when subtrees are idle."""
+        for goal in list(self._ce._dag.goals.values()):
+            if goal.parent_id is not None or not goal.rail_id:
+                continue
+            if goal.status in ("completed", "cancelled", "failed"):
+                continue
+            await self._maybe_emit_dag_idle(goal.id)
+
+    async def _schedule_ready_goals(self) -> None:
+        """Schedule all ready goals via WorkerPool dispatch (RFC-222 Phase C+)."""
+        await self._schedule_via_worker_pool()
+
+    async def _schedule_via_worker_pool(self) -> None:
+        """RFC-222 Phase C: schedule via WorkerPool + real subprocess dispatch.
+
+        For each ready goal under capacity, optionally check workspace
+        reservation, claim the goal, and spawn a stream-consuming task
+        that drives ``worker.runner.run(LoopRunRequest)`` and reacts to
+        the worker's terminal ``GoalCompletionChunk``.
+        """
+        if self._worker_pool is None:
+            return
+
+        # Bound by WorkerPool capacity and max_parallel_goals.
+        pool_slots = max(0, self._config.max_loops - self._worker_pool.active_count())
+        goal_slots = max(0, self._config.max_parallel_goals - self._worker_pool.active_count())
+        cap_remaining = min(pool_slots, goal_slots)
+        if cap_remaining <= 0:
+            return
+
+        candidates = self._ce.peek_ready_goals(limit=cap_remaining)
+        for candidate in candidates:
+            # Rail-bound job roots are coordinators only — skip without
+            # aborting the schedule round (False would break the loop).
+            if candidate.parent_id is None and candidate.rail_id:
+                logger.debug(
+                    "Skipping schedule for rail job root %s (rail_id=%s)",
+                    candidate.id,
+                    candidate.rail_id,
+                )
+                continue
+            if not await self._try_dispatch_goal(candidate):
+                break
+
+    async def _try_dispatch_goal(self, goal: GoalNode) -> bool:
+        """Attempt WorkerPool dispatch for one ready goal."""
+        # Rail-bound job roots are coordinators only — children execute work.
+        if goal.parent_id is None and goal.rail_id:
+            logger.debug(
+                "Skipping dispatch for rail job root %s (rail_id=%s)",
+                goal.id,
+                goal.rail_id,
+            )
+            return True
+        if self._workspace_reservation is not None:
+            ws = self._infer_workspace(goal)
+            conflict = self._workspace_reservation.conflicts_with_active(
+                ws, exclude_goal_id=goal.id
+            )
+            if conflict:
+                logger.debug(
+                    "Goal %s deferred: workspace %s conflicts with active goal %s",
+                    goal.id,
+                    ws,
+                    conflict,
+                )
+                return False
+            if not self._workspace_reservation.acquire(goal.id, ws):
+                return False
+
+        job_id = self._resolve_job_id(goal)
+        worker = await self._worker_pool.pick_worker(goal, job_id=job_id)
+        if worker is None:
+            if self._workspace_reservation is not None:
+                self._workspace_reservation.release(goal.id)
+            logger.debug("No worker capacity for goal %s; deferring", goal.id)
+            return False
+
+        claimed = self._ce.claim_goal(goal.id, loop_id=worker.loop_id)
+        if claimed is None:
+            logger.debug("Goal %s vanished before claim; releasing worker", goal.id)
+            await self._worker_pool.mark_idle(worker.loop_id, success=True)
+            if self._workspace_reservation is not None:
+                self._workspace_reservation.release(goal.id)
+            return False
+
+        try:
+            await self._job_loop_index.record_start(
+                job_id,
+                loop_id=worker.loop_id,
+                goal_id=goal.id,
+                attempt=goal.retry_count + 1,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to record job loop start for goal %s",
+                goal.id,
+                exc_info=True,
+            )
+
+        await self._internal_bus.emit(
+            InternalLoopAssignedEvent(
+                loop_id=worker.loop_id,
+                goal_id=goal.id,
+                parent_goal_id=goal.parent_id,
+                reused=False,
+            )
+        )
+        await self._dispatch_to_worker(claimed, worker)
+        return True
+
+    def _resolve_job_id(self, goal: GoalNode) -> str:
+        """Walk parent_id chain to the root goal (job_id)."""
+        current = goal
+        seen: set[str] = {goal.id}
+        while current.parent_id:
+            parent = self._ce.get_goal_sync(current.parent_id)
+            if parent is None or parent.id in seen:
+                break
+            seen.add(parent.id)
+            current = parent
+        return current.id
+
+    async def _dispatch_to_worker(self, goal: GoalNode, worker: Any) -> None:
+        """Build the LoopRunRequest and spawn a stream-consuming task."""
+        from soothe.protocols.runner import GoalDispatchEnvelope, LoopRunRequest
+
+        bundle = await self._build_merged_context(goal)
+
+        # RFC-222 H5: compute wall-clock deadline from config. The worker logs
+        # this value; the daemon-side monitor (``_monitor_loop_health``) is
+        # the authoritative enforcer — it cancels the worker on overrun.
+        deadline_seconds = getattr(self._config, "goal_deadline_seconds", None)
+
+        # Per-goal intake_scope overrides AutopilotConfig (null = Pass 1+2).
+        goal_scope = getattr(goal, "intake_scope", None)
+        intake_scope = (
+            goal_scope if goal_scope is not None else getattr(self._config, "intake_scope", None)
+        )
+
+        request = LoopRunRequest(
+            loop_id=worker.loop_id,
+            thread_id=f"autopilot__goal_{goal.id}__attempt_{goal.retry_count + 1}",
+            user_input="",
+            client_workspace=goal.workspace,
+            intake_scope=intake_scope,
+            autopilot_job=GoalDispatchEnvelope(
+                goal_id=goal.id,
+                goal_description=goal.description,
+                merged_context=bundle,
+                deadline_seconds=deadline_seconds,
+                attempt=goal.retry_count + 1,
+            ),
+        )
+
+        task = asyncio.create_task(self._consume_worker_stream(goal.id, worker, request))
+        worker.active_task = task
+        self._dispatch_tasks[goal.id] = task
+        logger.info(
+            "[Autopilot] dispatched goal %s to worker %s (attempt %d, intake_scope=%s)",
+            goal.id,
+            worker.loop_id,
+            request.autopilot_job.attempt,
+            intake_scope,
+        )
+
+    async def _build_merged_context(self, goal: GoalNode) -> Any:
+        """Build the GoalDispatchContextBundle for ``goal``.
+
+        Hooks the ``ContextProjector`` if one was wired, then attaches
+        operator guidance accumulated on the goal (and job-scoped root).
+        """
+        from soothe.goal_contracts import GoalDispatchContextBundle
+
+        projector = getattr(self, "_context_projector", None)
+        if projector is None:
+            bundle = GoalDispatchContextBundle()
+        else:
+            try:
+                bundle = await projector.project(goal, self._ce._dag.goals)
+            except Exception:
+                logger.warning(
+                    "ContextProjector failed for goal %s; falling back to empty bundle",
+                    goal.id,
+                    exc_info=True,
+                )
+                bundle = GoalDispatchContextBundle()
+
+        from soothe_autopilot.intake import collect_operator_guidance
+
+        guidance = collect_operator_guidance(goal, self._ce._dag.goals)
+        if guidance:
+            return bundle.model_copy(update={"operator_guidance": guidance})
+        return bundle
+
+    async def _emit_goal_completed(self, goal_id: str, *, loop_id: str | None = None) -> None:
+        """Notify monitor subscribers that a goal completed."""
+        lid = loop_id or ""
+        if not lid:
+            goal = await self._ce.get_goal(goal_id)
+            lid = (goal.assigned_loop_id if goal else None) or ""
+        logger.info(
+            "Goal completed event goal_id=%s loop_id=%s",
+            goal_id,
+            lid or "-",
+        )
+        await self._internal_bus.emit(
+            InternalGoalCompletedEvent(goal_id=goal_id, loop_id=lid, plan_result={})
+        )
+        await self._notify_rail("goal_completed", goal_id)
+        await self._maybe_notify_job_root(goal_id)
+
+    async def _emit_goal_failed(
+        self,
+        goal_id: str,
+        *,
+        evidence: dict[str, Any] | None = None,
+        error_message: str | None = None,
+        loop_id: str | None = None,
+    ) -> None:
+        """Notify monitor subscribers that a goal failed."""
+        lid = loop_id or ""
+        if not lid:
+            goal = await self._ce.get_goal(goal_id)
+            lid = (goal.assigned_loop_id if goal else None) or ""
+        logger.info(
+            "Goal failed event goal_id=%s loop_id=%s error=%s",
+            goal_id,
+            lid or "-",
+            (error_message or "-")[:160],
+        )
+        await self._internal_bus.emit(
+            InternalGoalFailedEvent(
+                goal_id=goal_id,
+                loop_id=lid,
+                evidence=evidence or {},
+                error_message=error_message,
+            )
+        )
+        await self._notify_rail("goal_failed", goal_id, error=error_message)
+        await self._maybe_notify_job_root(goal_id)
+
+    async def _mirror_plan_decision(self, goal_id: str, payload: dict[str, Any]) -> None:
+        """Apply worker ``plan_decision`` steps onto the Autopilot CE goal (IG-689).
+
+        Worker StrangeLoop CEs are loop-scoped; ``autopilot top`` reads the daemon
+        Autopilot CE. Mirror planned StepDAG nodes so the live forest can list STEPs.
+        """
+        goal = self._ce.get_goal_sync(goal_id)
+        if goal is None:
+            return
+        steps = payload.get("steps")
+        if not isinstance(steps, list) or not steps:
+            return
+        iteration = int(payload.get("iteration") or 0)
+        added = 0
+        for raw in steps:
+            if not isinstance(raw, dict):
+                continue
+            sid = str(raw.get("id") or "").strip()
+            if not sid:
+                continue
+            deps = [str(d) for d in (raw.get("dependencies") or []) if d]
+            desc = str(raw.get("description") or "").strip()
+            if sid in goal.steps.nodes:
+                existing = goal.steps.nodes[sid]
+                if existing.status == "pending" and deps:
+                    existing.dependencies = deps
+                if desc and not existing.description:
+                    existing.description = desc
+                continue
+            goal.steps.add_step(
+                StepNode(
+                    id=sid,
+                    description=desc,
+                    dependencies=deps,
+                    plan_iteration=iteration,
+                )
+            )
+            added += 1
+        if added or steps:
+            goal.touch()
+            await self._persist_goals()
+        if added:
+            logger.info(
+                "Plan mirrored goal_id=%s iteration=%s added_steps=%d total_payload=%d",
+                goal_id,
+                iteration,
+                added,
+                len(steps),
+            )
+            logger.debug(
+                "Plan mirrored step_ids goal_id=%s ids=%s",
+                goal_id,
+                [str(s.get("id") or "") for s in steps if isinstance(s, dict)][:40],
+            )
+
+    async def _mirror_step_started(self, goal_id: str, payload: dict[str, Any]) -> None:
+        """Mark a step ``active`` on the Autopilot CE goal when execution begins."""
+        sid = str(payload.get("step_id") or "").strip()
+        if not sid:
+            return
+        goal = self._ce.get_goal_sync(goal_id)
+        if goal is None:
+            return
+        if sid not in goal.steps.nodes:
+            desc = str(payload.get("description") or sid).strip() or sid
+            goal.steps.add_step(StepNode(id=sid, description=desc))
+        await self._ce.activate_step(goal_id, sid)
+        logger.debug("Step started mirrored goal_id=%s step_id=%s", goal_id, sid)
+
+    def _step_token_delta(self, goal_id: str, payload: dict[str, Any]) -> int:
+        """Derive tokens for one mirrored step from worker progress (IG-701).
+
+        Prefers an explicit non-negative ``tokens_used`` delta. Otherwise
+        diffs cumulative ``total_tokens_used`` against the per-goal cursor
+        (aligned with LoopState, reset on each attempt via ``goal_started``).
+        """
+        if "tokens_used" in payload and payload.get("tokens_used") is not None:
+            try:
+                delta = int(payload["tokens_used"])
+            except (TypeError, ValueError):
+                delta = 0
+            if delta < 0:
+                delta = 0
+            if "total_tokens_used" in payload:
+                try:
+                    cumulative = int(payload.get("total_tokens_used") or 0)
+                except (TypeError, ValueError):
+                    cumulative = -1
+                if cumulative >= 0:
+                    self._goal_loop_token_cursor[goal_id] = cumulative
+            return delta
+        if "total_tokens_used" not in payload:
+            return 0
+        try:
+            cumulative = int(payload.get("total_tokens_used") or 0)
+        except (TypeError, ValueError):
+            return 0
+        if cumulative < 0:
+            cumulative = 0
+        prev = self._goal_loop_token_cursor.get(goal_id, 0)
+        delta = cumulative - prev
+        if delta < 0:
+            # New attempt or counter reset without goal_started — treat as absolute.
+            delta = cumulative
+        self._goal_loop_token_cursor[goal_id] = cumulative
+        return delta
+
+    async def _mirror_step_completed(self, goal_id: str, payload: dict[str, Any]) -> None:
+        """Apply worker ``step_completed`` onto the Autopilot CE goal (IG-689)."""
+        sid = str(payload.get("step_id") or "").strip()
+        if not sid:
+            return
+        goal = self._ce.get_goal_sync(goal_id)
+        if goal is None:
+            return
+        if sid not in goal.steps.nodes:
+            desc = str(payload.get("description") or sid).strip() or sid
+            goal.steps.add_step(StepNode(id=sid, description=desc))
+        execution = StepExecution(
+            duration_ms=int(payload.get("duration_ms") or 0),
+            tool_call_count=int(payload.get("tool_call_count") or 0),
+            tokens_used=self._step_token_delta(goal_id, payload),
+            error=str(payload["error"]) if payload.get("error") else None,
+        )
+        if payload.get("success", True):
+            await self._ce.complete_step(goal_id, sid, execution)
+            outcome = "completed"
+        else:
+            await self._ce.fail_step(goal_id, sid, execution)
+            outcome = "failed"
+        logger.debug(
+            "Step completed mirrored goal_id=%s step_id=%s outcome=%s tokens=%d",
+            goal_id,
+            sid,
+            outcome,
+            execution.tokens_used,
+        )
+
+    async def _mirror_contribution_steps(self, goal_id: str, contribution: Any) -> None:
+        """Backfill StepDAG from completion contribution when progress was missed."""
+        plan_steps = getattr(contribution, "plan_steps_executed", None) or []
+        if not plan_steps:
+            return
+        goal = self._ce.get_goal_sync(goal_id)
+        if goal is None:
+            return
+        for step in plan_steps:
+            sid = str(getattr(step, "id", "") or "").strip()
+            if not sid:
+                continue
+            action = str(getattr(step, "action", "") or "").strip()
+            outcome = str(getattr(step, "outcome", "") or "completed").lower()
+            if sid not in goal.steps.nodes:
+                goal.steps.add_step(StepNode(id=sid, description=action or sid))
+            if goal.steps.nodes[sid].status in ("completed", "failed", "skipped"):
+                continue
+            execution = StepExecution()
+            if outcome in {"failed", "failure", "error"}:
+                await self._ce.fail_step(goal_id, sid, execution)
+            elif outcome in {"skipped", "skip"}:
+                await self._ce.skip_step(goal_id, sid)
+            else:
+                await self._ce.complete_step(goal_id, sid, execution)
+
+    async def _apply_worker_progress_event(self, goal_id: str, data: dict[str, Any]) -> None:
+        """Route autopilot progress custom chunks onto Autopilot CE StepDAG."""
+        ctype = str(data.get("type") or "")
+        prefix = "soothe.internal.autopilot.progress."
+        if not ctype.startswith(prefix):
+            return
+        event = ctype[len(prefix) :]
+        payload = data.get("payload")
+        if not isinstance(payload, dict):
+            payload = {k: v for k, v in data.items() if k not in {"type", "goal_id", "payload"}}
+        try:
+            if event == "plan_decision":
+                await self._mirror_plan_decision(goal_id, payload)
+            elif event == "step_started":
+                await self._mirror_step_started(goal_id, payload)
+            elif event == "step_completed":
+                await self._mirror_step_completed(goal_id, payload)
+        except Exception:
+            logger.warning(
+                "Failed to mirror worker progress %s onto goal %s",
+                event,
+                goal_id,
+                exc_info=True,
+            )
+
+    async def _consume_worker_stream(self, goal_id: str, worker: Any, request: Any) -> None:
+        """Drain a worker's stream and react to ``GoalCompletionChunk``.
+
+        Progress events (``plan_decision``, ``step_started``, ``step_completed``)
+        are mirrored onto the Autopilot CE StepDAG so ``autopilot top`` can list
+        STEPs with live status (IG-689).
+
+        On a successful completion: mark goal completed in ContextEngine,
+        store the contribution if a context store is wired, return the
+        worker to the idle queue, release any workspace reservation.
+
+        On exception or non-completion termination: mark goal failed.
+        """
+        from soothe.goal_contracts import (
+            EvidenceBundle,
+            GoalDispatchContextContribution,
+        )
+
+        completion_seen = False
+        try:
+            async for chunk in worker.runner.run(request):
+                # chunk = (namespace, mode, data) per StreamChunk shape.
+                _, mode, data = chunk
+                if mode != "custom" or not isinstance(data, dict):
+                    continue
+                ctype = data.get("type", "")
+                if ctype == "soothe.internal.autopilot.goal_started":
+                    # New loop attempt: LoopState tokens restart at 0 (IG-701).
+                    self._goal_loop_token_cursor[goal_id] = 0
+                    continue
+                if isinstance(ctype, str) and ctype.startswith(
+                    "soothe.internal.autopilot.progress."
+                ):
+                    await self._apply_worker_progress_event(goal_id, data)
+                    continue
+                if ctype != "soothe.internal.autopilot.goal_completion":
+                    continue
+
+                completion_seen = True
+                self._goal_loop_token_cursor.pop(goal_id, None)
+                outcome = data.get("outcome", "failed")
+                contribution_dict = dict(data.get("context_contribution") or {})
+                # Drop pre-IG-712 wire keys ignored by the current schema.
+                contribution_dict.pop("files_touched", None)
+                try:
+                    contribution = GoalDispatchContextContribution.model_validate(contribution_dict)
+                except Exception:
+                    logger.warning(
+                        "Invalid GoalDispatchContextContribution for goal %s; using empty",
+                        goal_id,
+                        exc_info=True,
+                    )
+                    contribution = GoalDispatchContextContribution()
+
+                try:
+                    await self._mirror_contribution_steps(goal_id, contribution)
+                except Exception:
+                    logger.warning(
+                        "Failed to backfill steps from contribution for goal %s",
+                        goal_id,
+                        exc_info=True,
+                    )
+
+                # RFC-204 Group C: Apply directives BEFORE outcome handling.
+                # This creates subgoals that inherit from the active goal.
+                directives_data = data.get("goal_directives", [])
+                if directives_data:
+                    try:
+                        from soothe_sdk.protocols.planner import GoalDirective
+
+                        directives = [GoalDirective(**d) for d in directives_data]
+                        created_ids = await self._ce.apply_directives(
+                            directives,
+                            source_goal_id=goal_id,
+                        )
+                        logger.info(
+                            "Applied %d directives from goal %s, created goals: %s",
+                            len(directives),
+                            goal_id,
+                            created_ids,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to apply directives for goal %s",
+                            goal_id,
+                            exc_info=True,
+                        )
+
+                # Persist the contribution if a store is wired.
+                store = getattr(self, "_context_store", None)
+                if store is not None:
+                    try:
+                        await store.put(goal_id, contribution)
+                    except Exception:
+                        logger.warning(
+                            "Failed to persist contribution for goal %s",
+                            goal_id,
+                            exc_info=True,
+                        )
+
+                # Release the worker slot + reservation BEFORE finalizing so
+                # the worker is drained (mark_idle) before the rail sees
+                # goal_completed — keeps runtime teardown ahead of CE/job
+                # completion (lifecycle alignment). The spawn-tree teardown
+                # already ran in the runner before this chunk was emitted.
+                await self._release_goal_runtime(
+                    goal_id,
+                    loop_id=worker.loop_id,
+                    success=outcome == "completed",
+                    end_status=outcome
+                    if outcome in ("completed", "failed", "cancelled")
+                    else "failed",
+                )
+
+                # React to outcome by transitioning the goal.
+                if outcome == "completed":
+                    await self._apply_consensus_and_finalize(
+                        goal_id,
+                        evidence_summary=str(data.get("evidence_summary", "")),
+                        loop_id=worker.loop_id,
+                        contribution=contribution,
+                        outcome=outcome,
+                    )
+                elif outcome == "needs_replan":
+                    # IG-707: clarification / empty PlanResult → send_back (or
+                    # fail on budget exhaust), never operator-wait suspend.
+                    narrative = (
+                        str(data.get("evidence_summary", "")).strip()
+                        or str(data.get("error_text", "")).strip()
+                        or "Worker needs replan (insufficient terminal evidence)"
+                    )
+                    try:
+                        await self._commit_loop_end_report(
+                            goal_id,
+                            outcome="needs_replan",
+                            summary=narrative,
+                            contribution=contribution,
+                        )
+                        await self._apply_send_back_or_fail(
+                            goal_id,
+                            reason=narrative,
+                            loop_id=worker.loop_id,
+                        )
+                    except Exception:
+                        logger.exception("send_back/fail raised for needs_replan %s", goal_id)
+                else:  # failed
+                    evidence = EvidenceBundle(
+                        structured={
+                            "outcome": outcome,
+                            "plan_result_status": data.get("plan_result_status"),
+                        },
+                        narrative=str(data.get("evidence_summary", "")).strip()
+                        or str(data.get("error_text", "")).strip()
+                        or "Worker reported failure without evidence summary",
+                        source="layer2_execute",
+                    )
+                    try:
+                        await self._commit_loop_end_report(
+                            goal_id,
+                            outcome="failed",
+                            summary=evidence.narrative,
+                            contribution=contribution,
+                        )
+                        await self._ce.fail_goal(goal_id, evidence=evidence)
+                        await self._emit_goal_failed(
+                            goal_id,
+                            evidence=evidence.model_dump(mode="json"),
+                            error_message=evidence.narrative,
+                            loop_id=worker.loop_id,
+                        )
+                    except Exception:
+                        logger.exception("fail_goal raised for goal %s", goal_id)
+
+                break  # one completion chunk per dispatch is the contract
+        except Exception:
+            logger.exception(
+                "Worker stream raised for goal %s on worker %s",
+                goal_id,
+                worker.loop_id,
+            )
+
+        if not completion_seen:
+            # Worker stream ended without a completion chunk — treat as failed.
+            # Still commit a minimal CE report so report-commit SoT holds (IG-726).
+            from soothe.goal_contracts import EvidenceBundle as _EvBundle
+
+            narrative = "Worker exited without emitting GoalCompletionChunk"
+            try:
+                await self._commit_loop_end_report(
+                    goal_id,
+                    outcome="failed",
+                    summary=narrative,
+                )
+                await self._ce.fail_goal(
+                    goal_id,
+                    evidence=_EvBundle(
+                        structured={"outcome": "no_completion_chunk"},
+                        narrative=narrative,
+                        source="layer2_execute",
+                    ),
+                )
+                await self._emit_goal_failed(
+                    goal_id,
+                    evidence={"outcome": "no_completion_chunk"},
+                    error_message=narrative,
+                    loop_id=worker.loop_id,
+                )
+            except Exception:
+                logger.debug("fail_goal raised on missing completion", exc_info=True)
+
+        # Always release worker + reservation, even on errors. Idempotent —
+        # no-ops when the early release (completion path above) already ran.
+        end_status = "completed" if completion_seen else "failed"
+        # Prefer outcome from CE if available.
+        finished = await self._ce.get_goal(goal_id)
+        if finished is not None:
+            if finished.status == "completed":
+                end_status = "completed"
+            elif finished.status in ("cancelled", "failed", "suspended"):
+                end_status = "failed" if finished.status != "cancelled" else "cancelled"
+        await self._release_goal_runtime(
+            goal_id,
+            loop_id=worker.loop_id,
+            success=completion_seen,
+            end_status=end_status,
+        )
+
+        self._dispatch_tasks.pop(goal_id, None)
+        await self._persist_goals()
+
+    async def _apply_send_back_or_fail(
+        self,
+        goal_id: str,
+        *,
+        reason: str,
+        loop_id: str | None = None,
+    ) -> None:
+        """Send goal back for rework, or fail + notify when budget is exhausted.
+
+        IG-707: never suspend for operator resume on consensus / replan paths.
+        """
+        updated = await self._ce.send_back_goal(goal_id, reason=reason)
+        if updated.status == "failed":
+            await self._emit_goal_failed(
+                goal_id,
+                error_message=reason,
+                loop_id=loop_id,
+            )
+            await self._maybe_emit_dag_idle(goal_id)
+        else:
+            await self._notify_rail("goal_send_back", goal_id, reason=reason)
+
+    async def _commit_loop_end_report(
+        self,
+        goal_id: str,
+        *,
+        outcome: str,
+        summary: str,
+        contribution: Any | None = None,
+    ) -> int | None:
+        """Persist StrangeLoop loop-end report onto CE (IG-726)."""
+        from soothe_autopilot.verify.report_projection import build_goal_report
+
+        findings = getattr(contribution, "findings", None) if contribution else None
+        effects = getattr(contribution, "effects", None) if contribution else None
+        report = build_goal_report(
+            outcome=outcome,
+            summary=summary,
+            findings=findings,
+            effects=effects,
+        )
+        try:
+            revision = await self._ce.commit_goal_report(goal_id, report)
+        except Exception:
+            logger.exception("commit_goal_report failed for goal %s", goal_id)
+            return None
+
+        # Mirror findings onto goal.findings for WavePlan / maturity readers.
+        goal = await self._ce.get_goal(goal_id)
+        if goal is not None and findings:
+            try:
+                from soothe_autopilot.rails.wave_plan import (
+                    WAVE_PLAN_FINDING_CAP,
+                    parse_wave_plan_payload,
+                )
+
+                for finding in findings[:20]:
+                    text = getattr(finding, "summary", None) or str(finding)
+                    if not text or text in goal.findings:
+                        continue
+                    cap = 500
+                    if parse_wave_plan_payload(str(text).strip()) is not None:
+                        cap = WAVE_PLAN_FINDING_CAP
+                    goal.findings.append(str(text)[:cap])
+            except Exception:
+                logger.debug("Failed to attach findings to goal %s", goal_id, exc_info=True)
+
+        try:
+            await self._internal_bus.emit(
+                InternalGoalReportCommittedEvent(
+                    goal_id=goal_id,
+                    report_revision=revision,
+                    outcome=str(report.get("outcome") or outcome or ""),
+                )
+            )
+        except Exception:
+            logger.debug(
+                "Failed to emit goal.report_committed for %s",
+                goal_id,
+                exc_info=True,
+            )
+        return revision
+
+    async def _apply_consensus_and_finalize(
+        self,
+        goal_id: str,
+        *,
+        evidence_summary: str,
+        loop_id: str | None = None,
+        contribution: Any | None = None,
+        outcome: str = "completed",
+    ) -> None:
+        """RFC-204 §1.3 / IG-726: commit CE report, then judge from projection.
+
+        StrangeLoop Plan-Execute-Eval owns terminal done. Autopilot commits the
+        ledger report to CE, projects it, and judges accept/send_back/fail —
+        never gates on host workspace probes. IG-725: no collect_evidence
+        re-dispatch. After accept, LoopRail / AutopilotMonitor react to CE.
+        Idempotent on ``(goal_id, report_revision)`` via ``judged_report_revision``.
+        """
+        from soothe_autopilot.verify.consensus import evaluate_goal_completion
+        from soothe_autopilot.verify.report_projection import project_goal_report_for_judge
+
+        goal = await self._ce.get_goal(goal_id)
+        if goal is None:
+            return
+
+        await self._commit_loop_end_report(
+            goal_id,
+            outcome=outcome,
+            summary=str(evidence_summary or "").strip(),
+            contribution=contribution,
+        )
+        goal = await self._ce.get_goal(goal_id)
+        if goal is None:
+            return
+        if not goal.report:
+            logger.error(
+                "No CE goal report after commit for %s — skipping LLM judge",
+                goal_id,
+            )
+            return
+
+        # Already terminal (prior accept/fail) — commit above is SoT only.
+        if goal.status in TERMINAL_STATES:
+            logger.info(
+                "Skipping report-commit judge for %s — already terminal status=%s",
+                goal_id,
+                goal.status,
+            )
+            return
+
+        rev = int(goal.report_revision or 0)
+        judged = int(goal.judged_report_revision or 0)
+        if rev > 0 and judged >= rev:
+            logger.info(
+                "Skipping report-commit judge for %s — already judged rev=%s",
+                goal_id,
+                rev,
+            )
+            return
+
+        report_projection = project_goal_report_for_judge(goal.report)
+        dag_ops: tuple[Any, ...] = ()
+        # Architecture + require_plan: host owns WavePlan ingest / accept gate
+        # (nano must not call Autopilot tools). Prefer committed report text.
+        arch_gate = await self._architecture_wave_plan_consensus_gate(
+            goal,
+            evidence_summary=report_projection or evidence_summary,
+            contribution=contribution,
+        )
+        if arch_gate is not None:
+            decision, reasoning = arch_gate
+            logger.info(
+                "Architecture wave-plan gate for %s: decision=%s reasoning=%s",
+                goal_id,
+                decision,
+                reasoning[:160],
+            )
+        else:
+            response_text = report_projection or (evidence_summary or "").strip()
+            dag_context = self._dag_slice_for_judge(goal_id)
+            try:
+                result = await evaluate_goal_completion(
+                    goal.description,
+                    response_text,
+                    model=self._consensus_model,
+                    dag_context=dag_context,
+                )
+                decision, reasoning = result.decision, result.reasoning
+                dag_ops = tuple(result.dag_ops or ())
+            except Exception:
+                logger.exception("Report-commit judgment failed for goal %s", goal_id)
+                decision, reasoning = "fail", "Report-commit judgment failed"
+
+        # Mark judged before transitions so crash mid-apply does not re-judge.
+        goal.judged_report_revision = rev
+        goal.updated_at = datetime.now(UTC)
+
+        rail_bound = bool(getattr(goal, "rail_id", None))
+        logger.info(
+            "Report-commit finalize goal_id=%s rev=%s decision=%s dag_ops=%d "
+            "rail_bound=%s reasoning=%s",
+            goal_id,
+            rev,
+            decision,
+            len(dag_ops),
+            rail_bound,
+            (reasoning or "")[:160],
+        )
+        try:
+            if dag_ops:
+                from soothe_autopilot.verify.dag_ops import apply_bounded_dag_ops
+
+                allow = frozenset(
+                    str(x).strip()
+                    for x in (getattr(self._config, "judge_allow_structural_dag_ops", None) or [])
+                    if str(x).strip()
+                )
+                notes = await apply_bounded_dag_ops(
+                    self._ce,
+                    list(dag_ops),
+                    source_goal_id=goal_id,
+                    structural_allowlist=allow,
+                )
+                if notes:
+                    logger.info(
+                        "Applied bounded dag_ops for %s: %s",
+                        goal_id,
+                        "; ".join(notes)[:240],
+                    )
+            if decision == "accept":
+                await self._ce.complete_goal(goal_id)
+                await self._emit_goal_completed(goal_id, loop_id=loop_id)
+                await self._maybe_assess_job_maturity(
+                    goal_id,
+                    qa_response=report_projection or evidence_summary,
+                )
+                await self._maybe_emit_dag_idle(goal_id)
+            elif decision == "send_back":
+                await self._apply_send_back_or_fail(goal_id, reason=reasoning, loop_id=loop_id)
+            else:
+                # fail (or any unexpected non-accept/send_back) — host recovery.
+                await self._ce.fail_goal(goal_id, error=reasoning)
+                await self._emit_goal_failed(
+                    goal_id,
+                    error_message=reasoning,
+                    loop_id=loop_id,
+                )
+                await self._maybe_emit_dag_idle(goal_id)
+        except Exception:
+            logger.exception("Report-commit finalize transitions failed for %s", goal_id)
+
+    def _dag_slice_for_judge(self, goal_id: str) -> str:
+        """Compact related CE goals for optional bounded dag_ops."""
+        from soothe_autopilot.verify.dag_ops import format_dag_slice_for_judge
+
+        job_id = self._job_id_for_goal(goal_id)
+        goals = []
+        if job_id is not None:
+            for g in self._ce._dag.goals.values():
+                if g.id == job_id or self._is_descendant_of(g.id, job_id):
+                    if g.status in ("pending", "active", "failed") or g.id == goal_id:
+                        goals.append(g)
+        else:
+            g = self._ce._dag.get_goal(goal_id)
+            if g is not None:
+                goals = [g]
+        return format_dag_slice_for_judge(goals)
+
+    async def _maybe_assess_job_maturity(
+        self,
+        goal_id: str,
+        *,
+        qa_response: str | None = None,
+    ) -> None:
+        """Run LLM job maturity assessor after verify-class goals (RFC-230)."""
+        from soothe_autopilot.intake import load_job_goal_md
+        from soothe_autopilot.verify.job_maturity import (
+            JobMaturityAssessor,
+            MaturityAssessmentError,
+            is_verify_class_goal,
+        )
+
+        goal = await self._ce.get_goal(goal_id)
+        if goal is None:
+            return
+        if not is_verify_class_goal(rail_tags=goal.rail_tags, role=goal.role):
+            return
+        job_id = self._job_id_for_goal(goal_id)
+        if job_id is None:
+            return
+        root = self._ce._dag.get_goal(job_id)
+        if root is None or not root.rail_id:
+            return
+        workspace = root.workspace or goal.workspace
+        children = [
+            g
+            for g in self._ce._dag.goals.values()
+            if g.id != job_id and self._is_descendant_of(g.id, job_id)
+        ]
+        qa_text = (qa_response or "").strip()
+        if not qa_text and goal.findings:
+            qa_text = "\n".join(str(f) for f in goal.findings[-5:])[:2000]
+
+        try:
+            snapshot = await JobMaturityAssessor(model=self._consensus_model).assess(
+                workspace,
+                verification_rules=root.verification_rules,
+                goal_md=load_job_goal_md(
+                    jobs_root=self._jobs_root,
+                    job_id=job_id,
+                ),
+                root=root,
+                children=children,
+                qa_response=qa_text or None,
+            )
+            root.maturity = snapshot.to_dict()
+            root.touch()
+            interp = self._rail_interpreter
+            if interp is not None:
+                await interp.builtins.set_acceptance_met(job_id, met=snapshot.acceptance_met)
+            logger.info(
+                "Job maturity for %s: acceptance_met=%s level=%s signal=%s",
+                job_id,
+                snapshot.acceptance_met,
+                snapshot.level,
+                snapshot.suggested_rail_signal,
+            )
+        except MaturityAssessmentError:
+            logger.exception(
+                "Job maturity assessment failed for job %s (acceptance not latched)",
+                job_id,
+            )
+        except Exception:
+            logger.exception("Job maturity assessment failed for job %s", job_id)
+
+    async def _maybe_emit_dag_idle(self, goal_id: str) -> None:
+        """Emit rail ``dag_idle`` when a rail job subtree has no open work (RFC-230)."""
+        job_id = self._job_id_for_goal(goal_id)
+        if job_id is None:
+            return
+        root = self._ce._dag.get_goal(job_id)
+        if root is None or not root.rail_id:
+            return
+        if root.status in ("completed", "cancelled", "failed"):
+            return
+
+        open_desc = [
+            g
+            for g in self._ce._dag.goals.values()
+            if g.id != job_id
+            and g.status not in TERMINAL_STATES
+            and self._is_descendant_of(g.id, job_id)
+        ]
+        if open_desc:
+            return
+        if self._worker_pool is not None:
+            for worker in self._worker_pool.active_workers():
+                cg = worker.current_goal_id
+                if cg and (cg == job_id or self._is_descendant_of(cg, job_id)):
+                    return
+        await self._notify_rail("dag_idle", job_id)
+
+    def _is_descendant_of(self, goal_id: str, ancestor_id: str) -> bool:
+        """True if ``goal_id`` is under ``ancestor_id`` via parent_id chains."""
+        if goal_id == ancestor_id:
+            return False
+        seen: set[str] = set()
+        cur = self._ce._dag.get_goal(goal_id)
+        while cur is not None and cur.id not in seen:
+            seen.add(cur.id)
+            if cur.parent_id == ancestor_id:
+                return True
+            if not cur.parent_id:
+                return False
+            cur = self._ce._dag.get_goal(cur.parent_id)
+        return False
+
+    @staticmethod
+    def _infer_workspace(goal: GoalNode) -> str:
+        """Workspace path for scheduling-time reservation (RFC-222).
+
+        Uses the goal's client workspace when set; otherwise a per-goal sentinel
+        so goals without an explicit workspace still get distinct reservation slots.
+        """
+        if goal.workspace:
+            return goal.workspace
+        return f"$autopilot/goal/{goal.id}"
+
+    async def _schedule_goal(self, goal_id: str) -> None:
+        """Schedule a single ready goal to a worker."""
+        goal = await self._ce.get_goal(goal_id)
+        if not goal:
+            logger.warning("Goal %s not found for scheduling", goal_id)
+            return
+
+        ready = self._ce.peek_ready_goals(limit=self._config.max_loops)
+        if not any(g.id == goal_id for g in ready):
+            return
+
+        candidate = next(g for g in ready if g.id == goal_id)
+        if not await self._try_dispatch_goal(candidate):
+            logger.warning("No worker capacity for goal %s", goal_id)
+
+    async def _monitor_loop_health(self) -> None:
+        """Monitor active workers — enforce wall-clock deadlines (RFC-222 H5).
+
+        For each active worker, if ``goal_deadline_seconds`` is configured and
+        the worker has been busy longer than that, request cooperative
+        cancellation via ``worker.runner.cancel()`` and fail the goal with a
+        deadline_exceeded evidence bundle. The stream consumer task will see
+        the cancel and unwind cleanly (releasing reservation + worker).
+        """
+        if self._worker_pool is None:
+            return
+
+        deadline = getattr(self._config, "goal_deadline_seconds", None)
+        if not deadline or deadline <= 0:
+            return
+
+        from soothe.goal_contracts import EvidenceBundle
+
+        now = datetime.now(UTC)
+        for worker in self._worker_pool.active_workers():
+            started = getattr(worker, "dispatch_started_at", None)
+            goal_id = worker.current_goal_id
+            if started is None or goal_id is None:
+                continue
+            elapsed = (now - started).total_seconds()
+            if elapsed < deadline:
+                continue
+
+            logger.warning(
+                "[Autopilot] H5: goal %s on %s exceeded deadline (%.1fs > %.1fs); cancelling",
+                goal_id,
+                worker.loop_id,
+                elapsed,
+                deadline,
+            )
+            # Request cooperative cancel of the worker first; the stream
+            # consumer task will then see termination and clean up.
+            try:
+                await worker.runner.cancel()
+            except Exception:
+                logger.debug("worker.runner.cancel() raised for %s", worker.loop_id, exc_info=True)
+
+            # Drain the goal's spawned background processes before failing so
+            # deadline-exceeded goals do not orphan run_background grandchildren.
+            deadline_goal = await self._ce.get_goal(goal_id)
+            if deadline_goal is not None:
+                await self._drain_goal_workspace(deadline_goal)
+
+            # Transition the goal to failed so backoff/retry logic can react.
+            try:
+                await self._ce.fail_goal(
+                    goal_id,
+                    evidence=EvidenceBundle(
+                        structured={
+                            "reason": "deadline_exceeded",
+                            "elapsed_seconds": round(elapsed, 2),
+                            "deadline_seconds": float(deadline),
+                            "loop_id": worker.loop_id,
+                        },
+                        narrative=(
+                            "Goal exceeded deadline_seconds budget; "
+                            "worker cancelled by autopilot monitor."
+                        ),
+                        source="layer3_reflect",
+                    ),
+                )
+            except Exception:
+                logger.debug(
+                    "fail_goal raised after deadline cancel for %s", goal_id, exc_info=True
+                )
+
+    async def _release_idle_loops(self) -> None:
+        """Release idle workers past timeout."""
+        timeout = self._config.loop_idle_timeout
+        now = datetime.now(UTC)
+
+        for worker in self._worker_pool.idle_workers():
+            if worker.idle_since:
+                elapsed = (now - worker.idle_since).total_seconds()
+                if elapsed > timeout:
+                    await self._release_worker(worker.loop_id, reason="idle_timeout")
+
+    async def reconcile_goal_resources(self) -> int:
+        """Reconcile runtime resources against goal state (watchdog pass).
+
+        Scans goals in terminal or interrupted states and ensures their
+        runtime resources are actually torn down:
+        - Drains spawned background processes for goals whose workspace still
+          has a ``.soothe/background/`` dir (catches crash-then-restart or
+          silent lifecycle-hook failures).
+        - Recycles worktrees under ``.soothe/worktrees/`` for terminal job
+          roots whose branch is merged (catches crash-then-restart).
+
+        This is the belt-and-suspenders layer over the lifecycle hooks; the
+        hooks at goal terminal transition are the primary mechanism. Returns
+        the count of resources reconciled (drained + recycled).
+        """
+        reconciled = 0
+        try:
+            goals = await self._ce.list_goals()
+        except Exception:
+            logger.debug("reconcile_goal_resources: list_goals failed", exc_info=True)
+            return 0
+        # Drain spawned processes for terminal/interrupted goals whose
+        # workspace still has a background log dir.
+        for goal in goals:
+            if goal.status not in TERMINAL_STATES and goal.status != "suspended":
+                continue
+            if not goal.workspace:
+                continue
+            try:
+                from soothe.runner.shell_drain import drain_goal_runtime
+
+                drained = await asyncio.to_thread(drain_goal_runtime, goal.workspace)
+                if drained:
+                    reconciled += drained
+                    logger.info(
+                        "reconcile: drained %d process group(s) for %s goal %s",
+                        drained,
+                        goal.status,
+                        goal.id,
+                    )
+            except Exception:
+                logger.debug("reconcile: drain failed for goal %s", goal.id, exc_info=True)
+        # Recycle worktrees for terminal job roots (rail jobs with a workspace
+        # under .soothe/worktrees/).
+        recycled_worktrees = await self._reconcile_terminal_job_worktrees()
+        reconciled += recycled_worktrees
+        return reconciled
+
+    async def _reconcile_terminal_job_worktrees(self) -> int:
+        """Recycle worktrees for terminal rail job roots (crash recovery)."""
+        from soothe_autopilot.rails import worktree_ops
+
+        recycled = 0
+        try:
+            goals = await self._ce.list_goals()
+        except Exception:
+            return 0
+        for goal in goals:
+            if goal.parent_id is not None or not goal.rail_id:
+                continue
+            if goal.status not in TERMINAL_STATES:
+                continue
+            workspace = goal.workspace
+            if not workspace:
+                continue
+            repo = None
+            try:
+                ws = Path(workspace).expanduser()
+                # The workspace may be the primary repo or a worktree under it.
+                if ".soothe" in ws.parts:
+                    repo = ws.parent if "worktrees" in ws.parts else ws
+                else:
+                    repo = ws
+            except Exception:
+                continue
+            if repo is None or not (repo / ".git").exists():
+                continue
+            try:
+                count = worktree_ops.recycle_job_worktrees(repo, job_id=goal.id)
+                if count:
+                    recycled += count
+                    logger.info(
+                        "reconcile: recycled %d worktree(s) for terminal job %s",
+                        count,
+                        goal.id,
+                    )
+            except Exception:
+                logger.debug(
+                    "reconcile: worktree recycle failed for job %s",
+                    goal.id,
+                    exc_info=True,
+                )
+        return recycled
+
+    async def _enter_dreaming_mode(self) -> None:
+        """Enter dreaming mode when no goals active."""
+        if self._dreaming:
+            return
+
+        self._dreaming = True
+
+        await self._internal_bus.emit(InternalAutopilotDreamingEvent(trigger="all_goals_complete"))
+
+        logger.info(
+            "Entered dreaming mode - polling reduced to %ds", self._config.dreaming_poll_interval
+        )
+
+    async def wake_from_dreaming(self, trigger: str = "wake_signal") -> None:
+        """Wake from dreaming mode.
+
+        Args:
+            trigger: What caused the wake (wake_signal, new_task, scheduled_task).
+        """
+        if not self._dreaming:
+            return
+
+        self._dreaming = False
+
+        await self._internal_bus.emit(
+            InternalAutopilotAwakeEvent(
+                trigger=trigger
+                if trigger in ("new_task", "wake_signal", "scheduled_task")
+                else "wake_signal"
+            )
+        )
+
+        logger.info("Woke from dreaming mode - trigger: %s", trigger)
+
+    async def force_dream(self) -> None:
+        """Force-enter dreaming mode (WS ``autopilot_dream`` / programmatic).
+
+        Prefer ``agent.autopilot.dreaming_enabled`` and automatic DAG-complete
+        entry over manual force; this remains for wire/protocol callers.
+        """
+        if not self._config.dreaming_enabled:
+            logger.info("Dreaming disabled in config; ignoring force_dream")
+            return
+        await self._enter_dreaming_mode()
+
+    _GOALS_SNAPSHOT_KEY = "autopilot:goals:snapshot"
+
+    async def _persist_goals(self) -> None:
+        """Persist ContextEngine DAG snapshot when a store is wired."""
+        if self._goal_persist_store is None:
+            return
+        try:
+            await self._goal_persist_store.save(
+                self._GOALS_SNAPSHOT_KEY,
+                self._ce.get_dag_snapshot().model_dump(mode="json"),
+            )
+            self._persist_fail_count = 0
+        except Exception:
+            self._persist_fail_count += 1
+            log = logger.error if self._persist_fail_count >= 3 else logger.warning
+            log(
+                "Failed to persist autopilot goals snapshot (consecutive=%d)",
+                self._persist_fail_count,
+                exc_info=True,
+            )
+
+    async def _restore_persisted_goals(self) -> None:
+        """Restore ContextEngine DAG from persistence and recover stranded actives."""
+        if self._goal_persist_store is None:
+            return
+        try:
+            data = await self._goal_persist_store.load(self._GOALS_SNAPSHOT_KEY)
+            if isinstance(data, dict) and "goals" in data:
+                from soothe.context.models import GoalStepDAGSnapshot
+
+                snapshot = GoalStepDAGSnapshot.model_validate(data)
+                self._ce._dag.restore_from_snapshot(snapshot)
+        except Exception:
+            logger.warning("Failed to restore autopilot goals snapshot", exc_info=True)
+        recovered = await self._ce.recover()
+        if recovered:
+            logger.warning(
+                "[Autopilot] crash recovery: reset %d active goal(s) → pending: %s",
+                len(recovered),
+                ", ".join(recovered),
+            )
+
+    def status(self) -> dict[str, Any]:
+        """Get AutopilotService status.
+
+        Returns:
+            Status dict with running, dreaming, loop pool stats.
+        """
+        snapshot = {
+            "running": self._running,
+            "dreaming": self._dreaming,
+            "loop_pool": {
+                "active": self._worker_pool.active_count(),
+                "idle": self._worker_pool.idle_count(),
+                "total": self._worker_pool.total_count(),
+                "max": self._worker_pool.max_loops,
+            },
+            "goals": {
+                "completed": sum(1 for g in self._ce.get_all_goals() if g.status == "completed"),
+            },
+            "config": {
+                "max_loops": self._config.max_loops,
+                "loop_idle_timeout": self._config.loop_idle_timeout,
+                "poll_interval": self._config.poll_interval,
+            },
+        }
+        logger.debug(
+            "Autopilot status report running=%s dreaming=%s active=%d idle=%d completed=%d",
+            snapshot["running"],
+            snapshot["dreaming"],
+            snapshot["loop_pool"]["active"],
+            snapshot["loop_pool"]["idle"],
+            snapshot["goals"]["completed"],
+        )
+        return snapshot
+
+    async def list_job_loops(self, job_id: str) -> list[dict[str, Any]]:
+        """Return durable loop membership history for a job (IG-677)."""
+        entries = await self._job_loop_index.list_loops(job_id)
+        return [e.model_dump(mode="json") for e in entries]
+
+    async def subtree_total_tokens(self, root_goal_id: str) -> int:
+        """Sum ``GoalNode.total_tokens_used`` over the job ``parent_id`` subtree.
+
+        Args:
+            root_goal_id: Root goal id (job id).
+
+        Returns:
+            Non-negative token total for the root and all descendants.
+        """
+        goals = await self._ce.list_goals()
+        children_map: dict[str, list[str]] = {}
+        by_id = {g.id: g for g in goals}
+        for g in goals:
+            if g.parent_id:
+                children_map.setdefault(g.parent_id, []).append(g.id)
+        total = 0
+        visited: set[str] = set()
+        queue = [root_goal_id]
+        while queue:
+            current_id = queue.pop(0)
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+            goal = by_id.get(current_id)
+            if goal is not None:
+                total += int(goal.total_tokens_used or 0)
+            for child_id in children_map.get(current_id, []):
+                if child_id not in visited:
+                    queue.append(child_id)
+        return total
+
+    async def top_snapshot(self, *, include_terminal: bool = False) -> dict[str, Any]:
+        """Build jobs → goals → loops snapshot for CLI top (IG-679 / IG-688).
+
+        Filters use CE ``TERMINAL_STATES`` for goals (unless
+        ``include_terminal``) and ``status == "active"`` for JobLoopIndex
+        entries. StepDAG under kept goals is preserved for ``steps=on``.
+        See RFC-228 §autopilot_top.
+
+        Args:
+            include_terminal: When ``True``, keep completed/failed/cancelled
+                goals and fully terminal jobs (CLI ``a`` / ``--all``).
+
+        Returns:
+            Dict with ``running``, ``dreaming``, ``loop_pool``, ``generated_at``,
+            and ``jobs`` (each with filtered ``dag`` and active ``loops``).
+        """
+        from soothe_autopilot.jobs.top_snapshot import build_top_job_entry, sort_top_jobs
+        from soothe_autopilot.verify.job_maturity import maturity_wire_fields
+
+        status = self.status()
+        goals = await self.list_goals()
+        roots = [g for g in goals if g.parent_id is None]
+        jobs: list[dict[str, Any]] = []
+        for root in roots:
+            dag = await self.dag_snapshot(root.id)
+            loops = await self.list_job_loops(root.id)
+            created = root.created_at
+            created_at = created.isoformat() if hasattr(created, "isoformat") else str(created)
+            updated = root.updated_at
+            updated_at = updated.isoformat() if hasattr(updated, "isoformat") else str(updated)
+            job_tokens = sum(
+                int(n.get("total_tokens_used") or 0)
+                for n in (dag.get("nodes") or [])
+                if isinstance(n, dict)
+            )
+            entry = build_top_job_entry(
+                job_id=root.id,
+                status=str(root.status),
+                priority=int(root.priority),
+                description=root.description,
+                workspace=root.workspace,
+                dag=dag,
+                loops=loops,
+                created_at=created_at,
+                started_at=_iso_or_none(root.started_at),
+                updated_at=updated_at,
+                include_terminal=include_terminal,
+                maturity=maturity_wire_fields(root.maturity),
+                total_tokens_used=job_tokens,
+                rail_id=root.rail_id,
+            )
+            if entry is not None:
+                jobs.append(entry)
+        snapshot = {
+            "running": status.get("running", False),
+            "dreaming": status.get("dreaming", False),
+            "loop_pool": status.get("loop_pool", {}),
+            "generated_at": datetime.now(UTC).isoformat(),
+            "jobs": sort_top_jobs(jobs),
+        }
+        logger.debug(
+            "Top snapshot built jobs=%d include_terminal=%s running=%s dreaming=%s",
+            len(snapshot["jobs"]),
+            include_terminal,
+            snapshot["running"],
+            snapshot["dreaming"],
+        )
+        return snapshot
+
+    async def dag_snapshot(self, root_goal_id: str) -> dict[str, Any]:
+        """Export job subtree for visualization (RFC-228 / CLI top).
+
+        Membership is the ``parent_id`` subtree (same as cancel / rail
+        descendants). Tree ``edges`` are parent → child so CLI ``job`` /
+        ``top`` can nest internal goals. Per-node ``depends_on`` remains
+        scheduling metadata (do not invert it into tree edges — rail often
+        makes the root depend on a child planner).
+
+        Args:
+            root_goal_id: Root goal ID (job_id) to traverse from.
+
+        Returns:
+            Dict with ``nodes``, ``edges``, and ``root_id``.
+            Nodes contain: id, description, status, priority, depends_on,
+            parent_id, assigned_loop_id, steps_completed, steps_total,
+            tool_calls, total_tokens_used, created_at, started_at (null until
+            the goal first runs), updated_at, optional ``steps`` StepDAG,
+            summary/findings when completed.
+            Edges contain: source=parent_id, target=child id.
+        """
+        goals = await self._ce.list_goals()
+        goal_by_id: dict[str, GoalNode] = {g.id: g for g in goals}
+
+        # parent_id hierarchy (job membership) — not depends_on inversion
+        children_map: dict[str, list[str]] = {}
+        for g in goals:
+            if g.parent_id:
+                children_map.setdefault(g.parent_id, []).append(g.id)
+
+        descendants: list[GoalNode] = []
+        visited: set[str] = set()
+        queue = [root_goal_id]
+
+        while queue:
+            current_id = queue.pop(0)
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+
+            goal = goal_by_id.get(current_id)
+            if goal is not None:
+                descendants.append(goal)
+
+            for child_id in children_map.get(current_id, []):
+                if child_id not in visited:
+                    queue.append(child_id)
+
+        # Build nodes for React Flow / CLI top (include planned StepDAG)
+        nodes: list[dict[str, Any]] = []
+        for g in descendants:
+            step_payload = _serialize_goal_steps(g)
+            node: dict[str, Any] = {
+                "id": g.id,
+                "description": (g.description[:100] if len(g.description) > 100 else g.description),
+                "status": g.status,
+                "priority": g.priority,
+                "depends_on": list(g.depends_on or []),
+                "parent_id": g.parent_id,
+                "assigned_loop_id": g.assigned_loop_id,
+                "role": g.role,
+                "steps_completed": step_payload["steps_completed"],
+                "steps_total": step_payload["steps_total"],
+                "tool_calls": 0,
+                "total_tokens_used": int(g.total_tokens_used or 0),
+                "created_at": (
+                    g.created_at.isoformat()
+                    if hasattr(g.created_at, "isoformat")
+                    else str(g.created_at)
+                ),
+                "started_at": _iso_or_none(g.started_at),
+                "updated_at": (
+                    g.updated_at.isoformat()
+                    if hasattr(g.updated_at, "isoformat")
+                    else str(g.updated_at)
+                ),
+            }
+            if g.rail_id:
+                node["rail_id"] = g.rail_id
+            if step_payload["steps"] is not None:
+                node["steps"] = step_payload["steps"]
+            # Report fields fill counts only when StepDAG is empty
+            if g.report is not None:
+                report = g.report if isinstance(g.report, dict) else {}
+                if step_payload["steps_total"] == 0:
+                    node["steps_completed"] = report.get("steps_completed", 0) or 0
+                    node["steps_total"] = report.get("steps_total", 0) or 0
+                node["tool_calls"] = report.get("tool_calls", 0) or 0
+                if g.status == "completed":
+                    node["summary"] = report.get("summary")
+                    node["findings"] = report.get("findings") or []
+            nodes.append(node)
+
+        # Hierarchy edges for ASCII / React tree (parent → child)
+        edges: list[dict[str, str]] = []
+        for g in descendants:
+            if g.parent_id and g.parent_id in visited:
+                edges.append({"source": g.parent_id, "target": g.id})
+
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "root_id": root_goal_id,
+        }
+
+
+def _iso_or_none(value: datetime | None) -> str | None:
+    """Render an optional timestamp as ISO text for wire payloads."""
+    if value is None:
+        return None
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+def _serialize_goal_steps(goal: GoalNode) -> dict[str, Any]:
+    """Build planned StepDAG payload and live counts for dag/top snapshots.
+
+    Returns:
+        Dict with ``steps_completed``, ``steps_total``, and optional ``steps``
+        (``nodes`` + ``edges``) when the goal has planned steps.
+    """
+    step_dag = getattr(goal, "steps", None)
+    nodes_map = getattr(step_dag, "nodes", None) if step_dag is not None else None
+    if not nodes_map:
+        return {"steps_completed": 0, "steps_total": 0, "steps": None}
+
+    step_nodes: list[dict[str, Any]] = []
+    step_edges: list[dict[str, str]] = []
+    completed = 0
+    for sn in nodes_map.values():
+        desc = sn.description or ""
+        if len(desc) > 80:
+            desc = desc[:80]
+        status = str(sn.status)
+        if status == "completed":
+            completed += 1
+        step_nodes.append(
+            {
+                "id": sn.id,
+                "description": desc,
+                "status": status,
+                "dependencies": list(sn.dependencies or []),
+            }
+        )
+        for dep in sn.dependencies or []:
+            step_edges.append({"source": str(dep), "target": str(sn.id)})
+    return {
+        "steps_completed": completed,
+        "steps_total": len(step_nodes),
+        "steps": {"nodes": step_nodes, "edges": step_edges},
+    }

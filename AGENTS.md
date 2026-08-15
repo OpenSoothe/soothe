@@ -51,8 +51,8 @@ place them in the correct **monorepo-owned** package. **Never reverse an arrow.*
 Enforcement for owned packages: `scripts/check_module_import_boundaries.sh`
 (wired into `./scripts/verify_finally.sh`).
 
-**This monorepo owns** `soothe`, `soothe-daemon`, and `soothe-cli` only.
-Submodules (`client/*`) are **consumed as code** — do **not**
+**This monorepo owns** `soothe`, `soothe-autopilot`, `soothe-daemon`, and
+`soothe-cli` only. Submodules (`client/*`) are **consumed as code** — do **not**
 format, lint, test, or release them from this repo. `soothe-nano`, `soothe-sdk`, and
 `soothe-deepagents` are **PyPI dependencies** (maintain/release in their own
 repositories).
@@ -65,9 +65,11 @@ soothe-deepagents     ← deepagents fork (PyPI; leaf)
         ↓
 soothe-nano           ← Coding CoreAgent (PyPI)
         ↓
-soothe                ← host: StrangeLoop, Autopilot, CE, cron, runner   ← OWNED
+soothe                ← host: StrangeLoop, CE, runner                   ← OWNED
         ↓
-soothe-daemon         ← soothed process                                 ← OWNED
+soothe-autopilot      ← goal orchestration: Autopilot, rails, verify    ← OWNED
+        ↓
+soothe-daemon         ← soothed process (channels, cron)                ← OWNED
         ↑
 soothe-client-python  ← WebSocket transport (submodule)
         ↑
@@ -80,8 +82,9 @@ soothe-cli            ← Typer + Textual TUI                             ← OW
 |---------|---------|
 | Shared events, wire, display, plugin contracts, protocols | `soothe-sdk` (PyPI; mirasoth/soothe-sdk) |
 | Coding CoreAgent, skills/MCP/backends used in-proc | `soothe-nano` (PyPI; mirasoth/soothe-nano) |
-| StrangeLoop, Autopilot, Context Engine, cron, identity, host runner | `soothe` |
-| Process lifecycle, channels, HTTP/WS server, admin IO | `soothe-daemon` |
+| StrangeLoop, Context Engine, identity, host runner | `soothe` |
+| Autopilot (goal scheduling, dispatch, monitor, rails, verify, notify) | `soothe-autopilot` |
+| Process lifecycle, channels, HTTP/WS server, admin IO, cron | `soothe-daemon` |
 | Human CLI / TUI | `soothe-cli` |
 | Language WS clients | `client/*` (external submodules) |
 
@@ -89,8 +92,9 @@ soothe-cli            ← Typer + Textual TUI                             ← OW
 
 | Package | May import | Must NOT import |
 |---------|------------|-----------------|
-| `soothe` | `soothe-sdk`, `soothe-nano`, `soothe-deepagents` | `soothe_daemon`, `soothe_cli` |
-| `soothe-daemon` | `soothe`, `soothe-nano`, `soothe-sdk` | `soothe_cli`, `soothe_client` |
+| `soothe` | `soothe-sdk`, `soothe-nano`, `soothe-deepagents` | `soothe_autopilot`, `soothe_daemon`, `soothe_cli` |
+| `soothe-autopilot` | `soothe`, `soothe-nano`, `soothe-sdk` | `soothe_daemon`, `soothe_cli`, `soothe_client` |
+| `soothe-daemon` | `soothe`, `soothe-autopilot`, `soothe-nano`, `soothe-sdk` | `soothe_cli`, `soothe_client` |
 | `soothe-cli` | `soothe-sdk`, `soothe-client-python` | `soothe`, `soothe_daemon` (use WebSocket, not Python imports) |
 
 Additional hard bans (owned packages):
@@ -99,7 +103,7 @@ Additional hard bans (owned packages):
 2. **Daemon does not depend on the WS client** — `soothe_daemon` must not import `soothe_client` in runtime source; admin RPCs use `soothe_sdk.wire` (tests may use the client via the `dev` extra).
 3. **Private nano middleware is closed** — owned packages must not import `soothe_nano.middleware._*`.
 
-Host packages (`soothe`, `soothe-daemon`, `soothe-cli`) MAY reference
+Host packages (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`) MAY reference
 IG-XXX/RFC-XXX in docstrings and comments (they live beside `docs/`).
 
 
@@ -145,8 +149,9 @@ Import/placement rules: **§7b Package Boundaries (MUST)**. Do not reverse the D
 
 ```
 packages/
-├── soothe/             # OWNED — StrangeLoop, Autopilot, CE, cron, runner
-├── soothe-daemon/      # OWNED — soothed process
+├── soothe/             # OWNED — StrangeLoop, CE, runner
+├── soothe-autopilot/   # OWNED — Autopilot, rails, verify, dispatch
+├── soothe-daemon/      # OWNED — soothed process, cron
 └── soothe-cli/         # OWNED — Typer CLI + Textual TUI
 
 # Submodules (consume only — format/lint/test/release in their own repos):

@@ -1,0 +1,128 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "soothe-autopilot"
+dynamic = ["version"]
+description = "Soothe autopilot - goal-driven orchestration for 24/7 autonomous agents"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11,<3.14"
+keywords = ["soothe", "autopilot", "agents", "ai", "llm", "goals", "orchestration"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    # First-party: autopilot orchestrates the soothe host (StrangeLoop, ContextEngine,
+    # config, events) and directly imports soothe-sdk/soothe-nano contracts.
+    "soothe>=0.9.15,<1.0.0",
+    "soothe-sdk>=1.0.8,<2.0.0",
+    "soothe-nano>=1.1.19,<2.0.0",
+    # Autopilot-specific runtime deps
+    "pydantic>=2.0.0,<3.0.0",
+    "langchain-core>=1.2.18,<2.0.0",
+    "pyyaml>=6.0.0,<7.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov",
+    "ruff>=0.12.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/mirasoth/soothe"
+Repository = "https://github.com/mirasoth/soothe"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/soothe_autopilot"]
+
+# Ship prompt XML fragments and builtin rail YML (non-.py package data) in the wheel.
+[tool.hatch.build.targets.wheel.force-include]
+"src/soothe_autopilot/prompts/fragments/consensus/judge_instructions.xml" = "soothe_autopilot/prompts/fragments/consensus/judge_instructions.xml"
+"src/soothe_autopilot/prompts/fragments/maturity/assess_closing.xml" = "soothe_autopilot/prompts/fragments/maturity/assess_closing.xml"
+"src/soothe_autopilot/prompts/fragments/maturity/assess_instructions.xml" = "soothe_autopilot/prompts/fragments/maturity/assess_instructions.xml"
+"src/soothe_autopilot/prompts/fragments/rail/autoresearch_loop.xml" = "soothe_autopilot/prompts/fragments/rail/autoresearch_loop.xml"
+"src/soothe_autopilot/prompts/fragments/rail/debug.xml" = "soothe_autopilot/prompts/fragments/rail/debug.xml"
+"src/soothe_autopilot/prompts/fragments/rail/evals.xml" = "soothe_autopilot/prompts/fragments/rail/evals.xml"
+"src/soothe_autopilot/prompts/fragments/rail/fix.xml" = "soothe_autopilot/prompts/fragments/rail/fix.xml"
+"src/soothe_autopilot/prompts/fragments/rail/guard_system.xml" = "soothe_autopilot/prompts/fragments/rail/guard_system.xml"
+"src/soothe_autopilot/prompts/fragments/rail/improve.xml" = "soothe_autopilot/prompts/fragments/rail/improve.xml"
+"src/soothe_autopilot/prompts/fragments/rail/learn.xml" = "soothe_autopilot/prompts/fragments/rail/learn.xml"
+"src/soothe_autopilot/prompts/fragments/rail/orchestrator_routing.xml" = "soothe_autopilot/prompts/fragments/rail/orchestrator_routing.xml"
+"src/soothe_autopilot/prompts/fragments/rail/plan.xml" = "soothe_autopilot/prompts/fragments/rail/plan.xml"
+"src/soothe_autopilot/prompts/fragments/rail/predict.xml" = "soothe_autopilot/prompts/fragments/rail/predict.xml"
+"src/soothe_autopilot/prompts/fragments/rail/probe.xml" = "soothe_autopilot/prompts/fragments/rail/probe.xml"
+"src/soothe_autopilot/prompts/fragments/rail/reason.xml" = "soothe_autopilot/prompts/fragments/rail/reason.xml"
+"src/soothe_autopilot/prompts/fragments/rail/regression.xml" = "soothe_autopilot/prompts/fragments/rail/regression.xml"
+"src/soothe_autopilot/prompts/fragments/rail/scenario.xml" = "soothe_autopilot/prompts/fragments/rail/scenario.xml"
+"src/soothe_autopilot/prompts/fragments/rail/security.xml" = "soothe_autopilot/prompts/fragments/rail/security.xml"
+"src/soothe_autopilot/prompts/fragments/rail/ship.xml" = "soothe_autopilot/prompts/fragments/rail/ship.xml"
+"src/soothe_autopilot/prompts/fragments/verify/backoff.xml" = "soothe_autopilot/prompts/fragments/verify/backoff.xml"
+"src/soothe_autopilot/prompts/fragments/verify/dag_health.xml" = "soothe_autopilot/prompts/fragments/verify/dag_health.xml"
+"src/soothe_autopilot/prompts/fragments/verify/goal_placement.xml" = "soothe_autopilot/prompts/fragments/verify/goal_placement.xml"
+"src/soothe_autopilot/prompts/fragments/verify/post_completion.xml" = "soothe_autopilot/prompts/fragments/verify/post_completion.xml"
+"src/soothe_autopilot/rails/builtin_rails/autoresearch.yml" = "soothe_autopilot/rails/builtin_rails/autoresearch.yml"
+"src/soothe_autopilot/rails/builtin_rails/feature-dev.yml" = "soothe_autopilot/rails/builtin_rails/feature-dev.yml"
+"src/soothe_autopilot/rails/builtin_rails/greenfield-system.yml" = "soothe_autopilot/rails/builtin_rails/greenfield-system.yml"
+"src/soothe_autopilot/rails/builtin_rails/hotfix.yml" = "soothe_autopilot/rails/builtin_rails/hotfix.yml"
+"src/soothe_autopilot/rails/builtin_rails/maker-checker.yml" = "soothe_autopilot/rails/builtin_rails/maker-checker.yml"
+"src/soothe_autopilot/rails/builtin_rails/pr-review.yml" = "soothe_autopilot/rails/builtin_rails/pr-review.yml"
+"src/soothe_autopilot/rails/builtin_rails/README.md" = "soothe_autopilot/rails/builtin_rails/README.md"
+"src/soothe_autopilot/rails/builtin_rails/spike.yml" = "soothe_autopilot/rails/builtin_rails/spike.yml"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/soothe_autopilot/"]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/*.pyo",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.hatch.version]
+path = "../../VERSION"
+pattern = "^(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+)$"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = [".", "tests", "../soothe/tests"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --strict-markers"
+markers = [
+    "asyncio: mark test as async",
+    "integration: mark test as integration test",
+    "slow: long-running or stress tests",
+]

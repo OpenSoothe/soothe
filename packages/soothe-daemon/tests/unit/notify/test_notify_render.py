@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.autopilot.notify.models import NotifyIntent
+from soothe_autopilot.notify.models import NotifyIntent
 
 from soothe_daemon.notify.render import intent_html_body, intent_plain_body, intent_subject
 

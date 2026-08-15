@@ -1,0 +1,110 @@
+"""Tests for AutopilotService(subscribe_to_bus=...) flag (RFC-222 revised, Phase B, RFC-625).
+
+The daemon's daemon-owned AutopilotService must coexist with the per-runner
+AutopilotService until Phase D retires the latter. They share the singleton
+InternalEventBus, so the daemon instance must pass subscribe_to_bus=False
+to avoid double-handling every event.
+"""
+
+from __future__ import annotations
+
+from soothe.config.models import AutopilotConfig
+from soothe.context import ContextEngine
+from soothe.events.internal_bus import InternalEventBus
+from soothe.events.internal_events import (
+    INTERNAL_GOAL_STATE_CHANGED,
+    INTERNAL_GOAL_UNBLOCKED,
+    INTERNAL_GOALS_READY,
+)
+
+from soothe_autopilot import AutopilotService
+
+from .fakes import IdleFakeFactory
+
+
+def _config() -> AutopilotConfig:
+    return AutopilotConfig(max_loops=2, max_parallel_goals=2)
+
+
+def _factory() -> IdleFakeFactory:
+    return IdleFakeFactory()
+
+
+class TestSubscribeToBusFlag:
+    def test_default_subscribes(self) -> None:
+        bus = InternalEventBus()
+        ce = ContextEngine()
+        svc = AutopilotService(ce=ce, config=_config(), internal_bus=bus, runner_factory=_factory())
+        assert svc._subscribed is True
+        assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
+        assert bus.subscriber_count(INTERNAL_GOALS_READY) == 1
+        assert bus.subscriber_count(INTERNAL_GOAL_UNBLOCKED) == 1
+
+    def test_explicit_true_subscribes(self) -> None:
+        bus = InternalEventBus()
+        ce = ContextEngine()
+        svc = AutopilotService(
+            ce=ce,
+            config=_config(),
+            internal_bus=bus,
+            subscribe_to_bus=True,
+            runner_factory=_factory(),
+        )
+        assert svc._subscribed is True
+        assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
+        assert bus.subscriber_count(INTERNAL_GOAL_UNBLOCKED) == 1
+
+    def test_false_does_not_subscribe(self) -> None:
+        bus = InternalEventBus()
+        ce = ContextEngine()
+        svc = AutopilotService(
+            ce=ce,
+            config=_config(),
+            internal_bus=bus,
+            subscribe_to_bus=False,
+            runner_factory=_factory(),
+        )
+        assert svc._subscribed is False
+        assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 0
+        assert bus.subscriber_count(INTERNAL_GOALS_READY) == 0
+        assert bus.subscriber_count(INTERNAL_GOAL_UNBLOCKED) == 0
+
+    def test_coexistence_only_one_subscriber_fires(self) -> None:
+        """Two AutopilotService instances sharing a bus: only the
+        subscribing one handles events."""
+        bus = InternalEventBus()
+        ce = ContextEngine()
+        svc_subscribed = AutopilotService(
+            ce=ce,
+            config=_config(),
+            internal_bus=bus,
+            subscribe_to_bus=True,
+            runner_factory=_factory(),
+        )
+        svc_dormant = AutopilotService(
+            ce=ce,
+            config=_config(),
+            internal_bus=bus,
+            subscribe_to_bus=False,
+            runner_factory=_factory(),
+        )
+        assert svc_subscribed._subscribed is True
+        assert svc_dormant._subscribed is False
+        # Bus sees exactly one handler per relevant topic.
+        assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
+        assert bus.subscriber_count(INTERNAL_GOALS_READY) == 1
+        assert bus.subscriber_count(INTERNAL_GOAL_UNBLOCKED) == 1
+
+    def test_dormant_service_still_callable(self) -> None:
+        """Dormant service must still be a usable object (just not subscribed)."""
+        bus = InternalEventBus()
+        ce = ContextEngine()
+        svc = AutopilotService(
+            ce=ce,
+            config=_config(),
+            internal_bus=bus,
+            subscribe_to_bus=False,
+            runner_factory=_factory(),
+        )
+        status = svc.status()
+        assert status["running"] is False

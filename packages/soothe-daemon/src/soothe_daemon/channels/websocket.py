@@ -773,9 +773,9 @@ class WebSocketChannel(Channel):
             Result dict.
         """
 
-        from soothe.cron import ExtractionError
-        from soothe.cron.extraction import AutopilotDisabledError
-        from soothe.cron.models import DEFAULT_CRON_USER_ID, DuplicateCronJobError
+        from soothe_daemon.cron import ExtractionError
+        from soothe_daemon.cron.extraction import AutopilotDisabledError
+        from soothe_daemon.cron.models import DEFAULT_CRON_USER_ID, DuplicateCronJobError
 
         service = self._cron_service
 

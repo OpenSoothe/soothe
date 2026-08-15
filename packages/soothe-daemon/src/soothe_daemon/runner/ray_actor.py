@@ -22,9 +22,9 @@ class LoopRunnerActor:
 
     def __init__(self, config: object) -> None:
         # Import deferred so the actor process initialises its own SootheRunner.
-        from soothe.runner import SootheRunner
+        from soothe_autopilot.runner import AutopilotSootheRunner
 
-        self._runner = SootheRunner(config)  # type: ignore[arg-type]
+        self._runner = AutopilotSootheRunner(config)  # type: ignore[arg-type]
         self._cancelled = False
 
     async def run(self, request: LoopRunRequest, queue: Queue) -> None:

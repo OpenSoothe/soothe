@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.autopilot.notify.models import DeliveryResult, NotifyIntent, NotifyTarget
+from soothe_autopilot.notify.models import DeliveryResult, NotifyIntent, NotifyTarget
 
 from soothe_daemon.notify.render import intent_webhook_payload
 
