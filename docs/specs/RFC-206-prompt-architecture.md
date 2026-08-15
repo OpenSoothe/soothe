@@ -1,10 +1,10 @@
 # RFC-206: Hierarchical Prompt Architecture
 
-**RFC**: 206  
-**Title**: Hierarchical Prompt Architecture with System/User Separation  
-**Status**: Draft  
-**Kind**: Architecture Design  
-**Created**: 2026-04-08  
+**RFC**: 206
+**Title**: Hierarchical Prompt Architecture with System/User Separation
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-04-08
 **Dependencies**: RFC-200, RFC-100, RFC-214 (Volatility-Tiered Prompt Architecture & Unified Message Ledger)
 
 ## Abstract
@@ -131,7 +131,7 @@ The hierarchical nesting makes it impossible for the LLM to confuse system metad
 ### Directory Structure
 
 ```
-packages/soothe/src/soothe/core/prompts/
+packages/soothe/src/soothe/sloop/prompts/
 ├── __init__.py
 ├── builder.py              # PromptBuilder class
 ├── fragments/              # XML fragment templates
@@ -237,7 +237,7 @@ Check PRIOR_CONVERSATION in USER_TASK?
 
 ### LLMPlanner Refactor
 
-**Before** (historical `simple.py`; superseded by `packages/soothe/src/soothe/core/strange_loop/core/planner.py`):
+**Before** (historical `simple.py`; superseded by `packages/soothe/src/soothe/sloop/cognition/planner.py`):
 ```python
 async def reason(self, goal, state, context):
     prompt = self._build_reason_prompt(goal, state, context)
@@ -312,8 +312,8 @@ class LLMPlanner:
 
 ### Affected Code
 
-- `packages/soothe/src/soothe/core/strange_loop/core/planner.py` (LLMPlanner / RFC-604)
-- `packages/soothe/src/soothe/core/prompts/builder.py` (PromptBuilder)
+- `packages/soothe/src/soothe/sloop/cognition/planner.py` (LLMPlanner / RFC-604)
+- `packages/soothe/src/soothe/sloop/prompts/builder.py` (PromptBuilder)
 - Any tests that construct prompts directly
 
 ---

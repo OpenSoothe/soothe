@@ -17,9 +17,9 @@
 
 | Component | Location | Status |
 |-----------|----------|--------|
-| `PlanDAG` | `soothe/core/strange_loop/core/plan_dag.py` | ✅ Implemented |
-| `PlanManager` | `soothe/core/strange_loop/core/plan_manager.py` | ✅ Implemented |
-| `CompletionStrategy` enum | `soothe/core/strange_loop/core/plan_manager.py` | ✅ Implemented |
+| `PlanDAG` | `soothe/sloop/cognition/plan_dag_normalizer.py` | ✅ Implemented |
+| `PlanManager` | `soothe/sloop/cognition/plan_step_safety.py` | ✅ Implemented |
+| `CompletionStrategy` enum | `soothe/sloop/cognition/plan_step_safety.py` | ✅ Implemented |
 | Ledger direct eligibility | `_ledger_direct_eligible()` | ✅ Implemented |
 | DAG synthesis check | `_dag_requires_synthesis()` | ✅ Implemented |
 | Content heuristic removal | IG-580 | ✅ Removed regex/token overlap checks |
@@ -94,18 +94,21 @@ This violates **separation of concerns** (RFC-001 §28) and makes StrangeLoop or
 Extract goal completion logic into dedicated module hierarchy:
 
 ```
-packages/soothe/src/soothe/core/
-├── strange_loop/
-│   ├── policies/goal_completion_policy.py   # DEPRECATED → migrated to PlanManager
-│   ├── core/plan_dag.py                     # Unified DAG of all planned steps
-│   ├── core/plan_manager.py                 # Plan orchestration + completion strategy
-│   ├── analysis/synthesis.py                # synthesis helper(s)
-│   ├── core/strange_loop.py                   # invokes goal-completion flow
-│   ├── core/plan_phase.py
-│   └── core/executor.py
+packages/soothe/src/soothe/
+├── sloop/
+│   ├── cognition/
+│   │   ├── plan_dag_normalizer.py           # Unified DAG of all planned steps (PlanDAG)
+│   │   ├── plan_step_safety.py              # Plan orchestration + completion strategy (PlanManager)
+│   │   └── ...
+│   ├── engine/
+│   │   ├── synthesis.py                     # synthesis helper(s)
+│   │   ├── strange_loop.py                 # invokes goal-completion flow
+│   │   └── executor.py
+│   └── state/
+│       └── schemas.py
 └── runner/                                  # wires StrangeLoop + streaming (e.g. _runner_strange_loop)
 ```
-*(Historical draft showed `cognition/strange_loop/completion/`; implementation lives under `core/` per IG consolidation.)*
+*(Historical: original draft referenced `cognition/strange_loop/completion/`; implementation lives under `sloop/` per IG consolidation.)*
 
 ### PlanDAG: Unified Plan DAG
 
@@ -194,9 +197,9 @@ class PlanManager:
 
 **Separation of Concerns** (RFC-001 §28):
 - **Policy Layer**: `strange_loop/core/plan_manager.py` (PlanManager, CompletionStrategy enum) and config (`SootheConfig.agentic.final_response`)
-- **Execution / synthesis**: `strange_loop/analysis/synthesis.py`, `strange_loop/core/strange_loop.py`, runner modules under `core/runner/`
-- **Plan DAG**: `strange_loop/core/plan_dag.py` (PlanDAG data structure)
-- *(Historical draft referenced `cognition/strange_loop/completion/*`; code now lives under `packages/soothe/src/soothe/core/`.)*
+- **Execution / synthesis**: `sloop/engine/synthesis.py`, `sloop/engine/strange_loop.py`, runner modules under `runner/`
+- **Plan DAG**: `sloop/cognition/plan_dag_normalizer.py` (PlanDAG data structure)
+- *(Historical draft referenced `cognition/strange_loop/completion/*`; code now lives under `packages/soothe/src/soothe/sloop/`.)*
 
 **Dependency Rule** (Clean Architecture):
 - Orchestration → PlanManager → PlanDAG → State schemas

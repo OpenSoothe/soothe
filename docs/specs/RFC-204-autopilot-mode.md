@@ -15,7 +15,7 @@ RFC-230 (job maturity; host probes ≠ per-goal report-commit judgment),
 design draft [2026-08-08-autopilot-report-commit-judgment-design.md](../archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md),
 [IG-725](../impl/IG-725-remove-evidence-turns-trust-sloop.md)
 (no evidence-follow-up turns),
-[IG-693](../impl/IG-693-rail-subgoal-consensus-exhaustion-recovery.md)
+[IG-693](../archive/impl/IG-693-rail-subgoal-consensus-exhaustion-recovery.md)
 (rail-bound send-back exhaustion → fail + maker replant)
 
 > **Scope**: This RFC owns Autopilot’s **user-facing surface** — `SOOTHE_HOME/autopilot/` layout, CLI (`soothe autopilot …`), HTTP (`/api/v1/autopilot/*`), report-commit judgment (§1.3), and dreaming semantics. Daemon runtime (`AutopilotService`, WorkerPool, workspace reservation, CE integration) is specified in RFC-222 / RFC-625. Per-goal judgment is report-commit driven; LoopRail owns rail DAG structure; host MUST NOT re-collect workspace evidence for the per-goal gate.
@@ -378,7 +378,7 @@ class ChannelMessage:
 
 ### 4.1 Location
 
-`packages/soothe/src/soothe/core/goal_engine/scheduled_tasks.py` (`SchedulerService`) — persisted task scheduling feeding GoalEngine.
+`packages/soothe/src/soothe/autopilot/schedule/tasks.py` (`SchedulerService`) — persisted task scheduling feeding the goal workflow.
 
 ### 4.2 Capabilities
 
@@ -761,7 +761,7 @@ async def apply_directives(
 
 **Gap 8 — Relationship auto-detection**
 
-- New module `packages/soothe/src/soothe/core/goal_engine/relationship_detector.py`
+- New module `packages/soothe/src/soothe/context/dag_utils.py` (relationship detection utilities)
 - `detect_relationships(completed_goal, all_goals)` function:
   - **`informs`**: Text overlap between completed goal's findings/description and other goals' descriptions. Shared tags increase confidence.
   - **`conflicts_with`**: Both goals reference same resource paths (file patterns, tool names) with write intent. High confidence auto-apply.
@@ -840,7 +840,7 @@ async def apply_directives(
 
 ## Related Documents
 
-- [RFC-200](./RFC-200-autonomous-goal-management.md) — Goal Management Foundation
+- [RFC-200](../archive/specs/RFC-200-autonomous-goal-management.md) — Goal Management Foundation
 - [RFC-201](./RFC-201-strangeloop-plan-execute-loop.md) — StrangeLoop Execution
 - [RFC-450](./RFC-450-daemon-communication-protocol.md) — Daemon Protocol
 - [RFC-500](./RFC-500-cli-tui-architecture.md) — CLI/TUI Architecture

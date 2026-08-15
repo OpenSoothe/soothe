@@ -77,7 +77,7 @@ The compiled graph state **must** include `messages` with `add_messages` for the
 
 ### 4.4 Model roles
 
-- **Plan** subagent primary model: ``subagents.planner.model`` (explicit ``provider:model``) when set; otherwise ``subagents.planner.model_role`` (default ``think``) via ``SootheConfig.create_chat_model(role)``.
+- **Plan** subagent primary model: `subagents.planner.model` (explicit `provider:model`) when set; otherwise `subagents.planner.model_role` (default `think`) via `SootheConfig.create_chat_model(role)`.
 - **Explore** invocations (including those spawned from plan): **`fast`** model inside `create_explore_subagent` from the plan factory; the standalone explore subagent default remains **`fast`** in `resolve_subagents`.
 
 ### 4.5 Supersession note (2026-07-28)
@@ -106,7 +106,7 @@ Structured logging in the engine; optional wire events in a follow-up.
 
 - RFC-613 — Explore agent.
 - RFC-601 — Built-in plugin agents.
-- `soothe/core/agent/_patch.py` — `task` tool config propagation.
+- `soothe/coreagent/_patch.py` — `task` tool config propagation.
 
 ## 9. Implementation
 

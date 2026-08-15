@@ -98,8 +98,8 @@ Rendered by `StepActivityTree.render` from `StepRowIndex` (see below).
 ### Render order
 
 1. **TODO** section (when CoreAgent todos present) — status glyph + content per item.
-   Todos are derived from ``write_todos`` tool-call args on the step card (no
-   dedicated daemon todo emit; execute avoids LangGraph ``updates`` per IG-477).
+   Todos are derived from `write_todos` tool-call args on the step card (no
+   dedicated daemon todo emit; execute avoids LangGraph `updates` per IG-477).
 2. **TOOLS** section (when tool/task/notes activity exists):
    - Task delegations — `SubAgentName(description)` label (+ running child tool count)
    - Main-agent tools — preview lines (+ `+N more tools`)
@@ -452,7 +452,7 @@ Run `./scripts/verify_finally.sh` before merge.
 
 Covers SubAgent cards mounted for **intake-only** StrangeLoop wired invoke (RFC-630 §6.3.3). These specialists never emit a main-graph `task` tool and have **no parent Cognition step card**.
 
-**Status of this part**: Implemented by [IG-602](../impl/IG-602-orphan-wired-subagent-card.md).
+**Status of this part**: Implemented by [IG-602](../archive/impl/IG-602-orphan-wired-subagent-card.md).
 
 ---
 

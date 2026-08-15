@@ -1,12 +1,12 @@
 # RFC-633: Planner Plan Artifact and Human Review
 
-**RFC**: 633  
-**Title**: Planner Plan Artifact and Human Review  
-**Status**: Draft  
-**Kind**: Architecture Design  
-**Created**: 2026-07-28  
-**Authors**: Soothe Team  
-**Depends on**: RFC-618, RFC-622, RFC-630, RFC-656 (IG-656 intake-only planner)  
+**RFC**: 633
+**Title**: Planner Plan Artifact and Human Review
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-07-28
+**Authors**: Soothe Team
+**Depends on**: RFC-618, RFC-622, RFC-630, RFC-656 (IG-656 intake-only planner)
 **Related**: RFC-621 (workspace host convention), RFC-628 (step/orphan cards)
 
 ## Abstract
@@ -78,8 +78,8 @@ resume      → Approve → plan_generate → execute… → goal_completion
               Comments→ re-invoke planner with prior plan + comments → review again
 ```
 
-> Naming: ``planner_subagent_review`` is the intake **planner subagent** human
-> gate. It is **not** StrangeLoop ``plan_generate`` / ``plan_assess`` (those are
+> Naming: `planner_subagent_review` is the intake **planner subagent** human
+> gate. It is **not** StrangeLoop `plan_generate` / `plan_assess` (those are
 > the host planning-stage nodes on the complex spine).
 
 ### 4.1 Planner engine (soothe-nano)
@@ -133,10 +133,10 @@ non-empty free text before resume.
 
 `ClarificationOrigin` gains `planner_subagent_review` (planner **subagent**
 gate only; not StrangeLoop `plan_generate`/`plan_assess`, not other wired
-subagents).  
-`route_after_wired_subagent` → `await_clarification` when pending;  
-→ `plan_generate` when Approve sets `planner_implement_handoff`;  
-→ `goal_completion` otherwise (Reject / non-planner wires).  
+subagents).
+`route_after_wired_subagent` → `await_clarification` when pending;
+→ `plan_generate` when Approve sets `planner_implement_handoff`;
+→ `goal_completion` otherwise (Reject / non-planner wires).
 `route_after_clarification` → `invoke_wired_subagent` for `planner_subagent_review`.
 
 ### 4.4 Answer semantics
@@ -165,10 +165,10 @@ Parsing uses case-insensitive prefixes on Q1 (`approve`, `reject`,
 2. Successful planner invoke writes a file under `{workspace}/.soothe/plans/`.
 3. Loop pauses on clarification; TUI shows the full draft plan body, a saved-path
    footer, then Approve / Reject / More comments controls (comments field only
-   for More comments). Origin ``planner_subagent_review`` is in
-   ``agent.clarification.force_manual_origins`` by default so veritas does not
-   auto-Approve/Reject even when clarification mode is ``auto``. This does not
-   force-manual StrangeLoop ``plan_generate`` / ``plan_assess`` clarifications
+   for More comments). Origin `planner_subagent_review` is in
+   `agent.clarification.force_manual_origins` by default so veritas does not
+   auto-Approve/Reject even when clarification mode is `auto`. This does not
+   force-manual StrangeLoop `plan_generate` / `plan_assess` clarifications
    or other wired subagents.
 4. Reject completes the goal; Approve hands off to StrangeLoop `plan_generate`
    (does not complete yet); More comments revises the plan and asks again.

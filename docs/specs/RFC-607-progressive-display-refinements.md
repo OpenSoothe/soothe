@@ -135,9 +135,9 @@ ThreadBackendBridge (NEW from RFC-606)
 - `src/soothe/ux/cli/stream/formatter.py` - Enable newline_before in formatters
 
 **Backend Adapters** (created in RFC-606, refined here):
-- `src/soothe/ux/tui/soothe_backend_adapter.py` - Protocol event filtering
-- `src/soothe/ux/tui/thread_backend_bridge.py` - Thread metadata bridge
-- `src/soothe/ux/tui/widgets/protocol_event.py` - Protocol rendering widget
+- `src/soothe_cli/tui/soothe_backend_adapter.py` - Protocol event filtering
+- `src/soothe_cli/tui/thread_backend_bridge.py` - Thread metadata bridge
+- `src/soothe_cli/tui/widgets/protocol_event.py` - Protocol rendering widget
 
 ### No Modifications to DeepAgents TUI Core
 

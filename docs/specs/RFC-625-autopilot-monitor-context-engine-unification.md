@@ -7,7 +7,7 @@
 **Created**: 2026-06-15
 **Updated**: 2026-08-11
 **Dependencies**: RFC-624 (Context Engine), RFC-222 (Autopilot and Goal Engine Architecture), RFC-200 (Autonomous Goal Management)
-**Related**: RFC-204 (Autopilot Mode — user-facing surface + report-commit judgment §1.3; RFC-625 defines runtime: AutopilotMonitor, ContextEngine integration, proactive DAG monitoring, `GoalNode.report` commit), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-678](../impl/IG-678-autopilot-ce-rails-production-readiness.md), [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md)
+**Related**: RFC-204 (Autopilot Mode — user-facing surface + report-commit judgment §1.3; RFC-625 defines runtime: AutopilotMonitor, ContextEngine integration, proactive DAG monitoring, `GoalNode.report` commit), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-678](../archive/impl/IG-678-autopilot-ce-rails-production-readiness.md), [IG-680](../archive/impl/IG-680-autopilot-dag-health-evidence-deps.md)
 **Supersedes**: RFC-200 (Goal Management) — GoalEngine deleted, features migrated to ContextEngine
 **Implements**: RFC-303 (MemoryProtocol) — CE's EpisodicSubmodule implements MemoryProtocol API for persistent episodic memory
 
@@ -1084,7 +1084,7 @@ IG-680 (unit regression in `test_ig680_health_evidence_deps.py`):
 
 ### Completion Tracking
 
-See [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) for health /
+See [IG-680](../archive/impl/IG-680-autopilot-dag-health-evidence-deps.md) for health /
 deps production fixes.
 
 ### Report-commit judgment

@@ -5,7 +5,7 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-12
-**Updated**: 2026-07-02  
+**Updated**: 2026-07-02
 **Related**: RFC-000, RFC-001, RFC-302, RFC-303, RFC-628 (step card display)
 
 ## Abstract
@@ -37,7 +37,7 @@ Execution Surfaces
   └─ Textual TUI (ux/tui/app.py), Headless CLI (ux/cli/execution/*), daemon-backed flows
 Daemon (daemon/server/ + channels/*)
   └─ SootheDaemon lifecycle, event routing, DaemonClient connections
-SootheRunner (core/runner/*)
+SootheRunner (runner/*)
   └─ Protocol orchestration, LangGraph astream() pass-through, interrupt auto-resume, thread lifecycle
 create_soothe_agent() -> CompiledStateGraph
   └─ deepagents middleware stack, subagents, tools, skills, protocol instances
@@ -65,14 +65,14 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 - Live execute observability is carried by tool telemetry (`ToolMessage` + AI tool-call metadata).
 - Final user-facing answer text (goal completion, quiz, autonomous summaries, direct-model replies) is emitted on the **`messages`** stream as loop-tagged AI message chunks with a **`phase`** field (for example `goal_completion`), not as `soothe.output.goal_completion.*` custom events.
 
-**Textual TUI — `LoopAIMessage` rendering (canonical)**  
+**Textual TUI — `LoopAIMessage` rendering (canonical)**
 | Source | `phase` / origin | TUI surface |
 |--------|------------------|-------------|
 | Main-agent step execute | `execute_step` (root namespace, active step card) | `CognitionStepMessage` body (step result), not a standalone assistant card |
 | Subagent / `task` subgraph | `execute_step`, `execute_wave`, or other non–goal-completion loop AI under a task scope | Parent **`task`** `ToolCallMessage` (subagent result preview / activity), not a standalone assistant card |
 | Goal completion / synthesis | `goal_completion` | **`AssistantMessage`** card only (all LangGraph namespaces) |
 
-**Runner replay (`loop_assistant_messages_chunk`)**  
+**Runner replay (`loop_assistant_messages_chunk`)**
 After `completed`, the runner emits **one** phased `goal_completion` chunk when `skip_goal_completion_wire_duplicate=False`. StrangeLoop sets the flag **true** only after a **successful streamed `synthesize`** (body already arrived on `messages` via `stream_event`). It stays **false** for **`ledger_direct`** and **`summary`** so **headless** stdout still receives an answer: execute-phase prose is suppressed there (IG-343), and without this replay there would be no `goal_completion` line to print.
 
 **Headless** (`--no-tui`): stdout shows loop-tagged assistant text only (`HeadlessCliRenderer`), following the same `messages` + `phase` contract. Slash routes such as `/research` or `/explore` set `preferred_subagent` as a planner hint; they do not bypass the streaming contract.

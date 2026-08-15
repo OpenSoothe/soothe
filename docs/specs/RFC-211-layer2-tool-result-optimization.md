@@ -47,7 +47,7 @@ Layer 2's current message handling has four critical inefficiencies:
 
 ### Minimal Data Contract
 
-**Delegate finals (IG-355, complementary note)**  
+**Delegate finals (IG-355, complementary note)**
 Adaptive completion and headless wire parity may source user-visible text from **`task`** tool return payloads aggregated at Act-wave finalize time. That path is separate from Layer 2 checkpoint truncation here; `StepResult.outcome` remains concise metadata for planning while Executor promotes bounded delegate-return strings into loop completion state.
 
 **StepResult schema update**:
@@ -147,7 +147,7 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
 
 ### 2. Large Result Cache
 
-**File**: `packages/soothe/src/soothe/core/strange_loop/context/result_cache.py` (new)
+**File**: `packages/soothe/src/soothe/sloop/engine/result_cache.py` (proposed — not yet implemented)
 
 **Purpose**: Cache large tool results (>50KB) to file system.
 
@@ -163,7 +163,7 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
 
 ### 3. Executor Enhancement
 
-**File**: `packages/soothe/src/soothe/core/strange_loop/core/executor.py` (modify existing)
+**File**: `packages/soothe/src/soothe/sloop/engine/executor.py` (modify existing)
 
 **Changes**:
 - Extract `tool_call_id` from ToolMessage
@@ -174,7 +174,7 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
 
 ### 4. StepResult Schema Update
 
-**File**: `packages/soothe/src/soothe/core/strange_loop/state/schemas.py` (modify existing)
+**File**: `packages/soothe/src/soothe/sloop/state/schemas.py` (modify existing)
 
 **Changes**:
 - Replace `output: str | None` with `outcome: dict`
@@ -183,7 +183,7 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
 
 ### 5. Layer 1 Final Report Generation
 
-**File**: `src/soothe/core/runner/_runner_phases.py` (add new function)
+**File**: `packages/soothe/src/soothe/runner/_runner_phases.py` (add new function)
 
 **Function**: `generate_final_report_from_checkpoint(thread_id, goal, checkpointer)`
 

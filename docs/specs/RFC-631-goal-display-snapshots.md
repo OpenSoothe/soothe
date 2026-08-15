@@ -316,7 +316,7 @@ Add `loop_history_fetch` to protocol params and `TuiDaemonSession.fetch_loop_his
 | P2 | Live-only ledger enforcement; deprecate `loop_cards_fetch` |
 | P3 | Desktop / Go / TS appkit |
 
-See [IG-548](../impl/IG-548-goal-display-snapshots.md).
+See [IG-548](../archive/impl/IG-548-goal-display-snapshots.md).
 
 ---
 

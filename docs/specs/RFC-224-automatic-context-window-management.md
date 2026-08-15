@@ -142,7 +142,7 @@ Orchestrator.run_goal_iteration()
 
 ### ContextWindowManager (NEW)
 
-**Location**: `packages/soothe/src/soothe/core/loop/engine/context_window_manager.py`
+**Location**: `packages/soothe/src/soothe/sloop/engine/context_window_manager.py`
 
 **Interface**:
 

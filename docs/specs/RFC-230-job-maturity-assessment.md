@@ -1,13 +1,13 @@
 # RFC-230: Job Maturity Assessment for Autopilot Rails
 
-**RFC**: 230  
-**Title**: Job Maturity Assessment for Autopilot Rails  
-**Status**: Draft  
-**Kind**: Architecture Design  
-**Created**: 2026-08-05  
-**Updated**: 2026-08-08  
-**Authors**: Soothe Team  
-**Depends on**: RFC-204, RFC-222, RFC-228, RFC-624, RFC-625, RFC-630  
+**RFC**: 230
+**Title**: Job Maturity Assessment for Autopilot Rails
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-08-05
+**Updated**: 2026-08-08
+**Authors**: Soothe Team
+**Depends on**: RFC-204, RFC-222, RFC-228, RFC-624, RFC-625, RFC-630
 **Related**: [RFC-231](RFC-231-looprail-rail-exec.md) (LoopRail + Rail Exec;
 §8–§9 streaming spawn / deprecated wave barriers),
 [RFC-232](RFC-232-waveplan-flat-semistructured-ingest.md) (flat WavePlan wire),

@@ -406,7 +406,7 @@ Total Phase 2:     ~500-800 tokens ✅ (safe margin)
 
 ### 8.1 Existing Fallback Logic
 
-**Location**: `packages/soothe/src/soothe/core/strange_loop/core/planner.py` (structured Plan / retry; historical refs to `llm.py` pre-merge)
+**Location**: `packages/soothe/src/soothe/sloop/cognition/planner.py` (structured Plan / retry; historical refs to `llm.py` pre-merge)
 
 **Current Pipeline**:
 ```python

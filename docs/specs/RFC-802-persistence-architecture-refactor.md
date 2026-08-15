@@ -24,7 +24,7 @@ Refactor Soothe's persistence architecture to enforce production-grade storage, 
 Soothe currently has **5 major persistence scenarios** with fragmented backend options and inconsistent validation:
 
 1. **LangGraph Checkpoints** - CoreAgent execution state
-2. **StrangeLoop Checkpoints** - Loop orchestration metadata  
+2. **StrangeLoop Checkpoints** - Loop orchestration metadata
 3. **Thread Metadata** - DurabilityProtocol thread lifecycle
 4. **Vector Stores** - Context/memory embeddings
 5. **Memory Backends** - MemU long-term user memory
@@ -72,7 +72,7 @@ Required: All backends must be postgresql.
 
 Migration guide:
 1. Set persistence.postgres_base_dsn with PostgreSQL connection
-2. Configure persistence.postgres_databases for each purpose  
+2. Configure persistence.postgres_databases for each purpose
 3. Remove backend=sqlite declarations
 4. Switch vector_stores.provider_type to pgvector
 
@@ -328,7 +328,7 @@ vector_stores:
 
 | Component | Location | Action |
 |-----------|----------|--------|
-| MemorySaver | core/resolver/_resolver_infra.py | Remove fallback logic |
+| MemorySaver | resolver/_resolver_infra.py | Remove fallback logic |
 | InMemoryVectorStore | backends/vector_store/in_memory.py | Delete file |
 | backend="memory" | config files | Remove from examples |
 | RocksDB backend | backends/durability/rocksdb.py | Remove implementation |
@@ -360,8 +360,8 @@ vector_stores:
 - `backends/vector_store/in_memory.py` - DELETE
 - `backends/durability/rocksdb.py` - DELETE
 - `backends/durability/json.py` - DELETE
-- `core/resolver/_resolver_infra.py` - Remove fallback logic
-- `core/runner/_runner_phases.py` - Remove MemorySaver initialization
+- `resolver/_resolver_infra.py` - Remove fallback logic
+- `runner/_runner_phases.py` - Remove MemorySaver initialization
 - `tests/` - Update fixtures
 
 ---
@@ -377,7 +377,7 @@ vector_stores:
 
 **Files affected**:
 - `config/models.py` - Add mode field, validation logic
-- `core/resolver/_resolver_infra.py` - Backend validation
+- `resolver/_resolver_infra.py` - Backend validation
 - `config/config.yml` - Add mode section
 - `config/develop/nano.yml` - Development mode template
 
@@ -422,7 +422,7 @@ def validate_backends_for_mode(config: SootheConfig) -> None:
 
 **Files affected**:
 - `config/models.py` - Add new fields, remove old ones
-- `core/resolver/_resolver_infra.py` - Update resolution logic
+- `resolver/_resolver_infra.py` - Update resolution logic
 - `backends/persistence/*.py` - Update path/connection handling
 
 **Model changes**:

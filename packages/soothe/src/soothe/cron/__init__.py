@@ -14,6 +14,7 @@ Key components:
 
 from __future__ import annotations
 
+from soothe.cron.builtin import BUILTIN_JOBS, BuiltinJobSpec
 from soothe.cron.extraction import (
     AutopilotDisabledError,
     CronExtractionService,
@@ -35,8 +36,10 @@ from soothe.cron.store_factory import create_cron_job_store
 
 __all__ = [
     "AUTOPILOT_REQUIRED_FOR_CRON",
+    "BUILTIN_JOBS",
     "DEFAULT_CRON_USER_ID",
     "AutopilotDisabledError",
+    "BuiltinJobSpec",
     "CronExtractionService",
     "CronJob",
     "CronJobStore",

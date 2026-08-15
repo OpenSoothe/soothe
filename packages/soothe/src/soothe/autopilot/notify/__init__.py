@@ -5,6 +5,7 @@ from soothe.autopilot.notify.models import (
     NotifyIntent,
     NotifyKind,
     NotifyTarget,
+    Severity,
 )
 from soothe.autopilot.notify.router import NotificationRouter
 
@@ -14,4 +15,5 @@ __all__ = [
     "NotifyIntent",
     "NotifyKind",
     "NotifyTarget",
+    "Severity",
 ]

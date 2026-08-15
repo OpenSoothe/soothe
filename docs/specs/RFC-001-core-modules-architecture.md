@@ -165,9 +165,9 @@ class PlannerProtocol(Protocol):
 - IG-028: DirectPlanner → SimplePlanner
 - IG-036: Removed SubagentPlanner indirection
 - IG-149: Implemented RFC-604 two-phase Plan architecture
-- IG-150: Removed ClaudePlanner and AutoPlanner, consolidated to LLMPlanner; planning merged into `soothe.core.strange_loop` (historically `cognition.*` paths)
+- IG-150: Removed ClaudePlanner and AutoPlanner, consolidated to LLMPlanner; planning merged into `soothe.sloop` (`cognition.*` paths)
 
-**Module location**: `packages/soothe/src/soothe/core/strange_loop/core/planner.py` (after IG-150 consolidation; package `soothe.core`)
+**Module location**: `packages/soothe/src/soothe/sloop/cognition/planner.py` (after IG-150 consolidation; package `soothe.sloop`)
 
 ## Module 4: PolicyProtocol
 

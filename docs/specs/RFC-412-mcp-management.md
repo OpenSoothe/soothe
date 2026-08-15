@@ -2,12 +2,12 @@
 
 **RFC**: 412
 **Title**: MCP Management
-**Status**: Implemented (partial) — baseline MCPRegistry from soothe_nano.mcp wired through ThreadContextManager and daemon server core. ProgressiveMCPRegistry facade scaffolded in soothe.mcp.progressive_registry (partition, new_for_thread, bound_tools, mark_sent/promoted, search_deferred, merge_mcp_activation). MCPActivationMiddleware and search_mcp_tools stub not yet wired into agent build/middleware stack.
+**Status**: Implemented (partial) — baseline MCPRegistry from soothe_nano.mcp wired through ThreadContextManager and daemon server core. ProgressiveMCPRegistry facade lives in `soothe_nano.mcp.mcp_progressive` (coding-layer PyPI package, per AGENTS.md DAG: MCP progressive disclosure belongs in soothe-nano, not the host). ProgressiveMCPRegistry methods: partition, new_for_thread, bound_tools, mark_sent/promoted, search_deferred, merge_mcp_activation. MCPActivationMiddleware and search_mcp_tools stub not yet wired into agent build/middleware stack.
 **Kind**: Implementation Interface Design
 **Created**: 2026-05-29
 **Last Updated**: 2026-07-11
 **Authors**: Platonic brainstorming session
-**Design Draft**: [2026-05-29-mcp-management-design.md](../archive/drafts/2026-05-29-mcp-management-design.md)
+**Design Draft**: `2026-05-29-mcp-management-design.md`
 **Revision Draft**: [2026-07-11-mcp-progressive-loading-design.md](../drafts/2026-07-11-mcp-progressive-loading-design.md)
 **Depends On**: RFC-100 (CoreAgent Runtime), RFC-101 (Tool Interface), RFC-105 (Progressive Skill Loading), RFC-305 (Policy Protocol Architecture), RFC-600 (Plugin Extension System)
 
@@ -415,7 +415,7 @@ These fields are durable snapshots; middleware reads/writes agent graph state, n
 
 ### `MCPRegistry`
 
-Location: `packages/soothe/src/soothe/mcp/registry.py`
+Location: `soothe-nano` PyPI package (`soothe_nano.mcp.registry`)
 
 ```python
 class MCPRegistry:
@@ -468,7 +468,7 @@ The registry wraps `MultiServerMCPClient` as its internal `_client`. It does not
 
 ### `format_mcp_tools_within_budget`
 
-Location: `packages/soothe/src/soothe/mcp/budget.py`
+Location: `soothe-nano` PyPI package (`soothe_nano.mcp.budget`)
 
 ```python
 def format_mcp_tools_within_budget(
@@ -492,7 +492,7 @@ def format_mcp_tools_within_budget(
 
 ### `ProgressiveMCPRegistry`
 
-Location: `packages/soothe/src/soothe/mcp/progressive_registry.py`
+Location: `soothe-nano` PyPI package (`soothe_nano.mcp.progressive_registry`)
 
 Stateless facade mirroring `ProgressiveToolRegistry`. All activation state lives in `state["mcp_activation"]`.
 
@@ -540,7 +540,7 @@ class ProgressiveMCPRegistry:
 
 ### `MCPActivationMiddleware`
 
-Location: `packages/soothe/src/soothe/middleware/mcp_activation.py`
+Location: `soothe-nano` PyPI package (`soothe_nano.middleware.mcp_activation`)
 
 Replaces `MCPToolSearchMiddleware`. Mirrors `ProgressiveToolMiddleware` responsibilities for the MCP domain.
 
@@ -570,7 +570,7 @@ Order in `build_soothe_middleware_stack`:
 
 ### `search_mcp_tools` discovery stub
 
-Location: `packages/soothe/src/soothe/mcp/discovery_tools.py`
+Location: `packages/soothe/src/soothe/mcp/discovery_tools.py` (soothe-nano, external PyPI)
 
 ```python
 def create_search_mcp_tools_tool() -> StructuredTool:
@@ -581,7 +581,7 @@ Registered in `AgentBuilder.build()` whenever `mcp_registry` has ≥1 deferred t
 
 ### `_compose_mcp_tools_block` extension to `SystemPromptMiddleware`
 
-Private helper in `packages/soothe/src/soothe/middleware/system_prompt.py`, invoked from `_get_prompt_for_complexity` (parallel to `_compose_skills_block`):
+Private helper in `packages/soothe/src/soothe/middleware/system_prompt.py` (soothe-nano, external PyPI), invoked from `_get_prompt_for_complexity` (parallel to `_compose_skills_block`):
 
 ```python
 def _compose_mcp_tools_block(self, state: dict) -> str | None:
@@ -603,7 +603,7 @@ activate them, then call the exact mangled name mcp__<server>__<tool>.
 
 ### `build_mcp_tool_name` / `parse_mcp_tool_name`
 
-Location: `packages/soothe/src/soothe/mcp/name_utils.py`
+Location: `packages/soothe/src/soothe/mcp/name_utils.py` (soothe-nano, external PyPI)
 
 ```python
 def build_mcp_tool_name(server: str, tool: str) -> str:
@@ -618,7 +618,7 @@ Because `MultiServerMCPClient` is initialized with `tool_name_prefix=False`, soo
 
 ### Transport factory
 
-Location: `packages/soothe/src/soothe/mcp/transports.py`
+Location: `packages/soothe/src/soothe/mcp/transports.py` (soothe-nano, external PyPI)
 
 ```python
 def make_connection_spec(server: MCPServerConfig) -> StdioConnection | SSEConnection | StreamableHttpConnection | WebsocketConnection:
@@ -646,7 +646,7 @@ Maps:
 
 ## Events
 
-MCP events are self-registered via `register_event()` in `packages/soothe/src/soothe/mcp/events.py` (IG-052 per-module pattern — not added to `core/events/catalog.py`).
+MCP events are self-registered via `register_event()` in `packages/soothe/src/soothe/mcp/events.py` (soothe-nano, external PyPI) (IG-052 per-module pattern — not added to `events/catalog.py`).
 
 ### Public events
 
@@ -739,24 +739,26 @@ Naming follows the four-segment convention (`soothe.<domain>.<component>.<action
 
 ### New files
 
-- `packages/soothe/src/soothe/mcp/__init__.py` — Public re-exports
-- `packages/soothe/src/soothe/mcp/registry.py` — `MCPRegistry`
-- `packages/soothe/src/soothe/mcp/connection.py` — `MCPConnection` dataclass
-- `packages/soothe/src/soothe/mcp/loader.py` — Adapter providing `load_mcp_tools` and `MCPSessionManager` for backward compat with existing import sites in `manager.py`
-- `packages/soothe/src/soothe/mcp/transports.py` — Transport factory
-- `packages/soothe/src/soothe/mcp/auth.py` — `MCPAuthHeaders` interpolation + `AuthProvider` protocol stub
-- `packages/soothe/src/soothe/mcp/name_utils.py` — `build_mcp_tool_name` / `parse_mcp_tool_name`
-- `packages/soothe/src/soothe/mcp/reconnect.py` — Exponential-backoff scheduler
-- `packages/soothe/src/soothe/mcp/cleanup.py` — Subprocess cleanup ladder
-- `packages/soothe/src/soothe/mcp/events.py` — Event model definitions + `register_event` calls
-- `packages/soothe/src/soothe/mcp/budget.py` — `format_mcp_tools_within_budget`
-- `packages/soothe/src/soothe/mcp/progressive_registry.py` — `ProgressiveMCPRegistry`, `merge_mcp_activation`
-- `packages/soothe/src/soothe/mcp/discovery_tools.py` — `create_search_mcp_tools_tool`
-- `packages/soothe/src/soothe/middleware/mcp_activation.py` — `MCPActivationMiddleware`
+> **Note**: All `mcp/` and `middleware/` modules below have moved to the `soothe-nano` PyPI package (`soothe_nano.mcp.*`, `soothe_nano.middleware.*`). They are no longer in this monorepo per the package boundary DAG.
+
+- `soothe-nano`: `soothe_nano.mcp.__init__` — Public re-exports
+- `soothe-nano`: `soothe_nano.mcp.registry` — `MCPRegistry`
+- `soothe-nano`: `soothe_nano.mcp.connection` — `MCPConnection` dataclass
+- `soothe-nano`: `soothe_nano.mcp.loader` — Adapter providing `load_mcp_tools` and `MCPSessionManager` for backward compat with existing import sites in `manager.py`
+- `soothe-nano`: `soothe_nano.mcp.transports` — Transport factory
+- `soothe-nano`: `soothe_nano.mcp.auth` — `MCPAuthHeaders` interpolation + `AuthProvider` protocol stub
+- `soothe-nano`: `soothe_nano.mcp.name_utils` — `build_mcp_tool_name` / `parse_mcp_tool_name`
+- `soothe-nano`: `soothe_nano.mcp.reconnect` — Exponential-backoff scheduler
+- `soothe-nano`: `soothe_nano.mcp.cleanup` — Subprocess cleanup ladder
+- `soothe-nano`: `soothe_nano.mcp.events` — Event model definitions + `register_event` calls
+- `soothe-nano`: `soothe_nano.mcp.budget` — `format_mcp_tools_within_budget`
+- `soothe-nano`: `soothe_nano.mcp.progressive_registry` — `ProgressiveMCPRegistry`, `merge_mcp_activation`
+- `soothe-nano`: `soothe_nano.mcp.discovery_tools` — `create_search_mcp_tools_tool`
+- `soothe-nano`: `soothe_nano.middleware.mcp_activation` — `MCPActivationMiddleware`
 
 **Removed** (2026-07-11 revision):
 
-- `packages/soothe/src/soothe/middleware/mcp_tool_search.py` — replaced by `mcp_activation.py`
+- `soothe-nano`: `soothe_nano.middleware.mcp_tool_search` — replaced by `mcp_activation`
 
 ### Modified files
 
@@ -764,12 +766,12 @@ Naming follows the four-segment convention (`soothe.<domain>.<component>.<action
 |---|---|
 | `config/models.py:165` | Replace `MCPServerConfig` with extended schema; add `ProgressiveMCPConfig` (after `ProgressiveSkillsConfig` at line 1504) |
 | `config/settings.py` | Add `mcp_servers` unique-name validation; add `progressive_mcp: ProgressiveMCPConfig` field |
-| `core/agent/_builder.py` | Append `mcp_registry.all_tools()` after `resolve_tools`; register `search_mcp_tools` when enabled; pass catalog to `MCPActivationMiddleware` |
-| `middleware/_builder.py` | Insert `MCPActivationMiddleware` at position 1c (after SkillActivation) |
-| `middleware/system_prompt.py` | `_compose_mcp_tools_block` uses `mcp_activation` + `ProgressiveMCPRegistry` |
-| `foundation/sloop/state/schemas.py` | `mcp_activation_sent`, `mcp_activation_promoted`, `disabled_mcp_servers`, `cached_mcp_resources` |
-| `foundation/sloop/engine/executor.py` | Snapshot/rehydrate `mcp_activation` ↔ LoopState |
-| `skills/catalog.py:127` | Merge `mcp_registry.prompts` into wire entries with `source="mcp"` |
+| `coreagent/builder.py` | Append `mcp_registry.all_tools()` after `resolve_tools`; register `search_mcp_tools` when enabled; pass catalog to `MCPActivationMiddleware` |
+| `middleware/_builder.py` — `soothe-nano` | Insert `MCPActivationMiddleware` at position 1c (after SkillActivation) |
+| `middleware/system_prompt.py` — `soothe-nano` | `_compose_mcp_tools_block` uses `mcp_activation` + `ProgressiveMCPRegistry` |
+| `sloop/state/schemas.py` | `mcp_activation_sent`, `mcp_activation_promoted`, `disabled_mcp_servers`, `cached_mcp_resources` |
+| `sloop/engine/executor.py` | Snapshot/rehydrate `mcp_activation` ↔ LoopState |
+| `skills/catalog.py:127` — `soothe-nano` | Merge `mcp_registry.prompts` into wire entries with `source="mcp"` |
 | `soothe_daemon/server.py` (near lines 87-116) | Add `self._mcp_registry`; call `initialize()` in `start()`, `shutdown()` on signal |
 | `soothe_daemon/health/checks/mcp_check.py` | Rewrite: validate `server.name`, check command/path, use `MCPRegistry.connection_status()` |
 | `soothe_cli/tui/widgets/mcp_viewer.py` | Wire `mcp_server_info` from `GET /mcp/status` |
@@ -790,8 +792,8 @@ Naming follows the four-segment convention (`soothe.<domain>.<component>.<action
 | Per-hop tool binding | `ProgressiveMCPRegistry.bound_tools` + `MCPActivationMiddleware.awrap_model_call` | `mcp/progressive_registry.py`, `middleware/mcp_activation.py` |
 | Builtin tools parity reference | `ProgressiveToolRegistry`, `ProgressiveToolMiddleware` | `toolkits/progressive/registry.py`, `middleware/progressive_tools.py` |
 | Path-glob matching | `fnmatch` (stdlib) | n/a |
-| Event registration | `register_event` (called from `mcp/events.py`) | `core/events/catalog.py` |
-| Internal pub/sub | `InternalEventBus.emit/subscribe` | `core/events/internal_bus.py` |
+| Event registration | `register_event` (called from `mcp/events.py`) | `events/catalog.py` |
+| Internal pub/sub | `InternalEventBus.emit/subscribe` | `events/internal_bus.py` |
 | Policy check | `PolicyProtocol.check("mcp", "call", ...)` | `protocols/policy.py` |
 | Env var interpolation | `config.secret_resolver` | `config/settings.py` |
 | System-prompt assembly | `SystemPromptOptimizationMiddleware._compose_mcp_tools_block` | `middleware/system_prompt_optimization.py` |
@@ -924,7 +926,7 @@ soothe daemon start --config /tmp/mcp-test.yml
 - [RFC-214: StrangeLoop Loop Message Surface](RFC-214-strangeloop-loop-message-surface.md)
 - [RFC-305: Policy Protocol Architecture](RFC-305-policy-protocol-architecture.md)
 - [RFC-600: Plugin Extension System](RFC-600-plugin-extension-system.md)
-- [Design Draft: MCP Management](../archive/drafts/2026-05-29-mcp-management-design.md)
+- `Design Draft: MCP Management`
 - [Revision Draft: MCP Progressive Loading](../drafts/2026-07-11-mcp-progressive-loading-design.md)
-- [RFC Standard](./rfc-standard.md)
+- [RFC Standard](./templates/rfc-standard.md)
 - [RFC Index](./rfc-index.md)

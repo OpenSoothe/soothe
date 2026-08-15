@@ -568,6 +568,107 @@ FROM pg_database
 WHERE datname LIKE 'soothe_%';
 ```
 
+## Job Lifecycle Notify Tuning
+
+Soothe pushes job-root lifecycle alerts (completed, failed, suspended
+timeout) to email, webhook, and Feishu sinks via the `NotificationRouter`.
+Three thresholds control alert behavior and are fully configurable.
+
+### Tunable Thresholds
+
+| Threshold | Config Key | Default | Range | Effect |
+|-----------|-----------|---------|-------|--------|
+| Suspend escalation multiplier | `agent.autopilot.notify.suspend_escalation_multiplier` | `2.0` | 1.0–10.0 | Multiplies `suspend_after_seconds` (default 2700s) to set the WARNING→ERROR escalation point. At 2.0, a job suspended ≥5400s escalates to ERROR severity. Lower for faster escalation (1.5 = 4050s), higher for more tolerance (3.0 = 8100s). |
+| Dedup TTL | `agent.autopilot.notify.dedup_ttl_seconds` | `86400` (24h) | 0+ | Dedup keys (`{job_id}:{kind}:{generation}`) expire after TTL, allowing long-running jobs to re-notify when state changes past the window. Set `0` to disable expiry (keys persist indefinitely — original behavior). |
+| Email rate limit | `agent.autopilot.notify.sinks.email.rate_limit_seconds` | `5.0` | 0.0–300.0 | Minimum seconds between email sends to the same recipient (per job+kind+address key). Set `0` to disable rate-limiting. |
+
+### Severity Classification
+
+The router classifies each alert using structural signals only (no keyword
+heuristics per RFC-630):
+
+| Kind | Baseline | Escalation Signal | Escalated Severity |
+|------|----------|-------------------|-------------------|
+| `job.completed` | INFO | Failed/active child goals, maturity blockers | WARNING |
+| `job.suspended_timeout` | WARNING | Suspended ≥ multiplier × threshold | ERROR |
+| `job.failed` | ERROR | — (always ERROR) | — |
+
+### Production Tuning Guide
+
+**Tighten escalation (noisier alerts)**:
+```yaml
+agent:
+  autopilot:
+    notify:
+      suspend_escalation_multiplier: 1.5  # Escalate at 4050s instead of 5400s
+      dedup_ttl_seconds: 3600             # Re-notify after 1h instead of 24h
+```
+
+**Loosen escalation (fewer alerts)**:
+```yaml
+agent:
+  autopilot:
+    notify:
+      suspend_escalation_multiplier: 3.0  # Tolerate up to 8100s before escalation
+      dedup_ttl_seconds: 172800          # 48h dedup window
+```
+
+**High-volume SMTP provider (rate limit)**:
+```yaml
+agent:
+  autopilot:
+    notify:
+      sinks:
+        email:
+          rate_limit_seconds: 30.0  # Max one email per 30s per recipient
+```
+
+**Disable rate-limiting entirely**:
+```yaml
+agent:
+  autopilot:
+    notify:
+      sinks:
+        email:
+          rate_limit_seconds: 0.0
+```
+
+### Deployment Steps
+
+1. **Edit config**: Override thresholds in `config/develop/soothe.yml` (dev) or your production config file. All three keys live under `agent.autopilot.notify`.
+
+2. **Restart daemon**:
+   ```bash
+   # Docker
+   docker compose restart soothed
+
+   # systemd
+   sudo systemctl restart soothed
+   ```
+
+3. **Verify config loaded**: Check daemon startup logs for notify config:
+   ```bash
+   grep "notify" ~/.soothe/logs/soothed.log | tail -5
+   ```
+
+4. **Test alert delivery**: Submit a test job and verify email/webhook receipt:
+   ```bash
+   soothe autopilot submit "test alert routing"
+   # Watch logs for NotifyIntent dispatch
+   tail -f ~/.soothe/logs/soothed.log | grep -i notify
+   ```
+
+5. **Monitor for 24h**: Verify dedup TTL allows re-notification after the configured window. Check that escalation severity matches expected behavior for long-suspended jobs.
+
+### Rollback
+
+All defaults preserve prior behavior. To revert to pre-tuning defaults:
+- Set `suspend_escalation_multiplier: 2.0` (or remove the key entirely)
+- Set `dedup_ttl_seconds: 86400` (or remove)
+- Set `rate_limit_seconds: 5.0` (or remove)
+
+Removing the keys from your config causes the Pydantic model defaults to apply, which match the original hardcoded values.
+
 ### Alerting Rules
 
 **Critical alerts**:
@@ -611,6 +712,8 @@ WHERE datname LIKE 'soothe_%';
 - [ ] Alerting rules configured
 - [ ] Thread auditing enabled
 - [ ] Log retention policy set
+- [ ] Notify thresholds tuned for job-duration profile
+- [ ] Email/webhook sink delivery verified with test job
 
 ### Daily Monitoring Tasks
 

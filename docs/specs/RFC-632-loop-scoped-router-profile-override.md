@@ -1,15 +1,15 @@
 # RFC-632: Loop-Scoped Router Profile Override
 
-**RFC**: 632  
-**Title**: Loop-Scoped Router Profile Override  
-**Status**: Implemented — TUI /model-router command, client session override (_router_profile_override), daemon LoopRunRequest.router_profile all wired through pool_runner/thread_runner/ray_actor  
-**Kind**: Architecture Design  
-**Created**: 2026-07-14  
-**Authors**: xiaming (with Cursor)  
-**Depends on**: RFC-450 (Daemon Protocol — `input` / turn overrides), RFC-454 (Slash Command Architecture), RFC-500 (CLI TUI), RFC-503 (Loop-First UX), RFC-627 (LLM Utilities / ModelRouter)  
-**Related**: RFC-450 `model` / `model_params` per-turn override; IG-545 (RoleRoutingMiddleware)  
-**Design**: [docs/drafts/2026-07-14-loop-scoped-router-profile-design.md](../drafts/2026-07-14-loop-scoped-router-profile-design.md)  
-**Implemented by**: [IG-592](../impl/IG-592-loop-scoped-router-profile-override.md)
+**RFC**: 632
+**Title**: Loop-Scoped Router Profile Override
+**Status**: Implemented — TUI /model-router command, client session override (_router_profile_override), daemon LoopRunRequest.router_profile all wired through pool_runner/thread_runner/ray_actor
+**Kind**: Architecture Design
+**Created**: 2026-07-14
+**Authors**: xiaming (with Cursor)
+**Depends on**: RFC-450 (Daemon Protocol — `input` / turn overrides), RFC-454 (Slash Command Architecture), RFC-500 (CLI TUI), RFC-503 (Loop-First UX), RFC-627 (LLM Utilities / ModelRouter)
+**Related**: RFC-450 `model` / `model_params` per-turn override; IG-545 (RoleRoutingMiddleware)
+**Design**: [docs/drafts/2026-07-14-loop-scoped-router-profile-design.md](../drafts/2026-07-14-loop-scoped-router-profile-design.md)
+**Implemented by**: [IG-592](../archive/impl/IG-592-loop-scoped-router-profile-override.md)
 
 ---
 

@@ -1,14 +1,14 @@
 # RFC-801: SQLite Backend Specification
 
-**RFC**: 801  
-**Title**: SQLite Backend for Persistence, Durability, and Vector Store  
-**Status**: Draft  
-**Kind**: Architecture Design + Implementation Interface Design  
-**Created**: 2026-04-04  
-**Updated**: 2026-07-24  
-**Dependencies**: RFC-000, RFC-001, RFC-302, RFC-303, RFC-802  
-**Related**: RFC-803, RFC-229, RFC-307, RFC-413, RFC-624  
-**Note**: Moved from 6xx (RFC-801) per RFC-900 reclassification  
+**RFC**: 801
+**Title**: SQLite Backend for Persistence, Durability, and Vector Store
+**Status**: Draft
+**Kind**: Architecture Design + Implementation Interface Design
+**Created**: 2026-04-04
+**Updated**: 2026-07-24
+**Dependencies**: RFC-000, RFC-001, RFC-302, RFC-303, RFC-802
+**Related**: RFC-803, RFC-229, RFC-307, RFC-413, RFC-624
+**Note**: Moved from 6xx (RFC-801) per RFC-900 reclassification
 **Design draft**: [2026-07-24-sqlite-runtime-isolation-performance-design.md](../drafts/2026-07-24-sqlite-runtime-isolation-performance-design.md)
 
 ## Abstract
@@ -19,32 +19,32 @@ This RFC specifies SQLite as the local/development persistence backend across So
 
 SQLite is the default local backend, but concurrent StrangeLoop / daemon load exposed:
 
-1. Multiple independent writers (and unsafe reader pools) on the same checkpoint file  
-2. Reads serialized through a single writer lock, defeating WAL reader concurrency  
-3. Inconsistent `busy_timeout` / missing `BEGIN IMMEDIATE` (lock-upgrade `SQLITE_BUSY`)  
-4. Per-manager flush workers vs PostgreSQL’s process-scoped writer  
+1. Multiple independent writers (and unsafe reader pools) on the same checkpoint file
+2. Reads serialized through a single writer lock, defeating WAL reader concurrency
+3. Inconsistent `busy_timeout` / missing `BEGIN IMMEDIATE` (lock-upgrade `SQLITE_BUSY`)
+4. Per-manager flush workers vs PostgreSQL’s process-scoped writer
 5. Scattered filenames (`soothe_checkpoints.db`, `context_engine.db`, `soothe.db`, `vector.db`, …)
 
 PostgreSQL already provides shared pools and a process-scoped write pipeline (RFC-802, RFC-803). SQLite needs the same **control-plane shape**.
 
 ## Design Goals
 
-1. **Protocol parity** — SQLite adapters implement the same store protocols as PostgreSQL  
-2. **Process-scoped Runtime** — one `SqliteStoreRuntime` per DB file; no store-owned write connections on the hot path  
-3. **Correctness floor** — leased readers, serialized writes, WAL + `busy_timeout` + `BEGIN IMMEDIATE`  
-4. **Postgres-shaped lifecycle** — registry / acquire / release / shutdown checkpoint, analogous to shared pools  
-5. **Unified layout** — `$SOOTHE_DATA_DIR/databases/{purpose}.db` only  
-6. **Hard cut** — no reading legacy paths; operators wipe old files on upgrade  
-7. **Graceful vector fallback** — if sqlite-vec is unavailable, fall back to in-memory vector store  
+1. **Protocol parity** — SQLite adapters implement the same store protocols as PostgreSQL
+2. **Process-scoped Runtime** — one `SqliteStoreRuntime` per DB file; no store-owned write connections on the hot path
+3. **Correctness floor** — leased readers, serialized writes, WAL + `busy_timeout` + `BEGIN IMMEDIATE`
+4. **Postgres-shaped lifecycle** — registry / acquire / release / shutdown checkpoint, analogous to shared pools
+5. **Unified layout** — `$SOOTHE_DATA_DIR/databases/{purpose}.db` only
+6. **Hard cut** — no reading legacy paths; operators wipe old files on upgrade
+7. **Graceful vector fallback** — if sqlite-vec is unavailable, fall back to in-memory vector store
 
 ## Guiding Principles
 
-1. **Protocol-First** — stores stay thin; Runtime owns connections  
-2. **Stdlib-First** — `sqlite3` for all non-vector DBs; sqlite-vec only on `vectors.db`  
-3. **WAL Mode** — concurrent readers with a single writer  
-4. **Single writer daemon** — optional read-only peekers (CLI/debug); multi-writer deployments use PostgreSQL  
-5. **Multi-file by purpose** — same logical separation as RFC-802 multi-database Postgres; no cross-file transactions  
-6. **Composition** — `SQLiteDurability` wraps persist KV via namespace  
+1. **Protocol-First** — stores stay thin; Runtime owns connections
+2. **Stdlib-First** — `sqlite3` for all non-vector DBs; sqlite-vec only on `vectors.db`
+3. **WAL Mode** — concurrent readers with a single writer
+4. **Single writer daemon** — optional read-only peekers (CLI/debug); multi-writer deployments use PostgreSQL
+5. **Multi-file by purpose** — same logical separation as RFC-802 multi-database Postgres; no cross-file transactions
+6. **Composition** — `SQLiteDurability` wraps persist KV via namespace
 
 ---
 
@@ -107,10 +107,10 @@ Root: `$SOOTHE_DATA_DIR/databases/` (default `~/.soothe/data/databases/`).
 ### `SqliteStoreRuntime` / `SqliteRuntimeRegistry`
 
 **Responsibilities:**
-- Own all connections for one absolute DB path  
-- Serialize writes; lease readers  
-- Apply mandatory pragmas on every connection  
-- Refcount via registry; `close_all` on daemon shutdown  
+- Own all connections for one absolute DB path
+- Serialize writes; lease readers
+- Apply mandatory pragmas on every connection
+- Refcount via registry; `close_all` on daemon shutdown
 
 **Config (optional; defaults mandatory-safe):**
 
@@ -142,22 +142,22 @@ Each adapter implements its existing protocol and delegates I/O to its Runtime:
 
 ### `SQLitePersistStore`
 
-- Implements `PersistStore` (`save`, `load`, `delete`, `close` / list)  
-- Table `soothe_kv` with `(namespace, key)` primary key  
-- JSON serialization via `json.dumps` / `json.loads`  
-- Default path: `$SOOTHE_DATA_DIR/databases/persist.db`  
+- Implements `PersistStore` (`save`, `load`, `delete`, `close` / list)
+- Table `soothe_kv` with `(namespace, key)` primary key
+- JSON serialization via `json.dumps` / `json.loads`
+- Default path: `$SOOTHE_DATA_DIR/databases/persist.db`
 
 ### `SQLiteDurability`
 
-- Wraps `SQLitePersistStore` via `BasePersistStoreDurability` with `namespace="durability"` (or equivalent)  
-- No private connection logic  
+- Wraps `SQLitePersistStore` via `BasePersistStoreDurability` with `namespace="durability"` (or equivalent)
+- No private connection logic
 
 ### `SQLiteVecStore`
 
-- Implements `VectorStoreProtocol`  
-- Default path: `$SOOTHE_DATA_DIR/databases/vectors.db`  
-- Async via Runtime / `asyncio.to_thread`  
-- Fallback to in-memory if sqlite-vec unavailable  
+- Implements `VectorStoreProtocol`
+- Default path: `$SOOTHE_DATA_DIR/databases/vectors.db`
+- Async via Runtime / `asyncio.to_thread`
+- Fallback to in-memory if sqlite-vec unavailable
 
 ### Read-only peekers
 
@@ -173,11 +173,11 @@ Loop purge and similar lifecycle ops issue ordered best-effort calls across Runt
 
 ## Error Handling
 
-1. **Runtime closed / missing** — `RuntimeError`  
-2. **`SQLITE_BUSY` after busy_timeout** — propagate on durability paths (checkpoints, identity, cron, display writes)  
-3. **sqlite-vec missing** — factory falls back to in-memory with clear log  
-4. **DB path not writable** — fail startup / first open with path detail  
-5. **Legacy files on disk** — ignored; never opened  
+1. **Runtime closed / missing** — `RuntimeError`
+2. **`SQLITE_BUSY` after busy_timeout** — propagate on durability paths (checkpoints, identity, cron, display writes)
+3. **sqlite-vec missing** — factory falls back to in-memory with clear log
+4. **DB path not writable** — fail startup / first open with path detail
+5. **Legacy files on disk** — ignored; never opened
 
 ---
 
@@ -225,9 +225,9 @@ Use `persistence.default_backend: postgresql` (RFC-802). SQLite is not a multi-w
 
 Upgrading from pre-Runtime builds:
 
-1. Stop the daemon  
-2. Delete obsolete flat `$SOOTHE_DATA_DIR/*.db` and `$SOOTHE_HOME/soothe.db` / `vector.db` (or archive offline)  
-3. Start daemon — recreates `databases/*.db`  
+1. Stop the daemon
+2. Delete obsolete flat `$SOOTHE_DATA_DIR/*.db` and `$SOOTHE_HOME/soothe.db` / `vector.db` (or archive offline)
+3. Start daemon — recreates `databases/*.db`
 
 No automatic import.
 
@@ -235,25 +235,25 @@ No automatic import.
 
 ## Testing (normative expectations)
 
-1. Concurrent `run_read` never shares one connection; concurrent `run_write` serializes  
-2. Every Runtime connection has WAL + busy_timeout; writes use `BEGIN IMMEDIATE`  
-3. N StrangeLoop managers share one `checkpoints` Runtime; zero private writer pools  
-4. Resolvers return only `$SOOTHE_DATA_DIR/databases/<purpose>.db`  
-5. Multi-loop stress (heartbeat + checkpoint + context + display) without connection races  
-6. RO peeker does not take write ownership  
-7. PostgreSQL mode tests remain green without SqliteRuntime  
+1. Concurrent `run_read` never shares one connection; concurrent `run_write` serializes
+2. Every Runtime connection has WAL + busy_timeout; writes use `BEGIN IMMEDIATE`
+3. N StrangeLoop managers share one `checkpoints` Runtime; zero private writer pools
+4. Resolvers return only `$SOOTHE_DATA_DIR/databases/<purpose>.db`
+5. Multi-loop stress (heartbeat + checkpoint + context + display) without connection races
+6. RO peeker does not take write ownership
+7. PostgreSQL mode tests remain green without SqliteRuntime
 
 ---
 
 ## Implementation phases
 
-See [IG-647](../impl/IG-647-sqlite-store-runtime.md) for concrete module layout, types, phased rollout, and verify commands.
+See [IG-647](../archive/impl/IG-647-sqlite-store-runtime.md) for concrete module layout, types, phased rollout, and verify commands.
 
-1. Paths + Runtime + Registry; migrate checkpoints; remove StrangeLoop private pools / per-manager SQLite flush  
-2. `context` + `display`  
-3. `cron` + `identity` + `metadata`  
-4. `persist` + `vectors`  
-5. Cleanse dead code and docs; operator wipe note in wiki  
+1. Paths + Runtime + Registry; migrate checkpoints; remove StrangeLoop private pools / per-manager SQLite flush
+2. `context` + `display`
+3. `cron` + `identity` + `metadata`
+4. `persist` + `vectors`
+5. Cleanse dead code and docs; operator wipe note in wiki
 
 ---
 
@@ -268,8 +268,8 @@ See [IG-647](../impl/IG-647-sqlite-store-runtime.md) for concrete module layout,
 
 ## Related Documents
 
-- [RFC-802](./RFC-802-persistence-architecture-refactor.md) — multi-purpose layout, mode validation  
-- [RFC-803](./RFC-803-strangeloop-checkpoint-backend.md) — checkpoint flush / unified write pipeline  
-- [Design draft](../drafts/2026-07-24-sqlite-runtime-isolation-performance-design.md)  
-- [RFC Index](./rfc-index.md)  
+- [RFC-802](./RFC-802-persistence-architecture-refactor.md) — multi-purpose layout, mode validation
+- [RFC-803](./RFC-803-strangeloop-checkpoint-backend.md) — checkpoint flush / unified write pipeline
+- [Design draft](../drafts/2026-07-24-sqlite-runtime-isolation-performance-design.md)
+- [RFC Index](./rfc-index.md)
 )

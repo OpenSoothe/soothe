@@ -7,8 +7,8 @@
 **Created**: 2026-03-18
 **Implemented**: 2026-03-18
 **Author**: System
-**Design Draft**: [secure-filesystem-path-handling.md](../archive/drafts/secure-filesystem-path-handling.md)
-**Implementation Guide**: [secure-filesystem-path-handling.md](../impl-guides/secure-filesystem-path-handling.md)
+**Design Draft**: `secure-filesystem-path-handling.md`
+**Implementation Guide**: `secure-filesystem-path-handling.md`
 **Depends On**: RFC-001 (Policy System)
 
 ## Abstract
@@ -170,7 +170,7 @@ Leverage existing `Permission` class:
 
 #### 4.1 Agent Creation
 
-Modify `src/soothe/core/agent.py` (lines 147-150):
+Modify `src/soothe/coreagent/core_agent.py` (lines 147-150):
 
 ```python
 from soothe.backends.filesystem_secure import SecureFilesystemBackend
@@ -289,6 +289,6 @@ Multiple security layers:
 
 ## References
 
-- Design Draft: [secure-filesystem-path-handling.md](../archive/drafts/secure-filesystem-path-handling.md)
+- Design Draft: `secure-filesystem-path-handling.md`
 - Policy Protocol: `src/soothe/protocols/policy.py`
 - FilesystemBackend: `deepagents.backends.filesystem`

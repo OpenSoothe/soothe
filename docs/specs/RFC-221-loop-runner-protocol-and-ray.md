@@ -99,7 +99,7 @@ Both modes are structurally symmetric: subprocess → `SootheRunner(config)` →
 
 ## Components
 
-### `LocalLoopRunner` — `core/runner/local_runner.py`
+### `LocalLoopRunner` — `runner/local_runner.py`
 
 Spawns a `multiprocessing.Process` per loop. The subprocess runs `_loop_worker(config, request, queue)` — a top-level function (required for pickling) that:
 
@@ -118,7 +118,7 @@ LocalLoopRunner.run(request)
         yield chunk
 ```
 
-### `LoopRunnerActor` — `core/runner/ray_actor.py`
+### `LoopRunnerActor` — `runner/ray_actor.py`
 
 A `@ray.remote` class hosting `SootheRunner` in a Ray worker process. Constructs `SootheRunner(config)` at actor `__init__` (once per actor lifetime). On `run()`, iterates `astream()` and pushes chunks to a `ray.util.queue.Queue` provided by the caller. Supports cooperative cancellation via `_cancelled` flag checked between chunks.
 
@@ -134,11 +134,11 @@ class LoopRunnerActor:
         self._cancelled = True
 ```
 
-### `RayLoopRunner` — `core/runner/ray_runner.py`
+### `RayLoopRunner` — `runner/ray_runner.py`
 
 Manages one `LoopRunnerActor` per `loop_id`. On `run(request)`: creates actor and `ray.util.queue.Queue`, calls `actor.run.remote(request, queue)` (non-blocking), returns `_drain_ray_queue(queue)` as an async generator. On `cancel()`: calls `actor.cancel.remote()`, waits 5s, then `ray.kill(actor)`. Ray imports are top-level in this file only — never transitively imported by local-mode paths.
 
-### `LoopRunnerFactory` — `core/runner/factory.py`
+### `LoopRunnerFactory` — `runner/factory.py`
 
 ```python
 class LoopRunnerFactory:
@@ -221,17 +221,17 @@ QueryEngine.run_query(loop_id, request)
 | File | Contents |
 |---|---|
 | `soothe/protocols/runner.py` | `LoopRunnerProtocol`, `LoopRunRequest` |
-| `core/runner/local_runner.py` | `LocalLoopRunner`, `_loop_worker`, `_drain_mp_queue` |
-| `core/runner/ray_actor.py` | `LoopRunnerActor` (`@ray.remote`) |
-| `core/runner/ray_runner.py` | `RayLoopRunner`, `_drain_ray_queue` |
-| `core/runner/factory.py` | `LoopRunnerFactory` |
+| `runner/local_runner.py` | `LocalLoopRunner`, `_loop_worker`, `_drain_mp_queue` |
+| `runner/ray_actor.py` | `LoopRunnerActor` (`@ray.remote`) |
+| `runner/ray_runner.py` | `RayLoopRunner`, `_drain_ray_queue` |
+| `runner/factory.py` | `LoopRunnerFactory` |
 
 **Modified files:**
 
 | File | Change |
 |---|---|
 | `soothe/protocols/__init__.py` | Export `LoopRunnerProtocol`, `LoopRunRequest` |
-| `core/runner/__init__.py` | Export `LocalLoopRunner`, `RayLoopRunner`, `LoopRunnerFactory`; `SootheRunner` unchanged |
+| `runner/__init__.py` | Export `LocalLoopRunner`, `RayLoopRunner`, `LoopRunnerFactory`; `SootheRunner` unchanged |
 | `daemon/server.py` | Replace `SootheRunner` singleton with `LoopRunnerFactory(config)` |
 | `daemon/query_engine.py` | Accept `LoopRunnerFactory`; use `_active_runners` |
 | `daemon/loop_isolation.py` | Remove `set_current_thread_id()` call; pass binding via `LoopRunRequest` |

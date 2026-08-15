@@ -175,6 +175,13 @@ class EmailNotifySinkConfig(BaseModel):
     from_address: str = ""
     connect_timeout_seconds: float = Field(default=30.0, gt=0)
     max_retries: int = Field(default=2, ge=0, le=5)
+    rate_limit_seconds: float = Field(
+        default=5.0,
+        ge=0.0,
+        le=300.0,
+        description="Minimum seconds between sends to the same recipient "
+        "(per job+kind+address key); 0 disables rate-limiting",
+    )
     targets: list[NotifyTargetConfig] = Field(default_factory=list)
 
 
@@ -224,6 +231,20 @@ class AutopilotNotifyConfig(BaseModel):
         default=2700,
         ge=60,
         description="Emit job.suspended_timeout after this many seconds suspended",
+    )
+    suspend_escalation_multiplier: float = Field(
+        default=2.0,
+        ge=1.0,
+        le=10.0,
+        description="Multiply suspend_after_seconds by this factor to escalate "
+        "severity from warning to error (e.g. 2.0 means 2x threshold = error)",
+    )
+    dedup_ttl_seconds: int = Field(
+        default=86400,
+        ge=0,
+        description="TTL for dedup keys in seconds; 0 means no expiry (keys persist "
+        "indefinitely). Prevents stale dedup keys from suppressing legitimate "
+        "re-notifications for long-running jobs.",
     )
     events: NotifyEventsConfig = Field(default_factory=NotifyEventsConfig)
     targets: list[NotifyTargetConfig] = Field(
@@ -1655,6 +1676,8 @@ class CronConfig(BaseModel):
         extraction_model: LLM role for natural language extraction.
         extraction_timeout: Timeout for LLM extraction calls.
         default_priority: Default job priority when not specified.
+        enable_builtin_jobs: When true, seed built-in recurring maintenance
+            jobs (e.g. quarterly drift review) on daemon startup.
     """
 
     max_jobs: int = Field(default=100, ge=1, le=1000, description="Max scheduled jobs per user")
@@ -1673,6 +1696,13 @@ class CronConfig(BaseModel):
         description=(
             "Timezone for cron/at wall-clock schedules: 'local' (system), 'UTC', "
             "or an IANA name such as 'Asia/Shanghai'"
+        ),
+    )
+    enable_builtin_jobs: bool = Field(
+        default=True,
+        description=(
+            "When true, seed built-in recurring maintenance jobs on startup "
+            "(e.g. quarterly RFC drift review per RFC-903 audit cadence)"
         ),
     )
 

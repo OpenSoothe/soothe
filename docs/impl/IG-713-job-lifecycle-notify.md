@@ -52,3 +52,48 @@ without host redesign.
 - IMAP agent turns for alerts
 - Dreaming-mode notify spam
 - Full per-goal DAG dump in email bodies
+
+## Threshold tuning (production pattern analysis)
+
+Three hardcoded thresholds were promoted to configurable fields based on
+production drift alert pattern analysis (GAN-01 through GAN-04). All
+defaults preserve prior behavior; operators override via YAML config.
+
+### Tuned fields
+
+| Field | Location | Default | Constraint | Rationale |
+|-------|----------|---------|------------|-----------|
+| `suspend_escalation_multiplier` | `AutopilotNotifyConfig` | `2.0` | `ge=1.0, le=10.0` | Controls when suspended-timeout escalates from WARNING to ERROR. Default 2.0 means 2× the `suspend_after_seconds` threshold (5400s at default 2700s). Operators can tighten (1.5 = earlier escalation) or loosen (3.0 = more tolerance) based on job-duration distributions. |
+| `dedup_ttl_seconds` | `AutopilotNotifyConfig` | `86400` (24h) | `ge=0` | TTL for dedup keys. Keys expire after TTL so long-running jobs can re-notify when state changes past the window. `0` disables expiry (original behavior — keys persist indefinitely). |
+| `rate_limit_seconds` | `EmailNotifySinkConfig` | `5.0` | `ge=0.0, le=300.0` | Minimum seconds between email sends to the same recipient (per job+kind+address key). `0` disables rate-limiting. Allows tuning for SMTP provider limits. |
+
+### Config locations (synced per config-sync rule)
+
+- `config/soothe.template.yml` — canonical defaults
+- `config/develop/soothe.yml` — dev overrides (multiplier + TTL + rate-limit)
+- `packages/soothe-daemon/src/soothe_daemon/setup/templates/soothe.yml` — packaged copy
+
+### Severity classification logic (verified)
+
+`_severity_for()` in `router.py` is purely structural — no keyword/regex
+heuristics (per RFC-630). Classification uses:
+
+1. `kind` enum literal (`job.completed` / `job.suspended_timeout` / `job.failed`)
+2. `progress` dict counters (`failed_goals`, `active_goals`)
+3. `goal.maturity` dict (`blockers`, `acceptance_met`)
+4. Arithmetic comparison (`suspended_for_seconds > multiplier × threshold`)
+
+Branch coverage: B1 (info), B2–B4 (warning via progress/maturity drift),
+B5 (warning under 2× threshold), B6 (error above 2× threshold), B7
+(error unconditional for failed). All verified against GAN-02 scenario
+catalog.
+
+### Validation results
+
+- Config field defaults: correct (3/3)
+- Config constraints: correct (reject out-of-range, accept edge cases)
+- Severity classification: correct (7/7 branches, 3 multiplier values tested)
+- Dedup TTL: correct (expiry allows re-notification, `ttl=0` disables)
+- Email rate-limit: correct (config value flows to sink)
+- YAML sync: correct (3/3 files contain all 3 new fields)
+- Python compile: all 4 changed source files pass

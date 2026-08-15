@@ -201,7 +201,7 @@ Examples:
 </INTAKE_PASS2>
 ```
 
-Fail-safe on classification failure: ``simple`` (lightweight plan), not ``complex``
+Fail-safe on classification failure: `simple` (lightweight plan), not `complex`
 (IG-654 CoreAgent-first granularity).
 
 **Context packaging**:

@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-05-27
 **Last Updated**: 2026-08-08
-**Revised**: 2026-05-28 — sole-child optimization; in-house ``copy_thread_via_public_api`` (no LangGraph saver implements ``acopy_thread`` natively).
+**Revised**: 2026-05-28 — sole-child optimization; in-house `copy_thread_via_public_api` (no LangGraph saver implements `acopy_thread` natively).
 **Dependencies**: RFC-201, RFC-214, RFC-207, RFC-218
 **Related**: RFC-222 (Autopilot loop management), RFC-452 (Unified Thread Management), RFC-224 (Context Window Management)
 **Implementation**: IG-477 (step isolation + envelope grounding), partial checkpoint forking pending
@@ -101,7 +101,7 @@ Per the 2026-05-28 revision, the strategy now distinguishes singleton-with-sibli
 
 ### In-house copy implementation
 
-LangGraph's stock savers (`InMemorySaver`, `AsyncSqliteSaver`, `AsyncPostgresSaver`, ...) all inherit `BaseCheckpointSaver.acopy_thread` which raises `NotImplementedError`. We supply our own copy via `core/loop/engine/checkpoint_copy.py::copy_thread_via_public_api`, which iterates the source thread's checkpoints with `alist`, rewrites `configurable.thread_id` to the target, and replays them with `aput` + `aput_writes`. Works on every saver because it relies only on the public protocol surface. ``ThreadForkManager.fork_checkpoint`` calls this helper instead of the saver's broken `acopy_thread`.
+LangGraph's stock savers (`InMemorySaver`, `AsyncSqliteSaver`, `AsyncPostgresSaver`, ...) all inherit `BaseCheckpointSaver.acopy_thread` which raises `NotImplementedError`. We supply our own copy via `sloop/engine/checkpoint_copy.py::copy_thread_via_public_api`, which iterates the source thread's checkpoints with `alist`, rewrites `configurable.thread_id` to the target, and replays them with `aput` + `aput_writes`. Works on every saver because it relies only on the public protocol surface. `ThreadForkManager.fork_checkpoint` calls this helper instead of the saver's broken `acopy_thread`.
 
 ---
 
@@ -161,7 +161,7 @@ Executor.execute()
 
 ### ThreadForkManager (NEW)
 
-**Location**: `packages/soothe/src/soothe/core/loop/engine/thread_fork_manager.py`
+**Location**: `packages/soothe/src/soothe/sloop/engine/thread_selection.py` (fork logic merged into thread selection; was `thread_fork_manager.py`)
 
 **Interface**:
 
@@ -261,7 +261,7 @@ async def fork_checkpoint(
 
 ### LoopState Extension (MODIFY)
 
-**Location**: `packages/soothe/src/soothe/core/loop/state/schemas.py`
+**Location**: `packages/soothe/src/soothe/sloop/state/schemas.py`
 
 **Add fields**:
 
@@ -282,7 +282,7 @@ class LoopState(BaseModel):
 
 ### Executor Modification (MODIFY — target; partial ship)
 
-**Location**: `packages/soothe/src/soothe/core/loop/engine/executor.py`
+**Location**: `packages/soothe/src/soothe/sloop/engine/executor.py`
 
 **Shipped in `_execute_step_collecting_events()`:**
 
@@ -509,16 +509,16 @@ Step D (depends on B + C):
   with no copy. Linear chains (A→B→C with no branches) skip every fork
   cost. Siblings of the same predecessor still fork to keep histories
   independent.
-- ``select_fork_source`` return type changed from ``str`` to
-  ``tuple[str, bool]`` so the caller can distinguish reuse from fork.
-- **In-house ``copy_thread_via_public_api``** helper added in
-  ``core/loop/engine/checkpoint_copy.py``. Implements ``acopy_thread``
-  semantics on top of any ``BaseCheckpointSaver`` via ``alist`` + ``aput``
-  + ``aput_writes`` because no concrete saver in the current LangGraph
-  release implements ``acopy_thread`` natively. ThreadForkManager calls
+- `select_fork_source` return type changed from `str` to
+  `tuple[str, bool]` so the caller can distinguish reuse from fork.
+- **In-house `copy_thread_via_public_api`** helper added in
+  `sloop/engine/checkpoint_copy.py`. Implements `acopy_thread`
+  semantics on top of any `BaseCheckpointSaver` via `alist` + `aput`
+  + `aput_writes` because no concrete saver in the current LangGraph
+  release implements `acopy_thread` natively. ThreadForkManager calls
   the helper instead of the saver's stub.
-- Tests added: ``test_checkpoint_copy.py`` (helper unit tests against
-  ``InMemorySaver``), expanded ``test_thread_fork_manager.py`` for the
+- Tests added: `test_checkpoint_copy.py` (helper unit tests against
+  `InMemorySaver`), expanded `test_thread_fork_manager.py` for the
   sole-child / siblings split, updated executor integration tests.
 
 ### 2026-07-01 (Implementation alignment)

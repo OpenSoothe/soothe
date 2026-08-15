@@ -7,7 +7,7 @@
 **Created**: 2026-03-31
 **Last Updated**: 2026-08-08
 **Author**: Design brainstorming session
-**Design Draft**: [2026-03-31-thread-aware-workspace-design.md](../archive/drafts/2026-03-31-thread-aware-workspace-design.md)
+**Design Draft**: `2026-03-31-thread-aware-workspace-design.md`
 **Depends On**: RFC-102 (Security Filesystem Policy), RFC-450 (Daemon Communication), RFC-452 (Thread Management)
 **Implementation**: Partial - context variables in place, full flow pending
 
@@ -233,7 +233,7 @@ def resolve_path_dynamic(cls, file_path: str) -> Path:
 
 ### 3. WorkspaceContextMiddleware (New)
 
-**Location**: `src/soothe/core/agent/middleware/workspace_context.py`
+**Location**: `src/soothe/coreagent/middleware/workspace_context.py`
 
 ```python
 from langchain.agents.middleware import AgentMiddleware
@@ -282,7 +282,7 @@ class WorkspaceContextMiddleware(AgentMiddleware):
 
 ### 4. SootheRunner Changes
 
-**Location**: `src/soothe/core/runner/_runner_phases.py`
+**Location**: `src/soothe/runner/_runner_phases.py`
 
 Modify `astream()` signature to accept workspace parameter:
 
@@ -369,7 +369,7 @@ The `work_dir` field remains on tool classes for backward compatibility.
 
 ### 7. Agent Factory Changes
 
-**Location**: `src/soothe/core/agent.py`
+**Location**: `src/soothe/coreagent/core_agent.py`
 
 Register WorkspaceContextMiddleware in the middleware stack:
 
@@ -478,7 +478,7 @@ None. All decisions finalized through design brainstorming session.
 
 ## References
 
-- Design Draft: [2026-03-31-thread-aware-workspace-design.md](../archive/drafts/2026-03-31-thread-aware-workspace-design.md)
+- Design Draft: `2026-03-31-thread-aware-workspace-design.md`
 - RFC-102: Secure Filesystem Path Handling
 - RFC-302: Daemon Communication Protocol
 - RFC-303: Unified Thread Management

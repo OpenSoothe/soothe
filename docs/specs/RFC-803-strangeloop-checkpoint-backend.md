@@ -251,7 +251,7 @@ CREATE INDEX idx_anchors_timestamp_range ON checkpoint_anchors USING GiST (times
 CREATE INDEX idx_branches_active ON failed_branches(loop_id, iteration) WHERE pruned_at IS NULL;
 
 -- JSONB columns for structured data (better query performance)
-ALTER TABLE failed_branches 
+ALTER TABLE failed_branches
     ALTER COLUMN execution_path TYPE JSONB USING execution_path::jsonb,
     ALTER COLUMN failure_insights TYPE JSONB USING failure_insights::jsonb,
     ALTER COLUMN avoid_patterns TYPE JSONB USING avoid_patterns::jsonb;
@@ -606,7 +606,7 @@ class StrangeLoopStateManager:
         
         self._pending_saves = asyncio.Queue(maxsize=100)
         self._flush_worker = asyncio.create_task(self._flush_worker_loop())
-        logger.info("Async checkpoint worker started: loop=%s flush_interval=%ss", 
+        logger.info("Async checkpoint worker started: loop=%s flush_interval=%ss",
                     self.loop_id, self._flush_interval)
     
     async def _flush_worker_loop(self) -> None:
@@ -617,7 +617,7 @@ class StrangeLoopStateManager:
                 # 1. New checkpoint in queue
                 # 2. Flush interval timeout (force periodic write)
                 checkpoint = await asyncio.wait_for(
-                    self._pending_saves.get(), 
+                    self._pending_saves.get(),
                     timeout=self._flush_interval
                 )
                 await self._do_save_checkpoint(checkpoint)
@@ -837,8 +837,8 @@ agent:
 
 ### Related implementation guides
 
-- [IG-550](../impl/IG-550-high-performance-persistence.md) — writer introduction, coalescing, goal-boundary transaction
-- [IG-571](../impl/IG-571-main-loop-persistence-writer-bridge.md) — main-loop submit bridge (thread_pool fix)
+- [IG-550](../archive/impl/IG-550-high-performance-persistence.md) — writer introduction, coalescing, goal-boundary transaction
+- [IG-571](../archive/impl/IG-571-main-loop-persistence-writer-bridge.md) — main-loop submit bridge (thread_pool fix)
 - [RFC-801](./RFC-801-sqlite-backend.md) — `SqliteStoreRuntime` / `databases/` layout
 - Design draft: [2026-07-24-sqlite-runtime-isolation-performance-design.md](../drafts/2026-07-24-sqlite-runtime-isolation-performance-design.md)
 

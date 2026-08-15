@@ -273,7 +273,7 @@ The optional `verification_rules` field on `job_create` provides natural-languag
 
 > **Normative evaluation**: Structured / executable assessment is specified in
 > [RFC-230](RFC-230-job-maturity-assessment.md) (prefer probes; LLM residual only).
-> Implementation: [IG-692](../impl/IG-692-job-maturity-assessment.md).
+> Implementation: [IG-692](../archive/impl/IG-692-job-maturity-assessment.md).
 
 ### job_status
 

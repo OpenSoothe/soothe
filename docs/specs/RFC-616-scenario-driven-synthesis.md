@@ -156,7 +156,7 @@ Final Synthesis Response
 
 **Modified**:
 - `analysis/synthesis.py` - Remove keyword classification, integrate classifier
-- `core/strange_loop.py` - Remove length categorization step
+- `sloop/engine/strange_loop.py` - Remove length categorization step
 - `state/schemas.py` - Remove response_length_category from PlanResult
 
 **Deleted**:

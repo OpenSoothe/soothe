@@ -1,11 +1,11 @@
 # RFC-903: Quarterly RFC Audit Cycle
 
-**RFC**: 903  
-**Title**: Quarterly RFC Audit Cycle  
-**Status**: Proposed  
-**Kind**: Process Specification  
-**Created**: 2026-08-11  
-**Authors**: Soothe Team  
+**RFC**: 903
+**Title**: Quarterly RFC Audit Cycle
+**Status**: Proposed
+**Kind**: Process Specification
+**Created**: 2026-08-11
+**Authors**: Soothe Team
 **Dependencies**: RFC-900 (Deprecation List and Number Segment Reclassification Scheme)
 
 ## Abstract
@@ -25,7 +25,7 @@ tracking metrics — not runtime architecture or API contracts.
 
 ### Current Problems
 
-1. **Status Drift Without Cadence**  
+1. **Status Drift Without Cadence**
    RFC-900 introduced a formal lifecycle (`Draft → Proposed → Accepted →
    Implemented → Deprecated → Archived`) and a deprecation process, but no
    recurring cadence enforces it. As of 2026-08-11, the index shows 58 of 90
@@ -33,7 +33,7 @@ tracking metrics — not runtime architecture or API contracts.
    `rfc-history.md`'s total (85) disagrees with `rfc-index.md`'s total (90).
    Without a scheduled audit, these inconsistencies accumulate.
 
-2. **Spec-vs-Code Drift Detected Reactively, Not Periodically**  
+2. **Spec-vs-Code Drift Detected Reactively, Not Periodically**
    The TJL pipeline (`docs/analysis/ci-rfc-boundary-report.md`) already
    computes DAG boundary violations, declared path mismatches, API contract
    mismatches, and declared-but-unimplemented components. But it runs on
@@ -41,13 +41,13 @@ tracking metrics — not runtime architecture or API contracts.
    path mismatches, 10 contract mismatches, and 12 declared-but-unimplemented
    components — drift that grew silently between audits.
 
-3. **Deprecation Backlog Has No Throughput Target**  
+3. **Deprecation Backlog Has No Throughput Target**
    RFC-900 mandates a 90-day Deprecated → Archived window, but nothing
    checks that the window is honored. The 2026-07 path-restructure notice in
    `rfc-index.md` flags that many RFCs retain design-time paths that no longer
    match the codebase — a known, unbounded drift surface.
 
-4. **No Tracked Health Metrics Over Time**  
+4. **No Tracked Health Metrics Over Time**
    There is no time series of corpus health. Decisions about whether to
    consolidate series, retire a sub-category, or invest in spec completion
    are made without trend data.

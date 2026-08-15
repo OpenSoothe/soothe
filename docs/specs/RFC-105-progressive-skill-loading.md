@@ -7,7 +7,7 @@
 **Created**: 2026-05-29
 **Last Updated**: 2026-07-03
 **Authors**: Platonic brainstorming session
-**Design Draft**: [2026-05-29-progressive-skill-loading-design.md](../archive/drafts/2026-05-29-progressive-skill-loading-design.md)
+**Design Draft**: `2026-05-29-progressive-skill-loading-design.md`
 **Revision Draft**: [2026-07-03-skill-runtime-discovery-design.md](../archive/drafts/2026-07-03-skill-runtime-discovery-design.md) (IG-543)
 **Depends On**: RFC-100 (CoreAgent Runtime), RFC-104 (Dynamic System Context), RFC-214 (StrangeLoop Loop Message Surface), RFC-600 (Plugin Extension System)
 
@@ -161,7 +161,7 @@ Claude Code solved the analogous problem (`src/skills/loadSkillsDir.ts`, `src/ut
 
 #### Flow 4: Iteration boundary snapshot
 
-1. `StrangeLoop` reaches iteration boundary in `core/loop/engine/strange_loop.py`.
+1. `StrangeLoop` reaches iteration boundary in `sloop/engine/strange_loop.py`.
 2. Copies `state["skill_activation"]["sent" | "activated" | "invoked"]` into `LoopState.sent_skill_names`, `.activated_skill_names`, `.invoked_skill_names`.
 3. Copies `state["skill_activation"]["invoked_bodies"]` dict into `LoopState.invoked_skill_bodies`.
 4. On thread resume (cold daemon start, reconnect), `StrangeLoop` rehydrates `state["skill_activation"]` from `LoopState` before the first `modify_request`.
@@ -251,7 +251,7 @@ class ProgressiveSkillsConfig(BaseModel):
 
 ### Discovery tools (2026-07-03)
 
-Location: `packages/soothe/src/soothe/skills/discovery_tools.py`
+Location: `soothe-nano` PyPI package (`soothe_nano.skills.discovery_tools`)
 
 ```python
 def create_search_skills_tool() -> StructuredTool: ...
@@ -287,7 +287,7 @@ Listing candidates: `core ∪ activated` (where `activated` = discovered set). D
 
 ### `ProgressiveSkillRegistry`
 
-Location: `packages/soothe/src/soothe/skills/registry.py`
+Location: `soothe-nano` PyPI package (`soothe_nano.skills.registry`)
 
 ```python
 class ProgressiveSkillRegistry:
@@ -328,7 +328,7 @@ Path matching delegates to `pathspec.PathSpec.from_lines("gitwildmatch", pattern
 
 ### `format_skills_within_budget`
 
-Location: `packages/soothe/src/soothe/skills/budget.py`
+Location: `soothe-nano` PyPI package (`soothe_nano.skills.budget`)
 
 ```python
 def format_skills_within_budget(
@@ -357,7 +357,7 @@ Mirrors `src/tools/SkillTool/prompt.ts:formatCommandsWithinBudget` in Claude Cod
 
 ### `SkillActivationMiddleware`
 
-Location: `packages/soothe/src/soothe/middleware/skill_activation.py`
+Location: `soothe-nano` PyPI package (`soothe_nano.middleware.skill_activation`)
 
 ```python
 class SkillActivationMiddleware(AgentMiddleware):
@@ -394,7 +394,7 @@ Order in `build_soothe_middleware_stack`:
 
 ### `_compose_skills_block` extension to `SystemPromptOptimizationMiddleware`
 
-Private helper added to `packages/soothe/src/soothe/middleware/system_prompt_optimization.py`, invoked from `_get_prompt_for_complexity` (around line 286–458):
+Private helper added to `soothe-nano` PyPI package (`soothe_nano.middleware.system_prompt_optimization`), invoked from `_get_prompt_for_complexity` (around line 286–458):
 
 ```python
 def _compose_skills_block(
@@ -416,7 +416,7 @@ The block layout follows existing static/semi-static tiering so prompt-cache hit
 
 ### Agent builder change
 
-In `packages/soothe/src/soothe/core/agent/_builder.py:199-211`, the existing:
+In `packages/soothe/src/soothe/coreagent/builder.py:199-211`, the existing:
 
 ```python
 all_skills = get_built_in_skills_paths() + (config.skills or [])
@@ -435,7 +435,7 @@ No post-construction surgery on the deepagents middleware list.
 
 ### StrangeLoop snapshot bridge
 
-In `packages/soothe/src/soothe/core/loop/engine/strange_loop.py`, at each iteration boundary (the same point that snapshots `goal_user_submission` and other transient fields onto `LoopState`):
+In `packages/soothe/src/soothe/sloop/engine/strange_loop.py`, at each iteration boundary (the same point that snapshots `goal_user_submission` and other transient fields onto `LoopState`):
 
 ```python
 activation = state.get("skill_activation") or ProgressiveSkillRegistry.init_activation_state()
@@ -449,7 +449,7 @@ On resume (cold daemon start or reconnect), the inverse copy happens once before
 
 ## Events
 
-Two new public events registered via `register_event` in `packages/soothe/src/soothe/core/events/catalog.py:567`:
+Two new public events registered via `register_event` in `packages/soothe/src/soothe/events/catalog.py:567`:
 
 ```python
 class SkillActivatedEvent(SootheEvent):
@@ -482,23 +482,23 @@ Naming follows the four-segment convention (`soothe.<domain>.<component>.<action
 
 ### New files
 
-- `packages/soothe/src/soothe/skills/registry.py` — `ProgressiveSkillRegistry`
-- `packages/soothe/src/soothe/skills/budget.py` — `format_skills_within_budget`
-- `packages/soothe/src/soothe/middleware/skill_activation.py` — `SkillActivationMiddleware`
-- `packages/soothe/src/soothe/skills/events.py` — event **model definitions** for `SkillActivatedEvent`, `SkillBodyLoadedEvent`, `InternalSkillActivatedEvent` (registration is performed centrally by `core/events/catalog.py:567` importing from here, per IG-052 self-registration pattern)
+- `soothe-nano` PyPI package: `soothe_nano.skills.registry` — `ProgressiveSkillRegistry`
+- `soothe-nano` PyPI package: `soothe_nano.skills.budget` — `format_skills_within_budget`
+- `soothe-nano` PyPI package: `soothe_nano.middleware.skill_activation` — `SkillActivationMiddleware`
+- `soothe-nano` PyPI package: `soothe_nano.skills.events` — event **model definitions** for `SkillActivatedEvent`, `SkillBodyLoadedEvent`, `InternalSkillActivatedEvent` (registration is performed centrally by `events/catalog.py:567` in `soothe` importing from here, per IG-052 self-registration pattern)
 
 ### Modified files
 
 | File | Change |
 |---|---|
-| `skills/catalog.py:28` (`_parse_frontmatter`) | Accept `paths: str \| list[str]` and `when_to_use: str` (existing `tags: str` unchanged) |
-| `skills/index.py:23` (`SkillIndexEntry`) | Add `paths: tuple[str, ...] \| None`, `when_to_use: str \| None`; keep existing `tags: str`; bump `SkillIndex.wire_entries()` (line 87) AND `catalog.wire_entries_for_agent_config()` (line 127) to surface the new fields in the wire-safe view |
-| `core/loop/state/schemas.py` (`LoopState`) | Add four snapshot fields (`sent_skill_names`, `activated_skill_names`, `invoked_skill_names`, `invoked_skill_bodies`) |
-| `core/loop/engine/strange_loop.py` | Iteration-boundary snapshot/rehydrate of `state["skill_activation"]` ↔ `LoopState` |
-| `middleware/system_prompt_optimization.py` | Add private `_compose_skills_block`; wire into `_get_prompt_for_complexity` |
-| `middleware/_builder.py:59` | Insert `SkillActivationMiddleware` after `SoothePolicyMiddleware`, before `ToolConcurrencyMiddleware` |
-| `core/agent/_builder.py:199-211` | Pass `skills=None` to `create_deep_agent` |
-| `core/events/catalog.py:567` | Register `SkillActivatedEvent` and `SkillBodyLoadedEvent` |
+| `skills/catalog.py:28` (`_parse_frontmatter`) — `soothe-nano` | Accept `paths: str \| list[str]` and `when_to_use: str` (existing `tags: str` unchanged) |
+| `skills/index.py:23` (`SkillIndexEntry`) — `soothe-nano` | Add `paths: tuple[str, ...] \| None`, `when_to_use: str \| None`; keep existing `tags: str`; bump `SkillIndex.wire_entries()` (line 87) AND `catalog.wire_entries_for_agent_config()` (line 127) to surface the new fields in the wire-safe view |
+| `sloop/state/schemas.py` (`LoopState`) | Add four snapshot fields (`sent_skill_names`, `activated_skill_names`, `invoked_skill_names`, `invoked_skill_bodies`) |
+| `sloop/engine/strange_loop.py` | Iteration-boundary snapshot/rehydrate of `state["skill_activation"]` ↔ `LoopState` |
+| `middleware/system_prompt_optimization.py` — `soothe-nano` | Add private `_compose_skills_block`; wire into `_get_prompt_for_complexity` |
+| `middleware/_builder.py:59` — `soothe-nano` | Insert `SkillActivationMiddleware` after `SoothePolicyMiddleware`, before `ToolConcurrencyMiddleware` |
+| `coreagent/builder.py:199-211` | Pass `skills=None` to `create_deep_agent` |
+| `events/catalog.py:567` | Register `SkillActivatedEvent` and `SkillBodyLoadedEvent` |
 | `config/models.py` | Add `ProgressiveSkillsConfig`; expose as `SootheConfig.progressive_skills` |
 | `config/config.template.yml`, `config/develop/nano.yml` | Mirror new `progressive_skills` section |
 | `packages/soothe/pyproject.toml` | Add `pathspec` runtime dependency |
@@ -516,14 +516,14 @@ Naming follows the four-segment convention (`soothe.<domain>.<component>.<action
 | Wire-shape entries (multi-root aggregated) | `wire_entries_for_agent_config` | `skills/catalog.py:127` |
 | Compose full body | `build_skill_context_text` | `skills/catalog.py:304` |
 | Materialize skill files for model | `sync_specific_skill_to_workspace` | `skills/workspace_sync.py:170` |
-| Token counting | `count_tokens` | `utils/token_counting.py` |
+| Token counting | `count_tokens` | `sloop/utils/token_usage.py` |
 | Context-window limit | `StrangeLoopConfig.context_window_limit` | `config/models.py:1001` |
-| Canonical file-op tool set | `BUILTIN_TOOL_TRIGGERS` | `core/context/trigger_registry.py:12` |
-| Path-key extraction (reference; middleware unwired today) | `FileLockMiddleware._PATH_KEYS` | `middleware/file_lock.py:41` |
-| Public event registration | `register_event`, `custom_event` | `core/events/catalog.py:567,116` |
-| Internal pub/sub | `InternalEventBus.emit/subscribe` | `core/events/internal_bus.py:25,45,76` |
-| System-prompt assembly site | `SystemPromptOptimizationMiddleware._get_prompt_for_complexity` (private — extend in place) | `middleware/system_prompt_optimization.py:286` |
-| Snapshot precedent | `goal_user_submission` mirrored at iteration boundary | `core/loop/state/schemas.py` |
+| Canonical file-op tool set | `BUILTIN_TOOL_TRIGGERS` — `soothe-nano` | `core/context/trigger_registry.py:12` |
+| Path-key extraction (reference; middleware unwired today) | `FileLockMiddleware._PATH_KEYS` — `soothe-nano` | `middleware/file_lock.py:41` |
+| Public event registration | `register_event`, `custom_event` | `events/catalog.py:567,116` |
+| Internal pub/sub | `InternalEventBus.emit/subscribe` — `soothe-nano` | `events/internal_bus.py:25,45,76` |
+| System-prompt assembly site | `SystemPromptOptimizationMiddleware._get_prompt_for_complexity` (private — extend in place) — `soothe-nano` | `middleware/system_prompt_optimization.py:286` |
+| Snapshot precedent | `goal_user_submission` mirrored at iteration boundary | `sloop/state/schemas.py` |
 | Path-glob matching | `pathspec` (gitignore semantics) | **new dep** |
 
 ## Cost Model
@@ -610,6 +610,6 @@ soothe daemon start --workspace /tmp/soothe-skill-test
 - [RFC-104: Dynamic System Context Injection](RFC-104-dynamic-system-context.md)
 - [RFC-214: StrangeLoop Loop Message Surface](RFC-214-strangeloop-loop-message-surface.md)
 - [RFC-600: Plugin Extension System](RFC-600-plugin-extension-system.md)
-- [Design Draft: Progressive Skill Loading](../archive/drafts/2026-05-29-progressive-skill-loading-design.md)
-- [RFC Standard](./rfc-standard.md)
+- `Design Draft: Progressive Skill Loading`
+- [RFC Standard](./templates/rfc-standard.md)
 - [RFC Index](./rfc-index.md)

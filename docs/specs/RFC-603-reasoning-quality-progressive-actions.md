@@ -13,7 +13,7 @@
 
 ## Abstract
 
-Refactor the reasoning layer to ensure progressive action descriptions and comprehensive final reports. This RFC addresses IG-143 Issues #2 and #3 by implementing prompt engineering, post-processing, and an optional synthesis phase. Additionally improves **confidence** estimation with an evidence-based blend in `LLMPlanner` (`packages/soothe/src/soothe/core/strange_loop/core/planner.py`). **`goal_progress`** is the assess model’s own estimate (see §3.2); it is not blended with step/evidence ratios (IG-376).
+Refactor the reasoning layer to ensure progressive action descriptions and comprehensive final reports. This RFC addresses IG-143 Issues #2 and #3 by implementing prompt engineering, post-processing, and an optional synthesis phase. Additionally improves **confidence** estimation with an evidence-based blend in `LLMPlanner` (`packages/soothe/src/soothe/sloop/cognition/planner.py`). **`goal_progress`** is the assess model’s own estimate (see §3.2); it is not blended with step/evidence ratios (IG-376).
 
 ---
 
@@ -67,7 +67,7 @@ LLM **confidence** benefits from calibration against execution outcomes. **`goal
 
 #### 1.1 Enhanced Prompts
 
-**Location**: `src/soothe/core/prompts/fragments/instructions/output_format.xml`
+**Location**: `src/soothe/sloop/prompts/fragments/instructions/output_format.xml`
 
 Add new `<PROGRESSIVE_ACTIONS>` section requiring:
 - Reference learnings from previous iterations
@@ -110,7 +110,7 @@ def get_recent_actions(self, n: int = 3) -> list[str]
 
 #### 2.1 Synthesis Trigger Logic
 
-**Location**: `packages/soothe/src/soothe/core/strange_loop/analysis/synthesis.py` (target / evolution)
+**Location**: `packages/soothe/src/soothe/sloop/engine/synthesis.py` (target / evolution)
 
 **Class**: `SynthesisPhase`
 
@@ -146,7 +146,7 @@ Evidence-based heuristics only (no keyword matching).
 
 #### 2.3 Synthesis Prompt Template
 
-**Location**: `src/soothe/core/prompts/fragments/instructions/synthesis_format.xml` (NEW)
+**Location**: `src/soothe/sloop/prompts/fragments/instructions/synthesis_format.xml` (NEW)
 
 **Requirements**:
 - Do NOT say "already analyzed"
@@ -174,7 +174,7 @@ Evidence-based heuristics only (no keyword matching).
 
 #### 2.4 Integration
 
-**Location**: `packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py`
+**Location**: `packages/soothe/src/soothe/sloop/engine/strange_loop.py`
 
 **Trigger Point**: After `reason_result.is_done()` returns True
 
@@ -193,7 +193,7 @@ Evidence-based heuristics only (no keyword matching).
 
 #### 3.1 Evidence-Based Confidence
 
-**Location**: `packages/soothe/src/soothe/core/strange_loop/core/planner.py` (`_calculate_evidence_based_confidence`)
+**Location**: `packages/soothe/src/soothe/sloop/cognition/planner.py` (`_calculate_evidence_based_confidence`)
 
 **Function**:
 ```python
@@ -230,7 +230,7 @@ Earlier drafts described blending `goal_progress` with step-completion and evide
 
 #### 3.3 Better Reasoning Guidance
 
-**Location**: `src/soothe/core/prompts/fragments/instructions/output_format.xml`
+**Location**: `src/soothe/sloop/prompts/fragments/instructions/output_format.xml`
 
 Add `<REASONING_QUALITY>` section requiring:
 - Cite specific evidence
@@ -252,7 +252,7 @@ Status=continue to examine remaining backends."
 
 #### 4.1 ReasonResult Updates
 
-**Location**: `packages/soothe/src/soothe/core/strange_loop/state/schemas.py`
+**Location**: `packages/soothe/src/soothe/sloop/state/schemas.py`
 
 **New Fields**:
 
@@ -279,7 +279,7 @@ evidence_quality_score: float = Field(
 
 #### 4.2 LoopState Updates
 
-**Location**: `packages/soothe/src/soothe/core/strange_loop/state/schemas.py`
+**Location**: `packages/soothe/src/soothe/sloop/state/schemas.py`
 
 **New Fields**:
 
@@ -316,7 +316,7 @@ def get_recent_actions(self, n: int = 3) -> list[str]
 ### Phase 2: Quality Improvements (0.5 days)
 
 **Files**:
-- `packages/soothe/src/soothe/core/strange_loop/core/planner.py`: Evidence-based confidence (`goal_progress` is assess-only per IG-376)
+- `packages/soothe/src/soothe/sloop/cognition/planner.py`: Evidence-based confidence (`goal_progress` is assess-only per IG-376)
 - `output_format.xml`: Add reasoning quality guidance
 
 **Tests**:
@@ -432,8 +432,8 @@ No backward compatibility maintained.
 - IG-143: CLI Display Architecture Refactoring
 - RFC-0008: Layer 2 Agentic Loop
 - RFC-000: System Conceptual Design
-- `packages/soothe/src/soothe/core/strange_loop/` — StrangeLoop implementation (planner, executor, state, analysis)
-- Planning (`LLMPlanner`, RFC-604) lives under `core/strange_loop/core/`, not a separate `cognition/planning` package
+- `packages/soothe/src/soothe/sloop/` — StrangeLoop implementation (planner, executor, state, analysis)
+- Planning (`LLMPlanner`, RFC-604) lives under `sloop/engine/`, not a separate `cognition/planning` package
 
 ---
 

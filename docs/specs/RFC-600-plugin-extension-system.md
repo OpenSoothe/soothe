@@ -271,11 +271,11 @@ class WidgetPlugin:
 ## Implementation Checklist
 
 ### Core
-- [ ] `PluginManifest` model (`src/soothe/plugin/manifest.py`)
-- [ ] `PluginContext` (`src/soothe/plugin/context.py`)
-- [ ] `PluginRegistry` (`src/soothe/plugin/registry.py`)
-- [ ] `PluginLoader` (`src/soothe/plugin/loader.py`)
-- [ ] `PluginLifecycleManager` (`src/soothe/plugin/lifecycle.py`)
+- [ ] `PluginManifest` model (`src/soothe/plugin/manifest.py` — soothe-nano, external PyPI)
+- [ ] `PluginContext` (`src/soothe/plugin/context.py` — soothe-nano, external PyPI)
+- [ ] `PluginRegistry` (`src/soothe/plugin/registry.py` — soothe-nano, external PyPI)
+- [ ] `PluginLoader` (`src/soothe/plugin/loader.py` — soothe-nano, external PyPI)
+- [ ] `PluginLifecycleManager` (`src/soothe/plugin/lifecycle.py` — soothe-nano, external PyPI)
 - [ ] Integrate with `SootheConfig`
 
 ### SDK
@@ -288,7 +288,7 @@ class WidgetPlugin:
 - [ ] Priority/conflict resolution
 
 ### Integration
-- [ ] Modify `core/agent.py`, `core/resolver/` to use plugin registry
+- [ ] Modify `coreagent/core_agent.py`, `resolver/` to use plugin registry
 
 ### Migration
 - [x] Migrate optional heavy delegated agents to soothe-plugins (IG-415); Skillify is core `foundation.skillify` (IG-604), weaver is community

@@ -12,7 +12,7 @@ from soothe.autopilot.notify.models import (
     KIND_TO_EVENT_FLAG,
     NotifyIntent,
     NotifyKind,
-    NotifySeverity,
+    Severity,
 )
 from soothe.autopilot.notify.progress import format_progress_plain
 
@@ -27,12 +27,61 @@ logger = logging.getLogger(__name__)
 NotifyDispatchFn = Callable[[NotifyIntent], Awaitable[None]]
 
 
-def _severity_for(kind: NotifyKind) -> NotifySeverity:
+def _severity_for(
+    kind: NotifyKind,
+    goal: GoalNode,
+    *,
+    progress: dict[str, Any] | None = None,
+    suspended_for_seconds: float | None = None,
+    suspend_threshold: float = 2700.0,
+    suspend_escalation_multiplier: float = 2.0,
+) -> Severity:
+    """Drift-aware severity classification for a job-root intent.
+
+    Baseline mapping (kind → severity):
+        job.completed          → info
+        job.suspended_timeout  → warning
+        job.failed             → error
+
+    Escalation signals (job is *drifting* away from a healthy outcome):
+    - Completed job with failed/active children → warning (drift from
+      a clean completion; the job nominally finished but left churn).
+    - Maturity ``blockers`` present → warning (acceptance not met).
+    - Suspended timeout with very long age (≥ 2× threshold) → error.
+    """
     if kind == "job.failed":
-        return "error"
+        return Severity.ERROR
     if kind == "job.suspended_timeout":
-        return "warning"
-    return "info"
+        # Escalate to error when the job has been suspended for an
+        # abnormally long time (beyond 2× the configured threshold),
+        # signalling drift past the expected suspend window.
+        if suspended_for_seconds is not None:
+            if suspended_for_seconds > suspend_escalation_multiplier * suspend_threshold:
+                return Severity.ERROR
+        return Severity.WARNING
+
+    # job.completed — baseline info, but escalate to warning when the
+    # completion is "drifting": child failures or maturity blockers
+    # indicate the job finished but not cleanly.
+    severity = Severity.INFO
+
+    # Progress drift: completed root with failed/active children.
+    if progress:
+        failed = int(progress.get("failed_goals") or 0)
+        active = int(progress.get("active_goals") or 0)
+        if failed > 0 or active > 0:
+            severity = Severity.WARNING
+
+    # Maturity drift: acceptance not met or blockers listed.
+    maturity = goal.maturity if isinstance(goal.maturity, dict) else None
+    if maturity:
+        blockers = maturity.get("blockers") or []
+        if blockers:
+            severity = Severity.WARNING
+        elif maturity.get("acceptance_met") is False:
+            severity = Severity.WARNING
+
+    return severity
 
 
 def _title_for(
@@ -109,7 +158,10 @@ class NotificationRouter:
         dispatch_fn: NotifyDispatchFn | None = None,
     ) -> None:
         self._config = notify_config
-        self._dedup = NotifyDedupStore(persist_store)
+        self._dedup = NotifyDedupStore(
+            persist_store,
+            ttl_seconds=int(self._config.dedup_ttl_seconds),
+        )
         self._dispatch_fn = dispatch_fn
 
     def set_dispatch_fn(self, dispatch_fn: NotifyDispatchFn | None) -> None:
@@ -161,7 +213,14 @@ class NotificationRouter:
                 suspended_for_seconds=suspended_for_seconds,
                 progress=progress,
             ),
-            severity=_severity_for(kind),
+            severity=_severity_for(
+                kind,
+                goal,
+                progress=progress,
+                suspended_for_seconds=suspended_for_seconds,
+                suspend_threshold=float(self._config.suspend_after_seconds),
+                suspend_escalation_multiplier=float(self._config.suspend_escalation_multiplier),
+            ),
             status=goal.status,
             description=(goal.description or "")[:500] or None,
             workspace=goal.workspace,

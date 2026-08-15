@@ -197,7 +197,7 @@ User types "/research market outlook"
 
 ### Command Registry
 
-**Location**: `packages/soothe-cli/src/soothe_cli/shared/commands/slash_commands.py`
+**Location**: `packages/soothe-cli/src/soothe_cli/tui/commands/slash_commands.py`
 
 **Structure**:
 ```python
@@ -239,7 +239,7 @@ COMMANDS: dict[str, dict[str, Any]] = {
 
 ### Command Router
 
-**Location**: `packages/soothe-cli/src/soothe_cli/shared/commands/command_router.py`
+**Location**: `packages/soothe-cli/src/soothe_cli/tui/commands/command_router.py`
 
 **Functions**:
 - `parse_slash_command(input_text)`: Extract command + query from input
@@ -275,7 +275,7 @@ async def route_slash_command(cmd_input, console, client):
 
 ### Rendering Functions
 
-**Location**: `packages/soothe-cli/src/soothe_cli/shared/commands/slash_commands.py`
+**Location**: `packages/soothe-cli/src/soothe_cli/tui/commands/slash_commands.py`
 
 Each RPC command has a rendering function that takes structured data and renders with Rich:
 
@@ -322,7 +322,7 @@ def show_history(console: Console, data: dict[str, Any]) -> None:
 
 ### Event Processor Integration
 
-**Location**: `packages/soothe-cli/src/soothe_cli/shared/event_processor.py`
+**Location**: `packages/soothe-cli/src/soothe_cli/runtime/headless/processor.py`
 
 **Update**: Handle `command_response` events
 
@@ -364,7 +364,7 @@ def _handle_command_response(self, event: dict[str, Any]) -> None:
 
 ```typescript
 // WebSocket message types (RFC-302 extension)
-type: "input" | "command_request" | "subscription" | "status" | "event" | 
+type: "input" | "command_request" | "subscription" | "status" | "event" |
       "subscription_confirmed" | "error"
 
 // Command request schema

@@ -71,6 +71,8 @@ agent:
     notify:
       enabled: false
       suspend_after_seconds: 2700
+      suspend_escalation_multiplier: 2.0
+      dedup_ttl_seconds: 86400
       events:
         job_completed: true
         job_failed: true
@@ -87,6 +89,9 @@ agent:
           smtp_use_tls: true
           smtp_use_ssl: false
           from_address: ""
+          connect_timeout_seconds: 30.0
+          max_retries: 2
+          rate_limit_seconds: 5.0
           targets: []
         webhook:
           enabled: false
@@ -94,6 +99,7 @@ agent:
             job_completed: null
             job_failed: null
             job_suspended_timeout: null
+          timeout_seconds: 15.0
         feishu:
           enabled: false
           # Plain string or ${ENV_VAR}.
@@ -271,3 +277,4 @@ cron:
   extraction_timeout: 30
   default_priority: 50
   timezone: local
+  enable_builtin_jobs: true

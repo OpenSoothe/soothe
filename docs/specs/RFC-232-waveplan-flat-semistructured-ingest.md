@@ -1,17 +1,17 @@
 # RFC-232: Flat WavePlan Wire Ingest (Semi-Structured, No Nesting)
 
-**RFC**: 232  
-**Title**: Flat WavePlan Wire Ingest (Semi-Structured, No Nesting)  
-**Status**: Draft  
-**Kind**: Architecture Design  
-**Created**: 2026-08-07  
-**Updated**: 2026-08-08  
-**Authors**: Soothe Team  
+**RFC**: 232
+**Title**: Flat WavePlan Wire Ingest (Semi-Structured, No Nesting)
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-08-07
+**Updated**: 2026-08-08
+**Authors**: Soothe Team
 **Depends on**: RFC-231, RFC-204, RFC-222, RFC-625, RFC-630
 **Related**: RFC-230,
 design draft `docs/drafts/2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md`,
 design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
-IG-704, IG-714, IG-718, IG-720, IG-722  
+IG-704, IG-714, IG-718, IG-720, IG-722
 **Amends**: RFC-231 §9 (Fan-out contract — streaming slice catalog)
 
 ## Abstract
@@ -207,10 +207,10 @@ Removed pre-Slice keys (`wave_modules`, `modules`, `module`) remain rejected
 
 After accept:
 
-- `RailJobState.wave_slices: list[str]` — flat leaf ids (compat / id list)  
+- `RailJobState.wave_slices: list[str]` — flat leaf ids (compat / id list)
 - `RailJobState.decompose_plan` — optional flat specs from rich `slices`,
-  including `depends_on` when present  
-- `RailJobState.wave_plan_source_path` — optional path that supplied a file transfer  
+  including `depends_on` when present
+- `RailJobState.wave_plan_source_path` — optional path that supplied a file transfer
 - `is_wave_plan_ready` iff non-empty catalog / `wave_slices` (or multi-form
   diagnose still yields flat)
 

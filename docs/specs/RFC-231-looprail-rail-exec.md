@@ -1,13 +1,13 @@
 # RFC-231: LoopRail and Rail Exec (Composable Verb Bodies)
 
-**RFC**: 231  
-**Title**: LoopRail and Rail Exec (Composable Verb Bodies)  
-**Status**: Draft  
-**Kind**: Architecture Design  
-**Created**: 2026-08-07  
-**Updated**: 2026-08-08  
-**Authors**: Soothe Team  
-**Depends on**: RFC-204, RFC-222, RFC-228, RFC-230, RFC-625, RFC-626, RFC-630  
+**RFC**: 231
+**Title**: LoopRail and Rail Exec (Composable Verb Bodies)
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-08-07
+**Updated**: 2026-08-08
+**Authors**: Soothe Team
+**Depends on**: RFC-204, RFC-222, RFC-228, RFC-230, RFC-625, RFC-626, RFC-630
 **Related**: RFC-232 (flat WavePlan wire ingest), LoopRail design draft
 (`docs/drafts/2026-07-11-loop-rail-design.md`),
 design draft `docs/drafts/2026-08-08-llm-rail-auto-pick-design.md` (§10 selection),
@@ -15,9 +15,9 @@ design draft `docs/drafts/2026-08-08-streaming-slice-dag-worktree-lifecycle-desi
 (§9 streaming slice DAG + host worktrees),
 design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`,
 IG-678, IG-687, IG-691, IG-692, IG-693, IG-700, IG-704, IG-714, IG-715, IG-720,
-IG-728 (LLM rail auto-pick)  
+IG-728 (LLM rail auto-pick)
 **Promotes / extends**: LoopRail design draft (normative architecture for
-job-scoped rails; this RFC adds Rail Exec and user-defined verb bodies)  
+job-scoped rails; this RFC adds Rail Exec and user-defined verb bodies)
 **Amended by**: RFC-232 (§9 — flat wire / nesting reject + optional slice
 `depends_on`); IG-728 implements §10 LLM auto-pick
 

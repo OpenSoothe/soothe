@@ -1,13 +1,13 @@
 # RFC-622: CoreAgent Clarification Relay
 
-**RFC**: 622  
-**Title**: CoreAgent Clarification Relay  
-**Status**: Draft  
-**Kind**: Architecture Design  
-**Created**: 2026-06-02  
-**Authors**: Soothe Team  
-**Depends on**: RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)  
-**Supersedes**: Empty-answer auto-resume behavior currently encoded in `core/loop/engine/graph_interrupt.py::build_auto_resume_payload` for `type=="ask_user"` interrupts.
+**RFC**: 622
+**Title**: CoreAgent Clarification Relay
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-06-02
+**Authors**: Soothe Team
+**Depends on**: RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)
+**Supersedes**: Empty-answer auto-resume behavior currently encoded in `sloop/engine/graph_interrupt.py::build_auto_resume_payload` for `type=="ask_user"` interrupts.
 
 ---
 
@@ -111,23 +111,23 @@ The bug is reproducible in trace `trace-2626ed6b65d86c80845248e42f383bff.json`: 
 
 | Component | Path | Responsibility |
 |-----------|------|----------------|
-| `ClarificationPolicy` protocol | `core/loop/clarification/protocol.py` | Abstract interface; request/answer dataclasses |
-| `InteractiveClarificationPolicy` | `core/loop/clarification/interactive.py` | TUI relay; loop-level `interrupt(...)` for durability |
-| `AutoClarificationPolicy` | `core/loop/clarification/auto.py` | Delegates to `veritas`; enforces min-confidence; raises `ClarificationDeferred` |
-| `ClarificationDetector` | `core/loop/clarification/detector.py` | Recognizes structured ``ask_user`` interrupts |
-| `await_clarification` node | `core/loop/orchestrator/nodes/await_clarification.py` | Calls policy; emits audit events; updates state |
+| `ClarificationPolicy` protocol | `sloop/clarification/protocol.py` | Abstract interface; request/answer dataclasses |
+| `InteractiveClarificationPolicy` | `sloop/clarification/interactive.py` | TUI relay; loop-level `interrupt(...)` for durability |
+| `AutoClarificationPolicy` | `sloop/clarification/auto.py` | Delegates to `veritas`; enforces min-confidence; raises `ClarificationDeferred` |
+| `ClarificationDetector` | `sloop/clarification/detector.py` | Recognizes structured `ask_user` interrupts |
+| `await_clarification` node | `sloop/orchestrator/nodes/await_clarification.py` | Calls policy; emits audit events; updates state |
 | `veritas` subagent | `subagents/veritas/{__init__,events,implementation,prompts,schemas}.py` | Intent-grounded auto-answerer; structured output via Pydantic |
 
 ### 4.3 Changed components
 
 | File | Change |
 |------|--------|
-| `core/loop/engine/graph_interrupt.py` | Drop empty-answer default for `ask_user`; helpers stay |
-| `core/loop/engine/executor.py` | `_core_agent_astream_with_interrupt_resume` returns to node on `ask_user` instead of auto-resuming; resumes with real payload on re-entry |
-| `core/loop/orchestrator/builder.py` | Add `await_clarification` node + edges |
-| `core/loop/orchestrator/routing.py` | Each `route_after_*` short-circuits to `await_clarification` if `pending_clarification` is set |
-| `core/loop/orchestrator/state.py` | Add `pending_clarification`, `pending_clarification_answer`, `last_clarification_origin` |
-| `core/loop/orchestrator/runtime_context.py` | Add `clarification_policy: ClarificationPolicy` |
+| `sloop/engine/graph_interrupt.py` | Drop empty-answer default for `ask_user`; helpers stay |
+| `sloop/engine/executor.py` | `_core_agent_astream_with_interrupt_resume` returns to node on `ask_user` instead of auto-resuming; resumes with real payload on re-entry |
+| `sloop/orchestrator/builder.py` | Add `await_clarification` node + edges |
+| `sloop/orchestrator/routing.py` | Each `route_after_*` short-circuits to `await_clarification` if `pending_clarification` is set |
+| `sloop/orchestrator/state.py` | Add `pending_clarification`, `pending_clarification_answer`, `last_clarification_origin` |
+| `sloop/orchestrator/runtime_context.py` | Add `clarification_policy: ClarificationPolicy` |
 | `core/goal_engine/*` | Add `awaiting_clarification` status + `answer_clarification(goal_id, ...)` API |
 | `cli/tui/app/_messages_mixin.py` | `ctrl+m` action; mode status badge |
 | `cli/main.py` | `--mode {manual,auto}` flag plumbed to runtime |
@@ -240,7 +240,7 @@ GoalStatus = Enum(
 3. **Veritas never asks back.** Its system prompt forbids emitting clarifications; any clarification-shaped output is coerced to `defer=True`. No recursive clarification.
 4. **Confidence floor is a safety net.** Even if veritas omits `defer`, `AutoClarificationPolicy` enforces `auto_min_confidence` and defers on low-confidence answers.
 5. **Auto-approve preserved.** Action-approval interrupts (`type=="review"`) keep their current auto-approve path; this RFC does not touch them.
-6. **Detection is structured-only.** Only ``ask_user`` LangGraph interrupts are detected. Plain-text questions in assistant messages are not treated as clarifications, eliminating heuristic false positives.
+6. **Detection is structured-only.** Only `ask_user` LangGraph interrupts are detected. Plain-text questions in assistant messages are not treated as clarifications, eliminating heuristic false positives.
 7. **Mode toggle is hot-swappable.** Changing Manual ↔ Auto in the TUI replaces the policy for *future* requests; in-flight requests complete under the previous policy.
 
 ---
@@ -319,7 +319,7 @@ New event types (registered via RFC-600 `register_event`):
 
 | Event | Payload | Owner |
 |-------|---------|-------|
-| `soothe.loop.clarification_requested` | `questions`, `origin_node`, `mode` | `core/loop/clarification/events.py` |
+| `soothe.loop.clarification_requested` | `questions`, `origin_node`, `mode` | `sloop/clarification/events.py` |
 | `soothe.loop.clarification_answered` | `source`, `confidence`, `defer` | same |
 | `soothe.loop.clarification_deferred` | `reason`, `question_summary` | same |
 | `soothe.subagent.veritas.requested` | `question_count`, `origin_node` | `subagents/veritas/events.py` |
@@ -347,10 +347,10 @@ agent:
 ```
 
 `force_manual_origins` keeps selected clarification origins on the interactive
-TUI relay even when the turn's clarification mode is ``auto``. The default is
+TUI relay even when the turn's clarification mode is `auto`. The default is
 **planner subagent review only** (`planner_subagent_review`). That gate is
-unrelated to StrangeLoop planning-stage nodes ``plan_generate`` /
-``plan_assess``. Other wired specialists (`browser_use`, `deep_research`, …)
+unrelated to StrangeLoop planning-stage nodes `plan_generate` /
+`plan_assess`. Other wired specialists (`browser_use`, `deep_research`, …)
 are not listed and can still use veritas under auto mode. Headless / autopilot
 runs (no human attached) defer forced origins instead of auto-answering. Empty
 the list to allow veritas to answer every origin under auto mode.
@@ -394,8 +394,8 @@ Unit:
 - `tests/unit/core/loop/engine/test_graph_interrupt.py` (rewritten — assert policy dispatch, not empty answers)
 
 Integration:
-- `tests/integration/core/loop/test_clarification_relay.py` — full round-trip.
-- `tests/integration/core/loop/test_clarification_durable_pause.py` — checkpoint restart with pending clarification.
+- `tests/integration/sloop/test_clarification_relay.py` — full round-trip.
+- `tests/integration/sloop/test_clarification_durable_pause.py` — checkpoint restart with pending clarification.
 
 ---
 
@@ -420,10 +420,10 @@ Integration:
 
 ## 18. Related Documents
 
-- [RFC Standard](./rfc-standard.md)
+- [RFC Standard](./templates/rfc-standard.md)
 - [RFC Index](./rfc-index.md)
-- [RFC-220](./RFC-220-agentic-goal-execution.md) — StrangeLoop topology that this RFC extends
-- [RFC-222](./RFC-222-autopilot-mode.md) — Autopilot scheduler whose status enum gains `awaiting_clarification`
+- [RFC-220](./RFC-220-langgraph-agent-loop-orchestrator.md) — StrangeLoop topology that this RFC extends
+- [RFC-222](./RFC-222-autopilot-goal-engine-architecture.md) — Autopilot scheduler whose status enum gains `awaiting_clarification`
 - [RFC-600](./RFC-600-plugin-extension-system.md) — `register_event` used for new event types
 - [RFC-601](./RFC-601-built-in-agents.md) — Built-in subagent registry that gains `veritas`
 - [RFC-403](./RFC-403-unified-event-naming.md) — Event naming for `soothe.loop.clarification_*` and `soothe.subagent.veritas.*`

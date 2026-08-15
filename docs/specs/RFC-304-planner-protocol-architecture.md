@@ -190,7 +190,7 @@ Plans support hierarchical decomposition:
 ```yaml
 # Planning is configured on SootheConfig.agentic (see config/config.template.yml).
 # LLMPlanner / two-phase StatusAssessment + PlanGeneration (RFC-604, IG-372, IG-329):
-# packages/soothe/src/soothe/core/strange_loop/core/planner.py
+# packages/soothe/src/soothe/sloop/cognition/planner.py
 agentic:
   max_iterations: 10
   reject_done_at_iteration_zero: false

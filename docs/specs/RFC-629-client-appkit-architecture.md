@@ -359,15 +359,15 @@ LoopSessionStore {
 
 ## Related Documents
 
-- [RFC Standard](./rfc-standard.md)
+- [RFC Standard](./templates/rfc-standard.md)
 - [RFC Index](./rfc-index.md)
 - [RFC-000](./RFC-000-system-conceptual-design.md) - Conceptual Design
 - [RFC-450](./RFC-450-daemon-communication-protocol.md) - Daemon Communication Protocol (protocol-1)
 - [RFC-614](./RFC-614-unified-streaming-messaging.md) - Unified Daemon → Client Streaming Messaging
 - [RFC-610](./RFC-610-sdk-module-structure-refactoring.md) - SDK Module Structure Refactoring
-- [IG-612](../impl/IG-612-python-client-layer0-extract.md) - Python client extract (reference)
-- [IG-617](../impl/IG-617-typescript-client-production-parity.md) - TypeScript production parity
-- [IG-619](../impl/IG-619-cross-client-api-parity.md) - Cross-client API parity (active)
+- [IG-612](../archive/impl/IG-612-python-client-layer0-extract.md) - Python client extract (reference)
+- [IG-617](../archive/impl/IG-617-typescript-client-production-parity.md) - TypeScript production parity
+- [IG-619](../archive/impl/IG-619-cross-client-api-parity.md) - Cross-client API parity (active)
 - [IG-527](../archive/impl/IG-527-go-client-appkit.md) - Go Client Core Upgrade and Appkit (archived)
 - [IG-531](../archive/impl/IG-531-typescript-client-appkit.md) - TypeScript Client Appkit (archived)
 

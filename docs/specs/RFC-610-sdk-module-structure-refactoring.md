@@ -141,7 +141,7 @@ soothe_sdk/
 
 **Migration:**
 - types/manifest.py → plugin/manifest.py
-- types/context.py → plugin/context.py  
+- types/context.py → plugin/context.py
 - types/health.py → plugin/health.py
 
 #### Decision 3: Minimal __init__.py
@@ -153,7 +153,7 @@ soothe_sdk/
 - Forces explicit imports (more discoverable structure)
 - Reduces maintenance burden
 
-**Current:** Re-exports all 50+ public API items  
+**Current:** Re-exports all 50+ public API items
 **New:** Only `__version__` and `__soothe_required_version__`
 
 #### Decision 4: Client Config Merge
@@ -431,8 +431,8 @@ __all__ = [
 
 ### Third-Party Plugin Migration
 
-**Impact:** All community plugins break  
-**Action required:** Manual import path updates  
+**Impact:** All community plugins break
+**Action required:** Manual import path updates
 **Mitigation:**
 - Complete import mapping table in migration guide
 - Version bump to v0.4.0 signals breaking change
@@ -468,7 +468,7 @@ __all__ = [
 
 ### Risk 1: Breaking Third-Party Plugins
 
-**Impact:** High - all community plugins require manual updates  
+**Impact:** High - all community plugins require manual updates
 **Mitigation:**
 - Complete import mapping table (50+ entries)
 - Version bump to v0.4.0 (breaking signal)
@@ -478,7 +478,7 @@ __all__ = [
 
 ### Risk 2: Import Errors During Migration
 
-**Impact:** Medium - tests catch errors but time-consuming  
+**Impact:** Medium - tests catch errors but time-consuming
 **Mitigation:**
 - Batch-by-batch execution (SDK → CLI → Daemon → Tests)
 - Run tests after each batch
@@ -488,7 +488,7 @@ __all__ = [
 
 ### Risk 3: Missed Imports
 
-**Impact:** Medium - could cause runtime failures  
+**Impact:** Medium - could cause runtime failures
 **Mitigation:**
 - Multi-layer checking (grep + linting + tests)
 - 900+ test coverage
@@ -497,7 +497,7 @@ __all__ = [
 
 ### Risk 4: Circular Imports Introduced
 
-**Impact:** High - could break runtime  
+**Impact:** High - could break runtime
 **Mitigation:**
 - Pre-refactor analysis: verify clean state
 - Keep protocols/ separate (no SDK imports)
@@ -507,7 +507,7 @@ __all__ = [
 
 ### Risk 5: Performance Regression
 
-**Impact:** Low - but measurable  
+**Impact:** Low - but measurable
 **Mitigation:**
 - Benchmark import time before/after
 - Minimal __init__.py should improve performance
@@ -554,9 +554,9 @@ __all__ = [
 
 ## Implementation
 
-**Implementation Guide:** IG-184 (to be created)  
-**Estimated effort:** 1-2 weeks (no backward compatibility)  
-**Breaking change:** Yes - all import paths change  
+**Implementation Guide:** IG-184 (to be created)
+**Estimated effort:** 1-2 weeks (no backward compatibility)
+**Breaking change:** Yes - all import paths change
 **Migration guide:** Required (docs/migration-guide-v0.3.md v0.4 section)
 
 ## References

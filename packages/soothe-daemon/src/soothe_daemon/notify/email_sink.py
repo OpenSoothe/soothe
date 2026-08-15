@@ -28,7 +28,7 @@ class EmailNotifySink:
     def __init__(self, config: EmailNotifySinkConfig) -> None:
         self._config = config
         self._last_sent_at: dict[str, float] = {}
-        self._min_interval_seconds = 5.0
+        self._min_interval_seconds = float(config.rate_limit_seconds)
 
     def enabled(self) -> bool:
         return bool(

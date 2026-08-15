@@ -2,7 +2,7 @@
 
 **RFC**: 901
 **Title**: OperationSecurityProtocol: Unified Workspace and Tool Operation Security
-**Status**: Draft
+**Status**: Implemented — `OperationSecurityProtocol` interface in `soothe_sdk.protocols.operation_security` (shared contracts, per DAG); implementing class `WorkspaceToolOperationSecurity` in `soothe_nano.security.operation_guard` (coding layer). Operation-level allow/deny/need-approval enforcement for filesystem and execution tools shipped.
 **Kind**: Architecture Design
 **Created**: 2026-04-30
 **Dependencies**: RFC-102, RFC-103, RFC-305, RFC-613

@@ -65,7 +65,7 @@ Execution Layer (unchanged)
     └─ headless.py → non-TUI execution
 
 TUI Layer (MIGRATED from soothe_deepagents)
-  src/soothe/ux/tui/
+  src/soothe_cli/tui/
     ├─ app.py (copied from soothe_deepagents_cli/app.py, modified)
     ├─ widgets/ (copied from soothe_deepagents_cli/widgets/, 20 files)
     ├─ input.py, sessions.py, theme.py (copied supporting modules)
@@ -78,7 +78,7 @@ TUI Layer (MIGRATED from soothe_deepagents)
 Backend Layer (unchanged)
   src/soothe/ux/client/session.py → DaemonClient (WebSocket)
   src/soothe/daemon/ → WebSocket server
-  src/soothe/core/runner/ → SootheRunner + protocols
+  src/soothe/runner/ → SootheRunner + protocols
 ```
 
 ### Component Flow
@@ -117,7 +117,7 @@ Widgets render (ConversationPanel, StatusBar, PlanTree)
 ### Files to Copy from soothe_deepagents-cli
 
 **Source**: `/Users/xiamingchen/Workspace/mirasurf/deepagents/libs/cli/deepagents_cli/`
-**Target**: `src/soothe/ux/tui/`
+**Target**: `src/soothe_cli/tui/`
 
 **Core TUI Files** (4 files):
 | Source File | Target File | Size | Purpose |
@@ -166,7 +166,7 @@ Widgets render (ConversationPanel, StatusBar, PlanTree)
 
 ### Files to Delete (Old Soothe TUI)
 
-Delete from `src/soothe/ux/tui/`:
+Delete from `src/soothe_cli/tui/`:
 | File | Size | Reason |
 |------|------|--------|
 | `app.py` | 1053 lines | Replaced by deepagents app.py |
@@ -181,7 +181,7 @@ Delete from `src/soothe/ux/tui/`:
 
 ### Files to Keep (Soothe-Specific)
 
-Keep from `src/soothe/ux/tui/`:
+Keep from `src/soothe_cli/tui/`:
 | File | Purpose |
 |------|---------|
 | `autopilot_screen.py` | Autopilot dashboard screen (RFC-203) |
@@ -190,7 +190,7 @@ Keep from `src/soothe/ux/tui/`:
 
 ### Files to Create (Integration Layer)
 
-Create in `src/soothe/ux/tui/`:
+Create in `src/soothe_cli/tui/`:
 | File | Purpose |
 |------|---------|
 | `soothe_backend_adapter.py` | Adapter bridging daemon to deepagents TUI interface |
@@ -199,7 +199,7 @@ Create in `src/soothe/ux/tui/`:
 
 ### Migration Summary
 
-- **Net change**: +18-23 files in `src/soothe/ux/tui/`
+- **Net change**: +18-23 files in `src/soothe_cli/tui/`
 - **Code volume**: ~5069 lines (deepagents app.py) + ~200KB widgets > ~1053 lines (old Soothe TUI)
 - **Feature gain**: Thread selector, autocomplete, approval UI, diff viewer, 20+ widgets
 
@@ -402,7 +402,7 @@ if is_protocol_event:
 
 ### ProtocolEventWidget Specification
 
-**File**: `src/soothe/ux/tui/widgets/protocol_event.py`
+**File**: `src/soothe_cli/tui/widgets/protocol_event.py`
 
 **Purpose**: Compact one-liner indicator for protocol events, similar to deepagents tool call indicators.
 
@@ -474,7 +474,7 @@ class ProtocolEventWidget(Widget):
 
 ### StatusBar Integration
 
-**File**: `src/soothe/ux/tui/widgets/status.py` (modified from soothe_deepagents)
+**File**: `src/soothe_cli/tui/widgets/status.py` (modified from soothe_deepagents)
 
 **Modification**: Add protocol event queue to status bar.
 
@@ -609,7 +609,7 @@ def _adapt_protocol_event(self, event: dict) -> Optional[dict]:
 
 **Purpose**: Connect deepagents thread_selector UI to Soothe's ThreadContextManager persistence backends.
 
-**File**: `src/soothe/ux/tui/thread_backend_bridge.py`
+**File**: `src/soothe_cli/tui/thread_backend_bridge.py`
 
 **Interface**:
 
@@ -713,7 +713,7 @@ class ThreadBackendBridge:
 
 ### thread_selector.py Modifications
 
-**File**: `src/soothe/ux/tui/widgets/thread_selector.py` (copied from soothe_deepagents)
+**File**: `src/soothe_cli/tui/widgets/thread_selector.py` (copied from soothe_deepagents)
 
 **Modification**: Replace backend connection with ThreadBackendBridge.
 
@@ -816,9 +816,9 @@ def action_edit_tags(self):
 **Purpose**: Preserve Soothe's autopilot dashboard (RFC-203) as alternate screen in deepagents TUI.
 
 **Files**:
-- Keep: `src/soothe/ux/tui/autopilot_screen.py`
-- Keep: `src/soothe/ux/tui/autopilot_dashboard.py`
-- Modify: `src/soothe/ux/tui/app.py` to support screen switching
+- Keep: `src/soothe_cli/tui/autopilot_screen.py`
+- Keep: `src/soothe_cli/tui/autopilot_dashboard.py`
+- Modify: `src/soothe_cli/tui/app.py` to support screen switching
 
 ### Screen Switching Architecture
 
@@ -863,7 +863,7 @@ class SootheApp(App):  # Modified from soothe_deepagents App
 
 ### Autopilot Screen Composition
 
-**File**: `src/soothe/ux/tui/autopilot_screen.py` (modified)
+**File**: `src/soothe_cli/tui/autopilot_screen.py` (modified)
 
 **Reuse deepagents widgets where applicable**:
 
@@ -1082,7 +1082,7 @@ self.command_registry.register("/detach", self.action_detach)
 
 **Duration**: 1 day
 **Actions**:
-1. Copy 25-30 files from soothe_deepagents-cli to `src/soothe/ux/tui/`
+1. Copy 25-30 files from soothe_deepagents-cli to `src/soothe_cli/tui/`
 2. Delete 7 old Soothe TUI files
 3. Update `__init__.py` imports
 4. Verify imports resolve

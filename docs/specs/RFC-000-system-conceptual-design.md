@@ -212,9 +212,9 @@ This is the foundational Conceptual Design spec. All subsequent Architecture Des
 
 ## Related Documents
 
-- [RFC Standard](./rfc-standard.md) - Specification kinds and process
+- [RFC Standard](./templates/rfc-standard.md) - Specification kinds and process
 - [RFC Index](./rfc-index.md) - All RFCs
-- [RFC-200](./RFC-200-autonomous-goal-management.md) - GoalEngine: Autonomous Goal Management
+- [RFC-200](../archive/specs/RFC-200-autonomous-goal-management.md) - GoalEngine: Autonomous Goal Management
 - [RFC-201](./RFC-201-strangeloop-plan-execute-loop.md) - StrangeLoop: Agentic Goal ExecutionExecute Loop
 - [RFC-302](./RFC-302-context-protocol-architecture.md) through [RFC-306](./RFC-306-durability-protocol-architecture.md) - Core protocol architecture set
 

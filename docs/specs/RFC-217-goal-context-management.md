@@ -86,13 +86,13 @@ class GoalContextManager:
 ### Module Structure
 
 ```
-packages/soothe/src/soothe/core/
-├─ strange_loop/context/goal_context_manager.py
-├─ strange_loop/state/state_manager.py
-├─ strange_loop/core/strange_loop.py
-├─ strange_loop/core/executor.py
-├─ strange_loop/state/checkpoint.py
-└─ goal_engine/thread_relationship.py   # related-thread analysis
+packages/soothe/src/soothe/
+├─ sloop/engine/goal_context_manager.py
+├─ sloop/state/state_manager.py
+├─ sloop/engine/strange_loop.py
+├─ sloop/engine/executor.py
+├─ sloop/state/checkpoint.py
+└─ context/dag_utils.py   # related-thread analysis
 ```
 
 ### Thread Relationship Module
@@ -117,8 +117,8 @@ class ContextConstructionOptions(BaseModel):
     similarity_threshold: float = 0.7
     """Embedding similarity threshold for goal matching."""
 
-```python
-# packages/soothe/src/soothe/core/goal_engine/thread_relationship.py (illustrative)
+```
+# packages/soothe/src/soothe/context/dag_utils.py (illustrative)
 
 class ContextConstructionOptions(BaseModel):
     """Options for goal context construction."""
@@ -470,7 +470,7 @@ class GoalContextManager:
 # strange_loop.py run_with_progress()
 embedding_model = config.create_embedding_model(config.agentic.goal_context.embedding_role)
 goal_context_manager = GoalContextManager(
-    state_manager, 
+    state_manager,
     config.agentic.goal_context,
     embedding_model,  # NEW
 )

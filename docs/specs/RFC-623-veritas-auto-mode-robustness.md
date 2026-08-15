@@ -182,7 +182,7 @@ Added to `subagents/veritas/schemas.py`:
 
 ### 5.3 Defer kind taxonomy
 
-`core/loop/clarification/protocol.py`:
+`sloop/clarification/protocol.py`:
 
 ```python
 DeferKind = Literal[
@@ -211,7 +211,7 @@ class ClarificationDeferredError(Exception):
 
 ### 5.4 `AutoClarificationPolicy` classification & fallback
 
-`core/loop/clarification/auto.py` is updated:
+`sloop/clarification/auto.py` is updated:
 
 ```python
 class AutoClarificationPolicy:
@@ -266,7 +266,7 @@ The rationale-prefix discriminator is a small coupling between veritas's coercio
 
 ### 5.5 `runtime_factory` wiring
 
-`core/loop/clarification/runtime_factory.py` updates `build_clarification_policy_for_runner` so that when `mode=="auto"`, it also constructs an `InteractiveClarificationPolicy` and passes it as `interactive_fallback`:
+`sloop/clarification/runtime_factory.py` updates `build_clarification_policy_for_runner` so that when `mode=="auto"`, it also constructs an `InteractiveClarificationPolicy` and passes it as `interactive_fallback`:
 
 ```python
 def build_clarification_policy_for_runner(config, *, mode=None, emit=None):
@@ -301,7 +301,7 @@ def build_clarification_policy_for_runner(config, *, mode=None, emit=None):
 
 ### 5.6 `await_clarification` event payload
 
-`core/loop/orchestrator/nodes/await_clarification.py`:
+`sloop/orchestrator/nodes/await_clarification.py`:
 
 - Log severity at line 85 (`policy deferred`) is raised from `INFO` to `WARNING`.
 - The `LOOP_CLARIFICATION_DEFERRED` event payload gains a `defer_kind` field populated from `exc.kind`:

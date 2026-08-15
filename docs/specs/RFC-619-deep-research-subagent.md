@@ -1,14 +1,14 @@
 # RFC-619: Deep Research Subagent
 
-**RFC**: 619  
-**Title**: Deep Research Subagent  
-**Status**: Accepted (revised)  
-**Kind**: Architecture Design  
-**Created**: 2026-05-21  
-**Updated**: 2026-07-07  
-**Authors**: Soothe Team  
-**Depends on**: RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming), RFC-616 (Scenario-Driven Synthesis)  
-**Supersedes**: Deep Research subagent identity (prior RFC-619 revision), Research section identity in RFC-601 §4  
+**RFC**: 619
+**Title**: Deep Research Subagent
+**Status**: Accepted (revised)
+**Kind**: Architecture Design
+**Created**: 2026-05-21
+**Updated**: 2026-07-07
+**Authors**: Soothe Team
+**Depends on**: RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming), RFC-616 (Scenario-Driven Synthesis)
+**Supersedes**: Deep Research subagent identity (prior RFC-619 revision), Research section identity in RFC-601 §4
 
 ### Change history
 
@@ -162,7 +162,7 @@ class ReportScenarioClassification(BaseModel):
     evidence_emphasis: str
 ```
 
-**Input**: research topic, effort, loop count, source/URL counts, condensed snippet summaries.  
+**Input**: research topic, effort, loop count, source/URL counts, condensed snippet summaries.
 **Model**: `fast` role.
 
 **Built-in scenarios (phase 1)**:

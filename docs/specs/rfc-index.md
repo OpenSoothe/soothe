@@ -1,6 +1,6 @@
 # RFC Index
 
-**Last Updated**: 2026-08-11
+**Last Updated**: 2026-08-15
 **Total RFCs**: 91 (9 archived, 7 reclassified, 2 process specifications)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.

@@ -1,5 +1,8 @@
 # Team develop nano profile (nano-owned keys only).
 # Compose with config/develop/soothe.yml for full soothe host behavior.
+# Carries only dev-specific overrides; values equal to config/nano.template.yml
+# (and matching the Pydantic model default) have been stripped so that the
+# template remains the single source of default values.
 
 providers:
   - name: dashscope
@@ -95,29 +98,38 @@ embedding_profile:
 agent:
   middleware:
     llm_rate_limit:
-      enabled: true
+      # Sized for ~2 Autopilot jobs (max_parallel_goals=3) + ~3 CLI StrangeLoops.
       rpm_limit: 180
       concurrent_limit: 4
       global_concurrent_limit: 18
+
+tools:
+  wizsearch:
+    # Tarzi-backed; default_engines is ordered failover (first success wins).
+    default_engines:
+      - duckduckgo
+      - bing
+  http_requests:
+    allow_dangerous_requests: false  # SEC: opt-in; prevents SSRF/arbitrary POST
+  deepxiv:
+    # Plain string, ${DEEPXIV_API_KEY}, or null (env lookup: DEEPXIV_API_KEY / DEEPXIV_TOKEN).
+    token: "${DEEPXIV_API_KEY}"
 
 # Local develop defaults to SQLite (one process mode for the whole runtime).
 # Flip to postgresql + pgvector when exercising the Postgres path against
 # docker compose / PgBouncer — do not mix backends in one process.
 persistence:
-  default_backend: sqlite
   # Unused while default_backend is sqlite; kept for a quick Postgres flip:
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
+  soothe_postgres_dsn: "${SOOTHE_POSTGRES_DSN}"
   postgres:
     pool_max_idle_seconds: 90
     pool_max_lifetime_seconds: 900
 
-security:
-  allow_paths_outside_workspace: true
-
 observability:
   log_file_level: DEBUG
   langfuse:
-    enabled: false
+    # Plain string or ${ENV_VAR}; omit/null also reads LANGFUSE_* from the environment.
     public_key: pk-lf-soothe-local
     secret_key: sk-lf-soothe-local
     host: http://localhost:3300
@@ -125,15 +137,21 @@ observability:
     tags:
       - soothe
 
+security:
+  allow_paths_outside_workspace: true
+  # Explicit-empty bypass lists: safety assertion against privilege escalation.
+  whitelist_paths_bypass: []
+  whitelist_commands_bypass: []
+
 vector_stores:
   - name: sqlite_vec_dev
     provider_type: sqlite_vec
+    # dsn / url / api_key: plain string or ${ENV_VAR} (pgvector / Weaviate).
+    dsn: null
+    index_type: hnsw
+    url: null
+    api_key: null
+    grpc_port: 50051
 
 vector_store_router:
   default: sqlite_vec_dev:soothe_default
-
-tools:
-  wizsearch:
-    default_engines:
-      - duckduckgo
-      - bing

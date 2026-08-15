@@ -8,7 +8,7 @@
 **Implemented**: 2026-08-11
 **Dependencies**: RFC-000, RFC-001, RFC-100, RFC-604, RFC-803, RFC-218, RFC-219
 **Supersedes**: RFC-201 §loop driver (imperative Plan → Execute driver)
-**Related**: RFC-203, RFC-207, RFC-211, RFC-213, RFC-214, RFC-217  
+**Related**: RFC-203, RFC-207, RFC-211, RFC-213, RFC-214, RFC-217
 
 ---
 
@@ -169,7 +169,7 @@ New configuration keys are introduced for evidence caps, allowlists, repair boun
 
 ## Implementation Sequence
 
-1. Follow **Implementation Guides** [IG-394](../impl/IG-394-langgraph-agent-loop-orchestrator.md) and [IG-396](../impl/IG-396-rfc-220-loop-graph-topology-langfuse.md).
+1. Follow **Implementation Guides** [IG-394](../archive/impl/IG-394-langgraph-agent-loop-orchestrator.md) and [IG-396](../archive/impl/IG-396-rfc-220-loop-graph-topology-langfuse.md).
 2. Implement Loop Graph + delete imperative loop.
 3. Reconcile dependent RFCs and docs in the same merge series.
 4. Run `./scripts/verify_finally.sh`; update RFC status to **Implemented** when complete.

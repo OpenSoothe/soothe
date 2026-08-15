@@ -242,7 +242,7 @@ soothe.plugin.unloaded        # Plugin unloaded
 **Example**:
 
 ```python
-from soothe.core.events import register_event
+from soothe.events import register_event
 from soothe_sdk.events import SootheEvent
 
 class MyPluginEvent(SootheEvent):
@@ -305,23 +305,23 @@ Add validation script to CI pipeline:
 #### Phase 1: Event Catalog Migration (1-2 days)
 
 **Tasks**:
-1. Update `core/events/catalog.py` type string constants
+1. Update `events/catalog.py` type string constants
 2. Update event class `type` field default values
 3. Update `_reg()` calls with new type strings
 4. Update `register_event()` calls in module event files:
-   - `packages/soothe/src/soothe/core/events/catalog.py` (core registry)
-   - `packages/soothe/src/soothe/core/strange_loop/utils/events.py` (StrangeLoop typed events)
+   - `packages/soothe/src/soothe/events/catalog.py` (core registry)
+   - `packages/soothe/src/soothe/sloop/utils/events.py` (StrangeLoop typed events)
 Optional community plugin event modules (see `community/src/soothe_plugins/`)
-   - `packages/soothe/src/soothe/subagents/research/events.py`
-   - `packages/soothe/src/soothe/plugin/events.py`
+   - `packages/soothe/src/soothe/subagents/research/events.py` (note: only `subagents/veritas/` exists today)
+   - `soothe-nano` PyPI package (`soothe_nano.plugin.events`)
 5. Delete old type string constants completely
 
 **Files**:
-- `packages/soothe/src/soothe/core/events/catalog.py`
-- `packages/soothe/src/soothe/core/events/constants.py`
-- `packages/soothe/src/soothe/core/strange_loop/utils/events.py`
+- `packages/soothe/src/soothe/events/catalog.py`
+- `packages/soothe-daemon/src/soothe_daemon/events/constants.py`
+- `packages/soothe/src/soothe/sloop/utils/events.py`
 - `packages/soothe/src/soothe/subagents/*/events.py`
-- `packages/soothe/src/soothe/plugin/events.py`
+- `soothe-nano` PyPI package (`soothe_nano.plugin.events`)
 
 #### Phase 2: Emitter Code Migration (1-2 days)
 
@@ -332,7 +332,7 @@ Optional community plugin event modules (see `community/src/soothe_plugins/`)
 
 **Files**:
 - All files that emit events using `custom_event()`
-- All files that import event constants from `soothe.core.events` / `soothe.core.events.catalog`
+- All files that import event constants from `soothe.events` / `soothe.events.catalog`
 
 #### Phase 3: Test Migration (1 day)
 
@@ -456,8 +456,8 @@ The following table recorded an abandoned rename toward `soothe.capability.*`. *
 
 ### 9.2 Phase 1: Event Catalog
 
-- [ ] Migrate `core/events/catalog.py` core events
-- [ ] Migrate `core/events/catalog.py` and per-module `register_event()` sites (e.g. `core/strange_loop/utils/events.py`)
+- [ ] Migrate `events/catalog.py` core events
+- [ ] Migrate `events/catalog.py` and per-module `register_event()` sites (e.g. `sloop/utils/events.py`)
 - [x] Migrate community plugin event modules under `soothe_plugins/` (IG-415)
 - [ ] Migrate `subagents/research/events.py`
 - [ ] Migrate `plugin/events.py`

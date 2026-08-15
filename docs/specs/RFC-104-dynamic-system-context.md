@@ -7,7 +7,7 @@
 **Created**: 2026-03-31
 **Last Updated**: 2026-08-08
 **Author**: Platonic brainstorming session
-**Design Draft**: [2026-03-31-dynamic-system-context-design.md](../archive/drafts/2026-03-31-dynamic-system-context-design.md)
+**Design Draft**: `2026-03-31-dynamic-system-context-design.md`
 **Depends On**: RFC-100 (CoreAgent Runtime), RFC-101 (Tool Interface), RFC-103 (Thread-Aware Workspace)
 **Implementation**: IG-117 (prompt-cache ordering), core context injection complete
 
@@ -94,7 +94,7 @@ To maximize prefix-cache hits on supported providers:
 2. **Structured context next**: `<SOOTHE_ENVIRONMENT>`, then `<SOOTHE_WORKSPACE>`, then (complex only) `<SOOTHE_THREAD>`, `<SOOTHE_PROTOCOLS>`.
 3. **Most volatile last**: lines that change every request (e.g. current date) are appended **after** all `<SOOTHE_*>` blocks.
 
-Shared builders live in `src/soothe/core/prompts/context_xml.py` so **main agent**, **LLMPlanner**, and **** emit the same ENV+WORKSPACE shape where config is available.
+Shared builders live in `src/soothe/sloop/prompts/context_xml.py` so **main agent**, **LLMPlanner**, and **** emit the same ENV+WORKSPACE shape where config is available.
 
 ---
 
@@ -104,7 +104,7 @@ Shared builders live in `src/soothe/core/prompts/context_xml.py` so **main agent
 
 | Component | Location | Status |
 |-----------|----------|--------|
-| XML context builders | `soothe/core/prompts/context_xml.py` | ✅ Implemented |
+| XML context builders | `soothe/sloop/prompts/context_xml.py` | ✅ Implemented |
 | Environment section | `<SOOTHE_ENVIRONMENT>` | ✅ Implemented |
 | Workspace section | `<SOOTHE_WORKSPACE>` with git context | ✅ Implemented |
 | Thread section | `<SOOTHE_THREAD>` | ✅ Implemented |
@@ -146,7 +146,7 @@ Four context sections with dedicated **outer** tags. Each outer tag includes `ve
 <vcs present="true">
   <branch>develop</branch>
   <main_branch>main</main_branch>
-  <status>M src/soothe/core/agent.py</status>
+  <status>M src/soothe/coreagent/core_agent.py</status>
   <recent_commits>7f7d076 fix: replace os.getcwd()
 878c1ad fix: convert logging f-strings</recent_commits>
 </vcs>
@@ -258,7 +258,7 @@ Protocol availability and state:
 
 ### 1. SystemPromptOptimizationMiddleware Extension
 
-**Location**: `src/soothe/middleware/system_prompt_optimization.py`
+**Location**: `src/soothe/middleware/system_prompt_optimization.py` (soothe-nano, external PyPI)
 
 Add section building methods:
 
@@ -538,7 +538,7 @@ def get_knowledge_cutoff(model_id: str) -> str:
 
 ### 4. Runner State Injection
 
-**Location**: `src/soothe/core/runner/_runner_phases.py`
+**Location**: `src/soothe/runner/_runner_phases.py`
 
 Modify `_pre_stream_independent()` to collect context for injection:
 
@@ -583,7 +583,7 @@ async def _pre_stream_independent(
 
 The execute phase builds the LangGraph input dict (messages plus optional
 `workspace`, `git_status`, `routing_classification`, etc.) before calling
-``CoreAgent.astream``:
+`CoreAgent.astream`:
 
 ```python
 async def _execute_graph_input(messages, *, workspace=None, git_status=None, ...):
@@ -682,7 +682,7 @@ None. All decisions finalized through brainstorming session.
 
 ## References
 
-- Design Draft: [2026-03-31-dynamic-system-context-design.md](../archive/drafts/2026-03-31-dynamic-system-context-design.md)
+- Design Draft: `2026-03-31-dynamic-system-context-design.md`
 - Claude Code Analysis: `../claude-code/workspace-context-analysis.md`
 - RFC-100: CoreAgent Runtime
 - RFC-101: Tool Interface

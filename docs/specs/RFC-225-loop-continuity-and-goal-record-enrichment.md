@@ -46,7 +46,7 @@ This RFC does **not** define:
 
 ## 3. Background & Motivation
 
-Commit `184bf0e1` collapsed the LLM intent classifier's structured output to `quiz | agentic`. However, the runtime still resolves "agentic" into `continue_thread` / `new_goal` strings via a `GoalEngine.list_goals()` check in the agentic runner (`core/runner/_runner_strange_loop.py:324-337`). This produces two defects:
+Commit `184bf0e1` collapsed the LLM intent classifier's structured output to `quiz | agentic`. However, the runtime still resolves "agentic" into `continue_thread` / `new_goal` strings via a `GoalEngine.list_goals()` check in the agentic runner (`runner/_runner_strange_loop.py:324-337`). This produces two defects:
 
 1. **Semantic mismatch.** Whether a query continues an existing conversation is structural — does the loop have prior goals? — not a property of the user's intent. The classifier should not encode loop topology.
 2. **Functional regression.** `GoalEngine` is recreated per request in solo mode (the daemon binds it only in autopilot flows), so `list_goals()` is always empty and `continue_thread` is always `False`. The entire same-loop continuation pathway is dead code in non-autopilot use.
@@ -90,7 +90,7 @@ Removed:
 
 ### 5.2 Structural Derivation of `continue_loop_mode`
 
-The agentic runner (`core/runner/_runner_strange_loop.py`) MUST NOT consult `GoalEngine` to determine continuation. `StrangeLoop.run_with_progress()` MUST derive `continue_loop_mode` exactly once, immediately after `state_manager.load()` and before any branch-specific checkpoint mutation:
+The agentic runner (`runner/_runner_strange_loop.py`) MUST NOT consult `GoalEngine` to determine continuation. `StrangeLoop.run_with_progress()` MUST derive `continue_loop_mode` exactly once, immediately after `state_manager.load()` and before any branch-specific checkpoint mutation:
 
 ```
 continue_loop_mode :=
@@ -324,11 +324,11 @@ The following constructs MUST be removed:
 
 | Item | Reason |
 |---|---|
-| `LoopState.continue_thread: bool` (`core/loop/state/schemas.py`) | Written but never read; pure dead field. |
+| `LoopState.continue_thread: bool` (`sloop/state/schemas.py`) | Written but never read; pure dead field. |
 | The `state.continue_thread = True` write block in `StrangeLoop` | Follows from dropping the field. |
 | `IntentHint.CONTINUE_THREAD`, `IntentHint.NEW_GOAL` enum values | Both bypass paths unreachable; `parse_intent_hint()` already returns `None` (with warning) on unknown values, so external clients sending these strings degrade gracefully. |
 | `intent_type` string in LangGraph state (`executor._execute_graph_input`, middleware scenario branches) | Replaced by `continue_loop_mode: bool` flowing through state. |
-| `GoalEngine.list_goals()` structural check in `core/runner/_runner_strange_loop.py` | Broken in solo mode; replaced by checkpoint-based derivation in `StrangeLoop`. |
+| `GoalEngine.list_goals()` structural check in `runner/_runner_strange_loop.py` | Broken in solo mode; replaced by checkpoint-based derivation in `StrangeLoop`. |
 
 The following constructs are retained as the single source of truth:
 

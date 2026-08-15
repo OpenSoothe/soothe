@@ -13,9 +13,10 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.autopilot.schedule.tasks import ScheduleSpec
 from soothe.autopilot.schedule.timezone import schedule_timezone_label
+from soothe.cron.builtin import BUILTIN_JOBS
 from soothe.cron.extraction import AutopilotDisabledError, CronExtractionService
 from soothe.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
-from soothe.cron.models import CronJob, DuplicateCronJobError, JobStatus
+from soothe.cron.models import DEFAULT_CRON_USER_ID, CronJob, DuplicateCronJobError, JobStatus
 from soothe.cron.store_factory import create_cron_job_store
 
 if TYPE_CHECKING:
@@ -104,6 +105,56 @@ class CronService:
                     schedule_timezone_label(self._cron_config.timezone),
                 )
 
+    async def seed_builtin_jobs(self) -> int:
+        """Seed built-in recurring maintenance jobs into the store.
+
+        Iterates the built-in job registry (see ``cron.builtin``) and creates
+        each job if it does not already exist. Seeding is idempotent: a job with
+        the same stable ``job_id`` is never duplicated.
+
+        Returns:
+            Number of newly created built-in jobs (0 if all already existed).
+        """
+        if not self._cron_config.enable_builtin_jobs:
+            logger.debug("Built-in cron jobs disabled; skipping seed pass")
+            return 0
+
+        created = 0
+        for spec in BUILTIN_JOBS:
+            existing = await self._store.get(spec.job_id)
+            if existing is not None:
+                logger.debug("Built-in cron job already exists: id=%s", spec.job_id)
+                continue
+
+            schedule = self._schedule_spec(spec.schedule_kind.value, spec.schedule_value)
+            next_run = schedule.next_after(datetime.now(tz=UTC))
+            if next_run is None:
+                logger.warning(
+                    "Built-in cron job has no valid next run: id=%s schedule=%s",
+                    spec.job_id,
+                    spec.schedule_value,
+                )
+                continue
+
+            job = CronJob(
+                id=spec.job_id,
+                user_id=DEFAULT_CRON_USER_ID,
+                description=spec.description,
+                schedule_kind=spec.schedule_kind,
+                schedule_value=spec.schedule_value,
+                priority=spec.priority,
+                status=JobStatus.PENDING,
+                next_run=next_run,
+            )
+            await self._store.create(job)
+            created += 1
+            logger.info(
+                "Built-in cron job seeded: id=%s next_run=%s",
+                spec.job_id,
+                next_run.isoformat(),
+            )
+        return created
+
     async def start(self) -> None:
         """Start the cron service monitoring loop."""
         if self._running:
@@ -122,6 +173,7 @@ class CronService:
             logger.debug("CronService subscribed to goal completion events")
 
         await self._reconcile_pending_schedules()
+        await self.seed_builtin_jobs()
 
         logger.info(
             "CronService started with poll_interval=%ds timezone=%s",

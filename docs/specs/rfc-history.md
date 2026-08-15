@@ -2,7 +2,7 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-08-11
+**Last Updated**: 2026-08-15
 **Total RFCs**: 86
 
 ## Summary Statistics
@@ -37,6 +37,18 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 | Unknown | 2 |
 
 ## Recent Changes
+
+### 2026-08-15
+
+- **Q3 2026 Δ-Cycle audit report** published at
+  `docs/analysis/rfc-audit-Q3-2026-delta.md` — first recurring drift review
+  under RFC-903. No corpus-metric movement from Q3 baseline. 1/5 immediate
+  items applied (I-5: RFC-100 status). 4 new false-positive drift records
+  identified (IG-740 corrections DR-095–098). 3 Dependency Graph metrics
+  computed for the first time (dangling refs: 10, missing reverse refs: 5,
+  path-restructure drift: 7 RFCs / 17 paths). Roles: Audit Owner = Soothe
+  (BMF-01); Reviewer sign-off pending (deviation D-6). In-cycle fixes
+  (I-1–I-4) deferred; no index/history totals changed this cycle.
 
 ### 2026-08-14
 

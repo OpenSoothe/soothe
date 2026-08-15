@@ -302,7 +302,7 @@ The recommended action: install `FileLockMiddleware` in autopilot mode (as origi
 
 ### Layer 1: Atomic Write + Version Stamp
 
-**Location**: `packages/soothe/src/soothe/core/filesystem/local.py`
+**Location**: `packages/soothe/src/soothe-nano (external PyPI)`
 
 #### Interface: `awrite_atomic`
 
@@ -362,7 +362,7 @@ async def awrite_atomic(
 
 #### Interface: `EditConflictError`
 
-**Location**: `packages/soothe/src/soothe/core/filesystem/exceptions.py`
+**Location**: `packages/soothe/src/soothe-nano (external PyPI)`
 
 ```python
 class EditConflictError(Exception):
@@ -404,7 +404,7 @@ After `patch` applies, re-read the file and verify the hash matches the expected
 
 ### Layer 2: Per-File Async Mutex
 
-**Location**: `packages/soothe/src/soothe/core/filesystem/local.py`
+**Location**: `packages/soothe/src/soothe-nano (external PyPI)`
 
 #### Interface: `FileEditLockRegistry`
 
@@ -494,7 +494,7 @@ async def aedit(self, path, old_string, new_string, replace_all=False):
 
 ### Layer 3: Coalescing Middleware + Staging Buffer
 
-**Location**: `packages/soothe/src/soothe/middleware/edit_coalescing.py` (new file)
+**Location**: `packages/soothe/src/soothe-nano (external PyPI)` (new file)
 
 #### Interface: `EditCoalescingMiddleware`
 
@@ -811,13 +811,13 @@ When `backend_type == "network"`: re-read and re-hash immediately before every w
 
 | Step | File | Change |
 |------|------|--------|
-| 1 | `foundation/core/filesystem/exceptions.py` | Add `EditConflictError` exception |
-| 2 | `foundation/core/filesystem/local.py` | Add `_file_locks` registry and `_get_file_lock()` method |
-| 3 | `foundation/core/filesystem/local.py` | Add `awrite_atomic()` method (temp + fsync + `os.replace`) |
-| 4 | `foundation/core/filesystem/local.py` | Modify `aedit()` to use lock + `awrite_atomic()` with version stamp |
-| 5 | `foundation/core/filesystem/local.py` | Modify `aedit_lines()` similarly |
-| 6 | `foundation/core/filesystem/local.py` | Modify `aedit_batched()` to use lock + `awrite_atomic()` |
-| 7 | `foundation/core/filesystem/unified.py` | Add `awrite_atomic()` to abstract interface |
+| 1 | `soothe-nano (external PyPI)` | Add `EditConflictError` exception |
+| 2 | `soothe-nano (external PyPI)` | Add `_file_locks` registry and `_get_file_lock()` method |
+| 3 | `soothe-nano (external PyPI)` | Add `awrite_atomic()` method (temp + fsync + `os.replace`) |
+| 4 | `soothe-nano (external PyPI)` | Modify `aedit()` to use lock + `awrite_atomic()` with version stamp |
+| 5 | `soothe-nano (external PyPI)` | Modify `aedit_lines()` similarly |
+| 6 | `soothe-nano (external PyPI)` | Modify `aedit_batched()` to use lock + `awrite_atomic()` |
+| 7 | `soothe-nano (external PyPI)` | Add `awrite_atomic()` to abstract interface |
 | 8 | `tests/integration/test_parallel_edits.py` | Test: two concurrent `aedit()` calls to same file |
 
 **Estimated LOC**: ~80 new, ~30 modified.
@@ -993,9 +993,9 @@ Two edit calls use different paths that resolve to the same file (e.g., `./confi
 
 | File | Phase | Change |
 |------|-------|--------|
-| `foundation/core/filesystem/exceptions.py` | 1 | Add `EditConflictError` |
-| `foundation/core/filesystem/local.py` | 1 | Add `_file_locks`, `_get_file_lock()`, `awrite_atomic()`; modify `aedit()`, `aedit_lines()`, `aedit_batched()` |
-| `foundation/core/filesystem/unified.py` | 1 | Add `awrite_atomic()` to abstract interface |
+| `soothe-nano (external PyPI)` | 1 | Add `EditConflictError` |
+| `soothe-nano (external PyPI)` | 1 | Add `_file_locks`, `_get_file_lock()`, `awrite_atomic()`; modify `aedit()`, `aedit_lines()`, `aedit_batched()` |
+| `soothe-nano (external PyPI)` | 1 | Add `awrite_atomic()` to abstract interface |
 | `middleware/edit_coalescing.py` | 2 | **Create** — Coalescing middleware + staging buffer |
 | `middleware/_builder.py` | 2 | Wire `EditCoalescingMiddleware` at position 3 |
 | `middleware/policy.py` | 2 | Fast-path check for `_batched` marker |
@@ -1012,7 +1012,7 @@ Two edit calls use different paths that resolve to the same file (e.g., `./confi
 
 ## Related Documents
 
-- [RFC Standard](./rfc-standard.md)
+- [RFC Standard](./templates/rfc-standard.md)
 - [RFC Index](./rfc-index.md)
 - RFC-101: Tool interface (middleware chain structure)
 - RFC-102: Security filesystem policy (path validation, permissions)

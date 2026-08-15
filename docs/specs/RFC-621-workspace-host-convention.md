@@ -153,7 +153,7 @@ Note: `is_configured` uses `bool()` (not `is not None`) so empty strings count a
 
 ### 4. Path Translation Functions
 
-Add to `soothe/core/workspace/resolution.py`:
+Add to `soothe/workspace/resolution.py`:
 
 ```python
 def translate_client_path_to_container(
@@ -518,17 +518,17 @@ Note: `workspace_mapping` in metadata is retained for debugging and SDK use, but
 | `config/config.template.yml` | Add `workspace_mount` section with `host_root` and `container_root` |
 | `config/develop/nano.yml` | Add `workspace_mount` (disabled by default, both null) |
 | `soothe/config/models.py` | Add `WorkspaceMountConfig` model |
-| `soothe/core/workspace/resolution.py` | Add translation functions; update `cleanup_anonymous_workspaces` to use `data/workspaces` |
-| `soothe/core/workspace/loop_workspace.py` | Change path to `data/workspaces`; thin wrapper for core resolution |
-| `soothe/core/workspace/stream_resolution.py` | Thin wrapper for core resolution |
-| `soothe/core/workspace/runtime_resolution.py` | Thin wrapper for core resolution |
-| `soothe/core/workspace/core_resolution.py` | **New**: `WorkspacePrecedence`, `resolve_workspace()`, source checker registry |
-| `soothe/core/workspace/context.py` | **New**: `WorkspaceContext` dataclass + ContextVar |
-| `soothe/core/workspace/migration.py` | **New**: one-time directory migration `workspaces/` → `data/workspaces/` |
-| `soothe/core/workspace/framework_filesystem.py` | Delegate to `WorkspaceContext` |
-| `soothe/core/workspace/virtual_home.py` | Delegate to `WorkspaceContext` |
-| `soothe/core/workspace/normalized_backend.py` | Use `get_workspace_backend()` cache |
-| `soothe/core/workspace/__init__.py` | Export new types |
+| `soothe/workspace/resolution.py` | Add translation functions; update `cleanup_anonymous_workspaces` to use `data/workspaces` |
+| `soothe/workspace/loop_workspace.py` | Change path to `data/workspaces`; thin wrapper for core resolution |
+| `soothe/workspace/stream_resolution.py` | Thin wrapper for core resolution |
+| `soothe/workspace/runtime_resolution.py` | Thin wrapper for core resolution |
+| `soothe/workspace/core_resolution.py` | **New**: `WorkspacePrecedence`, `resolve_workspace()`, source checker registry |
+| `soothe/workspace/context.py` | **New**: `WorkspaceContext` dataclass + ContextVar |
+| `soothe/workspace/migration.py` | **New**: one-time directory migration `workspaces/` → `data/workspaces/` |
+| `soothe/workspace/framework_filesystem.py` | Delegate to `WorkspaceContext` |
+| `soothe/workspace/virtual_home.py` | Delegate to `WorkspaceContext` |
+| `soothe/workspace/normalized_backend.py` | Use `get_workspace_backend()` cache |
+| `soothe/workspace/__init__.py` | Export new types |
 | `soothe-daemon/protocol/router.py` | Apply mapping in `_handle_loop_new`, guard translation on `client_workspace is not None` |
 | `soothe-daemon/loop_isolation.py` | Trust persisted `current_workspace`; remove re-resolution and translation |
 | `soothe-daemon/server.py` | Add startup validation for `workspace_mount`; add migration call |

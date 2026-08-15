@@ -7,12 +7,49 @@ consumed by daemon NotifySink adapters (email, webhook, Feishu, …).
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 NotifyKind = Literal["job.completed", "job.failed", "job.suspended_timeout"]
-NotifySeverity = Literal["info", "warning", "error"]
+
+
+class Severity(StrEnum):
+    """Severity classification for notify intents (IG-713).
+
+    Drift-aware escalation (see ``router._severity_for``):
+    - ``info``    — normal completion, no drift signals.
+    - ``warning`` — suspended timeout, maturity blockers, or repeated
+      failures below the retry budget (the job is *drifting* away from
+      a healthy outcome but is not yet terminal).
+    - ``error``   — terminal failure, or retry/send-back budgets
+      exhausted (the job has *drifted* past recovery).
+    """
+
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+    def __ge__(self, other: Severity) -> bool:
+        return _SEVERITY_RANK[self] >= _SEVERITY_RANK[other]
+
+    def __gt__(self, other: Severity) -> bool:
+        return _SEVERITY_RANK[self] > _SEVERITY_RANK[other]
+
+    def __le__(self, other: Severity) -> bool:
+        return _SEVERITY_RANK[self] <= _SEVERITY_RANK[other]
+
+    def __lt__(self, other: Severity) -> bool:
+        return _SEVERITY_RANK[self] < _SEVERITY_RANK[other]
+
+
+_SEVERITY_RANK: dict[Severity, int] = {
+    Severity.INFO: 0,
+    Severity.WARNING: 1,
+    Severity.ERROR: 2,
+}
+
 
 KIND_TO_EVENT_FLAG: dict[str, str] = {
     "job.completed": "job_completed",
@@ -35,7 +72,7 @@ class NotifyIntent(BaseModel):
     job_id: str
     title: str
     body: str
-    severity: NotifySeverity = "info"
+    severity: Severity = Severity.INFO
     status: str | None = None
     description: str | None = None
     workspace: str | None = None

@@ -382,17 +382,17 @@ RFC-413 replaces this approach: instead of reconstructing events on demand, reco
 
 ## 11. Phased Migration
 
-**Phase 1 — `/loops`-switch history load.** ✅ Shipped.  
+**Phase 1 — `/loops`-switch history load.** ✅ Shipped.
 Wire switch/resume paths to load history after successful loop switch.
 
-**Phase 2 — Extract `CardBinder` as a pure module.** ✅ Shipped.  
+**Phase 2 — Extract `CardBinder` as a pure module.** ✅ Shipped.
 `soothe_sdk.display.card_binder` owns conversion rules; unit-tested.
 
-**Phase 3 — Daemon owns binder + ledger; `soothe.card.*` + `loop_history_fetch`.** ✅ Largely shipped.  
-* `LoopCardManager` ingests stream tuples off the hot path; persists via DisplayCardStore (SQLite/Postgres).  
-* RFC-631 goal snapshots + `loop_history_fetch` for resume.  
-* `loop_reattach` streams `soothe.card.replay.*` for the live tail.  
-* Resume policy IG-577 (`sanitize_resume_display_cards`).  
+**Phase 3 — Daemon owns binder + ledger; `soothe.card.*` + `loop_history_fetch`.** ✅ Largely shipped.
+* `LoopCardManager` ingests stream tuples off the hot path; persists via DisplayCardStore (SQLite/Postgres).
+* RFC-631 goal snapshots + `loop_history_fetch` for resume.
+* `loop_reattach` streams `soothe.card.replay.*` for the live tail.
+* Resume policy IG-577 (`sanitize_resume_display_cards`).
 * **Gap:** live TUI still binds from raw stream events; ledger often `replace_with` full rebind on debounce rather than append mutations + live `soothe.card.*` emit.
 
 **Phase 4 — Live cutover + decommission (IG-655).** ✅ Shipped (2026-07-27):

@@ -159,7 +159,7 @@ Early RFC-614 drafts described a `_wrap_streaming_output()` helper that re-publi
 3. Loop tags: preserve `phase` metadata so clients can classify `goal_completion`, `quiz`, `autonomous_goal`, and `direct_model`.
 4. Namespace: carry LangGraph namespace through to the client so concurrent subgraphs do not interleave text.
 
-**Delegate finals & completion replay**  
+**Delegate finals & completion replay**
 Intermediate subgraph assistant prose stays **off** the root orchestration summary path (`iter_messages_for_act_aggregation` yields root-graph `messages` only). Answers that exist only inside a delegated run are promoted from ordered **`task`** `ToolMessage` return bodies at the delegation boundary (not by replaying raw subgraph AIMessage streams). The StrangeLoop `goal_completion` node sets **`skip_goal_completion_wire_duplicate`** after a **streamed `synthesize`** so the runner does not emit a second identical **`phase=goal_completion`** chunk. The flag stays **false** for **`ledger_direct`** (and **`summary`**) so headless clients still receive one **`goal_completion`** line on stdout while execute-phase narration remains suppressed (IG-343).
 
 #### StreamingTextAccumulator (State Machine)
@@ -266,8 +266,8 @@ CLI/TUI `EventProcessor` paths use these helpers to treat **`mode="messages"`** 
 ### Phase 2: Runner Layer (Stream Generation)
 
 **Primary modules**:
-1. `packages/soothe/src/soothe/core/runner/_runner_strange_loop.py` — multiplex `stream_event` into client `mode="messages"` / `custom`, enforce IG-119 / IG-304 suppression, forward loop-tagged assistant chunks for configured phases.
-2. `packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py` — emit `stream_event` tuples consumed by the runner.
+1. `packages/soothe/src/soothe/runner/_runner_strange_loop.py` — multiplex `stream_event` into client `mode="messages"` / `custom`, enforce IG-119 / IG-304 suppression, forward loop-tagged assistant chunks for configured phases.
+2. `packages/soothe/src/soothe/sloop/engine/strange_loop.py` — emit `stream_event` tuples consumed by the runner.
 
 **Forwarding contract** (summary): forward **tool UI** `messages` chunks; forward **loop assistant** `messages` chunks when `assistant_output_phase(...)` is non-null; suppress plain execute-phase assistant prose.
 
@@ -282,7 +282,7 @@ CLI/TUI `EventProcessor` paths use these helpers to treat **`mode="messages"`** 
 ### Phase 5: Client Layer (Display & Concatenation)
 
 **Primary modules**:
-1. `packages/soothe-cli/src/soothe_cli/shared/core/event_processor.py` — `StreamingTextAccumulator` keyed by internal namespace for **`phase=goal_completion`** message streaming; message handlers use `assistant_output_phase` (`soothe_sdk.ux.loop_stream`).
+1. `packages/soothe-cli/src/soothe_cli/runtime/headless/processor.py` — `StreamingTextAccumulator` keyed by internal namespace for **`phase=goal_completion`** message streaming; message handlers use `assistant_output_phase` (`soothe_sdk.ux.loop_stream`).
 2. `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py` — mirrors the same `messages` + `phase` behavior for the TUI.
 
 **Goal-completion accumulation** (conceptual):
@@ -653,8 +653,7 @@ Clients should send **`delivery_ack`** notifications after applying terminal fra
 ## Document History
 
 **Created**: 2026-04-27
-**Status**: Draft
-**Authors**: Soothe Team
+**Status**: Implemented — OutputStreamingConfig in config/models.py, stream_delivery (batch/adaptive/streaming), phase-based messages streaming, execute-phase suppression all shipped.
 
 **Revision History**:
 - v1.4 (2026-07-07): IG-556 — `stream_terminal`, `soothe.stream.end` scopes, strict ordering, `delivery_ack` drain

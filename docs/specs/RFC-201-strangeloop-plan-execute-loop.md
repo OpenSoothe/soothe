@@ -334,7 +334,7 @@ class PlanResult(BaseModel):
 
 **Synthesis Components**:
 1. **GoalEngine metadata**: Current goal priority, dependency goal IDs
-2. **ContextProtocol retrieval**: 
+2. **ContextProtocol retrieval**:
    - Dependency goals: retrieve execution history (5 entries per dependency)
    - Current goal: goal-centric retrieval (10 entries)
 3. **GoalContextManager summaries**: Previous goal summaries (5 entries)

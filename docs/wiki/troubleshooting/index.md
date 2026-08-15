@@ -24,6 +24,12 @@ Diagnostic guides and solutions for common issues, errors, and debugging techniq
 - Comprehensive debugging guide for agents and daemon
 - Log file locations, verbose output, and diagnostic strategies
 
+### 2. [RFC↔Code Drift Troubleshooting](rfc-drift-troubleshooting.md)
+- Developer procedures for diagnosing and fixing drift findings
+- RFC↔code categories (false path, wrong package, status conflict, missing
+  status, symbol not found), AsyncAPI wire-contract drift, telemetry/baseline
+  troubleshooting, alert handler recovery, and cron job failure modes
+
 ---
 
 ## Troubleshooting Guide

@@ -560,7 +560,7 @@ In daemon-owned autopilot, the natural subscribers are:
 - `MetricsSubscriber` (Prometheus / OpenTelemetry exporters — future)
 - `ObservabilityLogger` (structured audit log for backoff decisions — future, addresses gap M8)
 
-The existing internal-event types declared in `core/events/internal_events.py` are reused; no new event types are introduced by this revision.
+The existing internal-event types declared in `events/internal_events.py` are reused; no new event types are introduced by this revision.
 
 ---
 
@@ -638,7 +638,7 @@ agent:
 ```
 
 > Full field list lives in `config/soothe.template.yml` under `agent.autopilot`.
-> Production readiness gaps: [IG-678](../impl/IG-678-autopilot-ce-rails-production-readiness.md).
+> Production readiness gaps: [IG-678](../archive/impl/IG-678-autopilot-ce-rails-production-readiness.md).
 
 ---
 
@@ -757,7 +757,7 @@ Pydantic default for `enabled` is **`true`** — set `agent.autopilot.enabled: f
 
 ### Production gaps from long-running eval (2026-08-04)
 
-Tracked in [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md) (not
+Tracked in [IG-680](../archive/impl/IG-680-autopilot-dag-health-evidence-deps.md) (not
 optional soak — these break job-status honesty):
 
 | Gap | Impact | Fix home |
@@ -823,7 +823,7 @@ reservation key via the inherited path.
 ### 2026-08-04 (IG-680 eval gaps)
 - Documented production gaps: workspace inherit on decompose, consensus evidence
   grounding, health remove guardrails, pipeline `depends_on` wiring.
-- Related errata in RFC-625; implementation backlog [IG-680](../impl/IG-680-autopilot-dag-health-evidence-deps.md).
+- Related errata in RFC-625; implementation backlog [IG-680](../archive/impl/IG-680-autopilot-dag-health-evidence-deps.md).
 
 ### 2026-08-08 (Report-commit judgment + legacy cleanup)
 - Worker completion → CE `commit_goal_report` → `goal_report_committed` is the

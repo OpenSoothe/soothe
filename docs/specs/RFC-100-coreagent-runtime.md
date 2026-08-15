@@ -2,7 +2,7 @@
 
 **RFC**: 100
 **Title**: CoreAgent Runtime Architecture
-**Status**: Draft
+**Status**: Implemented (partial) — CoreAgent factory shipped at `src/soothe/coreagent/core_agent.py`; header previously said Draft while body marked Implemented. `CoreAgent Factory` contract name not yet exposed as a named contract (see Q3-2026 audit F-7); runtime is functional.
 **Kind**: Architecture Design
 **Created**: 2026-03-29
 **Updated**: 2026-05-26
@@ -175,7 +175,7 @@ await core_agent.astream(
 
 ## Implementation
 
-**File**: `src/soothe/core/agent.py`
+**File**: `src/soothe/coreagent/core_agent.py`
 
 **Status**: ✅ Implemented
 
