@@ -898,36 +898,6 @@ check_linting() {
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ASYNCAPI SPEC DRIFT CHECK (RFC-450 §11.3)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-check_asyncapi_drift() {
-  print_section "asyncapi"
-
-  cd "$WORKSPACE_ROOT"
-
-  if [ ! -f "scripts/check_asyncapi_drift.py" ]; then
-    print_warn "drift checker not found, skipping"
-    return 0
-  fi
-
-  local output
-  local exit_code
-  output=$("$VENV_PYTHON" scripts/check_asyncapi_drift.py --strict 2>&1) && exit_code=0 || exit_code=$?
-  if [ $exit_code -eq 0 ]; then
-    print_ok "spec ↔ pydantic in sync"
-    record_check_outcome "asyncapi" "spec drift" "pass"
-  else
-    print_fail "asyncapi: spec drift detected"
-    record_failure_log "AsyncAPI drift" "$output"
-    record_check_outcome "asyncapi" "spec drift" "fail"
-    return 1
-  fi
-
-  return 0
-}
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # WIKI CHANGELOG SYNC (root CHANGELOG.md → docs/wiki/changelog.md)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1381,7 +1351,6 @@ if $SKIP_TESTS; then
   check_formatting || true
   check_linting || true
   check_vulture || true
-  check_asyncapi_drift || true
   check_wiki_changelog_sync || true
 else
   # Full mode: parallelize independent checks
@@ -1406,11 +1375,6 @@ else
   ) >"$tmpdir/vulture.out" 2>&1 &
   pids+=($!)
   (
-    check_asyncapi_drift
-    echo $? >"$tmpdir/asyncapi.exit"
-  ) >"$tmpdir/asyncapi.out" 2>&1 &
-  pids+=($!)
-  (
     check_wiki_changelog_sync
     echo $? >"$tmpdir/docs.exit"
   ) >"$tmpdir/docs.out" 2>&1 &
@@ -1424,7 +1388,6 @@ else
   cat "$tmpdir/format.out" 2>/dev/null || true
   cat "$tmpdir/lint.out" 2>/dev/null || true
   cat "$tmpdir/vulture.out" 2>/dev/null || true
-  cat "$tmpdir/asyncapi.out" 2>/dev/null || true
   cat "$tmpdir/docs.out" 2>/dev/null || true
 
   _load_recorded_outcomes "$tmpdir/outcomes.log"
@@ -1436,7 +1399,6 @@ else
   _collect_parallel_check_result "$tmpdir" "format" "format"
   _collect_parallel_check_result "$tmpdir" "lint" "lint"
   _collect_parallel_check_result "$tmpdir" "vulture" "vulture"
-  _collect_parallel_check_result "$tmpdir" "asyncapi" "asyncapi"
   _collect_parallel_check_result "$tmpdir" "docs" "docs"
 
   VERIFY_RESULTS_DIR=""

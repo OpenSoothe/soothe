@@ -1,10 +1,9 @@
 """Canonical registry of `SOOTHE_CLI_*` environment variables.
 
 Every env var the CLI reads whose name starts with `SOOTHE_CLI_` must
-be defined here as a module-level constant.  A drift-detection test
-(`tests/unit_tests/test_env_vars.py`) fails when a bare string literal
-like `"SOOTHE_CLI_FOO"` appears in source code instead of a constant
-imported from this module.
+be defined here as a module-level constant.  An env-var coverage test
+fails when a bare string literal like `"SOOTHE_CLI_FOO"` appears in
+source code instead of a constant imported from this module.
 
 Import the short-name constants (e.g. `AUTO_UPDATE`, `DEBUG`) and pass them
 to `os.environ.get()` instead of using raw string literals. If the env var is
