@@ -135,6 +135,5 @@ async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() 
         if event_type == "intent_classified_reasoning" and isinstance(payload, dict)
     ]
     assert [e["reasoning"] for e in reasoning_events] == [
-        "This is a request to summarize the readme.",
         "I'll read the readme first.",
     ]

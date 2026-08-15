@@ -25,10 +25,6 @@ logger = logging.getLogger(__name__)
 
 INTENT_CLASSIFY_STATUS_LABEL = "Interpreting goal"
 
-# Structural bypass markers — not LLM prose for CognitionReasonMessage. Fail-safe
-# verdicts are not listed here: they carry user-facing prose and do display.
-_NON_DISPLAYABLE_INTAKE_REASONING_PREFIXES: tuple[str, ...] = ("Loop-control phrase;",)
-
 
 def _apply_intent_to_loop_state(
     loop_state: Any,
@@ -46,11 +42,8 @@ def _apply_intent_to_loop_state(
 
 
 def is_displayable_intake_reasoning(text: str) -> bool:
-    """True when intake reasoning is user-facing LLM prose for TUI cards."""
-    stripped = (text or "").strip()
-    if not stripped:
-        return False
-    return not any(stripped.startswith(p) for p in _NON_DISPLAYABLE_INTAKE_REASONING_PREFIXES)
+    """True when intake reasoning is non-empty user-facing prose for TUI cards."""
+    return bool((text or "").strip())
 
 
 def intake_reasoning_event(reasoning: str) -> tuple[str, dict[str, Any]] | None:
@@ -73,27 +66,17 @@ def intake_reasoning_event(reasoning: str) -> tuple[str, dict[str, Any]] | None:
 
 def intent_pass_reasoning_events(
     intent: IntentClassification,
-    *,
-    pass1_reasoning: str = "",
 ) -> list[tuple[str, dict[str, Any]]]:
-    """Build zero, one, or two intake cognition cards (Pass 1 then Pass 2).
+    """Build zero or one intake cognition card (Pass 2 scope reasoning only).
 
-    Skips chitchat. Dedupes when Pass 2 text matches Pass 1.
+    Skips chitchat. Pass 1 social-vs-task reasoning is not surfaced to the TUI.
     """
     if intent.intake_label == IntakeLabel.CHITCHAT:
         return []
-    events: list[tuple[str, dict[str, Any]]] = []
-    pass1_event = intake_reasoning_event(pass1_reasoning or intent.pass1_reasoning or "")
-    if pass1_event is not None:
-        events.append(pass1_event)
-    pass2_text = (intent.reasoning or "").strip()
-    pass2_event = intake_reasoning_event(pass2_text)
+    pass2_event = intake_reasoning_event((intent.reasoning or "").strip())
     if pass2_event is None:
-        return events
-    if pass1_event is not None and pass2_event[1]["reasoning"] == pass1_event[1]["reasoning"]:
-        return events
-    events.append(pass2_event)
-    return events
+        return []
+    return [pass2_event]
 
 
 def _ledger_messages_for_intake(ctx: LoopRuntimeContext) -> list[BaseMessage]:

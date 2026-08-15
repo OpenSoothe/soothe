@@ -395,10 +395,9 @@ class StrangeLoop:
                     pass1_result = pass1_raw
 
                 if pass1_result.is_task:
+                    # Pass 1 social-vs-task reasoning is retained for resume-topic
+                    # persistence but no longer surfaced as a TUI cognition card.
                     pass1_reasoning_text = (pass1_result.reasoning or "").strip()
-                    pass1_reasoning_event = intake_reasoning_event(pass1_reasoning_text)
-                    if pass1_reasoning_event is not None:
-                        yield pass1_reasoning_event
 
                 if not pass1_result.is_task:
                     from soothe.sloop.utils.structural_continuation import (
@@ -860,11 +859,10 @@ class StrangeLoop:
                     state.routing_classification = effective_routing
                     routing_classification = effective_routing
 
-                # Pass 1 cognition card already yielded above when displayable.
+                # Pass 1 reasoning is no longer emitted as a TUI card; surface
+                # only the Pass 2 scope reasoning (when displayable).
                 pass2_event = intake_reasoning_event(preclassified_intent.reasoning or "")
-                if pass2_event is not None and pass2_event[1]["reasoning"] != (
-                    pass1_reasoning_text or ""
-                ):
+                if pass2_event is not None:
                     yield pass2_event
 
             if force_continue_loop and loaded:
