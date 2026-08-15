@@ -143,11 +143,59 @@ def test_autopilot_config_defaults_for_dynamic_health() -> None:
     from soothe.config.models import AutopilotConfig
 
     ap = AutopilotConfig()
-    assert ap.verify_interval == 30
+    assert ap.verify_periodic_enabled is False
+    assert ap.verify_interval == 120
     assert ap.verify_idle_interval == 300
     assert ap.verify_llm_enabled is True
     assert ap.verify_llm_min_nonterminal == 1
     assert ap.verify_llm_debounce is True
+
+
+@pytest.mark.asyncio
+async def test_periodic_disabled_skips_health_tick() -> None:
+    """Master switch off → health tick no-ops even with pending goals."""
+    cfg = SootheConfig()
+    assert cfg.agent.autopilot.verify_periodic_enabled is False
+    ce = ContextEngine()
+    await ce.create_goal("open work", priority=50)
+    monitor = _make_monitor(ce, config=cfg)
+    reasoner = monitor._verifier._reasoner
+    reasoner.verify_health = AsyncMock()  # type: ignore[method-assign]
+    monitor._verifier.apply_health_report = AsyncMock()  # type: ignore[method-assign]
+
+    ran = await monitor._run_health_tick_if_enabled()
+
+    assert ran is False
+    reasoner.verify_health.assert_not_awaited()
+    monitor._verifier.apply_health_report.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_periodic_enabled_runs_health_tick() -> None:
+    """Master switch on → health tick runs (LLM gated by remaining sub-knobs)."""
+    cfg = SootheConfig()
+    cfg.agent.autopilot.verify_periodic_enabled = True
+    ce = ContextEngine()
+    await ce.create_goal("open work", priority=50)
+    monitor = _make_monitor(ce, config=cfg)
+    reasoner = monitor._verifier._reasoner
+    reasoner.verify_health = AsyncMock(  # type: ignore[method-assign]
+        return_value=MagicMock(
+            reset_goals=[],
+            remove_goals=[],
+            merge_goals=[],
+            decompose_goals=[],
+            priority_adjustments={},
+            wire_dependencies=[],
+            reasoning="ok",
+        )
+    )
+    monitor._verifier.apply_health_report = AsyncMock()  # type: ignore[method-assign]
+
+    ran = await monitor._run_health_tick_if_enabled()
+
+    assert ran is True
+    reasoner.verify_health.assert_awaited_once()
 
 
 @pytest.mark.asyncio

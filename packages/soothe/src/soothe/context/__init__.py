@@ -8,7 +8,6 @@ from soothe.context.ledger import LedgerManager
 from soothe.context.models import (
     BLOCKED_STATES,
     TERMINAL_STATES,
-    EpisodeSummary,
     EvidenceEntry,
     GoalNode,
     GoalStatus,
@@ -30,7 +29,6 @@ __all__ = [
     "ContextBundle",
     "ProjectionConfig",
     "ProjectionEngine",
-    "EpisodeSummary",
     "EvidenceEntry",
     "GoalNode",
     "StepNode",

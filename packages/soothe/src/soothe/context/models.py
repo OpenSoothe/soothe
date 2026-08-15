@@ -669,21 +669,3 @@ class GoalStepDAG(BaseModel):
             if depth > MAX_GOAL_DEPTH + 1:
                 break
         return depth
-
-
-# ── Dreaming models (RFC-625) ────────────────────────────────────────────────
-
-
-class EpisodeSummary(BaseModel):
-    """Distilled episodic memory from goal execution (RFC-625 dreaming).
-
-    Created by DreamingCoordinator.episodic mode, stored in ContextEngine
-    episodic memory store.
-    """
-
-    goal_id: str = Field(description="Source goal ID")
-    description: str = Field(description="Goal description")
-    outcome_summary: str = Field(description="Outcome summary")
-    key_steps: list[str] = Field(default_factory=list, description="Key steps executed")
-    lessons_learned: str = Field(default="", description="Lessons learned")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -18,7 +18,6 @@ from langchain_core.messages import (
 
 from soothe.context.ledger import LedgerManager
 from soothe.context.models import (
-    EpisodeSummary,
     GoalNode,
     GoalStatus,
     GoalStepDAG,
@@ -542,15 +541,6 @@ class ContextEngine:
     async def update_dependencies(self, goal_id: str, depends_on: list[str]) -> None:
         """Update goal dependencies (for mode switch flattening)."""
         self._dag.update_dependencies(goal_id, depends_on)
-
-    # ── Episodic memory (RFC-625 dreaming) ────────────────────────────────
-
-    _episodic_memory: list[EpisodeSummary] = []
-
-    async def record_episodic_memory(self, episodes: list[EpisodeSummary]) -> None:
-        """Store distilled episodic memory from dreaming."""
-        self._episodic_memory.extend(episodes)
-        logger.info("Recorded %d episodic memory entries", len(episodes))
 
     # ── Scheduler methods (RFC-222, RFC-625) ────────────────────────────────
 

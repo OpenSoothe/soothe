@@ -95,44 +95,6 @@ def normalize_agentic_final_response_mode(value: Any) -> Any:
     return value
 
 
-class DreamingModeConfig(BaseModel):
-    """Per-mode dreaming configuration (RFC-625 §13).
-
-    Args:
-        enabled: Whether this dreaming mode is enabled.
-        max_episodes: Maximum episodes to distill (episodic mode only).
-        min_success_rate: Minimum success rate for procedure extraction (procedure mode only).
-    """
-
-    enabled: bool = True
-    max_episodes: int = Field(
-        default=10, ge=1, le=100, description="Max episodes for episodic mode"
-    )
-    min_success_rate: float = Field(
-        default=0.8, ge=0.0, le=1.0, description="Min success rate for procedure mode"
-    )
-
-
-class DreamingModesConfig(BaseModel):
-    """Dreaming modes configuration container (RFC-625 §13).
-
-    Args:
-        episodic: Episodic memory distillation config.
-        procedure: Procedure/skill extraction config.
-        semantic: Project MEMORY.md update config.
-        profile: User profile extraction config.
-    """
-
-    episodic: DreamingModeConfig = Field(
-        default_factory=lambda: DreamingModeConfig(max_episodes=10)
-    )
-    procedure: DreamingModeConfig = Field(
-        default_factory=lambda: DreamingModeConfig(min_success_rate=0.8)
-    )
-    semantic: DreamingModeConfig = Field(default_factory=DreamingModeConfig)
-    profile: DreamingModeConfig = Field(default_factory=DreamingModeConfig)
-
-
 class NotifyTargetConfig(BaseModel):
     """One delivery destination for job lifecycle notify (IG-713).
 
@@ -273,10 +235,8 @@ class AutopilotConfig(BaseModel):
         max_engine_recoveries: Max engine-driven recoveries per failed goal (deadlock backstop).
         checkpoint_interval: Iterations between periodic checkpoints.
         dreaming_enabled: Enter dreaming mode when all goals complete.
-        dreaming_consolidation_interval: Seconds between memory consolidation during dreaming.
-        dreaming_health_check_interval: Seconds between health checks during dreaming.
         monitor_model_role: Router role for AutopilotMonitor LLM reasoners (backoff,
-            DAG verification, dreaming distillation). Defaults to ``think``.
+            DAG verification). Defaults to ``think``.
         consensus_model_role: Router role for RFC-204 report-commit judgment.
             Defaults to ``think``; daemon uses ``create_chat_model`` with automatic
             fallback to ``default`` on instantiation failure.
@@ -285,10 +245,17 @@ class AutopilotConfig(BaseModel):
         intake_scope: Forced StrangeLoop intake scope for dispatched goals
             (``trivial``|``simple``|``complex``). Default ``None`` lets the
             loop run Pass 1+2 intake classification.
+        verify_periodic_enabled: Master switch for periodic DAG health verification.
+            When ``False`` (default), the monitor's background health tick is
+            skipped entirely — no structural heuristics, no LLM. Event-driven
+            verification (post-completion, backoff reasoning) still runs. The
+            resource watchdog tick still runs on the same cadence.
         verify_interval: Background verification tick while non-terminal goals exist.
+            Only used while ``verify_periodic_enabled`` is ``True``.
         verify_idle_interval: Tick when DAG empty/complete (``0`` reuses
             ``verify_interval``); health LLM is skipped while idle.
-        verify_llm_enabled: Kill-switch for periodic health LLM.
+        verify_llm_enabled: Kill-switch for periodic health LLM. Only consulted
+            while ``verify_periodic_enabled`` is ``True``.
         verify_llm_min_nonterminal: Min non-terminal goals before health LLM runs.
         verify_llm_debounce: Skip health LLM when DAG fingerprint unchanged.
         webhooks: Webhook URLs by event type (legacy; prefer ``notify.sinks.webhook``).
@@ -333,14 +300,11 @@ class AutopilotConfig(BaseModel):
 
     # === Dreaming ===
     dreaming_enabled: bool = True
-    dreaming_consolidation_interval: int = Field(default=300, ge=10)
-    dreaming_health_check_interval: int = Field(default=60, ge=5)
 
     monitor_model_role: ModelRole = Field(
         default="think",
         description=(
-            "Router model role for AutopilotMonitor LLM reasoners "
-            "(backoff, DAG verification, dreaming distillation)."
+            "Router model role for AutopilotMonitor LLM reasoners (backoff, DAG verification)."
         ),
     )
 
@@ -441,8 +405,18 @@ class AutopilotConfig(BaseModel):
     )
 
     # RFC-625 / IG-743: AutopilotMonitor verification cadence + LLM gating
+    verify_periodic_enabled: bool = Field(
+        default=False,
+        description=(
+            "Master switch for periodic DAG health verification. When False "
+            "(default), the monitor's background health tick is skipped entirely "
+            "— no structural heuristics, no LLM. Event-driven verification "
+            "(post-completion, backoff reasoning) still runs; the resource "
+            "watchdog tick still runs on the same cadence."
+        ),
+    )
     verify_interval: int = Field(
-        default=30,
+        default=120,
         ge=5,
         le=300,
         description=("Background verification tick when non-terminal goals exist (seconds)"),
@@ -487,18 +461,6 @@ class AutopilotConfig(BaseModel):
         description="Time-based dreaming trigger interval (seconds)",
     )
     """Seconds between time-triggered dreaming mode entries."""
-
-    dreaming_scope: Literal["loop", "workspace", "topic"] = Field(
-        default="workspace",
-        description="Cross-loop dreaming scope for memory distillation",
-    )
-    """Scope for dreaming: loop (current), workspace (all goals), topic (tagged goals)."""
-
-    dreaming_modes: DreamingModesConfig = Field(
-        default_factory=lambda: DreamingModesConfig(),
-        description="Per-mode dreaming distillation config",
-    )
-    """Configuration for each dreaming distillation mode."""
 
     webhooks: dict[str, str | None] = Field(default_factory=dict)
     notify: AutopilotNotifyConfig = Field(

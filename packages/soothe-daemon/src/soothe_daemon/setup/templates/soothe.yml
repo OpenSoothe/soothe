@@ -20,8 +20,6 @@ agent:
     # Dreaming is automatic (DAG complete / timer) and config-driven — no CLI dream/wake.
     # Wake happens on submit or scheduled task. Set dreaming_enabled: false to disable.
     dreaming_enabled: true
-    dreaming_consolidation_interval: 300
-    dreaming_health_check_interval: 60
     monitor_model_role: think
     # Report-commit judgment; empty deny spawn/cancel dag_ops.
     consensus_model_role: think
@@ -42,31 +40,18 @@ agent:
     # Forced StrangeLoop intake for dispatched goals (null|trivial|simple|complex).
     # null (default) lets the loop classify; simple/trivial/complex skip Pass 1+2.
     intake_scope: null
-    verify_interval: 30
+    # Master switch for periodic DAG health verification (structural + LLM).
+    # false (default) skips the background health tick entirely; event-driven
+    # verification (post-completion, backoff) still runs. The resource watchdog
+    # tick still runs on the same cadence.
+    verify_periodic_enabled: false
+    verify_interval: 120
     # Idle tick (empty/all-terminal). 0 = reuse verify_interval. LLM skipped while idle.
     verify_idle_interval: 300
     verify_llm_enabled: true
     verify_llm_min_nonterminal: 1
     verify_llm_debounce: true
     dreaming_interval: 300
-    dreaming_scope: workspace
-    dreaming_modes:
-      episodic:
-        enabled: true
-        max_episodes: 10
-        min_success_rate: 0.8
-      procedure:
-        enabled: true
-        max_episodes: 10
-        min_success_rate: 0.8
-      semantic:
-        enabled: true
-        max_episodes: 10
-        min_success_rate: 0.8
-      profile:
-        enabled: true
-        max_episodes: 10
-        min_success_rate: 0.8
     webhooks: {}
     notify:
       enabled: false

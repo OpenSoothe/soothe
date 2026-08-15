@@ -83,7 +83,6 @@ class AutopilotMonitor:
         self._suspend_notify_scan: Any = None
         self._resource_reconcile: Any = None
         self._verify_task: asyncio.Task[None] | None = None
-        self._dreaming_task: asyncio.Task[None] | None = None
         # Last DAG fingerprint that triggered a health LLM call.
         self._last_health_llm_fingerprint: str | None = None
 
@@ -104,9 +103,8 @@ class AutopilotMonitor:
         self._dag_persist = persist_fn
 
     async def start(self) -> None:
-        """Start background verification and dreaming timer loops."""
+        """Start background verification loop."""
         self._verify_task = asyncio.create_task(self._verification_loop())
-        self._dreaming_task = asyncio.create_task(self._dreaming_timer_loop())
         logger.info("AutopilotMonitor started")
 
     async def stop(self) -> None:
@@ -120,9 +118,6 @@ class AutopilotMonitor:
         if self._verify_task is not None:
             self._verify_task.cancel()
             self._verify_task = None
-        if self._dreaming_task is not None:
-            self._dreaming_task.cancel()
-            self._dreaming_task = None
         logger.info("AutopilotMonitor stopped")
 
     # ── Goal Intake ────────────────────────────────────────────────────────
@@ -298,10 +293,6 @@ class AutopilotMonitor:
         # Post-completion verification
         await self._verify_post_completion(goal_id)
 
-        # Check if DAG complete → trigger dreaming
-        if self._ce.is_dag_complete():
-            await self._trigger_dreaming()
-
     async def _on_goal_failed(self, event: Any) -> None:
         """Handle soothe.internal.goal.failed."""
         goal_id = _event_goal_id(event)
@@ -391,6 +382,13 @@ class AutopilotMonitor:
         """Resolved ``agent.autopilot`` config (with safe defaults)."""
         return getattr(getattr(self._config, "agent", None), "autopilot", None)
 
+    def _periodic_verify_enabled(self) -> bool:
+        """Whether the periodic DAG health tick runs (master switch)."""
+        ap = self._autopilot_cfg()
+        if ap is None:
+            return False
+        return bool(getattr(ap, "verify_periodic_enabled", False))
+
     @staticmethod
     def _nonterminal_goals(goals: list[Any]) -> list[Any]:
         """Goals not in completed/failed/cancelled."""
@@ -426,7 +424,7 @@ class AutopilotMonitor:
     def _verify_tick_interval(self, *, has_open_work: bool) -> float:
         """Seconds to sleep before the next health tick."""
         ap = self._autopilot_cfg()
-        active = int(getattr(ap, "verify_interval", 30) or 30) if ap is not None else 30
+        active = int(getattr(ap, "verify_interval", 120) or 120) if ap is not None else 120
         if has_open_work:
             return float(active)
         idle = int(getattr(ap, "verify_idle_interval", 300) or 0) if ap is not None else 300
@@ -446,6 +444,19 @@ class AutopilotMonitor:
         debounce = bool(getattr(ap, "verify_llm_debounce", True)) if ap is not None else True
         if debounce and fingerprint == self._last_health_llm_fingerprint:
             return False
+        return True
+
+    async def _run_health_tick_if_enabled(self) -> bool:
+        """Run one DAG health tick when the periodic master switch is on.
+
+        Returns ``True`` when the tick ran, ``False`` when skipped because
+        ``verify_periodic_enabled`` is ``False``. The watchdog tick is
+        independent of this gate (see ``_verification_loop``).
+        """
+        if not self._periodic_verify_enabled():
+            logger.debug("Periodic DAG verification disabled; skipping health tick")
+            return False
+        await self._run_health_tick()
         return True
 
     async def _run_health_tick(self) -> None:
@@ -492,7 +503,13 @@ class AutopilotMonitor:
             logger.debug("Resource reconcile failed", exc_info=True)
 
     async def _verification_loop(self) -> None:
-        """Background DAG health verification with dynamic LLM gating."""
+        """Background DAG health verification with dynamic LLM gating.
+
+        When ``verify_periodic_enabled`` is ``False`` (default), the periodic
+        health tick is skipped — no structural heuristics, no LLM — while the
+        watchdog tick (suspend-notify scan + resource reconcile) keeps running
+        on the same cadence so orphaned runtime resources are still drained.
+        """
         while not self._shutdown_event.is_set():
             goals = self._ce.get_goals_by_status(None)
             has_open_work = bool(self._nonterminal_goals(goals))
@@ -501,7 +518,7 @@ class AutopilotMonitor:
             if self._shutdown_event.is_set():
                 break
             try:
-                await self._run_health_tick()
+                await self._run_health_tick_if_enabled()
             except Exception:
                 logger.exception("DAG verification failed")
             await self._run_watchdog_tick()
@@ -520,17 +537,6 @@ class AutopilotMonitor:
         """
         self._resource_reconcile = reconcile_fn
 
-    async def _dreaming_timer_loop(self) -> None:
-        """Background dreaming timer."""
-        interval = getattr(self._config.agent.autopilot, "dreaming_interval", 300)
-        while not self._shutdown_event.is_set():
-            await asyncio.sleep(interval)
-            try:
-                if self._ce.is_dag_complete():
-                    await self._trigger_dreaming()
-            except Exception:
-                logger.exception("Dreaming timer failed")
-
     async def _verify_post_completion(self, goal_id: str) -> None:
         """LLM-driven analysis after goal completion."""
         result = await self._verifier.verify_dag_post_completion(goal_id)
@@ -541,14 +547,3 @@ class AutopilotMonitor:
                 goal_id,
                 result.get("reasoning", ""),
             )
-
-    # ── Dreaming ────────────────────────────────────────────────────────────────
-
-    async def _trigger_dreaming(self) -> None:
-        """Trigger dreaming distillation.
-
-        Emits dreaming/awake lifecycle events. Per-mode LLM distillation is
-        deferred (IG-678 P1-7); events only until a follow-on IG.
-        """
-        await self._bus.emit_autopilot_dreaming()
-        await self._bus.emit_autopilot_awake()

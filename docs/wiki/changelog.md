@@ -27,12 +27,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.13] - 2026-08-15
+
+### Fixed
+- **checkpoints**: close loop-0041 race where `SharedPostgreSQLPool.reset_pool`
+  nulled `_pool` before reopening, so a concurrent
+  `for_shared_checkpoint_pool` caller snapshotted `get_pool() is None` and
+  raised "Shared checkpoint pool not initialized". `reset_pool` also
+  deadlocked re-entering `open()` on the non-reentrant `asyncio.Lock`. The
+  open+schema body is extracted into `_open_locked()` (caller holds
+  `_init_lock`); new `await_pool()` acquires `_init_lock` before returning
+  `_pool`, so callers block through the reopen window instead of observing
+  `None`. `StrangeLoopCheckpointPersistenceManager` and
+  `StrangeLoopStateManager` switched to `await_pool()`.
+
 ### Changed
-- Autopilot submit no longer auto-loads workspace `GOAL.md`: CLI requires an
-  explicit `TASK` or `--file`, and maturity / QA acceptance briefs read only
-  the durable job artifact `jobs/{job_id}/GOAL.md`. Removed unused
-  `GoalNode.source_file` / submit plumbing (IG-742).
-- Upgrade `soothe-nano` 1.1.16 → 1.1.19.
+- **notify**: drift-aware severity, TTL-based dedup, and configurable email
+  rate-limiting (IG-713). Severity classification is now drift-aware
+  (completed root with failed/active children or maturity blockers →
+  warning; suspended beyond `suspend_escalation_multiplier ×
+  suspend_after_seconds` → error). Dedup store switched from `set` to a
+  monotonic-timestamp dict with `dedup_ttl_seconds` (default 86400s; 0
+  disables) so long-running jobs can re-notify when state changes past the
+  window. Email sink `rate_limit_seconds` now flows from config (was
+  hardcoded 5.0). New configurable fields: `suspend_escalation_multiplier`
+  (default 2.0), `dedup_ttl_seconds` (default 86400),
+  `rate_limit_seconds` (default 5.0), synced across template/develop/daemon
+  config copies.
+- **cron**: `BuiltinJobSpec` registry + `BUILTIN_JOBS` tuple with
+  idempotent `seed_builtin_jobs()` on daemon startup; `enable_builtin_jobs`
+  flag (default true) seeds the quarterly RFC drift review.
+- **docs**: RFC methodology guide synthesized from RFC-900, RFC-903,
+  rfc-namings, IG-744, gap-inventory/triage IGs, and the Q3 2026 audit into
+  a reusable playbook (15 sections + appendix) at
+  `docs/rfc-methodology-guide.md`; wired into rfc-standard, rfc-template,
+  rfc-index, and rfc-history.
+- **chore**: removed the obsolete drift-detection pipeline
+  (`scripts/check_asyncapi_drift.py`, drift GitHub workflow, webhook test,
+  and `check_asyncapi_drift()` call sites in `verify_finally.sh`).
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.12...v0.10.13
 
 ## [v0.10.9] - 2026-08-13
 

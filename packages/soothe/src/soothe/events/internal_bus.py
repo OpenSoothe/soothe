@@ -18,14 +18,11 @@ import logging
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
-
-_DreamingTrigger = Literal["all_goals_complete", "no_ready_goals"]
-_AwakeTrigger = Literal["new_task", "wake_signal", "scheduled_task"]
 
 
 def _load_internal_events_module() -> Any:
@@ -137,22 +134,6 @@ class InternalEventBus:
                     handler.__name__,
                     exc_info=True,
                 )
-
-    async def emit_autopilot_dreaming(
-        self,
-        trigger: _DreamingTrigger = "all_goals_complete",
-    ) -> None:
-        """Emit ``soothe.internal.autopilot.dreaming``."""
-        events = _load_internal_events_module()
-        await self.emit(events.InternalAutopilotDreamingEvent(trigger=trigger))
-
-    async def emit_autopilot_awake(
-        self,
-        trigger: _AwakeTrigger = "wake_signal",
-    ) -> None:
-        """Emit ``soothe.internal.autopilot.awake``."""
-        events = _load_internal_events_module()
-        await self.emit(events.InternalAutopilotAwakeEvent(trigger=trigger))
 
     def has_subscribers(self, event_type: str) -> bool:
         """Check if event type has subscribers.
