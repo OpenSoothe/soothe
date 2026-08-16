@@ -10,11 +10,11 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from soothe_nano.utils.llm.invoke_policy import (
+from soothe_nano.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
 )
-from soothe_nano.utils.llm.structured import invoke_structured_chat
+from soothe_nano.llm.structured import invoke_structured_chat
 
 from soothe.sloop.intention.chitchat_fallbacks import pick_generic_chitchat_fallback
 
@@ -319,7 +319,7 @@ class IntakePass1Classifier:
         goal_trace: Any | None = None,
     ) -> dict[str, Any]:
         """Build RunnableConfig with Langfuse tracing."""
-        from soothe_nano.utils.llm.observability import create_llm_call_metadata
+        from soothe_nano.llm.observability import create_llm_call_metadata
 
         if goal_trace is not None:
             return goal_trace.intake_invoke_config(

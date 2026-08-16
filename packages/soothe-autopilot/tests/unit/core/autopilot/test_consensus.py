@@ -51,7 +51,7 @@ class TestEvaluateGoalCompletion:
     async def test_accept_with_structured_verdict(self) -> None:
         mock_model = MagicMock()
         with patch(
-            "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
+            "soothe_nano.llm.structured.invoke_structured_chat_typed",
             new_callable=AsyncMock,
             return_value=ConsensusVerdict(
                 decision="accept", reasoning="Response is comprehensive."
@@ -68,7 +68,7 @@ class TestEvaluateGoalCompletion:
     async def test_send_back_with_structured_verdict(self) -> None:
         mock_model = MagicMock()
         with patch(
-            "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
+            "soothe_nano.llm.structured.invoke_structured_chat_typed",
             new_callable=AsyncMock,
             return_value=ConsensusVerdict(
                 decision="send_back", reasoning="Missing key analysis section."
@@ -85,7 +85,7 @@ class TestEvaluateGoalCompletion:
     async def test_fail_with_structured_verdict(self) -> None:
         mock_model = MagicMock()
         with patch(
-            "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
+            "soothe_nano.llm.structured.invoke_structured_chat_typed",
             new_callable=AsyncMock,
             return_value=ConsensusVerdict(decision="fail", reasoning="Needs external credentials."),
         ):
@@ -109,7 +109,7 @@ class TestEvaluateGoalCompletion:
         mock_model = MagicMock()
         with (
             patch(
-                "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
+                "soothe_nano.llm.structured.invoke_structured_chat_typed",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("boom"),
             ),

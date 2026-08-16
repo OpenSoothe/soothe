@@ -92,7 +92,7 @@ class TestJobMaturityAssessor:
         )
         model = MagicMock()
         with patch(
-            "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
+            "soothe_nano.llm.structured.invoke_structured_chat_typed",
             new_callable=AsyncMock,
             return_value=verdict,
         ):
@@ -123,7 +123,7 @@ class TestJobMaturityAssessor:
         )
         model = MagicMock()
         with patch(
-            "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
+            "soothe_nano.llm.structured.invoke_structured_chat_typed",
             new_callable=AsyncMock,
             return_value=verdict,
         ):
@@ -142,7 +142,7 @@ class TestJobMaturityAssessor:
         model = MagicMock()
         with (
             patch(
-                "soothe_nano.utils.llm.structured.invoke_structured_chat_typed",
+                "soothe_nano.llm.structured.invoke_structured_chat_typed",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("boom"),
             ),

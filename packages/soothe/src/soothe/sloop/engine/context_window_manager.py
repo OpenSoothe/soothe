@@ -289,7 +289,7 @@ class ContextWindowManager:
             async def _invoke() -> Any:
                 return await model.ainvoke([HumanMessage(content=prompt)])
 
-            from soothe_nano.utils.llm.invoke_policy import (
+            from soothe_nano.llm.invoke_policy import (
                 await_with_llm_call_policy,
                 llm_rate_limit_config_from,
             )

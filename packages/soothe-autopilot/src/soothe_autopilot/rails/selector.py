@@ -224,7 +224,7 @@ class RailAutoPicker:
     ) -> RailAutoPickResponse:
         """Invoke structured pick for ``description`` against ``candidates``."""
         from langchain_core.messages import HumanMessage, SystemMessage
-        from soothe_nano.utils.llm.structured import invoke_structured_chat_typed
+        from soothe_nano.llm.structured import invoke_structured_chat_typed
 
         user_prompt = format_rail_pick_user_prompt(
             description,

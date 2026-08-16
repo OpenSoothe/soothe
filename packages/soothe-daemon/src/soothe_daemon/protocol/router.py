@@ -2183,7 +2183,7 @@ class MessageRouter:
         response_schema = q_opts.get("response_schema")
         if response_schema is not None:
             try:
-                from soothe_nano.utils.llm.schema_wire import validate_response_schema
+                from soothe_nano.llm.schema_wire import validate_response_schema
 
                 q_opts["response_schema"] = validate_response_schema(response_schema)
             except ValueError as exc:

@@ -96,12 +96,12 @@ async def evaluate_goal_completion(
     )
     try:
         from langchain_core.messages import HumanMessage
-        from soothe_nano.utils.llm.invoke_policy import (
+        from soothe_nano.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
-        from soothe_nano.utils.llm.observability import create_llm_call_metadata
-        from soothe_nano.utils.llm.structured import invoke_structured_chat_typed
+        from soothe_nano.llm.observability import create_llm_call_metadata
+        from soothe_nano.llm.structured import invoke_structured_chat_typed
 
         invoke_config = {
             "metadata": create_llm_call_metadata(

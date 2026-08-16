@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from soothe_nano.utils.llm.invoke_policy import (
+from soothe_nano.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
 )
-from soothe_nano.utils.llm.structured import (
+from soothe_nano.llm.structured import (
     StructuredOutputError,
     invoke_structured_chat,
 )

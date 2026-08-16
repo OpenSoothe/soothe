@@ -516,7 +516,7 @@ class LLMGuardEvaluator:
 
     async def evaluate(self, ctx: GuardContext) -> GuardResult:
         from pydantic import BaseModel, Field
-        from soothe_nano.utils.llm.structured import (
+        from soothe_nano.llm.structured import (
             StructuredOutputError,
             invoke_structured_chat_typed,
         )

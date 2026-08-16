@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
-from soothe_nano.utils.llm.structured import StructuredOutputError
+from soothe_nano.llm.structured import StructuredOutputError
 
 from soothe.sloop.cognition.planner import (
     LLMPlanner,

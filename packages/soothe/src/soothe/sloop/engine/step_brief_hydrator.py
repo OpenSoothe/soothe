@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
-from soothe_nano.utils.llm.structured import invoke_structured_chat_typed
+from soothe_nano.llm.structured import invoke_structured_chat_typed
 
 from soothe.sloop.engine.step_predecessor_context import template_hydrate_step_brief
 

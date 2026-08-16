@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from soothe_nano.utils.llm.invoke_policy import EnhancedTimeoutError
+from soothe_nano.llm.invoke_policy import EnhancedTimeoutError
 
 from soothe.coreagent import SootheNanoAgent as CoreAgent
 from soothe.sloop.engine.executor import Executor

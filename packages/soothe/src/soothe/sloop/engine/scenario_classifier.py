@@ -405,7 +405,7 @@ async def classify_synthesis_scenario(
     # Call LLM with structured output
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
-        from soothe_nano.utils.llm.invoke_policy import (
+        from soothe_nano.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
