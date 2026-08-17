@@ -123,9 +123,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   config copies.
 - **cron**: `BuiltinJobSpec` registry + `BUILTIN_JOBS` tuple with
   idempotent `seed_builtin_jobs()` on daemon startup; `enable_builtin_jobs`
-  flag (default true) seeds the quarterly RFC drift review.
-- **docs**: RFC methodology guide synthesized from RFC-900, RFC-903,
-  rfc-namings, IG-744, gap-inventory/triage IGs, and the Q3 2026 audit into
+  flag (default true).
+- **docs**: RFC methodology guide synthesized from RFC-900,
+  rfc-namings, IG-744, gap-inventory/triage IGs into
   a reusable playbook (15 sections + appendix) at
   `docs/rfc-methodology-guide.md`; wired into rfc-standard, rfc-template,
   rfc-index, and rfc-history.

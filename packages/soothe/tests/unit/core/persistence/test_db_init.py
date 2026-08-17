@@ -197,8 +197,7 @@ def test_checkpoints_has_checkpoint_index_migration() -> None:
     scripts = discover_versioned_scripts("soothe_checkpoints", sql_root=_HOST_SQL_ROOT)
     assert scripts, "soothe_checkpoints should ship at least one versioned migration"
     assert any(
-        "checkpoint_index" in script.sql and "ADD COLUMN" in script.sql
-        for script in scripts
+        "checkpoint_index" in script.sql and "ADD COLUMN" in script.sql for script in scripts
     ), "expected an ALTER TABLE ... ADD COLUMN checkpoint_index migration"
 
 

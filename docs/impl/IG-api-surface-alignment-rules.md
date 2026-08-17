@@ -7,7 +7,6 @@
 > (`soothe-sdk`, `soothe-nano`, `soothe-deepagents`).
 >
 > Inputs: TJL-01 RFC schema (`docs/analysis/rfc-module-boundary-schema.json`),
-> TJL-02 codebase index (`docs/analysis/tjl-02-codebase-index.json`),
 > AGENTS.md §7b DAG, RFC lifecycle states (`docs/specs/templates/rfc-standard.md`).
 
 ---
@@ -132,7 +131,7 @@ The checker consolidates findings into four buckets (TJL-05 §9). Mapping:
 |---|---|---|
 | **critical** | R1 or R9 failure (DAG/invariant breach) | Block release; fix immediately. |
 | **high** | R4/R5/R8 failure where RFC `Status: Implemented` | Fix code or downgrade RFC status within the sprint. |
-| **medium** | R2/R3/R6/R7 failure (path/contract/migration drift) | Track as docs debt; batch-fix in quarterly RFC audit (RFC-903). |
+| **medium** | R2/R3/R6/R7 failure (path/contract/migration drift) | Track as docs debt; batch-fix in the next docs sweep. |
 | **low** | Informational (test-only edges, undeclared-but-compliant edges) | No action; logged for visibility. |
 
 **Zero-critical invariant:** A green CI run requires `critical == []`. High and
@@ -187,5 +186,5 @@ and classified medium/low, not high:
   `module_path` to the SDK location and set `Status` appropriately (R7).
 - **When renaming a directory**: update all RFC `module_path` declarations in
   the same PR; otherwise R2 records medium debt.
-- **Quarterly audit** (RFC-903): sweep all medium findings and reclassify or
+- **Docs sweep**: sweep all medium findings and reclassify or
   resolve; this is the primary mechanism for closing drift debt.

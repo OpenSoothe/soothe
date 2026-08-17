@@ -3,7 +3,7 @@
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
 **Last Updated**: 2026-08-17
-**Total RFCs**: 92 (83 active + 9 archived)
+**Total RFCs**: 90 (81 active + 9 archived)
 
 ## Summary Statistics
 
@@ -11,11 +11,10 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Draft | 37 | 40.2% |
-| Implemented (all variants) | 44 | 47.8% |
-| Archived | 9 | 9.8% |
+| Draft | 37 | 41.1% |
+| Implemented (all variants) | 44 | 48.9% |
+| Archived | 9 | 10.0% |
 | Accepted | 1 | 1.1% |
-| Proposed | 2 | 2.2% |
 
 ### By Kind
 
@@ -30,63 +29,24 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 | Protocol Specification | 1 |
 | Feature Enhancement | 1 |
 | Product Specification | 1 |
-| Process Specification | 3 |
+| Process Specification | 1 |
 | Unknown | 2 |
 
 ## Recent Changes
 
-### 2026-08-15
-
-- **Q3 2026 Δ-Cycle audit report** published at
-  `docs/analysis/rfc-audit-Q3-2026-delta.md` — first recurring drift review
-  under RFC-903. No corpus-metric movement from Q3 baseline. 1/5 immediate
-  items applied (I-5: RFC-100 status). 4 new false-positive drift records
-  identified (IG-740 corrections DR-095–098). 3 Dependency Graph metrics
-  computed for the first time (dangling refs: 10, missing reverse refs: 5,
-  path-restructure drift: 7 RFCs / 17 paths). Roles: Audit Owner = Soothe
-  (BMF-01); Reviewer sign-off pending (deviation D-6). In-cycle fixes
-  (I-1–I-4) deferred; no index/history totals changed this cycle.
-
 ### 2026-08-14
 
 - **RFC Methodology Guide** published at `docs/rfc-methodology-guide.md`.
-  Synthesizes the methodology scattered across RFC-900, RFC-903, the RFC
+  Synthesizes the methodology scattered across RFC-900, the RFC
   template, `rfc-namings.md`, `rfc-index.md`, IG-744, the gap-inventory/triage
-  IGs, and the Q3 2026 audit report into a single reusable playbook (15
-  sections + appendix). Covers RFC lifecycle, authoring, kinds, number
-  segments, terminology discipline, index/catalog hygiene, dependency
-  tracking, deprecation/archival, path-restructure drift management,
-  quarterly audit cycle, spec-vs-code gap inventory method, gap triage
-  scoring (C1–C6 × I1–I5 → P0–P3), audit metrics reference, series
-  consolidation triggers, and four reusable checklists. Wired into the RFC
-  update flow via `rfc-standard.md`, `templates/rfc-template.md`, and
-  `rfc-index.md` as a normative reference for all RFC authoring, status
-  transitions, and audit work.
-
-### 2026-08-17
-
-- **RFC-904** drafted: Inter-Rater Reliability Reviewer Pool — process
-  specification defining the reviewer pool schema, cross-team coverage rules,
-  and calibration scope for the quarterly RFC audit cycle (RFC-903).
-  Establishes the reviewer data model (id, display_name, team, dag_level,
-  active, calibration_domains), team registry, coverage constraints (≥3
-  teams, both DAG levels, no team >50%), calibration domains (lifecycle
-  status accuracy, spec-vs-code drift, DAG boundary compliance, dependency
-  graph integrity, deprecation backlog throughput, index/catalog hygiene),
-  and IRR computation targets (Cohen's κ ≥0.7 pairwise, Fleiss' κ ≥0.6
-  pool-wide). Supersedes the informal "Reviewers" role hat in RFC-903 §Roles
-  with a named, cross-team pool. Status: Proposed.
-
-### 2026-08-11
-
-- **RFC-903** drafted: Quarterly RFC Audit Cycle — process specification
-  defining a quarterly audit of the RFC corpus. Establishes audit scope
-  (lifecycle accuracy, dependency integrity, DAG boundary compliance,
-  deprecation cadence), cadence (Q1/Q2/Q3/Q4 with fixed anchor weeks and
-  ~10 business-day window), and tracking metrics (lifecycle accuracy %,
-  stale RFC count, DAG violations, path-conformance %, archive backlog).
-  Operationalizes RFC-900 lifecycle states on a recurring schedule.
-  Status: Proposed.
+  IGs into a single reusable playbook (15 sections + appendix). Covers RFC
+  lifecycle, authoring, kinds, number segments, terminology discipline,
+  index/catalog hygiene, dependency tracking, deprecation/archival,
+  path-restructure drift management, spec-vs-code gap inventory method, gap
+  triage scoring (C1–C6 × I1–I5 → P0–P3), series consolidation triggers, and
+  four reusable checklists. Wired into the RFC update flow via
+  `rfc-standard.md`, `templates/rfc-template.md`, and `rfc-index.md` as a
+  normative reference for all RFC authoring and status transitions.
 
 ### 2026-08-08
 
@@ -132,36 +92,6 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **RFC-413** Phase 4 complete (IG-655): append-oriented DisplayCardStore ledger, live `soothe.card.*` via `event`/`custom`, TUI always prefers daemon projection for structural cards; inline tool rows remain live-only on step widgets. Design draft `docs/drafts/2026-07-27-tui-card-replay-source-of-truth-design.md`.
 
 ## Chronological Timeline
-
-### Major Changes - 2026-08-17
-
-**RFC-904**: Inter-Rater Reliability Reviewer Pool
-
-- Process specification defining the reviewer pool schema, cross-team
-  coverage rules, and calibration scope for the quarterly RFC audit cycle
-  (RFC-903). Establishes a reviewer data model (id, display_name, team,
-  dag_level, active, calibration_domains), a team registry aligned to the
-  Soothe package DAG, coverage constraints (≥3 teams, both DAG levels
-  represented, no single team >50%), and six calibration domains mapped to
-  RFC-903 §Tracking Metrics. IRR computation targets: Cohen's κ ≥0.7
-  pairwise, Fleiss' κ ≥0.6 pool-wide. Supersedes the informal "Reviewers"
-  role hat in RFC-903 §Roles with a named, cross-team pool. Implementation:
-  **IG-745**.
-
-### Major Changes - 2026-08-11
-
-**RFC-903**: Quarterly RFC Audit Cycle
-
-- Process specification establishing a recurring quarterly audit of the RFC
-  corpus. Scope covers lifecycle-state accuracy, dependency-integrity
-  verification, package-DAG boundary compliance, deprecation/archive cadence,
-  and spec-vs-codebase drift reconciliation. Cadence anchors on the second
-  week of each calendar quarter (Q1: Feb W2, Q2: May W2, Q3: Aug W2, Q4: Nov
-  W2) with a ~10 business-day audit window. Tracking metrics: lifecycle
-  accuracy %, stale RFC count, DAG boundary violations, path-conformance %,
-  archive backlog, dependency-cycle count, and audit-to-remediation lead time.
-- Operationalizes RFC-900 lifecycle states (Draft → Proposed → Accepted →
-  Implemented → Deprecated → Archived) on a fixed cadence rather than ad-hoc.
 
 ### Major Changes - 2026-08-08
 

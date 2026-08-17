@@ -1,14 +1,14 @@
 # RFC Index
 
 **Last Updated**: 2026-08-17
-**Total RFCs**: 92 (83 active, 9 archived, 7 reclassified, 3 process specifications)
+**Total RFCs**: 90 (81 active, 9 archived, 7 reclassified, 2 process specifications)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
-> **📋 Methodology Guide**: Before authoring a new RFC, transitioning an RFC's
-> status, or running a quarterly audit, consult the
+> **📋 Methodology Guide**: Before authoring a new RFC or transitioning an RFC's
+> status, consult the
 > [RFC Methodology Guide](../rfc-methodology-guide.md) — a reusable playbook
-> synthesizing lifecycle rules, gap-triage scoring, and audit checklists.
+> synthesizing lifecycle rules and gap-triage scoring.
 
 > **⚠️ Path Restructure Notice (2026-08)**: RFCs written before the 2026-07
 > `core/` → flat package restructure contain file paths that no longer match the
@@ -49,7 +49,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | Implemented (other variants — see individual RFC headers) | 16 |
 | Archived | 9 |
 | Accepted | 1 |
-| Proposed | 2 |
+| Proposed | 0 |
 
 > **Note**: "Implemented (other variants)" groups 16 RFCs whose status headers carry
 > implementation-detail prose (e.g. `Implemented (Partially Superseded)`,
@@ -70,7 +70,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | Protocol Specification | 1 |
 | Feature Enhancement | 1 |
 | Product Specification | 1 |
-| Process Specification | 2 |
+| Process Specification | 1 |
 
 ---
 
@@ -746,22 +746,6 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-06-28
   - Dependencies: RFC-101, RFC-102, RFC-222
 
-- **RFC-903**: [Quarterly RFC Audit Cycle](RFC-903-quarterly-rfc-audit-cycle.md)
-  - Kind: Process Specification
-  - Status: Proposed
-  - Created: 2026-08-11
-  - Dependencies: RFC-900
-  - Authors: Soothe Team
-  - Note: Operationalizes RFC-900 lifecycle and deprecation cadence on a quarterly schedule
-
-- **RFC-904**: [Inter-Rater Reliability Reviewer Pool](RFC-904-inter-rater-reliability-reviewer-pool.md)
-  - Kind: Process Specification
-  - Status: Proposed
-  - Created: 2026-08-17
-  - Dependencies: RFC-903
-  - Authors: Soothe Team
-  - Note: Defines the reviewer pool schema, cross-team coverage, and calibration scope for the quarterly audit cycle
-
 ---
 
 ## Quick Reference
@@ -827,8 +811,6 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 | RFC | Title | Status | Created |
 |-----|-------|--------|---------|
-| RFC-904 | Inter-Rater Reliability Reviewer Pool | Proposed | 2026-08-17 |
-| RFC-903 | Quarterly RFC Audit Cycle | Proposed | 2026-08-11 |
 | RFC-633 | Planner Plan Artifact and Human Review | Implemented (partial) | 2026-08-11 |
 | RFC-232 | Flat WavePlan Wire Ingest (Semi-Structured, No Nesting) | Draft | 2026-08-07 |
 | RFC-231 | LoopRail and Rail Exec (Composable Verb Bodies) | Draft | 2026-08-07 |
@@ -877,8 +859,6 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 ## Recently Added
 
-- **RFC-904**: Inter-Rater Reliability Reviewer Pool (2026-08-17, Proposed)
-- **RFC-903**: Quarterly RFC Audit Cycle (2026-08-11, Proposed)
 - **RFC-232**: Flat WavePlan Wire Ingest (Semi-Structured, No Nesting) (2026-08-07, Draft)
 - **RFC-231**: LoopRail and Rail Exec (Composable Verb Bodies) (2026-08-07, Draft)
 - **RFC-230**: Job Maturity Assessment for Autopilot Rails (2026-08-05, Draft)

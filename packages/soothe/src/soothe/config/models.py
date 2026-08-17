@@ -1662,10 +1662,7 @@ class CronConfig(BaseModel):
     )
     enable_builtin_jobs: bool = Field(
         default=True,
-        description=(
-            "When true, seed built-in recurring maintenance jobs on startup "
-            "(e.g. quarterly RFC drift review per RFC-903 audit cadence)"
-        ),
+        description=("When true, seed built-in recurring maintenance jobs on startup."),
     )
 
 

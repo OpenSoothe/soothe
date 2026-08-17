@@ -1,13 +1,13 @@
 # RFC Methodology Guide
 
-> Synthesized from RFC-900 (lifecycle/reclassification), RFC-903 (quarterly
-> audit cycle), the RFC template, `rfc-namings.md`, `rfc-index.md`,
-> IG-744 (gap/drift report), IG-spec-vs-code-gap-inventory, IG-gap-triage-matrix,
-> IG-gap-criticality-impact-criteria, and the Q3 2026 audit report.
+> Synthesized from RFC-900 (lifecycle/reclassification), the RFC template,
+> `rfc-namings.md`, `rfc-index.md`, IG-744 (gap/drift report),
+> IG-spec-vs-code-gap-inventory, IG-gap-triage-matrix,
+> IG-gap-criticality-impact-criteria.
 >
 > This guide is a **reusable playbook**: it distills the methodology scattered
 > across governance RFCs and implementation guides into a single reference.
-> It is normative for new RFC authoring, audit cycles, and gap-triage work.
+> It is normative for new RFC authoring and gap-triage work.
 
 **Created**: 2026-08-14
 **Synthesis source**: TEE-01 audit (full RFC/refinement corpus scan)
@@ -25,12 +25,10 @@
 7. [Dependency Tracking](#7-dependency-tracking)
 8. [Deprecation and Archival](#8-deprecation-and-archival)
 9. [Path-Restructure Drift Management](#9-path-restructure-drift-management)
-10. [Quarterly Audit Cycle](#10-quarterly-audit-cycle)
-11. [Spec-vs-Code Gap Inventory Method](#11-spec-vs-code-gap-inventory-method)
-12. [Gap Triage: Criticality × Impact](#12-gap-triage-criticality--impact)
-13. [Audit Metrics Reference](#13-audit-metrics-reference)
-14. [Series Consolidation Triggers](#14-series-consolidation-triggers)
-15. [Checklists](#15-checklists)
+10. [Spec-vs-Code Gap Inventory Method](#10-spec-vs-code-gap-inventory-method)
+11. [Gap Triage: Criticality × Impact](#11-gap-triage-criticality--impact)
+12. [Series Consolidation Triggers](#12-series-consolidation-triggers)
+13. [Checklists](#13-checklists)
 
 ---
 
@@ -60,9 +58,9 @@ Draft → Proposed → Accepted → Implemented → Deprecated → Archived
 - The bare token `Implemented (partial)` is **not** a sanctioned lifecycle
   state. Use `Implemented` with partial-implementation prose in the body, or
   `Draft` if the core contract is unshipped.
-- Time-box compliance (Proposed ≤ 30d, Accepted ≤ 90d) is checked each
-  quarterly audit cycle (RFC-903).
-- Status transitions are **non-destructive**: the audit recommends; status
+- Time-box compliance (Proposed ≤ 30d, Accepted ≤ 90d) is checked during
+  routine status reviews.
+- Status transitions are **non-destructive**: a review recommends; status
   changes follow the RFC-900 supersession process (§8 below).
 
 ---
@@ -111,7 +109,7 @@ When an RFC is created or its status changes:
 4. If implementation guide exists, cross-link from RFC body
 
 **Failure to update index and history in lockstep is a hard hygiene bug**
-(see §6). The Q3 2026 audit found a +5 delta between these files.
+(see §6). A prior corpus scan found a +5 delta between these files.
 
 ---
 
@@ -126,7 +124,7 @@ The template supports three kinds. Choose based on the RFC's purpose:
 | **Implementation Interface Design** | Concrete types, API contracts, method signatures | Type Definitions, API Contracts, Naming Conventions, Error Handling |
 
 Additional ad-hoc kinds in the corpus (not in template but present):
-- **Process Specification** (RFC-900, RFC-903) — cadence, roles, scope, metrics
+- **Process Specification** (RFC-900) — lifecycle, roles, deprecation process
 - **Protocol Specification** — Python `Protocol`/ABC interface definitions
 - **Feature Enhancement** — incremental changes to existing RFCs
 
@@ -140,8 +138,8 @@ document why the template kinds are insufficient.
 RFC-900 established semantic number segments. New RFCs must be placed in the
 correct segment:
 
-| Segment | Domain | Current count (Q3 2026) |
-|---------|--------|--------------------------|
+| Segment | Domain | Current count |
+|---------|--------|----------------|
 | 0xx | Foundation (system concept, core protocols) | 2 |
 | 1xx | CoreAgent runtime, tools, security | 6 |
 | 2xx | StrangeLoop (plan-execute-assess loop) | 23 |
@@ -180,13 +178,13 @@ Two files must agree on total RFC count:
 - `docs/specs/rfc-index.md` — catalog with status summary table
 - `docs/specs/rfc-history.md` — chronological evolution log
 
-**Hard rule (ALIGN-CORPUS-03):** Index total − History total must equal **0**.
+**Hard rule:** Index total − History total must equal **0**.
 Any nonzero delta is a hygiene bug.
 
 ### Updating the index
 
 The index `RFC Status Summary` table must be regenerated from a full-corpus
-`Status:` header scan whenever statuses change. The Q3 2026 audit found this
+`Status:` header scan whenever statuses change. A full-corpus scan found this
 table stale by +16 Draft / −20 Implemented because it was not refreshed after
 the 2026-06-19 RFC-900 reclassification.
 
@@ -208,7 +206,7 @@ Every RFC header should declare:
 
 Cross-reference `Dependencies`/`Supersedes` headers against the actual RFC
 set. Dangling references (pointing to non-existent or archived RFCs) are a
-finding. The quarterly audit runs `grep` across RFC headers to verify.
+finding. A routine `grep` across RFC headers verifies this.
 
 ---
 
@@ -225,14 +223,11 @@ RFC-900 defines a four-step deprecation process:
 
 ### Archived RFC status
 
-Archived RFCs should carry `Status: Archived` in their header. The Q3 2026
-audit found 9 archived RFCs retaining pre-archive status headers (Gap F-5) —
-a remediation backlog item.
+Archived RFCs should carry `Status: Archived` in their header.
 
 ### Deprecation window compliance
 
-RFC-903 mandates a minimum 90-day Deprecated → Archived window. The audit
-checks that this window is honored (ALIGN-CORPUS-07).
+RFC-900 mandates a minimum 90-day Deprecated → Archived window.
 
 ---
 
@@ -249,54 +244,9 @@ maintained in `rfc-index.md` (Path Restructure Notice table).
 - **Canonical mapping**: refer to the index's path-mapping table for current
   locations
 
-### Audit metric
-
-Path-restructure drift is measured as the count of declared path mismatches
-(ALIGN-DRIFT-02). Target: trend down, 0 net-new per quarter.
-
 ---
 
-## 10. Quarterly Audit Cycle
-
-RFC-903 establishes a recurring quarterly audit. Each cycle produces a
-structured assessment published in `docs/analysis/rfc-audit-Q{n}-{year}.md`.
-
-### Cycle phases
-
-| Phase | Name | Action |
-|-------|------|--------|
-| 1 | **Collect** | Freeze inputs: TJL boundary report, RFC index/history/namings, boundary-check script output, TJL-02/05 JSON |
-| 2 | **Assess** | Run all ALIGN-CORPUS and ALIGN-DRIFT metrics against frozen inputs |
-| 3 | **Report** | Publish audit report with metrics, gap findings (F-n), remediation backlog |
-| 4 | **Feed forward** | Backlog items become IG work for the next quarter |
-
-### Audit scope (in-scope concerns)
-
-| Concern | Source |
-|---------|--------|
-| RFC lifecycle status accuracy | RFC `Status:` headers vs assessed reality |
-| Spec-vs-codebase drift | TJL-05 / `ci-rfc-boundary-report.md` |
-| DAG boundary compliance | `scripts/check_module_import_boundaries.sh` |
-| Dependency graph integrity | RFC `Dependencies`/`Supersedes` headers vs RFC set |
-| Deprecation backlog throughput | RFC-90 Deprecated → Archived window |
-| Index/catalog hygiene | `rfc-index.md` vs `rfc-history.md` totals |
-| Series/sub-category coherence | RFC count per segment; overcrowding |
-| Path-restructure drift | Index mapping table vs codebase |
-
-### Audit principles
-
-1. **Non-destructive**: audit reports state and recommends; does not change
-   RFC status unilaterally.
-2. **Reuse existing tooling**: consumes TJL pipeline outputs; does not
-   re-derive AST or import-graph work.
-3. **Comparable metrics**: same metric definitions each cycle for
-   quarter-over-quarter trend analysis.
-4. **Self-applying**: process RFCs (RFC-900, RFC-903) are audited for fitness.
-5. **Internal-only identifiers**: audit reports may freely reference RFC-XXX.
-
----
-
-## 11. Spec-vs-Code Gap Inventory Method
+## 10. Spec-vs-Code Gap Inventory Method
 
 Derived from IG-spec-vs-code-gap-inventory. This is the **reusable procedure**
 for cross-referencing RFCs against the codebase.
@@ -347,7 +297,7 @@ actually lives in `soothe_nano.mcp.mcp_progressive` (correct per DAG rules).
 
 ---
 
-## 12. Gap Triage: Criticality × Impact
+## 11. Gap Triage: Criticality × Impact
 
 Derived from IG-gap-criticality-impact-criteria. Every gap row in the
 inventory is scored on two axes, then mapped to a priority.
@@ -428,56 +378,18 @@ keyword heuristics on user content (AGENTS §9 / RFC-630).
 
 ---
 
-## 13. Audit Metrics Reference
+## 12. Series Consolidation Triggers
 
-All metrics use stable IDs for quarter-over-quarter comparability.
-
-### ALIGN-CORPUS (corpus health)
-
-| ID | Metric | Target |
-|----|--------|--------|
-| ALIGN-CORPUS-01 | Active RFC count | tracked |
-| ALIGN-CORPUS-02 | Archived RFC count | tracked |
-| ALIGN-CORPUS-03 | Index vs history total delta | **0** (hard) |
-| ALIGN-CORPUS-04 | Draft ratio | trend down |
-| ALIGN-CORPUS-05 | Implemented ratio | trend up |
-| ALIGN-CORPUS-06 | Status accuracy rate | ≥ 0.95 |
-| ALIGN-CORPUS-07 | Deprecation window compliance | 1.0 |
-| ALIGN-CORPUS-08 | Orphan count | → 0 |
-
-### ALIGN-DRIFT (spec-vs-code drift)
-
-| ID | Metric | Target |
-|----|--------|--------|
-| ALIGN-DRIFT-01 | DAG boundary violations | **0** (hard) |
-| ALIGN-DRIFT-02 | Declared path mismatches | trend down; 0 net-new/qtr |
-| ALIGN-DRIFT-03 | API contract drift (true absence) | trend down |
-| ALIGN-DRIFT-04 | Declared-but-unimplemented (high severity) | tracked; 0 vs Implemented RFCs |
-| ALIGN-DRIFT-05 | Data model coverage | trend up |
-| ALIGN-DRIFT-06 | Wire protocol file integrity | trend down |
-| ALIGN-DRIFT-07 | Implemented-RFC lies (false claims) | **0** (hard) |
-| ALIGN-DRIFT-08 | PyPI migration debt | trend down |
-| ALIGN-DRIFT-09 | Type definition coverage | trend up |
-
----
-
-## 14. Series Consolidation Triggers
-
-RFC-903 §Scope flags series overcrowding as an audited concern.
+Series overcrowding is a governance concern.
 
 | Trigger | Threshold | Action |
 |---------|-----------|--------|
 | Segment reaches ≥ 20 RFCs | **Consolidation threshold** | Trigger split/merge review |
 | Segment reaches ≥ 25 RFCs | **At threshold** | Split review is mandatory; must propose consolidation RFC |
 
-### Q3 2026 baseline status
-
-- **2xx (StrangeLoop)**: 23 RFCs — at consolidation threshold
-- **6xx (Refinements)**: 25 RFCs — at threshold; split review triggered
-
 ### Consolidation approach
 
-When triggered, the audit report recommends:
+When triggered, a governance review recommends:
 1. Identify semantic sub-clusters within the segment
 2. Propose splitting into new segments or merging overlapping RFCs
 3. File a consolidation RFC (9xx governance series) with the reclassification
@@ -485,9 +397,9 @@ When triggered, the audit report recommends:
 
 ---
 
-## 15. Checklists
+## 13. Checklists
 
-### 15.1 New RFC Authoring Checklist
+### 13.1 New RFC Authoring Checklist
 
 - [ ] Copied `docs/specs/templates/rfc-template.md`
 - [ ] Header fields complete (RFC, Title, Status, Kind, Created, Dependencies)
@@ -502,7 +414,7 @@ When triggered, the audit report recommends:
 - [ ] Dependencies/Supersedes headers reference existing, non-archived RFCs (§7)
 - [ ] File paths reflect current codebase layout (not pre-restructure paths) (§9)
 
-### 15.2 Status Transition Checklist
+### 13.2 Status Transition Checklist
 
 - [ ] `Status:` header updated to new lifecycle state (§1)
 - [ ] If Deprecated: supersession notice added (§8)
@@ -511,20 +423,7 @@ When triggered, the audit report recommends:
 - [ ] `rfc-index.md` Status Summary table regenerated from full-corpus scan (§6)
 - [ ] `rfc-history.md` entry appended; totals match index (§6)
 
-### 15.3 Quarterly Audit Checklist
-
-- [ ] Phase 1 inputs frozen: boundary report, index, history, namings, boundary script output, TJL JSONs (§10)
-- [ ] All ALIGN-CORPUS metrics computed (§13)
-- [ ] All ALIGN-DRIFT metrics computed (§13)
-- [ ] Hard targets verified: CORPUS-03 (delta=0), DRIFT-01 (0 violations), DRIFT-07 (0 false claims)
-- [ ] Gap inventory refreshed via §11 procedure (if not reusing prior cycle's)
-- [ ] New gaps triaged via §12 scoring (C1–C6 × I1–I5 → P0–P3)
-- [ ] Series consolidation triggers checked (§14)
-- [ ] Gap findings (F-n) recorded with remediation backlog
-- [ ] Report published to `docs/analysis/rfc-audit-Q{n}-{year}.md`
-- [ ] Backlog items fed forward as IG work assignments
-
-### 15.4 Gap Inventory Procedure Checklist
+### 13.3 Gap Inventory Procedure Checklist
 
 - [ ] Step 1: Extracted title, status, section headings from every RFC in `docs/specs/` and `docs/archive/specs/`
 - [ ] Step 2: Ran targeted `rg -l "<component>"` against `packages/` source (excluding `tests/`)
@@ -547,11 +446,8 @@ When triggered, the audit report recommends:
 | RFC history | `docs/specs/rfc-history.md` | Chronological evolution log |
 | RFC namings | `docs/specs/rfc-namings.md` | Terminology registry |
 | RFC-900 | `docs/specs/RFC-900-deprecation-reclassification-scheme.md` | Lifecycle model, deprecation process, reclassification |
-| RFC-903 | `docs/specs/RFC-903-quarterly-rfc-audit-cycle.md` | Quarterly audit charter |
 | Gap inventory | `docs/impl/IG-spec-vs-code-gap-inventory.md` | Spec-vs-code cross-reference |
 | Gap triage matrix | `docs/impl/IG-gap-triage-matrix.md` | Scored priorities (P0–P3) |
 | Criticality criteria | `docs/impl/IG-gap-criticality-impact-criteria.md` | C1–C6 × I1–I5 scoring scheme |
 | Gap/drift report | `docs/impl/IG-744-rfc-impl-gap-drift-report.md` | Verified gap/drift findings |
-| Q3 2026 audit | `docs/analysis/rfc-audit-Q3-2026.md` | First baseline-cycle audit report |
-| Boundary report | `docs/analysis/ci-rfc-boundary-report.md` | TJL-05 human-readable mirror |
 | IG template | `docs/specs/templates/impl-guide-template.md` | Implementation guide scaffold |
