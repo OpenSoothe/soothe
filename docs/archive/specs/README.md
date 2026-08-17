@@ -14,7 +14,7 @@ RFCs are moved to this archive when:
 2. They have been superseded by newer specifications
 3. All dependent systems have been updated to reference replacement RFCs
 
-For details on the deprecation process, see [RFC-900: RFC Deprecation List and Number Segment Reclassification Scheme](../RFC-900-deprecation-reclassification-scheme.md).
+For details on the deprecation process, see [RFC-900: RFC Deprecation List and Number Segment Reclassification Scheme](../../specs/RFC-900-deprecation-reclassification-scheme.md).
 
 ## Archived RFCs
 
@@ -25,7 +25,10 @@ For details on the deprecation process, see [RFC-900: RFC Deprecation List and N
 | RFC-216 | StrangeLoop Multi-Thread Infinite Lifecycle | 2026-06-19 | RFC-207 |
 | RFC-300 | Context and Memory Architecture Design | 2026-06-19 | RFC-302, RFC-303 |
 | RFC-411 | Event Stream Replay & History Reconstruction | 2026-06-19 | RFC-413 |
+| RFC-505 | Soothe Desktop Client Architecture | 2026-06-04 | RFC-629 |
 | RFC-605 | Explore Subagent and Parallel Spawning | 2026-06-19 | RFC-613 |
+| RFC-613 | Explore Agent — LLM-Orchestrated Iterative Search | 2026-08-17 | — (CoreAgent file tools cover readonly recon) |
+| RFC-700 | Desktop App Product Redesign | 2026-06-04 | RFC-629 |
 
 ## Usage Guidelines
 
@@ -36,6 +39,6 @@ For details on the deprecation process, see [RFC-900: RFC Deprecation List and N
 
 ## Related Documentation
 
-- [RFC Index](../rfc-index.md) - Active RFC listing
-- [RFC-900](../RFC-900-deprecation-reclassification-scheme.md) - Deprecation policy and process
-- [RFC Naming Conventions](../rfc-namings.md) - RFC naming standards
+- [RFC Index](../../specs/rfc-index.md) - Active RFC listing
+- [RFC-900](../../specs/RFC-900-deprecation-reclassification-scheme.md) - Deprecation policy and process
+- [RFC Naming Conventions](../../specs/rfc-namings.md) - RFC naming standards

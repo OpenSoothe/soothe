@@ -272,7 +272,6 @@ class ConfigWatcher:
                 (default 100). Set to 0 to disable audit logging.
         """
         self._debounce_seconds = debounce_seconds
-        self._max_audit_entries = max_audit_entries
         self._audit_log = (
             ReloadAuditLog(max_entries=max_audit_entries) if max_audit_entries > 0 else None
         )
@@ -283,7 +282,6 @@ class ConfigWatcher:
         self._observer: Any | None = None  # watchdog.observer.Observer
         self._sighup_handler_installed = False
         self._original_sighup_handler: Any = None
-        self._thread: threading.Thread | None = None
         self._started = False
 
     @property

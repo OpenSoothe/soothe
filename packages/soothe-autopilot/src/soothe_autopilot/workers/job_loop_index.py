@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
@@ -200,12 +200,6 @@ class JobLoopIndex:
                 if ended is not None:
                     interrupted.append(loop_id)
         return interrupted
-
-    async def snapshot_for_job(self, job_id: str) -> dict[str, Any] | None:
-        record = await self.get_job(job_id)
-        if record is None:
-            return None
-        return record.model_dump(mode="json")
 
     async def _all_job_ids(self) -> list[str]:
         if self._store is None:

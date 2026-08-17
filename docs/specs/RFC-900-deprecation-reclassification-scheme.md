@@ -16,7 +16,7 @@ This RFC proposes a comprehensive deprecation list and number segment reclassifi
 
 This RFC has been fully implemented with the following outcomes:
 
-1. **Deprecated RFCs Archived**: 8 RFCs (RFC-200, RFC-203, RFC-216, RFC-300, RFC-411, RFC-505, RFC-605, RFC-700) moved to `docs/specs/archive/`
+1. **Deprecated RFCs Archived**: 9 RFCs (RFC-200, RFC-203, RFC-216, RFC-300, RFC-411, RFC-505, RFC-605, RFC-613, RFC-700) moved to `docs/archive/specs/`
 2. **Protocol RFCs Migrated**: 5 RFCs (RFC-302-306) moved from 4xx to 3xx series
 3. **Persistence RFCs Organized**: RFC-801, RFC-802 remained in 8xx; RFC-215 renamed to RFC-803 and moved to 8xx
 4. **Security RFCs Organized**: RFC-901 moved to 9xx series
@@ -68,7 +68,7 @@ Draft → Proposed → Accepted → Implemented → Deprecated → Archived
 | **Accepted** | Approved for implementation, not yet started | ≤90 days |
 | **Implemented** | Fully implemented in codebase | Until superseded |
 | **Deprecated** | Superseded by newer RFC, retained for historical reference | Minimum 90 days |
-| **Archived** | Removed from active index, moved to `docs/specs/archive/` | Permanent |
+| **Archived** | Removed from active index, moved to `docs/archive/specs/` | Permanent |
 | **Rejected** | Not approved for implementation | Permanent |
 
 **Deprecation Process:**
@@ -76,7 +76,7 @@ Draft → Proposed → Accepted → Implemented → Deprecated → Archived
 1. **Supersession Notice**: Add "Superseded by: RFC-XXX" to deprecated RFC header
 2. **Dependency Update**: Update all RFCs that reference the deprecated RFC
 3. **Index Update**: Move from active to deprecated section in `rfc-index.md`
-4. **Archive Timeline**: After 90 days in Deprecated status, move to `docs/specs/archive/`
+4. **Archive Timeline**: After 90 days in Deprecated status, move to `docs/archive/specs/`
 
 ### 2. Deprecation List
 
@@ -91,11 +91,12 @@ The following RFCs should be marked as **Deprecated**:
 | RFC-216 | Archived | RFC-207 | 2026-06-19 | Thread lifecycle and automatic switching incorporated into RFC-207 |
 | RFC-300 | Archived | RFC-302, RFC-303 | 2026-06-19 | Combined spec split into separate ContextProtocol and MemoryProtocol specs |
 | RFC-411 | Archived | RFC-413 | 2026-06-19 | Event stream replay replaced by server-owned display card ledger |
+| RFC-505 | Archived | RFC-629 | 2026-06-04 | Desktop client architecture removed from monorepo (separate archival process) |
 | RFC-605 | Archived | RFC-613 | 2026-06-19 | Fixed wave-based search replaced by LLM-orchestrated iterative search |
-| RFC-505 | Archived | — | 2026-06-04 | Desktop client architecture removed from monorepo (separate archival process) |
-| RFC-700 | Archived | — | 2026-06-04 | Desktop app product redesign removed from monorepo (separate archival process) |
+| RFC-613 | Archived | — (CoreAgent file tools cover readonly recon) | 2026-08-17 | Explorer/explore subagent removed entirely |
+| RFC-700 | Archived | RFC-629 | 2026-06-04 | Desktop app product redesign removed from monorepo (separate archival process) |
 
-All archived RFCs have been moved to `docs/specs/archive/` with detailed archive documentation.
+All archived RFCs have been moved to `docs/archive/specs/` with detailed archive documentation.
 
 #### Partial Deprecation (Update Status)
 
@@ -458,9 +459,9 @@ Identify overlapping RFCs that should be merged:
 
 **Status**: Completed on 2026-06-19
 
-1. ✓ Created `docs/specs/archive/` directory
+1. ✓ Created `docs/archive/specs/` directory
 2. ✓ Moved deprecated RFCs to archive: RFC-200, RFC-203, RFC-300, RFC-411, RFC-605
-3. ✓ Created `docs/specs/archive/README.md` with archive documentation
+3. ✓ Created `docs/archive/specs/README.md` with archive documentation
 4. ⏸ Pending: Update all internal RFC references (ongoing as codebase evolves)
 
 #### Phase 4: Consolidation (Weeks 4-6)
@@ -578,7 +579,7 @@ Update all series documentation to reflect new structure:
 | Date | Action | RFCs Affected |
 |------|--------|---------------|
 | 2026-06-16 | Mark as Deprecated | RFC-200, RFC-203, RFC-300, RFC-411, RFC-605 |
-| 2026-06-19 | Archived deprecated RFCs | RFC-200, RFC-203, RFC-300, RFC-411, RFC-605 (moved to docs/specs/archive/) |
+| 2026-06-19 | Archived deprecated RFCs | RFC-200, RFC-203, RFC-300, RFC-411, RFC-605 (moved to docs/archive/specs/) |
 | 2026-06-30 | Update status labels | RFC-201 (Partially Superseded) |
 
 ### 7. Number Segment Reference
@@ -695,7 +696,7 @@ This section provides the complete renumbering roadmap for migrating RFCs to the
   - [ ] Commit changes with message: `rfc: migrate RFC-XXX to RFC-YYY (protocol reorganization)`
 
 - [ ] **Archive** (after 90-day deprecation):
-  - [ ] Move source RFC to `docs/specs/archive/`
+  - [ ] Move source RFC to `docs/archive/specs/`
   - [ ] Update `rfc-index.md` to show archived status
   - [ ] Remove from active index
 
@@ -1024,7 +1025,7 @@ and affects how the RFC is displayed in the index.
    - Transition to Archived after 90 days
 
 6. **Archived**: RFC moved to historical archive
-   - RFC file moved to `docs/specs/archive/`
+   - RFC file moved to `docs/archive/specs/`
    - Retained for historical reference
    - No further updates
    - Index shows "Archived" with link to archive
@@ -1069,6 +1070,6 @@ When an RFC is superseded:
    - Update to reference the superseding RFC
 5. **Wait 90 Days**: Allow time for migration
 6. **Archive**:
-   - Move file to `docs/specs/archive/`
+   - Move file to `docs/archive/specs/`
    - Update index to show archived status
 ```

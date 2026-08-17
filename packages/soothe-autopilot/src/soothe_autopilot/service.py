@@ -145,7 +145,6 @@ class AutopilotService:
         self._running = False
         self._dreaming = False
         self._scheduling_task: asyncio.Task | None = None
-        self._subscribed = False
         # IG-680: health removals cascade through service cancel when monitor is wired.
         if self._monitor is not None:
             self._monitor.bind_service_cancel(self.cancel_goal)
@@ -157,10 +156,10 @@ class AutopilotService:
         # Capacity: ``max_loops`` (pool size) and ``max_parallel_goals``
         # (schedule cap in ``_schedule_via_worker_pool``). Assignment locking
         # lives on ``WorkerPool``.
-        self._runner_factory = runner_factory
         from soothe_autopilot.workers.job_loop_index import JobLoopIndex
         from soothe_autopilot.workers.pool import WorkerPool
 
+        self._runner_factory = runner_factory
         self._worker_pool = WorkerPool(factory=runner_factory, max_loops=self._config.max_loops)
         self._workspace_reservation = workspace_reservation
         self._consensus_model = consensus_model
@@ -186,6 +185,8 @@ class AutopilotService:
         if subscribe_to_bus:
             self._setup_subscriptions()
             self._subscribed = True
+        else:
+            self._subscribed = False
 
     def _init_notification_router(self) -> None:
         """Construct host NotificationRouter (daemon injects dispatch later)."""

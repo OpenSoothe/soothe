@@ -227,7 +227,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 3. **Process Documentation**:
    - Added RFC-900: Deprecation and Reclassification Scheme
-   - Updated archive/README.md with archival policy
+   - Updated ../archive/specs/README.md with archival policy
    - Established 90-day deprecation → archival timeline
 
 ---
@@ -791,7 +791,7 @@ RFCs are organized into numbered series by category:
 - RFC-502: Unified Presentation Engine
 - RFC-503: Loop-First User Experience Architecture
 - RFC-504: Loop Management CLI Commands
-- RFC-505: Soothe Desktop Client Architecture *(archived 2026-08-06)*
+- RFC-505: Soothe Desktop Client Architecture *(archived 2026-06-04)*
 
 ### 6xx - Plugin System & Extensions
 
@@ -805,7 +805,7 @@ RFCs are organized into numbered series by category:
 - RFC-607: Progressive Display Refinements Post-Migration
 - RFC-610: SDK Module Structure Refactoring
 - RFC-802: Persistence Architecture Refactor
-- RFC-613: Explore Agent — LLM-Orchestrated Iterative Search
+- RFC-613: Explore Agent — LLM-Orchestrated Iterative Search *(archived 2026-08-17)*
 - RFC-614: Unified Daemon → Client Streaming Messaging Framework
 - RFC-616: Scenario-Driven Goal Completion Synthesis
 - RFC-901: OperationSecurityProtocol: Unified Workspace and Tool Operation Security
@@ -818,7 +818,7 @@ RFCs are organized into numbered series by category:
 
 ### 7xx - Product & Applications
 
-- RFC-700: Desktop App Product Redesign *(archived 2026-08-06)*
+- RFC-700: Desktop App Product Redesign *(archived 2026-06-04)*
 
 ---
 

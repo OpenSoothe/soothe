@@ -130,7 +130,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 ### StrangeLoop & Cognition (2xx)
 
-- **RFC-200**: [Autonomous Goal Management Loop](archive/RFC-200-autonomous-goal-management.md) ⚠️ **ARCHIVED**
+- **RFC-200**: [Autonomous Goal Management Loop](../archive/specs/RFC-200-autonomous-goal-management.md) ⚠️ **ARCHIVED**
   - Kind: Architecture Design
   - Status: Archived
   - Superseded By: RFC-222 (control flow), RFC-625 (GoalEngine architecture)
@@ -143,7 +143,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Partially Superseded By: RFC-220 (§loop driver)
   - Created: 2026-04-17
 
-- **RFC-203**: [StrangeLoop State & Memory Architecture](archive/RFC-203-strangeloop-state-memory.md) ⚠️ **ARCHIVED**
+- **RFC-203**: [StrangeLoop State & Memory Architecture](../archive/specs/RFC-203-strangeloop-state-memory.md) ⚠️ **ARCHIVED**
   - Kind: Architecture Design / Impl Interface
   - Status: Archived
   - Superseded By: RFC-626
@@ -181,7 +181,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-05-03
 
-- **RFC-216**: [StrangeLoop Multi-Thread Infinite Lifecycle](archive/RFC-216-strangeloop-multithread-lifecycle.md) ⚠️ **ARCHIVED**
+- **RFC-216**: [StrangeLoop Multi-Thread Infinite Lifecycle](../archive/specs/RFC-216-strangeloop-multithread-lifecycle.md) ⚠️ **ARCHIVED**
   - Kind: Architecture Design
   - Status: Archived
   - Superseded By: RFC-207
@@ -296,7 +296,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 ### Protocols (3xx)
 
-- **RFC-300**: [Context and Memory Architecture Design](archive/RFC-300-context-memory-protocols.md) ⚠️ **ARCHIVED**
+- **RFC-300**: [Context and Memory Architecture Design](../archive/specs/RFC-300-context-memory-protocols.md) ⚠️ **ARCHIVED**
   - Kind: Architecture Design
   - Status: Archived
   - Superseded By: RFC-302, RFC-303
@@ -376,7 +376,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-04-15
   - Authors: Platonic Brainstorming Session
 
-- **RFC-411**: [Event Stream Replay & History Reconstruction](archive/RFC-411-event-stream-replay.md) ⚠️ **ARCHIVED**
+- **RFC-411**: [Event Stream Replay & History Reconstruction](../archive/specs/RFC-411-event-stream-replay.md) ⚠️ **ARCHIVED**
   - Kind: Architecture Design
   - Status: Archived
   - Superseded By: RFC-413
@@ -507,7 +507,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Depends on: RFC-201 (StrangeLoop Plan-Execute Loop)
   - Authors: Claude Sonnet 4.6
 
-- **RFC-605**: [Explore Subagent and Parallel Spawning](archive/RFC-605-explore-subagent-parallel-spawning.md) ⚠️ **ARCHIVED**
+- **RFC-605**: [Explore Subagent and Parallel Spawning](../archive/specs/RFC-605-explore-subagent-parallel-spawning.md) ⚠️ **ARCHIVED**
   - Kind: Architecture Design
   - Status: Archived
   - Superseded By: RFC-613
@@ -531,7 +531,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-613**: [Explore Agent — LLM-Orchestrated Iterative Search](archive/RFC-613-explore-agent-llm-orchestrated-search.md) ⚠️ **ARCHIVED**
+- **RFC-613**: [Explore Agent — LLM-Orchestrated Iterative Search](../archive/specs/RFC-613-explore-agent-llm-orchestrated-search.md) ⚠️ **ARCHIVED**
   - Kind: Architecture Design
   - Status: Archived
   - Superseded By: RFC-618 (Plan Subagent — structured planning with explore delegation)
@@ -784,12 +784,12 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | RFC-216 | StrangeLoop Multi-Thread Infinite Lifecycle | RFC-207 | 2026-06-19 |
 | RFC-300 | Context and Memory Architecture Design | RFC-302, RFC-303 | 2026-06-19 |
 | RFC-411 | Event Stream Replay & History Reconstruction | RFC-413 | 2026-06-19 |
+| RFC-505 | Soothe Desktop Client Architecture | RFC-629 | 2026-06-04 |
 | RFC-605 | Explore Subagent and Parallel Spawning | RFC-613 | 2026-06-19 |
-| RFC-613 | Explore Agent — LLM-Orchestrated Iterative Search | RFC-618 | 2026-06-19 |
-| RFC-505 | Soothe Desktop Client Architecture | — (removed from monorepo) | 2026-06-04 |
-| RFC-700 | Desktop App Product Redesign | — (removed from monorepo) | 2026-06-04 |
+| RFC-613 | Explore Agent — LLM-Orchestrated Iterative Search | — (CoreAgent file tools cover readonly recon) | 2026-08-17 |
+| RFC-700 | Desktop App Product Redesign | RFC-629 | 2026-06-04 |
 
-See [archive/README.md](archive/README.md) for archival schedule and process.
+See [archive/README.md](../archive/specs/README.md) for archival schedule and process.
 
 ### Reclassified RFCs
 

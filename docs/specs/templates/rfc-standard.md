@@ -74,7 +74,7 @@ Draft → Proposed → Accepted → Implemented → Deprecated → Archived
 | **Accepted** | Approved for implementation, not yet started | ≤90 days |
 | **Implemented** | Fully implemented in codebase | Until superseded |
 | **Deprecated** | Superseded by newer RFC, retained for historical reference | Minimum 90 days |
-| **Archived** | Removed from active index, moved to `docs/specs/archive/` | Permanent |
+| **Archived** | Removed from active index, moved to `docs/archive/specs/` | Permanent |
 | **Rejected** | Not approved for implementation | Permanent |
 
 ### Deprecation Process
@@ -82,7 +82,7 @@ Draft → Proposed → Accepted → Implemented → Deprecated → Archived
 1. **Supersession Notice**: Add "Superseded By: RFC-XXX" to deprecated RFC header
 2. **Dependency Update**: Update all RFCs that reference the deprecated RFC
 3. **Index Update**: Move from active to deprecated section in `rfc-index.md`
-4. **Archive Timeline**: After 90 days in Deprecated status, move to `docs/specs/archive/`
+4. **Archive Timeline**: After 90 days in Deprecated status, move to `docs/archive/specs/`
 
 ### RFC Header Template for Deprecated RFCs
 
