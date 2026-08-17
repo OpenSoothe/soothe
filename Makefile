@@ -162,7 +162,8 @@ docker-prod-up:
 	@echo "Starting production stack (PostgreSQL + pgvector + soothed)..."
 	@# Pre-create host bind-mount sources. On Colima/Lima sshfs, Docker's
 	@# create+chown of missing sources fails with "permission denied".
-	@mkdir -p "$${HOME}/.soothe/data" "$${HOME}/.soothe/logs"
+	@# ~/.soothe-prod is the prod workdir, isolated from dev's ~/.soothe.
+	@mkdir -p "$${HOME}/.soothe-prod/data" "$${HOME}/.soothe-prod/logs" "$${HOME}/.soothe-prod/config"
 	$(DOCKER_PROD_COMPOSE) up -d
 	@echo ""
 	@echo "Stack running. Check status: make docker-prod-ps"

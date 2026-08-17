@@ -13,12 +13,13 @@
 #   TAVILY_API_KEY=...                      # Tavily web search (deep_research / wizsearch)
 #   SOOTHE_WORKSPACE_HOST_ROOT=...          # Host workspace directory (default: $HOME)
 # Host persistence (bind mounts into /var/lib/soothe):
-#   $HOME/.soothe/data  → data (loops, threads, local artifacts)
-#   $HOME/.soothe/logs  → logs
-#   $SOOTHE_WORKSPACE_HOST_ROOT (default $HOME) → workspaces
-# Pre-create data/logs on the host before `compose up` (make docker-prod-up
-# does this). Colima/Lima sshfs rejects Docker's create+chown of missing
-# bind-mount sources ("chown ... permission denied").
+#   $HOME/.soothe-prod  → daemon workdir (data, logs, pid, config base)
+#   $SOOTHE_WORKSPACE_HOST_ROOT (default $HOME) → client workspaces
+# ~/.soothe-prod is isolated from dev's ~/.soothe so prod state survives
+# `make reset-the-world` and vice-versa.
+# Pre-create ~/.soothe-prod/{data,logs,config} before `compose up`
+# (make docker-prod-up does this). Colima/Lima sshfs rejects Docker's
+# create+chown of missing bind-mount sources ("chown ... permission denied").
 
 services:
   soothe-pgvector:
@@ -81,10 +82,14 @@ services:
     ports:
       - "127.0.0.1:18765:18765"
     volumes:
-      - soothe_daemon_data:/var/lib/soothe
+      # Daemon workdir (data, logs, pid, config base). Isolated from dev's
+      # ~/.soothe so prod state survives `make reset-the-world` and vice-versa.
+      - ${HOME}/.soothe-prod:/var/lib/soothe
+      # Agent config: repo-tracked, read-only on top of the workdir.
       - ./nano.yml:/var/lib/soothe/config/nano.yml:ro
-      - ${HOME}/.soothe/data:/var/lib/soothe/data
-      - ${HOME}/.soothe/logs:/var/lib/soothe/logs
+      # Client workspaces: expose host project dirs to the container (path
+      # translation via SOOTHE_WORKSPACE_HOST_ROOT in nano.yml). Separate
+      # from daemon state.
       - ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces
     deploy:
       resources:
@@ -112,4 +117,3 @@ networks:
 
 volumes:
   soothe_postgres_data:
-  soothe_daemon_data:
