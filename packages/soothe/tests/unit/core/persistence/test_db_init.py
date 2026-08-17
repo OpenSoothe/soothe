@@ -184,6 +184,24 @@ async def test_initialize_database_runs_init_then_migrations(tmp_path: Path) -> 
     assert result.migrations_applied == ["001"]
 
 
+def test_checkpoints_has_checkpoint_index_migration() -> None:
+    """A deployed DB bootstrapped before aa19fcb9 lacks checkpoint_index.
+
+    CREATE TABLE IF NOT EXISTS never adds columns to an existing table, so the
+    column must be backfilled via a versioned migration rather than init.sql
+    alone. Without it, loop_writer's INSERT referencing checkpoint_index fails
+    with psycopg.errors.UndefinedColumn on goal boundary persist.
+    """
+    from soothe.persistence.postgres_schema import _HOST_SQL_ROOT
+
+    scripts = discover_versioned_scripts("soothe_checkpoints", sql_root=_HOST_SQL_ROOT)
+    assert scripts, "soothe_checkpoints should ship at least one versioned migration"
+    assert any(
+        "checkpoint_index" in script.sql and "ADD COLUMN" in script.sql
+        for script in scripts
+    ), "expected an ALTER TABLE ... ADD COLUMN checkpoint_index migration"
+
+
 def test_checkpoints_init_lives_in_host_sql_root() -> None:
     """IG-635 PR-3: the StrangeLoop/CE checkpoints schema is host-owned.
 
