@@ -2,10 +2,10 @@
 
 **RFC**: 203
 **Title**: StrangeLoop State & Memory Architecture
-**Status**: Deprecated
+**Status**: Archived
 **Superseded By**: RFC-626
 **Superseded Date**: 2026-06-16
-**Deprecation Reason**: LoopState eliminated and consolidated into ExecutionState.
+**Archive Reason**: LoopState eliminated and consolidated into ExecutionState.
 **Archive Date**: 2026-09-14
 **Kind**: Architecture Design / Impl Interface
 **Created**: 2026-04-17

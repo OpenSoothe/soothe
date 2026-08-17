@@ -58,11 +58,11 @@ StrangeLoop becomes an abstract orchestration entity spanning multiple threads:
 
 ### Layer Integration
 
-This RFC extends RFC-203 (Layer 2 Unified State Model) and RFC-201 (Agentic Goal Execution):
+This RFC extends RFC-203 (Unified State Model) and RFC-201 (Agentic Goal Execution):
 
-- **Layer 2 StrangeLoop**: Manages Plan → Execute loop across multiple threads
-- **Layer 1 CoreAgent**: Executes on specific thread (LangGraph thread_id)
-- **Thread switching**: Layer 2 decides when to switch, Layer 1 executes on new thread
+- **StrangeLoop**: Manages Plan → Execute loop across multiple threads
+- **CoreAgent**: Executes on specific thread (LangGraph thread_id)
+- **Thread switching**: StrangeLoop decides when to switch, CoreAgent executes on new thread
 
 ---
 

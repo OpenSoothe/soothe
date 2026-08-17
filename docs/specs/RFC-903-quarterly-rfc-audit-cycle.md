@@ -142,7 +142,7 @@ Run (do not rewrite) the existing pipelines and gather the immutable inputs:
 2. Run `./scripts/check_module_import_boundaries.sh` (owned-package DAG).
 3. Snapshot `docs/specs/rfc-index.md`, `docs/specs/rfc-history.md`,
    `docs/specs/rfc-namings.md` current `Last Updated` and totals.
-4. Enumerate all RFC files under `docs/specs/` and `docs/specs/archive/`.
+4. Enumerate all RFC files under `docs/specs/` and `docs/archive/specs/`.
 5. Record the cycle baseline timestamp.
 
 No analysis in this phase — only collection. Inputs are frozen for the cycle.
@@ -209,7 +209,7 @@ so trends are comparable across quarters.
 | Metric | Definition | Target / Threshold |
 |--------|------------|-------------------|
 | **Total RFCs (active)** | Count of non-archived RFCs in `docs/specs/` | Tracked (no fixed target) |
-| **Total RFCs (archived)** | Count in `docs/specs/archive/` | Tracked |
+| **Total RFCs (archived)** | Count in `docs/archive/specs/` | Tracked |
 | **Index vs history total delta** | `rfc-index.md` total − `rfc-history.md` total | **0** (any nonzero is a hygiene bug) |
 | **Draft ratio** | `Draft` count ÷ active total | Trend down quarter-over-quarter |
 | **Implemented ratio** | `Implemented` count ÷ active total | Trend up |
@@ -278,7 +278,7 @@ prior cycle and the baseline (Q3 2026). Example shape:
 - `docs/specs/rfc-index.md` (snapshot)
 - `docs/specs/rfc-history.md` (snapshot)
 - `docs/specs/rfc-namings.md` (snapshot)
-- `docs/specs/` and `docs/specs/archive/` file listings
+- `docs/specs/` and `docs/archive/specs/` file listings
 - `./scripts/check_module_import_boundaries.sh` output
 
 ### Artifacts (produced per cycle)

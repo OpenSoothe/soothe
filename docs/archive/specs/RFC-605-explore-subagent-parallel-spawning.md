@@ -2,10 +2,10 @@
 
 **RFC**: 605
 **Title**: Explore Subagent and Parallel Spawning
-**Status**: Deprecated
+**Status**: Archived
 **Superseded By**: RFC-613
 **Superseded Date**: 2026-06-16
-**Deprecation Reason**: Fixed wave-based search replaced by LLM-orchestrated iterative search.
+**Archive Reason**: Fixed wave-based search replaced by LLM-orchestrated iterative search.
 **Archive Date**: 2026-09-14
 **Kind**: Architecture Design
 **Created**: 2026-04-13

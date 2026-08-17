@@ -2,10 +2,11 @@
 
 **RFC**: 505
 **Title**: Soothe Desktop Client Architecture
-**Status**: Draft
+**Status**: Archived
 **Kind**: Architecture Design
 **Created**: 2026-06-04
-**Last Updated**: 2026-06-04
+**Last Updated**: 2026-08-17
+**Archive Reason**: Desktop client architecture superseded by client appkit architecture (RFC-629).
 **Dependencies**: RFC-403 (Unified Event Naming), RFC-450 (Daemon Communication Protocol), RFC-454 (Slash Commands), RFC-500 (CLI/TUI Architecture), RFC-503 (Loop-First UX), RFC-504 (Loop Management Commands)
 **Supersedes**: ---
 **Author**: brainstormed via platonic-brainstorming, formalized from `docs/archive/drafts/2026-06-04-soothe-desktop-design.md`

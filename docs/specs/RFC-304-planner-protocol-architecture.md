@@ -137,9 +137,9 @@ class Reflection(BaseModel):
 - Merged with phase 1 in StrangeLoop’s `LLMPlanner` into `PlanResult` for execution
 - Cross-wave step dependencies: plan-generate envelope includes **Step Anchor Registry** (RFC-624 §3.1, IG-539); `PlanGenerateStep.continues_from` lists completed composite ids from prior waves; runtime **Plan DAG Normalizer** validates the merged DAG before execute
 
-**Implementation** (in Layer 2 StrangeLoop, RFC-201):
+**Implementation** (in StrangeLoop, RFC-201):
 ```python
-# Two-phase Plan execution is Layer 2 implementation
+# Two-phase Plan execution is a StrangeLoop implementation detail
 # PlannerProtocol interface remains protocol-level (no phases)
 class LLMPlanner(PlannerProtocol):
     """Default implementation using two-phase pattern."""
@@ -154,7 +154,7 @@ class LLMPlanner(PlannerProtocol):
     # Not in PlannerProtocol implementation
 ```
 
-**Separation**: PlannerProtocol defines interface, Layer 2 implements execution patterns (two-phase, progressive).
+**Separation**: PlannerProtocol defines interface, StrangeLoop implements execution patterns (two-phase, progressive).
 
 ---
 
@@ -208,9 +208,9 @@ agentic:
 - ✅ Plan creation from goal + context
 - ✅ Plan revision from reflection
 - ✅ Reflection generation
-- ✅ Goal directive support (Layer 3)
+- ✅ Goal directive support (GoalEngine)
 - ✅ Dependency DAG structure
-- ⚠️ Two-phase execution pattern (Layer 2 RFC-201 implementation)
+- ⚠️ Two-phase execution pattern (StrangeLoop RFC-201 implementation)
 
 ---
 
@@ -231,10 +231,10 @@ agentic:
 ### 2026-04-17
 - Consolidated RFC-001 Module 3 (PlannerProtocol) with plan architecture design
 - Defined protocol interface without two-phase implementation details (stays in RFC-201)
-- Clarified separation: Protocol interface vs Layer 2 execution patterns
+- Clarified separation: Protocol interface vs StrangeLoop execution patterns
 - Maintained hierarchical plan support and goal directive integration
 - Preserved runtime-agnostic design principle
 
 ---
 
-*PlannerProtocol plan creation and revision interface with LLMPlanner default implementation. Two-phase execution pattern implemented in Layer 2 (RFC-201), not in protocol.*
+*PlannerProtocol plan creation and revision interface with LLMPlanner default implementation. Two-phase execution pattern implemented in StrangeLoop (RFC-201), not in protocol.*

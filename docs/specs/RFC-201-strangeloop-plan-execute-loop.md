@@ -1,7 +1,7 @@
 # RFC-201: StrangeLoop Plan-Execute Loop Architecture
 
 **RFC**: 201
-**Title**: StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
+**Title**: StrangeLoop Plan-Execute Loop Architecture (Consolidated)
 **Status**: Implemented (Partially Superseded)
 **Partially Superseded By**: RFC-220 (§loop driver), RFC-222 (GoalEngine daemon-ownership), RFC-225 (loop-centric model)
 **Kind**: Architecture Design
@@ -54,7 +54,7 @@ Layer 1: CoreAgent Runtime (RFC-100) → Tools/Subagents
 
 **StrangeLoop Goal Pull Architecture** (Inverted Control Flow):
 
-Layer 2 StrangeLoop actively queries Layer 3 GoalEngine for goal assignment and reports execution results. GoalEngine provides goal state service, never invokes StrangeLoop.
+StrangeLoop actively queries GoalEngine for goal assignment and reports execution results. GoalEngine provides goal state service, never invokes StrangeLoop.
 
 **Integration Pattern**:
 
@@ -117,9 +117,9 @@ Configuration (`agent.loop.final_response`): `auto` (default) applies the struct
 **Important**: StrangeLoop is the **Layer 2 Plan → Execute loop runner**, not a consciousness module or knowledge accumulator. Its responsibilities are execution orchestration and iterative refinement, not knowledge persistence.
 
 **Architectural Separation**:
-- **StrangeLoop**: Layer 2 loop runner (Plan → Execute iterations)
+- **StrangeLoop**: Plan → Execute loop runner (iterations)
 - **ContextProtocol**: Consciousness/knowledge ledger (unbounded context accumulation)
-- **GoalEngine**: Layer 3 goal lifecycle manager (DAG management, goal status)
+- **GoalEngine**: Goal lifecycle manager (DAG management, goal status)
 - **Executor**: StrangeLoop component for thread coordination
 
 **Why This Matters**: Brainstorming sessions sometimes confuse StrangeLoop with "consciousness" because it maintains execution history. However, consciousness (unbounded knowledge with bounded projections) lives in ContextProtocol, not StrangeLoop. StrangeLoop's history is iteration-scoped execution state, not global knowledge accumulation.
@@ -158,7 +158,7 @@ relevant_history = retrieval.retrieve_by_goal_relevance(
 
 ### Dual Trigger Synchronization Ordering
 
-Layer 2 (StrangeLoop) and Layer 3 (GoalEngine, RFC-200) stay synchronized through **ordered complementary triggers** with precise timing guarantees.
+StrangeLoop and GoalEngine (RFC-200) stay synchronized through **ordered complementary triggers** with precise timing guarantees.
 
 **Trigger Types**:
 
@@ -441,13 +441,13 @@ Execute-phase assistant prose is internal orchestration output and should not be
 
 ---
 
-## Layer 2 Failure Evidence Handoff to Layer 3
+## Failure Evidence Handoff to GoalEngine
 
-Layer 2 does not own backoff policy. It produces high-fidelity execution evidence and hands it to Layer 3 GoalEngine, which owns backoff reasoning and DAG restructuring (encapsulated).
+StrangeLoop does not own backoff policy. It produces high-fidelity execution evidence and hands it to GoalEngine, which owns backoff reasoning and DAG restructuring (encapsulated).
 
 **Ownership Boundary**:
-- **Layer 2 (`RFC-201`)**: Produce execution evidence via EvidenceBundleBuilder, call GoalEngine.fail_goal()
-- **Layer 3 (`RFC-200`)**: Define and execute GoalBackoffReasoner policy internally, apply BackoffDecision
+- **StrangeLoop (`RFC-201`)**: Produce execution evidence via EvidenceBundleBuilder, call GoalEngine.fail_goal()
+- **GoalEngine (`RFC-200`)**: Define and execute GoalBackoffReasoner policy internally, apply BackoffDecision
 - **Shared contract**: EvidenceBundle (RFC-200 §14-22) with structured + narrative fields
 - **Encapsulation**: StrangeLoop never calls BackoffReasoner directly
 

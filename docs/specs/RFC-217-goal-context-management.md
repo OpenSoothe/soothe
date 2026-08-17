@@ -179,7 +179,8 @@ class ThreadRelationshipModule:
         semantic_sim = cosine_similarity(emb_a, emb_b)
 
         # Level 3: Dependency relationship (future - requires GoalEngine DAG traversal)
-        # TODO: Check if goals share dependency path
+        # Future work: check if goals share dependency path (deferred; requires
+        # autopilot DAG traversal not yet available at this layer).
 
         return semantic_sim
 ```

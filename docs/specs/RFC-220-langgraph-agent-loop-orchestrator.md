@@ -162,7 +162,7 @@ New configuration keys are introduced for evidence caps, allowlists, repair boun
 ## Non-Goals (this RFC)
 
 - Replacing deepagents / CoreAgent internals.
-- Changing Layer 3 GoalEngine protocol shapes.
+- Changing GoalEngine protocol shapes.
 - Preserving API compatibility with pre-RFC-220 runner entrypoints.
 
 ---

@@ -2,10 +2,10 @@
 
 **RFC**: 300
 **Title**: Context and Memory Architecture Design
-**Status**: Deprecated
+**Status**: Archived
 **Superseded By**: RFC-302 (ContextProtocol Architecture), RFC-303 (MemoryProtocol Architecture)
 **Superseded Date**: 2026-06-16
-**Deprecation Reason**: Combined spec split into separate ContextProtocol and MemoryProtocol specifications.
+**Archive Reason**: Combined spec split into separate ContextProtocol and MemoryProtocol specifications.
 **Archive Date**: 2026-09-14
 **Kind**: Architecture Design
 **Created**: 2026-03-14

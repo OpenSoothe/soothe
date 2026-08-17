@@ -891,15 +891,15 @@ jobs:
       - uses: actions/checkout@v3
       - name: Check RFC status consistency
         run: |
-          # TODO: scripts/validate_rfc_status.py not yet created
+          # Future work: scripts/validate_rfc_status.py not yet created
           echo "Manual audit required"
       - name: Check for broken references
         run: |
-          # TODO: scripts/check_rfc_references.py not yet created
+          # Future work: scripts/check_rfc_references.py not yet created
           echo "Manual audit required"
       - name: Verify index sync
         run: |
-          # TODO: scripts/verify_rfc_index.py not yet created
+          # Future work: scripts/verify_rfc_index.py not yet created
           echo "Manual audit required"
 ```
 

@@ -2,10 +2,11 @@
 
 **RFC**: 700
 **Title**: Desktop App Product Redesign
-**Status**: Proposed
+**Status**: Archived
 **Kind**: Product Specification
 **Created**: 2026-06-04
-**Updated**: 2026-06-04
+**Updated**: 2026-08-17
+**Archive Reason**: Desktop app product redesign withdrawn; superseded by client appkit architecture (RFC-629).
 **Dependencies**: RFC-222 (Autopilot and Goal Engine Architecture), RFC-228 (Autopilot Job IPC Commands), RFC-450 (Daemon Communication Protocol), RFC-200 (Autonomous Goal Management)
 
 ## Abstract

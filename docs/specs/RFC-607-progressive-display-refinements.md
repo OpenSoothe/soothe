@@ -122,7 +122,7 @@ ThreadBackendBridge (NEW from RFC-606)
 | normal | `soothe.plan.*`, `soothe.context.*`, `soothe.memory.*` |
 | detailed | All protocol events |
 
-**Integration Point**: DeepAgents TUI `widgets/status.py` (TODO: add protocol queue in Phase 4)
+**Integration Point**: DeepAgents TUI `widgets/status.py` (Phase 4 will add the protocol queue; not yet wired in current phase).
 
 ---
 

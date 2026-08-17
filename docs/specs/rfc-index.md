@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-08-15
-**Total RFCs**: 91 (9 archived, 7 reclassified, 2 process specifications)
+**Last Updated**: 2026-08-17
+**Total RFCs**: 91 (82 active, 9 archived, 7 reclassified, 2 process specifications)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -43,13 +43,18 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Status | Count |
 |--------|-------|
-| Draft | 58 |
-| Implemented | 18 |
-| Implemented (Partially Superseded) | 1 |
-| Implemented (core migration complete; plugin discovery deferred) | 1 |
+| Draft | 40 |
+| Implemented | 17 |
+| Implemented (partial) | 8 |
+| Implemented (other variants — see individual RFC headers) | 16 |
 | Archived | 9 |
-| Proposed | 3 |
 | Accepted | 1 |
+| Proposed | 1 |
+
+> **Note**: "Implemented (other variants)" groups 16 RFCs whose status headers carry
+> implementation-detail prose (e.g. `Implemented (Partially Superseded)`,
+> `Implemented (Parts I–III)`, `Implemented — <class> in <path>`). See individual RFC
+> headers for the authoritative per-RFC status. Total Implemented variants: 41.
 
 ## RFC Kind Summary
 

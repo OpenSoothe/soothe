@@ -2,10 +2,10 @@
 
 **RFC**: 411
 **Title**: Event Stream Replay & History Reconstruction
-**Status**: Deprecated
+**Status**: Archived
 **Superseded By**: RFC-413
 **Superseded Date**: 2026-06-16
-**Deprecation Reason**: Event stream replay replaced by server-owned display card ledger.
+**Archive Reason**: Event stream replay replaced by server-owned display card ledger.
 **Archive Date**: 2026-09-14
 **Kind**: Architecture Design
 **Created**: 2026-04-22

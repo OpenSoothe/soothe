@@ -4,10 +4,11 @@
 
 **RFC**: 613
 **Title**: Explore Agent — LLM-Orchestrated Iterative Search
-**Status**: Draft
+**Status**: Archived
 **Kind**: Architecture Design
 **Created**: 2026-04-24
-**Updated**: 2026-05-01
+**Updated**: 2026-08-17
+**Archive Reason**: Explorer/explore subagent removed; CoreAgent file tools cover readonly recon.
 **Authors**: Platonic Coding Workflow
 **Depends on**: RFC-000, RFC-001, RFC-100, RFC-600
 **Supersedes**: RFC-605 (explore subagent portion only)

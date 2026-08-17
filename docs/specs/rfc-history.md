@@ -2,8 +2,8 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-08-15
-**Total RFCs**: 86
+**Last Updated**: 2026-08-17
+**Total RFCs**: 91 (82 active + 9 archived)
 
 ## Summary Statistics
 
@@ -11,14 +11,11 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Draft | 56 | 65.1% |
-| Implemented | 16 | 18.6% |
-| Archived | 6 | 7.0% |
-| Proposed | 3 | 3.5% |
-| Accepted | 1 | 1.2% |
-| Implemented (Partially Superseded) | 1 | 1.2% |
-| Implemented — runtime architecture refined | 1 | 1.2% |
-| Unknown | 2 | 2.3% |
+| Draft | 40 | 44.0% |
+| Implemented (all variants) | 41 | 45.1% |
+| Archived | 9 | 9.9% |
+| Accepted | 1 | 1.1% |
+| Proposed | 1 | 1.1% |
 
 ### By Kind
 
