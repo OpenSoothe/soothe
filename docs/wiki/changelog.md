@@ -27,6 +27,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.15] - 2026-08-17
+
+### Fixed
+- **diagnose**: the host `autopilot` check no longer returns ERROR when
+  `soothe-autopilot` is not installed and autopilot is disabled
+  (`agent.autopilot.enabled=false`). Since `soothe` sits below
+  `soothe-autopilot` in the dependency DAG, the module may legitimately be
+  absent in an isolated core venv; the import failure is now only surfaced
+  as ERROR when autopilot is actually enabled.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.14...v0.10.15
+
 ## [v0.10.14] - 2026-08-17
 
 ### Added

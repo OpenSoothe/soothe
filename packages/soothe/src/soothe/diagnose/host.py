@@ -35,14 +35,31 @@ def _check_import(module_path: str, name: str) -> CheckResult:
 
 
 def _check_autopilot(config: Any | None) -> CheckResult:
-    """Check autopilot config presence and module import."""
+    """Check autopilot config presence and module import.
+
+    ``soothe`` sits below ``soothe-autopilot`` in the dependency DAG, so the
+    module may legitimately be absent when autopilot is disabled. Only surface
+    an import failure as ERROR when autopilot is actually enabled.
+    """
+    agent = getattr(config, "agent", None) if config is not None else None
+    autopilot = getattr(agent, "autopilot", None) if agent is not None else None
+    enabled = bool(getattr(autopilot, "enabled", False)) if autopilot is not None else False
+
     import_result = _check_import("soothe_autopilot", "autopilot_module")
     if import_result.status != CheckStatus.OK:
+        if enabled:
+            return CheckResult(
+                name="autopilot",
+                status=import_result.status,
+                message=import_result.message,
+                details=import_result.details,
+            )
+        # Autopilot disabled — module absence is fine.
         return CheckResult(
             name="autopilot",
-            status=import_result.status,
-            message=import_result.message,
-            details=import_result.details,
+            status=CheckStatus.OK,
+            message="Autopilot disabled (module not installed)",
+            details={"enabled": False, "module": "soothe_autopilot"},
         )
 
     if config is None:
@@ -53,8 +70,6 @@ def _check_autopilot(config: Any | None) -> CheckResult:
             details={"module": "soothe_autopilot"},
         )
 
-    agent = getattr(config, "agent", None)
-    autopilot = getattr(agent, "autopilot", None) if agent is not None else None
     if autopilot is None:
         return CheckResult(
             name="autopilot",
@@ -63,7 +78,6 @@ def _check_autopilot(config: Any | None) -> CheckResult:
             details={"remediation": "Add agent.autopilot in soothe.yml"},
         )
 
-    enabled = bool(getattr(autopilot, "enabled", False))
     return CheckResult(
         name="autopilot",
         status=CheckStatus.OK,
