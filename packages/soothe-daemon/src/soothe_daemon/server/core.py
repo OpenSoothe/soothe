@@ -753,9 +753,11 @@ class SootheDaemon(DaemonHandlersMixin):
                         max_entries=cp.max_context_entries,
                         retention_hours=cp.context_retention_hours,
                     )
-                self._autopilot_service._context_projector = ContextProjector(
-                    self._autopilot_service._context_store,
-                    self._config.agent.autopilot.context_projection,
+                self._autopilot_service.set_context_projector(
+                    ContextProjector(
+                        self._autopilot_service._context_store,
+                        self._config.agent.autopilot.context_projection,
+                    )
                 )
                 # IG-713: job lifecycle notify (email / webhook / Feishu sinks)
                 try:

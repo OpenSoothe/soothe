@@ -11,6 +11,14 @@ from soothe.goal_contracts import EvidenceBundle
 
 from soothe_autopilot.verify.backoff_reasoner import GoalBackoffReasoner
 
+
+def _fake_projector() -> MagicMock:
+    """Projector mock returning an empty ancestor transcript."""
+    proj = MagicMock()
+    proj.build_preamble_text = AsyncMock(return_value="")
+    return proj
+
+
 _BACKOFF_JSON = """```json
 {
   "backoff_to_goal_id": "parent-1",
@@ -65,7 +73,7 @@ async def test_backoff_reasoner_uses_metadata_only_invoke_config(
         source="layer2_execute",
     )
 
-    await reasoner.reason_backoff("failed-1", goals, evidence)
+    await reasoner.reason_backoff("failed-1", goals, evidence, projector=_fake_projector())
 
     config = captured.get("config")
     assert isinstance(config, dict)
@@ -100,7 +108,7 @@ async def test_backoff_reasoner_logs_decision(
     )
 
     with caplog.at_level(logging.INFO):
-        await reasoner.reason_backoff("failed-1", goals, evidence)
+        await reasoner.reason_backoff("failed-1", goals, evidence, projector=_fake_projector())
 
     assert any("Backoff reasoning" in record.message for record in caplog.records)
     assert any("parent-1" in record.message for record in caplog.records)

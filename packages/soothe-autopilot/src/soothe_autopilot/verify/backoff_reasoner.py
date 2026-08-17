@@ -56,6 +56,8 @@ class GoalBackoffReasoner:
         goal_id: str,
         goals: dict[str, GoalNode],
         failed_evidence: EvidenceBundle,
+        *,
+        projector: Any,
     ) -> BackoffDecision:
         """LLM analyzes full goal context and decides WHERE to backoff.
 
@@ -63,6 +65,10 @@ class GoalBackoffReasoner:
             goal_id: Failed goal identifier.
             goals: Snapshot of all goals in current DAG (goal_id → GoalNode mapping).
             failed_evidence: Evidence from StrangeLoop execution.
+            projector: ``ContextProjector`` used to project the ancestor
+                (user, ai) pair transcript (RFC-222 §Goal-Report-Pair) into
+                the dependency-chain slot, matching the context the executing
+                worker saw.
 
         Returns:
             BackoffDecision with backoff target goal ID, reasoning, and directives.
@@ -86,8 +92,9 @@ class GoalBackoffReasoner:
         # Build goal DAG state representation
         goal_dag_state = self._format_goal_dag_state(goals)
 
-        # Build dependency chain
-        dependency_chain = self._format_dependency_chain(goal_id, goals)
+        # Build dependency chain: ancestor (user, ai) pair transcript via the
+        # same projection path the executing worker uses (RFC-222 §Goal-Report-Pair).
+        dependency_chain = await projector.build_preamble_text(failed_goal, goals)
 
         prompt = render_backoff_prompt(
             goal_id=goal_id,
@@ -182,32 +189,3 @@ class GoalBackoffReasoner:
                 f"deps=[{deps}], conflicts=[{conflicts}]"
             )
         return "\n".join(lines)
-
-    def _format_dependency_chain(self, goal_id: str, goals: dict[str, GoalNode]) -> str:
-        """Format dependency chain for prompt.
-
-        Args:
-            goal_id: Failed goal ID.
-            goals: GoalNode dictionary.
-
-        Returns:
-            Formatted string representing dependency chain.
-        """
-        goal = goals.get(goal_id)
-        if not goal:
-            return "No dependency chain found"
-
-        # Build dependency chain from root to current goal
-        chain = []
-        current = goal
-
-        while current:
-            chain.append(f"  {current.id}: {current.description[:60]}")
-            if current.depends_on:
-                # Get first dependency (simplified for prompt)
-                parent_id = current.depends_on[0]
-                current = goals.get(parent_id)
-            else:
-                break
-
-        return "\n".join(chain[::-1])  # Reverse to show root first

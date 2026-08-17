@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from soothe.config import SootheConfig
@@ -89,6 +89,12 @@ async def test_monitor_receives_internal_goal_failed() -> None:
     bus = InternalEventBus()
     ce = ContextEngine()
     monitor = _make_monitor(ce, bus)
+
+    # Backoff reasoning now requires a bound ContextProjector
+    # (RFC-222 §Goal-Report-Pair). Bind a fake so the monitor proceeds.
+    fake_proj = MagicMock()
+    fake_proj.build_preamble_text = AsyncMock(return_value="")
+    monitor.bind_context_projector(fake_proj)
 
     goal = await ce.create_goal("fail goal")
     await ce.fail_goal(goal.id, error="boom")

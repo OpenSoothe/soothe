@@ -110,6 +110,24 @@ class ContextProjector:
             preamble_messages=preamble,
         )
 
+    async def build_preamble_text(
+        self,
+        goal: GoalNode,
+        all_goals: dict[str, GoalNode],
+    ) -> str:
+        """Render the ancestor pair transcript as readable text (RFC-222 §Goal-Report-Pair).
+
+        Used by the backoff reasoner so its LLM sees the same ancestor
+        (user → ai) transcript the executing StrangeLoop worker does — with
+        outcome, summary, findings, and effects per ancestor — instead of a
+        flat description-only chain. Returns ``""`` when the goal has no
+        ancestors with a stored contribution.
+        """
+        preamble = await self._build_preamble(goal, all_goals, {})
+        if not preamble:
+            return ""
+        return "\n\n".join(_render_turn_text(turn) for turn in preamble)
+
     # ---- merge helpers --------------------------------------------------
 
     @staticmethod
@@ -451,3 +469,36 @@ def synthesize_sloop_response_from_contribution(
         if text:
             return text[:2000]
     return ""
+
+
+def _render_turn_text(turn: GoalReportUserTurn | GoalReportAITurn) -> str:
+    """Render a projected pair turn as readable text (for the backoff prompt).
+
+    Mirrors the worker's ``_render_ai_turn_text`` format so the backoff LLM
+    sees the same ancestor context the executing worker did.
+    """
+    if isinstance(turn, GoalReportUserTurn):
+        return f"[user / goal {turn.goal_id_origin}]: {turn.content}"
+    # GoalReportAITurn
+    parts: list[str] = [f"[ai / goal {turn.goal_id_origin}]"]
+    summary = (turn.summary or "").strip()
+    if summary:
+        parts.append(summary)
+    findings = list(turn.findings or [])
+    if findings:
+        lines = [f"  - {str(f).strip()}" for f in findings if str(f).strip()]
+        if lines:
+            parts.append("Findings:\n" + "\n".join(lines))
+    effects = list(turn.effects or [])
+    if effects:
+        elines: list[str] = []
+        for eff in effects:
+            kind = getattr(eff, "kind", "")
+            ref = getattr(eff, "ref", "")
+            statement = getattr(eff, "statement", "")
+            bit = f"[{kind}] {ref}: {statement}" if kind else f"{ref}: {statement}"
+            if bit.strip(": []"):
+                elines.append(f"  - {bit}")
+        if elines:
+            parts.append("Effects:\n" + "\n".join(elines))
+    return "\n".join(parts)

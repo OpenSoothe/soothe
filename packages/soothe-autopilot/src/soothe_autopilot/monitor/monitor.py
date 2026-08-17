@@ -84,6 +84,9 @@ class AutopilotMonitor:
         self._suspend_notify_scan: Any = None
         self._resource_reconcile: Any = None
         self._verify_task: asyncio.Task[None] | None = None
+        # RFC-222 §Goal-Report-Pair: backoff reasoner uses the projector to
+        # see the same ancestor transcript the executing worker does.
+        self._context_projector: Any = None
         # Last DAG fingerprint that triggered a health LLM call.
         self._last_health_llm_fingerprint: str | None = None
 
@@ -102,6 +105,15 @@ class AutopilotMonitor:
     def bind_dag_persist(self, persist_fn: Callable[[], Awaitable[None]]) -> None:
         """Wire AutopilotService DAG snapshot persist after async placement refine."""
         self._dag_persist = persist_fn
+
+    def bind_context_projector(self, projector: Any) -> None:
+        """Wire the daemon's ContextProjector for backoff-reasoning projection.
+
+        When bound, the backoff reasoner projects the ancestor (user, ai)
+        transcript via the same path the dispatch worker uses, so the backoff
+        LLM sees the same context (RFC-222 §Goal-Report-Pair).
+        """
+        self._context_projector = projector
 
     async def start(self) -> None:
         """Start background verification loop."""
@@ -327,7 +339,18 @@ class AutopilotMonitor:
                     narrative=str(evidence_raw),
                     source="layer2_execute",
                 )
-            decision = await self._backoff_reasoner.reason_backoff(goal_id, goals, evidence)
+            if self._context_projector is None:
+                logger.warning(
+                    "Cannot run backoff reasoning for goal %s — no ContextProjector bound",
+                    goal_id,
+                )
+                return
+            decision = await self._backoff_reasoner.reason_backoff(
+                goal_id,
+                goals,
+                evidence,
+                projector=self._context_projector,
+            )
             logger.info(
                 "Backoff decision: backoff_to=%s, reason=%s",
                 decision.backoff_to_goal_id,

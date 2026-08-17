@@ -206,6 +206,18 @@ class AutopilotService:
             return
         self._notification_router.set_dispatch_fn(dispatch_fn)
 
+    def set_context_projector(self, projector: Any) -> None:
+        """Wire the daemon's ContextProjector (and bind it to the monitor).
+
+        The projector is assigned after service construction (daemon-side),
+        so this setter also binds it to the monitor so the backoff reasoner
+        projects the ancestor transcript through the same path (RFC-222
+        §Goal-Report-Pair).
+        """
+        self._context_projector = projector
+        if self._monitor is not None:
+            self._monitor.bind_context_projector(projector)
+
     async def _maybe_notify_job_root(self, goal_id: str) -> None:
         """Emit job.completed / job.failed when ``goal_id`` is a job root."""
         router = self._notification_router
