@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.19] - 2026-08-18
+
+### Fixed
+- **autopilot**: goal cancel/deadline paths only issued a cooperative
+  `cancel_event` signal (checked between stream chunks), so a worker
+  blocked mid-LLM-call or in sync code never observed the cancel and
+  kept executing a cancelled goal; the daemon heartbeat thread also
+  defeated stuck-worker detection. Mirror the query engine's
+  `_cancel_loop` ladder — `cancel()` → poll `is_idle()` with
+  exponential backoff → `force_kill()` — and add `is_idle`/`force_kill`
+  to `LoopRunnerProtocol`, implemented across `PoolLoopRunner`,
+  `ThreadLoopRunner`, and `RayLoopRunner`.
+- **build**: the `uv_sync_with_fallback` make macro dropped its
+  `$(1)` argument on the floor, so `make sync-no-cache` never actually
+  passed `--no-cache --refresh` to `uv sync` (the flags were instead
+  appended to `rewrite_uv_lock_to_pypi.sh`, which treats `$1` as the
+  lock path). Thread the flags through the macro correctly.
+
+### Changed
+- **deploy**: replace the prod daemon's named volume + three separate
+  bind mounts (data/logs/workspaces into `~/.soothe`) with a single
+  `~/.soothe-prod` bind mount as the full `SOOTHE_HOME` workdir.
+  Isolates prod state from dev's `~/.soothe` so `make reset-the-world`
+  no longer endangers prod data, and makes the full workdir (pid,
+  runtime artifacts, data, logs) host-inspectable instead of trapped in
+  a Docker named volume. Pre-creates `~/.soothe-prod/{data,logs,config}`
+  in `docker-prod-up` for Colima/Lima sshfs compatibility.
+
+### Removed
+- **drift**: complete the AsyncAPI drift-detection pipeline removal
+  advertised in v0.10.13 — drop the drift detector script, the `/drift`
+  TUI dashboard, the weekly historical-data-refresh builtin cron job,
+  the CI drift step, and the `verify_finally.sh` `check_asyncapi_drift`
+  phase. The `CronConfig.enable_builtin_jobs` docstring no longer
+  mentions the removed quarterly drift review.
+- **ci**: delete the obsolete manual-branch `docker.yml` workflow
+  (release builds use `release-docker.yml`).
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.18...v0.10.19
+
 ## [v0.10.18] - 2026-08-17
 
 ### Fixed
