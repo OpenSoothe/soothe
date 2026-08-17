@@ -27,6 +27,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.18] - 2026-08-17
+
+### Fixed
+- **persistence**: deployed `agentloop_checkpoints` tables bootstrapped
+  before the `checkpoint_index` column was introduced never received it
+  (`init.sql`'s `CREATE TABLE IF NOT EXISTS` is a no-op against an
+  existing table), so goal-boundary persistence failed with
+  `psycopg.errors.UndefinedColumn`. Add the first versioned migration
+  `001_add_checkpoint_index_column.sql`, which runs
+  `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` on the next pool open
+  (idempotent — a no-op where the column already exists), guarded by a
+  discovery test so the backfill cannot be silently dropped.
+
+### Changed
+- **build**: bump the `soothe-nano` floor from 1.2.2 to 1.2.3 in
+  `soothe` and `soothe-autopilot` and regenerate `uv.lock`.
+- **daemon**: the runtime Docker image now ships `fd-find` and `git`
+  alongside `ripgrep` (replacing `silversearcher-ag`) so `soothed
+  doctor` reports all expected host tools. Affects `Dockerfile` and
+  `Dockerfile.local`.
+
+### Removed
+- **rfc**: revert RFC-903 (Quarterly RFC Audit Cycle) and RFC-904
+  (Inter-Rater Reliability Reviewer Pool) along with their IG-745
+  implementation guide, the IRR reviewer pool config, and the Q3 2026
+  audit report. All cross-references are stripped from the RFC
+  methodology guide, `rfc-standard`, `rfc-index`, `rfc-history`, and the
+  API-surface alignment rules so the corpus is internally consistent at
+  90 RFCs. The `CronConfig.enable_builtin_jobs` description no longer
+  mentions the quarterly RFC drift review.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.17...v0.10.18
+
 ## [v0.10.17] - 2026-08-17
 
 ### Fixed
