@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.16] - 2026-08-17
+
+### Fixed
+- **diagnose**: the host `cron` check no longer returns ERROR when
+  `soothe-daemon` is not installed in an isolated core venv. Since `soothe`
+  sits below `soothe-daemon` in the dependency DAG, the `soothe_daemon.cron`
+  module may legitimately be absent when running host-only checks; the import
+  failure is now surfaced as a non-blocking note with OK status rather than
+  ERROR, while the config-presence check still runs.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.15...v0.10.16
+
 ## [v0.10.15] - 2026-08-17
 
 ### Fixed

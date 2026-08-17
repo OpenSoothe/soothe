@@ -124,14 +124,40 @@ def _check_loop(config: Any | None) -> CheckResult:
 
 
 def _check_cron(config: Any | None) -> CheckResult:
-    """Check cron config presence and module import."""
+    """Check cron config presence and module import.
+
+    ``soothe`` sits below ``soothe-daemon`` in the dependency DAG, so the
+    daemon cron module may legitimately be absent in an isolated core venv.
+    The config is still validated here; the module itself is exercised at the
+    daemon level. An import failure is only surfaced as ERROR when cron is
+    actually enabled (``enable_builtin_jobs=true``).
+    """
+    cron = getattr(config, "cron", None) if config is not None else None
+    enabled = bool(getattr(cron, "enable_builtin_jobs", False)) if cron is not None else False
+
     import_result = _check_import("soothe_daemon.cron", "cron_module")
     if import_result.status != CheckStatus.OK:
+        if enabled:
+            return CheckResult(
+                name="cron",
+                status=import_result.status,
+                message=import_result.message,
+                details=import_result.details,
+            )
+        # Cron not actively enabled — daemon module absence is fine at host level.
+        if cron is None:
+            return CheckResult(
+                name="cron",
+                status=CheckStatus.WARNING,
+                message="cron config missing",
+                details={"remediation": "Add cron in soothe.yml"},
+            )
+        max_jobs = getattr(cron, "max_jobs", None)
         return CheckResult(
             name="cron",
-            status=import_result.status,
-            message=import_result.message,
-            details=import_result.details,
+            status=CheckStatus.OK,
+            message=f"Cron config present (max_jobs={max_jobs}, module not installed)",
+            details={"module": "soothe_daemon.cron", "max_jobs": max_jobs, "installed": False},
         )
 
     if config is None:
@@ -142,7 +168,6 @@ def _check_cron(config: Any | None) -> CheckResult:
             details={"module": "soothe_daemon.cron"},
         )
 
-    cron = getattr(config, "cron", None)
     if cron is None:
         return CheckResult(
             name="cron",
