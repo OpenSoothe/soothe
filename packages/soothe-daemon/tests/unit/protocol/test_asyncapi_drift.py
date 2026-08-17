@@ -290,6 +290,57 @@ def test_cli_json_output() -> None:
     assert data["error_count"] == 0
 
 
+def test_cli_json_findings_have_module_severity_timestamp() -> None:
+    """--json findings carry structured module/severity/timestamp fields."""
+    code, stdout = _run_cli("--json")
+    assert code == 0
+    data: dict[str, Any] = json.loads(stdout)
+    # generated_at is present at the top level
+    assert "generated_at" in data
+    assert isinstance(data["generated_at"], str)
+    assert data["generated_at"]
+    # findings array mirrors warnings/errors
+    findings = data.get("findings", [])
+    assert len(findings) == data["warning_count"]
+    for f in findings:
+        assert set(f.keys()) == {"module", "severity", "message", "timestamp"}
+        assert f["module"] in {"schema", "registry", "client", "field"}
+        assert f["severity"] in {"error", "warning"}
+        assert f["timestamp"]
+        assert f["message"]
+
+
+def test_drift_finding_dataclass_defaults_timestamp(drift_mod) -> None:
+    """DriftFinding auto-populates timestamp when omitted."""
+    finding = drift_mod.DriftFinding(module="schema", severity="error", message="x")
+    assert finding.timestamp
+    assert finding.module == "schema"
+    d = finding.to_dict()
+    assert d == {
+        "module": "schema",
+        "severity": "error",
+        "message": "x",
+        "timestamp": finding.timestamp,
+    }
+
+
+def test_report_findings_track_module(drift_mod) -> None:
+    """report.error()/warn() attach the correct module to each finding."""
+    report = drift_mod.DriftReport()
+    report.error("schema gap", module="schema")
+    report.error("registry gap", module="registry")
+    report.warn("field drift", module="field")
+    report.warn("client gap", module="client")
+    modules = [(f.module, f.severity) for f in report.findings]
+    assert modules == [
+        ("schema", "error"),
+        ("registry", "error"),
+        ("field", "warning"),
+        ("client", "warning"),
+    ]
+    assert report.generated_at
+
+
 def test_cli_no_drift_message() -> None:
     """When no errors and no warnings, the 'no drift' message is printed."""
     # This only happens if warnings == 0; we can't guarantee that, so just

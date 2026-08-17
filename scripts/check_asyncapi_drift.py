@@ -37,6 +37,7 @@ import importlib
 import json
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -90,11 +91,49 @@ _NON_PARAMS_SCHEMAS = frozenset(
 
 
 @dataclass
+class DriftFinding:
+    """A single structured drift finding (RFC-450 §11.3).
+
+    Fields:
+        module: The subsystem the finding concerns — one of
+            ``"schema"``, ``"registry"``, ``"client"``, ``"field"``.
+        severity: ``"error"`` (structural drift, CI-failing) or
+            ``"warning"`` (field-level advisory, non-fatal).
+        message: Human-readable description of the drift.
+        timestamp: ISO-8601 UTC string when the finding was produced.
+    """
+
+    module: str
+    severity: str
+    message: str
+    timestamp: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.timestamp:
+            self.timestamp = datetime.now(tz=timezone.utc).isoformat()
+
+    def to_dict(self) -> dict[str, str]:
+        """Return a JSON-serializable mapping of this finding."""
+        return {
+            "module": self.module,
+            "severity": self.severity,
+            "message": self.message,
+            "timestamp": self.timestamp,
+        }
+
+
+@dataclass
 class DriftReport:
     """Accumulated drift findings."""
 
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    findings: list[DriftFinding] = field(default_factory=list)
+    generated_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.generated_at:
+            self.generated_at = datetime.now(tz=timezone.utc).isoformat()
 
     @property
     def has_errors(self) -> bool:
@@ -104,11 +143,17 @@ class DriftReport:
     def has_warnings(self) -> bool:
         return bool(self.warnings)
 
-    def error(self, msg: str) -> None:
+    def error(self, msg: str, *, module: str = "schema") -> None:
         self.errors.append(msg)
+        self.findings.append(
+            DriftFinding(module=module, severity="error", message=msg)
+        )
 
-    def warn(self, msg: str) -> None:
+    def warn(self, msg: str, *, module: str = "field") -> None:
         self.warnings.append(msg)
+        self.findings.append(
+            DriftFinding(module=module, severity="warning", message=msg)
+        )
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -320,7 +365,8 @@ def check_schema_presence(
         if not in_daemon and not in_client:
             report.error(
                 f"Schema '{schema_name}' is defined in the AsyncAPI spec but has "
-                f"no corresponding Pydantic model in the daemon or client."
+                f"no corresponding Pydantic model in the daemon or client.",
+                module="schema",
             )
 
     # Models with no corresponding spec schema (only check models that expect a schema)
@@ -330,7 +376,8 @@ def check_schema_presence(
             # Skip intentionally-schemaless models (empty string in overrides)
             report.error(
                 f"Daemon model '{model_name}' expects schema '{schema_name}' but it "
-                f"is not defined in the AsyncAPI spec."
+                f"is not defined in the AsyncAPI spec.",
+                module="schema",
             )
 
 
@@ -376,7 +423,8 @@ def check_registry_coverage(
         if pair not in registry_pairs:
             report.error(
                 f"Spec message defines ({pair[0]!r}, {pair[1]!r}) with a params "
-                f"schema but PARAMS_REGISTRY has no entry for this pair."
+                f"schema but PARAMS_REGISTRY has no entry for this pair.",
+                module="registry",
             )
 
     # Registry entries with no spec message (excluding control types with method=None)
@@ -389,7 +437,8 @@ def check_registry_coverage(
         if pair not in spec_pairs:
             report.error(
                 f"PARAMS_REGISTRY has entry ({type_val!r}, {method_val!r}) but the "
-                f"AsyncAPI spec has no corresponding method-specific message."
+                f"AsyncAPI spec has no corresponding method-specific message.",
+                module="registry",
             )
 
 
@@ -411,7 +460,8 @@ def check_client_model_coverage(
         if schema_name not in spec_schema_names:
             report.warn(
                 f"Client model '{model_name}' expects schema '{schema_name}' but it "
-                f"is not defined in the AsyncAPI spec."
+                f"is not defined in the AsyncAPI spec.",
+                module="client",
             )
 
 
@@ -476,12 +526,14 @@ def _compare_fields(
     if missing_in_model:
         report.warn(
             f"{source_name} model '{model_cls.__name__}' (schema '{schema_name}') "
-            f"is missing required fields present in spec: {sorted(missing_in_model)}"
+            f"is missing required fields present in spec: {sorted(missing_in_model)}",
+            module="field",
         )
     if extra_in_model:
         report.warn(
             f"{source_name} model '{model_cls.__name__}' (schema '{schema_name}') "
-            f"has required fields not in spec: {sorted(extra_in_model)}"
+            f"has required fields not in spec: {sorted(extra_in_model)}",
+            module="field",
         )
 
 
@@ -499,6 +551,8 @@ def print_report(report: DriftReport, strict: bool, json_output: bool) -> None:
             "error_count": len(report.errors),
             "warning_count": len(report.warnings),
             "strict": strict,
+            "generated_at": report.generated_at,
+            "findings": [f.to_dict() for f in report.findings],
         }
         print(json.dumps(output, indent=2))
         return

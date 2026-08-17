@@ -441,6 +441,17 @@ class _ModelMixin:
         )
         self.push_screen(screen, handle_result)
 
+    async def _show_drift_review(self) -> None:
+        """Open the AsyncAPI drift review dashboard as a modal screen."""
+        from soothe_cli.tui.widgets.drift_review import DriftReviewScreen
+
+        def handle_result(_result: None) -> None:
+            """Refocus input after the dashboard closes."""
+            if self._chat_input:
+                self._chat_input.focus_input()
+
+        self.push_screen(DriftReviewScreen(), handle_result)
+
     async def _resume_loop_via_daemon(self, loop_id: str) -> None:
         """Resume a loop by subscribing to daemon events (RFC-503).
 
