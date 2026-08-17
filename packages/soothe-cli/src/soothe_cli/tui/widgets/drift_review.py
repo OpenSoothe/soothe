@@ -672,7 +672,13 @@ class DriftReviewScreen(ModalScreen[None]):
 
     @staticmethod
     def _time_range_options() -> list[tuple[str, str]]:
-        labels = {"1h": "Last hour", "24h": "Last 24h", "7d": "Last 7 days", "all": "All time"}
+        labels = {
+            "1h": "Last hour",
+            "24h": "Last 24h",
+            "7d": "Last 7 days",
+            "30d": "Last 30 days",
+            "all": "All time",
+        }
         return [(labels[r], r) for r in TIME_RANGES]
 
     def on_mount(self) -> None:
