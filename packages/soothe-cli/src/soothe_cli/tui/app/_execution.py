@@ -545,8 +545,6 @@ class _ExecutionMixin:
             self._detach_or_exit()
         elif cmd == "/help":
             await self._show_help_screen()
-        elif cmd == "/drift":
-            await self._show_drift_review()
         elif cmd == "/paste":
             if self._chat_input is None:
                 await self._mount_message(AppMessage("Chat input is not ready."))

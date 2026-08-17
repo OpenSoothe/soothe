@@ -183,11 +183,6 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "handler": show_keymaps,
         "description": "Show keyboard shortcuts",
     },
-    "/drift": {
-        "location": "cli",
-        "handler": None,
-        "description": "Open the AsyncAPI drift review dashboard",
-    },
     # Daemon RPC commands (11)
     "/clear": {
         "location": "daemon",

@@ -14,7 +14,7 @@ Key components:
 
 from __future__ import annotations
 
-from soothe_daemon.cron.builtin import BUILTIN_JOBS, WEEKLY_HISTORICAL_DATA_REFRESH, BuiltinJobSpec
+from soothe_daemon.cron.builtin import BUILTIN_JOBS, BuiltinJobSpec
 from soothe_daemon.cron.extraction import (
     AutopilotDisabledError,
     CronExtractionService,
@@ -38,7 +38,6 @@ __all__ = [
     "AUTOPILOT_REQUIRED_FOR_CRON",
     "BUILTIN_JOBS",
     "DEFAULT_CRON_USER_ID",
-    "WEEKLY_HISTORICAL_DATA_REFRESH",
     "AutopilotDisabledError",
     "BuiltinJobSpec",
     "CronExtractionService",

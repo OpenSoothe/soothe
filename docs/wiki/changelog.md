@@ -183,8 +183,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/rfc-methodology-guide.md`; wired into rfc-standard, rfc-template,
   rfc-index, and rfc-history.
 - **chore**: removed the obsolete drift-detection pipeline
-  (`scripts/check_asyncapi_drift.py`, drift GitHub workflow, webhook test,
-  and `check_asyncapi_drift()` call sites in `verify_finally.sh`).
+  (`scripts/check_asyncapi_drift.py`, the `/drift` TUI dashboard, the
+  weekly historical-data-refresh builtin cron job, the CI drift step, and
+  the `check_asyncapi_drift()` call sites in `verify_finally.sh`).
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.12...v0.10.13
 

@@ -36,30 +36,12 @@ class BuiltinJobSpec:
     priority: int = 50
 
 
-#: Weekly historical-data refresh for the drift review dashboard.
-#:
-#: Runs every Monday at 03:00 local schedule time. The cron ``day_of_week=1``
-#: field selects Monday (cron: Sun=0, Mon=1). The job dispatches an imperative
-#: task to Autopilot that re-pulls historical run data and refreshes the
-#: dashboard's underlying dataset so drift reviews operate on a current corpus.
-WEEKLY_HISTORICAL_DATA_REFRESH = BuiltinJobSpec(
-    job_id="builtin-weekly-historical-refresh",
-    description=(
-        "Refresh historical data for the drift review dashboard by re-pulling "
-        "the latest run history and rebuilding the review dataset"
-    ),
-    schedule_kind=ScheduleKind.CRON,
-    schedule_value="0 3 * * 1",
-    priority=40,
-)
-
-
-#: Registry of all built-in cron jobs.
-BUILTIN_JOBS: tuple[BuiltinJobSpec, ...] = (WEEKLY_HISTORICAL_DATA_REFRESH,)
+#: Registry of all built-in cron jobs. Currently empty; the daemon's
+#: ``seed_builtin_jobs`` pass is a no-op until jobs are added here.
+BUILTIN_JOBS: tuple[BuiltinJobSpec, ...] = ()
 
 
 __all__ = [
     "BUILTIN_JOBS",
     "BuiltinJobSpec",
-    "WEEKLY_HISTORICAL_DATA_REFRESH",
 ]
