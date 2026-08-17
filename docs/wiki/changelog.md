@@ -27,6 +27,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.14] - 2026-08-17
+
+### Added
+- **autopilot**: extract the autopilot orchestration layer out of the
+  `soothe` host into a standalone `soothe-autopilot` package
+  (AutopilotService, AutopilotMonitor, rails, verify, intake, dispatch,
+  notify), with `soothe` never importing it back — enforcing the one-way
+  dependency DAG. Project goal-DAG pairs are now seeded into the
+  StrangeLoop Context Engine ledger as a real multi-turn transcript
+  before the current goal's user turn (RFC-222 §Goal-Report-Pair), so
+  the executing LLM begins with a genuine conversation leading up to the
+  ask instead of a flattened blob that loses turn structure and
+  provenance. The backoff reasoner is routed through the same
+  ContextProjector path so it sees the same outcome/summary/findings
+  context the worker saw.
+- **autopilot**: master switch
+  `agent.autopilot.verify_periodic_enabled` (default false) gates the
+  periodic DAG health tick; `verify_interval` raised 30s → 120s.
+
+### Changed
+- **nano**: migrate to `soothe-nano` 1.2.x unified `soothe_nano.llm`
+  module (litellm-backed, fixing the tool-calling regression where bound
+  `tools=` was dropped on the way to OpenAI-compatible endpoints like
+  DashScope); ~21 src + ~10 test consumers repointed across `soothe`,
+  `soothe-daemon`, and `soothe-autopilot`. Floor bumped to `>=1.2.2` for
+  the `_StructuredOutputRunnable` config leak fix and
+  `LITELLM_LOCAL_MODEL_COST_MAP`.
+- **daemon**: start readiness now requires both a live PID file and the
+  configured WS port accepting connections, so startup crashes surface
+  loudly instead of masking as success.
+- **sloop**: stop emitting Pass 1 intake reasoning as a TUI cognition
+  card; only the Pass 2 scope reasoning card is surfaced. Removed the
+  `pass1_reasoning` field from `IntentClassification` and the structural
+  bypass-prefix heuristic in intake.
+- **rfc**: reconcile per-RFC status headers and index/history tables
+  (82 active / 9 archived / 7 reclassified / 2 process).
+
+### Fixed
+- **ci**: bump Docker actions to Node 24
+  (setup-qemu v3→v4, login v3→v4, metadata v5→v6, build-push v6→v7)
+  and add `actions:write` so buildx cache writes succeed.
+
+### Removed
+- **autopilot**: dead dreaming-distillation stub and its symbols
+  (autopilot dreaming loops, `DreamingModeConfig`, episodic memory,
+  event triggers).
+- **config**: obsolete `.platonic.yml` (superseded by `AGENTS.md` and
+  the `docs/` RFC/IG workflow).
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.13...v0.10.14
+
 ## [v0.10.13] - 2026-08-15
 
 ### Fixed
