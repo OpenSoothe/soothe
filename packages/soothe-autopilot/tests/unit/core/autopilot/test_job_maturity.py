@@ -306,11 +306,15 @@ class TestTopMaturityField:
 
 
 class TestGoalEffectsHydration:
-    def test_bundle_appends_prior_effects(self) -> None:
+    def test_prior_effects_not_flattened_into_goal_text(self) -> None:
+        """RFC-222 §Goal-Report-Pair: prior effects flow as preamble pairs,
+        not as ``## Prior effects`` prose on the goal string. The directive
+        text stays clean; the effect is still on the bundle for structured
+        consumers."""
         from soothe.goal_contracts import GoalDispatchContextBundle, GoalEffect
         from soothe.protocols.runner import GoalDispatchEnvelope
 
-        from soothe_autopilot.runner import _goal_text_with_bundle
+        from soothe_autopilot.runner import _goal_directive_text
 
         job = GoalDispatchEnvelope(
             goal_id="g1",
@@ -327,10 +331,12 @@ class TestGoalEffectsHydration:
                 ]
             ),
         )
-        text = _goal_text_with_bundle(job)
-        assert "## Prior effects" in text
-        assert "Parent concluded X" in text
-        assert "[decide] answer:" in text
+        text = _goal_directive_text(job)
+        assert text == "do next step"
+        assert "## Prior effects" not in text
+        assert "Parent concluded X" not in text
+        # Structured field still carries the effect for verifiers/consensus.
+        assert len(job.merged_context.prior_effects) == 1
 
 
 class TestDagIdleEmission:

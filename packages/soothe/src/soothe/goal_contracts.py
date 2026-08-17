@@ -85,6 +85,11 @@ _BUNDLE_DEFAULT_MAX_FINDINGS = 20
 _BUNDLE_DEFAULT_MAX_EFFECTS = 50
 _BUNDLE_DEFAULT_MAX_PLAN_STEPS = 30
 _BUNDLE_DEFAULT_MAX_FINDING_CHARS = 2000
+# Hard cap on preamble_messages (user+ai pairs). Enforced both by
+# GoalDispatchContextBundle._enforce_bounds and by the ContextProjector when
+# emitting pairs — so the projector and the bundle model agree on the bound.
+# See RFC-222 §Goal-Report-Pair Projection.
+MAX_PREAMBLE_TURNS = 12
 
 GoalEffectKind = Literal["produce", "mutate", "observe", "communicate", "decide"]
 
@@ -159,6 +164,46 @@ class ToolCallStats(BaseModel):
         return sum(self.failures_by_name.values())
 
 
+class GoalReportUserTurn(BaseModel):
+    """The 'user' half of a projected ancestor pair — the ancestor's directive.
+
+    RFC-222 §Goal-Report-Pair Projection. Carried on
+    ``GoalDispatchContextBundle.preamble_messages`` and seeded into the
+    StrangeLoop CE ledger as a ``LoopHumanMessage(phase="preamble")`` before
+    the current goal's user turn.
+    """
+
+    goal_id_origin: str
+    content: str = Field(
+        max_length=_BUNDLE_DEFAULT_MAX_FINDING_CHARS,
+        description="Ancestor goal description/directive",
+    )
+
+
+class GoalReportAITurn(BaseModel):
+    """The 'ai' half of a projected ancestor pair — the ancestor's goal report.
+
+    Built by ``ContextProjector`` via the existing ``build_goal_report`` path
+    (RFC-204 §1.3, IG-726) from the ancestor's stored
+    ``GoalDispatchContextContribution``. Seeded into the CE ledger as a
+    ``LoopAIMessage(phase="preamble")``.
+    """
+
+    goal_id_origin: str
+    outcome: str = Field(description="completed / failed / needs_replan")
+    summary: str = Field(max_length=_BUNDLE_DEFAULT_MAX_FINDING_CHARS)
+    findings: list[str] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Top-K finding summaries from the ancestor's report",
+    )
+    effects: list[GoalEffect] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Top-K effects from the ancestor's contribution",
+    )
+
+
 class GoalDispatchContextBundle(BaseModel):
     """Immutable hydration input for StrangeLoop (RFC-222 revised).
 
@@ -180,6 +225,16 @@ class GoalDispatchContextBundle(BaseModel):
         default=None,
         description="Stable hash of the provider-cached system prompt prefix, when available",
     )
+    preamble_messages: list[GoalReportUserTurn | GoalReportAITurn] = Field(
+        default_factory=list,
+        description=(
+            "Projected ancestor (user, ai) pairs in topological order (RFC-222 "
+            "§Goal-Report-Pair Projection). Flattened: "
+            "[user₀, ai₀, user₁, ai₁, …]. Seeded into the StrangeLoop CE ledger "
+            "as a preamble transcript before the current goal turn. Additive: "
+            "the flat prior_* fields stay for structured consumers."
+        ),
+    )
 
     @model_validator(mode="after")
     def _enforce_bounds(self) -> GoalDispatchContextBundle:
@@ -200,6 +255,13 @@ class GoalDispatchContextBundle(BaseModel):
             msg = (
                 f"GoalDispatchContextBundle.prior_plan_steps ({len(self.prior_plan_steps)}) "
                 f"exceeds max {_BUNDLE_DEFAULT_MAX_PLAN_STEPS}"
+            )
+            raise ValueError(msg)
+        if len(self.preamble_messages) > MAX_PREAMBLE_TURNS:
+            msg = (
+                f"GoalDispatchContextBundle.preamble_messages "
+                f"({len(self.preamble_messages)}) exceeds max "
+                f"{MAX_PREAMBLE_TURNS}"
             )
             raise ValueError(msg)
         return self
@@ -266,6 +328,9 @@ __all__ = [
     "Finding",
     "StepSummary",
     "ToolCallStats",
+    "MAX_PREAMBLE_TURNS",
+    "GoalReportUserTurn",
+    "GoalReportAITurn",
     "GoalDispatchContextBundle",
     "GoalDispatchContextContribution",
 ]

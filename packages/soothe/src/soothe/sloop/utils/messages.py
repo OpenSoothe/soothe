@@ -115,6 +115,7 @@ def last_ledger_ai_content(state: LoopState) -> str:
         "intake",
         "intent_classify",
         "continuation",
+        "preamble",  # RFC-222 §Goal-Report-Pair: ancestor context, not output
     }
     for msg in reversed(state.loop_messages):
         if (
@@ -195,6 +196,7 @@ class LoopHumanMessage(HumanMessage):
             "goal_interrupted",  # Non-success terminal marker (cancel/fatal/max-iter)
             "chitchat",  # Chitchat intake fast-path (piggybacked response)
             "finalize",  # IG-663 station id (prefer goal_completion for wire)
+            "preamble",  # RFC-222 §Goal-Report-Pair: ancestor (user,ai) pairs
         ]
         | None
     ) = None

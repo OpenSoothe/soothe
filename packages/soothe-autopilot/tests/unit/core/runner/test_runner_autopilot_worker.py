@@ -525,3 +525,98 @@ async def test_stream_continues_when_clarification_builder_fails(
     ]
     assert captured["clarification_policy"] is None
     assert chunks[-1][2]["outcome"] == "completed"
+
+
+# ---- Preamble extraction helpers (RFC-222 §Goal-Report-Pair) -------------
+
+
+class TestGoalDirectiveText:
+    def test_no_guidance_returns_base(self) -> None:
+        from soothe_autopilot.runner import _goal_directive_text
+
+        job = _job()
+        assert _goal_directive_text(job) == "do thing"
+
+    def test_guidance_appended_as_section(self) -> None:
+        from soothe_autopilot.runner import _goal_directive_text
+
+        job = GoalDispatchEnvelope(
+            goal_id="g1",
+            goal_description="do thing",
+            merged_context=GoalDispatchContextBundle(
+                operator_guidance=["be careful", "commit often"]
+            ),
+        )
+        text = _goal_directive_text(job)
+        assert "do thing" in text
+        assert "## Operator guidance" in text
+        assert "- be careful" in text
+        assert "- commit often" in text
+
+
+class TestExtractPreamblePairs:
+    def test_empty_bundle_returns_empty(self) -> None:
+        from soothe_autopilot.runner import _extract_preamble_pairs
+
+        assert _extract_preamble_pairs(_job()) == []
+
+    def test_pairs_become_ledger_messages(self) -> None:
+        from soothe.goal_contracts import (
+            GoalDispatchContextBundle,
+            GoalEffect,
+            GoalReportAITurn,
+            GoalReportUserTurn,
+        )
+        from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+
+        from soothe_autopilot.runner import _extract_preamble_pairs
+
+        u = GoalReportUserTurn(goal_id_origin="A", content="do root")
+        a = GoalReportAITurn(
+            goal_id_origin="A",
+            outcome="completed",
+            summary="root done",
+            findings=["rf"],
+            effects=[GoalEffect(kind="produce", ref="file.py", statement="created file")],
+        )
+        job = GoalDispatchEnvelope(
+            goal_id="g1",
+            goal_description="do X",
+            merged_context=GoalDispatchContextBundle(preamble_messages=[u, a]),
+        )
+        pairs = _extract_preamble_pairs(job)
+        assert len(pairs) == 2
+        assert isinstance(pairs[0], LoopHumanMessage)
+        assert pairs[0].phase == "preamble"
+        assert pairs[0].content == "do root"
+        assert isinstance(pairs[1], LoopAIMessage)
+        assert pairs[1].phase == "preamble"
+        assert "root done" in pairs[1].content
+
+
+class TestRenderAITurnText:
+    def test_full_render(self) -> None:
+        from soothe.goal_contracts import GoalEffect, GoalReportAITurn
+
+        from soothe_autopilot.runner import _render_ai_turn_text
+
+        turn = GoalReportAITurn(
+            goal_id_origin="A",
+            outcome="completed",
+            summary="root done",
+            findings=["found X"],
+            effects=[GoalEffect(kind="produce", ref="f.py", statement="made f")],
+        )
+        text = _render_ai_turn_text(turn)
+        assert "root done" in text
+        assert "- found X" in text
+        assert "[produce] f.py: made f" in text
+
+    def test_empty_turn_has_fallback(self) -> None:
+        from soothe.goal_contracts import GoalReportAITurn
+
+        from soothe_autopilot.runner import _render_ai_turn_text
+
+        turn = GoalReportAITurn(goal_id_origin="A", outcome="failed", summary="")
+        text = _render_ai_turn_text(turn)
+        assert "outcome=failed" in text

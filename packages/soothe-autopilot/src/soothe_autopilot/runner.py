@@ -50,13 +50,13 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from soothe.events import StreamChunk
+    from soothe.goal_contracts import GoalReportAITurn
     from soothe.protocols.runner import GoalDispatchEnvelope
 
 logger = logging.getLogger(__name__)
 
 
 _GOAL_COMPLETION_TYPE = "soothe.internal.autopilot.goal_completion"
-_MAX_PRIOR_EFFECTS_IN_GOAL_TEXT = 12
 
 # Default SIGTERM→SIGKILL grace period when draining shell spawns.
 _DRAIN_GRACE_SECONDS = 2.0
@@ -187,7 +187,8 @@ class AutopilotSootheRunner(SootheRunner):
 
         plan_result: PlanResult | None = None
         try:
-            goal_text = _goal_text_with_bundle(job)
+            goal_text = _goal_directive_text(job)
+            preamble = _extract_preamble_pairs(job)
             async for event_type, event_data in strange_loop.run_with_progress(
                 goal=goal_text,
                 thread_id=tid,
@@ -200,6 +201,7 @@ class AutopilotSootheRunner(SootheRunner):
                 routing_classification=routing_classification,
                 shared_pool=shared_pool,
                 clarification_policy=clarification_policy,
+                preamble=preamble,
             ):
                 if event_type == "completed":
                     plan_result = self._extract_plan_result(event_data)
@@ -467,29 +469,83 @@ def _extract_reflection_directives(plan_result: PlanResult | None) -> list[GoalD
     return []
 
 
-def _goal_text_with_bundle(job: GoalDispatchEnvelope) -> str:
-    """Append operator guidance and prior effects from the dispatch bundle."""
+def _goal_directive_text(job: GoalDispatchEnvelope) -> str:
+    """Build the current goal directive, with operator guidance attached.
+
+    Prior-effects flattening was removed (RFC-222 §Goal-Report-Pair Projection):
+    ancestor context now flows as ``preamble_messages`` pairs seeded into the CE
+    ledger, not as ``## Prior effects`` prose on the goal string. Operator
+    guidance stays on the *current* (final) goal turn.
+    """
     base = job.goal_description
-    sections: list[str] = []
-
     guidance = list(getattr(job.merged_context, "operator_guidance", None) or [])
-    if guidance:
-        lines = "\n".join(f"- {g}" for g in guidance)
-        sections.append(f"## Operator guidance\n{lines}")
-
-    effects = list(getattr(job.merged_context, "prior_effects", None) or [])
-    if effects:
-        lines_e: list[str] = []
-        for effect in effects[:_MAX_PRIOR_EFFECTS_IN_GOAL_TEXT]:
-            kind = getattr(effect, "kind", "decide")
-            ref = getattr(effect, "ref", "")
-            statement = getattr(effect, "statement", "")
-            lines_e.append(f"- [{kind}] {ref}: {statement}")
-        sections.append("## Prior effects\n" + "\n".join(lines_e))
-
-    if not sections:
+    if not guidance:
         return base
-    return base + "\n\n" + "\n\n".join(sections)
+    lines = "\n".join(f"- {g}" for g in guidance)
+    return base + "\n\n" + f"## Operator guidance\n{lines}"
+
+
+def _extract_preamble_pairs(job: GoalDispatchEnvelope) -> list[Any]:
+    """Convert ``merged_context.preamble_messages`` into ledger-ready messages.
+
+    Returns a flattened ``list[BaseMessage]`` in pair order
+    ``[H₀, A₀, H₁, A₁, …]``: each ``GoalReportUserTurn`` →
+    ``LoopHumanMessage(phase="preamble")``; each ``GoalReportAITurn` →
+    ``LoopAIMessage(phase="preamble")``. Empty when no pairs were projected
+    (no ancestors with a stored contribution).
+    """
+    from soothe.goal_contracts import GoalReportAITurn, GoalReportUserTurn
+    from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+
+    pairs = job.merged_context.preamble_messages
+    if not pairs:
+        return []
+    out: list[Any] = []
+    for turn in pairs:
+        if isinstance(turn, GoalReportUserTurn):
+            out.append(
+                LoopHumanMessage(
+                    content=turn.content,
+                    phase="preamble",
+                    goal_summary=turn.content[:200] if turn.content else None,
+                )
+            )
+        elif isinstance(turn, GoalReportAITurn):
+            content = _render_ai_turn_text(turn)
+            out.append(LoopAIMessage(content=content, phase="preamble"))
+    return out
+
+
+def _render_ai_turn_text(turn: GoalReportAITurn) -> str:
+    """Render a ``GoalReportAITurn`` as readable ledger text.
+
+    The preamble AI half mirrors the committed CE goal report (IG-726 SoT).
+    Kept compact: outcome + summary, then top findings/effects as bullets.
+    """
+    parts: list[str] = []
+    summary = (turn.summary or "").strip()
+    if summary:
+        parts.append(summary)
+    findings = list(turn.findings or [])
+    if findings:
+        lines = [f"- {str(f).strip()}" for f in findings if str(f).strip()]
+        if lines:
+            parts.append("Findings:\n" + "\n".join(lines))
+    effects = list(turn.effects or [])
+    if effects:
+        elines: list[str] = []
+        for eff in effects:
+            kind = getattr(eff, "kind", "")
+            ref = getattr(eff, "ref", "")
+            statement = getattr(eff, "statement", "")
+            bit = f"[{kind}] {ref}: {statement}" if kind else f"{ref}: {statement}"
+            if bit.strip(": []"):
+                elines.append(f"- {bit}")
+        if elines:
+            parts.append("Effects:\n" + "\n".join(elines))
+    if not parts:
+        return f"Goal {turn.goal_id_origin} ended with outcome={turn.outcome}"
+    return "\n\n".join(parts)
 
 
 __all__ = ["AutopilotSootheRunner"]

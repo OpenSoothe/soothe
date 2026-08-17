@@ -33,6 +33,8 @@ def _goal(
     depends_on: list[str] | None = None,
     informs: list[str] | None = None,
     updated_offset_sec: float = 0.0,
+    report: dict | None = None,
+    created_offset_sec: float = 0.0,
 ) -> GoalNode:
     g = GoalNode(
         id=gid,
@@ -41,6 +43,9 @@ def _goal(
         informs=informs or [],
     )
     g.updated_at = datetime.now(UTC) - timedelta(seconds=updated_offset_sec)
+    g.created_at = datetime.now(UTC) - timedelta(seconds=created_offset_sec)
+    if report is not None:
+        g.report = report
     return g
 
 
@@ -326,3 +331,172 @@ class TestToolStatsAggregation:
             "edit_file": 1,
             "write_file": 5,
         }
+
+
+# ---- Preamble projection (RFC-222 §Goal-Report-Pair) -------------------
+
+
+def _report(outcome: str = "completed", summary: str = "", findings=None, effects=None):
+    r = {"outcome": outcome, "summary": summary or f"done ({outcome})"}
+    if findings is not None:
+        r["findings"] = findings
+    if effects is not None:
+        r["effects"] = effects
+    return r
+
+
+class TestPreambleProjection:
+    """RFC-222 §Goal-Report-Pair Projection — ancestor (user, ai) pairs."""
+
+    @pytest.mark.asyncio
+    async def test_topo_order_three_deep_chain(self) -> None:
+        """A → B → C dispatched: pairs appear [A, A-rpt, B, B-rpt], roots-first."""
+        store = InMemoryGoalDispatchContextStore()
+        await store.put("A", _contribution(findings=[("a-finding", 0.9)], origin="A"))
+        await store.put("B", _contribution(findings=[("b-finding", 0.8)], origin="B"))
+        a = _goal("A", report=_report(summary="root done"), created_offset_sec=200)
+        b = _goal("B", depends_on=["A"], report=_report(summary="mid done"), created_offset_sec=100)
+        c = _goal("C", depends_on=["B"])
+        proj = _default_projector(store)
+        out = await proj.project(c, {"A": a, "B": b, "C": c})
+        ids = [m.goal_id_origin for m in out.preamble_messages]
+        assert ids == ["A", "A", "B", "B"]
+
+    @pytest.mark.asyncio
+    async def test_transitive_grandparent_present(self) -> None:
+        """Direct parent (B) has no contribution, but grandparent (A) does."""
+        store = InMemoryGoalDispatchContextStore()
+        await store.put("A", _contribution(findings=[("a", 0.9)], origin="A"))
+        a = _goal("A", report=_report(summary="root done"), created_offset_sec=200)
+        b = _goal("B", depends_on=["A"], created_offset_sec=100)
+        c = _goal("C", depends_on=["B"])
+        proj = _default_projector(store)
+        out = await proj.project(c, {"A": a, "B": b, "C": c})
+        ids = [m.goal_id_origin for m in out.preamble_messages]
+        assert ids == ["A", "A"]
+        # flat fields empty since direct parent B has no contribution
+        assert out.prior_effects == []
+
+    @pytest.mark.asyncio
+    async def test_informs_cycle_guard(self) -> None:
+        """informs soft-link cycle (X ↔ Y) does not loop infinitely."""
+        store = InMemoryGoalDispatchContextStore()
+        await store.put("X", _contribution(findings=[("x", 0.9)], origin="X"))
+        await store.put("Y", _contribution(findings=[("y", 0.9)], origin="Y"))
+        x = _goal("X", informs=["Y"], report=_report(summary="x done"), created_offset_sec=200)
+        y = _goal("Y", informs=["X"], report=_report(summary="y done"), created_offset_sec=100)
+        proj = _default_projector(store)
+        # X informs Y informs X — cycle; must terminate
+        out = await proj.project(x, {"X": x, "Y": y})
+        # Both X and Y are ancestors of X via the cycle; both have contributions.
+        assert len(out.preamble_messages) >= 2
+
+    @pytest.mark.asyncio
+    async def test_cap_enforcement_drops_oldest(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Cap bit: more ancestors than MAX_PREAMBLE_TURNS//2 → oldest dropped."""
+        import soothe.goal_contracts as gc
+
+        # Patch the cap down to 4 messages (2 pairs) to exercise the drop
+        # path without needing 7+ ancestors under the real cap of 12.
+        monkeypatch.setattr(gc, "MAX_PREAMBLE_TURNS", 4)
+        monkeypatch.setattr("soothe_autopilot.dispatch.projector.MAX_PREAMBLE_TURNS", 4)
+        store = InMemoryGoalDispatchContextStore()
+        await store.put("A", _contribution(findings=[("a", 0.9)], origin="A"))
+        await store.put("B", _contribution(findings=[("b", 0.8)], origin="B"))
+        await store.put("C", _contribution(findings=[("c", 0.7)], origin="C"))
+        a = _goal("A", report=_report(summary="a done"), created_offset_sec=300)
+        b = _goal("B", depends_on=["A"], report=_report(summary="b done"), created_offset_sec=200)
+        c = _goal("C", depends_on=["B"], report=_report(summary="c done"), created_offset_sec=100)
+        d = _goal("D", depends_on=["C"])
+        proj = _default_projector(store)
+        out = await proj.project(d, {"A": a, "B": b, "C": c, "D": d})
+        assert len(out.preamble_messages) == 4
+        # Oldest (A) should be dropped; keep most-recent by updated_at.
+        ids = {m.goal_id_origin for m in out.preamble_messages}
+        assert "A" not in ids
+
+    @pytest.mark.asyncio
+    async def test_missing_contribution_skipped(self) -> None:
+        """Ancestor with no stored contribution is omitted; descendants still appear."""
+        store = InMemoryGoalDispatchContextStore()
+        await store.put("A", _contribution(findings=[("a", 0.9)], origin="A"))
+        # B has no contribution
+        a = _goal("A", report=_report(summary="a done"), created_offset_sec=200)
+        b = _goal("B", depends_on=["A"], created_offset_sec=100)
+        c = _goal("C", depends_on=["B"])
+        proj = _default_projector(store)
+        out = await proj.project(c, {"A": a, "B": b, "C": c})
+        ids = [m.goal_id_origin for m in out.preamble_messages]
+        assert ids == ["A", "A"]
+
+    @pytest.mark.asyncio
+    async def test_ai_turn_reads_committed_report(self) -> None:
+        """AI half mirrors GoalNode.report (outcome + summary), not the contribution."""
+        store = InMemoryGoalDispatchContextStore()
+        await store.put("A", _contribution(findings=[("contribution-finding", 0.9)], origin="A"))
+        a = _goal(
+            "A",
+            report=_report(
+                outcome="needs_replan",
+                summary="report-level summary",
+                findings=["report-finding"],
+                effects=[{"kind": "produce", "ref": "f.py", "statement": "made f"}],
+            ),
+            created_offset_sec=100,
+        )
+        b = _goal("B", depends_on=["A"])
+        proj = _default_projector(store)
+        out = await proj.project(b, {"A": a, "B": b})
+        ai_turn = out.preamble_messages[1]
+        from soothe.goal_contracts import GoalReportAITurn
+
+        assert isinstance(ai_turn, GoalReportAITurn)
+        assert ai_turn.outcome == "needs_replan"
+        assert ai_turn.summary == "report-level summary"
+        assert ai_turn.findings == ["report-finding"]
+
+    @pytest.mark.asyncio
+    async def test_recency_tiebreak_within_topo_level(self) -> None:
+        """Two root parents (A, B) of G: equal topo level, ordered by created_at asc."""
+        store = InMemoryGoalDispatchContextStore()
+        await store.put("A", _contribution(findings=[("a", 0.9)], origin="A"))
+        await store.put("B", _contribution(findings=[("b", 0.8)], origin="B"))
+        a = _goal("A", report=_report(summary="a done"), created_offset_sec=200)
+        b = _goal("B", report=_report(summary="b done"), created_offset_sec=100)
+        g = _goal("G", depends_on=["A", "B"])
+        proj = _default_projector(store)
+        out = await proj.project(g, {"A": a, "B": b, "G": g})
+        ids = [m.goal_id_origin for m in out.preamble_messages]
+        # A is older (200s ago) → appears before B (100s ago)
+        assert ids == ["A", "A", "B", "B"]
+
+
+# ---- Contract bounds (preamble_messages) --------------------------------
+
+
+class TestPreambleContractBounds:
+    def test_over_cap_raises(self) -> None:
+        from soothe.goal_contracts import (
+            GoalDispatchContextBundle,
+            GoalReportUserTurn,
+        )
+
+        u = GoalReportUserTurn(goal_id_origin="g", content="x")
+        with pytest.raises(ValueError, match="preamble_messages"):
+            GoalDispatchContextBundle(preamble_messages=[u] * 100)
+
+    def test_serialization_round_trip(self) -> None:
+        from soothe.goal_contracts import (
+            GoalDispatchContextBundle,
+            GoalReportAITurn,
+            GoalReportUserTurn,
+        )
+
+        u = GoalReportUserTurn(goal_id_origin="A", content="do A")
+        a = GoalReportAITurn(goal_id_origin="A", outcome="completed", summary="A done")
+        b = GoalDispatchContextBundle(preamble_messages=[u, a])
+        d = b.model_dump(mode="json")
+        b2 = GoalDispatchContextBundle.model_validate(d)
+        assert len(b2.preamble_messages) == 2
+        assert isinstance(b2.preamble_messages[0], GoalReportUserTurn)
+        assert isinstance(b2.preamble_messages[1], GoalReportAITurn)

@@ -182,6 +182,7 @@ class StrangeLoop:
         clarification_answers: list[str] | None = None,  # RFC-622: per-question answer list
         resume_interrupted: bool = False,  # IG-670: daemon crash recovery admission
         goal_trace: Any | None = None,  # GoalLoopTrace when Langfuse enabled
+        preamble: list[Any] | None = None,  # RFC-222 §Goal-Report-Pair Projection
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -208,6 +209,13 @@ class StrangeLoop:
             goal_trace: Optional pre-allocated ``GoalLoopTrace``; when omitted and Langfuse
                 is enabled, one is opened before pre-graph intake (Pass 1) so Pass 1,
                 Pass 2, and ``strange-loop-graph`` share one pinned trace.
+            preamble: Optional flattened list of ``BaseMessage`` (ancestor
+                ``(user, ai)`` pairs) projected by the daemon's
+                ``ContextProjector`` (RFC-222 §Goal-Report-Pair Projection).
+                When present, seeded into the CE ledger (phase ``"preamble"``)
+                after ``state.bind_ce`` and before the graph runs, so the
+                executing LLM begins with a real multi-turn transcript. ``None``
+                or empty → existing first-user-message path unchanged.
 
         Yields:
             Tuples of (event_type, event_data) for progress updates
@@ -990,6 +998,31 @@ class StrangeLoop:
                 ce_goal.id,
                 persistence_backend,
             )
+
+            # RFC-222 §Goal-Report-Pair Projection: seed ancestor (user, ai)
+            # pairs into the CE ledger as a preamble transcript before the
+            # graph runs. ``loop_messages`` is rebuilt from this ledger on
+            # every access (RFC-214), so the pairs surface to the planner /
+            # executor with no extra wiring. ``None``/empty → existing path.
+            if preamble:
+                seeded = 0
+                for msg in preamble:
+                    try:
+                        await ce_instance.record_message(msg, phase="preamble")
+                        seeded += 1
+                    except Exception:
+                        logger.warning(
+                            "[StrangeLoop] preamble seed dropped a message (loop=%s); continuing",
+                            state_manager.loop_id,
+                            exc_info=True,
+                        )
+                if seeded:
+                    logger.info(
+                        "[StrangeLoop] seeded %d preamble message(s) (loop=%s, goal=%s)",
+                        seeded,
+                        state_manager.loop_id,
+                        ce_goal.id,
+                    )
 
             ctx = LoopRuntimeContext(
                 strange_loop=self,
