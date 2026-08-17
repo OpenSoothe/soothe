@@ -125,10 +125,16 @@ class LoopRunRequest:
 class LoopRunnerProtocol(Protocol):
     """Structural interface satisfied by all loop runner implementations.
 
-    Consumers (``QueryEngine``) depend only on this interface. The concrete
-    runtime — ``LocalLoopRunner`` (multiprocessing) or ``RayLoopRunner`` (Ray
-    actor) — is selected by ``soothe_daemon.runner.LoopRunnerFactory`` based
-    on ``SootheDaemonConfig``.
+    Consumers (``QueryEngine``, ``AutopilotService``) depend only on this
+    interface. The concrete runtime — ``LocalLoopRunner`` (multiprocessing)
+    or ``RayLoopRunner`` (Ray actor) — is selected by
+    ``soothe_daemon.runner.LoopRunnerFactory`` based on ``SootheDaemonConfig``.
+
+    Cancel escalation (RFC-222 H8 revised): ``cancel()`` is cooperative and
+    best-effort — it only lands at await points inside the running loop. Callers
+    that must guarantee termination (goal cancel, deadline) follow up with
+    ``is_idle()`` and, if still busy, ``force_kill()``. This mirrors the
+    query engine's ``_cancel_loop`` retry → idle-check → force-kill ladder.
     """
 
     async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk]:
@@ -136,7 +142,33 @@ class LoopRunnerProtocol(Protocol):
         ...
 
     async def cancel(self) -> None:
-        """Request cancellation of the running loop."""
+        """Request cooperative cancellation of the running loop.
+
+        Best-effort: signals the worker (cancel_event / actor flag) so the loop
+        unwinds at its next await. Does not guarantee termination — a worker
+        blocked in sync code or a long LLM call may not observe the signal.
+        Pair with ``is_idle()`` / ``force_kill()`` when a guarantee is required.
+        """
+        ...
+
+    async def is_idle(self) -> bool:
+        """Return True if no loop for this runner is currently busy.
+
+        ``True`` means either no worker is mapped to this ``loop_id`` or the
+        mapped worker has returned to idle. Callers poll this after
+        ``cancel()`` to decide whether to escalate to ``force_kill()``.
+        """
+        ...
+
+    async def force_kill(self, *, timeout: float = 10.0) -> None:
+        """Force-terminate the worker running this loop's request.
+
+        Guaranteed termination: SIGTERM then SIGKILL the worker process group
+        (or hard-kill the Ray actor). Use only after cooperative ``cancel()``
+        fails to drive ``is_idle()`` True within a grace window. Releases the
+        worker slot and routes a failure to any pending response so the stream
+        consumer unblocks.
+        """
         ...
 
 

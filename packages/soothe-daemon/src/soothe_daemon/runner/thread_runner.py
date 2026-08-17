@@ -1321,6 +1321,22 @@ class ThreadPool:
 
         logger.info("Thread worker %s force cancelled", worker_id)
 
+    async def force_cancel_worker_by_loop_id(self, loop_id: str, timeout: float = 10.0) -> None:
+        """Force-cancel the worker mapped to ``loop_id`` (cancel backstop).
+
+        Mirrors ``WorkerPool.force_kill_worker_by_loop_id`` for the thread
+        runtime: resolves ``loop_id`` → ``worker_id`` then delegates to
+        ``force_cancel_worker``. No-op when no worker is mapped.
+        """
+        worker_id = self._workers_by_loop_id.get(loop_id)
+        if worker_id is None:
+            logger.debug(
+                "force_cancel_worker_by_loop_id: no active worker for loop_id=%s",
+                loop_id,
+            )
+            return
+        await self.force_cancel_worker(worker_id, timeout=timeout)
+
     def get_worker_id_for_loop(self, loop_id: str) -> str | None:
         """Return worker_id handling the given loop_id, if any."""
         return self._workers_by_loop_id.get(loop_id)
@@ -1471,10 +1487,30 @@ class ThreadLoopRunner:
         async for chunk in pool.submit(request):
             yield chunk
 
+    async def _resolve_pool(self) -> ThreadPool:
+        """Return the shared pool, fetching it if ``run`` hasn't yet bound it."""
+        if self._pool is None:
+            self._pool = await ThreadPool.get_shared_instance(
+                self._config,
+                self._daemon_config,
+                identity_runtime=self._identity_runtime,
+            )
+        return self._pool
+
     async def cancel(self) -> None:
-        """Request cancellation."""
-        if self._pool is not None:
-            await self._pool.cancel_request(self._loop_id)
+        """Request cooperative cancellation."""
+        pool = await self._resolve_pool()
+        await pool.cancel_request(self._loop_id)
+
+    async def is_idle(self) -> bool:
+        """True when no busy worker is mapped to this loop's request."""
+        pool = await self._resolve_pool()
+        return not pool.is_loop_busy(self._loop_id)
+
+    async def force_kill(self, *, timeout: float = 10.0) -> None:
+        """Force-cancel the worker mapped to this loop (cancel backstop)."""
+        pool = await self._resolve_pool()
+        await pool.force_cancel_worker_by_loop_id(self._loop_id, timeout=timeout)
 
 
 __all__ = [

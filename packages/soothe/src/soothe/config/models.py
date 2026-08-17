@@ -543,6 +543,41 @@ class AutopilotConfig(BaseModel):
         ),
     )
 
+    # === Cancel escalation (RFC-222 H8 revised) ===
+    # Goal cancel / deadline paths first request cooperative cancellation
+    # (``runner.cancel()``), then poll ``runner.is_idle()``; if the worker
+    # does not go idle within the retry budget, escalate to
+    # ``runner.force_kill()`` so a worker blocked mid-LLM-call or in sync code
+    # is guaranteed terminated rather than orphaned. Mirrors the query engine's
+    # ``_cancel_loop`` ladder (SootheDaemonConfig.cancel_* knobs).
+    cancel_retry_count: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description=(
+            "Cooperative-cancel retry attempts before escalating to force-kill "
+            "on goal cancel / deadline."
+        ),
+    )
+    cancel_retry_interval_seconds: float = Field(
+        default=2.0,
+        ge=0.1,
+        le=30.0,
+        description=(
+            "Base seconds between cooperative-cancel retries; exponential "
+            "backoff is applied (same scheme as the query engine)."
+        ),
+    )
+    cancel_force_kill_timeout_seconds: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=60.0,
+        description=(
+            "Seconds to wait for worker process death during force-kill after "
+            "cooperative cancel fails."
+        ),
+    )
+
 
 class ContextProjectionConfig(BaseModel):
     """Bounds for GoalDispatchContextBundle merging (RFC-222 revised).

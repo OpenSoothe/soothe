@@ -1008,23 +1008,92 @@ class AutopilotService:
         return await self._ce.get_goal(goal_id)
 
     async def _cancel_goal_worker(self, goal: GoalNode) -> None:
-        """Stop the worker for an active goal if one is assigned (RFC-222 H8)."""
+        """Stop the worker for an active goal (RFC-222 H8 revised).
+
+        Resolves the worker bound to ``goal.assigned_loop_id`` and delegates
+        to ``_escalate_cancel`` for the cooperative-cancel → idle-check →
+        force-kill ladder.
+        """
         if self._worker_pool is None or not goal.assigned_loop_id:
             return
         worker = self._worker_pool.get_worker(goal.assigned_loop_id)
         if worker is None or worker.current_goal_id != goal.id:
             return
+        await self._escalate_cancel(worker, goal.id)
+
+    async def _escalate_cancel(self, worker: Any, goal_id: str) -> None:
+        """Cooperative cancel → idle-check → force-kill (RFC-222 H8 revised).
+
+        Requests cooperative cancellation first (``runner.cancel()``), then
+        polls ``runner.is_idle()`` with exponential backoff. If the worker
+        does not go idle within the retry budget — the common failure when the
+        goal is blocked mid-LLM-call or in sync code and the cooperative
+        ``cancel_event`` never lands at an await point — escalate to
+        ``runner.force_kill()`` so the worker subprocess is guaranteed
+        terminated. Without the force-kill backstop a cancelled goal's worker
+        keeps executing the goal (the lifecycle-binding gap).
+
+        Shared by goal-cancel (``_cancel_goal_worker``) and the deadline
+        monitor (``_monitor_loop_health``).
+        """
+        loop_id = worker.loop_id
+        runner = worker.runner
+
+        # 1. Cooperative cancel.
         try:
-            await worker.runner.cancel()
+            await runner.cancel()
             logger.info(
                 "[Autopilot] cancel_goal: requested cancel of worker %s for goal %s",
-                worker.loop_id,
-                goal.id,
+                loop_id,
+                goal_id,
             )
         except Exception:
             logger.warning(
                 "worker.runner.cancel() raised during cancel_goal(%s)",
-                goal.id,
+                goal_id,
+                exc_info=True,
+            )
+
+        # 2. Poll for idle; escalate to force-kill if cooperative cancel
+        # does not land. ``is_idle`` may be absent on older runners — treat
+        # AttributeError as "not idle yet" and keep retrying.
+        max_retries = max(1, getattr(self._config, "cancel_retry_count", 3))
+        base_interval = float(getattr(self._config, "cancel_retry_interval_seconds", 2.0))
+        force_timeout = float(getattr(self._config, "cancel_force_kill_timeout_seconds", 10.0))
+
+        for attempt in range(max_retries):
+            await asyncio.sleep(base_interval * (0.5 + attempt * 0.5))
+            try:
+                if await runner.is_idle():
+                    logger.info(
+                        "[Autopilot] cancel_goal: worker %s idle after cancel "
+                        "(attempt %d) for goal %s",
+                        loop_id,
+                        attempt + 1,
+                        goal_id,
+                    )
+                    return
+            except Exception:
+                logger.debug(
+                    "runner.is_idle() raised for goal %s; retrying",
+                    goal_id,
+                    exc_info=True,
+                )
+
+        # 3. Force-kill backstop.
+        logger.warning(
+            "[Autopilot] cancel_goal: cooperative cancel did not idle worker %s "
+            "for goal %s after %d attempts; force-killing",
+            loop_id,
+            goal_id,
+            max_retries,
+        )
+        try:
+            await runner.force_kill(timeout=force_timeout)
+        except Exception:
+            logger.warning(
+                "runner.force_kill() raised during cancel_goal(%s)",
+                goal_id,
                 exc_info=True,
             )
 
@@ -2369,10 +2438,11 @@ class AutopilotService:
         """Monitor active workers — enforce wall-clock deadlines (RFC-222 H5).
 
         For each active worker, if ``goal_deadline_seconds`` is configured and
-        the worker has been busy longer than that, request cooperative
-        cancellation via ``worker.runner.cancel()`` and fail the goal with a
-        deadline_exceeded evidence bundle. The stream consumer task will see
-        the cancel and unwind cleanly (releasing reservation + worker).
+        the worker has been busy longer than that, escalate cancellation via
+        ``_escalate_cancel`` (cooperative → idle-check → force-kill) and fail
+        the goal with a deadline_exceeded evidence bundle. Force-kill
+        guarantees a deadline-exceeded goal cannot keep running when the worker
+        is blocked past the cancel_event's await points.
         """
         if self._worker_pool is None:
             return
@@ -2400,12 +2470,10 @@ class AutopilotService:
                 elapsed,
                 deadline,
             )
-            # Request cooperative cancel of the worker first; the stream
-            # consumer task will then see termination and clean up.
-            try:
-                await worker.runner.cancel()
-            except Exception:
-                logger.debug("worker.runner.cancel() raised for %s", worker.loop_id, exc_info=True)
+            # Escalate cooperative cancel → idle-check → force-kill so a
+            # deadline-exceeded goal cannot keep running when the worker is
+            # blocked past the cancel_event's await points.
+            await self._escalate_cancel(worker, goal_id)
 
             # Drain the goal's spawned background processes before failing so
             # deadline-exceeded goals do not orphan run_background grandchildren.

@@ -85,5 +85,29 @@ class RayLoopRunner:
             pass
         self._actor = None
 
+    async def is_idle(self) -> bool:
+        """True when this loop's actor is gone (no longer busy).
+
+        Ray actors are killed outright on cancel (``cancel`` already calls
+        ``ray.kill``), so "idle" = "no live actor". A live actor is busy.
+        """
+        return self._actor is None
+
+    async def force_kill(self, *, timeout: float = 10.0) -> None:
+        """Hard-kill the actor backing this loop (cancel backstop).
+
+        ``cancel`` already hard-kills the Ray actor; this is the explicit
+        escalation hook so callers can bypass the cooperative grace period
+        when they have already waited on ``is_idle``.
+        """
+        if self._actor is None:
+            return
+        logger.warning("RayLoopRunner: force-killing actor for loop=%s", self._loop_id[:16])
+        try:
+            ray.kill(self._actor)
+        except Exception:  # noqa: BLE001
+            pass
+        self._actor = None
+
 
 __all__ = ["RayLoopRunner"]

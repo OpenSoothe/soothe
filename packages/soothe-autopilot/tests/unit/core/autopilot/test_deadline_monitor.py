@@ -16,12 +16,21 @@ class _FakeRunner:
     def __init__(self, loop_id: str) -> None:
         self.loop_id = loop_id
         self.cancel_called = False
+        self.force_kill_called = False
+        self._idle = False
 
     async def run(self, request):  # noqa: ANN001
         yield None  # never reached in monitor-only tests
 
     async def cancel(self) -> None:
         self.cancel_called = True
+        self._idle = True
+
+    async def is_idle(self) -> bool:
+        return self._idle
+
+    async def force_kill(self, *, timeout: float = 10.0) -> None:
+        self.force_kill_called = True
 
 
 class _FakeFactory:
@@ -34,6 +43,10 @@ def _service(*, deadline: float | None) -> AutopilotService:
     ce = ContextEngine()
     cfg = AutopilotConfig(max_loops=2, max_parallel_goals=2)
     cfg.goal_deadline_seconds = deadline
+    # Tiny retry interval so the escalation ladder does not slow tests.
+    cfg.cancel_retry_count = 3
+    cfg.cancel_retry_interval_seconds = 0.1
+    cfg.cancel_force_kill_timeout_seconds = 1.0
     return AutopilotService(
         ce=ce,
         config=cfg,

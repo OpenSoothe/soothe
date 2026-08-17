@@ -13,15 +13,27 @@ from soothe_autopilot import AutopilotService
 
 
 class _FakeRunner:
+    """Cooperative runner: cancel() lands and is_idle() reports True after."""
+
     def __init__(self, loop_id: str) -> None:
         self.loop_id = loop_id
         self.cancel_called = False
+        self.force_kill_called = False
+        self._idle = False
 
     async def run(self, request):  # noqa: ANN001
         yield None
 
     async def cancel(self) -> None:
         self.cancel_called = True
+        self._idle = True
+
+    async def is_idle(self) -> bool:
+        return self._idle
+
+    async def force_kill(self, *, timeout: float = 10.0) -> None:
+        self.force_kill_called = True
+        self._idle = True
 
 
 class _HangingRunner:
@@ -30,6 +42,8 @@ class _HangingRunner:
     def __init__(self, loop_id: str) -> None:
         self.loop_id = loop_id
         self.cancel_called = False
+        self.force_kill_called = False
+        self._idle = False
 
     async def run(self, request):  # noqa: ANN001
         # Block forever until the consumer task is cancelled.
@@ -38,6 +52,39 @@ class _HangingRunner:
 
     async def cancel(self) -> None:
         self.cancel_called = True
+        self._idle = True
+
+    async def is_idle(self) -> bool:
+        return self._idle
+
+    async def force_kill(self, *, timeout: float = 10.0) -> None:
+        self.force_kill_called = True
+        self._idle = True
+
+
+class _StuckRunner:
+    """A runner that ignores cooperative cancel — simulates a worker blocked
+    mid-LLM-call. is_idle() never goes True, so cancel must escalate to
+    force_kill().
+    """
+
+    def __init__(self, loop_id: str) -> None:
+        self.loop_id = loop_id
+        self.cancel_called = False
+        self.force_kill_called = False
+
+    async def run(self, request):  # noqa: ANN001
+        await asyncio.Event().wait()
+        yield None  # pragma: no cover
+
+    async def cancel(self) -> None:
+        self.cancel_called = True
+
+    async def is_idle(self) -> bool:
+        return False
+
+    async def force_kill(self, *, timeout: float = 10.0) -> None:
+        self.force_kill_called = True
 
 
 class _FakeFactory:
@@ -51,7 +98,14 @@ class _FakeFactory:
 def _service(runner_cls: type = _FakeRunner) -> AutopilotService:
     bus = InternalEventBus()
     ce = ContextEngine()
-    cfg = AutopilotConfig(max_loops=2, max_parallel_goals=2)
+    # Tiny retry interval so the escalation ladder does not slow tests.
+    cfg = AutopilotConfig(
+        max_loops=2,
+        max_parallel_goals=2,
+        cancel_retry_count=3,
+        cancel_retry_interval_seconds=0.1,
+        cancel_force_kill_timeout_seconds=1.0,
+    )
     return AutopilotService(
         ce=ce,
         config=cfg,
@@ -88,6 +142,8 @@ class TestCancelGoal:
         result = await svc.cancel_goal(goal.id, reason="user_cancelled")
 
         assert worker.runner.cancel_called is True
+        # Cooperative cancel landed → no force-kill needed.
+        assert worker.runner.force_kill_called is False
         assert result is not None
         assert result.status == "cancelled"
 
@@ -225,3 +281,51 @@ class TestCancelGoalNoDeadWorkers:
         assert (await svc.get_goal(a.id)).status == "cancelled"
         assert (await svc.get_goal(child.id)).status == "cancelled"
         assert (await svc.get_goal(b.id)).status == "cancelled"
+
+
+class TestCancelEscalation:
+    """Cooperative cancel → idle-check → force-kill ladder (RFC-222 H8 revised)."""
+
+    @pytest.mark.asyncio
+    async def test_cooperative_cancel_short_circuits_force_kill(self) -> None:
+        """When is_idle() goes True after cancel(), force_kill is not called."""
+        svc = _service(runner_cls=_FakeRunner)
+        goal = await svc.submit_task("g", max_retries=0)
+        worker = await svc._worker_pool.pick_worker(goal, job_id=goal.id)
+        assert worker is not None
+        svc._ce.claim_goal(goal.id, loop_id=worker.loop_id)
+
+        await svc.cancel_goal(goal.id)
+
+        assert worker.runner.cancel_called is True
+        assert worker.runner.force_kill_called is False
+
+    @pytest.mark.asyncio
+    async def test_stuck_worker_force_killed_after_retries(self) -> None:
+        """A worker that never goes idle after cancel is force-killed."""
+        svc = _service(runner_cls=_StuckRunner)
+        goal = await svc.submit_task("g", max_retries=0)
+        worker = await svc._worker_pool.pick_worker(goal, job_id=goal.id)
+        assert worker is not None
+        svc._ce.claim_goal(goal.id, loop_id=worker.loop_id)
+
+        await svc.cancel_goal(goal.id)
+
+        runner = worker.runner
+        assert runner.cancel_called is True
+        assert runner.force_kill_called is True
+        assert (await svc.get_goal(goal.id)).status == "cancelled"
+
+    @pytest.mark.asyncio
+    async def test_escalate_cancel_directly(self) -> None:
+        """_escalate_cancel force-kills a stuck runner and returns."""
+        svc = _service(runner_cls=_StuckRunner)
+        goal = await svc.submit_task("g", max_retries=0)
+        worker = await svc._worker_pool.pick_worker(goal, job_id=goal.id)
+        assert worker is not None
+        runner = worker.runner
+
+        await svc._escalate_cancel(worker, goal.id)
+
+        assert runner.cancel_called is True
+        assert runner.force_kill_called is True
