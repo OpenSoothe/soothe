@@ -3,7 +3,7 @@
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
 **Last Updated**: 2026-08-17
-**Total RFCs**: 91 (82 active + 9 archived)
+**Total RFCs**: 92 (83 active + 9 archived)
 
 ## Summary Statistics
 
@@ -11,11 +11,11 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Draft | 40 | 44.0% |
-| Implemented (all variants) | 41 | 45.1% |
-| Archived | 9 | 9.9% |
+| Draft | 37 | 40.2% |
+| Implemented (all variants) | 44 | 47.8% |
+| Archived | 9 | 9.8% |
 | Accepted | 1 | 1.1% |
-| Proposed | 1 | 1.1% |
+| Proposed | 2 | 2.2% |
 
 ### By Kind
 
@@ -30,7 +30,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 | Protocol Specification | 1 |
 | Feature Enhancement | 1 |
 | Product Specification | 1 |
-| Process Specification | 2 |
+| Process Specification | 3 |
 | Unknown | 2 |
 
 ## Recent Changes
@@ -62,6 +62,20 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   update flow via `rfc-standard.md`, `templates/rfc-template.md`, and
   `rfc-index.md` as a normative reference for all RFC authoring, status
   transitions, and audit work.
+
+### 2026-08-17
+
+- **RFC-904** drafted: Inter-Rater Reliability Reviewer Pool — process
+  specification defining the reviewer pool schema, cross-team coverage rules,
+  and calibration scope for the quarterly RFC audit cycle (RFC-903).
+  Establishes the reviewer data model (id, display_name, team, dag_level,
+  active, calibration_domains), team registry, coverage constraints (≥3
+  teams, both DAG levels, no team >50%), calibration domains (lifecycle
+  status accuracy, spec-vs-code drift, DAG boundary compliance, dependency
+  graph integrity, deprecation backlog throughput, index/catalog hygiene),
+  and IRR computation targets (Cohen's κ ≥0.7 pairwise, Fleiss' κ ≥0.6
+  pool-wide). Supersedes the informal "Reviewers" role hat in RFC-903 §Roles
+  with a named, cross-team pool. Status: Proposed.
 
 ### 2026-08-11
 
@@ -118,6 +132,21 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **RFC-413** Phase 4 complete (IG-655): append-oriented DisplayCardStore ledger, live `soothe.card.*` via `event`/`custom`, TUI always prefers daemon projection for structural cards; inline tool rows remain live-only on step widgets. Design draft `docs/drafts/2026-07-27-tui-card-replay-source-of-truth-design.md`.
 
 ## Chronological Timeline
+
+### Major Changes - 2026-08-17
+
+**RFC-904**: Inter-Rater Reliability Reviewer Pool
+
+- Process specification defining the reviewer pool schema, cross-team
+  coverage rules, and calibration scope for the quarterly RFC audit cycle
+  (RFC-903). Establishes a reviewer data model (id, display_name, team,
+  dag_level, active, calibration_domains), a team registry aligned to the
+  Soothe package DAG, coverage constraints (≥3 teams, both DAG levels
+  represented, no single team >50%), and six calibration domains mapped to
+  RFC-903 §Tracking Metrics. IRR computation targets: Cohen's κ ≥0.7
+  pairwise, Fleiss' κ ≥0.6 pool-wide. Supersedes the informal "Reviewers"
+  role hat in RFC-903 §Roles with a named, cross-team pool. Implementation:
+  **IG-745**.
 
 ### Major Changes - 2026-08-11
 
@@ -593,9 +622,9 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Kind: Architecture Design
 
 - **2026-04-17**: RFC-302 - ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval
-  - Status: Draft
+  - Status: Implemented (partial)
   - Kind: Architecture Design
-  - Note: Reclassified from 4xx to 3xx per RFC-900
+  - Note: Reclassified from 4xx to 3xx per RFC-900; implemented 2026-08-17 (HMX-05) — ContextProtocol/ContextRetrievalModule/KeywordContext in soothe.context.retrieval
 
 - **2026-04-17**: RFC-303 - MemoryProtocol: Cross-Thread Memory & Context Separation
   - Status: Draft
@@ -673,7 +702,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Note: Reclassified from 6xx to 8xx per RFC-900
 
 - **2026-04-02**: RFC-502 - Unified Presentation Engine
-  - Status: Draft
+  - Status: Implemented (partial)
   - Kind: Implementation Interface Design
   - Authors: Soothe Team
 

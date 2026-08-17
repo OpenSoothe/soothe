@@ -1,0 +1,185 @@
+# Inter-Rater Reliability (IRR) Reviewer Pool
+# ------------------------------------------------------------
+# Defines the reviewer pool for the quarterly RFC audit cycle (RFC-903).
+# Schema, team structure, coverage rules, and calibration scope are
+# specified by RFC-904 (docs/specs/RFC-904-inter-rater-reliability-reviewer-pool.md).
+# Implementation guide: IG-745 (docs/impl/IG-745-irr-reviewer-pool.md).
+#
+# This file is the single source of truth for reviewer membership.
+# Do not maintain a parallel inline list in any RFC or code module.
+
+# ============================================================================
+# SCHEMA (self-documenting; mirrors RFC-904 §Reviewer Entry)
+# ============================================================================
+# Each reviewer entry has:
+#   id:                 Stable identifier (r-<team>-<NN>)
+#   display_name:       Role-based name (no personal names)
+#   team:               One of: sdk, nano, host, autopilot, daemon, cli
+#   dag_level:          leaf (sdk, nano) or host (soothe, autopilot, daemon, cli)
+#   expertise_areas:    RFC series or domains
+#   calibration_weight: Weight in calibration scoring (0.0-1.0; default 1.0)
+#   active:             Whether eligible this cycle
+#   onboarded_cycle:    First cycle active (e.g., "Q3-2026")
+
+# ============================================================================
+# TEAMS (mirrors RFC-904 §Team Structure and AGENTS.md §7b DAG)
+# ============================================================================
+teams:
+  - name: sdk
+    dag_level: leaf
+    package: soothe-sdk
+    reviewer_focus: "Shared contracts, wire, display, plugin contracts, protocols"
+  - name: nano
+    dag_level: leaf
+    package: soothe-nano
+    reviewer_focus: "Coding CoreAgent, skills, MCP backends"
+  - name: host
+    dag_level: host
+    package: soothe
+    reviewer_focus: "StrangeLoop, Context Engine, identity, host runner"
+  - name: autopilot
+    dag_level: host
+    package: soothe-autopilot
+    reviewer_focus: "Goal scheduling, dispatch, monitor, rails, verify, notify"
+  - name: daemon
+    dag_level: host
+    package: soothe-daemon
+    reviewer_focus: "Process lifecycle, channels, HTTP/WS server, admin IO, cron"
+  - name: cli
+    dag_level: host
+    package: soothe-cli
+    reviewer_focus: "Typer + Textual TUI, WebSocket transport"
+
+# ============================================================================
+# CALIBRATION SCOPE (mirrors RFC-904 §Calibration Scope)
+# ============================================================================
+calibration:
+  # What is calibrated: reviewer agreement on RFC status-transition
+  # recommendations — the gate assigned to Reviewers by RFC-903 §Roles.
+  target: "RFC status-transition recommendation agreement"
+  cadence: "quarterly (aligned to RFC-903 audit cycle)"
+  corpus:
+    # 8-12 RFC status assessments per cycle, double-rated by >=2 reviewers.
+    size_range: [8, 12]
+    sources:
+      - "RFCs flagged for status transition in current audit (primary)"
+      - "3 anchor RFCs re-rated every cycle (1 Implemented, 1 Draft, 1 Deprecated/Archived)"
+      - "Edge cases: RFCs with ambiguous status (e.g., Implemented (partial))"
+  metrics:
+    - name: "Pairwise agreement rate"
+      definition: "Fraction of corpus items where two reviewers assign the same status"
+      target: ">= 0.80"
+    - name: "Cohen's kappa"
+      definition: "Agreement corrected for chance (per reviewer pair)"
+      target: ">= 0.60 (substantial)"
+    - name: "Fleiss' kappa"
+      definition: "Multi-rater agreement (when >=3 reviewers rate)"
+      target: ">= 0.60"
+    - name: "Drift delta"
+      definition: "Anchor-item agreement this cycle minus last cycle"
+      target: "Trend toward 0"
+  coverage_rules:
+    - "Minimum >= 2 active reviewers per status-transition batch"
+    - "Cross-team diversity: reviewers must span >= 3 distinct teams"
+    - "DAG-level span: at least one leaf-level and one host-level reviewer"
+    - "No self-review: Audit Owner's team provides no reviewer for transitions the Audit Owner authored"
+
+# ============================================================================
+# REVIEWER ENTRIES
+# ============================================================================
+# Initial pool: 8 reviewers spanning all six package teams.
+# DAG-level coverage: 2 leaf (sdk, nano) + 6 host (host, autopilot, daemon, cli).
+# Cross-team diversity: 6 distinct teams (exceeds >= 3 minimum).
+# No team exceeds 25% of pool (max 2 of 8 = 25% for host and autopilot).
+reviewers:
+  # --- Leaf-level reviewers (sdk, nano) ---
+  - id: r-sdk-01
+    display_name: "SDK Team Reviewer"
+    team: sdk
+    dag_level: leaf
+    expertise_areas: ["1xx", "3xx", "4xx", "wire-contracts"]
+    calibration_weight: 1.0
+    active: true
+    onboarded_cycle: "Q3-2026"
+
+  - id: r-nano-01
+    display_name: "Nano Team Reviewer"
+    team: nano
+    dag_level: leaf
+    expertise_areas: ["1xx", "6xx-skills", "mcp-backends"]
+    calibration_weight: 1.0
+    active: true
+    onboarded_cycle: "Q3-2026"
+
+  # --- Host-level reviewers (soothe, autopilot, daemon, cli) ---
+  - id: r-host-01
+    display_name: "Host Team Reviewer"
+    team: host
+    dag_level: host
+    expertise_areas: ["2xx", "8xx", "strangeloop", "context-engine"]
+    calibration_weight: 1.0
+    active: true
+    onboarded_cycle: "Q3-2026"
+
+  - id: r-host-02
+    display_name: "Host Team Reviewer (2)"
+    team: host
+    dag_level: host
+    expertise_areas: ["2xx", "3xx", "identity", "runner"]
+    calibration_weight: 0.9
+    active: true
+    onboarded_cycle: "Q3-2026"
+
+  - id: r-autopilot-01
+    display_name: "Autopilot Team Reviewer"
+    team: autopilot
+    dag_level: host
+    expertise_areas: ["2xx", "7xx-rails", "goal-engine", "verify"]
+    calibration_weight: 1.0
+    active: true
+    onboarded_cycle: "Q3-2026"
+
+  - id: r-autopilot-02
+    display_name: "Autopilot Team Reviewer (2)"
+    team: autopilot
+    dag_level: host
+    expertise_areas: ["2xx", "7xx-rails", "dispatch", "monitor"]
+    calibration_weight: 0.9
+    active: true
+    onboarded_cycle: "Q3-2026"
+
+  - id: r-daemon-01
+    display_name: "Daemon Team Reviewer"
+    team: daemon
+    dag_level: host
+    expertise_areas: ["4xx", "5xx", "channels", "cron", "8xx-persistence"]
+    calibration_weight: 1.0
+    active: true
+    onboarded_cycle: "Q3-2026"
+
+  - id: r-cli-01
+    display_name: "CLI Team Reviewer"
+    team: cli
+    dag_level: host
+    expertise_areas: ["5xx", "tui", "slash-commands", "websocket-transport"]
+    calibration_weight: 1.0
+    active: true
+    onboarded_cycle: "Q3-2026"
+
+# ============================================================================
+# POOL GOVERNANCE (mirrors RFC-904 §Pool Governance)
+# ============================================================================
+governance:
+  onboarding: |
+    Append a new entry with active: true and onboarded_cycle set to the
+    current cycle. Display name must not collide with an existing active
+    entry's display name. ID follows r-<team>-<NN> pattern.
+  offboarding: |
+    Set active: false. Do not delete the entry — historical calibration
+    data references reviewer IDs, and deletion would break audit-report
+    traceability.
+  rotation: |
+    The Audit Owner role (RFC-903) rotates quarterly. The successor is
+    selected from active pool members whose onboarded_cycle is at least
+    one cycle prior, preferring members from a different team than the
+    outgoing Audit Owner.

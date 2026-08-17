@@ -1,7 +1,7 @@
 # RFC Index
 
 **Last Updated**: 2026-08-17
-**Total RFCs**: 91 (82 active, 9 archived, 7 reclassified, 2 process specifications)
+**Total RFCs**: 92 (83 active, 9 archived, 7 reclassified, 3 process specifications)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -43,18 +43,18 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Status | Count |
 |--------|-------|
-| Draft | 40 |
+| Draft | 37 |
 | Implemented | 17 |
-| Implemented (partial) | 8 |
+| Implemented (partial) | 11 |
 | Implemented (other variants — see individual RFC headers) | 16 |
 | Archived | 9 |
 | Accepted | 1 |
-| Proposed | 1 |
+| Proposed | 2 |
 
 > **Note**: "Implemented (other variants)" groups 16 RFCs whose status headers carry
 > implementation-detail prose (e.g. `Implemented (Partially Superseded)`,
 > `Implemented (Parts I–III)`, `Implemented — <class> in <path>`). See individual RFC
-> headers for the authoritative per-RFC status. Total Implemented variants: 41.
+> headers for the authoritative per-RFC status. Total Implemented variants: 44.
 
 ## RFC Kind Summary
 
@@ -312,7 +312,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 - **RFC-302**: [ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval](RFC-302-context-protocol-architecture.md)
   - Kind: Architecture Design
-  - Status: Draft
+  - Status: Implemented (partial)
   - Created: 2026-04-17
   - Dependencies: RFC-000, RFC-001
   - Related: RFC-303 (Memory), RFC-306 (Durability)
@@ -457,7 +457,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 - **RFC-502**: [Unified Presentation Engine](RFC-502-unified-presentation-engine.md)
   - Kind: Implementation Interface Design
-  - Status: Draft
+  - Status: Implemented (partial)
   - Created: 2026-04-02
   - Depends on: RFC-401 (Event Processing), RFC-501 (Display & Verbosity), RFC-500 (CLI/TUI Architecture)
   - Authors: Soothe Team
@@ -673,7 +673,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 - **RFC-633**: [Planner Plan Artifact and Human Review](RFC-633-planner-plan-artifact-and-human-review.md)
   - Kind: Architecture Design
-  - Status: Draft
+  - Status: Implemented (partial)
   - Created: 2026-07-28
   - Depends on: RFC-618, RFC-622, RFC-630
   - Implemented by: IG-658
@@ -754,6 +754,14 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Authors: Soothe Team
   - Note: Operationalizes RFC-900 lifecycle and deprecation cadence on a quarterly schedule
 
+- **RFC-904**: [Inter-Rater Reliability Reviewer Pool](RFC-904-inter-rater-reliability-reviewer-pool.md)
+  - Kind: Process Specification
+  - Status: Proposed
+  - Created: 2026-08-17
+  - Dependencies: RFC-903
+  - Authors: Soothe Team
+  - Note: Defines the reviewer pool schema, cross-team coverage, and calibration scope for the quarterly audit cycle
+
 ---
 
 ## Quick Reference
@@ -819,8 +827,9 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 | RFC | Title | Status | Created |
 |-----|-------|--------|---------|
+| RFC-904 | Inter-Rater Reliability Reviewer Pool | Proposed | 2026-08-17 |
 | RFC-903 | Quarterly RFC Audit Cycle | Proposed | 2026-08-11 |
-| RFC-633 | Planner Plan Artifact and Human Review | Draft | 2026-08-11 |
+| RFC-633 | Planner Plan Artifact and Human Review | Implemented (partial) | 2026-08-11 |
 | RFC-232 | Flat WavePlan Wire Ingest (Semi-Structured, No Nesting) | Draft | 2026-08-07 |
 | RFC-231 | LoopRail and Rail Exec (Composable Verb Bodies) | Draft | 2026-08-07 |
 | RFC-230 | Job Maturity Assessment for Autopilot Rails | Draft | 2026-08-05 |
@@ -868,6 +877,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 ## Recently Added
 
+- **RFC-904**: Inter-Rater Reliability Reviewer Pool (2026-08-17, Proposed)
 - **RFC-903**: Quarterly RFC Audit Cycle (2026-08-11, Proposed)
 - **RFC-232**: Flat WavePlan Wire Ingest (Semi-Structured, No Nesting) (2026-08-07, Draft)
 - **RFC-231**: LoopRail and Rail Exec (Composable Verb Bodies) (2026-08-07, Draft)
