@@ -1674,7 +1674,7 @@ class CronConfig(BaseModel):
         extraction_timeout: Timeout for LLM extraction calls.
         default_priority: Default job priority when not specified.
         enable_builtin_jobs: When true, seed built-in recurring maintenance
-            jobs (e.g. quarterly drift review) on daemon startup.
+            jobs on daemon startup.
     """
 
     max_jobs: int = Field(default=100, ge=1, le=1000, description="Max scheduled jobs per user")
