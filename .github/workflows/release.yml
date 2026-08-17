@@ -237,12 +237,12 @@ jobs:
         verbose: true
         print-hash: true
 
-  deploy-daemon:
+  deploy-autopilot:
     runs-on: ubuntu-latest
     needs: deploy-core
     environment:
       name: pypi
-      url: https://pypi.org/p/soothe-daemon
+      url: https://pypi.org/p/soothe-autopilot
 
     steps:
     - uses: actions/checkout@v5
@@ -272,6 +272,105 @@ jobs:
         done
         echo "❌ Timeout: soothe ${VERSION} not found on PyPI after 5 minutes"
         exit 1
+
+    - name: Sync soothe-autopilot dependencies
+      run: |
+        cd packages/soothe-autopilot
+        uv sync --all-extras
+
+    - name: Get soothe-autopilot version
+      id: autopilot-version
+      run: |
+        VERSION=$(cat VERSION)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check if soothe-autopilot version exists on PyPI
+      id: autopilot-check
+      run: |
+        VERSION="${{ steps.autopilot-version.outputs.version }}"
+        echo "Checking if soothe-autopilot $VERSION exists on PyPI..."
+        if pip index versions soothe-autopilot 2>/dev/null | grep -q "$VERSION"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "⚠️ Version $VERSION already exists on PyPI, skipping publish"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "✓ Version $VERSION not found on PyPI, will publish"
+        fi
+
+    - name: Run soothe-autopilot tests
+      if: steps.autopilot-check.outputs.exists == 'false'
+      run: |
+        cd packages/soothe-autopilot
+        uv run pytest tests/unit/ -v
+
+    - name: Build soothe-autopilot package
+      if: steps.autopilot-check.outputs.exists == 'false'
+      run: |
+        rm -rf dist/
+        cd packages/soothe-autopilot
+        uv build --out-dir ../../dist
+
+    - name: Verify soothe-autopilot dist directory
+      if: steps.autopilot-check.outputs.exists == 'false'
+      run: |
+        if [ ! -d "dist" ]; then
+          echo "❌ Error: dist directory not found"
+          exit 1
+        fi
+        if [ -z "$(ls -A dist | grep soothe_autopilot)" ]; then
+          echo "❌ Error: dist directory doesn't contain soothe-autopilot packages"
+          exit 1
+        fi
+        echo "✓ dist directory exists and contains soothe-autopilot packages"
+        ls -la dist/ | grep soothe_autopilot
+
+    - name: Publish soothe-autopilot to PyPI
+      if: steps.autopilot-check.outputs.exists == 'false'
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: dist/
+        verbose: true
+        print-hash: true
+
+  deploy-daemon:
+    runs-on: ubuntu-latest
+    needs: [deploy-core, deploy-autopilot]
+    environment:
+      name: pypi
+      url: https://pypi.org/p/soothe-daemon
+
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        submodules: true
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python install 3.12
+
+    - name: Wait for soothe and soothe-autopilot on PyPI
+      run: |
+        VERSION=$(cat VERSION)
+        for pkg in soothe soothe-autopilot; do
+          for i in {1..30}; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://pypi.org/pypi/${pkg}/${VERSION}/json" 2>/dev/null || echo "000")
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "✓ ${pkg} ${VERSION} is available on PyPI"
+              break
+            fi
+            echo "Waiting for ${pkg} ${VERSION} on PyPI... attempt $i/30 (HTTP ${HTTP_STATUS})"
+            sleep 10
+            if [ "$i" = "30" ]; then
+              echo "❌ Timeout: ${pkg} ${VERSION} not found on PyPI after 5 minutes"
+              exit 1
+            fi
+          done
+        done
 
     - name: Sync soothe-daemon dependencies
       run: |
