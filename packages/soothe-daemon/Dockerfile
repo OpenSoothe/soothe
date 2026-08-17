@@ -113,13 +113,14 @@ COPY --from=deps /opt/ms-playwright /opt/ms-playwright
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
-# Install runtime deps: playwright browser libs (if needed) + jemalloc for memory optimization
+# Install runtime deps: playwright browser libs (if needed) + jemalloc for memory
+# optimization + host tools reported by `soothed doctor` (rg, fd, git).
 RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
     && if [ "${INCLUDE_BROWSER}" = "true" ] && [ -n "$(ls -A /opt/ms-playwright 2>/dev/null)" ]; then \
       /app/.venv/bin/python -m playwright install-deps; \
     fi \
-    && apt-get install -y --no-install-recommends libjemalloc2 ripgrep silversearcher-ag \
+    && apt-get install -y --no-install-recommends libjemalloc2 ripgrep fd-find git \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --system soothe \
