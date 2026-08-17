@@ -36,7 +36,7 @@ def _check_import(module_path: str, name: str) -> CheckResult:
 
 def _check_autopilot(config: Any | None) -> CheckResult:
     """Check autopilot config presence and module import."""
-    import_result = _check_import("soothe.autopilot", "autopilot_module")
+    import_result = _check_import("soothe_autopilot", "autopilot_module")
     if import_result.status != CheckStatus.OK:
         return CheckResult(
             name="autopilot",
@@ -50,7 +50,7 @@ def _check_autopilot(config: Any | None) -> CheckResult:
             name="autopilot",
             status=CheckStatus.SKIPPED,
             message="Autopilot: no config loaded (module OK)",
-            details={"module": "soothe.autopilot"},
+            details={"module": "soothe_autopilot"},
         )
 
     agent = getattr(config, "agent", None)
@@ -68,7 +68,7 @@ def _check_autopilot(config: Any | None) -> CheckResult:
         name="autopilot",
         status=CheckStatus.OK,
         message=f"Autopilot config present (enabled={enabled})",
-        details={"enabled": enabled, "module": "soothe.autopilot"},
+        details={"enabled": enabled, "module": "soothe_autopilot"},
     )
 
 
@@ -111,7 +111,7 @@ def _check_loop(config: Any | None) -> CheckResult:
 
 def _check_cron(config: Any | None) -> CheckResult:
     """Check cron config presence and module import."""
-    import_result = _check_import("soothe.cron", "cron_module")
+    import_result = _check_import("soothe_daemon.cron", "cron_module")
     if import_result.status != CheckStatus.OK:
         return CheckResult(
             name="cron",
@@ -125,7 +125,7 @@ def _check_cron(config: Any | None) -> CheckResult:
             name="cron",
             status=CheckStatus.SKIPPED,
             message="Cron: no config loaded (module OK)",
-            details={"module": "soothe.cron"},
+            details={"module": "soothe_daemon.cron"},
         )
 
     cron = getattr(config, "cron", None)
@@ -142,7 +142,7 @@ def _check_cron(config: Any | None) -> CheckResult:
         name="cron",
         status=CheckStatus.OK,
         message=f"Cron config present (max_jobs={max_jobs})",
-        details={"module": "soothe.cron", "max_jobs": max_jobs},
+        details={"module": "soothe_daemon.cron", "max_jobs": max_jobs},
     )
 
 

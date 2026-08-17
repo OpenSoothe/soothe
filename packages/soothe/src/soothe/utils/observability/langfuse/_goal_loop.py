@@ -98,7 +98,7 @@ class GoalLoopTrace:
         extra_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """RunnableConfig for preprocess ``intake`` LLM under this trace."""
-        from soothe_nano.utils.llm.observability import create_llm_call_metadata
+        from soothe_nano.llm.observability import create_llm_call_metadata
 
         metadata = create_llm_call_metadata(purpose=purpose, component=component, phase=phase)
         if extra_metadata:

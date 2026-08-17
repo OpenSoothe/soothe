@@ -2183,7 +2183,7 @@ class MessageRouter:
         response_schema = q_opts.get("response_schema")
         if response_schema is not None:
             try:
-                from soothe_nano.utils.llm.schema_wire import validate_response_schema
+                from soothe_nano.llm.schema_wire import validate_response_schema
 
                 q_opts["response_schema"] = validate_response_schema(response_schema)
             except ValueError as exc:
@@ -2796,7 +2796,7 @@ class MessageRouter:
                     last_error = g.error
                     break
 
-        from soothe.autopilot.verify.job_maturity import maturity_wire_fields
+        from soothe_autopilot.verify.job_maturity import maturity_wire_fields
 
         payload: dict[str, Any] = {
             "job_id": job_id,
@@ -3165,7 +3165,7 @@ class MessageRouter:
             return
 
         # Absorb via Autopilot intake → CE (RFC-228 / IG-733); does not spawn goals.
-        from soothe.autopilot.intake import GuidanceScope, absorb_user_guidance
+        from soothe_autopilot.intake import GuidanceScope, absorb_user_guidance
 
         scope: GuidanceScope = "goal" if goal_id else "job"
         absorbed = await absorb_user_guidance(
@@ -3441,8 +3441,8 @@ class MessageRouter:
             return
 
         # Default user for daemon (single-user mode)
-        from soothe.cron.extraction import AutopilotDisabledError
-        from soothe.cron.models import DEFAULT_CRON_USER_ID, DuplicateCronJobError
+        from soothe_daemon.cron.extraction import AutopilotDisabledError
+        from soothe_daemon.cron.models import DEFAULT_CRON_USER_ID, DuplicateCronJobError
 
         user_id = DEFAULT_CRON_USER_ID
 
@@ -3521,7 +3521,7 @@ class MessageRouter:
         if service is None:
             return
 
-        from soothe.cron.models import DEFAULT_CRON_USER_ID
+        from soothe_daemon.cron.models import DEFAULT_CRON_USER_ID
 
         user_id = DEFAULT_CRON_USER_ID
 
@@ -3570,7 +3570,7 @@ class MessageRouter:
         if service is None:
             return
 
-        from soothe.cron.models import DEFAULT_CRON_USER_ID
+        from soothe_daemon.cron.models import DEFAULT_CRON_USER_ID
 
         user_id = DEFAULT_CRON_USER_ID
 
@@ -3631,7 +3631,7 @@ class MessageRouter:
         if service is None:
             return
 
-        from soothe.cron.models import DEFAULT_CRON_USER_ID
+        from soothe_daemon.cron.models import DEFAULT_CRON_USER_ID
 
         user_id = DEFAULT_CRON_USER_ID
 

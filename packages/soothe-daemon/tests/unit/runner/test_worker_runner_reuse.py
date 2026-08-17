@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 from soothe_daemon.runner._worker_runner import acquire_worker_runner
 
 
-@patch("soothe.runner.SootheRunner")
+@patch("soothe_autopilot.runner.AutopilotSootheRunner")
 def test_acquire_worker_runner_reuses_cached(mock_runner_cls: MagicMock) -> None:
     """Cached runner is reset and returned when reuse is enabled."""
     cached = MagicMock()
@@ -26,7 +26,7 @@ def test_acquire_worker_runner_reuses_cached(mock_runner_cls: MagicMock) -> None
     mock_runner_cls.assert_not_called()
 
 
-@patch("soothe.runner.SootheRunner")
+@patch("soothe_autopilot.runner.AutopilotSootheRunner")
 def test_acquire_worker_runner_warmup_creates_runner(mock_runner_cls: MagicMock) -> None:
     """Warmup path creates a runner when cache is empty."""
     created = MagicMock()

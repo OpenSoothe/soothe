@@ -225,19 +225,33 @@ def daemon_start(
     typer.echo("Starting daemon...")
     # Daemon initialization can take several seconds (runner + transport startup).
     # Model loading timeout is 30s; give 45s total buffer for all startup tasks.
+    #
+    # Readiness is confirmed by BOTH the PID file being live AND the configured
+    # WebSocket port accepting connections. Checking the PID file alone is a
+    # trap: a daemon that writes its PID then crashes during startup still
+    # appears "running" for the brief window before exit, so `start`/`restart`
+    # would report success and leave the port dead (observed when a missing
+    # dependency caused an immediate crash post-PID-write).
+    host, port = _get_ws_address()
+    ready = False
     for _ in range(450):
         running, _ = _fast_is_running()
-        if running:
-            pid = _fast_find_pid()
-            host, port = _get_ws_address()
-
-            pid_str = f"PID: {pid}" if pid else "PID: unknown"
-            typer.echo(f"Daemon started successfully ({pid_str}, ws://{host}:{port})")
-            return
+        if running and _is_port_live(host, port):
+            ready = True
+            break
         time.sleep(0.1)
 
-    typer.echo("Daemon process was launched but did not become ready in time.", err=True)
-    raise typer.Exit(code=1)
+    if not ready:
+        typer.echo(
+            "Daemon process was launched but did not become ready in time. "
+            "Check ~/.soothe/logs/daemon.log for startup errors.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    pid = _fast_find_pid()
+    pid_str = f"PID: {pid}" if pid else "PID: unknown"
+    typer.echo(f"Daemon started successfully ({pid_str}, ws://{host}:{port})")
 
 
 @app.command("stop")

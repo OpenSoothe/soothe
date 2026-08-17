@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
-from soothe_nano.utils.llm.invoke_policy import await_with_llm_call_policy
-from soothe_nano.utils.llm.structured import StructuredOutputError, invoke_structured_chat_typed
+from soothe_nano.llm.invoke_policy import await_with_llm_call_policy
+from soothe_nano.llm.structured import StructuredOutputError, invoke_structured_chat_typed
 from soothe_nano.utils.token_counting import estimate_content_chars
 from soothe_sdk.observability.langfuse import merge_langfuse_runnable_config
 from soothe_sdk.protocols.planner import PlanContext
@@ -164,7 +164,7 @@ def _parse_status_assessment_from_raw_message(response: Any) -> Any:
     function-calling parser surfaces ``json: null`` in traces. IG-668: they also
     emit tag-wrapped YAML and section envelopes, so parse both shapes.
     """
-    from soothe_nano.utils.llm.wrappers import _extract_json_str_from_response
+    from soothe_nano.llm.response_text import _extract_json_str_from_response
 
     from soothe.sloop.state.schemas import StatusAssessment
 

@@ -35,18 +35,18 @@ def acquire_worker_runner(
     Returns:
         Tuple of (runner_for_request, updated_cached_runner).
     """
-    from soothe.runner import SootheRunner
+    from soothe_autopilot.runner import AutopilotSootheRunner
 
     if reuse_runner and cached_runner is not None:
         cached_runner.prepare_for_request()
         return cached_runner, cached_runner
 
     if cached_runner is None and warmup_runner and reuse_runner:
-        runner = SootheRunner(config, identity_runtime=identity_runtime)
+        runner = AutopilotSootheRunner(config, identity_runtime=identity_runtime)
         logger.debug("[WorkerRunner] Warmed SootheRunner for worker reuse")
         return runner, runner
 
-    runner = SootheRunner(config, identity_runtime=identity_runtime)
+    runner = AutopilotSootheRunner(config, identity_runtime=identity_runtime)
     if reuse_runner:
         return runner, runner
     return runner, cached_runner

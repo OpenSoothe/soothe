@@ -6,7 +6,6 @@ from email.message import EmailMessage
 from typing import Any
 
 import pytest
-from soothe.autopilot.notify.models import NotifyIntent, NotifyTarget
 from soothe.config.models import (
     AutopilotNotifyConfig,
     EmailNotifySinkConfig,
@@ -14,6 +13,7 @@ from soothe.config.models import (
     NotifyTargetConfig,
     WebhookNotifySinkConfig,
 )
+from soothe_autopilot.notify.models import NotifyIntent, NotifyTarget
 
 from soothe_daemon.notify.email_sink import EmailNotifySink
 from soothe_daemon.notify.factory import build_notify_dispatcher
@@ -45,7 +45,7 @@ async def test_dispatcher_fanout_fail_soft() -> None:
             return True
 
         async def deliver(self, intent: NotifyIntent, targets: list[NotifyTarget]) -> Any:
-            from soothe.autopilot.notify.models import DeliveryResult
+            from soothe_autopilot.notify.models import DeliveryResult
 
             del targets
             results_ok.append(intent.job_id)

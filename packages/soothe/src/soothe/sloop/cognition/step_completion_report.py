@@ -47,7 +47,7 @@ async def summarize_step_completion_report(
         First-person summary text, or None when input is empty or the call fails.
     """
     from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-    from soothe_nano.utils.llm.invoke_policy import (
+    from soothe_nano.llm.invoke_policy import (
         await_with_llm_call_policy,
         llm_rate_limit_config_from,
     )

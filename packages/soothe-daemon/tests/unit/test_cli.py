@@ -80,6 +80,10 @@ def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
 
     monkeypatch.setattr("soothe_daemon.cli._fast_is_running", _is_running)
     monkeypatch.setattr("soothe_daemon.cli._fast_find_pid", lambda: 4242)
+    # Readiness check requires the WS port to accept connections; in tests no
+    # daemon actually listens, so stub the port probe True when the "process"
+    # is reported running.
+    monkeypatch.setattr("soothe_daemon.cli._is_port_live", lambda *_a, **_k: True)
     # Mock daemon config to not load any file
     daemon_cfg = SootheDaemonConfig()
     daemon_cfg.soothe_config_path = tmp_path / "nano.yml"

@@ -5,9 +5,9 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-05-27
-**Updated**: 2026-08-08
-**Dependencies**: RFC-000, RFC-201, RFC-204, RFC-221 (Loop Runner Protocol), RFC-625, RFC-626
-**Related**: RFC-200 (Goal Lifecycle), RFC-220 (Loop Orchestrator), RFC-403 (Events), RFC-229 (Cron Service for Autopilot), RFC-204 §1.3 (report-commit judgment), RFC-231 (LoopRail), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`
+**Updated**: 2026-08-16
+**Dependencies**: RFC-000, RFC-201, RFC-204, RFC-221 (Loop Runner Protocol), RFC-625, RFC-626, RFC-214 (Loop Message Surface)
+**Related**: RFC-200 (Goal Lifecycle), RFC-220 (Loop Orchestrator), RFC-403 (Events), RFC-229 (Cron Service for Autopilot), RFC-204 §1.3 (report-commit judgment), RFC-231 (LoopRail), RFC-214 (loop message ledger), design draft `docs/drafts/2026-08-16-autopilot-goal-dag-pair-projection-design.md`, `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`
 
 > **Ownership**: Goal/step DAG state lives in **ContextEngine** (RFC-624 / RFC-625). This RFC owns the daemon-side **dispatch contract**: `AutopilotService`, `WorkerPool`, `WorkspaceReservation`, `AutopilotJob` / `GoalCompletionChunk`, and report-commit handoff into CE. Sections that still name `GoalEngine` describe deleted components — treat CE + AutopilotMonitor as authoritative for those concerns.
 
@@ -127,7 +127,7 @@ CoreAgent (per StrangeLoop)
 - Subprocess lifecycle (`LoopRunnerFactory` owns this — autopilot is a consumer)
 
 **StrangeLoop responsibilities (subprocess worker):**
-- Hydrate `loop_messages` and plan ledger from `GoalDispatchContextBundle` on entry
+- Hydrate `loop_messages` and plan ledger from `GoalDispatchContextBundle` on entry — including seeding `preamble_messages` pairs into the CE ledger as a transcript before the current goal turn (§Goal-Report-Pair Projection)
 - Drive plan/execute/reflect loop for the one goal at hand
 - Emit `GoalCompletionChunk` exactly once, just before the terminal `done` chunk
 - Cooperatively check `cancel_event` between chunks (existing mechanism)
@@ -260,6 +260,10 @@ class GoalDispatchContextBundle(BaseModel):
     findings: list[ParentFinding] = []               # LLM-synthesized
     tool_call_summary: ToolCallStats = ToolCallStats()
     cached_system_prompt_hash: str | None = None     # for provider cache hit
+    preamble_messages: list[GoalReportUserTurn | GoalReportAITurn] = []
+    # ↑ ancestor (user, ai) pairs, topo-ordered, seeded into the CE ledger as
+    #   a real transcript before the current goal turn (§Goal-Report-Pair
+    #   Projection). Additive: prior_* fields stay for structured consumers.
 
     @model_validator(mode="after")
     def _enforce_bounds(self) -> Self:
@@ -267,6 +271,30 @@ class GoalDispatchContextBundle(BaseModel):
         ...
         return self
 ```
+
+The two preamble turn types are deliberately small and serializable (they
+cross the IPC boundary on the bundle):
+
+```python
+class GoalReportUserTurn(BaseModel):
+    """The 'user' half of a projected ancestor pair — the ancestor's directive."""
+    goal_id_origin: str
+    content: str = Field(max_length=2000)
+
+class GoalReportAITurn(BaseModel):
+    """The 'ai' half of a projected ancestor pair — the ancestor's goal report."""
+    goal_id_origin: str
+    outcome: str            # completed / failed / needs_replan
+    summary: str = Field(max_length=2000)
+    findings: list[str] = Field(default_factory=list, max_length=8)
+    effects: list[GoalEffect] = Field(default_factory=list, max_length=8)
+```
+
+`preamble_messages` is **additive**: the flat `prior_effects` / `findings` /
+`prior_plan_steps` fields remain and continue to feed structured consumers
+(verifier reasoner, consensus, worker effect checks). The new field is an
+*additional* projection that gives the executing LLM a real multi-turn
+transcript instead of a flattened prose blob.
 
 ### `GoalDispatchContextContribution` (worker output)
 
@@ -309,6 +337,9 @@ Merge rules:
 - **Plan steps**: union, prefer recent N
 - **Tool stats**: aggregate
 - **Cached prompt hash**: take from most recent parent (for cache hit)
+- **Preamble pairs**: one `(GoalReportUserTurn, GoalReportAITurn)` per
+  transitive ancestor, in topological order (roots first). See
+  §Goal-Report-Pair Projection.
 
 ### `GoalDispatchContextStore`
 
@@ -316,6 +347,67 @@ Thin wrapper over `DurabilityProtocol`:
 - `put(goal_id, contribution)` — called on completion
 - `get(goal_id)` — called by projector
 - `delete_for_root(root_goal_id)` — called when a root goal's DAG ages out (per Q3, default 168h after root reaches terminal state)
+
+### Goal-Report-Pair Projection
+
+The flat `prior_*` fields give the executing LLM ancestor context as *prose
+bullets bolted onto one user message* — the worker's
+`_goal_text_with_bundle` appends `## Prior effects` / `## Operator guidance`
+sections to the goal string. This loses the turn structure: the model cannot
+tell which ancestor was *asked* what versus which *reported* what, and
+provenance (parent → effect) is erased by `ref`-dedup.
+
+The `preamble_messages` field replaces that flattening with a real
+multi-turn transcript. For each transitive ancestor goal, the projector
+emits one `(GoalReportUserTurn, GoalReportAITurn)` pair:
+
+- **User half** = the ancestor's directive (`GoalNode.description`).
+- **AI half** = the ancestor's committed goal report, built by the existing
+  `build_goal_report` path (outcome + summary + top findings + top effects).
+  Reused unchanged — this is the same report committed via CE
+  `commit_goal_report` (RFC-204 §1.3, IG-726).
+
+**Walk**: BFS/DFS over `depends_on` (hard) + `informs` (soft), recursively,
+from the dispatched goal — the **full transitive** subgraph, not just direct
+parents. A `visited: set[str]` guard prevents re-visiting even if `informs`
+soft-links form a cycle (the scheduler guarantees acyclic `depends_on`, but
+`informs` is not policed — the guard is cheap insurance).
+
+**Ordering**: ancestors are topologically sorted roots-first (a node never
+appears before its own `depends_on` parents); ties broken by `created_at`
+(older first). The current goal directive becomes the **final** user message,
+so the transcript reads as a real conversation leading up to the current ask.
+
+**Per-ancestor rules**:
+- Skip an ancestor with no stored contribution (e.g. crashed before emitting
+  one) rather than emit an empty AI turn — the transcript omits it cleanly.
+- `build_goal_report` guarantees a minimal `outcome + summary` on thin/crash
+  terminals, so every projected AI turn is non-empty by construction.
+
+**Cap**: stop once `len(preamble_messages) >= MAX_PREAMBLE_TURNS` (the
+hard IPC bound, `12` = 6 pairs — a fixed constant in `goal_contracts.py`,
+not a config knob). When the cap bites mid-subgraph, log the drop count (no
+silent truncation) and keep the most-recently-completed ancestors by
+`updated_at`.
+
+**Worker seeding**: the worker extracts the pairs from
+`job.merged_context.preamble_messages` into `LoopHumanMessage` /
+`LoopAIMessage` (phase `"preamble"`) and passes them to
+`run_with_progress(goal=…, preamble=pairs)`. StrangeLoop seeds the CE ledger
+**after** `state.bind_ce(ce_instance, ce_goal.id)` and **before**
+`pump_graph`, so the pairs join the same ledger that `loop_messages` is
+rebuilt from (RFC-214) — no extra reflection wiring. The `"preamble"` phase
+is excluded from `last_ledger_ai_content` so preamble AI turns are not
+surfaced as final user-facing output in `ledger_direct` completion mode.
+
+> **Why seed the ledger, not the goal string?** `loop_messages` is rebuilt
+> from the CE ledger on every access (`_build_loop_messages_from_ce_sync`,
+> RFC-214). A cache stuffed at dispatch time would be overwritten. The
+> ledger is the SoT; committing the preamble there is the only path that
+> survives the rebuild. The CE ledger is created *inside*
+> `run_with_progress` (line 757) and `state.bind_ce` happens at line 974,
+> so the worker cannot pre-seed — it must pass pairs via the `preamble`
+> parameter, and StrangeLoop commits them after `bind_ce`.
 
 ---
 
@@ -833,6 +925,29 @@ reservation key via the inherited path.
   “historical reference only”, and backward-compat hedges from the body.
 - Aligns with design draft
   `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`.
+
+### 2026-08-16 (Goal-report-pair projection)
+- **New `preamble_messages` field on `GoalDispatchContextBundle`** carries
+  `(GoalReportUserTurn, GoalReportAITurn)` pairs — one per transitive
+  ancestor goal, topologically ordered. Additive: the flat `prior_*` fields
+  remain for structured consumers (verifier reasoner, consensus, effect
+  checks). Formalizes the design draft
+  `docs/drafts/2026-08-16-autopilot-goal-dag-pair-projection-design.md`.
+- **`ContextProjector` walks the full transitive ancestor subgraph**
+  (`depends_on` ∪ `informs`, recursively) with a `visited` cycle guard, and
+  topologically sorts ancestors roots-first. The current goal directive
+  becomes the final user message. Reuses `build_goal_report` for the AI half.
+- **Worker seeds the CE ledger** with the pairs (phase `"preamble"`) via a
+  new `run_with_progress(preamble=…)` parameter, after `state.bind_ce` and
+  before `pump_graph`. Pairs surface through `loop_messages` automatically
+  (RFC-214 ledger SoT); the `"preamble"` phase is excluded from
+  `last_ledger_ai_content` so preamble turns are not surfaced as final
+  user-facing output.
+- **Cap is a fixed constant** (`MAX_PREAMBLE_TURNS = 12` in
+  `goal_contracts.py`, enforced by both the projector and
+  `GoalDispatchContextBundle._enforce_bounds`), not a config knob.
+- **StrangeLoop worker hydration responsibility** updated to call out
+  preamble seeding. RFC-214 added as a dependency (loop message ledger).
 
 ---
 

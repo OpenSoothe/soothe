@@ -262,7 +262,7 @@ class AsyncCancelOrchestrator:
         if not workspace:
             return
         try:
-            from soothe.runner._runner_autopilot_worker import drain_goal_runtime
+            from soothe.runner.shell_drain import drain_goal_runtime
 
             await asyncio.to_thread(drain_goal_runtime, workspace)
         except Exception:

@@ -6,7 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from soothe_nano.utils.llm.structured import StructuredOutputError
+from soothe_nano.llm.structured import StructuredOutputError
 from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.sloop.cognition.plan_step_safety import assess_respects_gap_analysis

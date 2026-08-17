@@ -13,8 +13,8 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, BeforeValidator, Field, PrivateAttr, model_validator
 from soothe_sdk.protocols.planner import planner_outcome_text_preview
 
-from soothe.autopilot.dispatch.models import GoalEffect
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
+from soothe.goal_contracts import GoalEffect
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.sloop.utils.subagent_catalog import (  # noqa: F401
     INTAKE_ONLY_WIRE_SUBAGENTS,

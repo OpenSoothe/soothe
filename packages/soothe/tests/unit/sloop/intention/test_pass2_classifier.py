@@ -138,7 +138,7 @@ async def test_structured_output_error_fails_safe_to_simple() -> None:
     """StructuredOutputError after one invoke fails safe to simple (no outer retry)."""
     from unittest.mock import patch
 
-    from soothe_nano.utils.llm.structured import StructuredOutputError
+    from soothe_nano.llm.structured import StructuredOutputError
 
     mock_model = MagicMock()
     classifier = IntakePass2Classifier(model=mock_model)

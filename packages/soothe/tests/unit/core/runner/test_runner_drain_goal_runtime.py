@@ -11,7 +11,7 @@ import signal
 from pathlib import Path
 from unittest.mock import patch
 
-from soothe.runner._runner_autopilot_worker import drain_goal_runtime
+from soothe.runner.shell_drain import drain_goal_runtime
 
 
 def _make_bg_logs(workspace: Path, pids: list[int]) -> Path:
@@ -67,10 +67,10 @@ def test_drain_kills_process_groups_sigterm_then_sigkill(tmp_path: Path) -> None
         return not already_killed
 
     with (
-        patch("soothe.runner._runner_autopilot_worker.os.getpgid", side_effect=_fake_getpgid),
-        patch("soothe.runner._runner_autopilot_worker.os.killpg", side_effect=_fake_killpg),
-        patch("soothe.runner._runner_autopilot_worker._pid_alive", side_effect=_pid_alive),
-        patch("soothe.runner._runner_autopilot_worker.time.sleep"),
+        patch("soothe.runner.shell_drain.os.getpgid", side_effect=_fake_getpgid),
+        patch("soothe.runner.shell_drain.os.killpg", side_effect=_fake_killpg),
+        patch("soothe.runner.shell_drain._pid_alive", side_effect=_pid_alive),
+        patch("soothe.runner.shell_drain.time.sleep"),
     ):
         reaped = drain_goal_runtime(str(workspace), grace_seconds=0.0)
 
@@ -105,10 +105,10 @@ def test_drain_kills_foreground_run_command_sessions(tmp_path: Path) -> None:
         return not already_killed
 
     with (
-        patch("soothe.runner._runner_autopilot_worker.os.getpgid", side_effect=_fake_getpgid),
-        patch("soothe.runner._runner_autopilot_worker.os.killpg", side_effect=_fake_killpg),
-        patch("soothe.runner._runner_autopilot_worker._pid_alive", side_effect=_pid_alive),
-        patch("soothe.runner._runner_autopilot_worker.time.sleep"),
+        patch("soothe.runner.shell_drain.os.getpgid", side_effect=_fake_getpgid),
+        patch("soothe.runner.shell_drain.os.killpg", side_effect=_fake_killpg),
+        patch("soothe.runner.shell_drain._pid_alive", side_effect=_pid_alive),
+        patch("soothe.runner.shell_drain.time.sleep"),
     ):
         reaped = drain_goal_runtime(str(workspace), grace_seconds=0.0)
 
@@ -137,10 +137,10 @@ def test_drain_reaps_foreground_and_background_together(tmp_path: Path) -> None:
         return pid not in killed
 
     with (
-        patch("soothe.runner._runner_autopilot_worker.os.getpgid", side_effect=_fake_getpgid),
-        patch("soothe.runner._runner_autopilot_worker.os.killpg", side_effect=_fake_killpg),
-        patch("soothe.runner._runner_autopilot_worker._pid_alive", side_effect=_pid_alive),
-        patch("soothe.runner._runner_autopilot_worker.time.sleep"),
+        patch("soothe.runner.shell_drain.os.getpgid", side_effect=_fake_getpgid),
+        patch("soothe.runner.shell_drain.os.killpg", side_effect=_fake_killpg),
+        patch("soothe.runner.shell_drain._pid_alive", side_effect=_pid_alive),
+        patch("soothe.runner.shell_drain.time.sleep"),
     ):
         reaped = drain_goal_runtime(str(workspace), grace_seconds=0.0)
 
@@ -153,12 +153,12 @@ def test_drain_skips_dead_processes(tmp_path: Path) -> None:
     _make_bg_logs(workspace, [333])
 
     with (
-        patch("soothe.runner._runner_autopilot_worker.os.getpgid", return_value=333),
+        patch("soothe.runner.shell_drain.os.getpgid", return_value=333),
         patch(
-            "soothe.runner._runner_autopilot_worker._pid_alive",
+            "soothe.runner.shell_drain._pid_alive",
             return_value=False,
         ),
-        patch("soothe.runner._runner_autopilot_worker.os.killpg") as mock_killpg,
+        patch("soothe.runner.shell_drain.os.killpg") as mock_killpg,
     ):
         reaped = drain_goal_runtime(str(workspace), grace_seconds=0.0)
 
@@ -174,10 +174,10 @@ def test_drain_process_lookup_error_is_swallowed(tmp_path: Path) -> None:
         raise ProcessLookupError
 
     with (
-        patch("soothe.runner._runner_autopilot_worker.os.getpgid", return_value=444),
-        patch("soothe.runner._runner_autopilot_worker._pid_alive", return_value=True),
-        patch("soothe.runner._runner_autopilot_worker.os.killpg", side_effect=_fake_killpg),
-        patch("soothe.runner._runner_autopilot_worker.time.sleep"),
+        patch("soothe.runner.shell_drain.os.getpgid", return_value=444),
+        patch("soothe.runner.shell_drain._pid_alive", return_value=True),
+        patch("soothe.runner.shell_drain.os.killpg", side_effect=_fake_killpg),
+        patch("soothe.runner.shell_drain.time.sleep"),
     ):
         reaped = drain_goal_runtime(str(workspace), grace_seconds=0.0)
 
@@ -198,9 +198,9 @@ def test_drain_only_touches_workspace_bg_logs(tmp_path: Path) -> None:
         killed.append(pgid)
 
     with (
-        patch("soothe.runner._runner_autopilot_worker.os.getpgid", return_value=lambda p: p),
-        patch("soothe.runner._runner_autopilot_worker._pid_alive", return_value=False),
-        patch("soothe.runner._runner_autopilot_worker.os.killpg", side_effect=_fake_killpg),
+        patch("soothe.runner.shell_drain.os.getpgid", return_value=lambda p: p),
+        patch("soothe.runner.shell_drain._pid_alive", return_value=False),
+        patch("soothe.runner.shell_drain.os.killpg", side_effect=_fake_killpg),
     ):
         drain_goal_runtime(str(workspace), grace_seconds=0.0)
 

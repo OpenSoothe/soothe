@@ -19,7 +19,10 @@ Implementation is decomposed into mixins:
 
 - `PhasesMixin`     -- chitchat fast path and checkpointer initialization
 - `StrangeLoopMixin` -- StrangeLoop execution (RFC-0008)
-- `AutopilotWorkerMixin` -- single-goal worker entry (RFC-222 revised)
+
+The autopilot goal-dispatch path is provided by ``soothe_autopilot``'s
+``AutopilotSootheRunner``, which overrides the ``_run_autopilot_job`` hook
+below. The base ``SootheRunner`` is autopilot-agnostic.
 """
 
 from __future__ import annotations
@@ -34,7 +37,6 @@ from soothe_sdk.protocols.policy import PolicyProtocol
 from soothe.config import SootheConfig
 from soothe.workspace import resolve_workspace_for_stream
 
-from ._runner_autopilot_worker import AutopilotWorkerMixin
 from ._runner_phases import PhasesMixin
 from ._runner_shared import StreamChunk
 from ._runner_strange_loop import StrangeLoopMixin
@@ -64,7 +66,6 @@ logger = logging.getLogger(__name__)
 
 
 class SootheRunner(
-    AutopilotWorkerMixin,
     StrangeLoopMixin,
     PhasesMixin,
 ):
@@ -607,9 +608,9 @@ class SootheRunner(
 
         **Two execution modes** (selected in priority order):
         - ``autopilot_job`` set (RFC-222 revised): daemon-dispatched goal, runs
-          ``_run_single_autopilot_goal`` which hydrates from the bundle and
-          emits a ``GoalCompletionChunk`` at the end. StrangeLoop never sees the
-          DAG. ``user_input`` is ignored.
+          ``_run_autopilot_job`` which hydrates from the bundle and emits a
+          ``GoalCompletionChunk`` at the end. StrangeLoop never sees the DAG.
+          ``user_input`` is ignored.
         - Default (RFC-201): Agentic loop with Reason → Act iteration.
 
         Args:
@@ -672,7 +673,7 @@ class SootheRunner(
             # RFC-222 revised: autopilot-dispatched job takes priority.
             # StrangeLoop runs the single goal hydrated from the bundle; ignores user_input.
             if autopilot_job is not None:
-                async for chunk in self._run_single_autopilot_goal(
+                async for chunk in self._run_autopilot_job(
                     autopilot_job,
                     thread_id=thread_id,
                     workspace=effective_workspace,
@@ -699,3 +700,27 @@ class SootheRunner(
         finally:
             self._client_loop_id_for_stream = prev_client_loop
             self._clear_query_scoped_runner_state()
+
+    async def _run_autopilot_job(
+        self,
+        job: Any,
+        *,
+        thread_id: str | None,
+        workspace: str,
+        max_iterations: int,
+        intake_scope: str | None = None,
+    ) -> AsyncGenerator[StreamChunk]:
+        """Run an autopilot-dispatched goal (overridden by ``AutopilotSootheRunner``).
+
+        The base ``SootheRunner`` is autopilot-agnostic: it must never receive a
+        non-``None`` ``autopilot_job``. The daemon constructs
+        ``soothe_autopilot.AutopilotSootheRunner`` in autopilot worker loops; that
+        subclass overrides this hook with the RFC-222 goal-dispatch implementation.
+
+        Raises:
+            RuntimeError: If a bare ``SootheRunner`` receives an ``autopilot_job``.
+        """
+        raise RuntimeError(
+            "autopilot_job reached a non-autopilot SootheRunner; construct "
+            "soothe_autopilot.AutopilotSootheRunner in autopilot workers"
+        )

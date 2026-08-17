@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
     # First-party: sdk and nano are PyPI-only dependencies.
     "soothe-sdk>=1.0.8,<2.0.0",
-    "soothe-nano>=1.1.19,<2.0.0",
+    "soothe-nano>=1.2.2,<2.0.0",
     # Host-owned runtime (StrangeLoop / config / identity / checkpointers)
     "aiosqlite>=0.22.1,<1.0.0",
     "pydantic>=2.0.0,<3.0.0",

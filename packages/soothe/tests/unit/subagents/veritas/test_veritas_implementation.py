@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
-from soothe_nano.utils.llm.structured import StructuredOutputError
+from soothe_nano.llm.structured import StructuredOutputError
 
 from soothe.sloop.clarification.protocol import (
     ClarificationRequest,

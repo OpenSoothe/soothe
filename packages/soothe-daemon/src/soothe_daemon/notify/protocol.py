@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Protocol, runtime_checkable
 
-from soothe.autopilot.notify.models import DeliveryResult, NotifyIntent, NotifyTarget
+from soothe_autopilot.notify.models import DeliveryResult, NotifyIntent, NotifyTarget
 
 logger = logging.getLogger(__name__)
 

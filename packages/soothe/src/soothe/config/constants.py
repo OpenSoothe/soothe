@@ -78,20 +78,3 @@ _PASS2_REASONING_MAX_CHARS: int = 200
 # ── Planner assembly ────────────────────────────────────────────────────────
 
 GOAL_PREVIEW_MAX_CHARS: int = 120
-
-# ── Maturity / workspace inventory ──────────────────────────────────────────
-
-_WORKSPACE_INVENTORY_MAX_CHARS: int = 25_000
-
-# ── Job maturity acceptance-contract evidence caps (RFC-230) ──────────────────
-#
-# Autopilot maturity assessor feeds the full acceptance contract to the LLM
-# (verification_rules, GOAL.md, DAG summary, QA response). These caps bound
-# each evidence slice independently so the assessor sees full contract context
-# without unbounded growth; each defaults to the full inventory budget.
-
-_MATURITY_GOAL_MD_MAX_CHARS: int = 25_000
-_MATURITY_VERIFICATION_RULES_MAX_CHARS: int = 25_000
-_MATURITY_DAG_DESC_MAX_CHARS: int = 25_000
-_MATURITY_PROBE_SUMMARY_MAX_CHARS: int = 25_000
-_MATURITY_QA_RESPONSE_MAX_CHARS: int = 25_000

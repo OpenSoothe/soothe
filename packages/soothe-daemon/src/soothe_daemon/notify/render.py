@@ -5,7 +5,7 @@ from __future__ import annotations
 from html import escape
 from typing import Any
 
-from soothe.autopilot.notify.models import NotifyIntent
+from soothe_autopilot.notify.models import NotifyIntent
 
 _SEVERITY_COLOR = {
     "info": "#2563eb",

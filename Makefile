@@ -2,8 +2,9 @@
 #
 # Monorepo-owned packages (format / lint / test / publish here):
 # 1. soothe-cli        - CLI client (Typer CLI + Textual TUI)
-# 2. soothe            - StrangeLoop / Autopilot / host composition
-# 3. soothe-daemon     - Daemon server (WebSocket/HTTP transports)
+# 2. soothe            - StrangeLoop / host composition
+# 3. soothe-autopilot  - Goal orchestration (Autopilot, rails, verify)
+# 4. soothe-daemon     - Daemon server (WebSocket/HTTP transports, cron)
 #
 # Submodules (consume code only — do not format, lint, test, or release here):
 #   soothe-sdk, client/* (python/go/ts/rust)
@@ -20,14 +21,14 @@ DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml --env-file de
 .PHONY: reset-the-world
 .PHONY: format format-check lint lint-src lint-fix autofix vulture vulture-whitelist
 .PHONY: test test-unit test-integration test-coverage build clean
-.PHONY: cli-publish soothe-publish daemon-publish publish
-.PHONY: cli-publish-test soothe-publish-test daemon-publish-test publish-test
+.PHONY: cli-publish soothe-publish autopilot-publish daemon-publish publish
+.PHONY: cli-publish-test soothe-publish-test autopilot-publish-test daemon-publish-test publish-test
 
 # ============================================================================
 # Configuration
 # ============================================================================
 
-PACKAGES = soothe-cli soothe soothe-daemon
+PACKAGES = soothe-cli soothe soothe-autopilot soothe-daemon
 
 # Root-level directories to lint (outside packages)
 ROOT_LINT_DIRS = examples scripts
@@ -303,6 +304,7 @@ test-unit: sync
 test-integration: sync
 	@echo "Running integration tests..."
 	@cd packages/soothe && uv run pytest tests/integration/ --run-integration -v && cd ..
+	@cd packages/soothe-autopilot && uv run pytest tests/integration/ --run-integration -v && cd ..
 	@cd packages/soothe-daemon && uv run pytest tests/integration/ --run-integration -v && cd ..
 
 test-coverage: sync
@@ -338,10 +340,13 @@ cli-publish:
 soothe-publish:
 	cd packages/soothe && uv publish dist/* --native-tls
 
+autopilot-publish:
+	cd packages/soothe-autopilot && uv publish dist/* --native-tls
+
 daemon-publish:
 	cd packages/soothe-daemon && uv publish dist/* --native-tls
 
-publish: build cli-publish soothe-publish daemon-publish
+publish: build cli-publish soothe-publish autopilot-publish daemon-publish
 	@echo "Published to PyPI (sdk/nano publish from their own repos)"
 
 cli-publish-test:
@@ -350,8 +355,11 @@ cli-publish-test:
 soothe-publish-test:
 	cd packages/soothe && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 
+autopilot-publish-test:
+	cd packages/soothe-autopilot && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
+
 daemon-publish-test:
 	cd packages/soothe-daemon && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 
-publish-test: build cli-publish-test soothe-publish-test daemon-publish-test
+publish-test: build cli-publish-test soothe-publish-test autopilot-publish-test daemon-publish-test
 	@echo "Published to TestPyPI"

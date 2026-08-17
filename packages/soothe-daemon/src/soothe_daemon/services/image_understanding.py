@@ -149,7 +149,7 @@ async def enrich_user_text_with_vision(
 
     invoke_config = _build_vision_invoke_config(config, session_id=session_id)
 
-    from soothe_nano.utils.llm.invoke_policy import (
+    from soothe_nano.llm.invoke_policy import (
         await_with_llm_call_policy,
         llm_rate_limit_config_from,
     )

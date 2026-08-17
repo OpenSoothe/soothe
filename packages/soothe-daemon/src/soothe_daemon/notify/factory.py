@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from soothe.autopilot.notify.models import NotifyTarget
+from soothe_autopilot.notify.models import NotifyTarget
 
 from soothe_daemon.notify.email_sink import EmailNotifySink
 from soothe_daemon.notify.feishu_sink import FeishuNotifySink

@@ -115,7 +115,7 @@ for arg in "$@"; do
 done
 
 # Monorepo-owned packages only (submodules/clients are not formatted or tested here)
-ALL_PACKAGES=(soothe-cli soothe soothe-daemon)
+ALL_PACKAGES=(soothe-cli soothe soothe-autopilot soothe-daemon)
 
 # Resolve package root directory (most packages live under packages/; Python client is under client/).
 package_dir() {
@@ -451,6 +451,32 @@ validate_package_dependencies() {
   fi
   print_ok "soothe ↛ soothe-daemon"
   record_check_outcome "dependencies" "soothe ↛ soothe-daemon" "pass"
+
+  # Rule 2c: soothe (host) MUST NOT depend on soothe-autopilot (one-way DAG:
+  # autopilot sits above soothe; the host never imports it).
+  local autopilot_deps
+  autopilot_deps=$(sed -n '/^dependencies = \[/,/\]/p' packages/soothe/pyproject.toml 2>/dev/null || true)
+  if echo "$autopilot_deps" | grep -qE '"soothe-autopilot'; then
+    print_fail "soothe pyproject.toml lists soothe-autopilot in core deps"
+    record_check_outcome "dependencies" "soothe ↛ soothe-autopilot (pyproject)" "fail"
+    record_failure_log "Dependency: soothe pyproject.toml" "$(echo "$autopilot_deps" | grep -nE '"soothe-autopilot')"
+    return 1
+  fi
+  print_ok "soothe ↛ soothe-autopilot"
+  record_check_outcome "dependencies" "soothe ↛ soothe-autopilot" "pass"
+
+  # Rule 2d: soothe-autopilot MUST NOT depend on soothe-daemon / soothe-cli /
+  # soothe-client-python (it sits above the daemon, below the host).
+  local ap_deps
+  ap_deps=$(sed -n '/^dependencies = \[/,/\]/p' packages/soothe-autopilot/pyproject.toml 2>/dev/null || true)
+  if echo "$ap_deps" | grep -qE '"soothe-(daemon|cli)([^a-z-]|")|"soothe-client-python'; then
+    print_fail "soothe-autopilot pyproject.toml lists soothe-daemon/soothe-cli/soothe-client-python"
+    record_check_outcome "dependencies" "soothe-autopilot ↛ daemon/cli/client (pyproject)" "fail"
+    record_failure_log "Dependency: autopilot pyproject.toml" "$(echo "$ap_deps" | grep -nE '"soothe-(daemon|cli)([^a-z-]|")|"soothe-client-python')"
+    return 1
+  fi
+  print_ok "soothe-autopilot ↛ daemon/cli/client"
+  record_check_outcome "dependencies" "soothe-autopilot ↛ daemon/cli/client" "pass"
 
   # Rule 3: soothe-daemon MUST NOT depend on soothe-cli in core dependencies
   # Optimized: read file once, grep from variable
