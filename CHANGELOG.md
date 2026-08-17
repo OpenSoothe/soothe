@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.17] - 2026-08-17
+
+### Fixed
+- **ci**: add `deploy-autopilot` job to the release workflow so
+  `soothe-autopilot` publishes to PyPI alongside the other packages
+  (previously missing — the package was never published by CI). The
+  `deploy-daemon` job now waits for both `deploy-core` and
+  `deploy-autopilot`, and its PyPI wait step also waits for
+  `soothe-autopilot` to be available before syncing daemon dependencies.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.16...v0.10.17
+
 ## [v0.10.16] - 2026-08-17
 
 ### Fixed
