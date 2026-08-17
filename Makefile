@@ -95,8 +95,11 @@ help:
 
 # Sync workspace dependencies using the configured mirror, then rewrite
 # uv.lock package URLs back to canonical PyPI hosts (keeps version bumps).
+# $(1): extra uv sync flags (e.g. --no-cache --refresh). Passed to uv sync, not
+# the rewrite script — the trailing `\` would otherwise attach them to
+# rewrite_uv_lock_to_pypi.sh (which treats $1 as the lock path).
 define uv_sync_with_fallback
-	$(UV_SYNC) \
+	$(UV_SYNC) $(1) \
 		&& ./scripts/rewrite_uv_lock_to_pypi.sh
 endef
 
@@ -114,7 +117,7 @@ sync:
 sync-no-cache:
 	@echo "Syncing all workspace packages (no cache, refresh install)..."
 	uv cache clean
-	@$(call uv_sync_with_fallback) --no-cache --refresh
+	@$(call uv_sync_with_fallback,--no-cache --refresh)
 	@$(MAKE) sync-verify
 	@echo "All packages synced (cache bypassed)"
 
