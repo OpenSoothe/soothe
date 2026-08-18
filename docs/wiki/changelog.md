@@ -27,6 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **repo**: Migrate `soothe-sdk` from an independent PyPI repository
+  (`mirasoth/soothe-sdk`) into the monorepo as `packages/soothe-sdk`.
+  The SDK keeps its own `VERSION` file (1.x line, required by
+  `soothe-nano>=1.0.7`) and participates in workspace sync, format,
+  lint, test, and publish targets. CI and release workflows now build
+  and publish the SDK from this repo instead of waiting for an external
+  PyPI release. Module boundary checks now enforce that `soothe-sdk`
+  (leaf) must not import host packages.
+
 ## [v0.10.20] - 2026-08-18
 
 ### Changed

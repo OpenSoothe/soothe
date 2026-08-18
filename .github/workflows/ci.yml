@@ -39,6 +39,10 @@ jobs:
     - name: Install dependencies (workspace)
       run: uv sync --frozen --all-packages --all-extras
 
+    - name: Verify package imports
+      run: |
+        uv run python -c "from soothe_sdk.protocols.core_agent import CoreAgentCapabilities; print('soothe-sdk OK')"
+
     - name: Run tests (daemon package)
       run: make test-unit
 

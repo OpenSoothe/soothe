@@ -1,0 +1,63 @@
+"""Shared utilities for SDK, CLI, and daemon.
+
+This package provides logging, display formatting, parsing,
+serde, and workspace utilities used across all Soothe packages.
+"""
+
+from soothe_sdk.tools.metadata import (
+    TOOL_REGISTRY,
+    ToolMeta,
+    get_all_path_arg_keys,
+    get_outcome_type,
+    get_tool_categories,
+    get_tool_display_name,
+    get_tool_meta,
+    get_tools_with_header_info,
+)
+from soothe_sdk.utils.formatting import (
+    convert_and_abbreviate_path,
+    format_cli_error,
+    log_preview,
+)
+from soothe_sdk.utils.logging import (
+    GlobalInputHistory,
+    resolve_cli_log_level,
+    setup_logging,
+)
+from soothe_sdk.utils.parsing import (
+    _TASK_NAME_RE,
+    PATH_ARG_PATTERN,
+    parse_autopilot_goals,
+    resolve_provider_env,
+)
+from soothe_sdk.utils.serde import (
+    create_soothe_serde,
+    get_soothe_msgpack_allowlist,
+)
+from soothe_sdk.utils.workspace import INVALID_WORKSPACE_DIRS
+
+__all__ = [
+    "setup_logging",
+    "GlobalInputHistory",
+    "resolve_cli_log_level",
+    "format_cli_error",
+    "log_preview",
+    "convert_and_abbreviate_path",
+    "get_tool_display_name",
+    "parse_autopilot_goals",
+    "_TASK_NAME_RE",
+    "resolve_provider_env",
+    "INVALID_WORKSPACE_DIRS",
+    "PATH_ARG_PATTERN",
+    "create_soothe_serde",
+    "get_soothe_msgpack_allowlist",
+    # ToolMeta registry exports
+    "ToolMeta",
+    "TOOL_REGISTRY",
+    "get_tool_meta",
+    "get_all_path_arg_keys",
+    "get_tool_display_name",
+    "get_tools_with_header_info",
+    "get_tool_categories",
+    "get_outcome_type",
+]

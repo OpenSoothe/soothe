@@ -3,10 +3,10 @@
 Generates dependency lines from package metadata (soothe, daemon) so Docker
 can cache dependency installation independently from source code changes.
 
-``soothe-sdk``, ``soothe-nano`` and ``soothe-deepagents`` are installed from
-PyPI; their pins are taken from ``soothe``'s and ``soothe-daemon``'s
-dependencies. ``soothe`` and ``soothe-daemon`` are installed from local source
-with ``--no-deps``.
+``soothe-nano`` and ``soothe-deepagents`` are installed from PyPI; their pins
+are taken from ``soothe``'s and ``soothe-daemon``'s dependencies.
+``soothe``, ``soothe-daemon``, ``soothe-cli``, and ``soothe-sdk`` are installed
+from local source with ``--no-deps``.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ SKIP_LOCAL = {
     "soothe",
     "soothe-daemon",
     "soothe-cli",
+    "soothe-sdk",
 }
 
 
@@ -50,16 +51,16 @@ def main() -> None:
     daemon = tomllib.loads((app_root / "packages/soothe-daemon/pyproject.toml").read_text())
 
     requirements: list[str] = []
-    # Keep first-party PyPI pins (sdk / nano / deepagents); skip local soothe/daemon.
+    # Keep first-party PyPI pins (nano / deepagents); skip local soothe/sdk/daemon.
     add_reqs(
         requirements,
         core["project"].get("dependencies", []),
-        keep={"soothe-sdk", "soothe-nano", "soothe-deepagents"},
+        keep={"soothe-nano", "soothe-deepagents"},
     )
     add_reqs(
         requirements,
         daemon["project"].get("dependencies", []),
-        keep={"soothe-sdk", "soothe-nano", "soothe-deepagents"},
+        keep={"soothe-nano", "soothe-deepagents"},
     )
 
     if args.include_browser:

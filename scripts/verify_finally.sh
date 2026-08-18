@@ -115,7 +115,7 @@ for arg in "$@"; do
 done
 
 # Monorepo-owned packages only (submodules/clients are not formatted or tested here)
-ALL_PACKAGES=(soothe-cli soothe soothe-autopilot soothe-daemon)
+ALL_PACKAGES=(soothe-sdk soothe-cli soothe soothe-autopilot soothe-daemon)
 
 # Resolve package root directory (most packages live under packages/; Python client is under client/).
 package_dir() {

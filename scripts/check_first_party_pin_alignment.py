@@ -126,6 +126,28 @@ def main() -> int:
                 )
             )
 
+    # soothe-sdk is now a workspace member with its own VERSION (1.x line);
+    # its pin must admit the SDK's own version, not the root VERSION.
+    sdk_version_path = ROOT / "packages" / "soothe-sdk" / "VERSION"
+    if sdk_version_path.exists():
+        sdk_version = sdk_version_path.read_text().strip()
+        if re.fullmatch(r"\d+\.\d+\.\d+", sdk_version):
+            sdk_ver = Version(sdk_version)
+            for pkg_name, pkg_deps, pkg_file in (
+                ("soothe", soothe, _SOOTHE_PYPROJECT),
+                ("soothe-daemon", daemon, _DAEMON_PYPROJECT),
+                ("soothe-autopilot", autopilot, _AUTOPILOT_PYPROJECT),
+            ):
+                sdk_req = pkg_deps.get("soothe-sdk")
+                if sdk_req is not None and sdk_ver not in sdk_req.specifier:
+                    errors.append(
+                        (
+                            f"{pkg_name} soothe-sdk pin {_normalize_spec(sdk_req.specifier)} "
+                            f"does not admit current SDK VERSION {sdk_version}",
+                            pkg_file,
+                        )
+                    )
+
     soothe_req = daemon.get("soothe")
     if soothe_req is None:
         errors.append(("soothe-daemon is missing dependency on soothe", _DAEMON_PYPROJECT))

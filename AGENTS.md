@@ -51,16 +51,20 @@ place them in the correct **monorepo-owned** package. **Never reverse an arrow.*
 Enforcement for owned packages: `scripts/check_module_import_boundaries.sh`
 (wired into `./scripts/verify_finally.sh`).
 
-**This monorepo owns** `soothe`, `soothe-autopilot`, `soothe-daemon`, and
-`soothe-cli` only. Submodules (`client/*`) are **consumed as code** — do **not**
-format, lint, test, or release them from this repo. `soothe-nano`, `soothe-sdk`, and
-`soothe-deepagents` are **PyPI dependencies** (maintain/release in their own
-repositories).
+**This monorepo owns** `soothe`, `soothe-autopilot`, `soothe-daemon`,
+`soothe-cli`, and `soothe-sdk`. Submodules (`client/*`) are **consumed as
+code** — do **not** format, lint, test, or release them from this repo.
+`soothe-nano` and `soothe-deepagents` are **PyPI dependencies** (maintain/release
+in their own repositories).
+
+> `soothe-sdk` keeps its own `VERSION` file (1.x line) because
+> `soothe-nano` (PyPI) depends on `soothe-sdk>=1.0.7`. All other owned
+> packages use the root `VERSION` file (0.x line).
 
 #### Dependency DAG (allowed direction only)
 
 ```text
-soothe-sdk            ← shared contracts (PyPI; leaf)
+soothe-sdk            ← shared contracts (monorepo; leaf)               ← OWNED
 soothe-deepagents     ← deepagents fork (PyPI; leaf)
         ↓
 soothe-nano           ← Coding CoreAgent (PyPI)
@@ -80,7 +84,7 @@ soothe-cli            ← Typer + Textual TUI                             ← OW
 
 | Concern | Package |
 |---------|---------|
-| Shared events, wire, display, plugin contracts, protocols | `soothe-sdk` (PyPI; mirasoth/soothe-sdk) |
+| Shared events, wire, display, plugin contracts, protocols | `soothe-sdk` (monorepo; `packages/soothe-sdk`) |
 | Coding CoreAgent, skills/MCP/backends used in-proc | `soothe-nano` (PyPI; mirasoth/soothe-nano) |
 | StrangeLoop, Context Engine, identity, host runner | `soothe` |
 | Autopilot (goal scheduling, dispatch, monitor, rails, verify, notify) | `soothe-autopilot` |
@@ -92,6 +96,7 @@ soothe-cli            ← Typer + Textual TUI                             ← OW
 
 | Package | May import | Must NOT import |
 |---------|------------|-----------------|
+| `soothe-sdk` | (leaf: `pydantic`, `langchain-core` only) | `soothe`, `soothe_autopilot`, `soothe_daemon`, `soothe_cli` |
 | `soothe` | `soothe-sdk`, `soothe-nano`, `soothe-deepagents` | `soothe_autopilot`, `soothe_daemon`, `soothe_cli` |
 | `soothe-autopilot` | `soothe`, `soothe-nano`, `soothe-sdk` | `soothe_daemon`, `soothe_cli`, `soothe_client` |
 | `soothe-daemon` | `soothe`, `soothe-autopilot`, `soothe-nano`, `soothe-sdk` | `soothe_cli`, `soothe_client` |
@@ -103,8 +108,9 @@ Additional hard bans (owned packages):
 2. **Daemon does not depend on the WS client** — `soothe_daemon` must not import `soothe_client` in runtime source; admin RPCs use `soothe_sdk.wire` (tests may use the client via the `dev` extra).
 3. **Private nano middleware is closed** — owned packages must not import `soothe_nano.middleware._*`.
 
-Host packages (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`) MAY reference
-IG-XXX/RFC-XXX in docstrings and comments (they live beside `docs/`).
+Host packages (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`,
+`soothe-sdk`) MAY reference IG-XXX/RFC-XXX in docstrings and comments (they
+live beside `docs/`).
 
 
 ### 8. DO NOT Cheat Tests
@@ -149,6 +155,7 @@ Import/placement rules: **§7b Package Boundaries (MUST)**. Do not reverse the D
 
 ```
 packages/
+├── soothe-sdk/        # OWNED — shared contracts (events, wire, display, protocols)
 ├── soothe/             # OWNED — StrangeLoop, CE, runner
 ├── soothe-autopilot/   # OWNED — Autopilot, rails, verify, dispatch
 ├── soothe-daemon/      # OWNED — soothed process, cron

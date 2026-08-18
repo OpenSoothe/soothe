@@ -14,43 +14,85 @@ permissions:
   id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
 
 jobs:
-  # soothe-sdk publishes from mirasoth/soothe-sdk (independent repo).
-  # Monorepo release waits for the pinned floor on PyPI; does not publish sdk.
+  # soothe-sdk is now hosted in this monorepo (packages/soothe-sdk).
+  # It publishes first; downstream packages wait for it on PyPI.
   deploy-sdk:
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/soothe-sdk
+
     steps:
     - uses: actions/checkout@v5
       with:
         submodules: true
 
-    - name: Wait for soothe-sdk on PyPI
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python install 3.12
+
+    - name: Sync SDK dependencies
       run: |
-        # soothe-sdk is consumed as a PyPI dependency (>=1.0.8,<2.0.0); read the
-        # pinned floor from packages/soothe-cli/pyproject.toml, mirroring the
-        # soothe-nano wait in deploy-core.
-        VERSION=$(python - <<'PY'
-        import re
-        from pathlib import Path
-        text = Path("packages/soothe-cli/pyproject.toml").read_text()
-        match = re.search(r'"soothe-sdk>=([^,<"]+)', text)
-        if not match:
-            raise SystemExit("soothe-sdk pin not found in packages/soothe-cli/pyproject.toml")
-        print(match.group(1))
-        PY
-        )
-        for i in {1..30}; do
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://pypi.org/pypi/soothe-sdk/${VERSION}/json" 2>/dev/null || echo "000")
-          if [ "$HTTP_STATUS" = "200" ]; then
-            echo "✓ soothe-sdk ${VERSION} is available on PyPI"
-            exit 0
-          fi
-          echo "Waiting for soothe-sdk ${VERSION} on PyPI... attempt $i/30 (HTTP ${HTTP_STATUS})"
-          sleep 10
-        done
-        echo "❌ Timeout: soothe-sdk ${VERSION} not found on PyPI after 5 minutes"
-        echo "Publish soothe-sdk from https://github.com/mirasoth/soothe-sdk first, then re-run."
-        exit 1
+        cd packages/soothe-sdk
+        uv sync --all-extras
+
+    - name: Get SDK version
+      id: sdk-version
+      run: |
+        VERSION=$(cat packages/soothe-sdk/VERSION)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check if SDK version exists on PyPI
+      id: sdk-check
+      run: |
+        VERSION="${{ steps.sdk-version.outputs.version }}"
+        echo "Checking if soothe-sdk $VERSION exists on PyPI..."
+        if pip index versions soothe-sdk 2>/dev/null | grep -q "$VERSION"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "⚠️ Version $VERSION already exists on PyPI, skipping publish"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "✓ Version $VERSION not found on PyPI, will publish"
+        fi
+
+    - name: Run SDK tests
+      if: steps.sdk-check.outputs.exists == 'false'
+      run: |
+        cd packages/soothe-sdk
+        uv run pytest tests/ -v --ignore=tests/test_integration.py
+
+    - name: Build SDK package
+      if: steps.sdk-check.outputs.exists == 'false'
+      run: |
+        rm -rf dist/
+        cd packages/soothe-sdk
+        uv build --out-dir ../../dist
+
+    - name: Verify SDK dist directory
+      if: steps.sdk-check.outputs.exists == 'false'
+      run: |
+        if [ ! -d "dist" ]; then
+          echo "❌ Error: dist directory not found"
+          exit 1
+        fi
+        if [ -z "$(ls -A dist | grep soothe_sdk)" ]; then
+          echo "❌ Error: dist directory doesn't contain soothe-sdk packages"
+          exit 1
+        fi
+        echo "✓ dist directory exists and contains soothe-sdk packages"
+        ls -la dist/ | grep soothe_sdk
+
+    - name: Publish soothe-sdk to PyPI
+      if: steps.sdk-check.outputs.exists == 'false'
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: dist/
+        verbose: true
+        print-hash: true
 
   deploy-cli:
     runs-on: ubuntu-latest
@@ -71,6 +113,22 @@ jobs:
 
     - name: Set up Python
       run: uv python install 3.12
+
+    - name: Wait for soothe-sdk on PyPI
+      run: |
+        VERSION=$(cat packages/soothe-sdk/VERSION)
+        for i in {1..30}; do
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://pypi.org/pypi/soothe-sdk/${VERSION}/json" 2>/dev/null || echo "000")
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✓ soothe-sdk ${VERSION} is available on PyPI"
+            exit 0
+          fi
+          echo "Waiting for soothe-sdk ${VERSION} on PyPI... attempt $i/30 (HTTP ${HTTP_STATUS})"
+          sleep 10
+        done
+        echo "❌ Timeout: soothe-sdk ${VERSION} not found on PyPI after 5 minutes"
+        exit 1
 
     - name: Sync CLI dependencies
       run: |
@@ -176,6 +234,41 @@ jobs:
         done
         echo "❌ Timeout: soothe-nano ${VERSION} not found on PyPI after 5 minutes"
         echo "Publish soothe-nano from https://github.com/mirasoth/soothe-nano first, then re-run."
+        exit 1
+
+    - name: Wait for soothe-sdk on PyPI
+      run: |
+        # soothe-sdk is published from this monorepo (deploy-sdk job).
+        VERSION=$(cat VERSION)
+        for i in {1..30}; do
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://pypi.org/pypi/soothe-sdk/${VERSION}/json" 2>/dev/null || echo "000")
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✓ soothe-sdk ${VERSION} is available on PyPI"
+            exit 0
+          fi
+          echo "Waiting for soothe-sdk ${VERSION} on PyPI... attempt $i/30 (HTTP ${HTTP_STATUS})"
+          sleep 10
+        done
+        echo "❌ Timeout: soothe-sdk ${VERSION} not found on PyPI after 5 minutes"
+        exit 1
+
+    - name: Wait for soothe-sdk on PyPI
+      run: |
+        # soothe-sdk is published from this monorepo (deploy-sdk job).
+        # Wait for PyPI propagation before resolving soothe's dependencies.
+        VERSION=$(cat packages/soothe-sdk/VERSION)
+        for i in {1..30}; do
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://pypi.org/pypi/soothe-sdk/${VERSION}/json" 2>/dev/null || echo "000")
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✓ soothe-sdk ${VERSION} is available on PyPI"
+            exit 0
+          fi
+          echo "Waiting for soothe-sdk ${VERSION} on PyPI... attempt $i/30 (HTTP ${HTTP_STATUS})"
+          sleep 10
+        done
+        echo "❌ Timeout: soothe-sdk ${VERSION} not found on PyPI after 5 minutes"
         exit 1
 
     - name: Sync soothe core dependencies

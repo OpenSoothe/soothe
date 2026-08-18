@@ -1,13 +1,14 @@
 # Makefile for Soothe Multi-Package Monorepo
 #
 # Monorepo-owned packages (format / lint / test / publish here):
-# 1. soothe-cli        - CLI client (Typer CLI + Textual TUI)
-# 2. soothe            - StrangeLoop / host composition
-# 3. soothe-autopilot  - Goal orchestration (Autopilot, rails, verify)
-# 4. soothe-daemon     - Daemon server (WebSocket/HTTP transports, cron)
+# 1. soothe-sdk        - Shared contracts (events, wire, display, protocols)
+# 2. soothe-cli        - CLI client (Typer CLI + Textual TUI)
+# 3. soothe            - StrangeLoop / host composition
+# 4. soothe-autopilot  - Goal orchestration (Autopilot, rails, verify)
+# 5. soothe-daemon     - Daemon server (WebSocket/HTTP transports, cron)
 #
 # Submodules (consume code only — do not format, lint, test, or release here):
-#   soothe-sdk, client/* (python/go/ts/rust)
+#   client/* (python/go/ts/rust)
 # PyPI-only first-party deps (not in this tree): soothe-nano, soothe-deepagents
 #
 # Uses .venv managed by uv for development.
@@ -21,14 +22,14 @@ DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml --env-file de
 .PHONY: reset-the-world
 .PHONY: format format-check lint lint-src lint-fix autofix vulture vulture-whitelist
 .PHONY: test test-unit test-integration test-coverage build clean
-.PHONY: cli-publish soothe-publish autopilot-publish daemon-publish publish
-.PHONY: cli-publish-test soothe-publish-test autopilot-publish-test daemon-publish-test publish-test
+.PHONY: cli-publish soothe-publish autopilot-publish daemon-publish sdk-publish publish
+.PHONY: cli-publish-test soothe-publish-test autopilot-publish-test daemon-publish-test sdk-publish-test publish-test
 
 # ============================================================================
 # Configuration
 # ============================================================================
 
-PACKAGES = soothe-cli soothe soothe-autopilot soothe-daemon
+PACKAGES = soothe-sdk soothe-cli soothe soothe-autopilot soothe-daemon
 
 # Root-level directories to lint (outside packages)
 ROOT_LINT_DIRS = examples scripts
@@ -335,8 +336,11 @@ clean:
 	@echo "Done"
 
 # ============================================================================
-# Publish (monorepo packages only — sdk/nano release from their own repos)
+# Publish (monorepo packages — sdk now hosted here; nano releases from its own repo)
 # ============================================================================
+
+sdk-publish:
+	cd packages/soothe-sdk && uv publish dist/* --native-tls
 
 cli-publish:
 	cd packages/soothe-cli && uv publish dist/* --native-tls
@@ -350,8 +354,11 @@ autopilot-publish:
 daemon-publish:
 	cd packages/soothe-daemon && uv publish dist/* --native-tls
 
-publish: build cli-publish soothe-publish autopilot-publish daemon-publish
-	@echo "Published to PyPI (sdk/nano publish from their own repos)"
+publish: build sdk-publish cli-publish soothe-publish autopilot-publish daemon-publish
+	@echo "Published to PyPI (nano publishes from its own repo)"
+
+sdk-publish-test:
+	cd packages/soothe-sdk && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 
 cli-publish-test:
 	cd packages/soothe-cli && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
@@ -365,5 +372,5 @@ autopilot-publish-test:
 daemon-publish-test:
 	cd packages/soothe-daemon && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 
-publish-test: build cli-publish-test soothe-publish-test autopilot-publish-test daemon-publish-test
+publish-test: build sdk-publish-test cli-publish-test soothe-publish-test autopilot-publish-test daemon-publish-test
 	@echo "Published to TestPyPI"
