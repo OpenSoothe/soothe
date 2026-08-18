@@ -29,10 +29,8 @@ if TYPE_CHECKING:
 
     from soothe.sloop.prompts.graph_wrapper import (
         GraphCallKind,
-        GraphPromptWrapper,
         ProjectionResult,
     )
-    from soothe.sloop.state.schemas import LoopState
 
     from .runtime_context import LoopRuntimeContext
 
