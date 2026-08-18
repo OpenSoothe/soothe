@@ -402,11 +402,6 @@ class StrangeLoop:
                 else:
                     pass1_result = pass1_raw
 
-                if pass1_result.is_task:
-                    # Pass 1 social-vs-task reasoning is retained for resume-topic
-                    # persistence but no longer surfaced as a TUI cognition card.
-                    pass1_reasoning_text = (pass1_result.reasoning or "").strip()
-
                 if not pass1_result.is_task:
                     from soothe.sloop.utils.structural_continuation import (
                         should_bypass_pass1_social_fast_path,
@@ -426,7 +421,6 @@ class StrangeLoop:
                             response_language=prior_lang or ResponseLanguage.OTHER,
                             reasoning="Loop-control phrase; resume via checkpoint",
                         )
-                        pass1_reasoning_text = pass1_result.reasoning or ""
                     else:
                         social_intent = intent_classifier.pass1_to_intent(
                             pass1_result, execution_goal
@@ -709,8 +703,8 @@ class StrangeLoop:
             from soothe.sloop.utils.goal_text import resolve_user_request
 
             if not clarification_answer:
-                # Fail-safe prose describes the fallback, not the goal — let the
-                # resume topic fall back to the user's own words instead.
+                # Pass 1 task reasoning is suppressed — the resume topic falls
+                # back to the user's own words for all task results.
                 resume_reasoning = (
                     None if pass1_result is None or pass1_result.fallback else pass1_reasoning_text
                 )
