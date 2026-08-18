@@ -2,14 +2,19 @@
 
 > Design doc synthesizing patterns discovered in the IHQ-01 inventory of the
 > StrangeLoop LangGraph codebase (`packages/soothe/src/soothe/sloop/`).
-> Status: **P1–P3 implemented** (commits `ffaa88890`, `fb493aa34`, `da849dc24`).
+> Status: **P1–P3 implemented; P4–P8 withdrawn/deferred** (commits
+> `ffaa88890`, `fb493aa34`, `da849dc24`).
 >
-> **Revision 2026-08-18 (post-implementation):** The phase-subgraph topology
-> (P4–P5) is **withdrawn**. Implementation revealed that 6 of 8 routers fan
-> across phase boundaries, so LangGraph subgraphs — which can only route
-> internally — don't compose cleanly with the cross-phase routing. The flat
-> graph with `LoopNode` lifecycle + node folds (P1–P3) is the target topology.
-> See RFC-903 §13 for the full rationale.
+> **Revision 2026-08-18 (post-implementation):**
+> - **P4–P5 withdrawn:** Phase-subgraph topology doesn't compose with
+>   LangGraph's subgraph model (6 of 8 routers cross phase boundaries).
+> - **P6–P7 withdrawn:** Native `interrupt()` for return-to-sender origins is
+>   not feasible — `ask_user` interrupts originate in CoreAgent (Layer 1),
+>   not StrangeLoop (Layer 2). The current `ClarificationCapture` relay is
+>   the correct cross-graph interrupt pattern.
+> - **P8 deferred:** `execute` (663 lines) and `finalize` (517 lines) are too
+>   complex for the 5-method split to cleanly partition. Defer until a natural
+>   refactor opportunity.
 >
 > **P1–P3 delivered:**
 > - `LoopNode` 5-method base class + `RouteDecision` + `GuardOutcome` + `wrap_node`
@@ -17,8 +22,8 @@
 > - `validate_plan` folded into `commit_plan`, `begin_iteration` folded into `check_limits`
 > - Topology: 14→12 nodes, 11→8 conditional routers
 >
-> **Future phases (P6–P7):** Native `interrupt()` for return-to-sender
-> clarification origins + residual sidecar for non-return origins.
+> The flat graph with `LoopNode` lifecycle + node folds is the **final target
+> topology**. No further phases are planned.
 
 ---
 

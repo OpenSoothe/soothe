@@ -208,18 +208,25 @@ START → intake → enter_loop
 
 ---
 
-## Clarification Model (future — P6)
+## Clarification Model (withdrawn — P6/P7)
 
-Clarification origins split by whether the resume target is the *same node*:
+The original draft proposed replacing the manual clarification relay with
+native LangGraph `interrupt()` for 3 return-to-sender origins (`execute`,
+`generate_plan`, `evaluate`). **Implementation analysis revealed this is not
+feasible:** the `ask_user` interrupts originate inside **CoreAgent** (Layer 1),
+not in the StrangeLoop graph (Layer 2). The executor catches them via
+`_fetch_pending_interrupts_from_state` after the CoreAgent stream ends and
+relays them via `ClarificationCapture` → `pending_clarification` graph state →
+`await_user` sidecar. The StrangeLoop graph nodes never call `interrupt()`
+themselves — they just read state the runner relays.
 
-- **Return-to-sender (3 origins):** `execute`, `generate_plan`, `evaluate` —
-  native LangGraph `interrupt()` / `Command(resume=...)` re-enters in-place.
-  Requires touching the executor interrupt seam (`_fetch_pending_interrupts_from_state`
-  + `ClarificationCapture` shunt in `strange_loop.py`).
-- **Non-return (2 origins):** `planner_subagent_review` → `delegate`,
-  `rail_pause` → host — keep the manual `await_user` sidecar channel.
+Native `interrupt()` cannot be used for interrupts that originate in a different
+graph. The current `ClarificationCapture` → `pending_clarification` relay is the
+correct pattern for cross-graph interrupt relay. **P6 and P7 are withdrawn.**
 
-This is **not implemented in P1–P3** and remains a future phase.
+The `await_user` sidecar correctly handles all 5 clarification origins
+(`execute`, `generate_plan`, `evaluate`, `planner_subagent_review`,
+`rail_pause`) via the manual channel. No collapse is needed.
 
 ---
 
@@ -255,9 +262,7 @@ RFC-220). The node folds move checkpoint cursors (a goal interrupted at the old
 `validate_plan` station now resumes at `commit_plan`), but `normalize_station`
 maps the legacy station ID, so resume is compatible.
 
-No checkpoint key versioning is needed for the fold-only topology change. If
-the future clarification-model change (P6) introduces native `interrupt()`, the
-key may version then.
+No checkpoint key versioning is needed.
 
 ---
 
@@ -285,11 +290,14 @@ Unchanged from RFC-220. The `LoopNode` base driver **may** auto-emit
 ## Non-Goals (this RFC)
 
 - Phase-subgraph restructure (withdrawn — see §13).
+- Native `interrupt()` for clarification (withdrawn — see §Clarification Model).
 - Replacing the `Executor` step-wave execution machinery.
 - Replacing the `StrangeLoop.run` / `pump_graph` outer pump.
 - Redesigning `GraphPromptWrapper` projection internals.
 - Renaming wire-stable deliverable phases or checkpoint ledger phases.
-- Native `interrupt()` for clarification (future P6).
+- Migrating `execute`/`finalize` to `LoopNode` (deferred — these 500–660-line
+  nodes are too complex for the 5-method split to cleanly partition; defer until
+  a natural refactor opportunity).
 
 ---
 
@@ -302,10 +310,12 @@ Unchanged from RFC-220. The `LoopNode` base driver **may** auto-emit
 3. **P3 (done):** Fold `validate_plan` into `CommitPlanNode.process()` and
    `begin_iteration` into `CheckLimitsNode.process()`. Update builder, routers,
    and topology test.
-4. **P6 (future):** Replace executor interrupt seam with native `interrupt()` for
-   3 return-to-sender origins.
-5. **P7 (future):** Collapse residual `await_user` sidecar to 2 non-return origins.
-6. Update RFC-220 header: `Partially Superseded by: RFC-903`.
+4. **P6 (withdrawn):** Native `interrupt()` for return-to-sender origins — not
+   feasible (interrupts originate in CoreAgent, not StrangeLoop).
+5. **P7 (withdrawn):** Collapse `await_user` sidecar — moot (P6 withdrawn).
+6. **P8 (deferred):** Migrate `execute`/`finalize` to `LoopNode` — defer until
+   natural refactor opportunity.
+7. Update RFC-220 header: `Partially Superseded by: RFC-903`.
 
 ---
 
