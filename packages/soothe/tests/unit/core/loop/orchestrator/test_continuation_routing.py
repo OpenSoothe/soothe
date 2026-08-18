@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from soothe.sloop.engine.continuation_context import build_continue_bootstrap_step_briefs
-from soothe.sloop.orchestrator.continuation_routing import (
+from soothe.sloop.orchestrator.continuation import (
     bootstrap_terminal_after_execute,
 )
 from soothe.sloop.stages.plan.assess import (

@@ -5,7 +5,7 @@ from __future__ import annotations
 from langchain_core.messages import SystemMessage
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.sloop.orchestrator.continuation_routing import FRESH_LOOP_BYPASS_REASON
+from soothe.sloop.orchestrator.continuation import FRESH_LOOP_BYPASS_REASON
 from soothe.sloop.prompts import PromptBuilder
 from soothe.sloop.prompts.user_message import UserMessageBuilder
 from soothe.sloop.state.schemas import LoopState, StatusAssessment

@@ -15,8 +15,7 @@ from soothe.sloop.state.schemas import AgentDecision, LoopState, PlanResult, Ste
 
 @pytest.mark.asyncio
 async def test_record_iteration_increments_ce_iteration_count() -> None:
-    from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-    from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+    from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch, LoopRuntimeContext
     from soothe.sloop.stages.execute.record_progress import node_record_iteration
 
     ce = ContextEngine(

@@ -17,7 +17,7 @@ import time
 from typing import Any, Literal
 
 from soothe.sloop.intention.models import IntakeLabel
-from soothe.sloop.orchestrator.mid_loop_intake import mid_loop_allow_inventory
+from soothe.sloop.orchestrator.continuation import mid_loop_allow_inventory
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.prompts.plan_ledger_projection import (
     _current_goal_has_execute_ledger,

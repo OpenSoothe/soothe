@@ -8,8 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from soothe.sloop.cognition.planner import LLMPlanner
-from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch, LoopRuntimeContext
 from soothe.sloop.stages.plan.evaluate import node_plan_evaluate
 from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 from soothe.utils.observability.langfuse import (

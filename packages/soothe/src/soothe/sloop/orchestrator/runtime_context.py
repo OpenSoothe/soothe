@@ -1,4 +1,9 @@
-"""Mutable runtime bundle for LangGraph Strange Loop nodes (RFC-220)."""
+"""Mutable runtime bundle for LangGraph Strange Loop nodes (RFC-220).
+
+Per-iteration planner scratch lives on ``LoopRuntimeContext`` (not graph
+channels) because payloads reference rich non-primitive models that are not
+serialized in LangGraph checkpoints today.
+"""
 
 from __future__ import annotations
 
@@ -11,12 +16,16 @@ from typing import TYPE_CHECKING, Any
 from soothe.sloop.engine.anchor_manager import CheckpointAnchorManager
 from soothe.sloop.state.checkpoint import StrangeLoopCheckpoint
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
-from soothe.sloop.state.schemas import LoopState
+from soothe.sloop.state.schemas import (
+    AgentDecision,
+    LoopState,
+    PlanGapAnalysis,
+    PlanResult,
+    StatusAssessment,
+)
 from soothe.sloop.state.sloop_manager import (
     StrangeLoopStateManager,
 )
-
-from .phase_scratch import LoopPhaseScratch
 
 if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
@@ -28,6 +37,24 @@ if TYPE_CHECKING:
 EmitFn = Callable[[str, Any], Awaitable[None]]
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class LoopPhaseScratch:
+    """Mutable planner outputs for one iteration cycle."""
+
+    plan_result: PlanResult | None = None
+    plan_assessment: StatusAssessment | None = None
+    plan_gap: PlanGapAnalysis | None = None
+    decision: AgentDecision | None = None
+    iteration_perf_start: float | None = None
+    step_results: list[Any] = field(default_factory=list)
+    # RFC-633 / intake planner *subagent* review gate (not StrangeLoop plan_*)
+    plan_artifact_path: str | None = None
+    plan_artifact_markdown: str | None = None
+    planner_subagent_review_comments: str | None = None
+    # Approve → StrangeLoop plan_generate handoff (one-shot).
+    planner_implement_handoff: bool = False
 
 
 @dataclass

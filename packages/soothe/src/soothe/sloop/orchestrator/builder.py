@@ -1,7 +1,7 @@
 """Compile the Strange Loop LangGraph (RFC-220, stem stations, evaluate).
 
 The graph checkpoint key uses ``{loop_id}__strange_loop`` via
-``configurable.thread_id`` (see ``checkpoint_keys``) when a checkpointer is
+``configurable.thread_id`` (see ``checkpoint``) when a checkpointer is
 attached. Persistence for goals remains ``StrangeLoopStateManager``.
 """
 
@@ -25,7 +25,7 @@ from soothe.sloop.stages.preprocess.intake import node_intent_classify
 from soothe.sloop.stages.sidecars.await_user import node_await_clarification
 from soothe.sloop.stages.sidecars.delegate import node_invoke_wired_subagent
 
-from .checkpointer import core_agent_checkpointer
+from .checkpoint import core_agent_checkpointer
 from .node_base import wrap_node
 from .routing import (
     route_after_clarification,
@@ -40,7 +40,6 @@ from .routing import (
     route_after_wired_subagent,
 )
 from .runtime_context import LoopRuntimeContext
-from .state import LoopGraphState
 from .stations import (
     AWAIT_USER,
     CHECK_LIMITS,
@@ -54,6 +53,7 @@ from .stations import (
     GENERATE_PLAN,
     INTAKE,
     RECORD_PROGRESS,
+    LoopGraphState,
 )
 
 logger = logging.getLogger(__name__)

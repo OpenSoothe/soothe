@@ -73,7 +73,7 @@ def _runtime_ctx(
     checkpoint = SimpleNamespace(
         thread_health_metrics=ThreadHealthMetrics(thread_id="t", last_updated=datetime.now(UTC)),
     )
-    from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+    from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch
 
     return SimpleNamespace(
         loop_state=LoopState(

@@ -14,7 +14,7 @@ import traceback
 from typing import Any
 
 from soothe.sloop.orchestrator.builder import build_strange_loop_graph
-from soothe.sloop.orchestrator.checkpoint_keys import (
+from soothe.sloop.orchestrator.checkpoint import (
     snapshot_has_resumable_interrupt,
     snapshot_has_unanswered_pending,
     strange_loop_configurable,

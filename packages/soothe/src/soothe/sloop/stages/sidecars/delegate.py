@@ -213,7 +213,7 @@ async def _run_intake_only_runnable(
     """Run specialist while bridging wire customs live onto the query stream."""
     from soothe_nano.utils.progress import reset_wire_bridge, set_wire_bridge
 
-    from soothe.sloop.orchestrator.checkpoint_keys import intake_only_invoke_config
+    from soothe.sloop.orchestrator.checkpoint import intake_only_invoke_config
 
     state_manager = getattr(ctx, "state_manager", None)
     loop_id = str(getattr(state_manager, "loop_id", "") or "")
@@ -423,7 +423,7 @@ async def _handle_planner_subagent_review_answer(
         _record_wired_execute_ledger(
             ctx, goal_text=goal_text, report=note, wire=wire, step_id=step_id
         )
-        from soothe.sloop.orchestrator.continuation_routing import fresh_loop_bypass_assessment
+        from soothe.sloop.orchestrator.continuation import fresh_loop_bypass_assessment
 
         # StrangeLoop will own the decision; drop the intake trivial plan.
         ctx.scratch.plan_result = None

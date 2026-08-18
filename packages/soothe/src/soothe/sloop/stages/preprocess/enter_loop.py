@@ -17,7 +17,7 @@ from typing import Any
 
 from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.intention.models import IntakeLabel
-from soothe.sloop.orchestrator.continuation_routing import (
+from soothe.sloop.orchestrator.continuation import (
     is_fresh_goal,
     is_structural_continuation,
 )

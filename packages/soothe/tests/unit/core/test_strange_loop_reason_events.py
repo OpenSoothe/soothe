@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.sloop.orchestrator.continuation_routing import FRESH_LOOP_BYPASS_REASON
+from soothe.sloop.orchestrator.continuation import FRESH_LOOP_BYPASS_REASON
 from soothe.sloop.utils.loop_reason_display import (
     is_displayable_assessment_reasoning,
     should_emit_loop_reason_event,

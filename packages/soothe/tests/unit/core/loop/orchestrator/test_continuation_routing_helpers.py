@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from soothe.sloop.orchestrator.continuation_routing import (
+from soothe.sloop.orchestrator.continuation import (
     FRESH_LOOP_BYPASS_PREFIX,
     FRESH_LOOP_BYPASS_REASON,
     fresh_loop_bypass_assessment,

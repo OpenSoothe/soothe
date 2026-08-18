@@ -9,7 +9,7 @@ import pytest
 from langgraph.types import Command
 
 from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
-from soothe.sloop.orchestrator.checkpoint_keys import (
+from soothe.sloop.orchestrator.checkpoint import (
     intake_only_invoke_config,
     snapshot_has_resumable_interrupt,
     strange_loop_configurable,

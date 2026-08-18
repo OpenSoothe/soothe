@@ -10,8 +10,7 @@ from soothe_nano.llm.structured import StructuredOutputError
 from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.sloop.cognition.plan_step_safety import assess_respects_gap_analysis
-from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch, LoopRuntimeContext
 from soothe.sloop.prompts import PromptBuilder
 from soothe.sloop.prompts.user_message import UserMessageBuilder
 from soothe.sloop.stages.plan.evaluate import (

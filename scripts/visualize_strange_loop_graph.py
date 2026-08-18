@@ -76,7 +76,7 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
         started_at=datetime.now(UTC),
     )
 
-    from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+    from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch
     from soothe.sloop.state.schemas import LoopState
 
     state = LoopState(

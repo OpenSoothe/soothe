@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from soothe.sloop.intention.models import IntakeLabel
-from soothe.sloop.orchestrator.mid_loop_intake import (
+from soothe.sloop.orchestrator.continuation import (
     mid_loop_allow_inventory,
     mid_loop_skip_continuation_assess,
     mid_loop_use_lightweight_generate,

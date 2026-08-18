@@ -35,7 +35,7 @@ def test_build_loop_graph_invoke_config_keeps_isolated_strange_loop_thread() -> 
 
     out = build_loop_graph_invoke_config(ctx)
 
-    from soothe.sloop.orchestrator.checkpoint_keys import strange_loop_thread_id
+    from soothe.sloop.orchestrator.checkpoint import strange_loop_thread_id
 
     assert out["configurable"]["thread_id"] == strange_loop_thread_id("loop-abc")
     assert "checkpoint_ns" not in out["configurable"]
@@ -117,7 +117,7 @@ def test_build_loop_graph_invoke_config_uses_goal_trace_pinned_id() -> None:
 
     out = build_loop_graph_invoke_config(ctx)
 
-    from soothe.sloop.orchestrator.checkpoint_keys import strange_loop_thread_id
+    from soothe.sloop.orchestrator.checkpoint import strange_loop_thread_id
 
     assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
     assert out["configurable"]["thread_id"] == strange_loop_thread_id("loop-1")

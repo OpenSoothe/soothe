@@ -9,7 +9,6 @@ from langgraph.graph import END
 
 from soothe.sloop.intention.models import IntakeLabel
 
-from .state import PLAN_ROUTE_GOAL_DONE
 from .stations import (
     AWAIT_USER,
     CHECK_LIMITS,
@@ -20,6 +19,7 @@ from .stations import (
     FINALIZE,
     GATHER_EVIDENCE,
     GENERATE_PLAN,
+    PLAN_ROUTE_GOAL_DONE,
     RECORD_PROGRESS,
 )
 

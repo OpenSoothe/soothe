@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.sloop.orchestrator.continuation_routing import FRESH_LOOP_BYPASS_PREFIX
+from soothe.sloop.orchestrator.continuation import FRESH_LOOP_BYPASS_PREFIX
 
 
 def is_displayable_assessment_reasoning(text: str) -> bool:

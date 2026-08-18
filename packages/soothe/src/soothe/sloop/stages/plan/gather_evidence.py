@@ -22,7 +22,7 @@ from soothe.sloop.cognition.structural_keep import (
     reset_structural_keep_streak,
     structural_keep_block_reason,
 )
-from soothe.sloop.orchestrator.continuation_routing import (
+from soothe.sloop.orchestrator.continuation import (
     fresh_loop_bypass_assessment,
     is_fresh_loop_skip_evaluate,
 )

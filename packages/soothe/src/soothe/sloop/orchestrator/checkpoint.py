@@ -1,4 +1,4 @@
-"""LangGraph checkpoint key helpers for StrangeLoop vs CoreAgent isolation.
+"""LangGraph checkpoint helpers for StrangeLoop vs CoreAgent isolation.
 
 CoreAgent execute streams default to ``thread_id=loop_id`` with ``checkpoint_ns=""``.
 StrangeLoop parks ``await_user`` interrupts on the same checkpointer; without a
@@ -14,7 +14,10 @@ with empty ``checkpoint_ns``.
 
 from __future__ import annotations
 
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
+
+if TYPE_CHECKING:
+    from soothe.sloop.engine.strange_loop import StrangeLoop
 
 # Scoped under the loop UUID so CoreAgent (thread_id=loop_id) cannot orphan
 # review interrupts on the shared checkpointer.
@@ -75,3 +78,23 @@ def snapshot_has_unanswered_pending(snapshot: Any) -> bool:
     return bool(values.get("pending_clarification")) and not values.get(
         "pending_clarification_answer"
     )
+
+
+def core_agent_checkpointer(strange_loop: StrangeLoop) -> Any | None:
+    """Return the LangGraph checkpointer wired on CoreAgent, if any.
+
+    Does not force LazyCoreAgent materialization. Callers must materialize
+    (and attach the async checkpointer) before compiling the loop graph;
+    sync ``.graph`` access would compile without the async saver.
+    """
+    agent = strange_loop.core_agent
+    if getattr(agent, "is_materialized", True) is False:
+        return None
+    try:
+        graph = getattr(agent, "graph", None)
+        if graph is None:
+            return None
+        return getattr(graph, "checkpointer", None)
+    except NotImplementedError:
+        # CoreAgent without LangGraph graph
+        return None
