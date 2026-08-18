@@ -1,16 +1,9 @@
 """Resolve executable ``AgentDecision`` from ``PlanResult`` (RFC-220 pre-execute path).
 
-Migrated to ``LoopNode`` (RFC-903 P2): the node is a ``CommitPlanNode``
-subclass. The missing-``plan_result`` guard and the no-decision guard move
-into ``pre`` via ``GuardOutcome``; the fallback-decision logic stays in
-``process``. The legacy ``node_resolve_decision`` function is retained as a
-thin wrapper.
-
-RFC-903 P3: ``validate_plan`` is folded into this node's ``post()`` — the
-deterministic evidence-binding check runs here, eliminating the separate
-``VALIDATE_PLAN`` station and its two routers (``route_after_resolve_decision``,
-``route_after_validate_evidence``). The legacy ``node_validate_evidence_bindings``
-function is retained for backward compatibility with tests/imports.
+Implemented as a ``LoopNode`` subclass (RFC-903). The missing-``plan_result``
+guard is in ``pre`` via ``GuardOutcome``; the fallback-decision logic and
+evidence-binding validation (folded from the former ``validate_plan`` node)
+are in ``process``.
 """
 
 from __future__ import annotations
@@ -191,8 +184,3 @@ class CommitPlanNode(LoopNode):
 
 # Singleton instance for the graph builder.
 node: CommitPlanNode = CommitPlanNode()
-
-
-async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Legacy entry point — delegates to :class:`CommitPlanNode`."""
-    return await node(ctx, _state)

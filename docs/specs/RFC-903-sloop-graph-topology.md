@@ -2,7 +2,7 @@
 
 **RFC**: 903
 **Title**: Sloop Graph Topology and Node Lifecycle
-**Status**: Draft
+**Status**: Proposed
 **Kind**: Architecture Design
 **Created**: 2026-08-18
 **Dependencies**: RFC-220, RFC-604, RFC-622, RFC-633, RFC-803
@@ -27,14 +27,6 @@ RFC revises that topology by:
 3. **Folding** two serial validation/setup nodes into their siblings
    (`validate_plan` → `commit_plan`, `begin_iteration` → `check_limits`),
    reducing the graph from 14→12 nodes and 11→8 conditional routers.
-
-**Revision note (2026-08-18, post-implementation):** The original draft proposed
-a **phase-subgraph** restructure (4 compiled subgraphs + residual sidecars).
-Implementation revealed that 6 of 8 routers fan across phase boundaries, so
-LangGraph subgraphs — which can only route internally — don't compose cleanly
-with the cross-phase routing. The phase-subgraph approach is **withdrawn**; the
-flat graph with `LoopNode` lifecycle + node folds is the target topology. See
-§13 for the full rationale.
 
 ---
 
@@ -62,10 +54,7 @@ flat graph with `LoopNode` lifecycle + node folds is the target topology. See
 2. **Fold, don't restructure** — Collapse serial setup/validation nodes into
    their siblings rather than restructuring the graph topology. The flat graph
    is retained; the node count and router count drop.
-3. **Native primitives over manual channels** — Use LangGraph `interrupt()` for
-   return-to-sender clarification (P6, future); keep a manual channel only
-   where the resume target is a different node.
-4. **Wire stability** — Wire-stable deliverable phases and checkpoint ledger
+3. **Wire stability** — Wire-stable deliverable phases and checkpoint ledger
    phases remain immutable; `stations.normalize_station` decouples internal
    renames from the wire contract.
 
@@ -73,7 +62,7 @@ flat graph with `LoopNode` lifecycle + node folds is the target topology. See
 
 ## Supersedes and Obsolete Surface
 
-When RFC-903 is **Implemented**:
+When RFC-903 is **Accepted**:
 
 - RFC-220 remains **Implemented** for its identity/isolation rules, persistence
   strategy, and two-graphs-two-keys invariant. Its §Loop Graph Topology (flat
@@ -91,7 +80,7 @@ When RFC-903 is **Implemented**:
   type as nodes migrate to `LoopNode`.
 
 RFC-220's header **should** carry `Partially Superseded by: RFC-903 (node
-lifecycle, node folds, typed route contract)` once RFC-903 reaches Implemented.
+lifecycle, node folds, typed route contract)` once RFC-903 reaches Accepted.
 
 ---
 
@@ -204,29 +193,7 @@ START → intake → enter_loop
   sidecars: delegate, await_user
 ```
 
-**12 nodes, 8 conditional routers, 6 unconditional edges.**
-
----
-
-## Clarification Model (withdrawn — P6/P7)
-
-The original draft proposed replacing the manual clarification relay with
-native LangGraph `interrupt()` for 3 return-to-sender origins (`execute`,
-`generate_plan`, `evaluate`). **Implementation analysis revealed this is not
-feasible:** the `ask_user` interrupts originate inside **CoreAgent** (Layer 1),
-not in the StrangeLoop graph (Layer 2). The executor catches them via
-`_fetch_pending_interrupts_from_state` after the CoreAgent stream ends and
-relays them via `ClarificationCapture` → `pending_clarification` graph state →
-`await_user` sidecar. The StrangeLoop graph nodes never call `interrupt()`
-themselves — they just read state the runner relays.
-
-Native `interrupt()` cannot be used for interrupts that originate in a different
-graph. The current `ClarificationCapture` → `pending_clarification` relay is the
-correct pattern for cross-graph interrupt relay. **P6 and P7 are withdrawn.**
-
-The `await_user` sidecar correctly handles all 5 clarification origins
-(`execute`, `generate_plan`, `evaluate`, `planner_subagent_review`,
-`rail_pause`) via the manual channel. No collapse is needed.
+**12 nodes, 8 conditional routers.**
 
 ---
 
@@ -236,7 +203,7 @@ The `await_user` sidecar correctly handles all 5 clarification origins
 
 | Channel | Change |
 |---|---|
-| `resume_synth` | Retained (P3 moved the clear into `CheckLimitsNode.post()`) |
+| `resume_synth` | Retained (clear moved into `CheckLimitsNode.post()`) |
 | `after_record_route` | Retained (not yet replaced by `RouteDecision`) |
 | `plan_route`, `assess_route`, `evidence_gather_route` | Retained (not yet replaced by `RouteDecision`) |
 
@@ -260,9 +227,8 @@ nodes.
 The Loop Graph checkpoint key remains `{loop_id}__strange_loop` (unchanged from
 RFC-220). The node folds move checkpoint cursors (a goal interrupted at the old
 `validate_plan` station now resumes at `commit_plan`), but `normalize_station`
-maps the legacy station ID, so resume is compatible.
-
-No checkpoint key versioning is needed.
+maps the legacy station ID, so resume is compatible. No checkpoint key
+versioning is needed.
 
 ---
 
@@ -287,17 +253,14 @@ Unchanged from RFC-220. The `LoopNode` base driver **may** auto-emit
 
 ---
 
-## Non-Goals (this RFC)
+## Non-Goals
 
-- Phase-subgraph restructure (withdrawn — see §13).
-- Native `interrupt()` for clarification (withdrawn — see §Clarification Model).
 - Replacing the `Executor` step-wave execution machinery.
 - Replacing the `StrangeLoop.run` / `pump_graph` outer pump.
 - Redesigning `GraphPromptWrapper` projection internals.
 - Renaming wire-stable deliverable phases or checkpoint ledger phases.
 - Migrating `execute`/`finalize` to `LoopNode` (deferred — these 500–660-line
-  nodes are too complex for the 5-method split to cleanly partition; defer until
-  a natural refactor opportunity).
+  nodes are too complex for the 5-method split to cleanly partition).
 
 ---
 
@@ -310,12 +273,7 @@ Unchanged from RFC-220. The `LoopNode` base driver **may** auto-emit
 3. **P3 (done):** Fold `validate_plan` into `CommitPlanNode.process()` and
    `begin_iteration` into `CheckLimitsNode.process()`. Update builder, routers,
    and topology test.
-4. **P6 (withdrawn):** Native `interrupt()` for return-to-sender origins — not
-   feasible (interrupts originate in CoreAgent, not StrangeLoop).
-5. **P7 (withdrawn):** Collapse `await_user` sidecar — moot (P6 withdrawn).
-6. **P8 (deferred):** Migrate `execute`/`finalize` to `LoopNode` — defer until
-   natural refactor opportunity.
-7. Update RFC-220 header: `Partially Superseded by: RFC-903`.
+4. Update RFC-220 header: `Partially Superseded by: RFC-903`.
 
 ---
 
@@ -326,40 +284,3 @@ lifecycle, a typed `RouteDecision` contract, and two node folds
 (`validate_plan` → `commit_plan`, `begin_iteration` → `check_limits`), reducing
 topology from 14→12 nodes and 11→8 routers. The flat graph is retained.
 Wire-stable phases and the two-graphs-two-keys invariant are preserved.
-
----
-
-## 13. Withdrawn: Phase-Subgraph Topology
-
-The original draft of this RFC (and the source design draft
-`docs/drafts/2026-08-18-sloop-graph-topology-design.md`) proposed restructuring
-the flat graph into 4 phase subgraphs (`preprocess`, `plan`, `execute`,
-`complete`) plus residual sidecars, shrinking the outer graph to ~7 nodes.
-
-**Implementation revealed this approach does not compose cleanly with
-LangGraph's subgraph model.** LangGraph subgraphs (compiled `StateGraph` passed
-to `parent.add_node(name, subgraph)`) can only route *internally* — a subgraph
-node's output is a single state patch, and the parent graph does the
-conditional routing on that output. Tracing the 8 routers revealed that **6 of
-8 fan across phase boundaries**:
-
-| Router | Targets | Crosses phases? |
-|---|---|---|
-| `route_after_preprocess` | plan, delegate, END | ✓ preprocess→plan/sidecar |
-| `route_after_evidence_gather` | evaluate, generate_plan, commit_plan | ✓ plan→execute |
-| `route_after_evaluate` | finalize, commit_plan, generate_plan, await_user | ✓ plan→complete/execute/sidecar |
-| `route_after_plan` | finalize, commit_plan, generate_plan, await_user | ✓ plan→complete/execute/sidecar |
-| `route_after_commit` | execute, END | ✗ intra-execute |
-| `route_after_execute` | record_progress, await_user, check_limits, END | ✗ intra-execute + sidecar |
-| `route_after_record_iteration` | check_limits, finalize, END | ✓ execute→complete |
-
-Only `route_after_commit` and `route_after_execute` are intra-phase. The rest
-cross boundaries, so they cannot live inside a subgraph — they must live in the
-parent graph. Putting the nodes in subgraphs while keeping the routing in the
-parent yields thin wrappers that add checkpoint complexity without simplifying
-the routing.
-
-The flat graph with `LoopNode` lifecycle + node folds delivers the real
-simplification (centralized guards, typed route contract, fewer nodes/routers)
-without fighting LangGraph's subgraph model. The phase-subgraph approach is
-withdrawn.

@@ -213,21 +213,14 @@ This document defines the terminology and naming conventions used in this projec
 | Two-stage pre-graph gather | Parallelized pre-graph sequence: stage 1 = intake LLM ∥ `checkpoint.load` ∥ `git_status`; stage 2 = CE construct+load+`create_goal`/`activate_goal` (depend on checkpoint) ∥ instruction/memory file reads via `to_thread`. Stage split is a correctness constraint (CE needs the checkpoint), not an optimization choice. | RFC-630 |
 | Direct replacement | The 4-class intake is the sole intent path — the legacy binary `IntentClassificationLLMResult` schema, `classify_intent`, the binary prompt fragments, and `_is_likely_agentic` are removed outright. No feature flag, no backward-compat shim. The `IntentClassifiedEvent` wire contract (`intent_type: quiz\|agentic`) is preserved; `intent_type` is derived from the 4-class label. | RFC-630 |
 
-### Phase-Subgraph Topology Terms (RFC-903)
+### Node Lifecycle Terms (RFC-903)
 
 | Term | Definition | Introduced In |
 |------|------------|---------------|
 | `LoopNode` | Base class for every StrangeLoop graph node with a five-method lifecycle: `pre` (guards/setup) → `project` (DAG projection) → `prompt` (message assembly) → `process` (core work) → `post` (writes/emit/route). Replaces the implicit `async def(ctx, state) -> dict` shape. Non-LLM nodes no-op `project`/`prompt`. | RFC-903 |
 | `RouteDecision` | Typed sum-type returned by `LoopNode.post()`: `kind ∈ {proceed, await_user, deferred, fatal, terminal}` + `next_phase` / `clarification_origin` / `state_patch`. Replaces the free-form route-key dict (`plan_route`, `assess_route`, `evidence_gather_route`, `after_record_route`, `resume_synth`, `planner_implement_handoff`). | RFC-903 |
-| `GuardOutcome` | Short-circuit result from `LoopNode.pre()`: `kind ∈ {fatal, deferred, skip}`. Folds the per-node `emit fatal_error + return {"last_outcome":"fatal"}` boilerplate and the 4-router `_pending_clarification` check into one `pre()` default. | RFC-903 |
-| Phase subgraph | Compiled `StateGraph` owning one orchestration phase (`preprocess`, `plan`, `execute`, `complete`) and its internal routing. Returns a single `next_phase` exit channel. Subgraphs compose with the parent checkpointer natively. | RFC-903 |
-| Return-to-sender origin | Clarification origin whose resume target is the same node that asked (`execute`, `generate_plan`, `evaluate`). Uses native LangGraph `interrupt()` / `Command(resume=...)` — no `pending_clarification` channel or origin map. | RFC-903 |
-| Non-return origin | Clarification origin whose resume target is a different node (`planner_subagent_review` → `delegate`, `rail_pause` → host). Retains the manual `await_user` sidecar channel. | RFC-903 |
-| `__strange_loop_v2` | Versioned Loop Graph checkpoint key for the phase-subgraph topology. In-flight goals on the v1 key (`__strange_loop`) resume on v1 or via a migration shim. | RFC-903 |
-
-> **Revises**: the `StrangeLoop stem stations` entry (RFC-630 section) describing
-> the flat 14-node graph is partially superseded by RFC-903's phase-subgraph
-> topology once RFC-903 reaches Implemented.
+| `GuardOutcome` | Short-circuit result from `LoopNode.pre()`: `kind ∈ {fatal, deferred, skip}`. Folds the per-node `emit fatal_error + return {"last_outcome":"fatal"}` boilerplate into one `pre()` default. | RFC-903 |
+| `wrap_node` | Builder adapter that detects `LoopNode` instances vs legacy `async def(ctx, state) -> dict` functions, so the graph adopts the new base incrementally. | RFC-903 |
 
 ### Clarification Relay Terms (RFC-622, RFC-623)
 

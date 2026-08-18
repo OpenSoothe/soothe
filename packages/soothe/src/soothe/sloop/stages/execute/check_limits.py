@@ -1,16 +1,11 @@
-"""Iteration cap check before per-iteration work (RFC-220 ``iteration_gate``).
+"""Iteration cap check and iteration begin (RFC-220 ``iteration_gate``).
 
-Migrated to ``LoopNode`` (RFC-903 P2): the node is a ``CheckLimitsNode``
-subclass. Terminal branches (max_iterations, rate_limited) emit their own
-completion events in ``process`` and return ``RouteDecision(kind="terminal")``.
-The legacy ``node_iteration_gate`` function is retained as a thin wrapper.
-
-RFC-903 P3: ``begin_iteration`` is folded into this node's ``process()``
-non-terminal branch — scratch reset, start anchor capture, and
-``iteration_started`` emission happen here, eliminating the separate
-``BEGIN_ITERATION`` station and the unconditional edge to ``GATHER_EVIDENCE``.
-The legacy ``node_iteration_start`` function is retained for backward
-compatibility with tests/imports.
+Implemented as a ``CheckLimitsNode`` subclass (RFC-903). Terminal branches
+(max_iterations, rate_limited) emit completion events in ``process`` and
+return ``RouteDecision(kind="terminal")``. The non-terminal branch performs
+iteration-begin setup (scratch reset, start anchor capture,
+``iteration_started`` emission) — folded from the former ``begin_iteration``
+node.
 """
 
 from __future__ import annotations
@@ -145,11 +140,6 @@ class CheckLimitsNode(LoopNode):
 
 # Singleton instance for the graph builder.
 node: CheckLimitsNode = CheckLimitsNode()
-
-
-async def node_iteration_gate(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Legacy entry point — delegates to :class:`CheckLimitsNode`."""
-    return await node(ctx, _state)
 
 
 async def emit_rate_limit_terminal(ctx: LoopRuntimeContext) -> None:

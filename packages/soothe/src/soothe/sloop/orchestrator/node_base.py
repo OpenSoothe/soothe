@@ -1,20 +1,15 @@
-"""Generalized StrangeLoop graph node lifecycle (RFC-903 §4, IG P1).
+"""Generalized StrangeLoop graph node lifecycle (RFC-903).
 
 Introduces the ``LoopNode`` base class with a five-method lifecycle
 (``pre`` / ``project`` / ``prompt`` / ``process`` / ``post``) and the typed
 ``RouteDecision`` / ``GuardOutcome`` contracts that replace the implicit
 ``async def(ctx, state) -> dict`` shape and free-form route-key dict.
 
-P1 (this module) is **non-breaking**: the ``wrap_node`` adapter detects
-``LoopNode`` instances vs legacy ``async def(ctx, state) -> dict`` functions so
-the graph builder can adopt the new base incrementally without touching
-existing nodes. No node is migrated in P1; guard centralization (fatal,
-clarification, resume-skip) lands in P2–P3, and the phase-subgraph topology in
-P4–P5.
+The ``wrap_node`` adapter detects ``LoopNode`` instances vs legacy
+``async def(ctx, state) -> dict`` functions so the graph builder adopts the
+new base incrementally.
 
-See:
-- RFC-903 §Generalized Node Lifecycle
-- ``docs/impl/IG-sloop-generalized-node-topology.md`` §3–§4
+See RFC-903 §Generalized Node Lifecycle.
 """
 
 from __future__ import annotations
@@ -45,9 +40,7 @@ RouteKind = Literal["proceed", "await_user", "deferred", "fatal", "terminal"]
 """Discriminator for the route a node selects after its work completes.
 
 - ``proceed`` — continue within the current phase or hand to the next.
-- ``await_user`` — route to the residual ``await_user`` sidecar (non-return
-  clarification origin only; return-to-sender origins use native
-  ``interrupt()`` in P6).
+- ``await_user`` — route to the ``await_user`` sidecar for clarification.
 - ``deferred`` — clarification deferred by policy; terminate the run.
 - ``fatal`` — unrecoverable error; terminate the run.
 - ``terminal`` — goal done; route to ``complete`` / END.
@@ -79,9 +72,8 @@ class RouteDecision:
     """For ``proceed``: the target phase or internal station id."""
 
     clarification_origin: str | None = None
-    """For ``await_user``: the non-return clarification origin (e.g.
-    ``planner_subagent_review``). Return-to-sender origins use native
-    ``interrupt()`` and do not set this."""
+    """For ``await_user``: the clarification origin (e.g.
+    ``planner_subagent_review``, ``execute``, ``generate_plan``)."""
 
     state_patch: dict[str, Any] = field(default_factory=dict)
     """Scratch/state writes + emit side effects merged into the graph state."""
@@ -238,8 +230,7 @@ class LoopNode(ABC):
         """Core work. The one abstract method every node must implement.
 
         Calls ``ctx.strange_loop.<phase>`` or ``ctx.strange_loop.executor``.
-        May call ``interrupt()`` for return-to-sender clarification origins
-        (P6). Returns a :class:`NodeResult` for :meth:`post` to act on.
+        Returns a :class:`NodeResult` for :meth:`post` to act on.
         """
 
     def post(

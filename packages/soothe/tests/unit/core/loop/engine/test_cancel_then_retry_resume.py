@@ -13,7 +13,7 @@ The ``TestCancelRetryContinueLifecycle`` class drives the *full* Cancel →
 Retry → Continue lifecycle through real instances (a ``StrangeLoopCheckpoint``
 + the real ``mark_goal_interrupted`` mutation logic + the real
 ``has_resumable_interrupted_goal`` helper + the real idle-resume re-activation
-conditional + the real ``node_iteration_gate``) so regressions in any link of
+conditional + the real ``CheckLimitsNode``) so regressions in any link of
 the chain surface here.
 """
 
@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe.sloop.stages.execute.check_limits import node_iteration_gate
+from soothe.sloop.stages.execute.check_limits import node as check_limits_node
 from soothe.sloop.state.checkpoint import StrangeLoopCheckpoint, ThreadHealthMetrics
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.sloop.state.schemas import LoopState
@@ -64,7 +64,7 @@ def _runtime_ctx(
     recovery_valid_resume: bool,
     goal_record: GoalIndexEntry | None = None,
 ) -> SimpleNamespace:
-    """Build a minimal runtime context duck-typed for ``node_iteration_gate``.
+    """Build a minimal runtime context duck-typed for ``check_limits_node``.
 
     RFC-903 P3: ``begin_iteration`` folded into ``check_limits``, so the
     non-terminal branch now accesses ``strange_loop`` (for checkpointer),
@@ -144,7 +144,7 @@ async def test_iteration_gate_grants_grace_iteration_on_resumed_goal() -> None:
         recovery_valid_resume=True,
     )
 
-    result = await node_iteration_gate(ctx, {})  # type: ignore[arg-type]
+    result = await check_limits_node(ctx, {})  # type: ignore[arg-type]
 
     # RFC-903 P3: begin_iteration folded into check_limits. The non-terminal
     # branch now emits iteration_started and clears stale route keys
@@ -173,7 +173,7 @@ async def test_iteration_gate_terminals_non_resumed_goal_at_boundary() -> None:
         goal_record=_goal(status="running"),
     )
 
-    result = await node_iteration_gate(ctx, {})  # type: ignore[arg-type]
+    result = await check_limits_node(ctx, {})  # type: ignore[arg-type]
 
     assert result == {"last_outcome": "max_iterations"}
     ctx.emit.assert_awaited_once()
@@ -307,7 +307,7 @@ class TestCancelRetryContinueLifecycle:
             recovery_valid_resume=True,
             goal_record=reactivated,
         )
-        result = await node_iteration_gate(gate_ctx, {})  # type: ignore[arg-type]
+        result = await check_limits_node(gate_ctx, {})  # type: ignore[arg-type]
         # RFC-903 P3: folded begin_iteration emits iteration_started + clears
         # stale route keys on the non-terminal branch.
         assert result == {
@@ -443,7 +443,7 @@ class TestCancelRetryContinueLifecycle:
             iteration=5, max_iterations=5, recovery_valid_resume=True, goal_record=reactivated
         )
         # RFC-903 P3: folded begin_iteration emits + clears route keys.
-        assert await node_iteration_gate(resumed_ctx, {}) == {  # type: ignore[arg-type]
+        assert await check_limits_node(resumed_ctx, {}) == {  # type: ignore[arg-type]
             "plan_route": None,
             "assess_route": None,
             "last_outcome": None,
@@ -454,7 +454,7 @@ class TestCancelRetryContinueLifecycle:
         next_ctx = _runtime_ctx(
             iteration=5, max_iterations=5, recovery_valid_resume=False, goal_record=reactivated
         )
-        assert await node_iteration_gate(next_ctx, {}) == {"last_outcome": "max_iterations"}  # type: ignore[arg-type]
+        assert await check_limits_node(next_ctx, {}) == {"last_outcome": "max_iterations"}  # type: ignore[arg-type]
         next_ctx.emit.assert_awaited_once()
 
     @pytest.mark.asyncio
