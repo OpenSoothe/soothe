@@ -29,7 +29,7 @@ from tests.integration.ws_loop_client import loop_new, subscribe_loop_stream
 TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
 # Load actual image assets for real-world integration tests
-_ASSETS_DIR = Path(__file__).parent.parent.parent.parent.parent.parent / "assets"
+_ASSETS_DIR = Path(__file__).parent.parent.parent.parent.parent.parent / "docs" / "assets"
 
 
 def _load_image_b64(filename: str) -> str:
