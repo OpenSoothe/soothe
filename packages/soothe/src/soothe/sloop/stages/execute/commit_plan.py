@@ -1,4 +1,11 @@
-"""Resolve executable ``AgentDecision`` from ``PlanResult`` (RFC-220 pre-execute path)."""
+"""Resolve executable ``AgentDecision`` from ``PlanResult`` (RFC-220 pre-execute path).
+
+Migrated to ``LoopNode`` (RFC-903 P2): the node is a ``CommitPlanNode``
+subclass. The missing-``plan_result`` guard and the no-decision guard move
+into ``pre`` via ``GuardOutcome``; the fallback-decision logic stays in
+``process``. The legacy ``node_resolve_decision`` function is retained as a
+thin wrapper.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +13,7 @@ import logging
 from typing import Any
 
 from soothe.sloop.cognition.plan_dag_normalizer import normalize_plan_dag
+from soothe.sloop.orchestrator.node_base import GuardOutcome, LoopNode, NodeResult, RouteDecision
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.state.schemas import (
     AgentDecision,
@@ -33,90 +41,134 @@ def _scope_decision_for_plan(
     return normalize_plan_dag(decision, completed_ids=state.dependency_completion_ids())
 
 
-async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Generate plan ids, merge keep/new semantics, stash decision on scratch."""
-    strange_loop = ctx.strange_loop
-    state = ctx.loop_state
-    plan_result = ctx.scratch.plan_result
+class CommitPlanNode(LoopNode):
+    """Generate plan ids, merge keep/new semantics, stash decision on scratch.
 
-    if plan_result is None:
-        logger.error("[resolve_decision] missing scratch.plan_result")
-        await ctx.emit(
-            "fatal_error",
-            {"error": "Resolve decision without plan result", "step_id": ""},
-        )
-        return {"last_outcome": "fatal"}
+    Non-LLM node (``call_kind is None``). Missing-``plan_result`` guard and
+    no-decision fatal guard are in ``pre``; the fallback-decision logic
+    (iter=0 with no step results) stays in ``process``; ``post`` emits the
+    ``plan_decision`` event.
+    """
 
-    decision = strange_loop._resolve_decision(plan_result, state)
-    if decision is None:
-        # Guard: create fallback decision when LLM returned type="final" at iteration 0
-        if state.iteration == 0 and len(state.step_results) == 0:
-            logger.warning("[Guard] No decision at iter=0; creating fallback execute plan")
-            decision = AgentDecision(
-                type="execute_steps",
-                steps=[
-                    StepAction(
-                        id="01",
-                        description=state.goal or "Execute task",
-                    )
-                ],
-                execution_mode="parallel",
-                reasoning="Initial execution to gather evidence for goal assessment",
-            )
-        else:
-            logger.error("[Reason] No executable decision after reason phase; aborting loop")
+    station = "commit_plan"
+    call_kind = None
+
+    async def pre(self, ctx: LoopRuntimeContext, state: dict[str, Any]) -> GuardOutcome | None:
+        plan_result = ctx.scratch.plan_result
+        if plan_result is None:
+            logger.error("[resolve_decision] missing scratch.plan_result")
             await ctx.emit(
                 "fatal_error",
-                {"error": "Reason phase returned no executable plan", "step_id": ""},
+                {"error": "Resolve decision without plan result", "step_id": ""},
             )
-            return {"last_outcome": "fatal"}
+            return GuardOutcome(kind="fatal")
+        return None
 
-    if plan_result.plan_action == "new":
-        decision = _scope_decision_for_plan(decision, state, reuse_plan_id=None)
-    elif plan_result.plan_action == "keep" and state.current_decision is None:
-        decision = _scope_decision_for_plan(decision, state, reuse_plan_id=state.plan_id)
+    async def process(
+        self,
+        ctx: LoopRuntimeContext,
+        state: dict[str, Any],
+        messages: list,
+    ) -> NodeResult:
+        strange_loop = ctx.strange_loop
+        loop_state = ctx.loop_state
+        plan_result = ctx.scratch.plan_result
 
-    if plan_result.plan_action == "new":
-        state.current_decision = decision
+        decision = strange_loop._resolve_decision(plan_result, loop_state)
+        if decision is None:
+            # Guard: create fallback decision when LLM returned type="final" at
+            # iteration 0
+            if loop_state.iteration == 0 and len(loop_state.step_results) == 0:
+                logger.warning("[Guard] No decision at iter=0; creating fallback execute plan")
+                decision = AgentDecision(
+                    type="execute_steps",
+                    steps=[
+                        StepAction(
+                            id="01",
+                            description=loop_state.goal or "Execute task",
+                        )
+                    ],
+                    execution_mode="parallel",
+                    reasoning="Initial execution to gather evidence for goal assessment",
+                )
+            else:
+                logger.error("[Reason] No executable decision after reason phase; aborting loop")
+                return NodeResult(
+                    payload=None,
+                    events=[
+                        (
+                            "fatal_error",
+                            {"error": "Reason phase returned no executable plan", "step_id": ""},
+                        )
+                    ],
+                )
 
-    ctx.scratch.decision = decision
-    merged = plan_result.model_copy(update={"decision": decision})
-    ctx.scratch.plan_result = merged
-    ctx.plan_manager.ingest_plan(merged, state.plan_id, state.iteration)
+        if plan_result.plan_action == "new":
+            decision = _scope_decision_for_plan(decision, loop_state, reuse_plan_id=None)
+        elif plan_result.plan_action == "keep" and loop_state.current_decision is None:
+            decision = _scope_decision_for_plan(
+                decision, loop_state, reuse_plan_id=loop_state.plan_id
+            )
 
-    # RFC-624 Phase 4: persist CE state after plan ingestion
-    if ctx.ce is not None:
-        try:
-            ctx.ce.defer_save()
-        except Exception:
-            logger.warning("[resolve_decision] CE save failed", exc_info=True)
+        if plan_result.plan_action == "new":
+            loop_state.current_decision = decision
 
-    # Calculate cumulative step counts for TUI display
-    # done_steps: steps that completed successfully across all iterations
-    done_count = sum(1 for r in state.step_results if r.success)
-    # total_steps: all steps that have completed (success or fail) + pending new steps
-    total_count = len(state.step_results) + len(decision.steps)
+        ctx.scratch.decision = decision
+        merged = plan_result.model_copy(update={"decision": decision})
+        ctx.scratch.plan_result = merged
+        ctx.plan_manager.ingest_plan(merged, loop_state.plan_id, loop_state.iteration)
 
-    intake_raw = getattr(getattr(state, "intent", None), "intake_label", None)
-    intake_label = str(getattr(intake_raw, "value", intake_raw) or "")
+        # RFC-624 Phase 4: persist CE state after plan ingestion
+        if ctx.ce is not None:
+            try:
+                ctx.ce.defer_save()
+            except Exception:
+                logger.warning("[resolve_decision] CE save failed", exc_info=True)
 
-    await ctx.emit(
-        "plan_decision",
-        {
-            "iteration": state.iteration,
-            "steps": [
-                {
-                    "id": s.id,
-                    "description": (s.description or "").strip().replace("\n", " "),
-                    **({"dependencies": list(s.dependencies)} if s.dependencies else {}),
-                }
-                for s in decision.steps
-            ],
-            "execution_mode": decision.execution_mode,
-            "intake_label": intake_label,
-            "total_steps": total_count,
-            "done_steps": done_count,
-        },
-    )
+        # Calculate cumulative step counts for TUI display
+        done_count = sum(1 for r in loop_state.step_results if r.success)
+        total_count = len(loop_state.step_results) + len(decision.steps)
 
-    return {}
+        intake_raw = getattr(getattr(loop_state, "intent", None), "intake_label", None)
+        intake_label = str(getattr(intake_raw, "value", intake_raw) or "")
+
+        plan_decision_event: tuple[str, dict[str, Any]] = (
+            "plan_decision",
+            {
+                "iteration": loop_state.iteration,
+                "steps": [
+                    {
+                        "id": s.id,
+                        "description": (s.description or "").strip().replace("\n", " "),
+                        **({"dependencies": list(s.dependencies)} if s.dependencies else {}),
+                    }
+                    for s in decision.steps
+                ],
+                "execution_mode": decision.execution_mode,
+                "intake_label": intake_label,
+                "total_steps": total_count,
+                "done_steps": done_count,
+            },
+        )
+
+        return NodeResult(payload=decision, events=[plan_decision_event])
+
+    def post(
+        self,
+        ctx: LoopRuntimeContext,
+        state: dict[str, Any],
+        result: NodeResult,
+    ) -> RouteDecision:
+        # If process returned fatal_error events, payload is None.
+        if result.payload is None:
+            return RouteDecision(kind="fatal")
+        return RouteDecision(kind="proceed")
+
+
+# Singleton instance for the graph builder.
+node: CommitPlanNode = CommitPlanNode()
+
+
+async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
+    """Legacy entry point — delegates to :class:`CommitPlanNode`."""
+    return await node(ctx, _state)

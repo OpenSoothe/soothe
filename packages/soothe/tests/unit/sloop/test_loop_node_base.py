@@ -123,7 +123,7 @@ class TestLoopNodeDriver:
 
     async def test_pre_short_circuits_skips_process(self) -> None:
         class _GuardedNode(_StubNode):
-            def pre(self, ctx: Any, state: dict[str, Any]) -> GuardOutcome | None:
+            async def pre(self, ctx: Any, state: dict[str, Any]) -> GuardOutcome | None:
                 return GuardOutcome(kind="fatal")
 
         node = _GuardedNode()
@@ -138,7 +138,7 @@ class TestLoopNodeDriver:
 
     async def test_pre_returning_none_proceeds(self) -> None:
         class _NonePreNode(_StubNode):
-            def pre(self, ctx: Any, state: dict[str, Any]) -> GuardOutcome | None:
+            async def pre(self, ctx: Any, state: dict[str, Any]) -> GuardOutcome | None:
                 return None
 
         node = _NonePreNode()

@@ -190,12 +190,15 @@ class LoopNode(ABC):
     # Stages — subclasses override what they need
     # ------------------------------------------------------------------ #
 
-    def pre(self, ctx: LoopRuntimeContext, state: dict[str, Any]) -> GuardOutcome | None:
+    async def pre(self, ctx: LoopRuntimeContext, state: dict[str, Any]) -> GuardOutcome | None:
         """Guards and setup. Return ``GuardOutcome`` to short-circuit.
 
         P1 default: no-op (returns ``None`` = proceed). P2–P3 centralize the
         fatal / pending-clarification / resume-skip / phase-status guards here.
         Subclasses may override to add specific prereq checks immediately.
+
+        Async so guard short-circuits can emit events (e.g. ``fatal_error``)
+        before the driver skips ``project``/``prompt``/``process``/``post``.
         """
         return None
 
@@ -265,7 +268,7 @@ class LoopNode(ABC):
         Returns the LangGraph state-dict patch. If ``pre`` short-circuits,
         skips the remaining stages.
         """
-        guard = self.pre(ctx, state)
+        guard = await self.pre(ctx, state)
         if guard is not None:
             return guard.as_state_patch()
         proj = self.project(ctx, state)

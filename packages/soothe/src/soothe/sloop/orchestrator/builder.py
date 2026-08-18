@@ -13,12 +13,12 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from soothe.sloop.stages.complete.finalize import node_goal_completion
-from soothe.sloop.stages.execute.begin_iteration import node_iteration_start
-from soothe.sloop.stages.execute.check_limits import node_iteration_gate
-from soothe.sloop.stages.execute.commit_plan import node_resolve_decision
+from soothe.sloop.stages.execute.begin_iteration import node as begin_iteration_node
+from soothe.sloop.stages.execute.check_limits import node as check_limits_node
+from soothe.sloop.stages.execute.commit_plan import node as commit_plan_node
 from soothe.sloop.stages.execute.execute import node_execute
 from soothe.sloop.stages.execute.record_progress import node_record_iteration
-from soothe.sloop.stages.execute.validate_plan import node_validate_evidence_bindings
+from soothe.sloop.stages.execute.validate_plan import node as validate_plan_node
 from soothe.sloop.stages.plan.evaluate import node_plan_evaluate
 from soothe.sloop.stages.plan.gather_evidence import node_bounded_evidence_gather
 from soothe.sloop.stages.plan.generate_plan import node_plan_generate
@@ -28,6 +28,7 @@ from soothe.sloop.stages.sidecars.await_user import node_await_clarification
 from soothe.sloop.stages.sidecars.delegate import node_invoke_wired_subagent
 
 from .checkpointer import core_agent_checkpointer
+from .node_base import wrap_node
 from .routing import (
     route_after_clarification,
     route_after_evaluate,
@@ -97,11 +98,17 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     async def delegate(state: dict[str, Any]) -> dict[str, Any]:
         return await node_invoke_wired_subagent(ctx, state)
 
+    # Migrated nodes (RFC-903 P2): wrap_node detects LoopNode vs legacy.
+    _check_limits_fn = wrap_node("check_limits", check_limits_node, ctx)
+    _begin_iteration_fn = wrap_node("begin_iteration", begin_iteration_node, ctx)
+    _commit_plan_fn = wrap_node("commit_plan", commit_plan_node, ctx)
+    _validate_plan_fn = wrap_node("validate_plan", validate_plan_node, ctx)
+
     async def check_limits(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_iteration_gate(ctx, state)
+        return await _check_limits_fn(state)
 
     async def begin_iteration(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_iteration_start(ctx, state)
+        return await _begin_iteration_fn(state)
 
     async def gather_evidence(state: dict[str, Any]) -> dict[str, Any]:
         return await node_bounded_evidence_gather(ctx, state)
@@ -116,10 +123,10 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         return await node_goal_completion(ctx, state)
 
     async def commit_plan(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_resolve_decision(ctx, state)
+        return await _commit_plan_fn(state)
 
     async def validate_plan(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_validate_evidence_bindings(ctx, state)
+        return await _validate_plan_fn(state)
 
     async def execute(state: dict[str, Any]) -> dict[str, Any]:
         return await node_execute(ctx, state)
