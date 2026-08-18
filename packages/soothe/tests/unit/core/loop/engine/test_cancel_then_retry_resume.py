@@ -436,7 +436,6 @@ class TestCancelRetryContinueLifecycle:
         """
         from soothe.sloop.state.status_vocabulary import (
             is_goal_index_in_flight,
-            is_goal_index_interrupted,
         )
 
         cp = _make_checkpoint(goal_status="running", iteration=0)
@@ -448,7 +447,6 @@ class TestCancelRetryContinueLifecycle:
         assert goal.status == "interrupted"
         # In-flight (resumable / can still be terminalized), not terminal.
         assert is_goal_index_in_flight(goal.status) is True
-        assert is_goal_index_interrupted(goal.status) is True
         # Loop checkpoint stayed resumable (idle), not finalized/cancelled.
         assert cp.status == "idle"
         # And force_terminal_status can still transition an interrupted goal.

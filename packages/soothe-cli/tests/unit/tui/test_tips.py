@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import random
-
-from soothe_cli.tui.tips import SESSION_TIPS, TipRotator, pick_session_tip
+from soothe_cli.tui.tips import SESSION_TIPS, TipRotator
 
 
 def test_session_tips_is_non_empty_str_list() -> None:
@@ -25,17 +23,6 @@ def test_plan_tips_reference_action_triggers() -> None:
     assert any("ctrl+t" in t.lower() for t in plan_tips), "expected a ctrl+t plan-quick-view tip"
     assert any("shift+tab" in t.lower() for t in plan_tips), "expected a shift+tab Plan mode tip"
     assert any("/plan" in t.lower() for t in plan_tips), "expected a /plan command tip"
-
-
-def test_pick_session_tip_returns_member_of_pool() -> None:
-    random.seed(42)
-    for _ in range(20):
-        tip = pick_session_tip()
-        assert tip in SESSION_TIPS
-
-
-def test_pick_session_tip_returns_str() -> None:
-    assert isinstance(pick_session_tip(), str)
 
 
 def test_tip_rotator_returns_pool_members() -> None:

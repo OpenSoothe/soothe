@@ -38,35 +38,6 @@ def split_unified_diff_body_line(line: str) -> tuple[str | None, str]:
     return None, line
 
 
-def format_diff_row_plain(
-    marker: str,
-    content: str,
-    *,
-    line_num: int,
-    width: int,
-    gutter_bar: str = "▌",
-    box_vertical: str = "│",
-) -> str:
-    """Format one diff row as plain text with aligned code columns.
-
-    Args:
-        marker: Unified diff marker (``+``, ``-``, or space for context).
-        content: Line payload after the marker.
-        line_num: Old/new line number to display.
-        width: Width of the line-number column.
-        gutter_bar: Gutter glyph for added/removed rows.
-        box_vertical: Gutter glyph for context rows.
-
-    Returns:
-        Plain-text row used by tests to verify indentation alignment.
-    """
-    if marker == " ":
-        gutter = box_vertical
-    else:
-        gutter = gutter_bar
-    return f"{gutter}{line_num:>{width}}{DIFF_CODE_GAP}{content}"
-
-
 def _max_diff_line_number(lines: list[str]) -> int:
     max_line = 0
     for line in lines:

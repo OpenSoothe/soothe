@@ -156,16 +156,6 @@ def _message_step_id(msg: BaseMessage) -> str | None:
     return None
 
 
-def _extract_step_ids_from_messages(messages: list[BaseMessage]) -> frozenset[str]:
-    """Extract all unique step_id values from a list of messages."""
-    step_ids: set[str] = set()
-    for msg in messages:
-        sid = _message_step_id(msg)
-        if sid:
-            step_ids.add(sid)
-    return frozenset(step_ids)
-
-
 def _message_text_len(msg: BaseMessage) -> int:
     return len(extract_text_from_message_content(getattr(msg, "content", "")))
 
@@ -569,30 +559,6 @@ def _is_loop_human_message(msg: BaseMessage) -> bool:
 def _is_loop_ai_message(msg: BaseMessage) -> bool:
     name = type(msg).__name__
     return name.endswith("AIMessage")
-
-
-def _extract_last_phase_pair(
-    loop_messages: list[BaseMessage],
-    phase: str,
-) -> list[BaseMessage]:
-    """Return the last human+AI pair for ``phase``, or the trailing AI alone."""
-    last_ai_idx: int | None = None
-    for i in range(len(loop_messages) - 1, -1, -1):
-        msg = loop_messages[i]
-        if getattr(msg, "phase", None) == phase and _is_loop_ai_message(msg):
-            last_ai_idx = i
-            break
-    if last_ai_idx is None:
-        return []
-    last_human_idx: int | None = None
-    for j in range(last_ai_idx - 1, -1, -1):
-        msg = loop_messages[j]
-        if getattr(msg, "phase", None) == phase and _is_loop_human_message(msg):
-            last_human_idx = j
-            break
-    if last_human_idx is not None:
-        return list(loop_messages[last_human_idx : last_ai_idx + 1])
-    return [loop_messages[last_ai_idx]]
 
 
 def _compact_goal_completion_units_in_messages(

@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 from typing import Any, TextIO
 from urllib import error, request
-from urllib.parse import urlparse
 
 import yaml
 from soothe_nano.config import _ENV_VAR_RE, _resolve_env
@@ -234,24 +233,6 @@ def merge_provider_from_env(nano_path: Path) -> dict[str, Any] | None:
         )
     save_yaml_dict(nano_path, updated)
     return updated
-
-
-def suggest_provider_name(endpoint: str) -> str:
-    """Derive a short provider id from an OpenAI-compatible endpoint URL."""
-    host = (urlparse(endpoint).hostname or "").lower()
-    if not host or host in {"localhost", "127.0.0.1", "::1"}:
-        return DEFAULT_NEW_PROVIDER_NAME
-    if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", host):
-        return "host-" + host.replace(".", "-")
-
-    labels = [part for part in host.split(".") if part and part not in _HOST_NOISE]
-    if not labels:
-        labels = [part for part in host.split(".") if part]
-    if not labels:
-        return DEFAULT_NEW_PROVIDER_NAME
-    if len(labels) == 1:
-        return _slugify_provider_name(labels[0]) or DEFAULT_NEW_PROVIDER_NAME
-    return _slugify_provider_name("-".join(labels[:2])) or DEFAULT_NEW_PROVIDER_NAME
 
 
 def _slugify_provider_name(name: str) -> str:

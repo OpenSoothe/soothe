@@ -18,7 +18,6 @@ LoopCheckpointStatus = Literal["idle", "running", "interrupted"]
 GoalIndexStatus = Literal["running", "completed", "failed", "cancelled", "interrupted"]
 
 _GOAL_INDEX_IN_FLIGHT: frozenset[str] = frozenset({"running", "interrupted"})
-_GOAL_INDEX_INTERRUPTED: frozenset[str] = frozenset({"interrupted"})
 
 
 def is_goal_index_in_flight(status: str) -> bool:
@@ -28,17 +27,6 @@ def is_goal_index_in_flight(status: str) -> bool:
     user cancel or infra event and is still resumable. Both count as in-flight.
     """
     return status in _GOAL_INDEX_IN_FLIGHT
-
-
-def is_goal_index_interrupted(status: str) -> bool:
-    """Return True when a checkpoint goal index entry is interrupted mid-flight.
-
-    ``interrupted`` is a *resumable* pause — distinct from terminal ``cancelled``
-    and ``failed``. The cursor (iteration + completed steps) is persisted so a
-    ``retry`` / ``resume`` turn picks up from the last completed step rather than
-    restarting the goal.
-    """
-    return status in _GOAL_INDEX_INTERRUPTED
 
 
 def suggest_loop_checkpoint_status(
