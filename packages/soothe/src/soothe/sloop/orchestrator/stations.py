@@ -1,10 +1,10 @@
 """StrangeLoop stem station IDs.
 
-Canonical LangGraph node names for the flat Loop Graph. ``normalize_station``
-maps persisted legacy clarification origins to their canonical resume station
-for checkpoint-resume compatibility (RFC-903 §normalize_station). Ledger
-dual-read of older ``phase`` tags is handled separately by
-``PLANNING_LEDGER_PHASES`` / ``INTAKE_LEDGER_PHASES``.
+Canonical LangGraph node names for the flat Loop Graph. Legacy clarification
+origin → canonical resume-station mapping lives in
+``clarification.origins.CLARIFICATION_ORIGIN_RESUME_NODE``. Ledger dual-read
+of older ``phase`` tags is handled by ``PLANNING_LEDGER_PHASES`` /
+``INTAKE_LEDGER_PHASES``.
 
 Client/CLI wire deliverable phases (``goal_completion``, ``execute_step``) and
 checkpoint ledger phases that soothe-sdk filters (``intent_classify``,
@@ -71,38 +71,6 @@ PLANNING_LEDGER_PHASES: frozenset[str] = frozenset(
 
 INTAKE_LEDGER_PHASES: frozenset[str] = frozenset({INTAKE, PHASE_LEDGER_INTAKE})
 
-# Legacy clarification origins → canonical resume station. Only the origins
-# in ``_ACCEPTED_CLARIFICATION_ORIGINS`` (origins.py) ever reach this dict via
-# ``normalize_station``; entries for old graph-node ids were unreachable and
-# have been removed. Folded stations (``validate_plan``, ``begin_iteration``)
-# are absent — persisted checkpoints resume at their folding station.
-LEGACY_TO_STATION: dict[str, str] = {
-    # Legacy planning origins persisted by pre-RFC-903 runs.
-    "plan_generate": GENERATE_PLAN,
-    "plan_assess": EVALUATE,
-    "plan_gap_analysis": EVALUATE,
-    "assess": EVALUATE,
-    "analyze_gaps": EVALUATE,
-    # Canonical identity entries for the clarification-origin stations.
-    EVALUATE: EVALUATE,
-    GENERATE_PLAN: GENERATE_PLAN,
-    EXECUTE: EXECUTE,
-}
-
-
-def normalize_station(station_or_legacy: str | None) -> str | None:
-    """Map a legacy or canonical station id to the canonical station id.
-
-    Args:
-        station_or_legacy: Graph node id, clarification origin, or internal phase.
-
-    Returns:
-        Canonical station id, or ``None`` when unknown / empty.
-    """
-    if not station_or_legacy:
-        return None
-    return LEGACY_TO_STATION.get(station_or_legacy)
-
 
 __all__ = [
     "AWAIT_USER",
@@ -126,5 +94,4 @@ __all__ = [
     "PHASE_LEDGER_INTAKE",
     "PLANNING_LEDGER_PHASES",
     "RECORD_PROGRESS",
-    "normalize_station",
 ]

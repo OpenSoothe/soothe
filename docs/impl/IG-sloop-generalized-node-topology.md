@@ -117,9 +117,9 @@ Each phase was a standalone commit with `verify_finally.sh` green.
 - [x] `BEGIN_ITERATION`/`VALIDATE_PLAN` no longer graph nodes; their station
       constants are removed (persisted checkpoints resume at the folding
       station).
-- [x] `normalize_station` maps the 5 persisted legacy clarification origins to
-      their canonical resume station; `LEGACY_TO_STATION` is trimmed to
-      reachable entries only.
+- [x] `LEGACY_TO_STATION` / `normalize_station` removed from `stations.py`;
+      legacy origin → canonical resume-station mapping consolidated into
+      `clarification.origins.CLARIFICATION_ORIGIN_RESUME_NODE`.
 - [x] `test_loop_graph_topology.py` asserts the folded node set.
 
 ---

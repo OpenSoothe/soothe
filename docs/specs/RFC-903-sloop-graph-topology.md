@@ -55,8 +55,9 @@ RFC revises that topology by:
    their siblings rather than restructuring the graph topology. The flat graph
    is retained; the node count and router count drop.
 3. **Wire stability** — Wire-stable deliverable phases and checkpoint ledger
-   phases remain immutable; `stations.normalize_station` decouples internal
-   renames from the wire contract.
+   phases remain immutable; `clarification.origins` owns the legacy origin →
+   canonical resume-station mapping, decoupling internal renames from the
+   wire contract.
 
 ---
 
@@ -214,16 +215,15 @@ nodes migrate to `LoopNode`.
 
 Unchanged.
 
-### `stations.normalize_station`
+### `clarification.origins.CLARIFICATION_ORIGIN_RESUME_NODE`
 
 Normative. Maps persisted legacy clarification origins to their canonical
-resume station. `LEGACY_TO_STATION` is trimmed to the reachable legacy planning
-origins (`plan_generate`, `plan_assess`, `plan_gap_analysis`, `assess`,
-`analyze_gaps`) plus identity entries for the clarification-origin stations.
-The folded `VALIDATE_PLAN` / `BEGIN_ITERATION` constants are removed; their
-dict entries pointed at deleted nodes and were unreachable through the single
-caller (`resume_node_for_clarification_origin`, which pre-filters via
-`_ACCEPTED_CLARIFICATION_ORIGINS`).
+resume station. Legacy planning origins (`plan_generate`, `plan_assess`,
+`plan_gap_analysis`, `assess`, `analyze_gaps`) resume into the unified
+`evaluate` station (or `generate_plan` for `plan_generate`). The mapping
+replaces the former `stations.LEGACY_TO_STATION` / `normalize_station`
+indirection — the legacy dict was reachable only through this single consumer,
+so it is consolidated here.
 
 ---
 
@@ -231,9 +231,9 @@ caller (`resume_node_for_clarification_origin`, which pre-filters via
 
 The Loop Graph checkpoint key remains `{loop_id}__strange_loop` (unchanged from
 RFC-220). The node folds move checkpoint cursors (a goal interrupted at the old
-`validate_plan` station now resumes at `commit_plan`), but `normalize_station`
-maps the legacy station ID, so resume is compatible. No checkpoint key
-versioning is needed.
+`validate_plan` station now resumes at `commit_plan`), but
+`CLARIFICATION_ORIGIN_RESUME_NODE` maps the legacy origin, so resume is
+compatible. No checkpoint key versioning is needed.
 
 ---
 
@@ -251,9 +251,8 @@ Unchanged from RFC-220. The `LoopNode` base driver **may** auto-emit
   isolation per node.
 - **Folds**: the `test_loop_graph_topology.py` test asserts the folded node set
   (no `begin_iteration`/`validate_plan` as graph nodes).
-- **Compat**: `normalize_station` maps the 5 persisted legacy clarification
-  origins to their canonical resume station; the dict is trimmed to reachable
-  entries only.
+- **Compat**: `CLARIFICATION_ORIGIN_RESUME_NODE` maps the 5 persisted legacy
+  clarification origins to their canonical resume station.
 - **Isolation**: the RFC-220 isolation tests (Loop Graph `thread_id` ≠ CoreAgent
   `thread_id`) remain unchanged.
 
