@@ -34,6 +34,22 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ## Recent Changes
 
+### 2026-08-18
+
+- **RFC-903 - Sloop Phase-Subgraph Topology and Node Lifecycle**
+  - Status: Draft
+  - Kind: Architecture Design
+  - Revises: RFC-220 §Loop Graph Topology, §State and Schemas (node contract)
+  - Replaces the flat 14-node / 11-router `StateGraph` with 4 phase subgraphs
+    (`preprocess`/`plan`/`execute`/`complete`) + residual sidecars; introduces
+    the 5-method `LoopNode` lifecycle (`pre`/`project`/`prompt`/`process`/`post`)
+    and typed `RouteDecision` sum type; replaces the manual clarification
+    round-trip with native LangGraph `interrupt()` for 3 return-to-sender
+    origins, eliminating the `resume_synth` workaround. Wire-stable phases
+    and the two-graphs-two-keys invariant preserved.
+  - Implementation guide: `docs/impl/IG-sloop-generalized-node-topology.md`
+    (phased P1–P8).
+
 ### 2026-08-14
 
 - **RFC Methodology Guide** published at `docs/rfc-methodology-guide.md`.
@@ -754,6 +770,7 @@ RFCs are organized into numbered series by category:
 - RFC-218: StrangeLoop Checkpoint Tree Architecture
 - RFC-219: Goal Completion Module Architecture
 - RFC-220: LangGraph Agent Loop Orchestrator
+- RFC-903: Sloop Phase-Subgraph Topology and Node Lifecycle (revises RFC-220 topology + node contract)
 - RFC-221: LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution
 - RFC-222: Autopilot and Goal Engine Architecture (Daemon-Owned)
 - RFC-223: Thread Inheritance with LangGraph Checkpoint Forking
