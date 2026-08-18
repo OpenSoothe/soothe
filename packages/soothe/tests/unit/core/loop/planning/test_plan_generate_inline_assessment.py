@@ -8,7 +8,7 @@ import pytest
 from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.sloop.cognition.planner import LLMPlanner
-from soothe.sloop.orchestrator.continuation_routing import FRESH_LOOP_BYPASS_REASON
+from soothe.sloop.orchestrator.continuation import FRESH_LOOP_BYPASS_REASON
 from soothe.sloop.state.schemas import (
     LoopState,
     PlanGenerateStep,

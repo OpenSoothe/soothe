@@ -20,9 +20,13 @@ Output:
 
 from __future__ import annotations
 
+import os
+import re
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 # Ensure soothe package is importable
 sys.path.insert(0, str(Path(__file__).parent.parent / "packages/soothe/src"))
@@ -31,13 +35,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "packages/soothe/src"))
 import soothe.config  # noqa: F401
 import soothe.sloop.engine.strange_loop  # noqa: F401
 from soothe.config import SootheConfig
+from soothe.sloop.orchestrator import stations
 from soothe.sloop.orchestrator.builder import build_strange_loop_graph
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 
 
 def create_mock_runtime_context() -> LoopRuntimeContext:
     """Create a minimal mock runtime context for graph building."""
-    from datetime import UTC, datetime
     from unittest.mock import MagicMock
 
     config = SootheConfig()
@@ -76,7 +80,7 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
         started_at=datetime.now(UTC),
     )
 
-    from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+    from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch
     from soothe.sloop.state.schemas import LoopState
 
     state = LoopState(
@@ -108,31 +112,34 @@ def get_mermaid_output(graph) -> str:
     return graph.draw_mermaid()
 
 
-def save_mermaid_file(mermaid: str, output_path: Path) -> None:
-    """Save Mermaid syntax to file."""
-    # Clean up mermaid output - remove YAML config header for cleaner rendering
-    lines = mermaid.split("\n")
-    # Skip the YAML config block (--- lines and config)
-    start_idx = 0
-    for i, line in enumerate(lines):
-        if line.strip() == "---":
-            if start_idx == 0:
-                start_idx = i + 1
-            else:
-                start_idx = i + 1
-                break
-        if "graph TD" in line or "graph LR" in line:
-            start_idx = i
-            break
+# Spine reading order (preprocess → plan → execute → sidecars → complete).
+# ``draw_mermaid`` emits nodes/edges alphabetically, which gives dagre a poor
+# initial ordering; declaring them in spine order cuts edge crossings.
+_STATION_LAYOUT_ORDER: tuple[str, ...] = (
+    "__start__",
+    stations.INTAKE,
+    stations.ENTER_LOOP,
+    stations.DELEGATE,
+    stations.GATHER_EVIDENCE,
+    stations.EVALUATE,
+    stations.GENERATE_PLAN,
+    stations.COMMIT_PLAN,
+    stations.EXECUTE,
+    stations.RECORD_PROGRESS,
+    stations.CHECK_LIMITS,
+    stations.AWAIT_USER,
+    stations.FINALIZE,
+    "__end__",
+)
 
-    clean_mermaid = "\n".join(lines[start_idx:]) if start_idx > 0 else mermaid
-
-    # Add title
-    clean_mermaid = f"""---
+_MERMAID_HEADER = """---
 title: StrangeLoop LangGraph (RFC-220 / RFC-630)
 config:
   flowchart:
-    curve: linear
+    curve: basis
+    nodeSpacing: 30
+    rankSpacing: 40
+    useMaxWidth: true
   theme: base
   themeVariables:
     primaryColor: "#e1f5fe"
@@ -142,44 +149,155 @@ config:
     secondaryColor: "#fff3e0"
     tertiaryColor: "#f3e5f5"
 ---
-{clean_mermaid}"""
+graph TD;
+"""
 
-    output_path.write_text(clean_mermaid)
+
+def _strip_frontmatter(mermaid: str) -> str:
+    """Drop the YAML config block ``draw_mermaid`` prepends, keeping the graph body."""
+    lines = mermaid.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return mermaid
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            return "\n".join(lines[index + 1 :])
+    return mermaid
+
+
+def _layout_rank(node_id: str) -> tuple[int, str]:
+    """Sort key placing known stations in spine order, unknown ones last."""
+    try:
+        return (_STATION_LAYOUT_ORDER.index(node_id), node_id)
+    except ValueError:
+        return (len(_STATION_LAYOUT_ORDER), node_id)
+
+
+def save_mermaid_file(mermaid: str, output_path: Path) -> None:
+    """Rewrite the ``draw_mermaid`` dump in spine order and save it."""
+    node_decls: list[tuple[tuple[int, str], str]] = []
+    edge_decls: list[tuple[tuple[int, str], tuple[int, str], str, str, str]] = []
+    class_defs: list[str] = []
+
+    for raw in _strip_frontmatter(mermaid).splitlines():
+        line = raw.strip()
+        if not line or line.startswith(("graph ", "flowchart ")):
+            continue
+        if line.startswith("classDef"):
+            class_defs.append(line)
+            continue
+        edge = re.match(r"^(\S+?)\s+(-\.->|-->)\s+(\S+?);?$", line)
+        if edge:
+            source, arrow, target = edge.group(1), edge.group(2), edge.group(3)
+            edge_decls.append((_layout_rank(source), _layout_rank(target), source, arrow, target))
+            continue
+        node = re.match(r"^([A-Za-z_]\w*)", line)
+        if node:
+            node_decls.append((_layout_rank(node.group(1)), line))
+
+    if not node_decls:
+        # Unexpected dump shape — keep the raw body rather than losing the graph.
+        output_path.write_text(mermaid)
+        print(f"Mermaid source saved verbatim to: {output_path}")
+        return
+
+    node_decls.sort(key=lambda item: item[0])
+    edge_decls.sort(key=lambda item: (item[0], item[1]))
+
+    body = [f"\t{decl}\n" for _, decl in node_decls]
+    body += [f"\t{source} {arrow} {target};\n" for _, _, source, arrow, target in edge_decls]
+    body += [f"\t{decl}\n" for decl in class_defs]
+
+    # Abort edges fan in to ``__end__`` from every station; dimming them keeps
+    # the spine legible. The happy-path exit (finalize) stays emphasized.
+    aborts = [
+        index
+        for index, (_, _, source, _, target) in enumerate(edge_decls)
+        if target == "__end__" and source != stations.FINALIZE
+    ]
+    if aborts:
+        body.append(
+            f"\tlinkStyle {','.join(str(i) for i in aborts)} stroke:#b0bec5,stroke-width:1px\n"
+        )
+    for index, (_, _, source, _, target) in enumerate(edge_decls):
+        if source == stations.FINALIZE and target == "__end__":
+            body.append(f"\tlinkStyle {index} stroke:#0288d1,stroke-width:2px\n")
+
+    output_path.write_text(_MERMAID_HEADER + "".join(body))
     print(f"Mermaid source saved to: {output_path}")
 
 
 def convert_mermaid_to_svg(mermaid_path: Path, svg_path: Path) -> bool:
-    """Convert Mermaid file to SVG using mermaid-cli."""
-    try:
-        result = subprocess.run(
-            [
-                "mmdc",
-                "-i",
-                str(mermaid_path),
-                "-o",
-                str(svg_path),
-                "-b",
-                "white",
-                "--scale",
-                "2",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+    """Convert Mermaid file to SVG using mermaid-cli (global ``mmdc`` or npx)."""
+    env = os.environ.copy()
+    # Prefer system Chrome when puppeteer's bundled chrome-headless-shell is
+    # unavailable (common in CI / restricted networks).
+    chrome = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+    if chrome.is_file() and "PUPPETEER_EXECUTABLE_PATH" not in env:
+        env["PUPPETEER_EXECUTABLE_PATH"] = str(chrome)
+
+    mmdc_args = ["-i", str(mermaid_path), "-o", str(svg_path), "-b", "white", "--scale", "2"]
+    commands = [
+        ["mmdc", *mmdc_args],
+        ["npx", "--yes", "@mermaid-js/mermaid-cli", *mmdc_args],
+    ]
+
+    for command in commands:
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=180,
+                env=env,
+            )
+        except FileNotFoundError:
+            continue
+        except subprocess.TimeoutExpired:
+            print(f"{command[0]} timed out")
+            continue
         if result.returncode == 0:
+            stamp_svg_updated(svg_path)
             print(f"SVG diagram saved to: {svg_path}")
             return True
-        else:
-            print(f"mmdc failed: {result.stderr}")
-            return False
-    except FileNotFoundError:
-        print("mermaid-cli (mmdc) not found.")
-        print("Install with: npm install -g @mermaid-js/mermaid-cli")
-        return False
-    except subprocess.TimeoutExpired:
-        print("mmdc timed out")
-        return False
+        print(f"{command[0]} failed: {result.stderr.strip()[:400]}")
+
+    print("mermaid-cli unavailable (install: npm install -g @mermaid-js/mermaid-cli)")
+    return False
+
+
+def stamp_svg_updated(svg_path: Path, *, when: datetime | None = None) -> None:
+    """Insert or refresh a visible ``Updated:`` stamp under the diagram title."""
+    text = svg_path.read_text()
+    text = re.sub(
+        r'\s*<text[^>]*id="soothe-diagram-updated"[^>]*>.*?</text>',
+        "",
+        text,
+        flags=re.DOTALL,
+    )
+    stamp_when = when or datetime.now(ZoneInfo("Asia/Shanghai"))
+    stamp_label = stamp_when.strftime("%Y-%m-%d %H:%M %Z")
+
+    # Prefer aligning under Mermaid's title text when present.
+    title_x = "50%"
+    title_match = re.search(
+        r'class="flowchartTitleText"[^>]*\bx="([^"]+)"|'
+        r'\bx="([^"]+)"[^>]*class="flowchartTitleText"',
+        text,
+    )
+    if title_match:
+        title_x = title_match.group(1) or title_match.group(2)
+
+    stamp = (
+        f'<text id="soothe-diagram-updated" text-anchor="middle" '
+        f'x="{title_x}" y="-6" '
+        f'style="font-family:trebuchet ms,verdana,arial,sans-serif;'
+        f'font-size:11px;fill:#546e7a">'
+        f"Updated: {stamp_label}</text>"
+    )
+    close = text.rfind("</svg>")
+    if close < 0:
+        raise ValueError(f"no </svg> in {svg_path}")
+    svg_path.write_text(text[:close] + stamp + text[close:])
 
 
 def main() -> None:
@@ -237,11 +355,12 @@ def main() -> None:
 
     # Full-edge appendix (do not overwrite hand-authored strange_loop_graph_nodes.md / stem).
     summary_path = output_dir / "strange_loop_graph_edges.md"
-    summary = """# StrangeLoop LangGraph — Full Edge Dump (IG-663)
+    summary = """# StrangeLoop LangGraph — Full Edge Dump
 
 Auto-generated from ``build_strange_loop_graph()``.
 Canonical architecture: [`strange_loop_stem.mmd`](strange_loop_stem.mmd) /
 [`strange_loop_graph_nodes.md`](strange_loop_graph_nodes.md).
+Orchestrator modules: [`orchestrator_modules.md`](orchestrator_modules.md).
 
 Regenerate: ``python scripts/visualize_strange_loop_graph.py``
 

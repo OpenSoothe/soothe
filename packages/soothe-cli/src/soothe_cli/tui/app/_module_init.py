@@ -18,9 +18,9 @@ from soothe_cli.runtime.state.session_stats import (
 from soothe_cli.tui import theme
 
 # Keep module-level imports minimal before first paint.
-# All other config imports — settings, create_model, detect_provider, etc. — are
-# deferred to local imports at their call sites since they are only accessed
-# after user interaction begins.
+# All other config imports — settings, detect_provider, etc. — are deferred to
+# local imports at their call sites since they are only accessed after user
+# interaction begins.
 from soothe_cli.tui._version import CHANGELOG_URL, DOCS_URL
 from soothe_cli.tui.widgets.message_store import (
     MessageData,

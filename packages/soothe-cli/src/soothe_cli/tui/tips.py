@@ -31,11 +31,6 @@ SESSION_TIPS: list[str] = [
 ]
 
 
-def pick_session_tip() -> str:
-    """Return one random tip string (one-shot selection)."""
-    return random.choice(SESSION_TIPS)  # noqa: S311
-
-
 class TipRotator:
     """Cycle through the tip pool, yielding a different tip each call.
 

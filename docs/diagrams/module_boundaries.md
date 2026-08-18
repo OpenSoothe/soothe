@@ -61,7 +61,7 @@ soothe-cli            ← Typer + Textual TUI                             ← OW
 
 | Slice | Owns |
 |-------|------|
-| `sloop/` | StrangeLoop graph — `engine/`, `orchestrator/`, `state/`, `stages/`, `cognition/`, `intention/`, `clarification/`, `plans/`, `nodes/`, `checkpoints/`, `prompts/` |
+| `sloop/` | StrangeLoop graph — `engine/`, `orchestrator/` (see [`orchestrator_modules.md`](orchestrator_modules.md)), `state/`, `stages/`, `cognition/`, `intention/`, `clarification/`, `plans/`, `nodes/`, `checkpoints/`, `prompts/` |
 | `autopilot/` | Autopilot / GoalEngine (L3) — `service`, `cognition/`, `dispatch/`, `intake/`, `monitor/`, `notify/`, `rail/`, `schedule/`, `verify/`, `workers/`, `jobs/` |
 | `coreagent/` | CoreAgent runtime (`core_agent`, `factory`, `builder`, `lazy`) — delegates to `soothe-nano` |
 | `runner/` | Host runner — `_runner_strange_loop`, `_runner_autopilot_worker`, `_thread_manager`, `resolver/` |

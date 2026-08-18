@@ -8,8 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from soothe.sloop.cognition.planner import LLMPlanner
-from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch, LoopRuntimeContext
 from soothe.sloop.stages.plan.evaluate import node_plan_evaluate
 from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 from soothe.utils.observability.langfuse import (
@@ -33,18 +32,18 @@ def test_evaluate_langfuse_display_names() -> None:
 
 def test_planner_maps_evaluate_langfuse_phases() -> None:
     assert (
-        LLMPlanner._evaluate_langfuse_phase_name("soothe", "evaluate-assess")
+        LLMPlanner._planner_langfuse_phase_name("soothe", "evaluate-assess")
         == "soothe:evaluate-assess"
     )
     assert (
-        LLMPlanner._evaluate_langfuse_phase_name("soothe", "evaluate-gap") == "soothe:evaluate-gap"
+        LLMPlanner._planner_langfuse_phase_name("soothe", "evaluate-gap") == "soothe:evaluate-gap"
     )
     assert (
-        LLMPlanner._evaluate_langfuse_phase_name("soothe", "evaluate-gap-leg-1")
+        LLMPlanner._planner_langfuse_phase_name("soothe", "evaluate-gap-leg-1")
         == "soothe:evaluate-gap-leg-1"
     )
-    assert LLMPlanner._evaluate_langfuse_phase_name("soothe", "assess") is None
-    assert LLMPlanner._evaluate_langfuse_phase_name("soothe", "analyze-gaps") is None
+    assert LLMPlanner._planner_langfuse_phase_name("soothe", "assess") is None
+    assert LLMPlanner._planner_langfuse_phase_name("soothe", "analyze-gaps") is None
 
 
 def test_planner_langfuse_config_pins_trace() -> None:

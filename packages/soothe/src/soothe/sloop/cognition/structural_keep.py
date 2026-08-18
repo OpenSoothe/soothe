@@ -50,12 +50,7 @@ def detect_stuck_loop(state: LoopState) -> str | None:
 
 
 def assess_keep_block_reason(state: LoopState) -> str | None:
-    """Return why assess/PlanGen must not keep the in-flight plan, else None.
-
-    Structural keep already refuses a failed last wave. Assess keep and the
-    PlanGen keep short-circuit previously ignored that gate, so failed steps
-    (including stream stalls) were retried forever via ``skip_generate``.
-    """
+    """Return why assess/PlanGen must not keep the in-flight plan, else None."""
     if not state.step_results:
         return None
     if not state.step_results[-1].success:
@@ -103,15 +98,9 @@ def structural_keep_block_reason(
         return "no_current_decision"
     if not state.step_results:
         return "no_step_results"
-    if not state.step_results[-1].success:
-        return "last_step_failed"
-    if state.last_wave_hit_subagent_cap:
-        return "subagent_cap"
-    if state.last_wave_hit_tool_budget:
-        return "tool_budget"
-    stuck = detect_stuck_loop(state)
-    if stuck:
-        return f"stuck:{stuck[:80]}"
+    shared = assess_keep_block_reason(state)
+    if shared is not None:
+        return shared
     streak = int(getattr(state, "structural_keep_streak", 0) or 0)
     if max_streak > 0 and streak >= max_streak:
         return f"streak_cap:{streak}>={max_streak}"

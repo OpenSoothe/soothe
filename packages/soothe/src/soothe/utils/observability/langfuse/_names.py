@@ -10,11 +10,18 @@ Evaluate subgraph: parent ``evaluate`` with children
 
 _HOST_LOOP_GRAPH_RUN_NAME = "strange-loop-graph"
 _HOST_INTAKE_RUN_NAME = "intake"
+_HOST_INTAKE_PHASE_RUN_NAMES = {
+    "intake_pass1": "intake-pass1",
+    "intake_pass2": "intake-pass2",
+    "strange_loop_graph": "intake-classify",
+}
 _HOST_EXECUTE_STEP_RUN_NAME = "execute-step"
 _HOST_EVALUATE_RUN_NAME = "evaluate"
 _HOST_EVALUATE_GAP_RUN_NAME = "evaluate-gap"
 _HOST_EVALUATE_ASSESS_RUN_NAME = "evaluate-assess"
 _HOST_EVALUATE_ASSESS_CONTINUATION_RUN_NAME = "evaluate-assess-continuation"
+_HOST_GENERATE_PLAN_RUN_NAME = "generate-plan"
+_HOST_FINALIZE_RUN_NAME = "finalize"
 
 
 def _with_trace_prefix(trace_name: str | None, suffix: str) -> str:
@@ -30,6 +37,14 @@ def loop_graph_langfuse_run_display_name(trace_name: str | None) -> str:
 def intake_langfuse_run_display_name(trace_name: str | None) -> str:
     """Return host preprocess ``intake`` child run display name for a trace."""
     return _with_trace_prefix(trace_name, _HOST_INTAKE_RUN_NAME)
+
+
+def intake_phase_langfuse_run_display_name(trace_name: str | None, phase: str) -> str | None:
+    """Return the child run name under ``intake`` for a phase, or None when unmapped."""
+    suffix = _HOST_INTAKE_PHASE_RUN_NAMES.get(phase)
+    if suffix is None:
+        return None
+    return _with_trace_prefix(trace_name, suffix)
 
 
 def execute_step_langfuse_run_display_name(trace_name: str | None) -> str:
@@ -66,6 +81,16 @@ def evaluate_assess_continuation_langfuse_run_display_name(trace_name: str | Non
     return _with_trace_prefix(trace_name, _HOST_EVALUATE_ASSESS_CONTINUATION_RUN_NAME)
 
 
+def generate_plan_langfuse_run_display_name(trace_name: str | None) -> str:
+    """Return parent generate-plan station span name."""
+    return _with_trace_prefix(trace_name, _HOST_GENERATE_PLAN_RUN_NAME)
+
+
+def finalize_langfuse_run_display_name(trace_name: str | None) -> str:
+    """Return finalize / goal-completion synthesis run display name."""
+    return _with_trace_prefix(trace_name, _HOST_FINALIZE_RUN_NAME)
+
+
 __all__ = [
     "evaluate_assess_continuation_langfuse_run_display_name",
     "evaluate_assess_langfuse_run_display_name",
@@ -73,6 +98,9 @@ __all__ = [
     "evaluate_gap_leg_langfuse_run_display_name",
     "evaluate_langfuse_run_display_name",
     "execute_step_langfuse_run_display_name",
+    "finalize_langfuse_run_display_name",
+    "generate_plan_langfuse_run_display_name",
     "intake_langfuse_run_display_name",
+    "intake_phase_langfuse_run_display_name",
     "loop_graph_langfuse_run_display_name",
 ]

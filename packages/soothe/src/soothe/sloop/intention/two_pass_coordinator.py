@@ -18,7 +18,7 @@ from .models import (
     IntakeScope,
     IntentClassification,
     ResponseLanguage,
-    derive_task_complexity_from_intake,
+    intent_classification_from_pass2,
 )
 from .pass1_classifier import IntakePass1Classifier, build_pass1_task_fallback
 from .pass2_classifier import IntakePass2Classifier
@@ -57,15 +57,9 @@ class TwoPassIntakeResult:
 
         # Build IntentClassification if task
         if pass1_result.is_task and pass2_result is not None:
-            intake_label = pass2_result.to_intake_label()
-            self._intent_classification = IntentClassification(
-                intake_label=intake_label,
-                reasoning=pass2_result.reasoning,
-                chitchat_response=None,
-                multi_phase=pass2_result.multi_phase,
-                requires_tool_use=pass2_result.requires_tool_use,
+            self._intent_classification = intent_classification_from_pass2(
+                pass2_result,
                 response_language=pass1_result.response_language,
-                task_complexity=derive_task_complexity_from_intake(intake_label),
             )
         else:
             self._intent_classification = None

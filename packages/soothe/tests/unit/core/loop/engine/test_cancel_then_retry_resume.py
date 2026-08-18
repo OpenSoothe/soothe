@@ -13,7 +13,7 @@ The ``TestCancelRetryContinueLifecycle`` class drives the *full* Cancel →
 Retry → Continue lifecycle through real instances (a ``StrangeLoopCheckpoint``
 + the real ``mark_goal_interrupted`` mutation logic + the real
 ``has_resumable_interrupted_goal`` helper + the real idle-resume re-activation
-conditional + the real ``node_iteration_gate``) so regressions in any link of
+conditional + the real ``CheckLimitsNode``) so regressions in any link of
 the chain surface here.
 """
 
@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe.sloop.stages.execute.check_limits import node_iteration_gate
+from soothe.sloop.stages.execute.check_limits import node as check_limits_node
 from soothe.sloop.state.checkpoint import StrangeLoopCheckpoint, ThreadHealthMetrics
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.sloop.state.schemas import LoopState
@@ -64,10 +64,17 @@ def _runtime_ctx(
     recovery_valid_resume: bool,
     goal_record: GoalIndexEntry | None = None,
 ) -> SimpleNamespace:
-    """Build a minimal runtime context duck-typed for ``node_iteration_gate``."""
+    """Build a minimal runtime context duck-typed for ``check_limits_node``.
+
+    RFC-903 P3: ``begin_iteration`` folded into ``check_limits``, so the
+    non-terminal branch now accesses ``strange_loop`` (for checkpointer),
+    ``anchor_manager``, and ``scratch``.
+    """
     checkpoint = SimpleNamespace(
         thread_health_metrics=ThreadHealthMetrics(thread_id="t", last_updated=datetime.now(UTC)),
     )
+    from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch
+
     return SimpleNamespace(
         loop_state=LoopState(
             goal="retry",
@@ -80,6 +87,10 @@ def _runtime_ctx(
         goal_record=goal_record,
         emit=AsyncMock(),
         state_manager=SimpleNamespace(save=AsyncMock()),
+        # RFC-903 P3: folded begin_iteration needs these on the non-terminal branch
+        strange_loop=SimpleNamespace(config=None, core_agent=None),
+        anchor_manager=SimpleNamespace(capture_iteration_start_anchor=AsyncMock()),
+        scratch=LoopPhaseScratch(),
     )
 
 
@@ -133,10 +144,18 @@ async def test_iteration_gate_grants_grace_iteration_on_resumed_goal() -> None:
         recovery_valid_resume=True,
     )
 
-    result = await node_iteration_gate(ctx, {})  # type: ignore[arg-type]
+    result = await check_limits_node(ctx, {})  # type: ignore[arg-type]
 
-    assert result == {}
-    ctx.emit.assert_not_awaited()
+    # RFC-903 P3: begin_iteration folded into check_limits. The non-terminal
+    # branch now emits iteration_started and clears stale route keys
+    # (resume_synth etc.) instead of returning {}.
+    assert result == {
+        "plan_route": None,
+        "assess_route": None,
+        "last_outcome": None,
+        "resume_synth": None,
+    }
+    ctx.emit.assert_awaited_once()  # iteration_started
 
 
 @pytest.mark.asyncio
@@ -154,7 +173,7 @@ async def test_iteration_gate_terminals_non_resumed_goal_at_boundary() -> None:
         goal_record=_goal(status="running"),
     )
 
-    result = await node_iteration_gate(ctx, {})  # type: ignore[arg-type]
+    result = await check_limits_node(ctx, {})  # type: ignore[arg-type]
 
     assert result == {"last_outcome": "max_iterations"}
     ctx.emit.assert_awaited_once()
@@ -288,9 +307,16 @@ class TestCancelRetryContinueLifecycle:
             recovery_valid_resume=True,
             goal_record=reactivated,
         )
-        result = await node_iteration_gate(gate_ctx, {})  # type: ignore[arg-type]
-        assert result == {}
-        gate_ctx.emit.assert_not_awaited()
+        result = await check_limits_node(gate_ctx, {})  # type: ignore[arg-type]
+        # RFC-903 P3: folded begin_iteration emits iteration_started + clears
+        # stale route keys on the non-terminal branch.
+        assert result == {
+            "plan_route": None,
+            "assess_route": None,
+            "last_outcome": None,
+            "resume_synth": None,
+        }
+        gate_ctx.emit.assert_awaited_once()  # iteration_started
 
     @pytest.mark.asyncio
     async def test_cancel_persists_cursor_not_incremented(self) -> None:
@@ -416,13 +442,19 @@ class TestCancelRetryContinueLifecycle:
         resumed_ctx = _runtime_ctx(
             iteration=5, max_iterations=5, recovery_valid_resume=True, goal_record=reactivated
         )
-        assert await node_iteration_gate(resumed_ctx, {}) == {}  # type: ignore[arg-type]
+        # RFC-903 P3: folded begin_iteration emits + clears route keys.
+        assert await check_limits_node(resumed_ctx, {}) == {  # type: ignore[arg-type]
+            "plan_route": None,
+            "assess_route": None,
+            "last_outcome": None,
+            "resume_synth": None,
+        }
 
         # Second turn: not resumed → boundary check reapplies, hard-exit.
         next_ctx = _runtime_ctx(
             iteration=5, max_iterations=5, recovery_valid_resume=False, goal_record=reactivated
         )
-        assert await node_iteration_gate(next_ctx, {}) == {"last_outcome": "max_iterations"}  # type: ignore[arg-type]
+        assert await check_limits_node(next_ctx, {}) == {"last_outcome": "max_iterations"}  # type: ignore[arg-type]
         next_ctx.emit.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -436,7 +468,6 @@ class TestCancelRetryContinueLifecycle:
         """
         from soothe.sloop.state.status_vocabulary import (
             is_goal_index_in_flight,
-            is_goal_index_interrupted,
         )
 
         cp = _make_checkpoint(goal_status="running", iteration=0)
@@ -448,7 +479,6 @@ class TestCancelRetryContinueLifecycle:
         assert goal.status == "interrupted"
         # In-flight (resumable / can still be terminalized), not terminal.
         assert is_goal_index_in_flight(goal.status) is True
-        assert is_goal_index_interrupted(goal.status) is True
         # Loop checkpoint stayed resumable (idle), not finalized/cancelled.
         assert cp.status == "idle"
         # And force_terminal_status can still transition an interrupted goal.

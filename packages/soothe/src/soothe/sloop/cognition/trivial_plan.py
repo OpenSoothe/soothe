@@ -10,7 +10,7 @@ Execute (or post-direct-invoke) routes to ``goal_completion`` via
 
 from __future__ import annotations
 
-from soothe.sloop.cognition.step_deliverable import TRIVIAL_DIRECT_EXPECTED_OUTPUT
+from soothe.sloop.engine.step_deliverable import TRIVIAL_DIRECT_EXPECTED_OUTPUT
 from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanResult,

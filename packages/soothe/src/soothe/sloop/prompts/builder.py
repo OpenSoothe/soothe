@@ -1,23 +1,19 @@
-"""Hierarchical prompt builder with fragment composition."""
+"""Hierarchical prompt builder with fragment composition.
+
+Refactored to delegate to :class:`GraphPromptWrapper` so prompt injection
+and message projection logic lives in exactly one place. ``PromptBuilder``
+remains the public API consumed by ``planner.py``; it forwards to the
+centralized wrapper internally.
+"""
 
 from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
-from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.messages import BaseMessage
 
-from soothe.sloop.prompts.plan_ledger_projection import (
-    project_continuation_assess_ledger,
-    project_planner_ledger,
-    project_planner_ledger_for_assess,
-    projected_ledger_has_goal_completion,
-    resolve_planner_projection_mode,
-)
-from soothe.sloop.prompts.planner_assembly import (
-    PlannerCallKind,
-    goal_preview_text,
-)
+from soothe.sloop.prompts.graph_wrapper import GraphPromptWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -30,64 +26,14 @@ if TYPE_CHECKING:
 
 PlanPromptPhase = Literal["assess", "generate"]
 
-_PRIOR_CONVERSATION_TAGS: tuple[tuple[str, Literal["human", "ai"]], ...] = (
-    ("USER", "human"),
-    ("ASSISTANT", "ai"),
-)
-
-
-def _parse_prior_conversation_xml(msg_xml: str) -> tuple[Literal["human", "ai"], str] | None:
-    """Parse ``<USER>`` / ``<ASSISTANT>`` blocks from prior conversation projection."""
-    msg_xml = msg_xml.strip()
-    for tag, role in _PRIOR_CONVERSATION_TAGS:
-        open_tag, close_tag = f"<{tag}>", f"</{tag}>"
-        if msg_xml.startswith(open_tag) and msg_xml.endswith(close_tag):
-            return role, msg_xml[len(open_tag) : -len(close_tag)].strip()
-    return None
-
-
-def _prior_goals_from_checkpoint(
-    checkpoint: Any | None,
-    *,
-    exclude_goal_id: str | None,
-) -> list[Any]:
-    """Build ``PriorGoalSummary`` rows from checkpoint goal index (metadata only)."""
-    from soothe.context.projection import PriorGoalSummary
-
-    if checkpoint is None:
-        return []
-    out: list[PriorGoalSummary] = []
-    for rec in checkpoint.goal_history:
-        if exclude_goal_id and rec.goal_id == exclude_goal_id:
-            continue
-        if rec.status not in ("completed", "cancelled", "failed"):
-            continue
-        out.append(
-            PriorGoalSummary(
-                goal_id=rec.goal_id,
-                description=rec.goal_id,
-                status=rec.status,
-                step_summary="",
-                completion_text="",
-            )
-        )
-    return out
-
-
-def _format_dag_context(dag_ctx: Any) -> str:
-    """Format DagPlanningContext as plain-text DAG STATUS section for prompt injection."""
-    if not dag_ctx or not dag_ctx.has_prior_state:
-        return ""
-    from soothe.sloop.prompts.user_message import _render_dag_status as _render
-
-    return _render(dag_ctx)
-
 
 class PromptBuilder:
     """Composes hierarchical prompts from fragments.
 
-    Internal API for Soothe prompt construction.
-    Not exposed to users for configuration.
+    Thin facade over :class:`GraphPromptWrapper`. The wrapper centralizes
+    projection mode resolution, ledger slicing, system-message fragment
+    selection, and human-message scenario assembly so all LLM-invoking
+    nodes share one assembly pipeline.
 
     Structure (RFC-207):
         SystemMessage: environment, workspace, policies, instructions (static)
@@ -103,6 +49,7 @@ class PromptBuilder:
             config: Optional Soothe configuration
         """
         self.config = config
+        self._wrapper = GraphPromptWrapper(config)
 
     def build_plan_messages(
         self,
@@ -119,46 +66,19 @@ class PromptBuilder:
         inline_assessment: Any | None = None,
         plan_gap: Any | None = None,
     ) -> list[BaseMessage]:
-        """Build SystemMessage + projected ledger + task envelope (RFC-214 §4)."""
-        from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+        """Build SystemMessage + projected ledger + task envelope (RFC-214 §4).
+
+        Delegates to :class:`GraphPromptWrapper` for centralized projection
+        and injection. The wrapper resolves projection mode, slices the ledger,
+        selects the system-prompt fragment, and builds the scenario human message
+        uniformly across all planner call kinds.
+        """
 
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
-        projection_mode = resolve_planner_projection_mode(state)
-        ledger_cfg = self.config.agent.loop.plan_prompt_ledger if self.config is not None else None
+
+        # Resolve assess-prompt config for plan_coverage and omit_prior_progress_hint.
         assess_prompt_cfg = (
             self.config.agent.loop.plan_evaluate_prompt if self.config is not None else None
-        )
-        if kind == "continuation":
-            projected = project_continuation_assess_ledger(state.loop_messages, ledger_cfg)
-        elif kind in ("assess", "gap"):
-            projected = project_planner_ledger_for_assess(
-                state.loop_messages,
-                projection_mode,
-                ledger_cfg,
-                soothe_config=self.config,
-            )
-        else:
-            projected = project_planner_ledger(
-                state.loop_messages,
-                projection_mode,
-                ledger_cfg,
-                soothe_config=self.config,
-            )
-        completion_in_ledger = projected_ledger_has_goal_completion(projected)
-
-        prior_goals = (
-            list(context_bundle.prior_goals)
-            if context_bundle and context_bundle.prior_goals
-            else []
-        )
-        if not prior_goals and projection_mode == "new_goal":
-            prior_goals = _prior_goals_from_checkpoint(checkpoint, exclude_goal_id=exclude_goal_id)
-
-        system_content = self._build_system_message(
-            context,
-            state,
-            call_kind=kind,
-            context_bundle=None if kind in ("assess", "gap") else context_bundle,
         )
         plan_coverage = None
         if kind in ("assess", "gap"):
@@ -169,78 +89,26 @@ class PromptBuilder:
             )
             if include_coverage:
                 plan_coverage = render_plan_coverage(state) or None
-        human_content = self._build_plan_context_human_text(
-            goal,
-            state,
-            context,
-            call_kind=kind,
-            dag_context=dag_context,
-            context_bundle=context_bundle,
-            projection_mode=projection_mode,
-            completion_in_ledger=completion_in_ledger,
-            prior_goals_override=prior_goals or None,
-            inline_assessment=inline_assessment,
-            plan_coverage=plan_coverage,
-            omit_prior_progress_hint=(
-                assess_prompt_cfg.omit_prior_progress_hint
-                if assess_prompt_cfg is not None
-                else True
-            ),
-            plan_gap=plan_gap,
+
+        omit_prior_progress_hint = (
+            assess_prompt_cfg.omit_prior_progress_hint if assess_prompt_cfg is not None else True
         )
 
-        out: list[BaseMessage] = [SystemMessage(content=system_content)]
-        out.extend(projected)
-        if len(projected) != len(state.loop_messages):
-            logger.debug(
-                "Plan messages: ledger projection len=%d (raw=%d) kind=%s mode=%s",
-                len(projected),
-                len(state.loop_messages),
-                kind,
-                projection_mode,
-            )
-
-        if context.recent_messages and kind not in ("assess", "gap"):
-            for msg_xml in context.recent_messages:
-                parsed = _parse_prior_conversation_xml(msg_xml)
-                if parsed is None:
-                    continue
-                role, content = parsed
-                if role == "human":
-                    out.append(
-                        LoopHumanMessage(
-                            content=content,
-                            thread_id=state.thread_id,
-                            iteration=None,
-                            phase="execute_step",
-                        )
-                    )
-                else:
-                    out.append(
-                        LoopAIMessage(
-                            content=content,
-                            thread_id=state.thread_id,
-                            iteration=None,
-                            phase="execute_step",
-                        )
-                    )
-
-        if human_content.strip():
-            phase = (
-                "plan_gap_analysis"
-                if kind == "gap"
-                else ("plan_assess" if kind in ("assess", "continuation") else "plan_generate")
-            )
-            out.append(
-                LoopHumanMessage(
-                    content=human_content,
-                    thread_id=state.thread_id,
-                    iteration=state.iteration,
-                    goal_summary=goal[:200],
-                    phase=phase,
-                )
-            )
-        return out
+        return self._wrapper.build_messages(
+            kind=kind,
+            goal=goal,
+            state=state,
+            context=context,
+            context_bundle=context_bundle,
+            checkpoint=checkpoint,
+            exclude_goal_id=exclude_goal_id,
+            dag_context=dag_context,
+            inline_assessment=inline_assessment,
+            plan_gap=plan_gap,
+            plan_coverage=plan_coverage,
+            omit_prior_progress_hint=omit_prior_progress_hint,
+            recent_messages=context.recent_messages if context is not None else None,
+        )
 
     def _build_system_message(
         self,
@@ -253,74 +121,17 @@ class PromptBuilder:
     ) -> str:
         """Construct static context: policies and phase instructions.
 
-        Maps RFC-206 SYSTEM_CONTEXT + INSTRUCTIONS layers to SystemMessage.
-        Uses prefetched fragments for cache optimization.
-
-        Workspace path semantics, ENVIRONMENT, WORKSPACE metadata, and
-        AGENT_INSTRUCTIONS live on execute-step CoreAgent system prompts only —
-        plan-assess / plan-generate stay lean and workspace-agnostic for cache
-        stability.
-
-        Section ordering:
-        - **assess** : PLAN_ASSESS_INSTRUCTIONS, then conditional blocks.
-        - **generate**: EXECUTION_POLICIES, PLAN_GENERATE_INSTRUCTIONS, conditional blocks.
-        - **continuation**: PLAN_CONTINUATION_DISCRIMINATE, conditional blocks.
-
-        Goal is supplied in the plan-context user message (``GOAL:``), not in the system prompt.
-
-        Args:
-            context: Planning context with workspace, capabilities
-            state: Optional loop state for iteration limits and capability context
-            plan_phase: Which planner LLM call this system prompt serves.
-            context_bundle: Optional ContextBundle (RFC-624). When provided, project/agent/memory
-                instructions from the bundle replace or supplement disk reads.
+        Delegates to :class:`GraphPromptWrapper.build_system_message`.
         """
-        from soothe.prompts.system_templates import build_response_language_hint
-        from soothe.sloop.prompts.fragments import (
-            EXECUTION_POLICIES_FRAGMENT,
-            PLAN_ASSESS_INSTRUCTIONS_FRAGMENT,
-            PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT,
-            PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT,
-            PLAN_GENERATE_INSTRUCTIONS_FRAGMENT,
-        )
 
-        parts: list[str] = []
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
-
-        if kind == "continuation":
-            parts.append(PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT + "\n")
-        elif kind == "assess":
-            parts.append(PLAN_ASSESS_INSTRUCTIONS_FRAGMENT + "\n")
-        elif kind == "gap":
-            parts.append(PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT + "\n")
-        else:
-            parts.append(EXECUTION_POLICIES_FRAGMENT + "\n")
-            parts.append(PLAN_GENERATE_INSTRUCTIONS_FRAGMENT + "\n")
-
-        language = getattr(state, "response_language", None) if state is not None else None
-        parts.append(build_response_language_hint(language) + "\n")
-
-        # RFC-624: Supplementary instructions from ContextBundle (plan cache-stable:
-        # agent/project rules stay on execute-type system prompts only).
-        if context_bundle is not None and kind not in ("assess", "gap"):
-            if context_bundle.memory_instructions:
-                parts.append(
-                    "<MEMORY_INSTRUCTIONS>\n"
-                    + context_bundle.memory_instructions
-                    + "\n</MEMORY_INSTRUCTIONS>\n"
-                )
-
-        # Prior conversation follow-up policy (static when prior conversation exists)
-        if context.recent_messages and kind not in ("assess", "gap"):
-            parts.append(
-                "<FOLLOW_UP_POLICY>\n"
-                'Prior-thread goals: status MUST NOT be "done" until execution produced the '
-                "requested output; include at least one execute_steps item that performs the work; "
-                "do not claim completion without execution evidence.\n"
-                "</FOLLOW_UP_POLICY>\n"
-            )
-
-        return "\n".join(parts)
+        return self._wrapper.build_system_message(
+            kind=kind,
+            context=context,
+            state=state,
+            context_bundle=context_bundle,
+            recent_messages=context.recent_messages if context is not None else None,
+        )
 
     def _build_plan_context_human_text(
         self,
@@ -342,110 +153,34 @@ class PromptBuilder:
     ) -> str:
         """Construct plan-context human text without ledger (RFC-214).
 
-        StrangeLoop ledger messages are appended separately in ``build_plan_messages`` so the
-        plan model sees native human/AI turns instead of a single flattened block.
-        Execute-step evidence lives in those ledger messages.
-
-        Uses scenario-based structured text (GOAL/CONTEXT/TASK) instead
-        of XML envelopes.
-
-        Args:
-            goal: User's goal description
-            state: Current loop state with optional plan snapshot
-            context: Planning context (unused now - prior conversation is in ledger)
-            plan_phase: When ``generate``, append step-id hint and optional DAG context.
-            dag_context: Optional plain-text DAG context for progressive planning.
-            context_bundle: Optional ContextBundle from ContextEngine.project().
-
-        Returns:
-            Formatted prompt string for the plan-context ``LoopHumanMessage``.
+        Delegates to :class:`GraphPromptWrapper._build_human_text`.
         """
-        from soothe.sloop.prompts.user_message import UserMessageBuilder
-        from soothe.sloop.state.schemas import next_goal_local_step_id_start
 
-        builder = UserMessageBuilder()
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
-        mode = projection_mode or resolve_planner_projection_mode(state)
-
-        if kind == "continuation":
-            return builder.build_plan_continuation_message(
-                goal,
-                context_bundle=context_bundle,
-                display_goal=goal_preview_text(goal) if mode == "new_goal" else None,
-                completion_in_ledger=completion_in_ledger,
-                prior_goals_override=prior_goals_override,
-            )
-
-        step_id_hint = None
-        step_anchor_registry = None
-        if kind == "generate":
-            from soothe.sloop.cognition.step_anchor_registry import (
-                build_step_anchor_registry,
-            )
-
-            goal_node = context_bundle.active_goal if context_bundle is not None else None
-            if goal_node is not None or state.step_results:
-                step_anchor_registry = build_step_anchor_registry(
-                    goal_node=goal_node,
-                    state=state,
-                )
-            nxt = next_goal_local_step_id_start(state)
-            if nxt > 1:
-                width = max(2, len(str(nxt + 1)))
-                ex_a = str(nxt).zfill(width)
-                ex_b = str(nxt + 1).zfill(width)
-                step_id_hint = (
-                    f"This goal already used lower step indices; use the next unused local "
-                    f"step ids starting with {ex_a} (e.g. {ex_a}, {ex_b}, …), not 01/02 again."
-                )
-
-        common_kwargs = dict(
+        return self._wrapper._build_human_text(
+            kind=kind,
             goal=goal,
+            state=state,
+            context=context,
             dag_context=dag_context,
-            skill_context=state.skill_context,
-            prior_progress=getattr(state, "prior_progress", None),
-            current_iteration=state.iteration,
             context_bundle=context_bundle,
-            display_goal=goal_preview_text(goal) if mode == "new_goal" else None,
-            projection_mode=mode,
+            projection_mode=projection_mode,
             completion_in_ledger=completion_in_ledger,
             prior_goals_override=prior_goals_override,
+            inline_assessment=inline_assessment,
+            plan_coverage=plan_coverage,
+            omit_prior_progress_hint=omit_prior_progress_hint,
+            plan_gap=plan_gap,
         )
 
-        if kind == "assess":
-            last_assessment = None
-            if context_bundle is not None and context_bundle.active_goal is not None:
-                last_assessment = context_bundle.active_goal.last_assessment
-            return builder.build_plan_assess_message(
-                **common_kwargs,
-                plan_coverage=plan_coverage,
-                omit_prior_progress_hint=omit_prior_progress_hint,
-                last_assessment=last_assessment,
-                plan_gap=plan_gap,
-            )
-        if kind == "gap":
-            return builder.build_plan_gap_message(
-                goal=goal,
-                prior_progress=getattr(state, "prior_progress", None),
-                current_iteration=state.iteration,
-                projection_mode=mode,
-                plan_coverage=plan_coverage,
-                omit_prior_progress_hint=omit_prior_progress_hint,
-            )
-        generate_kwargs: dict[str, Any] = {
-            **common_kwargs,
-            "step_id_hint": step_id_hint,
-            "step_anchor_registry": step_anchor_registry,
-        }
-        if inline_assessment is not None:
-            generate_kwargs["assessment_status"] = getattr(inline_assessment, "status", None)
-            generate_kwargs["assessment_progress"] = getattr(
-                inline_assessment, "goal_progress", None
-            )
-        if plan_gap is not None:
-            generate_kwargs["plan_gap"] = plan_gap
-        approved_md = getattr(state, "approved_plan_markdown", None)
-        if (approved_md or "").strip():
-            generate_kwargs["approved_plan_markdown"] = approved_md
-            generate_kwargs["approved_plan_path"] = getattr(state, "approved_plan_path", None)
-        return builder.build_plan_generate_message(**generate_kwargs)
+
+# Backward-compatible re-exports for existing callers (executor.py, planner.py,
+# tests) that import these helpers from ``builder``. The canonical definitions
+# now live in ``graph_wrapper`` alongside the centralized assembly pipeline.
+from soothe.sloop.prompts.graph_wrapper import (  # noqa: E402, F401
+    _format_dag_context,
+    _prior_goals_from_checkpoint,
+)
+from soothe.sloop.prompts.planner_assembly import (  # noqa: E402
+    PlannerCallKind,
+)

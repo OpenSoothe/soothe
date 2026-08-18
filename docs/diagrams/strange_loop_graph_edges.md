@@ -1,8 +1,9 @@
-# StrangeLoop LangGraph — Full Edge Dump (IG-663)
+# StrangeLoop LangGraph — Full Edge Dump
 
 Auto-generated from ``build_strange_loop_graph()``.
 Canonical architecture: [`strange_loop_stem.mmd`](strange_loop_stem.mmd) /
 [`strange_loop_graph_nodes.md`](strange_loop_graph_nodes.md).
+Orchestrator modules: [`orchestrator_modules.md`](orchestrator_modules.md).
 
 Regenerate: ``python scripts/visualize_strange_loop_graph.py``
 
@@ -13,13 +14,11 @@ Regenerate: ``python scripts/visualize_strange_loop_graph.py``
 - `enter_loop`
 - `delegate`
 - `check_limits`
-- `begin_iteration`
 - `gather_evidence`
 - `evaluate`
 - `generate_plan`
 - `finalize`
 - `commit_plan`
-- `validate_plan`
 - `execute`
 - `record_progress`
 - `await_user`
@@ -35,11 +34,10 @@ Solid arrows in Mermaid/SVG are unconditional; dashed are conditional.
 - `await_user` → `evaluate`
 - `await_user` → `execute`
 - `await_user` → `generate_plan`
-- `begin_iteration` → `gather_evidence`
 - `check_limits` → `__end__`
-- `check_limits` → `begin_iteration`
+- `check_limits` → `gather_evidence`
 - `commit_plan` → `__end__`
-- `commit_plan` → `validate_plan`
+- `commit_plan` → `execute`
 - `delegate` → `__end__`
 - `delegate` → `await_user`
 - `delegate` → `finalize`
@@ -67,6 +65,4 @@ Solid arrows in Mermaid/SVG are unconditional; dashed are conditional.
 - `record_progress` → `__end__`
 - `record_progress` → `check_limits`
 - `record_progress` → `finalize`
-- `validate_plan` → `__end__`
-- `validate_plan` → `execute`
 - `finalize` → `__end__`

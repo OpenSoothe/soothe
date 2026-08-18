@@ -1,7 +1,7 @@
 """Compile the Strange Loop LangGraph (RFC-220, stem stations, evaluate).
 
 The graph checkpoint key uses ``{loop_id}__strange_loop`` via
-``configurable.thread_id`` (see ``checkpoint_keys``) when a checkpointer is
+``configurable.thread_id`` (see ``checkpoint``) when a checkpointer is
 attached. Persistence for goals remains ``StrangeLoopStateManager``.
 """
 
@@ -13,12 +13,10 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from soothe.sloop.stages.complete.finalize import node_goal_completion
-from soothe.sloop.stages.execute.begin_iteration import node_iteration_start
-from soothe.sloop.stages.execute.check_limits import node_iteration_gate
-from soothe.sloop.stages.execute.commit_plan import node_resolve_decision
+from soothe.sloop.stages.execute.check_limits import node as check_limits_node
+from soothe.sloop.stages.execute.commit_plan import node as commit_plan_node
 from soothe.sloop.stages.execute.execute import node_execute
 from soothe.sloop.stages.execute.record_progress import node_record_iteration
-from soothe.sloop.stages.execute.validate_plan import node_validate_evidence_bindings
 from soothe.sloop.stages.plan.evaluate import node_plan_evaluate
 from soothe.sloop.stages.plan.gather_evidence import node_bounded_evidence_gather
 from soothe.sloop.stages.plan.generate_plan import node_plan_generate
@@ -27,9 +25,11 @@ from soothe.sloop.stages.preprocess.intake import node_intent_classify
 from soothe.sloop.stages.sidecars.await_user import node_await_clarification
 from soothe.sloop.stages.sidecars.delegate import node_invoke_wired_subagent
 
-from .checkpointer import core_agent_checkpointer
+from .checkpoint import core_agent_checkpointer
+from .node_base import wrap_node
 from .routing import (
     route_after_clarification,
+    route_after_commit,
     route_after_evaluate,
     route_after_evidence_gather,
     route_after_execute,
@@ -37,15 +37,11 @@ from .routing import (
     route_after_plan,
     route_after_preprocess,
     route_after_record_iteration,
-    route_after_resolve_decision,
-    route_after_validate_evidence,
     route_after_wired_subagent,
 )
 from .runtime_context import LoopRuntimeContext
-from .state import LoopGraphState
 from .stations import (
     AWAIT_USER,
-    BEGIN_ITERATION,
     CHECK_LIMITS,
     COMMIT_PLAN,
     DELEGATE,
@@ -57,7 +53,7 @@ from .stations import (
     GENERATE_PLAN,
     INTAKE,
     RECORD_PROGRESS,
-    VALIDATE_PLAN,
+    LoopGraphState,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,12 +93,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     async def delegate(state: dict[str, Any]) -> dict[str, Any]:
         return await node_invoke_wired_subagent(ctx, state)
 
-    async def check_limits(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_iteration_gate(ctx, state)
-
-    async def begin_iteration(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_iteration_start(ctx, state)
-
     async def gather_evidence(state: dict[str, Any]) -> dict[str, Any]:
         return await node_bounded_evidence_gather(ctx, state)
 
@@ -114,12 +104,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
 
     async def finalize(state: dict[str, Any]) -> dict[str, Any]:
         return await node_goal_completion(ctx, state)
-
-    async def commit_plan(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_resolve_decision(ctx, state)
-
-    async def validate_plan(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_validate_evidence_bindings(ctx, state)
 
     async def execute(state: dict[str, Any]) -> dict[str, Any]:
         return await node_execute(ctx, state)
@@ -134,14 +118,12 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_node(INTAKE, intake)
     graph.add_node(ENTER_LOOP, enter_loop)
     graph.add_node(DELEGATE, delegate)
-    graph.add_node(CHECK_LIMITS, check_limits)
-    graph.add_node(BEGIN_ITERATION, begin_iteration)
+    graph.add_node(CHECK_LIMITS, wrap_node(CHECK_LIMITS, check_limits_node, ctx))
     graph.add_node(GATHER_EVIDENCE, gather_evidence)
     graph.add_node(EVALUATE, evaluate)
     graph.add_node(GENERATE_PLAN, generate_plan)
     graph.add_node(FINALIZE, finalize)
-    graph.add_node(COMMIT_PLAN, commit_plan)
-    graph.add_node(VALIDATE_PLAN, validate_plan)
+    graph.add_node(COMMIT_PLAN, wrap_node(COMMIT_PLAN, commit_plan_node, ctx))
     graph.add_node(EXECUTE, execute)
     graph.add_node(RECORD_PROGRESS, record_progress)
     graph.add_node(AWAIT_USER, await_user)
@@ -171,9 +153,8 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_conditional_edges(
         CHECK_LIMITS,
         route_after_iteration_gate,
-        {BEGIN_ITERATION: BEGIN_ITERATION, END: END},
+        {GATHER_EVIDENCE: GATHER_EVIDENCE, END: END},
     )
-    graph.add_edge(BEGIN_ITERATION, GATHER_EVIDENCE)
     graph.add_conditional_edges(
         GATHER_EVIDENCE,
         route_after_evidence_gather,
@@ -206,12 +187,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_edge(FINALIZE, END)
     graph.add_conditional_edges(
         COMMIT_PLAN,
-        route_after_resolve_decision,
-        {VALIDATE_PLAN: VALIDATE_PLAN, END: END},
-    )
-    graph.add_conditional_edges(
-        VALIDATE_PLAN,
-        route_after_validate_evidence,
+        route_after_commit,
         {EXECUTE: EXECUTE, END: END},
     )
     graph.add_conditional_edges(

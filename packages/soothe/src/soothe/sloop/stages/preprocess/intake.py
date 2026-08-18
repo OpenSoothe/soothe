@@ -20,6 +20,7 @@ from soothe.sloop.intention.models import (
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
+from soothe.utils.observability.langfuse import open_intake_langfuse_span
 
 logger = logging.getLogger(__name__)
 
@@ -136,16 +137,31 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
 
     prior_language = normalize_response_language(getattr(ctx.loop_state, "response_language", None))
 
-    intent = await classifier.classify_intake(
-        query,
-        loop_messages=loop_messages,
-        thread_id=thread_id,
-        context_engine=ctx.ce,
-        prior_response_language=prior_language,
-        goal_trace=ctx.goal_trace,
-        observability_phase="strange_loop_graph",
-        observability_component="strange_loop.intent_classification",
+    intake_span = open_intake_langfuse_span(
+        ctx.goal_trace,
+        metadata={"loop_id": ctx.state_manager.loop_id},
+        input_text=query,
     )
+    nested_trace = (
+        ctx.goal_trace.with_intake_parent_span(intake_span.parent_span_id)
+        if ctx.goal_trace is not None
+        else None
+    )
+    try:
+        intent = await classifier.classify_intake(
+            query,
+            loop_messages=loop_messages,
+            thread_id=thread_id,
+            context_engine=ctx.ce,
+            prior_response_language=prior_language,
+            goal_trace=nested_trace,
+            observability_phase="strange_loop_graph",
+            observability_component="strange_loop.intent_classification",
+        )
+    except Exception:
+        intake_span.end()
+        raise
+    intake_span.end(output=str(intent.intake_label))
 
     await emit_plan_phase_status(ctx, label=INTENT_CLASSIFY_STATUS_LABEL)
 

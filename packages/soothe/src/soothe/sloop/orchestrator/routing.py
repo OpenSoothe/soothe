@@ -1,4 +1,4 @@
-"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630,,)."""
+"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630)."""
 
 from __future__ import annotations
 
@@ -9,10 +9,8 @@ from langgraph.graph import END
 
 from soothe.sloop.intention.models import IntakeLabel
 
-from .state import PLAN_ROUTE_GOAL_DONE
 from .stations import (
     AWAIT_USER,
-    BEGIN_ITERATION,
     CHECK_LIMITS,
     COMMIT_PLAN,
     DELEGATE,
@@ -21,8 +19,8 @@ from .stations import (
     FINALIZE,
     GATHER_EVIDENCE,
     GENERATE_PLAN,
+    PLAN_ROUTE_GOAL_DONE,
     RECORD_PROGRESS,
-    VALIDATE_PLAN,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,44 +30,24 @@ def route_after_evidence_gather(state: dict[str, Any]) -> str:
     """Route from gather_evidence based on fresh-loop / structural keep."""
     route = state.get("evidence_gather_route")
     if route == "keep_plan":
-        logger.info("[routing] route_after_evidence_gather → commit_plan (structural keep)")
+        logger.debug("[routing] route_after_evidence_gather → commit_plan (structural keep)")
         return COMMIT_PLAN
     if route == "plan_generate_skip_evaluate":
-        logger.info("[routing] route_after_evidence_gather → generate_plan (fresh-loop skip)")
+        logger.debug("[routing] route_after_evidence_gather → generate_plan (fresh-loop skip)")
         return GENERATE_PLAN
-    # mid-goal path is always evaluate.
-    logger.info("[routing] route_after_evidence_gather → evaluate")
+    logger.debug("[routing] route_after_evidence_gather → evaluate")
     return EVALUATE
 
 
 def _pending_clarification(state: dict[str, Any]) -> bool:
-    """RFC-622: yield to ``await_user`` when a request is pending and unanswered."""
+    """True when a clarification request is pending and unanswered."""
     pending = state.get("pending_clarification")
     answer = state.get("pending_clarification_answer")
-    result = bool(pending) and not answer
-    if result:
-        logger.debug(
-            "[routing] _pending_clarification: pending=%s, answer=%s, result=%s",
-            bool(pending),
-            answer,
-            result,
-        )
-    return result
+    return bool(pending) and not answer
 
 
 def route_after_preprocess(state: dict[str, Any]) -> str:
-    """RFC-630 / branch dispatch after enter_loop.
-
-    Priority (first match wins):
-
-    1. ``intent_route == fast_path`` → END (chitchat)
-    2. ``intent_route == wired_subagent`` → ``delegate``
-    3. **Fresh** + trivial|simple → ``commit_plan`` (injected pseudo-plan)
-    4. **Everything else** (fresh complex + all mid-loop) → ``gather_evidence``
-
-    Mid-loop intake tiers (trivial bootstrap / simple lightweight / complex full)
-    live inside gather → evaluate → generate, not as a preprocess overlay.
-    """
+    """Branch after enter_loop: chitchat END, wired delegate, or plan spine."""
     new_goal_created = state.get("new_goal_created", False)
     label = state.get("intake_label")
     is_fresh_goal = state.get("is_fresh_goal")
@@ -92,27 +70,25 @@ def route_after_preprocess(state: dict[str, Any]) -> str:
                 "forcing complex route"
             )
             return GATHER_EVIDENCE
-        logger.info("[routing] route_after_preprocess → END (chitchat fast-path)")
+        logger.debug("[routing] route_after_preprocess → END (chitchat fast-path)")
         return END
 
     if state.get("intent_route") == "wired_subagent":
-        logger.info("[routing] route_after_preprocess → delegate")
+        logger.debug("[routing] route_after_preprocess → delegate")
         return DELEGATE
 
     if is_fresh_goal and label in (IntakeLabel.TRIVIAL, IntakeLabel.SIMPLE):
-        logger.info(
+        logger.debug(
             "[routing] route_after_preprocess → commit_plan (fresh trivial/simple; label=%s)",
             label,
         )
         return COMMIT_PLAN
 
-    if is_fresh_goal:
-        logger.info("[routing] route_after_preprocess → gather_evidence (fresh complex/default)")
-    else:
-        logger.info(
-            "[routing] route_after_preprocess → gather_evidence (mid-loop; label=%s)",
-            getattr(label, "value", label),
-        )
+    logger.debug(
+        "[routing] route_after_preprocess → gather_evidence (fresh=%s; label=%s)",
+        is_fresh_goal,
+        getattr(label, "value", label),
+    )
     return GATHER_EVIDENCE
 
 
@@ -121,10 +97,10 @@ route_by_intent = route_after_preprocess
 
 
 def route_after_iteration_gate(state: dict[str, Any]) -> str:
-    """End graph after max-iteration or rate-limit terminal; otherwise begin iteration."""
+    """End after max-iteration/rate-limit terminal; otherwise gather evidence."""
     if state.get("last_outcome") in ("max_iterations", "rate_limited"):
         return END
-    return BEGIN_ITERATION
+    return GATHER_EVIDENCE
 
 
 def route_after_plan(state: dict[str, Any]) -> str:
@@ -136,7 +112,7 @@ def route_after_plan(state: dict[str, Any]) -> str:
     if state.get("plan_route") == PLAN_ROUTE_GOAL_DONE:
         return FINALIZE
     if state.get("assess_route") == "continue_generate":
-        logger.info("[routing] route_after_plan → generate_plan (continue_generate)")
+        logger.debug("[routing] route_after_plan → generate_plan (continue_generate)")
         return GENERATE_PLAN
     return COMMIT_PLAN
 
@@ -152,11 +128,11 @@ def route_after_evaluate(state: dict[str, Any]) -> str:
     return GENERATE_PLAN
 
 
-def route_after_resolve_decision(state: dict[str, Any]) -> str:
-    """Stop on planner fatal; otherwise validate plan evidence refs."""
+def route_after_commit(state: dict[str, Any]) -> str:
+    """Stop on commit/evidence-validation fatal; otherwise CoreAgent execute."""
     if state.get("last_outcome") == "fatal":
         return END
-    return VALIDATE_PLAN
+    return EXECUTE
 
 
 def route_after_wired_subagent(state: dict[str, Any]) -> str:
@@ -165,34 +141,27 @@ def route_after_wired_subagent(state: dict[str, Any]) -> str:
         logger.debug("[routing] route_after_wired_subagent → END (fatal)")
         return END
     if _pending_clarification(state):
-        logger.info("[routing] route_after_wired_subagent → await_user")
+        logger.debug("[routing] route_after_wired_subagent → await_user")
         return AWAIT_USER
     if state.get("planner_implement_handoff"):
-        logger.info("[routing] route_after_wired_subagent → generate_plan (approved plan handoff)")
+        logger.debug("[routing] route_after_wired_subagent → generate_plan (handoff)")
         return GENERATE_PLAN
-    logger.info("[routing] route_after_wired_subagent → finalize")
+    logger.debug("[routing] route_after_wired_subagent → finalize")
     return FINALIZE
-
-
-def route_after_validate_evidence(state: dict[str, Any]) -> str:
-    """Stop on validation fatal; otherwise CoreAgent execute."""
-    if state.get("last_outcome") == "fatal":
-        return END
-    return EXECUTE
 
 
 def route_after_execute(state: dict[str, Any]) -> str:
     """Stop on execute fatal; otherwise record progress."""
     if _pending_clarification(state):
-        logger.info("[routing] route_after_execute → await_user")
+        logger.debug("[routing] route_after_execute → await_user")
         return AWAIT_USER
     if state.get("last_outcome") == "fatal":
         logger.debug("[routing] route_after_execute → END (fatal)")
         return END
     if state.get("resume_synth"):
-        logger.info("[routing] route_after_execute → check_limits (resume synth)")
+        logger.debug("[routing] route_after_execute → check_limits (resume synth)")
         return CHECK_LIMITS
-    logger.info("[routing] route_after_execute → record_progress")
+    logger.debug("[routing] route_after_execute → record_progress")
     return RECORD_PROGRESS
 
 
@@ -207,7 +176,7 @@ def route_after_record_iteration(state: dict[str, Any]) -> str:
 
 
 def route_after_clarification(state: dict[str, Any]) -> str:
-    """RFC-622: return to originating station, or END on defer."""
+    """Return to originating station, or END on defer."""
     if state.get("last_outcome") == "deferred":
         return END
     from soothe.sloop.clarification.origins import resume_node_for_clarification_origin

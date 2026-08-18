@@ -15,8 +15,7 @@ from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode
 from soothe.context.store_sqlite import SqliteContextPersistence
 from soothe.sloop.engine.continuation_context import build_prior_goal_summaries
-from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch, LoopRuntimeContext
 from soothe.sloop.stages.plan.assess import (
     build_continue_loop_bootstrap_plan,
 )

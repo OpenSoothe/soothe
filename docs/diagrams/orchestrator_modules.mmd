@@ -1,0 +1,47 @@
+---
+title: soothe.sloop.orchestrator modules (IG-745)
+config:
+  flowchart:
+    curve: basis
+    htmlLabels: true
+---
+flowchart TB
+  subgraph invoke [Compile and invoke]
+    builder[builder.py<br/>build_strange_loop_graph]
+    runner[runner.py<br/>invoke_strange_loop_graph]
+    builder --> runner
+  end
+
+  subgraph topology [Topology]
+    stations[stations.py<br/>station IDs · LoopGraphState · PLAN_ROUTE_*]
+    routing[routing.py<br/>route_after_*]
+    stations --> routing
+    routing --> builder
+  end
+
+  subgraph lifecycle [Node lifecycle]
+    node_base[node_base.py<br/>LoopNode · wrap_node · RouteDecision]
+    node_base --> builder
+  end
+
+  subgraph runtime [Runtime bundle]
+    runtime_context[runtime_context.py<br/>LoopRuntimeContext · LoopPhaseScratch]
+    runtime_context --> builder
+    runtime_context --> runner
+  end
+
+  subgraph policy [Entry and intake policy]
+    continuation[continuation.py<br/>fresh/mid-loop · synthetic assess]
+  end
+
+  subgraph ckpt [Checkpoint isolation]
+    checkpoint[checkpoint.py<br/>thread ids · core_agent_checkpointer]
+    checkpoint --> builder
+    checkpoint --> runner
+  end
+
+  stages[stages/* · engine · prompts] -.-> runtime_context
+  stages -.-> continuation
+  stages -.-> stations
+  stages -.-> checkpoint
+  stages -.-> node_base

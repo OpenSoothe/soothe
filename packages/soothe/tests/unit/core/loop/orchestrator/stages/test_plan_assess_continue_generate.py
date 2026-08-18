@@ -13,8 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch, LoopRuntimeContext
 from soothe.sloop.stages.plan.assess import node_plan_assess
 from soothe.sloop.state.checkpoint import (
     StrangeLoopCheckpoint,

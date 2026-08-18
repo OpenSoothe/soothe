@@ -6,7 +6,9 @@ instructions, loader) stay in ``soothe.prompts``.
 """
 
 from .builder import PromptBuilder
+from .graph_wrapper import GraphCallKind, GraphPromptWrapper, ProjectionResult
 from .plan_ledger_projection import (
+    current_goal_has_execute_ledger,
     project_continuation_assess_ledger,
     project_loop_messages_for_core_agent,
     project_loop_messages_for_plan,
@@ -32,12 +34,16 @@ from .user_message import (
 
 __all__ = [
     "EXECUTION_TASK_LABEL",
+    "GraphCallKind",
+    "GraphPromptWrapper",
     "PRIOR_PROGRESS_MAX_CHARS",
     "PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS",
     "PlannerCallKind",
     "PlannerProjectionMode",
+    "ProjectionResult",
     "PromptBuilder",
     "UserMessageBuilder",
+    "current_goal_has_execute_ledger",
     "flatten_user_message_content",
     "goal_preview_text",
     "project_continuation_assess_ledger",

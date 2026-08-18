@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 from langgraph.checkpoint.memory import MemorySaver
 
 from soothe.sloop.orchestrator.builder import build_strange_loop_graph
-from soothe.sloop.orchestrator.checkpointer import core_agent_checkpointer
+from soothe.sloop.orchestrator.checkpoint import core_agent_checkpointer
 
 
 def test_build_strange_loop_graph_attaches_core_agent_checkpointer() -> None:

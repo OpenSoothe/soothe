@@ -38,8 +38,8 @@ from soothe.sloop.clarification.events import (
     ClarificationDeferredEvent,
     ClarificationRequestedEvent,
 )
-from soothe.sloop.intention import build_loop_routing_classification
 from soothe.sloop.intention.models import (
+    build_loop_routing_classification,
     intent_classification_from_intake_scope,
     parse_intake_scope,
 )

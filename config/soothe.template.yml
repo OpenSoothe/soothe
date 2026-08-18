@@ -237,7 +237,7 @@ agent:
     auto_min_confidence: 0.4
     degrade_to_manual_on_low_confidence: true
     max_defer_age_hours: 168
-    default_mode: auto
+    default_mode: manual
     # StrangeLoop plan_generate/plan_assess are *not* listed here.
     # Default: planner *subagent* human review only.
     force_manual_origins:

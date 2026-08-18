@@ -16,8 +16,8 @@ from soothe_nano.llm.invoke_policy import (
 )
 from soothe_nano.llm.structured import invoke_structured_chat
 
-from soothe.sloop.intention.chitchat_fallbacks import pick_generic_chitchat_fallback
-
+from .chitchat_fallbacks import pick_generic_chitchat_fallback
+from .invoke_config import build_intake_invoke_config
 from .models import (
     IntakePass1Confidence,
     IntakePass1LLMResult,
@@ -208,9 +208,11 @@ class IntakePass1Classifier:
             ),
         ]
 
-        config = self._build_invoke_config(
-            "classify_pass1",
-            "intake.pass1",
+        config = build_intake_invoke_config(
+            phase="intake_pass1",
+            purpose="classify_pass1",
+            component="intake.pass1",
+            soothe_config=self._soothe_config,
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
         )
@@ -268,9 +270,11 @@ class IntakePass1Classifier:
             SystemMessage(content=system_prompt),
             HumanMessage(content=f"{query}\n\n{INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK}"),
         ]
-        config = self._build_invoke_config(
-            "classify_pass1_social_reply",
-            "intake.pass1_social_reply",
+        config = build_intake_invoke_config(
+            phase="intake_pass1",
+            purpose="classify_pass1_social_reply",
+            component="intake.pass1_social_reply",
+            soothe_config=self._soothe_config,
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
         )
@@ -309,46 +313,6 @@ class IntakePass1Classifier:
         reason = type(error_context).__name__ if error_context else "no_model"
         logger.debug("Pass1 fallback to task (%s)", reason)
         return build_pass1_task_fallback()
-
-    def _build_invoke_config(
-        self,
-        purpose: str,
-        component: str,
-        *,
-        observability_metadata: dict[str, str] | None = None,
-        goal_trace: Any | None = None,
-    ) -> dict[str, Any]:
-        """Build RunnableConfig with Langfuse tracing."""
-        from soothe_nano.llm.observability import create_llm_call_metadata
-
-        if goal_trace is not None:
-            return goal_trace.intake_invoke_config(
-                purpose=purpose,
-                component=f"classifier.{component}",
-                phase="intake_pass1",
-                extra_metadata=observability_metadata,
-            )
-
-        if self._soothe_config is not None:
-            from soothe_sdk.observability.langfuse import SootheLangfuse
-
-            trace_name = (self._soothe_config.observability.langfuse.trace_name or "").strip()
-            return SootheLangfuse(self._soothe_config).traced_llm(
-                purpose=purpose,
-                component=f"classifier.{component}",
-                phase="intake_pass1",
-                run_name=f"intake-pass1:{trace_name or 'query'}",
-                extra_metadata=observability_metadata,
-            )
-
-        metadata = create_llm_call_metadata(
-            purpose=purpose,
-            component=f"classifier.{component}",
-            phase="intake_pass1",
-        )
-        if observability_metadata:
-            metadata.update(observability_metadata)
-        return {"metadata": metadata}
 
 
 __all__ = [

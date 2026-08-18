@@ -121,7 +121,7 @@ def _append_ask_user_loop_messages(
     next planning iteration. Without this pair the planner re-asks the same
     clarification because it has no record of what was asked or answered.
     """
-    from soothe.sloop.cognition.ledger_compaction import compact_execute_human_content
+    from soothe.sloop.utils.ledger_compaction import compact_execute_human_content
     from soothe.sloop.utils.messages import _record_ledger_message
 
     questions_block = _format_ask_user_questions(questions)

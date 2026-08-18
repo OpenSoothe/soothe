@@ -187,19 +187,6 @@ def _selected_text_from_screen(app: App) -> str | None:
     return text or None
 
 
-def clear_widget_text_selection(widget: Widget) -> None:
-    """Drop a widget's selection entry when its rendered line count may have changed."""
-    screen = widget.screen
-    if screen is None:
-        return
-    selections = getattr(screen, "selections", None)
-    if not selections or widget not in selections:
-        return
-    updated = dict(selections)
-    updated.pop(widget, None)
-    screen.selections = updated
-
-
 def _collect_selected_texts(
     app: App,
     *,

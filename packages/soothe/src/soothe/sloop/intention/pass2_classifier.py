@@ -18,6 +18,7 @@ from soothe_nano.llm.structured import invoke_structured_chat
 
 from soothe.config.constants import _PASS2_PRIOR_MAX_CHARS, _PASS2_REASONING_MAX_CHARS
 
+from .invoke_config import build_intake_invoke_config
 from .models import IntakePass2LLMResult, IntakeScope
 from .prompts import INTAKE_PASS2_HUMAN_TASK, INTAKE_PASS2_SYSTEM_PROMPT
 from .structured_methods import INTAKE_JSON_FIRST_METHODS
@@ -108,7 +109,7 @@ class IntakePass2Classifier:
             logger.debug(
                 "Pass2 classified: scope=%s goal=%s",
                 result.scope,
-                preview_goal(query),
+                _preview_goal(query),
             )
             return result
         except Exception as exc:
@@ -138,9 +139,11 @@ class IntakePass2Classifier:
 
         messages.append(HumanMessage(content=f"CURRENT_GOAL: {query}\n\n{INTAKE_PASS2_HUMAN_TASK}"))
 
-        config = self._build_invoke_config(
-            "classify_pass2",
-            "intake.pass2",
+        config = build_intake_invoke_config(
+            phase="intake_pass2",
+            purpose="classify_pass2",
+            component="intake.pass2",
+            soothe_config=self._soothe_config,
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
         )
@@ -202,48 +205,8 @@ class IntakePass2Classifier:
             requires_tool_use=False,
         )
 
-    def _build_invoke_config(
-        self,
-        purpose: str,
-        component: str,
-        *,
-        observability_metadata: dict[str, str] | None = None,
-        goal_trace: Any | None = None,
-    ) -> dict[str, Any]:
-        """Build RunnableConfig with Langfuse tracing."""
-        from soothe_nano.llm.observability import create_llm_call_metadata
 
-        if goal_trace is not None:
-            return goal_trace.intake_invoke_config(
-                purpose=purpose,
-                component=f"classifier.{component}",
-                phase="intake_pass2",
-                extra_metadata=observability_metadata,
-            )
-
-        if self._soothe_config is not None:
-            from soothe_sdk.observability.langfuse import SootheLangfuse
-
-            trace_name = (self._soothe_config.observability.langfuse.trace_name or "").strip()
-            return SootheLangfuse(self._soothe_config).traced_llm(
-                purpose=purpose,
-                component=f"classifier.{component}",
-                phase="intake_pass2",
-                run_name=f"intake-pass2:{trace_name or 'query'}",
-                extra_metadata=observability_metadata,
-            )
-
-        metadata = create_llm_call_metadata(
-            purpose=purpose,
-            component=f"classifier.{component}",
-            phase="intake_pass2",
-        )
-        if observability_metadata:
-            metadata.update(observability_metadata)
-        return {"metadata": metadata}
-
-
-def preview_goal(goal: str, max_len: int = 50) -> str:
+def _preview_goal(goal: str, max_len: int = 50) -> str:
     """Truncate goal description for logging."""
     if len(goal) <= max_len:
         return goal

@@ -29,14 +29,14 @@ from soothe.sloop.engine.continuation_context import (
     polish_continuation_assess_reasoning,
 )
 from soothe.sloop.intention.models import IntakeLabel
-from soothe.sloop.orchestrator.continuation_routing import (
+from soothe.sloop.orchestrator.continuation import (
     bootstrap_terminal_after_execute,
-    continuation_forced_plan_generate_assessment,
     has_prior_goal_context,
+    mid_loop_skip_continuation_assess,
+    synthetic_continue_assessment,
 )
-from soothe.sloop.orchestrator.mid_loop_intake import mid_loop_skip_continuation_assess
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.orchestrator.state import PLAN_ROUTE_GOAL_DONE
+from soothe.sloop.orchestrator.stations import PLAN_ROUTE_GOAL_DONE
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 from soothe.sloop.state.schemas import (
     AgentDecision,
@@ -234,13 +234,13 @@ async def _handle_continuation_first_plan(
     # plan_generate (lightweight for simple). Trivial alone runs the discriminator.
     if mid_loop_skip_continuation_assess(intake_label):
         logger.info("[Plan] continuation-assess skipped (intake=%s)", intake_label.value)
-        ctx.scratch.plan_assessment = continuation_forced_plan_generate_assessment()
+        ctx.scratch.plan_assessment = synthetic_continue_assessment()
         return {"assess_route": "continue_generate"}
 
     multi_phase = getattr(state.intent, "multi_phase", None) if state.intent else None
     if multi_phase:
         logger.info("[Plan] continuation guardrail: multi-step goal forced plan_generate")
-        ctx.scratch.plan_assessment = continuation_forced_plan_generate_assessment()
+        ctx.scratch.plan_assessment = synthetic_continue_assessment()
         return {"assess_route": "continue_generate"}
 
     if is_continue_keyword(state.goal):

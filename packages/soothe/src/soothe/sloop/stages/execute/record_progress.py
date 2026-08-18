@@ -6,7 +6,7 @@ import logging
 import time
 from typing import Any
 
-from soothe.sloop.orchestrator.checkpointer import core_agent_checkpointer
+from soothe.sloop.orchestrator.checkpoint import core_agent_checkpointer
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.utils.plan_action_text import resolve_plan_action_text
 

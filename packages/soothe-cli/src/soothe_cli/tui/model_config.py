@@ -266,7 +266,7 @@ PROVIDER_API_KEY_ENV = {
 }
 
 # Providers where a single API-key env var is not a reliable auth signal
-# (ADC, local runtime, etc.) — matches early-credential skip in ``create_model``.
+# (ADC, local runtime, etc.).
 IMPLICIT_AUTH_PROVIDERS: frozenset[str] = frozenset(
     {
         "google_vertexai",

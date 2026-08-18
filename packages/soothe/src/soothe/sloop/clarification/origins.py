@@ -20,7 +20,6 @@ from soothe.sloop.orchestrator.stations import (
     EVALUATE,
     EXECUTE,
     GENERATE_PLAN,
-    normalize_station,
 )
 
 # --- StrangeLoop planning / execute stages ---------------------------------
@@ -96,6 +95,17 @@ STRANGELOOP_PLANNING_ORIGINS: frozenset[str] = frozenset(
 
 CLARIFICATION_ORIGIN_RESUME_NODE: dict[str, str] = {
     ORIGIN_PLANNER_SUBAGENT_REVIEW: DELEGATE,
+    # Canonical origins resume at their own station.
+    ORIGIN_EXECUTE: EXECUTE,
+    ORIGIN_PLAN_GENERATE: GENERATE_PLAN,
+    ORIGIN_PLAN_EVALUATE: EVALUATE,
+    # Legacy planning origins persisted by pre-RFC-903 runs resume into the
+    # unified ``evaluate`` station (RFC-672 gap+assess fold).
+    "plan_generate": GENERATE_PLAN,
+    "plan_assess": EVALUATE,
+    "plan_gap_analysis": EVALUATE,
+    "assess": EVALUATE,
+    "analyze_gaps": EVALUATE,
 }
 
 DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = (ORIGIN_PLANNER_SUBAGENT_REVIEW,)
@@ -106,7 +116,8 @@ PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX: Final = "planner-subagent-review:"
 def resume_node_for_clarification_origin(origin: str | None) -> str | None:
     """Map a clarification origin to the StrangeLoop graph station that should resume.
 
-    Accepts legacy origin ids (``plan_generate``, ``plan_assess``, …) and normalizes them.
+    Accepts legacy origin ids (``plan_generate``, ``plan_assess``, …) and maps them
+    to their canonical resume station.
 
     Returns:
         Canonical graph station name, or ``None`` when the origin is unknown
@@ -116,9 +127,7 @@ def resume_node_for_clarification_origin(origin: str | None) -> str | None:
         return None
     if origin == ORIGIN_RAIL_PAUSE:
         return None
-    if origin in CLARIFICATION_ORIGIN_RESUME_NODE:
-        return CLARIFICATION_ORIGIN_RESUME_NODE[origin]
-    return normalize_station(origin) or origin
+    return CLARIFICATION_ORIGIN_RESUME_NODE[origin]
 
 
 __all__ = [

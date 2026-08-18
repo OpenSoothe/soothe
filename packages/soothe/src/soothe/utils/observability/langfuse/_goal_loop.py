@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.observability.langfuse._client import resolve_str, resolved_langfuse_tags
@@ -12,11 +13,14 @@ from soothe_sdk.observability.langfuse._merge import merge_langfuse_runnable_con
 from soothe.utils.observability.langfuse._names import (
     execute_step_langfuse_run_display_name,
     intake_langfuse_run_display_name,
+    intake_phase_langfuse_run_display_name,
     loop_graph_langfuse_run_display_name,
 )
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -32,6 +36,7 @@ class GoalLoopTrace:
     session_id: str | None
     loop_id: str | None
     trace_display_name: str
+    intake_parent_span_id: str | None = None
 
     @classmethod
     def begin(
@@ -61,6 +66,12 @@ class GoalLoopTrace:
     def enabled(self) -> bool:
         return self.soothe_config.observability.langfuse.enabled
 
+    def with_intake_parent_span(self, span_id: str | None) -> GoalLoopTrace:
+        """Return a view whose intake LLM runs nest under the ``intake`` span."""
+        if not span_id:
+            return self
+        return replace(self, intake_parent_span_id=span_id)
+
     def _configurable(self) -> dict[str, Any]:
         return {"thread_id": self.loop_id or self.session_id or ""}
 
@@ -89,6 +100,50 @@ class GoalLoopTrace:
         meta["langfuse_trace_name"] = self.trace_display_name
         return meta
 
+    def pinned_llm_invoke_config(
+        self,
+        *,
+        purpose: str,
+        component: str,
+        phase: str,
+        run_name: str,
+        extra_metadata: dict[str, Any] | None = None,
+        nest_under_intake_span: bool = False,
+    ) -> dict[str, Any]:
+        """RunnableConfig for a direct LLM call pinned to this goal-loop trace.
+
+        Args:
+            purpose: ``soothe_call_purpose`` metadata.
+            component: ``soothe_call_component`` metadata.
+            phase: ``soothe_call_phase`` metadata.
+            run_name: Langfuse observation display name.
+            extra_metadata: Optional extra RunnableConfig metadata.
+            nest_under_intake_span: When True and an intake parent span is open,
+                nest the run under that span (Pass 1 / Pass 2 / graph intake).
+        """
+        from soothe_nano.llm.observability import create_llm_call_metadata
+
+        metadata = create_llm_call_metadata(purpose=purpose, component=component, phase=phase)
+        if extra_metadata:
+            metadata.update(extra_metadata)
+
+        base: dict[str, Any] = {
+            "configurable": dict(self._configurable()),
+            "metadata": {**self.base_metadata(), **metadata},
+        }
+        nested_handler = self._intake_parent_handler() if nest_under_intake_span else None
+        if nested_handler is not None:
+            base["callbacks"] = [nested_handler]
+        return merge_langfuse_runnable_config(
+            base,
+            self.soothe_config,
+            session_id=self.session_id,
+            run_name=run_name,
+            loop_id=self.loop_id,
+            pinned_trace_id=self.trace_id,
+            inherit_callbacks_from=base if nested_handler is not None else None,
+        )
+
     def intake_invoke_config(
         self,
         *,
@@ -98,27 +153,36 @@ class GoalLoopTrace:
         extra_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """RunnableConfig for preprocess ``intake`` LLM under this trace."""
-        from soothe_nano.llm.observability import create_llm_call_metadata
-
-        metadata = create_llm_call_metadata(purpose=purpose, component=component, phase=phase)
-        if extra_metadata:
-            metadata.update(extra_metadata)
-
         trace_name = (self.soothe_config.observability.langfuse.trace_name or "").strip()
-        run_name = intake_langfuse_run_display_name(trace_name or None)
-
-        base: dict[str, Any] = {
-            "configurable": dict(self._configurable()),
-            "metadata": {**self.base_metadata(), **metadata},
-        }
-        return merge_langfuse_runnable_config(
-            base,
-            self.soothe_config,
-            session_id=self.session_id,
+        run_name = intake_phase_langfuse_run_display_name(
+            trace_name or None, phase
+        ) or intake_langfuse_run_display_name(trace_name or None)
+        return self.pinned_llm_invoke_config(
+            purpose=purpose,
+            component=component,
+            phase=phase,
             run_name=run_name,
-            loop_id=self.loop_id,
-            pinned_trace_id=self.trace_id,
+            extra_metadata=extra_metadata,
+            nest_under_intake_span=True,
         )
+
+    def _intake_parent_handler(self) -> Any | None:
+        """Handler that nests intake runs under the ``intake`` span, when open."""
+        if not self.trace_id or not self.intake_parent_span_id:
+            return None
+        from soothe_sdk.observability.langfuse._handlers import new_soothe_langfuse_handler
+
+        try:
+            return new_soothe_langfuse_handler(
+                self.soothe_config,
+                trace_context={
+                    "trace_id": self.trace_id,
+                    "parent_span_id": self.intake_parent_span_id,
+                },
+            )
+        except Exception:
+            logger.debug("Langfuse intake parent handler unavailable", exc_info=True)
+            return None
 
     def graph_invoke_config(
         self,

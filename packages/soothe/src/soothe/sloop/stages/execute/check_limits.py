@@ -1,11 +1,23 @@
-"""Iteration cap check before per-iteration work (RFC-220 ``iteration_gate``)."""
+"""Iteration cap check and iteration begin (RFC-220 ``iteration_gate``).
+
+Implemented as a ``CheckLimitsNode`` subclass (RFC-903). Terminal branches
+(max_iterations, rate_limited) emit completion events in ``process`` and
+return ``RouteDecision(kind="terminal")``. The non-terminal branch performs
+iteration-begin setup (scratch reset, start anchor capture,
+``iteration_started`` emission) — folded from the former ``begin_iteration``
+node.
+"""
 
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
-from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.orchestrator.checkpoint import core_agent_checkpointer
+from soothe.sloop.orchestrator.node_base import LoopNode, NodeResult, RouteDecision
+from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch, LoopRuntimeContext
+from soothe.sloop.orchestrator.stations import CHECK_LIMITS
 from soothe.sloop.stages.execute.max_iterations_terminal import emit_max_iterations_terminal
 
 logger = logging.getLogger(__name__)
@@ -29,37 +41,105 @@ def _get_rate_limit_threshold(ctx: LoopRuntimeContext) -> int:
     return _DEFAULT_RATE_LIMIT_THRESHOLD
 
 
-async def node_iteration_gate(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Stop with terminal completion when the iteration budget is exhausted."""
-    # Resumable interrupt edge case: when a goal was just resumed in place
-    # from an ``interrupted``/``cancelled`` cursor (recovery_valid_resume) and
-    # the persisted iteration happens to sit exactly at the budget boundary,
-    # the gate must not emit max_iterations before the resumed run does any
-    # work. Grant one grace iteration so the resumed goal can make progress
-    # before the budget check applies again. Without this, a cancel-then-retry
-    # at the final iteration would immediately terminalize the goal.
-    _resumed = bool(getattr(ctx, "recovery_valid_resume", False))
-    if not _resumed and ctx.loop_state.iteration >= ctx.loop_state.max_iterations:
-        await emit_max_iterations_terminal(ctx)
-        return {"last_outcome": "max_iterations"}
+class CheckLimitsNode(LoopNode):
+    """Stop with terminal completion when the iteration budget is exhausted.
 
-    # Rate limit circuit breaker: stop when consecutive 429s exceed threshold
-    metrics = ctx.checkpoint.thread_health_metrics
-    try:
-        rate_limit_errors = int(getattr(metrics, "consecutive_rate_limit_errors", 0))
-    except (TypeError, ValueError):
-        rate_limit_errors = 0
-    threshold = _get_rate_limit_threshold(ctx)
-    if rate_limit_errors >= threshold:
-        logger.warning(
-            "[Rate limit] Loop stopping: %d consecutive rate limit errors >= threshold %d",
-            rate_limit_errors,
-            threshold,
+    Non-LLM node (``call_kind is None``). Terminal branches emit completion
+    events in ``process`` and return ``RouteDecision(kind="terminal")`` so
+    the router routes to END.
+    """
+
+    station = CHECK_LIMITS
+    call_kind = None
+
+    async def process(
+        self,
+        ctx: LoopRuntimeContext,
+        state: dict[str, Any],
+        messages: list,
+    ) -> NodeResult:
+        # Resumable interrupt edge case: when a goal was just resumed in place
+        # from an ``interrupted``/``cancelled`` cursor (recovery_valid_resume)
+        # and the persisted iteration happens to sit exactly at the budget
+        # boundary, the gate must not emit max_iterations before the resumed
+        # run does any work. Grant one grace iteration so the resumed goal can
+        # make progress before the budget check applies again. Without this, a
+        # cancel-then-retry at the final iteration would immediately
+        # terminalize the goal.
+        _resumed = bool(getattr(ctx, "recovery_valid_resume", False))
+        if not _resumed and ctx.loop_state.iteration >= ctx.loop_state.max_iterations:
+            await emit_max_iterations_terminal(ctx)
+            return NodeResult(payload="max_iterations")
+
+        # Rate limit circuit breaker: stop when consecutive 429s exceed threshold
+        metrics = ctx.checkpoint.thread_health_metrics
+        try:
+            rate_limit_errors = int(getattr(metrics, "consecutive_rate_limit_errors", 0))
+        except (TypeError, ValueError):
+            rate_limit_errors = 0
+        threshold = _get_rate_limit_threshold(ctx)
+        if rate_limit_errors >= threshold:
+            logger.warning(
+                "[Rate limit] Loop stopping: %d consecutive rate limit errors >= threshold %d",
+                rate_limit_errors,
+                threshold,
+            )
+            await emit_rate_limit_terminal(ctx)
+            return NodeResult(payload="rate_limited")
+
+        # RFC-903 P3: folded begin_iteration into the non-terminal branch.
+        # Scratch reset, start anchor capture, and iteration_started emission
+        # previously lived in a separate BEGIN_ITERATION node.
+        strange_loop = ctx.strange_loop
+        loop_state = ctx.loop_state
+
+        ctx.scratch = LoopPhaseScratch(iteration_perf_start=time.perf_counter())
+
+        events: list[tuple[str, dict[str, Any]]] = [
+            (
+                "iteration_started",
+                {
+                    "iteration": loop_state.iteration,
+                    "max_iterations": loop_state.max_iterations,
+                },
+            )
+        ]
+
+        await ctx.anchor_manager.capture_iteration_start_anchor(
+            iteration=loop_state.iteration,
+            thread_id=loop_state.thread_id,
+            checkpointer=core_agent_checkpointer(strange_loop),
         )
-        await emit_rate_limit_terminal(ctx)
-        return {"last_outcome": "rate_limited"}
 
-    return {}
+        return NodeResult(payload="continue", events=events)
+
+    def post(
+        self,
+        ctx: LoopRuntimeContext,
+        state: dict[str, Any],
+        result: NodeResult,
+    ) -> RouteDecision:
+        if result.payload in ("max_iterations", "rate_limited"):
+            return RouteDecision(
+                kind="terminal",
+                state_patch={"last_outcome": result.payload},
+            )
+        # RFC-226 fix: clear resume_synth to prevent stale flag from prior
+        # clarification synthesis from affecting subsequent goals/iterations.
+        # Previously cleared by the folded begin_iteration node.
+        return RouteDecision(
+            kind="proceed",
+            state_patch={
+                "plan_route": None,
+                "assess_route": None,
+                "last_outcome": None,
+                "resume_synth": None,
+            },
+        )
+
+
+# Singleton instance for the graph builder.
+node: CheckLimitsNode = CheckLimitsNode()
 
 
 async def emit_rate_limit_terminal(ctx: LoopRuntimeContext) -> None:

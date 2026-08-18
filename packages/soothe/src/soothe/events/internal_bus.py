@@ -13,37 +13,13 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import logging
-import sys
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
-
-
-def _load_internal_events_module() -> Any:
-    """Load ``internal_events`` without importing ``events`` package ``__init__``.
-
-    The events package ``__init__`` pulls in the full catalog and can circular-import
-    during early monitor imports; loading the module file directly is safe.
-    """
-    name = "soothe.events.internal_events"
-    mod = sys.modules.get(name)
-    if mod is not None and hasattr(mod, "InternalAutopilotDreamingEvent"):
-        return mod
-
-    path = Path(__file__).resolve().parent / "internal_events.py"
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot load internal events module from {path}")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
 
 
 class InternalEventBus:

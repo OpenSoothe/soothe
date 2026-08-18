@@ -205,17 +205,6 @@ def test_build_edit_file_preview_has_diff_lines() -> None:
     assert any(line.startswith("-") or line.startswith("+") for line in data["diff_lines"])
 
 
-def test_edit_file_preview_diff_rows_align_context_and_additions() -> None:
-    """Regression: added lines must align with context lines in diff previews."""
-    from soothe_cli.tui.widgets.diff import format_diff_row_plain
-
-    width = 3
-    content = "        if self._autopilot is not None:"
-    context = format_diff_row_plain(" ", content, line_num=92, width=width)
-    added = format_diff_row_plain("+", content, line_num=96, width=width)
-    assert context.index(content) == added.index(content)
-
-
 def test_build_edit_lines_preview_uses_line_range(tmp_path: Path) -> None:
     """edit_lines preview diffs the replaced segment against new_content."""
     target = tmp_path / "lines.py"

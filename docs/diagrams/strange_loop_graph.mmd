@@ -2,7 +2,10 @@
 title: StrangeLoop LangGraph (RFC-220 / RFC-630)
 config:
   flowchart:
-    curve: linear
+    curve: basis
+    nodeSpacing: 30
+    rankSpacing: 40
+    useMaxWidth: true
   theme: base
   themeVariables:
     primaryColor: "#e1f5fe"
@@ -17,59 +20,56 @@ graph TD;
 	intake(intake)
 	enter_loop(enter_loop)
 	delegate(delegate)
-	check_limits(check_limits)
-	begin_iteration(begin_iteration)
 	gather_evidence(gather_evidence)
 	evaluate(evaluate)
 	generate_plan(generate_plan)
-	finalize(finalize)
 	commit_plan(commit_plan)
-	validate_plan(validate_plan)
 	execute(execute)
 	record_progress(record_progress)
+	check_limits(check_limits)
 	await_user(await_user)
+	finalize(finalize)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> intake;
-	await_user -.-> __end__;
-	await_user -.-> delegate;
-	await_user -.-> evaluate;
-	await_user -.-> execute;
-	await_user -.-> generate_plan;
-	begin_iteration --> gather_evidence;
-	check_limits -.-> __end__;
-	check_limits -.-> begin_iteration;
-	commit_plan -.-> __end__;
-	commit_plan -.-> validate_plan;
-	delegate -.-> __end__;
-	delegate -.-> await_user;
-	delegate -.-> finalize;
-	delegate -.-> generate_plan;
-	enter_loop -.-> __end__;
-	enter_loop -.-> commit_plan;
+	intake --> enter_loop;
 	enter_loop -.-> delegate;
 	enter_loop -.-> gather_evidence;
-	evaluate -.-> await_user;
-	evaluate -.-> commit_plan;
-	evaluate -.-> finalize;
-	evaluate -.-> generate_plan;
-	execute -.-> __end__;
-	execute -.-> await_user;
-	execute -.-> check_limits;
-	execute -.-> record_progress;
-	gather_evidence -.-> commit_plan;
+	enter_loop -.-> commit_plan;
+	enter_loop -.-> __end__;
+	delegate -.-> generate_plan;
+	delegate -.-> await_user;
+	delegate -.-> finalize;
+	delegate -.-> __end__;
 	gather_evidence -.-> evaluate;
 	gather_evidence -.-> generate_plan;
-	generate_plan -.-> await_user;
+	gather_evidence -.-> commit_plan;
+	evaluate -.-> generate_plan;
+	evaluate -.-> commit_plan;
+	evaluate -.-> await_user;
+	evaluate -.-> finalize;
+	generate_plan -.-> generate_plan;
 	generate_plan -.-> commit_plan;
+	generate_plan -.-> await_user;
 	generate_plan -.-> finalize;
-	intake --> enter_loop;
-	record_progress -.-> __end__;
+	commit_plan -.-> execute;
+	commit_plan -.-> __end__;
+	execute -.-> record_progress;
+	execute -.-> check_limits;
+	execute -.-> await_user;
+	execute -.-> __end__;
 	record_progress -.-> check_limits;
 	record_progress -.-> finalize;
-	validate_plan -.-> __end__;
-	validate_plan -.-> execute;
+	record_progress -.-> __end__;
+	check_limits -.-> gather_evidence;
+	check_limits -.-> __end__;
+	await_user -.-> delegate;
+	await_user -.-> evaluate;
+	await_user -.-> generate_plan;
+	await_user -.-> execute;
+	await_user -.-> __end__;
 	finalize --> __end__;
-	generate_plan -.-> generate_plan;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc
+	linkStyle 5,9,22,26,29,31,36 stroke:#b0bec5,stroke-width:1px
+	linkStyle 37 stroke:#0288d1,stroke-width:2px

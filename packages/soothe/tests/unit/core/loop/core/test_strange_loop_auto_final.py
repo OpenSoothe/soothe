@@ -13,7 +13,7 @@ from soothe.sloop.state.schemas import PlanResult
 def _make_mock_core_with_checkpointer() -> Mock:
     """Create mock CoreAgent with graph.checkpointer as AsyncMock returning None.
 
-    Without this, node_iteration_start's anchor_manager.capture_iteration_start_anchor
+    Without this, CheckLimitsNode's anchor_manager.capture_iteration_start_anchor
     tries to await checkpointer.aget_tuple(config), causing TypeError on regular Mock.
     """
     mock_core = Mock()

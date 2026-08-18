@@ -32,9 +32,6 @@ _GOAL_ITERATION_SUFFIX_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Pattern for @server:uri references in user messages
-_MCP_RESOURCE_REF_RE = re.compile(r"@(\w+):(\S+)")
-
 # Execute-step envelope label (distinct from plan-phase GOAL / GOAL RECAP).
 EXECUTION_TASK_LABEL = "EXECUTION TASK"
 
@@ -441,11 +438,6 @@ def _render_dag_status(dag_ctx: Any) -> str:
             "- NOTE: Prior steps failed — propose a DIFFERENT approach, do not retry the same failed steps."
         )
     return "\n".join(lines)
-
-
-def _extract_mcp_resource_refs(text: str) -> list[tuple[str, str]]:
-    """Extract ``@server:uri`` references from user text."""
-    return [(m.group(1), m.group(2)) for m in _MCP_RESOURCE_REF_RE.finditer(text)]
 
 
 def _render_mcp_resource_blocks(blocks: list[str] | None) -> str:

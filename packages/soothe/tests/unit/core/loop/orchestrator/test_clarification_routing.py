@@ -45,7 +45,7 @@ def test_route_after_plan_fatal_exits_before_continue_generate() -> None:
 
 
 def test_route_after_plan_prefers_goal_done_over_replan() -> None:
-    from soothe.sloop.orchestrator.state import PLAN_ROUTE_GOAL_DONE
+    from soothe.sloop.orchestrator.stations import PLAN_ROUTE_GOAL_DONE
 
     assert (
         route_after_plan({"plan_route": PLAN_ROUTE_GOAL_DONE, "assess_route": "continue_generate"})

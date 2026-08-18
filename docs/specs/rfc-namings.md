@@ -2,7 +2,7 @@
 
 This document defines the terminology and naming conventions used in this project.
 
-**Last Updated**: 2026-08-08
+**Last Updated**: 2026-08-18
 
 > Note: Also covers start-phase intake & branch routing terms (RFC-630) and
 > LoopRail streaming slice / worktree terms (RFC-231 §9, RFC-232).
@@ -201,7 +201,7 @@ This document defines the terminology and naming conventions used in this projec
 | Plan artifact | Markdown plan file at `{workspace}/.soothe/plans/{timestamp}-{slug}.md` written by the host after intake planner completes. | RFC-633 |
 | StrangeLoop `generate_plan` | StrangeLoop **planning-stage** station that drafts/refines the multi-step `AgentDecision` for the current goal wave (legacy id: `plan_generate`). Not the intake `planner` subagent. | RFC-220, RFC-227, IG-663 |
 | StrangeLoop `assess` | StrangeLoop **planning-stage** station that assesses progress / continuation before (or instead of) regenerating a plan (legacy id: `plan_assess`). Not the intake `planner` subagent. | RFC-220, RFC-226, IG-663 |
-| StrangeLoop stem stations | Flat LangGraph node IDs: `intake` → `enter_loop` → (`gather_evidence` →) `assess` → `generate_plan` → `commit_plan` → `validate_plan` → `execute` → `record_progress` → (`check_limits`…) / `finalize`. Sidecars: `await_user`, `delegate`. See `orchestrator/stations.py`. | IG-663 |
+| StrangeLoop stem stations | Flat LangGraph node IDs: `intake` → `enter_loop` → (`gather_evidence` →) `evaluate` → `generate_plan` → `commit_plan` → `execute` → `record_progress` → `check_limits`… / `finalize`. Sidecars: `await_user`, `delegate`. RFC-903 folded `validate_plan`→`commit_plan` and `begin_iteration`→`check_limits`. See `orchestrator/stations.py`. | IG-663, RFC-903 |
 | `route_after_preprocess` | Conditional edge after `enter_loop` that dispatches by intake label (legacy name: `route_by_intent`). | RFC-630, IG-663 |
 | Planner subagent review | Human Approve / Reject / More comments gate **after** the intake-only `planner` subagent produces a markdown plan artifact. Clarification origin: `planner_subagent_review`. Distinct from StrangeLoop `plan_generate` / `plan_assess`. | RFC-633, RFC-622 |
 | `planner_subagent_review` | `ClarificationOrigin` for the planner-subagent review gate only. Default entry in `agent.clarification.force_manual_origins`. | RFC-633 |
@@ -212,6 +212,15 @@ This document defines the terminology and naming conventions used in this projec
 | Trivial-branch plan | Minimal 1-step `PlanResult` injected by `enter_loop` for the `trivial` label: step action = the intake LLM's `goal_description` (no prefix), plan reasoning = `None` (no synthetic prose), soft direct-answer `expected_output`, and `requires_tool_use` from Pass 2 for the execute deliverable gate (IG-569). | RFC-630, IG-663 |
 | Two-stage pre-graph gather | Parallelized pre-graph sequence: stage 1 = intake LLM ∥ `checkpoint.load` ∥ `git_status`; stage 2 = CE construct+load+`create_goal`/`activate_goal` (depend on checkpoint) ∥ instruction/memory file reads via `to_thread`. Stage split is a correctness constraint (CE needs the checkpoint), not an optimization choice. | RFC-630 |
 | Direct replacement | The 4-class intake is the sole intent path — the legacy binary `IntentClassificationLLMResult` schema, `classify_intent`, the binary prompt fragments, and `_is_likely_agentic` are removed outright. No feature flag, no backward-compat shim. The `IntentClassifiedEvent` wire contract (`intent_type: quiz\|agentic`) is preserved; `intent_type` is derived from the 4-class label. | RFC-630 |
+
+### Node Lifecycle Terms (RFC-903)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| `LoopNode` | Base class for every StrangeLoop graph node with a five-method lifecycle: `pre` (guards/setup) → `project` (DAG projection) → `prompt` (message assembly) → `process` (core work) → `post` (writes/emit/route). Replaces the implicit `async def(ctx, state) -> dict` shape. Non-LLM nodes no-op `project`/`prompt`. | RFC-903 |
+| `RouteDecision` | Typed sum-type returned by `LoopNode.post()`: `kind ∈ {proceed, await_user, deferred, fatal, terminal}` + `next_phase` / `clarification_origin` / `state_patch`. Replaces the free-form route-key dict (`plan_route`, `assess_route`, `evidence_gather_route`, `after_record_route`, `resume_synth`, `planner_implement_handoff`). | RFC-903 |
+| `GuardOutcome` | Short-circuit result from `LoopNode.pre()`: `kind ∈ {fatal, deferred, skip}`. Folds the per-node `emit fatal_error + return {"last_outcome":"fatal"}` boilerplate into one `pre()` default. | RFC-903 |
+| `wrap_node` | Builder adapter that detects `LoopNode` instances vs legacy `async def(ctx, state) -> dict` functions, so the graph adopts the new base incrementally. | RFC-903 |
 
 ### Clarification Relay Terms (RFC-622, RFC-623)
 
