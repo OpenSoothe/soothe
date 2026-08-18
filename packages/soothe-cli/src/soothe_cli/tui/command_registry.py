@@ -302,6 +302,14 @@ ALWAYS_IMMEDIATE: frozenset[str] = _build_bypass_set(BypassTier.ALWAYS)
 BARE_QUIT_WORDS: frozenset[str] = frozenset({"exit", "quit"})
 """Single-word normal-mode input that exits the TUI (no leading slash)."""
 
+BARE_COMMAND_ALIASES: dict[str, str] = {"clear": "/clear"}
+"""Single-word normal-mode input rewritten to its slash-command equivalent.
+
+Keys are bare words typed in normal mode (no leading ``/``); values are the
+canonical slash command the input is rewritten to before routing. This lets
+operators type plain ``clear`` and get the same behavior as ``/clear``.
+"""
+
 BYPASS_WHEN_CONNECTING: frozenset[str] = _build_bypass_set(BypassTier.CONNECTING)
 """Commands that bypass only during initial server connection."""
 

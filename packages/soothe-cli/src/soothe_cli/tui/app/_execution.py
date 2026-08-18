@@ -172,7 +172,11 @@ class _ExecutionMixin:
 
         # /quit, /q, /exit, and bare exit/quit always execute immediately,
         # even mid-loop-switch or while the agent is busy.
-        from soothe_cli.tui.command_registry import ALWAYS_IMMEDIATE, BARE_QUIT_WORDS
+        from soothe_cli.tui.command_registry import (
+            ALWAYS_IMMEDIATE,
+            BARE_COMMAND_ALIASES,
+            BARE_QUIT_WORDS,
+        )
 
         stripped = value.lower().strip()
         if mode == "command" and stripped in ALWAYS_IMMEDIATE:
@@ -181,6 +185,14 @@ class _ExecutionMixin:
         if mode == "normal" and stripped in BARE_QUIT_WORDS:
             self._detach_or_exit()
             return
+
+        # Rewrite bare plain-text aliases (e.g. ``clear`` -> ``/clear``) to the
+        # canonical slash command and route as a command so the same queueing
+        # and loop-switch guards apply. Only exact single-word normal-mode
+        # input is rewritten so multi-word turns are never hijacked.
+        if mode == "normal" and stripped in BARE_COMMAND_ALIASES:
+            value = BARE_COMMAND_ALIASES[stripped]
+            mode = "command"
 
         # Prevent message handling while a loop switch is in-flight.
         if self._loop_switching:
