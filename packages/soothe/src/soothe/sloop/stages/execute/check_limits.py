@@ -17,6 +17,7 @@ from typing import Any
 from soothe.sloop.orchestrator.checkpoint import core_agent_checkpointer
 from soothe.sloop.orchestrator.node_base import LoopNode, NodeResult, RouteDecision
 from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch, LoopRuntimeContext
+from soothe.sloop.orchestrator.stations import CHECK_LIMITS
 from soothe.sloop.stages.execute.max_iterations_terminal import emit_max_iterations_terminal
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ class CheckLimitsNode(LoopNode):
     the router routes to END.
     """
 
-    station = "check_limits"
+    station = CHECK_LIMITS
     call_kind = None
 
     async def process(

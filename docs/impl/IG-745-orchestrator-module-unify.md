@@ -24,6 +24,17 @@ modules. No behavior changes; no backward-compat shims.
 `phase_scratch.py`, `checkpointer.py`, `checkpoint_keys.py`, `continuation_routing.py`,
 `mid_loop_intake.py`, `state.py`, `evidence.py`.
 
+## Public API polish (follow-up)
+
+- Demote unused ``__all__`` type aliases and ``PHASE_LEDGER_*`` to private.
+- Drop thin ``continuation_forced_plan_generate_assessment``; callers use
+  ``synthetic_continue_assessment``.
+- Slim ``node_base`` migration narrative; demote ``RouteKind``/``GuardKind``.
+- Remove builder double-wrap of migrated nodes; demote hot-path routing logs to DEBUG.
+- Adopt ``PHASE_EXECUTE_STEP`` in plan ledger projection mid-goal set.
+- Refresh ``docs/diagrams``: stem + nodes docs, regenerated full-edge dump/SVG,
+  new ``orchestrator_modules`` diagram.
+
 ## Verification
 
 `./scripts/verify_finally.sh`

@@ -93,13 +93,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     async def delegate(state: dict[str, Any]) -> dict[str, Any]:
         return await node_invoke_wired_subagent(ctx, state)
 
-    # Migrated nodes (RFC-903 P2): wrap_node detects LoopNode vs legacy.
-    _check_limits_fn = wrap_node("check_limits", check_limits_node, ctx)
-    _commit_plan_fn = wrap_node("commit_plan", commit_plan_node, ctx)
-
-    async def check_limits(state: dict[str, Any]) -> dict[str, Any]:
-        return await _check_limits_fn(state)
-
     async def gather_evidence(state: dict[str, Any]) -> dict[str, Any]:
         return await node_bounded_evidence_gather(ctx, state)
 
@@ -111,9 +104,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
 
     async def finalize(state: dict[str, Any]) -> dict[str, Any]:
         return await node_goal_completion(ctx, state)
-
-    async def commit_plan(state: dict[str, Any]) -> dict[str, Any]:
-        return await _commit_plan_fn(state)
 
     async def execute(state: dict[str, Any]) -> dict[str, Any]:
         return await node_execute(ctx, state)
@@ -128,12 +118,12 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_node(INTAKE, intake)
     graph.add_node(ENTER_LOOP, enter_loop)
     graph.add_node(DELEGATE, delegate)
-    graph.add_node(CHECK_LIMITS, check_limits)
+    graph.add_node(CHECK_LIMITS, wrap_node(CHECK_LIMITS, check_limits_node, ctx))
     graph.add_node(GATHER_EVIDENCE, gather_evidence)
     graph.add_node(EVALUATE, evaluate)
     graph.add_node(GENERATE_PLAN, generate_plan)
     graph.add_node(FINALIZE, finalize)
-    graph.add_node(COMMIT_PLAN, commit_plan)
+    graph.add_node(COMMIT_PLAN, wrap_node(COMMIT_PLAN, commit_plan_node, ctx))
     graph.add_node(EXECUTE, execute)
     graph.add_node(RECORD_PROGRESS, record_progress)
     graph.add_node(AWAIT_USER, await_user)
@@ -160,9 +150,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             END: END,
         },
     )
-    # RFC-903 P3: begin_iteration folded into check_limits. The gate now
-    # routes directly to gather_evidence on the non-terminal branch (previously
-    # routed to BEGIN_ITERATION → GATHER_EVIDENCE unconditionally).
     graph.add_conditional_edges(
         CHECK_LIMITS,
         route_after_iteration_gate,
@@ -198,10 +185,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         },
     )
     graph.add_edge(FINALIZE, END)
-    # RFC-903 P3: validate_plan folded into commit_plan. The evidence
-    # validation now runs in CommitPlanNode.process(); commit_plan routes
-    # directly to execute or END (previously: commit_plan → validate_plan →
-    # execute, with two routers).
     graph.add_conditional_edges(
         COMMIT_PLAN,
         route_after_commit,

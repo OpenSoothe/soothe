@@ -23,6 +23,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from soothe.sloop.orchestrator.stations import (
     INTAKE_LEDGER_PHASES,
+    PHASE_EXECUTE_STEP,
     PHASE_GOAL_COMPLETION,
     PHASE_GOAL_INTERRUPTED,
     PLANNING_LEDGER_PHASES,
@@ -63,7 +64,7 @@ _NEW_GOAL_LEDGER_PHASES = frozenset(
 )
 _PLANNER_PROJECTED_EXCLUDED_PHASES = frozenset({"assess", "plan_assess"})
 _MID_GOAL_CURRENT_PHASES = frozenset(
-    {*INTAKE_LEDGER_PHASES, "generate_plan", "plan_generate", "execute_step"}
+    {*INTAKE_LEDGER_PHASES, "generate_plan", "plan_generate", PHASE_EXECUTE_STEP}
 )
 
 # RFC-214: phases that mark a goal segment boundary. ``goal_completion`` is the
@@ -409,7 +410,7 @@ _EXECUTE_AI_STRIP_PREFIXES = (
 
 
 def _is_execute_ai_message(msg: BaseMessage) -> bool:
-    return getattr(msg, "phase", None) == "execute_step" and _is_loop_ai_message(msg)
+    return getattr(msg, "phase", None) == PHASE_EXECUTE_STEP and _is_loop_ai_message(msg)
 
 
 def _compact_execute_ai_for_assess(msg: BaseMessage, max_chars: int) -> BaseMessage:
@@ -735,7 +736,7 @@ def _current_goal_has_execute_ledger(state: LoopState) -> bool:
     if not plan_step_ids:
         return False
     for msg in state.loop_messages:
-        if getattr(msg, "phase", None) != "execute_step":
+        if getattr(msg, "phase", None) != PHASE_EXECUTE_STEP:
             continue
         sid = _message_step_id(msg)
         if sid and sid in plan_step_ids:
@@ -907,7 +908,7 @@ def execute_step_ids_subsumed_by_cross_goal_completion(
         segment_start = _goal_segment_start(loop_messages, start)
         for i in range(segment_start, start):
             msg = loop_messages[i]
-            if getattr(msg, "phase", None) != "execute_step":
+            if getattr(msg, "phase", None) != PHASE_EXECUTE_STEP:
                 continue
             sid = _message_step_id(msg)
             if sid:
@@ -985,7 +986,7 @@ def _prior_wave_step_ids_in_goal_segment(
     seg_start = _current_goal_segment_start(loop_messages)
     prior: set[str] = set()
     for msg in loop_messages[seg_start:]:
-        if getattr(msg, "phase", None) != "execute_step":
+        if getattr(msg, "phase", None) != PHASE_EXECUTE_STEP:
             continue
         sid = _message_step_id(msg)
         if sid and sid not in current_ids:
@@ -1104,7 +1105,7 @@ def project_execute_step_graph_input(
                 step.id,
             )
             if predecessor_projected and not any(
-                getattr(msg, "phase", None) == "execute_step" for msg in out
+                getattr(msg, "phase", None) == PHASE_EXECUTE_STEP for msg in out
             ):
                 predecessor_projected = False
 
@@ -1193,7 +1194,7 @@ def project_loop_messages_for_core_agent(
     for msg in loop_messages:
         phase = getattr(msg, "phase", None)
         if isinstance(msg, (LoopHumanMessage, LoopAIMessage)):
-            if phase == "execute_step":
+            if phase == PHASE_EXECUTE_STEP:
                 out.append(msg)
         # Also include any non-loop messages (plain HumanMessage/AIMessage from early phases)
         elif isinstance(msg, (HumanMessage, AIMessage)) and phase is None:

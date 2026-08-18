@@ -21,7 +21,6 @@ __all__ = [
     "FRESH_LOOP_BYPASS_PREFIX",
     "FRESH_LOOP_BYPASS_REASON",
     "bootstrap_terminal_after_execute",
-    "continuation_forced_plan_generate_assessment",
     "fresh_loop_bypass_assessment",
     "has_prior_goal_context",
     "is_fresh_goal",
@@ -94,11 +93,6 @@ def synthetic_continue_assessment(*, reasoning: str = ""):
         assessment_reasoning=reasoning,
         require_goal_completion=False,
     )
-
-
-def continuation_forced_plan_generate_assessment():
-    """Synthetic assessment when intake complexity forbids bootstrap."""
-    return synthetic_continue_assessment(reasoning="")
 
 
 def fresh_loop_bypass_assessment():

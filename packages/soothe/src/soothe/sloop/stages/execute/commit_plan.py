@@ -14,6 +14,7 @@ from typing import Any
 from soothe.sloop.cognition.plan_dag_normalizer import normalize_plan_dag
 from soothe.sloop.orchestrator.node_base import GuardOutcome, LoopNode, NodeResult, RouteDecision
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.orchestrator.stations import COMMIT_PLAN
 from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -74,7 +75,7 @@ class CommitPlanNode(LoopNode):
     ``plan_decision`` event.
     """
 
-    station = "commit_plan"
+    station = COMMIT_PLAN
     call_kind = None
 
     async def pre(self, ctx: LoopRuntimeContext, state: dict[str, Any]) -> GuardOutcome | None:
