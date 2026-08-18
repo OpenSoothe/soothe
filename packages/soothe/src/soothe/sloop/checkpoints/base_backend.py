@@ -1,6 +1,6 @@
 """Abstract backend interface for StrangeLoop persistence.
 
-IG-055: Backend-agnostic persistence layer supporting PostgreSQL and SQLite.
+Backend-agnostic persistence layer supporting PostgreSQL and SQLite.
 """
 
 from __future__ import annotations

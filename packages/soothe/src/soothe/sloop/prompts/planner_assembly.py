@@ -1,4 +1,4 @@
-"""Planner prompt assembly helpers (RFC-214 §4, IG-538)."""
+"""Planner prompt assembly helpers (RFC-214 §4)."""
 
 from __future__ import annotations
 

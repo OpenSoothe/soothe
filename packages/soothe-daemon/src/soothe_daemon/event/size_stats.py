@@ -1,4 +1,4 @@
-"""Streaming event wire-size distribution for the daemon EventBus (IG-403).
+"""Streaming event wire-size distribution for the daemon EventBus.
 
 Uses fixed-bin histogram + Welford's online mean/variance — O(1) memory per window.
 """

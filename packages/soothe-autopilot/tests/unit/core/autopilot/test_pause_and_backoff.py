@@ -1,4 +1,4 @@
-"""Tests for AutopilotService.pause_job cascade (IG-678 P1-1)."""
+"""Tests for AutopilotService.pause_job cascade (P1-1)."""
 
 from __future__ import annotations
 

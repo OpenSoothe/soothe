@@ -1,4 +1,4 @@
-"""Schema-level tests for the ``kind``/``questions`` fields (IG-462)."""
+"""Schema-level tests for the ``kind``/``questions`` fields."""
 
 from __future__ import annotations
 

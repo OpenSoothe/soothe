@@ -1,4 +1,4 @@
-"""Archive storage for finalized StrangeLoop checkpoints (IG-500).
+"""Archive storage for finalized StrangeLoop checkpoints.
 
 Provides persistent storage for archived loops, preserving goal history and
 metrics for knowledge transfer via /recall.

@@ -1,4 +1,4 @@
-"""Unmocked Autopilot CE paths (IG-678 P1-6): guidance + pause on real CE."""
+"""Unmocked Autopilot CE paths (P1-6): guidance + pause on real CE."""
 
 from __future__ import annotations
 

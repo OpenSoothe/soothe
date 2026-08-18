@@ -41,7 +41,7 @@ def resolve_interrupt_resume_ce_goal(ce: Any, *, loop_id: str) -> Any | None:
     """Pick the CE goal to reuse when resuming after user cancel / crash.
 
     Prefers ``active``, then ``pending`` / ``suspended``, then ``cancelled``
-    (pre-IG-684 cancel path). Same ``assigned_loop_id`` matching as clarification.
+    (pre-cancel path). Same ``assigned_loop_id`` matching as clarification.
 
     Args:
         ce: Loaded ``ContextEngine`` instance.

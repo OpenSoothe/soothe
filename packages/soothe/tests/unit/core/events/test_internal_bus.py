@@ -1,4 +1,4 @@
-"""Unit tests for Internal EventBus (RFC-222, IG-295)."""
+"""Unit tests for Internal EventBus (RFC-222)."""
 
 import pytest
 

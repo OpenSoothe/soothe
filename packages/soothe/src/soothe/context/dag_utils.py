@@ -1,4 +1,4 @@
-"""Shared DAG utilities for step dependency token expansion (IG-400, IG-537)."""
+"""Shared DAG utilities for step dependency token expansion."""
 
 from __future__ import annotations
 

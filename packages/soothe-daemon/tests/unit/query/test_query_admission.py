@@ -1,4 +1,4 @@
-"""Tests for query admission control (IG-534 gaps)."""
+"""Tests for query admission control (gaps)."""
 
 from __future__ import annotations
 

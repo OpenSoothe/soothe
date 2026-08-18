@@ -10,7 +10,7 @@ from textual.css.query import NoMatches
 
 @pytest.mark.asyncio
 async def test_clear_cancels_agent_before_new_loop() -> None:
-    """IG-533: /clear must cancel synthesis on the old loop before switching loop_id."""
+    """/clear must cancel synthesis on the old loop before switching loop_id."""
     from soothe_cli.tui.app._execution import _ExecutionMixin
 
     app = object.__new__(_ExecutionMixin)

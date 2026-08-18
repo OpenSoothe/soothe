@@ -1,4 +1,4 @@
-"""Unit tests for worker runner reuse helpers (IG-506)."""
+"""Unit tests for worker runner reuse helpers."""
 
 from __future__ import annotations
 

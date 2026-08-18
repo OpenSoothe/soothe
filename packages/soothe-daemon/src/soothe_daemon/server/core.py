@@ -142,10 +142,10 @@ class SootheDaemon(DaemonHandlersMixin):
         self._stale_worker_reap_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._event_size_stats_task: asyncio.Task[None] | None = None
-        self._event_bus_cleanup_task: asyncio.Task[None] | None = None  # IG-475
-        # Smart heartbeat tracking (IG-426)
+        self._event_bus_cleanup_task: asyncio.Task[None] | None = None  #
+        # Smart heartbeat tracking
         self._last_broadcast_monotonic: float = 0.0
-        # Message dispatch concurrency control (IG-258)
+        # Message dispatch concurrency control
         self._dispatch_semaphore: asyncio.Semaphore = asyncio.Semaphore(
             self._daemon_config.max_concurrent_dispatches
         )
@@ -158,7 +158,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._pid_lock_fd: int | None = None
         # Channel manager for multi-channel support (RFC-620)
         self._channel_manager: ChannelManager | None = None
-        # Event bus architecture (RFC-0013, IG-047)
+        # Event bus architecture (RFC-0013)
         self._event_size_stats: EventSizeDistributionCollector | None = None
         if self._daemon_config.event_size_stats_enabled:
             self._event_size_stats = EventSizeDistributionCollector()
@@ -166,16 +166,16 @@ class SootheDaemon(DaemonHandlersMixin):
         self._session_manager: ClientSessionManager = ClientSessionManager(
             self._event_bus,
             cancel_callback=self._cancel_loop_for_session,
-            dispatch_cleanup_callback=self._cleanup_dispatch_tasks,  # IG-258
+            dispatch_cleanup_callback=self._cleanup_dispatch_tasks,  #
             config=self._config,  # RFC-614: for streaming interval config
         )
         # Keys: LangGraph checkpoint id (``configurable.thread_id``), not ``loop_id``.
         self._active_threads: dict[str, asyncio.Task] = {}
         #: Loop ids for all in-flight streams (heartbeats; internal only).
         self._active_stream_loop_ids: set[str] = set()
-        #: Loop ids with an admitted query (exclusive per loop; IG-534 Phase 2.2).
+        #: Loop ids with an admitted query (exclusive per loop; Phase 2.2).
         self._loops_with_active_query: set[str] = set()
-        #: Loops queued/enqueued for IG-670 auto-resume (reconciliation exemption).
+        #: Loops queued/enqueued for auto-resume (reconciliation exemption).
         self._auto_resume_protected_loop_ids: set[str] = set()
         self._auto_resume_release_task: asyncio.Task[None] | None = None
         # Lock protecting query state transitions (_active_threads, _current_query_task)
@@ -188,7 +188,7 @@ class SootheDaemon(DaemonHandlersMixin):
         # Daemon readiness state for explicit startup handshake (RFC-0023)
         self._readiness_state: str = "starting"
         self._readiness_message: str | None = None
-        # Per-thread isolation (IG-110): populated when runner exists
+        # Per-thread isolation: populated when runner exists
         self._thread_registry: ThreadStateRegistry = ThreadStateRegistry()
         # Global cross-thread input history
         self._global_history: Any = None  # GlobalInputHistory | None
@@ -208,7 +208,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 getattr(self._daemon_config, "card_flush_debounce_ms", 200) or 200
             ),
         )
-        # IG-475: Memory profiler (tracemalloc) for leak detection
+        # Memory profiler (tracemalloc) for leak detection
         self._memory_profiler: MemoryProfiler | None = None
         if self._daemon_config.memory_profiling.enabled:
             self._memory_profiler = MemoryProfiler(self._daemon_config.memory_profiling)
@@ -301,7 +301,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Build a purge callable backed by the daemon display card store.
 
         Injected into ``StrangeLoopCheckpointPersistenceManager`` so the host can
-        purge a loop's display rows without importing the daemon (IG-635 PR-2).
+        purge a loop's display rows without importing the daemon (PR-2).
         """
         from soothe_daemon.display.display_store import get_display_card_store
 
@@ -486,7 +486,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._config_watcher.reload_now()
 
     async def _cancel_loop_for_session(self, loop_id: str) -> None:
-        """Cancel in-flight work for a loop when a client disconnects (IG-408)."""
+        """Cancel in-flight work for a loop when a client disconnects."""
         if not str(loop_id or "").strip():
             logger.warning("[Session] cancel_callback with empty loop_id; ignoring")
             return
@@ -538,7 +538,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     raise
 
             # Unified persistence: cron/identity follow default_backend via host
-            # stores; the display card store is daemon-owned (IG-635 PR-2).
+            # stores; the display card store is daemon-owned (PR-2).
             try:
                 from soothe.persistence.unified import configure_unified_persistence
 
@@ -651,7 +651,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 # autopilot goal DAG. Persistence is the sidecar snapshot in
                 # ``goal_persist_store`` (restored in AutopilotService.start);
                 # worker StrangeLoop CEs remain loop-scoped (ledger/steps).
-                # Full unified durability is tracked in IG-678 P1-4.
+                # Full unified durability is tracked in P1-4.
                 daemon_ce = ContextEngine()
                 # RFC-625: AutopilotMonitor handles proactive DAG monitoring.
                 daemon_monitor = AutopilotMonitor(
@@ -938,7 +938,7 @@ class SootheDaemon(DaemonHandlersMixin):
             self._queue_monitoring_task: asyncio.Task[None] = asyncio.create_task(
                 self._periodic_queue_monitoring()
             )
-            # IG-475: Periodic event bus cleanup to remove orphaned topics
+            # Periodic event bus cleanup to remove orphaned topics
             self._event_bus_cleanup_task = asyncio.create_task(self._periodic_event_bus_cleanup())
             if self._event_size_stats is not None:
                 self._event_size_stats_task = asyncio.create_task(self._periodic_event_size_stats())
@@ -981,7 +981,7 @@ class SootheDaemon(DaemonHandlersMixin):
             self._readiness_state = "ready"
             self._readiness_message = None
 
-            # IG-475: Start memory profiler if enabled
+            # Start memory profiler if enabled
             if self._memory_profiler is not None:
                 self._memory_profiler.start()
 
@@ -1130,7 +1130,7 @@ class SootheDaemon(DaemonHandlersMixin):
             loop.call_soon_threadsafe(self._stop_event.set)
 
     async def _detect_incomplete_threads(self) -> None:
-        """Classify incomplete loops; optionally auto-resume (IG-670).
+        """Classify incomplete loops; optionally auto-resume.
 
         Replaces log-only detection. Cancel-by-age still runs via the classifier;
         resume requires ``agent.loop.checkpoint.auto_resume_on_start``.
@@ -1227,7 +1227,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 logger.warning("Periodic inactivity check failed", exc_info=True)
 
     async def _periodic_loop_gc(self) -> None:
-        """Periodic loop GC: ephemeral pass + empty-loop pass per tick (IG-466).
+        """Periodic loop GC: ephemeral pass + empty-loop pass per tick.
 
         Both passes share the per-loop purge helper. Loops appearing in both
         listings are purged once via de-duplication by ``loop_id``.
@@ -1408,7 +1408,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 logger.warning("Loop status reconciliation failed", exc_info=True)
 
     async def _periodic_event_size_stats(self) -> None:
-        """Log EventBus wire-size distribution on a fixed interval (IG-403).
+        """Log EventBus wire-size distribution on a fixed interval.
 
         Stops emitting while no events have been published for
         ``event_size_stats_idle_pause_seconds`` (window is discarded without logging).
@@ -1426,7 +1426,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 logger.debug("event_size_stats periodic tick failed", exc_info=True)
 
     async def _periodic_event_bus_cleanup(self) -> None:
-        """Periodically clean up orphaned event bus topics (IG-475).
+        """Periodically clean up orphaned event bus topics.
 
         Removes topics with no subscribers that were not properly cleaned up
         during unsubscribe (e.g., due to race conditions or early disconnects).
@@ -1442,7 +1442,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 logger.debug("Event bus cleanup failed", exc_info=True)
 
     async def _periodic_queue_monitoring(self) -> None:
-        """Monitor queue depths and log warnings when near capacity (IG-258)."""
+        """Monitor queue depths and log warnings when near capacity."""
         while self._running:
             await asyncio.sleep(10)  # Check every 10 seconds
             try:
@@ -1486,7 +1486,7 @@ class SootheDaemon(DaemonHandlersMixin):
         long requests. The heartbeat is only broadcast when a query is running.
 
         RFC-0013: Heartbeat is broadcast every 5 seconds.
-        IG-426: Skip heartbeat if stream is actively flowing (last broadcast < 5s).
+        Skip heartbeat if stream is actively flowing (last broadcast < 5s).
         """
         from datetime import UTC, datetime
         from time import monotonic
@@ -1500,7 +1500,7 @@ class SootheDaemon(DaemonHandlersMixin):
             if not self._has_active_queries():
                 continue
 
-            # Smart heartbeat: skip if stream actively flowing (IG-426)
+            # Smart heartbeat: skip if stream actively flowing
             now = monotonic()
             if now - self._last_broadcast_monotonic < _HEARTBEAT_INTERVAL_S:
                 # Stream is active, heartbeat not needed
@@ -1593,7 +1593,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._readiness_message = None
         self._running = False
 
-        # IG-475: Stop memory profiler if running
+        # Stop memory profiler if running
         if self._memory_profiler is not None:
             self._memory_profiler.stop()
 
@@ -1674,7 +1674,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 await self._event_size_stats_task
             self._event_size_stats_task = None
 
-        # IG-475: Cancel event bus cleanup task
+        # Cancel event bus cleanup task
         if self._event_bus_cleanup_task and not self._event_bus_cleanup_task.done():
             self._event_bus_cleanup_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -1687,7 +1687,7 @@ class SootheDaemon(DaemonHandlersMixin):
             with contextlib.suppress(asyncio.CancelledError):
                 await self._current_query_task
 
-        # IG-248: Skip stopped status broadcast - daemon shutdown disconnects all clients anyway
+        # Skip stopped status broadcast - daemon shutdown disconnects all clients anyway
         # No need to broadcast globally; clients will receive connection close event
 
         # Clean up runner resources with a timeout
@@ -1804,7 +1804,7 @@ class SootheDaemon(DaemonHandlersMixin):
         Client-visible delivery is keyed strictly by ``loop_id`` on the message envelope.
         Internal CoreAgent ``thread_id`` is not used to infer routing.
         """
-        # Track last broadcast for smart heartbeat (IG-426)
+        # Track last broadcast for smart heartbeat
         from time import monotonic
 
         self._last_broadcast_monotonic = monotonic()
@@ -1864,13 +1864,13 @@ class SootheDaemon(DaemonHandlersMixin):
         """Handle incoming message from any transport.
 
         This method routes messages from the transport layer to the
-        existing message handling logic with concurrency control (IG-258).
+        existing message handling logic with concurrency control.
 
         Args:
             client_id: Unique client identifier
             msg: Message dict from a transport client.
         """
-        # Create a task with semaphore control and tracking (IG-258)
+        # Create a task with semaphore control and tracking
         task = asyncio.create_task(self._dispatch_with_semaphore(client_id, msg))
         # Track task per client for cleanup on disconnect
         self._dispatch_tasks[client_id] = task
@@ -1878,7 +1878,7 @@ class SootheDaemon(DaemonHandlersMixin):
         task.add_done_callback(lambda t: self._dispatch_tasks.pop(client_id, None))
 
     async def _dispatch_with_semaphore(self, client_id: str, msg: dict[str, Any]) -> None:
-        """Dispatch message with semaphore control and proper cleanup (IG-258).
+        """Dispatch message with semaphore control and proper cleanup.
 
         Validates the message at the transport boundary (RFC-450 §6.4) before
         dispatching to the router.  This is the final defense-in-depth check;
@@ -1914,7 +1914,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 logger.exception("Error dispatching message for client %s", client_id)
 
     async def _cleanup_dispatch_tasks(self, client_id: str) -> None:
-        """Cancel pending dispatch tasks for disconnected client (IG-258).
+        """Cancel pending dispatch tasks for disconnected client.
 
         Args:
             client_id: Client identifier being disconnected

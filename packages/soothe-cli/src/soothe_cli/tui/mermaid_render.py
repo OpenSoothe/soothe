@@ -1,4 +1,4 @@
-"""Render fenced Mermaid diagrams for TUI markdown (IG-657).
+"""Render fenced Mermaid diagrams for TUI markdown.
 
 Goal-completion synthesis emits mermaid code fences; Rich's default
 ``CodeBlock`` shows them as source. This helper expands supported diagrams to

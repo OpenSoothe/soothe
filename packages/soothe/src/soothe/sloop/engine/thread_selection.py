@@ -1,4 +1,4 @@
-"""Thread selection logic for execute steps (RFC-223, IG-477, IG-349).
+"""Thread selection logic for execute steps (RFC-223,).
 
 Functions for selecting thread IDs during parallel step execution and
 subagent routing detection.
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def _wire_subagent_from_routing(routing_classification: Any | None) -> str | None:
-    """Subagent name when wire routing requests explicit subagent delegation (IG-349)."""
+    """Subagent name when wire routing requests explicit subagent delegation."""
     if routing_classification is None:
         return None
     if isinstance(routing_classification, dict):
@@ -64,7 +64,7 @@ def _select_thread_for_step(
 ) -> str:
     """Select an isolated thread_id for a step.
 
-    IG-477: Thread isolation via ``__step_<id>`` namespace for parallel safety.
+    Thread isolation via ``__step_<id>`` namespace for parallel safety.
     Predecessor context arrives via ledger projection, not checkpoint fork.
 
     Strategy:

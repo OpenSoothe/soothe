@@ -88,7 +88,7 @@ class TestGoalDAGVerifier:
     async def test_verify_dag_health_detects_orphaned_goals(
         self, verifier: GoalDAGVerifier
     ) -> None:
-        """verify_dag_health suggests reset for orphaned pending goals (IG-680)."""
+        """verify_dag_health suggests reset for orphaned pending goals."""
         report = await verifier.verify_dag_health()
 
         # Goal-3 depends on missing-goal; heuristic now prefers reset over remove

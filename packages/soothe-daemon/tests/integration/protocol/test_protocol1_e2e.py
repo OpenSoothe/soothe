@@ -1,4 +1,4 @@
-"""End-to-end protocol-1 integration tests (RFC-450, IG-522 Phase 10).
+"""End-to-end protocol-1 integration tests (RFC-450, Phase 10).
 
 These tests exercise the full protocol-1 wire contract end-to-end through a
 real WebSocket transport: SDK client → WebSocket channel → mock daemon →

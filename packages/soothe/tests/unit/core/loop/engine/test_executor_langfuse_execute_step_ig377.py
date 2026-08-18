@@ -1,4 +1,4 @@
-"""Langfuse run_name for Executor streams (IG-377)."""
+"""Langfuse run_name for Executor streams."""
 
 from __future__ import annotations
 

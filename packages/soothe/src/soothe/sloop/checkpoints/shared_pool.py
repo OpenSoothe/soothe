@@ -1,4 +1,4 @@
-"""Shared PostgreSQL connection pool for StrangeLoop persistence (IG-406).
+"""Shared PostgreSQL connection pool for StrangeLoop persistence.
 
 Provides a singleton pool at daemon level for high-concurrency scenarios
 (200+ threads). Each StrangeLoopStateManager reuses this shared pool instead
@@ -61,7 +61,7 @@ _pool_lock = asyncio.Lock()
 class SharedPostgreSQLPool:
     """Shared PostgreSQL connection pool for StrangeLoop state persistence.
 
-    IG-406: High-concurrency architecture with 200+ thread support.
+    High-concurrency architecture with 200+ thread support.
     Pool size is config-driven (``persistence.postgres.checkpoints_pool_size``); default suits
     one active run per process (e.g. pool workers) without multiplying connections by 30×N workers.
 
@@ -252,7 +252,7 @@ class SharedPostgreSQLPool:
     async def get_shared_instance(cls, config: SootheConfig) -> SharedPostgreSQLPool | None:
         """Get or create the singleton shared pool instance.
 
-        IG-406: Daemon-level singleton for high-concurrency support.
+        Daemon-level singleton for high-concurrency support.
         Creates pool only if PostgreSQL backend is configured.
 
         Args:

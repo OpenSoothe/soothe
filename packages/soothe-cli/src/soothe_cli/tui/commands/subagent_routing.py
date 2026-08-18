@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-# Display names for known soothe core subagents (IG-517).
+# Display names for known soothe core subagents.
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
     "planner": "Planner",
     "deep_research": "Deep Research",
@@ -12,7 +12,7 @@ SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
 
 # Lowercase slash tokens matched after ``/`` for preferred_subagent routing (core only).
 # Longest-first so a shorter id never shadows a longer prefix match.
-# Intake-only specialists (IG-600/601) must stay here so slash sets preferred_subagent.
+# Intake-only specialists (601) must stay here so slash sets preferred_subagent.
 # ``plan`` is the UX slash for wire id ``planner`` (RFC-454 /plan routing).
 SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = (
     "academic_research",

@@ -7,7 +7,7 @@ Tests end-to-end smart retry cycle across all components:
 - Smart retry execution
 
 RFC-218: StrangeLoop Checkpoint Tree Architecture
-IG-243: Checkpoint Tree Integration Testing
+Checkpoint Tree Integration Testing
 """
 
 from contextlib import contextmanager

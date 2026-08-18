@@ -1,4 +1,4 @@
-"""Tests for job-scoped rail_trace path + legacy loops migrate (IG-686)."""
+"""Tests for job-scoped rail_trace path + legacy loops migrate."""
 
 from __future__ import annotations
 

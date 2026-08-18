@@ -1,4 +1,4 @@
-"""Unit tests for Pass 1 classifier: social vs task (IG-554)."""
+"""Unit tests for Pass 1 classifier: social vs task."""
 
 from __future__ import annotations
 

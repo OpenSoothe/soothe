@@ -434,7 +434,7 @@ def _pool_worker_body(
 
     Behavior:
         - Wait for requests on request_queue (with idle timeout)
-        - Reuse one SootheRunner per worker when ``reuse_runner`` (IG-506)
+        - Reuse one SootheRunner per worker when ``reuse_runner``
         - Execute request, stream results to response_queue
         - Check cancel_event between chunks for cooperative cancellation
         - Send heartbeat messages on a background thread (independent of chunk cadence
@@ -546,7 +546,7 @@ def _pool_worker_body(
                                 response_queue.put(("cancelled", request_id, None))
                                 return
 
-                            # Tag response with request_id for routing (IG-477: backpressure)
+                            # Tag response with request_id for routing (backpressure)
                             try:
                                 response_queue.put(
                                     ("chunk", request_id, chunk), block=True, timeout=0.5
@@ -925,7 +925,7 @@ class WorkerPool:
     ) -> tuple[WorkerProcess, Any]:
         """Spawn a single worker process with request/response queues and cancel event."""
         request_queue: Any = self._ctx.Queue()
-        # IG-477: Bound mp response queue so worker subprocess blocks when full
+        # Bound mp response queue so worker subprocess blocks when full
         response_queue: Any = self._ctx.Queue(maxsize=100)
         cancel_event: Any = self._ctx.Event()
         warmup_done_event: Any = self._ctx.Event()
@@ -970,7 +970,7 @@ class WorkerPool:
         return worker, warmup_done_event
 
     def _start_worker_bridge(self, worker_id: str) -> None:
-        """Start per-worker response bridge (blocking mp get → asyncio queue, IG-429)."""
+        """Start per-worker response bridge (blocking mp get → asyncio queue)."""
         old = self._bridge_tasks.pop(worker_id, None)
         if old is not None:
             old.cancel()
@@ -1248,7 +1248,7 @@ class WorkerPool:
             logger.exception("WorkerPool: failed to respawn dead worker %s", worker.worker_id)
 
     async def _worker_health_watchdog(self) -> None:
-        """Stuck/dead worker detection and idle stale-queue drain (no chunk relay; IG-429)."""
+        """Stuck/dead worker detection and idle stale-queue drain (no chunk relay;)."""
         loop = asyncio.get_event_loop()
 
         while self._running:

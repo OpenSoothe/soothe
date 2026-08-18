@@ -1,4 +1,4 @@
-"""Goal-entry and continuation routing helpers (RFC-226, RFC-630, IG-676).
+"""Goal-entry and continuation routing helpers (RFC-226, RFC-630).
 
 Fresh goals use special graph entry (inject / skip-evaluate). Mid-loop goals share
 the ``gather_evidence`` spine; intake tiers live in ``mid_loop_intake``.
@@ -42,7 +42,7 @@ def is_structural_continuation(ctx: Any) -> bool:
 
 
 def is_fresh_goal(ctx: Any) -> bool:
-    """True for the first goal with no prior loop work (IG-676 preprocess entry)."""
+    """True for the first goal with no prior loop work (preprocess entry)."""
     if getattr(ctx, "recovery_valid_resume", False):
         return False
     if getattr(ctx, "continue_loop_mode", False):
@@ -53,7 +53,7 @@ def is_fresh_goal(ctx: Any) -> bool:
 
 
 def is_fresh_loop_skip_evaluate(ctx: LoopRuntimeContext) -> bool:
-    """True when fresh complex may skip evaluate (IG-476).
+    """True when fresh complex may skip evaluate.
 
     Requires a live CE (tests without CE fall through to evaluate).
     """
@@ -85,7 +85,7 @@ def continuation_forced_plan_generate_assessment():
 
 
 def fresh_loop_bypass_assessment():
-    """Synthetic assessment when fresh complex skips evaluate (IG-476)."""
+    """Synthetic assessment when fresh complex skips evaluate."""
     return synthetic_continue_assessment(reasoning=FRESH_LOOP_BYPASS_REASON)
 
 

@@ -1,4 +1,4 @@
-"""Tests for IG-355 delegate-final text aggregation from ``task`` tool returns."""
+"""Tests for delegate-final text aggregation from ``task`` tool returns."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from soothe.sloop.engine.step_wave_types import _StreamCollectChunk
 
 @pytest.mark.asyncio
 async def test_stream_and_collect_namespaced_task_chunk_populates_delegate_finals() -> None:
-    """Namespaced ``messages`` chunk carries Explore subgraph ``task`` return (IG-355)."""
+    """Namespaced ``messages`` chunk carries Explore subgraph ``task`` return."""
     tool_msg = ToolMessage(
         content="Namespaced explore answer.",
         tool_call_id="call_ns_task",
@@ -90,7 +90,7 @@ async def test_record_execute_wave_prefers_delegate_final_over_empty_root_ai() -
 
 
 def test_record_execute_wave_parallel_multi_merges_delegate_finals() -> None:
-    """Parallel multi-step waves preserve merged delegate text for goal completion (IG-356)."""
+    """Parallel multi-step waves preserve merged delegate text for goal completion."""
     from soothe.sloop.state.schemas import LoopState
 
     mock_agent = MagicMock()
@@ -483,7 +483,7 @@ async def test_subgraph_rewrite_skips_already_unified_step_level_ids() -> None:
 
 @pytest.mark.asyncio
 async def test_stream_and_collect_rewrites_root_tool_message_to_unified_id() -> None:
-    """Root ToolMessage.tool_call_id matches rewritten AI ids for TUI result binding (IG-416)."""
+    """Root ToolMessage.tool_call_id matches rewritten AI ids for TUI result binding."""
     tool_msg = ToolMessage(
         content="done",
         tool_call_id="functions.grep:0",
@@ -668,7 +668,7 @@ async def test_stream_and_collect_logs_tool_call_args_from_invocation_registry(
     """Tool kwargs come from middleware invocation registry when stream has no AI chunks."""
     from langchain.agents.middleware.types import ToolCallRequest
 
-    # IG-519: Use registry directly (semaphore removed from stack)
+    # Use registry directly (semaphore removed from stack)
     from soothe_nano.middleware.tool_call_args_registry import (
         get_recorded_tool_call_args,
         init_tool_call_args_registry,

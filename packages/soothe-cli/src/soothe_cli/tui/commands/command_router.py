@@ -253,7 +253,7 @@ async def handle_routing_command(
     For routing commands that map to a configured subagent id (e.g. ``/deep_research``,
     ``/browser_use``, ``/plan`` → ``planner``), strips the slash token from the query and
     sets the WebSocket ``preferred_subagent`` field so the daemon merges a subagent hint
-    into StrangeLoop (IG-349).
+    into StrangeLoop.
 
     Args:
         cmd_input: Full command input (e.g., "/deep_research topic summary")

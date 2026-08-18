@@ -281,7 +281,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             ans = answer_from_state(pending_answer_state)
             origin_iid = str(pending_request_state.get("origin_interrupt_id", ""))
             if origin_iid.startswith(PLANNER_ASK_INTERRUPT_PREFIX):
-                # IG-462 Branch 1: planner-emitted ask_user step. No CoreAgent
+                # Branch 1: planner-emitted ask_user step. No CoreAgent
                 # interrupt to resume — instead synthesize a StepExecutionRecord below
                 # so the next get_ready_steps() call naturally skips this step.
                 planner_ask_answered_step_id = origin_iid[len(PLANNER_ASK_INTERRUPT_PREFIX) :]
@@ -401,7 +401,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     step_results: list[StepExecutionRecord] = []
     step_desc = {s.id: s.description for s in decision.steps}
 
-    # IG-462 Branch 1 continued: synthesize a successful StepExecutionRecord for the
+    # Branch 1 continued: synthesize a successful StepExecutionRecord for the
     # planner-emitted ask_user step that was just answered. Recording it here
     # adds the id to state.completed_step_ids so the executor's
     # get_ready_steps() will skip it on the resumed wave.
@@ -453,7 +453,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     # RFC-223: Pass checkpointer for thread fork inheritance
     checkpointer = strange_loop.core_agent.checkpointer
 
-    # IG-462 Branch 2: when the planner emits a kind="ask_user" step in this
+    # Branch 2: when the planner emits a kind="ask_user" step in this
     # wave, surface it to the clarification relay BEFORE running the executor.
     # The planner prompt limits this to one ask_user per wave, paired with no
     # other steps; we honor that by short-circuiting on the first such ready
@@ -652,7 +652,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
 
     if resume_answer_payload is not None or planner_ask_answered_step_id is not None:
         # Successfully resumed from a prior clarification (CoreAgent interrupt
-        # or planner-emitted ask_user — IG-462). Clear BOTH the request and the
+        # or planner-emitted ask_user). Clear BOTH the request and the
         # answer channels so route_after_execute does not re-route us back into
         # await_clarification on the next graph tick.
         return {

@@ -1,4 +1,4 @@
-"""IG-664: step card To-do/Tool-use sections and compact title meta."""
+"""step card To-do/Tool-use sections and compact title meta."""
 
 from __future__ import annotations
 

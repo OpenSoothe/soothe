@@ -292,7 +292,7 @@ async def node_goal_completion(
 ) -> dict[str, Any]:
     """Finalize goal when planner reports ``done`` (record iteration, synthesis, emit completed).
 
-    IG-475: Clear all pending execution state to prevent task leakage into next query.
+    Clear all pending execution state to prevent task leakage into next query.
     When goal completion happens, any pending decision, step_results, or working memory
     from this query must be cleared so the next query starts fresh.
     """
@@ -359,10 +359,10 @@ async def node_goal_completion(
             goal_record=goal_record,
             iteration=iteration_completed,
             plan_result=plan_result,
-            decision=None,  # IG-475: Explicitly None - no pending decision
-            step_results=[],  # IG-475: Empty - no pending steps (state cleared)
+            decision=None,  # Explicitly None - no pending decision
+            step_results=[],  # Empty - no pending steps (state cleared)
             state=state,
-            working_memory=None,  # IG-475: Working memory cleared
+            working_memory=None,  # Working memory cleared
         )
 
     synthesis_gen = SynthesisGenerator(
@@ -484,7 +484,7 @@ async def node_goal_completion(
 
     # Runner ``loop_assistant_messages_chunk`` replay: skip when synthesis already
     # streamed ``phase=goal_completion`` on ``messages`` (``stream_event``). Do not
-    # skip for ``ledger_direct`` — headless CLI suppresses execute-phase prose (IG-343)
+    # skip for ``ledger_direct`` — headless CLI suppresses execute-phase prose
     # and relies on this replay for the user-visible answer (RFC-614 / RFC-500).
     skip_goal_completion_wire_duplicate = (
         action == CompletionStrategy.SYNTHESIZE and not used_synthesis_fallback
@@ -509,7 +509,7 @@ async def node_goal_completion(
         ctx,
         goal_record=goal_record,
     )
-    # IG-475: Force garbage collection after goal completion to reclaim
+    # Force garbage collection after goal completion to reclaim
     # LLM streaming objects (langchain message buffers, tokenizer caches, etc.)
     # This prevents accumulation of ephemeral objects across multiple queries.
     gc.collect()

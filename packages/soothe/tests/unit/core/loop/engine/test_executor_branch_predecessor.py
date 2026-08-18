@@ -1,4 +1,4 @@
-"""Executor integration tests for thread isolation and predecessor message injection (IG-477)."""
+"""Executor integration tests for thread isolation and predecessor message injection."""
 
 from __future__ import annotations
 

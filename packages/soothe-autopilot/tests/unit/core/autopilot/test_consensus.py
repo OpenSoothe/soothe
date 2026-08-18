@@ -1,4 +1,4 @@
-"""Tests for the consensus loop (soothe_autopilot.verify.consensus) — IG-678 / IG-690."""
+"""Tests for the consensus loop (soothe_autopilot.verify.consensus) — /."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 

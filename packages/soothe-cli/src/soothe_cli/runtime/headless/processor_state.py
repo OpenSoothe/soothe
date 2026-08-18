@@ -28,7 +28,7 @@ class ProcessorState:
     # Message deduplication - tracks seen message IDs
     seen_message_ids: set[str] = field(default_factory=set)
 
-    # Streaming tool call arg accumulation (IG-053)
+    # Streaming tool call arg accumulation
     # Maps tool_call_id -> {'name': str, 'args_str': str, 'emitted': bool, 'is_main': bool}
     pending_tool_calls: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -60,7 +60,7 @@ class ProcessorState:
     final_loop_output_emitted: set[tuple[str, tuple[str, ...]]] = field(default_factory=set)
     """(phase, namespace) pairs that already emitted final loop-tagged output this turn."""
 
-    # Task tool spawn queue → bind first subgraph namespace (FIFO; IG-334)
+    # Task tool spawn queue → bind first subgraph namespace (FIFO;)
     task_spawn_queue: deque[tuple[str, str, str]] = field(default_factory=deque)
     namespace_task_bindings: dict[tuple[str, ...], tuple[str, str, str]] = field(
         default_factory=dict

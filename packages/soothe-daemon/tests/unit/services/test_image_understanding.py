@@ -1,4 +1,4 @@
-"""Unit tests for IG-327 image attachment validation and vision preflight."""
+"""Unit tests for image attachment validation and vision preflight."""
 
 from __future__ import annotations
 

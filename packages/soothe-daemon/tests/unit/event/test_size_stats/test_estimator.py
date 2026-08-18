@@ -1,4 +1,4 @@
-"""Unit tests for streaming EventBus wire-size stats (IG-403)."""
+"""Unit tests for streaming EventBus wire-size stats."""
 
 from __future__ import annotations
 

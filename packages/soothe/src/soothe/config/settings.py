@@ -275,7 +275,7 @@ class SootheConfig(BaseSettings):
     # --- Agent behaviour (unified) ---
 
     agent: AgentConfig = Field(default_factory=AgentConfig)
-    """Unified agent configuration (IG-434): identity, behavior, autopilot, loop, protocols."""
+    """Unified agent configuration: identity, behavior, autopilot, loop, protocols."""
 
     subagents: dict[str, SubagentConfig] = Field(default_factory=dict)
     """Subagent name to config mapping. Set ``enabled: false`` to disable.
@@ -609,7 +609,7 @@ class SootheConfig(BaseSettings):
     """Container workspace path mapping (RFC-621)."""
 
     optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
-    """Semantic optimization for risk and relationship heuristics (IG-433)."""
+    """Semantic optimization for risk and relationship heuristics."""
 
     # --- Vector store config ---
 

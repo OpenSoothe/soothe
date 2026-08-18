@@ -67,7 +67,7 @@ def test_filter_keeps_task_delegation_with_complete_args() -> None:
 
 
 def test_filter_keeps_write_todos_with_complete_args() -> None:
-    """IG-664: write_todos wire updates must reach the TUI Todo section."""
+    """write_todos wire updates must reach the TUI Todo section."""
     updates = [
         {
             "type": "soothe.stream.tool_call.update",

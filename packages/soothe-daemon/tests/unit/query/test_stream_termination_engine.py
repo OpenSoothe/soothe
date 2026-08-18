@@ -1,4 +1,4 @@
-"""QueryEngine stream termination ordering tests (IG-556 hardening)."""
+"""QueryEngine stream termination ordering tests (hardening)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""IG-643: skillify index events are registered in the shared REGISTRY."""
+"""skillify index events are registered in the shared REGISTRY."""
 
 from soothe_sdk.core.registry import REGISTRY
 

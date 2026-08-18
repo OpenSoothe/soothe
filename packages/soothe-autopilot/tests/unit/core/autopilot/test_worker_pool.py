@@ -1,4 +1,4 @@
-"""Tests for WorkerPool sticky-affinity scheduling (RFC-222 / IG-677)."""
+"""Tests for WorkerPool sticky-affinity scheduling (RFC-222)."""
 
 from __future__ import annotations
 
@@ -118,7 +118,7 @@ class TestIdleReuse:
 
     @pytest.mark.asyncio
     async def test_mark_idle_with_failure_requeues_slot(self) -> None:
-        """Failed dispatches must not leak pool capacity (IG-678 P0-4)."""
+        """Failed dispatches must not leak pool capacity (P0-4)."""
         pool = WorkerPool(_FakeFactory(), max_loops=1)
         w = await _pick(pool, _goal("g1"))
         assert w is not None

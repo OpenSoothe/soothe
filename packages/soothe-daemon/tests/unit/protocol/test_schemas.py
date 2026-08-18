@@ -1,4 +1,4 @@
-"""Tests for Pydantic param models and PARAMS_REGISTRY (RFC-450 §6.2, IG-522 Phase 8).
+"""Tests for Pydantic param models and PARAMS_REGISTRY (RFC-450 §6.2, Phase 8).
 
 Covers:
 - Every params model validates correctly with valid input

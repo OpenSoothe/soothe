@@ -174,7 +174,7 @@ async def node_await_clarification(
         ctx.clarification_resume_answers = None
         ctx.clarification_resume_text = None
 
-    # IG-462: keep ``pending_clarification`` alive alongside the answer so the
+    # keep ``pending_clarification`` alive alongside the answer so the
     # originating node (``execute`` / ``plan_*``) can pair them on re-entry
     # — it needs ``origin_interrupt_id`` to know which CoreAgent interrupt
     # (or planner-emitted step) is being resumed. The originating node clears

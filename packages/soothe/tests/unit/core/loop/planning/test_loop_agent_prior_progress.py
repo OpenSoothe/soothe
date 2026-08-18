@@ -44,7 +44,7 @@ def _payload(
 ) -> _ExecuteStepResult:
     """Production-shaped gather_results entry.
 
-    ``_stream_and_collect`` returns _ExecuteStepResult dataclass (IG-493);
+    ``_stream_and_collect`` returns _ExecuteStepResult dataclass ;
     tests that need tool-result evidence in PriorProgressDigest may pass
     ToolMessages via ``tool_messages`` (test-only convenience).
     """

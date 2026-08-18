@@ -1,4 +1,4 @@
-"""Daemon auto-resume of interrupted StrangeLoop goals (IG-670).
+"""Daemon auto-resume of interrupted StrangeLoop goals.
 
 Classifies incomplete ``status=running`` loops after a daemon restart and,
 when ``agent.loop.checkpoint.auto_resume_on_start`` is enabled, re-enters
@@ -191,7 +191,7 @@ def _loop_has_active_runner(daemon: Any, loop_id: str) -> bool:
 
 
 async def recover_incomplete_loops(daemon: Any) -> list[AutoResumeClassification]:
-    """Classify incomplete loops; optionally enqueue auto-resume (IG-670).
+    """Classify incomplete loops; optionally enqueue auto-resume.
 
     Always runs cancel-by-age classification; resumes only when
     ``auto_resume_on_start`` is true.

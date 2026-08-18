@@ -51,7 +51,7 @@ class GoalPlanningSubengine:
         parent_id, depends_on, workspace inheritance, and priority fields.
 
         When every subgoal omits ``depends_on`` and there are 2+ children,
-        applies a deterministic sequential chain (IG-680 AH-3).
+        applies a deterministic sequential chain (AH-3).
         """
         parent = self._dag.get_goal(parent_id)
         parent_workspace = parent.workspace if parent is not None else None

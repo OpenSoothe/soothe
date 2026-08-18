@@ -1,4 +1,4 @@
-"""Integration tests for periodic loop status reconciliation (IG-466 follow-up)."""
+"""Integration tests for periodic loop status reconciliation (follow-up)."""
 
 from __future__ import annotations
 

@@ -1,10 +1,10 @@
-"""PostgreSQL backend for StrangeLoop persistence (RFC-612, IG-055).
+"""PostgreSQL backend for StrangeLoop persistence (RFC-612).
 
 Backend-agnostic implementation supporting full StrangeLoop persistence operations.
 Uses shared soothe_checkpoints database with 4 tables: agentloop_checkpoints,
 checkpoint_anchors, failed_branches, goal_records.
 
-IG-406: Supports shared pool for high-concurrency (200+ threads) support.
+Supports shared pool for high-concurrency (200+ threads) support.
 """
 
 from __future__ import annotations
@@ -48,12 +48,12 @@ def _is_missing_hot_cold_schema(exc: BaseException) -> bool:
 
 
 class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
-    """PostgreSQL backend for StrangeLoop persistence (RFC-612, IG-055).
+    """PostgreSQL backend for StrangeLoop persistence (RFC-612).
 
     Backend-agnostic implementation using shared soothe_checkpoints database
     with separate tables for checkpoints, anchors, branches, and goals.
 
-    IG-406: Supports shared pool mode for high-concurrency scenarios.
+    Supports shared pool mode for high-concurrency scenarios.
     """
 
     def __init__(
@@ -66,19 +66,19 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
     ) -> None:
         """Initialize PostgreSQL backend with DSN and pool configuration.
 
-        IG-406: pool_size=0 indicates externally provided (shared) pool.
+        pool_size=0 indicates externally provided (shared) pool.
 
         Args:
             dsn: PostgreSQL DSN for soothe_checkpoints database.
             pool_size: Connection pool size (default: 10). Use 0 for shared pool mode.
-            shared_pool: Shared pool instance for reset capability (IG-406).
+            shared_pool: Shared pool instance for reset capability.
             pool_timing: Optional psycopg pool options (timeout, max_idle, max_lifetime).
         """
         self.dsn = dsn
         self.pool_size = pool_size
         self._pool: AsyncConnectionPool | None = None
         self._init_lock = asyncio.Lock()
-        # IG-406: pool_size=0 = externally injected shared pool; never close it here.
+        # pool_size=0 = externally injected shared pool; never close it here.
         self._owns_pool = pool_size != 0
         self._shared_pool = shared_pool
         self._pool_timing = pool_timing
@@ -86,7 +86,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
     async def _ensure_pool(self) -> AsyncConnectionPool:
         """Lazy connection pool initialization with schema setup.
 
-        IG-406: If pool is already set (shared mode), skip creation.
+        If pool is already set (shared mode), skip creation.
 
         Returns:
             Active AsyncConnectionPool instance.
@@ -104,7 +104,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                 )
                 raise RuntimeError(msg)
 
-        # IG-406: pool_size=0 means pool will be set externally (shared pool mode)
+        # pool_size=0 means pool will be set externally (shared pool mode)
         if self.pool_size == 0:
             logger.debug("PostgreSQL backend in shared pool mode (awaiting external pool)")
             # Wait for pool to be set externally - raise error if not set
@@ -435,7 +435,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
     async def close(self) -> None:
         """Close connection pool.
 
-        IG-406: Only closes pool if this backend owns it (not shared).
+        Only closes pool if this backend owns it (not shared).
         Shared pools are closed at daemon shutdown level.
         """
         if self._pool and self._owns_pool:
@@ -445,7 +445,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             self._pool = None
             logger.info("StrangeLoop PostgreSQL backend closed")
 
-    # IG-055: Implement abstract interface methods
+    # Implement abstract interface methods
 
     async def register_loop(
         self,

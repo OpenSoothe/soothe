@@ -1,4 +1,4 @@
-"""Tests for QueryEngine batched stream broadcast (IG-535 Opt 3)."""
+"""Tests for QueryEngine batched stream broadcast (Opt 3)."""
 
 from __future__ import annotations
 

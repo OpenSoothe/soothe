@@ -80,7 +80,7 @@ def test_batch_mode_suppresses_goal_completion_until_completed() -> None:
 
 
 def test_consume_turn_complete_pending_returns_and_clears() -> None:
-    """IG-556: QueryEngine uses consume_turn_complete_pending after stream end."""
+    """QueryEngine uses consume_turn_complete_pending after stream end."""
     coalescer = StreamDeliveryCoalescer("batch")
     coalescer.ingest(*_gc_chunk("tail"))
     coalescer.ingest(
@@ -106,7 +106,7 @@ def test_adaptive_small_goal_completion_passthrough() -> None:
 
 
 def test_coalesce_interval_100_faster_first_emit_than_300_baseline() -> None:
-    """IG-534 Phase 3: shorter coalesce interval reduces time-to-first-chunk."""
+    """Phase 3: shorter coalesce interval reduces time-to-first-chunk."""
 
     def _time_to_first_emit_ms(interval_ms: int) -> float | None:
         coalescer = StreamDeliveryCoalescer(
@@ -290,7 +290,7 @@ def test_strip_tool_metadata_for_batch() -> None:
 
 
 def test_batch_mode_flushes_goal_completion_on_completed_event() -> None:
-    """IG-436: Verify goal_completion flushed when STRANGE_LOOP_COMPLETED arrives."""
+    """Verify goal_completion flushed when STRANGE_LOOP_COMPLETED arrives."""
     coalescer = StreamDeliveryCoalescer("batch")
     # Accumulate goal_completion chunks
     assert coalescer.ingest(*_gc_chunk("part1")) == []
@@ -311,9 +311,9 @@ def test_batch_mode_flushes_goal_completion_on_completed_event() -> None:
 
 
 def test_adaptive_mode_switches_to_chunked_streaming_on_threshold() -> None:
-    """IG-441: After threshold, adaptive enters chunked-streaming (not pure batch).
+    """After threshold, adaptive enters chunked-streaming (not pure batch).
 
-    Pre-IG-441 the second phase was pure batch — every post-threshold chunk
+    Pre-the second phase was pure batch — every post-threshold chunk
     was held until ``strange_loop.completed``. With block_chars=1024 (default)
     and a short stream, the new behavior with default block thresholds still
     holds chunks until the final flush, preserving the no-duplicate guarantee:
@@ -346,7 +346,7 @@ def test_adaptive_mode_switches_to_chunked_streaming_on_threshold() -> None:
 
 
 def test_adaptive_chunked_streaming_emits_size_based_blocks() -> None:
-    """IG-441: In chunked-streaming phase, size-based block flush kicks in.
+    """In chunked-streaming phase, size-based block flush kicks in.
 
     With ``adaptive_threshold_chars=5`` and ``adaptive_block_chars=10``:
     - first chunk "abc" (3 chars) streams individually (phase=streaming).
@@ -399,7 +399,7 @@ def test_adaptive_chunked_streaming_emits_size_based_blocks() -> None:
 
 
 def test_adaptive_chunked_streaming_time_based_block_flush() -> None:
-    """IG-441: Time-based block flush triggers when block_interval elapses.
+    """Time-based block flush triggers when block_interval elapses.
 
     Even when buffered chars are below ``adaptive_block_chars``, the coalescer
     must emit a block once ``adaptive_block_interval_ms`` has elapsed so slow
@@ -459,7 +459,7 @@ def test_adaptive_chunked_streaming_time_based_block_flush() -> None:
 
 
 def test_streaming_mode_passthrough_every_goal_completion_chunk() -> None:
-    """IG-441: ``streaming`` mode forwards every goal_completion chunk verbatim.
+    """``streaming`` mode forwards every goal_completion chunk verbatim.
 
     No buffering, no threshold, no chunked-streaming transition. The phase
     tracker stays in ``streaming`` for the lifetime of the turn — this is the
@@ -494,7 +494,7 @@ def test_streaming_mode_passthrough_every_goal_completion_chunk() -> None:
 
 
 def test_streaming_mode_file_output_still_buffers() -> None:
-    """IG-441: file_output_threshold overrides ``streaming`` mode to pure batch.
+    """file_output_threshold overrides ``streaming`` mode to pure batch.
 
     file_output cannot stream — it needs the full text in one place to decide
     between file vs. wire delivery. ``streaming`` mode + file_output therefore
@@ -518,7 +518,7 @@ def test_streaming_mode_file_output_still_buffers() -> None:
 
 
 def test_adaptive_chunked_streaming_with_file_output_uses_pure_batch() -> None:
-    """IG-441: When file_output_threshold_chars > 0, adaptive falls back to pure batch.
+    """When file_output_threshold_chars > 0, adaptive falls back to pure batch.
 
     file_output needs the entire goal_completion text in one place to decide
     whether to write the file. Streaming intermediate blocks would defeat
@@ -544,7 +544,7 @@ def test_adaptive_chunked_streaming_with_file_output_uses_pure_batch() -> None:
 
 
 def test_streaming_mode_emits_stream_end_after_terminal() -> None:
-    """IG-556 P2: terminal content is followed by soothe.stream.end scopes."""
+    """P2: terminal content is followed by soothe.stream.end scopes."""
     from soothe_sdk.core.events import STREAM_END
 
     coalescer = StreamDeliveryCoalescer("streaming")
@@ -560,7 +560,7 @@ def test_streaming_mode_emits_stream_end_after_terminal() -> None:
 
 
 def test_streaming_mode_stamps_stream_terminal_on_last_chunk() -> None:
-    """IG-556 P1.2: streaming passthrough stamps stream_terminal on final chunk."""
+    """P1.2: streaming passthrough stamps stream_terminal on final chunk."""
     coalescer = StreamDeliveryCoalescer("streaming")
     out = coalescer.ingest(*_gc_chunk("final", last=True))
     assert len(_messages(out)) == 1
@@ -571,7 +571,7 @@ def test_streaming_mode_stamps_stream_terminal_on_last_chunk() -> None:
 
 
 def test_chunk_position_last_flushes_goal_completion_without_completed_event() -> None:
-    """IG-556 P1.1: chunk_position=last forces immediate namespace flush."""
+    """P1.1: chunk_position=last forces immediate namespace flush."""
     coalescer = StreamDeliveryCoalescer("batch")
     assert coalescer.ingest(*_gc_chunk("a")) == []
     out = coalescer.ingest(*_gc_chunk("b", last=True))

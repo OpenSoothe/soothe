@@ -1,4 +1,4 @@
-"""Tests for IG-454 planner stuck-loop detection."""
+"""Tests for planner stuck-loop detection."""
 
 from __future__ import annotations
 

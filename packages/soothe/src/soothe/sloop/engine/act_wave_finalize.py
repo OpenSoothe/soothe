@@ -1,4 +1,4 @@
-"""Act-wave finalize resolution (IG-355, IG-356, IG-357, RFC-227).
+"""Act-wave finalize resolution (,, RFC-227).
 
 This module handles the computation of visible assistant text for Execute waves.
 After each Execute wave, auto goal completion and headless replay read the
@@ -180,7 +180,7 @@ def _last_tool_result_block(messages: list[BaseMessage]) -> str:
 
 
 def _full_tool_output_text(messages: list[BaseMessage]) -> str:
-    """Extract full tool output text from ToolMessages (IG-479).
+    """Extract full tool output text from ToolMessages.
 
     Ledger must store full content; truncation only happens during projection.
     Walks messages in reverse to get the most recent tool output.

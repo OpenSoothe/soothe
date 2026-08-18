@@ -31,7 +31,7 @@ async def _await_background_query_idle(
     *,
     timeout_s: float = 2.0,
 ) -> list[dict[str, Any]]:
-    """Wait for IG-054 background query task to broadcast running and idle status.
+    """Wait for background query task to broadcast running and idle status.
 
     The query task may finish and unregister from ``_active_threads`` before the
     test observes it, so poll ``sent`` until both status transitions appear.
@@ -314,7 +314,7 @@ async def test_websocket_client_send_input_includes_options() -> None:
 
 @pytest.mark.asyncio
 async def test_cancel_command_bypasses_input_queue() -> None:
-    """IG-161: /cancel must not enqueue — targets ``QueryEngine.cancel_loop`` directly."""
+    """/cancel must not enqueue — targets ``QueryEngine.cancel_loop`` directly."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     cancel_mock = AsyncMock()
@@ -343,11 +343,11 @@ async def test_cancel_command_bypasses_input_queue() -> None:
 
 @pytest.mark.asyncio
 async def test_exit_and_quit_commands_bypass_input_queue() -> None:
-    """IG-161: /exit and /quit must not enqueue — input loop may be blocked on run_query."""
+    """/exit and /quit must not enqueue — input loop may be blocked on run_query."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
 
-    # IG-248: Mock _send_client_message instead of _broadcast
+    # Mock _send_client_message instead of _broadcast
     sent_to_client: list[dict] = []
 
     async def _fake_send_client_message(cid: str, msg: dict) -> None:
@@ -366,7 +366,7 @@ async def test_exit_and_quit_commands_bypass_input_queue() -> None:
         },
     )
     assert daemon._loop_input_dispatcher.total_queued() == 0
-    # IG-248: Direct send to client (no thread_id, deprecated legacy socket)
+    # Direct send to client (no thread_id, deprecated legacy socket)
     assert sent_to_client == [
         {"client_id": "client-1", "msg": {"type": "status", "state": "detached"}}
     ]
@@ -507,7 +507,7 @@ async def test_daemon_handles_slash_commands() -> None:
 
 @pytest.mark.asyncio
 async def test_daemon_command_exit_does_not_stop_daemon() -> None:
-    """Test that /exit and /quit commands do NOT stop the daemon (IG-085, RFC-0013).
+    """Test that /exit and /quit commands do NOT stop the daemon (RFC-0013).
 
     Per RFC-0013 daemon lifecycle semantics:
     - /exit and /quit should detach client, not stop daemon
@@ -529,7 +529,7 @@ async def test_daemon_command_exit_does_not_stop_daemon() -> None:
         {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )
 
-    # IG-085: Daemon should KEEP RUNNING (not stop)
+    # Daemon should KEEP RUNNING (not stop)
     assert daemon._running is True
 
 

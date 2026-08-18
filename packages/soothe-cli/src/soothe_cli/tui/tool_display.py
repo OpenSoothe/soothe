@@ -1,4 +1,4 @@
-"""Step-card tool activity line formatting (IG-402, IG-428)."""
+"""Step-card tool activity line formatting."""
 
 from __future__ import annotations
 

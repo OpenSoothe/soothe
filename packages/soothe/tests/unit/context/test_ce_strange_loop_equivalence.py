@@ -1,4 +1,4 @@
-"""Integration tests for ContextEngine step-plan adapter (RFC-624, IG-537)."""
+"""Integration tests for ContextEngine step-plan adapter (RFC-624)."""
 
 from __future__ import annotations
 

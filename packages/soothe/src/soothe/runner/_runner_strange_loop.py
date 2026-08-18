@@ -17,7 +17,7 @@ from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.events import (
     ERROR,
-    IntentClassifiedEvent,  # IG-518
+    IntentClassifiedEvent,  #
     StrangeLoopCompletedEvent,
     StrangeLoopPlanDecisionEvent,
     StrangeLoopPlanPhaseStatusEvent,
@@ -200,7 +200,7 @@ def _is_tool_stream_chunk(chunk: object) -> bool:
     """Return True if chunk is a ``messages``-mode LangGraph chunk carrying a tool result.
 
     The agentic loop previously dropped all ``stream_event`` tuples to avoid duplicating
-    assistant prose on stdout (IG-119). Tool rows must still reach the WebSocket so the
+    assistant prose on stdout. Tool rows must still reach the WebSocket so the
     CLI can render ``on_tool_call`` / ``on_tool_result`` (RFC-0020).
 
     Args:
@@ -305,7 +305,7 @@ def _is_ai_messages_stream_chunk(chunk: object) -> bool:
     """True for ``messages`` chunks whose payload is assistant AI (not human/tool).
 
     Used so daemon clients receive full streamed assistant content from subgraphs
-    and execute phases, not only tool rows (IG-330). Empty AI chunks with no tool
+    and execute phases, not only tool rows. Empty AI chunks with no tool
     metadata are dropped to reduce stream volume.
     """
     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
@@ -379,9 +379,9 @@ def _forward_messages_chunk(
     """Whether to forward a ``stream_event`` chunk to WebSocket / TUI.
 
     Forwards:
-    - ``messages`` mode: ``ToolMessage`` and ``AIMessage`` / ``AIMessageChunk`` (IG-330)
+    - ``messages`` mode: ``ToolMessage`` and ``AIMessage`` / ``AIMessageChunk``
     - ``custom`` mode: ``soothe.stream.tool_call.update`` (main graph and subgraph)
-    - ``custom`` mode: curated ``soothe.subagent.*`` progress (sparse metadata, IG-339)
+    - ``custom`` mode: curated ``soothe.subagent.*`` progress (sparse metadata)
 
     Args:
         chunk: Deepagents stream chunk ``(namespace, mode, data)``.
@@ -468,18 +468,18 @@ class StrangeLoopMixin:
         Yields:
             StreamChunk events during execution
         """
-        # Ensure thread_id is always a string (caller / daemon sets runner thread id; do not mutate here — IG-110)
+        # Ensure thread_id is always a string (caller / daemon sets runner thread id; do not mutate here)
         tid = str(thread_id or self._current_thread_id or "")
 
         # RFC-214: Prior conversation is now in loop_messages ledger, not separate excerpts
-        # One load for unified classification (tail) - IG-128, IG-133
+        # One load for unified classification (tail) -,
         #
         # Materialize CoreAgent + durable LangGraph checkpointer before the
         # StrangeLoop graph compiles. ``await_user`` (planner-subagent review,
         # ask_user) uses ``interrupt()``; without a checkpointer that pause is
         # not resumable and Approve / ``Command(resume=...)`` is a no-op.
 
-        # RFC-630 IG-554: Pass 1 runs pre-graph in StrangeLoop (parallel with checkpoint).
+        # RFC-630 Pass 1 runs pre-graph in StrangeLoop (parallel with checkpoint).
         # Pass 2 runs after CE load; social queries END before the graph.
         #
         # When the caller flags this turn as a clarification answer (RFC-622), the graph
@@ -518,7 +518,7 @@ class StrangeLoopMixin:
             config=self._config,
         )
 
-        # IG-406: Get shared PostgreSQL pool for high-concurrency support
+        # Get shared PostgreSQL pool for high-concurrency support
         shared_pool = await self.get_sloop_shared_pool()
 
         # RFC-622: build the clarification policy from per-request mode + config defaults.
@@ -561,7 +561,7 @@ class StrangeLoopMixin:
             preclassified_intent, preferred_subagent
         )
 
-        # Loop status liveness heartbeat (IG-466 follow-up):
+        # Loop status liveness heartbeat (follow-up):
         # While the loop runs, tick `updated_at` so periodic reconciliation can
         # trust the timestamp as a freshness signal and avoid demoting a live
         # `status="running"` row to `idle`.
@@ -581,7 +581,7 @@ class StrangeLoopMixin:
                 routing_classification=routing_classification,
                 intent_classifier=self._intent_classifier,
                 preferred_subagent=preferred_subagent,
-                shared_pool=shared_pool,  # IG-406: Shared pool for high-concurrency
+                shared_pool=shared_pool,  # Shared pool for high-concurrency
                 clarification_policy=clarification_policy,
                 clarification_answer=clarification_answer,
                 clarification_answers=clarification_answers,
@@ -774,8 +774,8 @@ class StrangeLoopMixin:
                     )
 
                 elif event_type == "stream_event":
-                    # IG-330: Forward full ``messages`` stream for AI + tool payloads (no strip).
-                    # IG-416: Forward custom tool_call_update (main + subgraph).
+                    # Forward full ``messages`` stream for AI + tool payloads (no strip).
+                    # Forward custom tool_call_update (main + subgraph).
                     if _forward_messages_chunk(event_data):
                         yield event_data
 
@@ -924,7 +924,7 @@ class StrangeLoopMixin:
                             status=final_result.status,
                             goal_progress=final_result.goal_progress,
                             evidence_summary=evidence,
-                            goal=display_goal,  # IG-267: Pass goal for CLI trophy display
+                            goal=display_goal,  # Pass goal for CLI trophy display
                             completion_summary=completion_summary,
                             total_steps=n_act_steps,
                         ).to_dict()

@@ -1,4 +1,4 @@
-"""Transport message dispatch for the daemon (IG-110).
+"""Transport message dispatch for the daemon.
 
 Maps JSON message types to handlers using ``SootheRunner`` public APIs instead
 of reaching into ``runner._durability``.
@@ -116,7 +116,7 @@ _METHOD_TO_HANDLER: dict[str, str] = {
 
 
 def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
-    """Normalize optional runner fields for ``loop_input`` messages (IG-362).
+    """Normalize optional runner fields for ``loop_input`` messages.
 
     Args:
         msg: Raw client message dict.
@@ -190,7 +190,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
 
 
 def _coerce_loop_input_text(content: Any) -> str | None:
-    """Normalize ``loop_input`` content to a non-empty user text string (IG-361).
+    """Normalize ``loop_input`` content to a non-empty user text string.
 
     Preferred wire shape is a bare string. Some clients send a small JSON
     object (e.g. ``{"text": "..."}``); extract the first known string field.
@@ -325,7 +325,7 @@ class MessageRouter:
         await d._send_client_message(client_id, envelope)
 
     async def _client_subscribed_loop_id(self, client_id: Any) -> str | None:
-        """Return the ``loop_id`` this client receives loop-scoped events for (IG-408).
+        """Return the ``loop_id`` this client receives loop-scoped events for.
 
         The session manager enforces **at most one** loop subscription per client
         (``subscribe_loop`` replaces any prior loop). **Many clients** may subscribe
@@ -866,7 +866,7 @@ class MessageRouter:
         self._mark_pong_received(client_id)
 
     async def _handle_delivery_ack(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Record client delivery acknowledgment for stream drain gating (IG-556)."""
+        """Record client delivery acknowledgment for stream drain gating."""
         params = msg.get("params")
         if not isinstance(params, dict):
             params = msg
@@ -1121,7 +1121,7 @@ class MessageRouter:
             resolve_skill_directory,
         )
 
-        # IG-054: Capacity check moved to query_engine.py to eliminate race
+        # Capacity check moved to query_engine.py to eliminate race
 
         raw_skill = msg.get("skill")
         if not isinstance(raw_skill, str) or not raw_skill.strip():
@@ -1230,7 +1230,7 @@ class MessageRouter:
         )
 
     async def _handle_daemon_status(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle daemon_status RPC request (IG-174 Phase 0).
+        """Handle daemon_status RPC request (Phase 0).
 
         Args:
             client_id: Client connection identifier.
@@ -1270,7 +1270,7 @@ class MessageRouter:
         )
 
     async def _handle_daemon_shutdown(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle daemon_shutdown RPC request (IG-174 Phase 0).
+        """Handle daemon_shutdown RPC request (Phase 0).
 
         Args:
             client_id: Client connection identifier.
@@ -1296,7 +1296,7 @@ class MessageRouter:
         await d.stop()
 
     async def _handle_config_get(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle config_get RPC request (IG-174 Phase 0).
+        """Handle config_get RPC request (Phase 0).
 
         Args:
             client_id: Client connection identifier.
@@ -1359,7 +1359,7 @@ class MessageRouter:
             )
 
     # ---------------------------------------------------------------------------
-    # Loop RPC Helpers (IG-246: Self-healing metadata sync)
+    # Loop RPC Helpers (Self-healing metadata sync)
     # ---------------------------------------------------------------------------
 
     async def _ensure_loop_exists(self, loop_id: str) -> bool:
@@ -1386,7 +1386,7 @@ class MessageRouter:
             msg: Request message with optional ``filter`` and ``limit``.
                 ``filter.status`` — narrows to one persisted status value.
                 ``filter.exclude_empty`` — when True (default), hides loops
-                with zero human + zero AI messages (IG-466).
+                with zero human + zero AI messages.
                 ``filter.workspace`` — narrows to loops with matching client_workspace.
         """
         d = self._daemon
@@ -1811,7 +1811,7 @@ class MessageRouter:
             return
 
         wire_tier = msg.get("wire_tier", "full")
-        # IG-441: three first-class modes (batch / adaptive / streaming);
+        # three first-class modes (batch / adaptive / streaming);
         # default to ``adaptive`` for new subscribers since it gives the best
         # all-round UX. Unknown values fall back to adaptive too.
         stream_delivery = msg.get("stream_delivery", "adaptive")
@@ -2885,7 +2885,7 @@ class MessageRouter:
             )
             return
 
-        # Suspend the job subtree and stop in-flight workers (IG-678 P1-1).
+        # Suspend the job subtree and stop in-flight workers (P1-1).
         try:
             await service.pause_job(job_id, reason="user_pause")
         except Exception as exc:
@@ -2963,7 +2963,7 @@ class MessageRouter:
             )
             return
 
-        # Resume the job subtree and notify LoopRail (IG-678 P2).
+        # Resume the job subtree and notify LoopRail (P2).
         try:
             resumed = await service.resume_job(job_id)
         except ValueError as exc:

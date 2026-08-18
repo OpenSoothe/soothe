@@ -1,4 +1,4 @@
-"""Unified tool call ID generation and stream rewriting (IG-416).
+"""Unified tool call ID generation and stream rewriting.
 
 This module provides functions for generating unified tool_call_ids that combine
 step_id, task_idx, and tool name into a consistent format. These IDs enable
@@ -116,7 +116,7 @@ def _rewrite_tool_call_ids_to_unified(
 ) -> BaseMessage:
     """Rewrite tool_call_ids in AI message/chunk to unified format.
 
-    IG-416: Transforms provider tool_call_ids like ``functions.task:0`` to
+    Transforms provider tool_call_ids like ``functions.task:0`` to
     ``{step_id}:s:{tool}`` (root) or ``{step_id}:t{idx}:{tool}`` (subgraph).
 
     Returns the original message if no modifications needed, or a new
@@ -224,7 +224,7 @@ def _rewrite_tool_message_tool_call_id(
     *,
     task_idx: int | None = None,
 ) -> BaseMessage:
-    """Align ``ToolMessage.tool_call_id`` with unified AIMessage ids (IG-416).
+    """Align ``ToolMessage.tool_call_id`` with unified AIMessage ids.
 
     Args:
         msg: Stream message (typically ``ToolMessage``).

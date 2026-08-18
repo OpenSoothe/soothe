@@ -1,4 +1,4 @@
-"""Client session management for event bus architecture (RFC-0013, IG-408)."""
+"""Client session management for event bus architecture (RFC-0013)."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 _GLOBAL_TOPIC = "global"
 _SENDER_FILTER_DROP_LOG_LAST: dict[str, float] = {}
 _SENDER_FILTER_DROP_LOG_INTERVAL_SEC = 5.0
-_HIGH_PRIORITY_SETTLE_MARGIN_S = 0.15  # IG-436: Extra settle for HIGH events
+_HIGH_PRIORITY_SETTLE_MARGIN_S = 0.15  # Extra settle for HIGH events
 _DELIVERY_ACK_POLL_S = 0.01
 
 
@@ -159,7 +159,7 @@ def _to_next_envelope(event: dict[str, Any], subscription_id: str | None) -> dic
 
 
 def _queue_has_high_priority(queue: asyncio.Queue) -> bool:
-    """Peek queue to check if any HIGH/CRITICAL priority events pending (IG-436).
+    """Peek queue to check if any HIGH/CRITICAL priority events pending.
 
     Since asyncio.Queue doesn't support true peek, we temporarily drain and
     re-queue to check priorities. Only used during drain settle when queue
@@ -202,7 +202,7 @@ def _queue_has_high_priority(queue: asyncio.Queue) -> bool:
 
 @dataclass
 class ClientSession:
-    """Represents a connected client with loop-scoped subscriptions (IG-408).
+    """Represents a connected client with loop-scoped subscriptions.
 
     Attributes:
         client_id: Unique identifier for this client
@@ -211,7 +211,7 @@ class ClientSession:
         subscriptions: Set of loop_ids this client receives events for
         event_queue: Queue for delivering events to the client
         sender_task: Background task that sends events to the client
-        wire_tier: Client wire filter tier (``full`` or ``progress``, IG-435)
+        wire_tier: Client wire filter tier (``full`` or ``progress``)
         detach_requested: Whether client explicitly requested detach (RFC-0013)
         config: Optional SootheConfig for effective streaming config (RFC-614)
         loop_subscription_ids: Maps loop_id → subscription correlation id for ``next`` envelopes
@@ -221,7 +221,7 @@ class ClientSession:
     transport: Channel
     transport_client: Any  # WebSocket connection or channel-specific handle
     subscriptions: set[str] = field(default_factory=set)
-    # IG-408: Bounded per-client event queue to prevent unbounded growth
+    # Bounded per-client event queue to prevent unbounded growth
     event_queue: asyncio.Queue[dict[str, Any]] = field(
         default_factory=lambda: asyncio.Queue(maxsize=10000)
     )
@@ -231,18 +231,18 @@ class ClientSession:
     detach_requested: bool = False  # RFC-0013: client explicitly requested detach
     autopilot_subscribed: bool = False  # RFC-228: receives autopilot__* worker events
     config: SootheConfig | None = None  # RFC-614: daemon config reference
-    stream_delivery: StreamDeliveryMode = "adaptive"  # IG-534 §3.2: per-client preference
+    stream_delivery: StreamDeliveryMode = "adaptive"  # §3.2: per-client preference
     # Subscription correlation ids for protocol-1 ``next`` envelopes (RFC-450).
     loop_subscription_ids: dict[str, str] = field(default_factory=dict)  # loop_id → subscription_id
 
 
 class ClientSessionManager:
-    """Manages client sessions and loop-scoped subscriptions (IG-408).
+    """Manages client sessions and loop-scoped subscriptions.
 
     Args:
         event_bus: EventBus instance for routing events
         cancel_callback: Optional async callback to cancel work for a loop_id on disconnect.
-        dispatch_cleanup_callback: Optional async callback to cleanup dispatch tasks (IG-258).
+        dispatch_cleanup_callback: Optional async callback to cleanup dispatch tasks.
         config: Optional SootheConfig for streaming interval configuration (RFC-614).
     """
 
@@ -260,7 +260,7 @@ class ClientSessionManager:
         self._cancel_callback = cancel_callback
         self._dispatch_cleanup_callback = dispatch_cleanup_callback
         self._config = config
-        # IG-556 P1.3: per-loop delivery sequence + client acks for drain gating.
+        # P1.3: per-loop delivery sequence + client acks for drain gating.
         self._delivery_sent_seq: dict[tuple[str, str], int] = {}
         self._delivery_ack_seq: dict[tuple[str, str], int] = {}
 
@@ -300,7 +300,7 @@ class ClientSessionManager:
     ) -> StreamDeliveryMode:
         """Return stream shaping mode for a client or loop.
 
-        IG-534 §3.2: Preference is stored on ``ClientSession``, not a shared
+        §3.2: Preference is stored on ``ClientSession``, not a shared
         per-loop map. When ``client_id`` is provided, that session's mode wins.
         Otherwise resolve via the client that owns in-flight work on ``loop_id``.
 
@@ -384,7 +384,7 @@ class ClientSessionManager:
 
         session.wire_tier = wire_tier if wire_tier in ("full", "progress") else "full"
         if stream_delivery is not None:
-            # IG-441: accept the canonical three modes (batch / adaptive / streaming).
+            # accept the canonical three modes (batch / adaptive / streaming).
             # Unknown values fall back to "batch" for safety.
             delivery: StreamDeliveryMode = (
                 stream_delivery
@@ -408,7 +408,7 @@ class ClientSessionManager:
         if subscription_id is not None:
             session.loop_subscription_ids[loop_id] = subscription_id
 
-        # Unsubscribe from global for strict loop isolation (IG-408)
+        # Unsubscribe from global for strict loop isolation
         # Loop-scoped clients should only receive events from their subscribed loop
         await self._event_bus.unsubscribe(_GLOBAL_TOPIC, session.event_queue)
 
@@ -525,7 +525,7 @@ class ClientSessionManager:
     async def release_loop_ownership(self, client_id: str) -> str | None:
         """Release loop ownership; returns the loop_id if any.
 
-        IG-490: Wait for queue drain when sender is alive to prevent race condition
+        Wait for queue drain when sender is alive to prevent race condition
         where events arrive after await_loop_delivery_drained() but before ownership
         release (e.g., "idle" status broadcast after goal completion).
         """
@@ -542,7 +542,7 @@ class ClientSessionManager:
                 backlog = session.event_queue.qsize()
                 sender_alive = session.sender_task is not None and not session.sender_task.done()
                 if backlog > 0 and sender_alive:
-                    # IG-490: Wait for sender to drain events before releasing
+                    # Wait for sender to drain events before releasing
                     # This prevents race where idle status arrives after drain check
                     logger.debug(
                         "Client %s has %d undelivered event(s) with sender alive, "
@@ -745,9 +745,9 @@ class ClientSessionManager:
         )
 
     async def _sender_loop(self, session: ClientSession) -> None:
-        """Send events from queue with daemon-side filtering and batching (RFC-0022, IG-258).
+        """Send events from queue with daemon-side filtering and batching (RFC-0022).
 
-        IG-436: HIGH/CRITICAL priority events flush immediately without batch wait.
+        HIGH/CRITICAL priority events flush immediately without batch wait.
         This prevents goal_completion events from being delayed by the batch timeout.
         """
         # Set logging context for full client_id in daemon.log
@@ -759,14 +759,14 @@ class ClientSessionManager:
             batch: list[dict[str, Any]] = []
             while True:
                 try:
-                    skip_batch_fill = False  # IG-436: Flag for HIGH priority flush
+                    skip_batch_fill = False  # Flag for HIGH priority flush
                     try:
                         event_data = await asyncio.wait_for(
                             session.event_queue.get(), timeout=batch_timeout
                         )
                         batch.append(event_data)
 
-                        # IG-436: Check priority - flush HIGH/CRITICAL immediately
+                        # Check priority - flush HIGH/CRITICAL immediately
                         if isinstance(event_data, tuple) and len(event_data) == 2:
                             event_meta = event_data[1]
                             if event_meta is not None:
@@ -784,7 +784,7 @@ class ClientSessionManager:
                         if not batch:
                             continue
 
-                    # IG-436: Skip batch fill for HIGH priority events
+                    # Skip batch fill for HIGH priority events
                     if not skip_batch_fill:
                         while not session.event_queue.empty() and len(batch) < 50:
                             try:
@@ -923,11 +923,11 @@ class ClientSessionManager:
 
         Ensures ``goal_completion`` and other tail frames are flushed before ``status: idle``.
 
-        IG-436: Adds extra settle margin for HIGH/CRITICAL priority events to prevent
+        Adds extra settle margin for HIGH/CRITICAL priority events to prevent
         race condition where sender hasn't flushed batched goal_completion before
         ownership release.
 
-        IG-556 P1.3: After queue drain, waits until clients ack outbound delivery
+        P1.3: After queue drain, waits until clients ack outbound delivery
         sequence through terminal frames (or times out with a degraded warning).
 
         Args:
@@ -970,7 +970,7 @@ class ClientSessionManager:
             if queues and all(q.empty() for q in queues):
                 queues_drained = True
                 break
-            # IG-436: Check for HIGH priority events that arrived during settle
+            # Check for HIGH priority events that arrived during settle
             if queues and any(_queue_has_high_priority(q) for q in queues):
                 logger.debug(
                     "Loop %s drain: HIGH priority event(s) pending, adding extra settle margin",

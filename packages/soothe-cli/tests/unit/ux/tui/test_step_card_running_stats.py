@@ -165,7 +165,7 @@ def test_route_pending_main_tools_single_active_step_without_unified_id() -> Non
 
 
 def test_running_animation_includes_tool_stats_in_title() -> None:
-    """Compact tool/task counts appear on the step title during animation (IG-664)."""
+    """Compact tool/task counts appear on the step title during animation."""
     card = CognitionStepMessage("RUN-01", "Deep Research workspace", id="step-run")
 
     card.add_tool_call("RUN_01:s:grep:0", "grep", {"pattern": "TODO"})

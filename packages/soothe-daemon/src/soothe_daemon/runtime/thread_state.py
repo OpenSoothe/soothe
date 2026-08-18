@@ -1,4 +1,4 @@
-"""Per-checkpoint state for daemon isolation (IG-110, IG-408).
+"""Per-checkpoint state for daemon isolation.
 
 Registry keys are LangGraph / durability **checkpoint ids** (historically called
 ``thread_id`` in code). **Client routing** uses **``loop_id``**; this module maps
@@ -82,7 +82,7 @@ class ThreadStateRegistry:
         self._thread_loop.pop(thread_id, None)
 
     def set_thread_loop(self, thread_id: str, loop_id: str | None) -> None:
-        """Associate a durability thread with an StrangeLoop id (IG-300)."""
+        """Associate a durability thread with an StrangeLoop id."""
         if loop_id and str(loop_id).strip():
             self._thread_loop[thread_id] = str(loop_id).strip()
         else:
@@ -93,7 +93,7 @@ class ThreadStateRegistry:
         return self._thread_loop.get(thread_id)
 
     def bind_loop(self, thread_id: str, loop_id: str) -> None:
-        """Bind thread to loop (create or update mapping) (IG-500).
+        """Bind thread to loop (create or update mapping).
 
         Used by /clear command to update thread binding after creating new loop.
 
@@ -105,7 +105,7 @@ class ThreadStateRegistry:
             self._thread_loop[thread_id] = str(loop_id).strip()
 
     def unbind_loop(self, thread_id: str, loop_id: str) -> None:
-        """Remove thread → loop binding (IG-500).
+        """Remove thread → loop binding.
 
         Used by /clear command to remove old loop binding before creating new loop.
 

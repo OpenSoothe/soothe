@@ -98,7 +98,7 @@ def pytest_runtest_teardown(item, nextitem):
 def _close_sqlite_runtime_registry():
     """Session backstop: release every ``SqliteStoreRuntime`` after each test.
 
-    IG-647 unified all SQLite durability surfaces (checkpoints, context, cron,
+    unified all SQLite durability surfaces (checkpoints, context, cron,
     identity, display) under the process-global ``SqliteRuntimeRegistry`` in
     soothe-nano.  Each ``acquire()`` that isn't matched by ``release_sync()``
     leaks a Runtime (1 writer + ``reader_pool_size`` readers = 4 open sqlite3

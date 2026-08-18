@@ -1,4 +1,4 @@
-"""Integration tests for two-pass intake classification (RFC-630 IG-554).
+"""Integration tests for two-pass intake classification (RFC-630).
 
 Tests the full two-pass flow:
 - Pass 1 (social vs task) with pivot pattern detection

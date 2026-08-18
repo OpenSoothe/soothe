@@ -1,4 +1,4 @@
-"""Tests for soothe.internal broadcast suppression (IG-435)."""
+"""Tests for soothe.internal broadcast suppression."""
 
 from __future__ import annotations
 

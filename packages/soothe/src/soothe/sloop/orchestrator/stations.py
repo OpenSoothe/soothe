@@ -1,4 +1,4 @@
-"""StrangeLoop stem station IDs (IG-663, IG-672).
+"""StrangeLoop stem station IDs.
 
 Canonical LangGraph node names for the flat Loop Graph. Legacy IDs remain
 accepted via ``normalize_station`` for persisted clarification origins and

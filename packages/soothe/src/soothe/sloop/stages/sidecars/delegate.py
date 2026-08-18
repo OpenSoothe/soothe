@@ -1,11 +1,11 @@
-"""Wired-subagent intake branch (RFC-630, IG-599 / IG-601 / IG-602 / IG-656 / IG-658 / IG-660).
+"""Wired-subagent intake branch (RFC-630, / / / /).
 
 Intake-only wires (``planner``, ``browser_use``, ``deep_research``,
 ``academic_research``): stream the specialist runnable from the intake-only
 registry (not on CoreAgent ``task``), forward curated wire customs for the
 orphan SubAgent card, record Human/AI execute-step ledger rows.
 
-For ``planner`` (RFC-633 / IG-660): persist ``.soothe/plans/`` artifact and pause
+For ``planner`` (RFC-633): persist ``.soothe/plans/`` artifact and pause
 on RFC-622 clarification (Approve / Reject / More comments). Approve hands off
 to StrangeLoop ``plan_generate``; Reject routes to ``goal_completion``. Other
 wires still route directly to ``goal_completion``.
@@ -482,7 +482,7 @@ async def _invoke_intake_only_direct(
     wire: str,
     goal_text: str,
 ) -> dict[str, Any]:
-    """Run intake-only CompiledSubAgent with orphan-card stream bridge (IG-602)."""
+    """Run intake-only CompiledSubAgent with orphan-card stream bridge."""
     lookup = getattr(ctx.core_agent, "lookup_intake_only_subagent", None)
     spec = lookup(wire) if callable(lookup) else None
     if spec is None:

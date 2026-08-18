@@ -236,7 +236,7 @@ async def test_websocket_cors_accepts_allowed_origin(tmp_path: Path) -> None:
 async def test_websocket_internal_heartbeat_not_broadcast_while_query_running(
     websocket_daemon: tuple[SootheDaemon, int],
 ) -> None:
-    """Internal catalog events must not be broadcast to WebSocket clients (IG-435)."""
+    """Internal catalog events must not be broadcast to WebSocket clients."""
     daemon, port = websocket_daemon
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()

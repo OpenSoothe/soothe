@@ -1,4 +1,4 @@
-"""Tests for LoopPersistenceWriter cross-event-loop submit bridge (IG-571)."""
+"""Tests for LoopPersistenceWriter cross-event-loop submit bridge."""
 
 from __future__ import annotations
 

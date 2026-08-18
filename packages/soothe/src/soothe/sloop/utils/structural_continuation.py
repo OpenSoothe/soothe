@@ -1,4 +1,4 @@
-"""Structural loop-continuation controls (RFC-225, RFC-630, IG-558).
+"""Structural loop-continuation controls (RFC-225, RFC-630).
 
 Continuation is derived from checkpoint state and explicit control phrases,
 not from Pass 1 social classification. These helpers run before the pre-graph

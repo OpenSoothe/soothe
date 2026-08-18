@@ -1,4 +1,4 @@
-"""Unit tests for IG-517: Task row deduplication and subagent_type display."""
+"""Unit tests for Task row deduplication and subagent_type display."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for goal-completion output reconciliation (IG-578)."""
+"""Tests for goal-completion output reconciliation."""
 
 from __future__ import annotations
 

@@ -344,7 +344,7 @@ def test_baseline_omits_plan_assess_anchor_by_default() -> None:
     results = _run_all_conditions()
     base = results["baseline"]
     assert not base.anchor_present
-    # IG-557 assess envelope: single GOAL: in task human only.
+    # assess envelope: single GOAL: in task human only.
     assert base.duplicated_goal_count == 1, (
         f"assess v2 should expose one GOAL: block; got {base.duplicated_goal_count}"
     )

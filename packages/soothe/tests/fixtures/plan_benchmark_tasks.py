@@ -1,4 +1,4 @@
-"""Plan generation benchmark task fixtures with ground truth (IG-536).
+"""Plan generation benchmark task fixtures with ground truth.
 
 Provides simulated tasks for evaluating LLMPlanner latency and accuracy.
 Each task includes a goal, mocked context, and expected plan (ground truth).

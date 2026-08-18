@@ -21,7 +21,7 @@ LOOPS_DATA_DIR = "data/loops"
 """Directory for StrangeLoop checkpoint data (Layer 2)."""
 
 ARCHIVED_LOOPS_DATA_DIR = "data/archived_loops"
-"""Directory for archived StrangeLoop checkpoints (IG-500)."""
+"""Directory for archived StrangeLoop checkpoints."""
 
 
 class PersistenceDirectoryManager:
@@ -89,7 +89,7 @@ class PersistenceDirectoryManager:
 
     @staticmethod
     def get_archived_loops_directory() -> Path:
-        """Get archived StrangeLoop loops base directory path (IG-500).
+        """Get archived StrangeLoop loops base directory path.
 
         Returns:
             Path to data/archived_loops/ directory.
@@ -139,7 +139,7 @@ class PersistenceDirectoryManager:
 
     @staticmethod
     def get_loop_checkpoint_path() -> Path:
-        """Get StrangeLoop global checkpoint database path (IG-055: unified SQLite).
+        """Get StrangeLoop global checkpoint database path (unified SQLite).
 
         Returns:
             Path to shared ``databases/checkpoints.db`` (StrangeLoop + LangGraph).

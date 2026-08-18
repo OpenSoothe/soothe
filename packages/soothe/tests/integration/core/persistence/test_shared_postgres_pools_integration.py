@@ -1,4 +1,4 @@
-"""Integration tests for shared PostgreSQL pools (IG-406 + checkpointer singleton).
+"""Integration tests for shared PostgreSQL pools (+ checkpointer singleton).
 
 Requires PostgreSQL at ``127.0.0.1:6432`` (docker-compose soothe-pgvector) or
 ``SOOTHE_TEST_POSTGRES_BASE_DSN``. Run with::

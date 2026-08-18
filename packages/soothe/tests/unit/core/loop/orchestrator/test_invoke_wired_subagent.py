@@ -1,4 +1,4 @@
-"""IG-599 / IG-601: slash wired-subagent direct route."""
+"""/ slash wired-subagent direct route."""
 
 from __future__ import annotations
 

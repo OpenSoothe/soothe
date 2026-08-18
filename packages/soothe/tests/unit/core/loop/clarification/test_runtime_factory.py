@@ -1,4 +1,4 @@
-"""Unit tests for the runtime clarification-policy factory (RFC-622, IG-462)."""
+"""Unit tests for the runtime clarification-policy factory (RFC-622)."""
 
 from __future__ import annotations
 

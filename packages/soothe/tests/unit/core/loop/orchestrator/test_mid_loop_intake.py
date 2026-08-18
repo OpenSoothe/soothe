@@ -1,4 +1,4 @@
-"""Unit tests for mid-loop intake-tier policy (IG-676)."""
+"""Unit tests for mid-loop intake-tier policy."""
 
 from __future__ import annotations
 

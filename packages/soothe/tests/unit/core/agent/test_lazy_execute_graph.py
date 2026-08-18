@@ -1,4 +1,4 @@
-"""Unit tests for lazy execute graph compilation (IG-506)."""
+"""Unit tests for lazy execute graph compilation."""
 
 from __future__ import annotations
 

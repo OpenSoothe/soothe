@@ -1,4 +1,4 @@
-"""Tests for client workspace propagation through ``loop_new`` (IG-409).
+"""Tests for client workspace propagation through ``loop_new``.
 
 The CLI passes the user's CWD on bootstrap so the agent's filesystem tools default
 to the user's project directory. ``_handle_loop_new`` must validate the value and
@@ -125,7 +125,7 @@ async def test_loop_new_persists_is_ephemeral(
         metadata = await _read_metadata(loop_id, config)
         assert metadata.get("is_ephemeral") is True
         assert metadata.get("current_workspace")
-        # IG-466: last_message_at is populated on first counter increment, not at creation,
+        # last_message_at is populated on first counter increment, not at creation,
         # so empty-loop GC can detect bootstrap-only loops via COALESCE(last_message_at, created_at).
         assert metadata.get("last_message_at") is None
         assert metadata.get("human_message_count", 0) == 0

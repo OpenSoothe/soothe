@@ -1,4 +1,4 @@
-"""Golden wire trace for IG-556 stream termination ordering (coalescer path)."""
+"""Golden wire trace for stream termination ordering (coalescer path)."""
 
 from __future__ import annotations
 

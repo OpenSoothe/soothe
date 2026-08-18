@@ -1,4 +1,4 @@
-"""Autopilot forest helpers for CLI ``top`` (RFC-228 / IG-679 / IG-688).
+"""Autopilot forest helpers for CLI ``top`` (RFC-228 /).
 
 Pure filter/assembly used by ``AutopilotService.top_snapshot``. Server SoT for
 which jobs/goals/loops appear in the live dashboard (active-only by default;

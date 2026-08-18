@@ -4,7 +4,7 @@ Captures checkpoint anchors at iteration boundaries (start/end) to enable
 precise rewinding and checkpoint tree management.
 
 RFC-218: StrangeLoop Checkpoint Tree Architecture
-IG-055: Backend-agnostic persistence with config-driven backend selection
+Backend-agnostic persistence with config-driven backend selection
 """
 
 from __future__ import annotations
@@ -174,7 +174,7 @@ class CheckpointAnchorManager:
         )
 
     async def close(self) -> None:
-        """Close persistence manager backend pools (IG-404: prevent pool exhaustion).
+        """Close persistence manager backend pools (prevent pool exhaustion).
 
         Must be called when anchor manager is no longer needed to release database connections.
         """

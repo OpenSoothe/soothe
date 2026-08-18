@@ -1,6 +1,6 @@
 """Per-loop card ledger lifecycle, real-time binding, and reattach replay.
 
-IG-535 Optimization 4: Uses dedicated card-bind executor to isolate from
+Optimization 4: Uses dedicated card-bind executor to isolate from
 asyncio.to_thread pool, preventing contention under concurrent loops.
 """
 
@@ -70,7 +70,7 @@ def reset_card_ingest_overflow_metrics() -> None:
     _card_ingest_overflow_total.clear()
 
 
-# IG-535 Optimization 4: Dedicated executor for card binding (isolated from to_thread pool)
+# Optimization 4: Dedicated executor for card binding (isolated from to_thread pool)
 _card_bind_executor: ThreadPoolExecutor | None = None
 _card_bind_max_workers = 4
 
@@ -78,7 +78,7 @@ _card_bind_max_workers = 4
 def _get_card_bind_executor() -> ThreadPoolExecutor:
     """Return the dedicated card-bind executor (lazily initialized).
 
-    IG-535: Separate from asyncio.to_thread pool to prevent contention
+    Separate from asyncio.to_thread pool to prevent contention
     when N concurrent loops all call card binding simultaneously.
     """
     global _card_bind_executor
@@ -104,7 +104,7 @@ class _BindingBuffers:
     log_events: list[dict[str, Any]] = field(default_factory=list)
 
 
-_CARD_BIND_QUEUE_MAXSIZE = 500  # IG-534 §2.3: bounded per-loop ingest backlog
+_CARD_BIND_QUEUE_MAXSIZE = 500  # §2.3: bounded per-loop ingest backlog
 
 
 @dataclass
@@ -247,7 +247,7 @@ class LoopCardManager:
         mode: str,
         data: Any,
     ) -> None:
-        """Queue one stream tuple for background card binding (IG-534 §2.3).
+        """Queue one stream tuple for background card binding (§2.3).
 
         Never blocks the daemon stream hot path. Failures are logged in the
         per-loop ingest worker.
@@ -428,7 +428,7 @@ class LoopCardManager:
         )
 
     def _effective_flush_debounce_s(self, loop_id: str) -> float:
-        """Widen debounce when ingest backlog exceeds 80% capacity (IG-546)."""
+        """Widen debounce when ingest backlog exceeds 80% capacity."""
         base = self._flush_debounce_s
         worker = self._ingest_workers.get(loop_id)
         if worker is None or worker.queue.maxsize <= 0:
@@ -462,10 +462,10 @@ class LoopCardManager:
     async def _flush_buffers_to_ledger(self, loop_id: str, state: _BindingBuffers) -> None:
         """Flush buffers to ledger using dedicated card-bind executor.
 
-        IG-535 Optimization 4: Uses isolated ThreadPoolExecutor instead of
+        Optimization 4: Uses isolated ThreadPoolExecutor instead of
         asyncio.to_thread to prevent contention with general thread pool.
 
-        IG-655 / RFC-413 Phase 4: append create/update mutations when possible;
+        / RFC-413 Phase 4: append create/update mutations when possible;
         fall back to ``replace_with`` only when cards disappear from the
         projection. Broadcasts live ``soothe.card.*`` frames after a successful apply.
         """

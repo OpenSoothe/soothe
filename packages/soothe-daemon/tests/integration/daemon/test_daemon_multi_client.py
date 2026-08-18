@@ -1,4 +1,4 @@
-"""Integration tests for multi-client daemon with loop-scoped isolation (RFC-0013, IG-408)."""
+"""Integration tests for multi-client daemon with loop-scoped isolation (RFC-0013)."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 """Host Executor error classification vs rate-limit detection.
 
-Moved from soothe-nano (IG-641): these tests exercise StrangeLoop Executor
+Moved from soothe-nano: these tests exercise StrangeLoop Executor
 and execute_steps helpers, which must not live in nano.
 """
 
@@ -83,7 +83,7 @@ def test_executor_timeout_not_misclassified_as_rate_limit() -> None:
 
 
 def test_executor_dispatch_timeout_classified_as_timeout() -> None:
-    """IG-683: DispatchTimeoutError maps to timeout for planner evidence."""
+    """DispatchTimeoutError maps to timeout for planner evidence."""
     from soothe.sloop.engine.graph_interrupt import DispatchTimeoutError
 
     exc = DispatchTimeoutError(300.0, step_id="LIS-04", reason="idle")

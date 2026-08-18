@@ -1,4 +1,4 @@
-"""Unit tests for daemon turn_id helper (IG-616)."""
+"""Unit tests for daemon turn_id helper."""
 
 from __future__ import annotations
 

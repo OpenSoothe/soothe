@@ -1,4 +1,4 @@
-"""IG-555 plan_assess guardrails for complex intake at iter=0."""
+"""plan_assess guardrails for complex intake at iter=0."""
 
 from __future__ import annotations
 

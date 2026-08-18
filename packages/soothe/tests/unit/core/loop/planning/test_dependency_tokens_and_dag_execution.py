@@ -1,4 +1,4 @@
-"""Unified StepDAG + dependency token expansion (IG-400, IG-537)."""
+"""Unified StepDAG + dependency token expansion."""
 
 from __future__ import annotations
 

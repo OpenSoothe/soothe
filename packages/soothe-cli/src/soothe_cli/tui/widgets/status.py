@@ -76,7 +76,7 @@ class ClarificationModeBadge(Static):
     ``Auto`` renders as muted/dim text — matching the welcome banner's
     ``Loop:`` line — to stay visually quiet in the default state. ``Manual``
     keeps a bold orange pill so the override stands out. ``Plan`` uses a teal
-    pill for sticky planner routing (IG-682).
+    pill for sticky planner routing.
     """
 
     DEFAULT_CSS = """

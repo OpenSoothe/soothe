@@ -1,4 +1,4 @@
-"""Durable job ↔ loop membership index (IG-677).
+"""Durable job ↔ loop membership index.
 
 A job is the root GoalNode id. Each StrangeLoop assignment gets a unique
 ``loop_id`` under ``data/loops/{loop_id}/``. This module persists membership

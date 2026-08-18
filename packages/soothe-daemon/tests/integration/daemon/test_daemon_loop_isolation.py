@@ -1,4 +1,4 @@
-"""Integration tests for loop isolation from daemon API (IG-408).
+"""Integration tests for loop isolation from daemon API.
 
 These tests verify that loops are properly isolated with:
 - No event leakage between different loops

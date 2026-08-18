@@ -1,4 +1,4 @@
-"""Step deliverable gate for execute action retry (RFC-630, IG-569).
+"""Step deliverable gate for execute action retry (RFC-630).
 
 Replaces the legacy ``## Result`` substring contract with structural evidence checks,
 optional fast-LLM assessment, and failure-mode-specific retry instructions.

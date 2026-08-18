@@ -1,4 +1,4 @@
-"""SQLite persistence for empty-loop GC: message counters + list_empty_loops (IG-466)."""
+"""SQLite persistence for empty-loop GC: message counters + list_empty_loops."""
 
 from __future__ import annotations
 

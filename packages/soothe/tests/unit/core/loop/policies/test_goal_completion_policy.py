@@ -1,4 +1,4 @@
-"""Unit tests for goal completion hybrid policy (IG-298, IG-537)."""
+"""Unit tests for goal completion hybrid policy."""
 
 from __future__ import annotations
 

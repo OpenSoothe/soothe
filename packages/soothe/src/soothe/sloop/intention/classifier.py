@@ -1,4 +1,4 @@
-"""Intent classifier implementation (RFC-225, RFC-630, IG-554).
+"""Intent classifier implementation (RFC-225, RFC-630).
 
 Two-pass intake classification: Pass 1 (social vs task) then Pass 2 (scope).
 Loop continuation is derived structurally inside ``StrangeLoop`` from the
@@ -42,7 +42,7 @@ def prior_projection_text_from_messages(
 ) -> str | None:
     """Build prior-goal summary text for Pass 2 from ledger messages.
 
-    IG-555: Intake Pass 2 omits boundary marker since classifier needs prior
+    Intake Pass 2 omits boundary marker since classifier needs prior
     scope signal for reference resolution, not planning anchoring prevention.
     """
     if not loop_messages:
@@ -56,7 +56,7 @@ def prior_projection_text_from_messages(
 
 
 class IntentClassifier:
-    """Two-pass LLM intake classification (RFC-630, IG-554).
+    """Two-pass LLM intake classification (RFC-630).
 
     Pass 1 decides social vs task without prior context. Pass 2 classifies
     scope (trivial/simple/complex) with prior projection when available.
@@ -163,7 +163,7 @@ class IntentClassifier:
         observability_phase: str = "strange_loop_graph",
         observability_component: str = "strange_loop.intent_classification",
     ) -> IntentClassification:
-        """Classify query via two-pass intake (RFC-630, IG-554).
+        """Classify query via two-pass intake (RFC-630).
 
         Args:
             query: User input text.

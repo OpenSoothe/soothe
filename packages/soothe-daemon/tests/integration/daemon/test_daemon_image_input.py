@@ -1,4 +1,4 @@
-"""Integration tests for daemon input with image attachments (IG-327)."""
+"""Integration tests for daemon input with image attachments."""
 
 from __future__ import annotations
 

@@ -142,7 +142,7 @@ def _render_prior_progress_for_assess(
     omit_hint: bool = True,
     max_step_summaries: int = 4,
 ) -> str:
-    """De-noised PRIOR PROGRESS block for assess prompts (IG-557)."""
+    """De-noised PRIOR PROGRESS block for assess prompts."""
     header_parts = [
         f"iter={digest.iteration}",
         f"wave={digest.wave_index}",
@@ -198,7 +198,7 @@ def _render_prior_progress_for_assess(
 
 
 def _render_previous_assessment(last_assessment: dict[str, Any] | None) -> str:
-    """Compact prior assess continuity from CE ``GoalNode.last_assessment`` (IG-557)."""
+    """Compact prior assess continuity from CE ``GoalNode.last_assessment``."""
     if not last_assessment:
         return ""
     status = str(last_assessment.get("status") or "unknown").strip()
@@ -213,7 +213,7 @@ def _render_previous_assessment(last_assessment: dict[str, Any] | None) -> str:
 
 
 def _render_gap_analysis_block(gap: PlanGapAnalysis | dict[str, Any]) -> str:
-    """Render PlanGapAnalysis for assess feed-forward (IG-557)."""
+    """Render PlanGapAnalysis for assess feed-forward."""
     if isinstance(gap, dict):
         gap_obj = PlanGapAnalysis.model_validate(gap)
     else:
@@ -236,7 +236,7 @@ def _render_gap_analysis_block(gap: PlanGapAnalysis | dict[str, Any]) -> str:
 
 
 def _render_open_gaps_block(gap: PlanGapAnalysis | dict[str, Any]) -> str:
-    """Render gap remaining work for plan-generate targeting (IG-557 Phase F)."""
+    """Render gap remaining work for plan-generate targeting (Phase F)."""
     if isinstance(gap, dict):
         gap_obj = PlanGapAnalysis.model_validate(gap)
     else:
@@ -287,7 +287,7 @@ def _render_prior_goals_tree(
     completion_in_ledger: bool,
     completion_preview_chars: int = 160,
 ) -> str:
-    """Render prior goals as nested list with GOAL labels (RFC-214 §4.4, IG-538)."""
+    """Render prior goals as nested list with GOAL labels (RFC-214 §4.4)."""
     if not prior_goals:
         return ""
     blocks: list[str] = []
@@ -481,7 +481,7 @@ class UserMessageBuilder:
         last_assessment: dict[str, Any] | None = None,
         plan_gap: PlanGapAnalysis | dict[str, Any] | None = None,
     ) -> str:
-        """Build assess task envelope (allowlist-only, IG-557).
+        """Build assess task envelope (allowlist-only).
 
         Legacy kwargs (``dag_context``, ``skill_context``, ``context_bundle``,
         ``prior_goals_override``, ``display_goal``) are ignored — assess uses a
@@ -638,7 +638,7 @@ class UserMessageBuilder:
             context_bundle: Optional ContextBundle from ContextEngine.project().
             assessment_status: Assess ``status`` (inline envelope; not in projected ledger).
             assessment_progress: Assess ``goal_progress`` (inline envelope).
-            plan_gap: Optional gap analysis for ``OPEN GAPS`` replan targeting (IG-557 Phase F).
+            plan_gap: Optional gap analysis for ``OPEN GAPS`` replan targeting (Phase F).
             approved_plan_path: Optional path of an operator-approved intake plan artifact.
             approved_plan_markdown: Optional approved plan body (frontmatter stripped).
 
@@ -722,7 +722,7 @@ class UserMessageBuilder:
         completion_in_ledger: bool = False,
         prior_goals_override: list[PriorGoalSummary] | None = None,
     ) -> str:
-        """Build task envelope for RFC-226 continuation discriminator (IG-538)."""
+        """Build task envelope for RFC-226 continuation discriminator."""
         sections: list[tuple[str, str]] = [
             ("GOAL", display_goal if display_goal is not None else _goal_text(goal)),
         ]
@@ -757,7 +757,7 @@ class UserMessageBuilder:
         skill_context: str | None = None,
         mcp_resource_blocks: list[str] | None = None,
     ) -> str:
-        """Build user message for an execute-step (IG-508: simplified, no INTENT/TASK).
+        """Build user message for an execute-step (simplified, no INTENT/TASK).
 
         Args:
             step_description: The step's description or full_description (what to execute).
@@ -767,7 +767,7 @@ class UserMessageBuilder:
             instructions: Bullet-list execution instructions (INSTRUCTIONS section).
             prior_steps: Transitive predecessor step descriptions and statuses.
             prior_goals: Prior goals tree at goal boundary (metadata only).
-            vision_context: Daemon vision-preflight summary body (IG-674); subordinate
+            vision_context: Daemon vision-preflight summary body ; subordinate
                 to EXECUTION TASK — never a peer GOAL section.
             workspace_state: Optional lightweight workspace diff summary.
             skill_context: Skill reference only (SKILL.md).
@@ -821,7 +821,7 @@ class UserMessageBuilder:
 
         GOAL, INTENT, contextual focus, evidence emphasis, and step summaries
         live in the system prompt and current-goal execute-step ledger messages
-        (IG-662) — not here.
+        — not here.
         """
         return _render_sections(
             [

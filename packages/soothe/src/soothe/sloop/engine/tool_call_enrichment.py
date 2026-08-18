@@ -1,4 +1,4 @@
-"""Tool call argument enrichment and normalization (IG-416, IG-449).
+"""Tool call argument enrichment and normalization.
 
 This module provides functions for processing tool call arguments during
 streaming: normalizing raw args to dict, backfilling empty args from chunks,

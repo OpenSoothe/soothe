@@ -85,7 +85,7 @@ class RendererProtocol(Protocol):
             args: Parsed argument dictionary.
             tool_call_id: Unique identifier for correlation with result.
             is_main: True if from main agent.
-            task_scope: Parent Task delegation scope for subgraph tools (IG-334).
+            task_scope: Parent Task delegation scope for subgraph tools.
         """
         ...
 
@@ -107,7 +107,7 @@ class RendererProtocol(Protocol):
             tool_call_id: Correlates with on_tool_call.
             is_error: True if result indicates failure.
             is_main: True if from main agent.
-            task_scope: Parent Task delegation scope for subgraph tools (IG-334).
+            task_scope: Parent Task delegation scope for subgraph tools.
         """
         ...
 
@@ -144,7 +144,7 @@ class RendererProtocol(Protocol):
             event_type: Full event type string (e.g., ``soothe.subagent.deep_research.started``).
             data: Event payload.
             namespace: Subagent namespace tuple (empty for main agent).
-            task_scope: When subgraph streams are bound to a Task tool call (IG-334).
+            task_scope: When subgraph streams are bound to a Task tool call.
         """
         ...
 

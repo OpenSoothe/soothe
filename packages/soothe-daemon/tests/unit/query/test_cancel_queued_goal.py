@@ -1,4 +1,4 @@
-"""Regression tests for cancel + queued goal lifecycle (IG-581)."""
+"""Regression tests for cancel + queued goal lifecycle."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Unit tests for Pass 2 classifier: scope classification (IG-554)."""
+"""Unit tests for Pass 2 classifier: scope classification."""
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
-"""IG-655 Phase 4 integration: attach hydrate + multi-subscriber card seq.
+"""Phase 4 integration: attach hydrate + multi-subscriber card seq.
 
 These tests seed the daemon ``LoopCardManager`` (no LLM) and exercise the
-WebSocket hydrate / live ``soothe.card.*`` paths that close the IG-655
+WebSocket hydrate / live ``soothe.card.*`` paths that close the
 acceptance checklist.
 """
 

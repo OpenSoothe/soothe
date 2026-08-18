@@ -1,4 +1,4 @@
-"""IG-697: engine-owned failed-goal / deadlock recovery."""
+"""engine-owned failed-goal / deadlock recovery."""
 
 from __future__ import annotations
 

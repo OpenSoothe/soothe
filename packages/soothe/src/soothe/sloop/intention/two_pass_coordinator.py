@@ -1,4 +1,4 @@
-"""Two-pass intake coordinator (RFC-630 IG-554).
+"""Two-pass intake coordinator (RFC-630).
 
 Orchestrates Pass 1 (social vs task) and Pass 2 (scope) classification.
 Pass 1 runs first; if social, returns immediately without Pass 2.
@@ -115,7 +115,7 @@ class TwoPassIntakeResult:
 
 
 class TwoPassIntakeCoordinator:
-    """Orchestrates two-pass intake classification (RFC-630 IG-554).
+    """Orchestrates two-pass intake classification (RFC-630).
 
     Pass 1: Social vs task (no prior context).
     Pass 2: Scope classification (with prior projection), only if is_task=True.

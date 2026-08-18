@@ -1,4 +1,4 @@
-"""Tests for TUI Mermaid diagram expansion (IG-657)."""
+"""Tests for TUI Mermaid diagram expansion."""
 
 from __future__ import annotations
 

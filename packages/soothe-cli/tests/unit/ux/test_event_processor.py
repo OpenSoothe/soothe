@@ -292,7 +292,7 @@ class TestEventProcessorOutputEventRouting:
         assert assistant_calls == []
 
     def test_chitchat_phase_messages_routes_to_assistant_text(self) -> None:
-        """Chitchat piggyback text uses ``messages`` + ``phase`` (IG-317)."""
+        """Chitchat piggyback text uses ``messages`` + ``phase``."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer)
 
@@ -539,7 +539,7 @@ class TestEventProcessorMessageDeduplication:
 
 
 class TestEventProcessorToolAndAssistantFiltering:
-    """Tool routing and DisplayPolicy text shaping (fixed client UX; IG-343)."""
+    """Tool routing and DisplayPolicy text shaping (fixed client UX;)."""
 
     def test_duplicate_tool_call_id_emits_once(self) -> None:
         """The same tool_call_id must not invoke on_tool_call twice."""
@@ -819,7 +819,7 @@ class TestEventProcessorHeadlessSubgraph:
         assert assistant_calls == []
 
     def test_headless_suppresses_unphased_main_graph_execute_wave(self) -> None:
-        """Execute-wave main graph text has no loop phase; stdout stays for synthesis only (IG-345)."""
+        """Execute-wave main graph text has no loop phase; stdout stays for synthesis only."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, headless_output=True)
 

@@ -1,4 +1,4 @@
-"""IG-600: intake-only wire subagents vs open task catalog."""
+"""intake-only wire subagents vs open task catalog."""
 
 from __future__ import annotations
 

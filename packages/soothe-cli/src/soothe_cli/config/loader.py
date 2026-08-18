@@ -1,4 +1,4 @@
-"""Configuration loading utilities (IG-174 Phase 3)."""
+"""Configuration loading utilities (Phase 3)."""
 
 from __future__ import annotations
 

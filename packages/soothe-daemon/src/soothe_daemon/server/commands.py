@@ -3,7 +3,7 @@
 Structured command request/response handlers for slash commands.
 Each handler executes a specific command and returns structured data.
 
-IG-408 naming:
+naming:
     - Wire / clients: ``loop_id`` (StrangeLoop subscription scope).
     - First positional argument to each ``_cmd_*`` handler: ``checkpoint_thread_id`` —
       the LangGraph / durability checkpoint key (``configurable.thread_id``) after
@@ -147,7 +147,7 @@ async def _send_command_response(
 async def _cmd_clear(
     self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
 ) -> dict[str, Any]:
-    """Clear conversation history, archive loop, create fresh loop (IG-500).
+    """Clear conversation history, archive loop, create fresh loop.
 
     Process:
     1. Archive current loop checkpoint
@@ -287,7 +287,7 @@ async def _cmd_cancel(
 async def _cmd_memory(
     self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
 ) -> dict[str, Any]:
-    """Query memory stats (IG-475: supports daemon-level tracemalloc profiling).
+    """Query memory stats (supports daemon-level tracemalloc profiling).
 
     Args:
         params: Optional dict with "mode" key:
@@ -302,7 +302,7 @@ async def _cmd_memory(
     """
     mode = params.get("mode", "runner") if isinstance(params, dict) else "runner"
 
-    # IG-475: Daemon-level memory profiling via MemoryProfiler
+    # Daemon-level memory profiling via MemoryProfiler
     if mode == "daemon":
         if self._memory_profiler is None:
             return {

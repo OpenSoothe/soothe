@@ -1,4 +1,4 @@
-"""Unified planner ledger projection and continuation envelopes (IG-538)."""
+"""Unified planner ledger projection and continuation envelopes."""
 
 from __future__ import annotations
 

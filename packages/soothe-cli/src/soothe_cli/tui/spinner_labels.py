@@ -43,7 +43,7 @@ def map_plan_phase_spinner_label(label: str) -> str:
     mapped = _PLAN_PHASE_TO_SPINNER.get(key)
     if mapped:
         return mapped
-    # Intake-only wire: «Delegating to {subagent}» (RFC-630 / IG-602).
+    # Intake-only wire: «Delegating to {subagent}» (RFC-630).
     if key.lower().startswith("delegating"):
         return SPINNER_LABEL_DELEGATING
     return SPINNER_LABEL_THINKING

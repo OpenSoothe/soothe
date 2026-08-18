@@ -1,4 +1,4 @@
-"""Execution policies fragment includes IG-380 discovery guidance."""
+"""Execution policies fragment includes discovery guidance."""
 
 from soothe.sloop.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
 

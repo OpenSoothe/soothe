@@ -1,4 +1,4 @@
-"""End-to-end planner-emitted ask_user → policy.answer → resume (IG-462).
+"""End-to-end planner-emitted ask_user → policy.answer → resume.
 
 Drives ``StrangeLoop.run_with_progress`` with a stub planner that emits a
 ``kind="ask_user"`` step on the first iteration and a stub
@@ -125,7 +125,7 @@ class _AskUserPlanner:
     async def analyze_plan_gap(
         self, goal: str, state: Any, context: PlanContext, *, context_engine: Any | None = None
     ) -> Any:
-        """Read-only gap analysis (IG-557); stub returns no gaps."""
+        """Read-only gap analysis ; stub returns no gaps."""
         return None
 
     async def plan(self, goal: str, state: Any, context: PlanContext) -> PlanResult:

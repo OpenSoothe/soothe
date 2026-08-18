@@ -46,7 +46,7 @@ class CompletionStrategy(StrEnum):
 
 @dataclass
 class DagPlanningContext:
-    """Structured DAG summary for LLM planning (IG-400 interleaving).
+    """Structured DAG summary for LLM planning (interleaving).
 
     Shared between PlanManager and StepPlanningSubengine. Lives here
     to avoid circular imports between manager.py and step_planner.py.

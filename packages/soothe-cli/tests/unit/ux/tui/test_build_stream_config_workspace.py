@@ -1,4 +1,4 @@
-"""Tests for LangGraph stream config workspace (IG-341)."""
+"""Tests for LangGraph stream config workspace."""
 
 from __future__ import annotations
 

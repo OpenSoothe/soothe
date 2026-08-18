@@ -6,7 +6,7 @@ Intent classification produces a 4-class intake label (RFC-630) —
 in-flight loop is derived structurally inside ``StrangeLoop`` from the loaded
 checkpoint, not classified here.
 
-Two-pass intake (RFC-630 IG-554): Pass 1 (social vs task) → Pass 2 (scope).
+Two-pass intake (RFC-630): Pass 1 (social vs task) → Pass 2 (scope).
 Pass 1 returns ``is_task`` boolean; Pass 2 returns ``scope`` for work requests.
 
 CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
@@ -64,7 +64,7 @@ def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplex
 
 
 class IntentClassification(BaseModel):
-    """Primary intent classification model (RFC-225, IG-518, RFC-630).
+    """Primary intent classification model (RFC-225,, RFC-630).
 
     4-class LLM intake classification:
     - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.
@@ -76,7 +76,7 @@ class IntentClassification(BaseModel):
 
     Args:
         intake_label: 4-class intake label for branch routing (RFC-630).
-        reasoning: Brief reasoning for classification (IG-518).
+        reasoning: Brief reasoning for classification.
         chitchat_response: Direct reply for ``chitchat`` intake only.
         task_complexity: Routing complexity level (derived from ``intake_label``).
     """
@@ -151,7 +151,7 @@ def build_loop_routing_classification(
 
 
 # -----------------------------------------------------------------------------
-# Two-pass intake schemas (RFC-630, IG-554)
+# Two-pass intake schemas (RFC-630)
 # -----------------------------------------------------------------------------
 
 
@@ -185,7 +185,7 @@ class IntakePass1SocialKind(StrEnum):
 
 
 class IntakePass1LLMResult(BaseModel):
-    """Structured output from Pass 1: social vs task (RFC-630 IG-554).
+    """Structured output from Pass 1: social vs task (RFC-630).
 
     Pass 1 cleanly separates social interactions from work requests. No prior
     context is provided — the decision depends only on GOAL text. ``social_response``
@@ -316,7 +316,7 @@ def intent_classification_from_intake_scope(
 
 
 class IntakePass2LLMResult(BaseModel):
-    """Structured output from Pass 2: scope classification (RFC-630 IG-554).
+    """Structured output from Pass 2: scope classification (RFC-630).
 
     Pass 2 classifies work scope as trivial, simple, or complex. Prior-goal
     projection is included for reference resolution ("apply it"). The model

@@ -1,4 +1,4 @@
-"""``StrangeLoop.run_with_progress`` forwards ``clarification_policy`` (IG-462)."""
+"""``StrangeLoop.run_with_progress`` forwards ``clarification_policy``."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def _make_mock_core_with_checkpointer() -> Mock:
 
 
 def _make_done_plan_result() -> PlanResult:
-    """Create a done PlanResult for tests (IG-476)."""
+    """Create a done PlanResult for tests."""
     return PlanResult(
         status="done",
         goal_progress="complete",
@@ -147,7 +147,7 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
-        # IG-476: Mock generate_from_assessment to return done status directly
+        # Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
         _ = [
@@ -206,7 +206,7 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
-        # IG-476: Mock generate_from_assessment to return done status directly
+        # Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
         _ = [

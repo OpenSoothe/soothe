@@ -1,4 +1,4 @@
-"""Integration tests for periodic loop GC (IG-430 ephemeral pass + IG-466 empty pass)."""
+"""Integration tests for periodic loop GC (ephemeral pass + empty pass)."""
 
 from __future__ import annotations
 

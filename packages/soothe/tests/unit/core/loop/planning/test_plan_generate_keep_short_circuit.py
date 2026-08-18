@@ -82,7 +82,7 @@ async def test_generate_from_assessment_reuses_plan_without_llm() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_from_assessment_rejects_keep_after_failed_step() -> None:
-    """IG-683: failed last wave must not short-circuit to keep."""
+    """failed last wave must not short-circuit to keep."""
     planner = LLMPlanner(MagicMock())
     plan_generation = PlanGeneration(
         type="execute_steps",

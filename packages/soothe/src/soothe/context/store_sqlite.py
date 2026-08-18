@@ -1,7 +1,7 @@
 """SQLite persistence backend for the Context Engine (RFC-624 Phase 4).
 
 Stores CE DAG and ledger in ``databases/context.db`` keyed by ``loop_id``.
-Uses process-scoped ``SqliteStoreRuntime`` (RFC-801 / IG-647).
+Uses process-scoped ``SqliteStoreRuntime`` (RFC-801).
 """
 
 from __future__ import annotations

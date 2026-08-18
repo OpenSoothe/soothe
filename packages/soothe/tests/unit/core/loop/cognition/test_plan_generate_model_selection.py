@@ -1,4 +1,4 @@
-"""Adaptive plan-generate model selection (IG-671)."""
+"""Adaptive plan-generate model selection."""
 
 from __future__ import annotations
 

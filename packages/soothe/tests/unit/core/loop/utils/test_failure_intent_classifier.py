@@ -1,4 +1,4 @@
-"""Tests for failure intent classifier (IG-433)."""
+"""Tests for failure intent classifier."""
 
 from soothe.sloop.utils.failure_intent_classifier import (
     classify_failure_intent_keyword,

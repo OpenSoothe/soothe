@@ -1,4 +1,4 @@
-"""IG-693: rail-bound send-back exhaustion → fail + retry_maker."""
+"""rail-bound send-back exhaustion → fail + retry_maker."""
 
 from __future__ import annotations
 

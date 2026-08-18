@@ -1,4 +1,4 @@
-"""Query execution lifecycle for the daemon (IG-110).
+"""Query execution lifecycle for the daemon.
 
 Owns streaming, cancellation, and per-thread logging hooks. Uses
 ``SootheRunner`` public APIs only (no direct ``_durability`` access from
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 _STREAM_CHUNK_LENGTH = 3
 _MSG_PAIR_LENGTH = 2
-# IG-477: cap in-query assistant text accumulation (~100KB)
+# cap in-query assistant text accumulation (~100KB)
 _MAX_FULL_RESPONSE_CHARS = 100_000
 
 
@@ -304,7 +304,7 @@ class AsyncCancelOrchestrator:
 class QueryEngine:
     """Runs ``SootheRunner.astream`` and manages cancel/ownership for the daemon.
 
-    IG-408: Locals named ``thread_id`` in this module are LangGraph **checkpoint ids**
+    Locals named ``thread_id`` in this module are LangGraph **checkpoint ids**
     (``configurable.thread_id``). Client-visible scope is always ``loop_id`` /
     ``effective_loop_id``; ``_loop_scoped_client_message`` strips stray ``thread_id``
     keys from outbound frames.
@@ -318,9 +318,9 @@ class QueryEngine:
         # Monotonic turn counter per loop; stale finally blocks must not emit
         # terminal frames or cancel a successor runner.
         self._loop_turn_generation: dict[str, int] = {}
-        # IG-616: monotonic outbound seq per loop for client stale-drop.
+        # monotonic outbound seq per loop for client stale-drop.
         self._loop_event_seq: dict[str, int] = {}
-        # IG-616 phase 4: loops still emitting prior-turn terminals after
+        # phase 4: loops still emitting prior-turn terminals after
         # admission release — next admit must wait.
         self._loops_finalizing: set[str] = set()
         # Optional override while a turn broadcasts (emitting generation).
@@ -400,7 +400,7 @@ class QueryEngine:
         # still hold per-loop query admission until stream-finally completes.
         # Queue workers can invoke run_query again before that finally runs; wait
         # here so the follow-up turn is deferred instead of being rejected LOOP_BUSY.
-        # IG-616 phase 4: also wait while prior turn is still emitting terminals.
+        # phase 4: also wait while prior turn is still emitting terminals.
         while True:
             async with self._daemon._query_state_lock:
                 if (
@@ -501,7 +501,7 @@ class QueryEngine:
         *,
         turn_generation: int | None = None,
     ) -> dict[str, Any]:
-        """Build a client-visible frame: ``loop_id``, ``turn_id``, ``seq`` (IG-616)."""
+        """Build a client-visible frame: ``loop_id``, ``turn_id``, ``seq``."""
         from soothe_daemon.query.turn_boundary import format_turn_id
 
         out = dict(payload)
@@ -529,7 +529,7 @@ class QueryEngine:
         *,
         turn_generation: int | None = None,
     ) -> None:
-        """Broadcast one loop-scoped frame with per-loop in-flight budget (IG-534 2.2)."""
+        """Broadcast one loop-scoped frame with per-loop in-flight budget (2.2)."""
         d = self._daemon
         scoped = self._loop_scoped_client_message(loop_id, payload, turn_generation=turn_generation)
         budget = getattr(d, "_loop_broadcast_budget", None)
@@ -546,7 +546,7 @@ class QueryEngine:
         reason: str | None = None,
         turn_generation: int | None = None,
     ) -> None:
-        """Broadcast ``soothe.stream.end`` with ``scope=turn`` (IG-556 / IG-616)."""
+        """Broadcast ``soothe.stream.end`` with ``scope=turn``."""
         from soothe_sdk.core.events import STREAM_END
 
         from soothe_daemon.query.turn_boundary import format_turn_id
@@ -999,7 +999,7 @@ class QueryEngine:
             )
         thread_logger = d._thread_logger  # local ref — safe against concurrent overwrites
 
-        # IG-054: Admit before vision preflight (IG-327) to avoid wasted image API calls.
+        # Admit before vision preflight to avoid wasted image API calls.
         profile_name = (
             router_profile.strip()
             if isinstance(router_profile, str) and router_profile.strip()
@@ -1352,7 +1352,7 @@ class QueryEngine:
                         )
                         if not namespace and mode == "messages" and is_msg_pair:
                             msg, _metadata = data
-                            # IG-477: Apply bounded accumulation to prevent memory leak
+                            # Apply bounded accumulation to prevent memory leak
                             text_parts = extract_text_from_ai_message(msg)
                             for part in text_parts:
                                 if full_response_chars + len(part) < _MAX_FULL_RESPONSE_CHARS:
@@ -1494,7 +1494,7 @@ class QueryEngine:
                     if owns_turn and effective_loop_id:
                         d._active_stream_loop_ids.discard(effective_loop_id)  # Bug 4.3
 
-                    # IG-054: Moved post-query logic here since we don't await task
+                    # Moved post-query logic here since we don't await task
                     final_thread_id = d._runner.current_thread_id or ""
                     final_logger_handle: ThreadLogger | None = None
                     # Phase-tagged conversation rows (plan_direct, goal_completion,
@@ -1651,7 +1651,7 @@ class QueryEngine:
             # Yield once so _run_stream begins before run_query returns; otherwise /cancel
             # can run before the coroutine starts and skip finally cleanup.
             await asyncio.sleep(0)
-            # IG-054: DO NOT await task - let it run in background
+            # DO NOT await task - let it run in background
             # This allows the input loop to process concurrent queries
             # The task's internal finally block handles cleanup
         except asyncio.CancelledError:
@@ -1840,7 +1840,7 @@ class QueryEngine:
                     d._current_query_task = None
 
     async def cancel_loop(self, loop_id: str) -> None:
-        """Cancel running query tasks bound to ``loop_id`` (IG-408).
+        """Cancel running query tasks bound to ``loop_id``.
 
         Signals cancellation immediately (runner.cancel() called before return),
         then kicks off async background task that guarantees completion via

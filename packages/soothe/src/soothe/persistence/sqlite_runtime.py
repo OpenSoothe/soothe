@@ -1,4 +1,4 @@
-"""Host re-exports for process-scoped SQLite Runtime (IG-647 / RFC-801)."""
+"""Host re-exports for process-scoped SQLite Runtime (RFC-801)."""
 
 from soothe_nano.config.models import SqliteRuntimeConfig
 from soothe_nano.persistence.sqlite_runtime import (

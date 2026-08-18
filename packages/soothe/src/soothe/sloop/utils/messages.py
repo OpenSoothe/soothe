@@ -103,7 +103,7 @@ def last_ledger_ai_content(state: LoopState) -> str:
     Returns:
         Content of the last non-planning AI message, or empty string if none found.
     """
-    # Dual-read: client-visible ledger phases + IG-663 station ids if present.
+    # Dual-read: client-visible ledger phases + station ids if present.
     planning_phases = {
         "evaluate",
         "assess",
@@ -181,12 +181,12 @@ class LoopHumanMessage(HumanMessage):
     workspace: str | None = None
     phase: (
         Literal[
-            "intake",  # IG-663: Preprocess intake
+            "intake",  # Preprocess intake
             "intent_classify",  # legacy alias
-            "evaluate",  # IG-672: Plan evaluate (inventory + assess)
+            "evaluate",  # Plan evaluate (inventory + assess)
             "assess",  # legacy stem alias → evaluate
             "plan_assess",  # legacy ledger
-            "generate_plan",  # IG-663: Plan generate
+            "generate_plan",  # Plan generate
             "plan_generate",  # legacy
             "analyze_gaps",  # legacy stem alias → evaluate
             "plan_gap_analysis",  # legacy ledger
@@ -195,7 +195,7 @@ class LoopHumanMessage(HumanMessage):
             "goal_completion",  # Goal completion phase (wire-stable)
             "goal_interrupted",  # Non-success terminal marker (cancel/fatal/max-iter)
             "chitchat",  # Chitchat intake fast-path (piggybacked response)
-            "finalize",  # IG-663 station id (prefer goal_completion for wire)
+            "finalize",  # station id (prefer goal_completion for wire)
             "preamble",  # RFC-222 §Goal-Report-Pair: ancestor (user,ai) pairs
         ]
         | None
@@ -253,7 +253,7 @@ class LoopAIMessage(AIMessage):
 
 
 class LoopAIMessageChunk(AIMessageChunk):
-    """Streaming AI chunk with StrangeLoop ``phase`` metadata (IG-317 / RFC-614)."""
+    """Streaming AI chunk with StrangeLoop ``phase`` metadata (RFC-614)."""
 
     thread_id: str | None = None
     iteration: int | None = None
@@ -270,7 +270,7 @@ def loop_assistant_messages_chunk(
     thread_id: str,
     iteration: int | None = None,
 ) -> tuple[tuple[str, ...], str, tuple[LoopAIMessage, dict[str, Any]]]:
-    """Build a root ``messages``-mode stream chunk for piggybacked assistant text (IG-317)."""
+    """Build a root ``messages``-mode stream chunk for piggybacked assistant text."""
     if phase not in ASSISTANT_OUTPUT_PHASES:
         raise ValueError(f"Invalid assistant output phase: {phase}")
     msg = LoopAIMessage(content=content, thread_id=thread_id, iteration=iteration, phase=phase)
@@ -333,7 +333,7 @@ def tag_messages_stream_chunk_for_goal_completion(
     thread_id: str,
     iteration: int,
 ) -> Any:
-    """Tag AI payloads in a LangGraph ``messages`` chunk with ``phase=goal_completion`` (IG-317)."""
+    """Tag AI payloads in a LangGraph ``messages`` chunk with ``phase=goal_completion``."""
     return tag_messages_stream_chunk_for_assistant_phase(
         chunk,
         phase="goal_completion",

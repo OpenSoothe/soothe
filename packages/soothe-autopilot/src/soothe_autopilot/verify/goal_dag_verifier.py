@@ -6,7 +6,7 @@ Coordinates:
 3. Placement analysis for new goal intake
 
 Uses DagVerificationReasoner for structured LLM calls when enabled.
-IG-680: health remove guardrails, wire_dependencies, decompose budget.
+health remove guardrails, wire_dependencies, decompose budget.
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ class GoalDAGVerifier:
 
         When ``use_llm`` is True, runs the monitor health LLM (falls back to
         heuristics on failure). When False, uses heuristics only. Always merges
-        structural deadlock recoveries (IG-697) into ``suggest_reset``.
+        structural deadlock recoveries  into ``suggest_reset``.
 
         Args:
             use_llm: Whether to invoke the health LLM for this tick.
@@ -125,7 +125,7 @@ class GoalDAGVerifier:
         return True
 
     def find_deadlocked_failed_goals(self, goals: list[Any] | None = None) -> list[str]:
-        """Find failed workers that block pending dependents (IG-697).
+        """Find failed workers that block pending dependents.
 
         Structural only: no active goals, failed non-root with all deps
         completed, at least one pending dependent, recovery budget remaining.
@@ -262,7 +262,7 @@ class GoalDAGVerifier:
         return report
 
     def may_auto_remove(self, goal_id: str) -> bool:
-        """Return True if health may auto-remove this goal (IG-680 AH-1).
+        """Return True if health may auto-remove this goal (AH-1).
 
         Only cancelled/failed clutter with zero dependents and no non-terminal
         descendants. Job roots that are still non-terminal are never removable.
@@ -307,7 +307,7 @@ class GoalDAGVerifier:
         return True
 
     def _decompose_allowed(self, parent_id: str) -> bool:
-        """Enforce per-parent decompose cooldown (IG-680 AH-4)."""
+        """Enforce per-parent decompose cooldown (AH-4)."""
         now = time.monotonic()
         last = self._decompose_at.get(parent_id)
         if last is not None and (now - last) < _DECOMPOSE_COOLDOWN_SECONDS:
@@ -344,7 +344,7 @@ class GoalDAGVerifier:
         if not completed:
             return {}
 
-        # RFC-230 / IG-692: rail-bound jobs — LoopRail owns follow-up spawn.
+        # RFC-230 / rail-bound jobs — LoopRail owns follow-up spawn.
         if self._forbid_rail_decompose(completed_goal_id):
             logger.info(
                 "Post-completion skip decompose for %s: rail-bound job (rail exclusivity)",
@@ -518,7 +518,7 @@ class GoalDAGVerifier:
                 continue
             if goal.status not in ("blocked", "suspended"):
                 continue
-            # IG-691: do not undo consensus send-back budget exhaustion.
+            # do not undo consensus send-back budget exhaustion.
             if goal.status == "suspended" and goal.send_back_count >= goal.max_send_backs:
                 logger.info(
                     "Health reset skipped for %s: consensus send_back budget exhausted (%d/%d)",
@@ -545,7 +545,7 @@ class GoalDAGVerifier:
             )
 
     async def _recover_failed_from_health(self, goal: Any, *, reason: str) -> None:
-        """Apply engine recovery for a failed worker suggested by health (IG-697)."""
+        """Apply engine recovery for a failed worker suggested by health."""
         goals = self._ce.get_goals_by_status(None)
         goals_by_id = {g.id: g for g in goals}
         if not self._deps_all_completed(goal, goals_by_id):

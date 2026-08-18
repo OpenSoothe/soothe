@@ -23,7 +23,7 @@ class TestExecutorHints:
 
     @pytest.mark.asyncio
     async def test_executor_omits_legacy_tools_config_key(self):
-        """Executor does not set soothe_step_tools (IG-382)."""
+        """Executor does not set soothe_step_tools."""
         mock_agent = MagicMock()
         # execution_astream is sync and returns an async iterator — not awaitable.
         mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
@@ -159,7 +159,7 @@ class TestExecutorHints:
 
     @pytest.mark.asyncio
     async def test_executor_thread_creates_isolated_thread(self) -> None:
-        """A no-deps step gets a fresh isolated ``__step_<id>`` thread (IG-477).
+        """A no-deps step gets a fresh isolated ``__step_<id>`` thread.
 
         No checkpoint fork — thread isolation for parallel safety, predecessor
         context arrives via message injection.
@@ -192,7 +192,7 @@ class TestExecutorHints:
 
         call_args = mock_agent.execution_astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
-        # IG-477: creates __step_ prefixed thread for isolation
+        # creates __step_ prefixed thread for isolation
         assert configurable["thread_id"] == "logical-thread__step_a1b2c3d4"
         assert result.step_result.thread_id == "logical-thread"
         assert state.step_thread_ids["a1b2c3d4"] == "logical-thread__step_a1b2c3d4"

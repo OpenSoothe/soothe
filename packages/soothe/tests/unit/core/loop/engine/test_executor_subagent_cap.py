@@ -1,4 +1,4 @@
-"""Executor subagent task cap wiring (IG-130)."""
+"""Executor subagent task cap wiring."""
 
 from __future__ import annotations
 

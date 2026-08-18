@@ -1,17 +1,17 @@
-"""Synthesis execution logic for comprehensive final report generation (RFC-603, RFC-616, IG-300).
+"""Synthesis execution logic for comprehensive final report generation (RFC-603, RFC-616).
 
 Consolidated execution module:
 - Scenario classification (Phase 1 via ScenarioClassifier)
 - Synthesis generation (Phase 2 via CoreAgent streaming)
 
-Separation of concerns (IG-300 / IG-652):
+Separation of concerns:
 - ``context/planning_completion.py``: Decision logic ("should we synthesize?")
 - ``sloop/engine/scenario_classifier.py``: Classification ("what style/outline?")
 - ``sloop/engine/synthesis.py``: Execution ("how to synthesize?")
 
-Checkpoint isolation (IG-302): synthesis uses a fresh LangGraph ``thread_id`` so the
+Checkpoint isolation: synthesis uses a fresh LangGraph ``thread_id`` so the
 checkpointer does not replay the parent thread. The model receives current-goal
-execute-step ledger messages (plus optional compact prior status; IG-662), a TASK
+execute-step ledger messages (plus optional compact prior status;), a TASK
 human envelope, and system report instructions.
 """
 
@@ -52,7 +52,7 @@ _SYNTH_GC_MARKER = "__synth_gc__"
 
 
 def synthesis_checkpoint_thread_id(parent_thread_id: str) -> str:
-    """Return an ephemeral LangGraph thread id for goal-completion synthesis (IG-302).
+    """Return an ephemeral LangGraph thread id for goal-completion synthesis.
 
     Using a dedicated id prevents the SQLite checkpointer from loading the parent
     thread's full conversation into the synthesis model call.
@@ -67,9 +67,9 @@ def synthesis_checkpoint_thread_id(parent_thread_id: str) -> str:
 
 
 class SynthesisGenerator:
-    """Generate synthesis reports from execution evidence (RFC-616, IG-300).
+    """Generate synthesis reports from execution evidence (RFC-616).
 
-    Two-phase synthesis: scenario classification, then CoreAgent generation (IG-300).
+    Two-phase synthesis: scenario classification, then CoreAgent generation.
     """
 
     def __init__(
@@ -86,7 +86,7 @@ class SynthesisGenerator:
         Args:
             llm_client: Model for synthesis streaming (Phase 2).
             core_agent: CoreAgent for synthesis execution with streaming (Phase 2).
-            soothe_config: Optional daemon config for evidence budgeting (IG-317).
+            soothe_config: Optional daemon config for evidence budgeting.
             loop_id: Optional loop identifier for Langfuse trace correlation.
             fast_llm_client: Fast model for scenario classification (Phase 1).
                 Falls back to ``llm_client`` when not provided.
@@ -98,7 +98,7 @@ class SynthesisGenerator:
         self._loop_id = loop_id
 
     async def _classify_scenario(self, goal: str, state: LoopState) -> ScenarioClassification:
-        """Wrap classifier with error handling (IG-300).
+        """Wrap classifier with error handling.
 
         Args:
             goal: User's goal description.
@@ -220,7 +220,7 @@ class SynthesisGenerator:
 
             graph_config = merge_configs(parent_runnable_config, graph_config)
 
-        # IG-477: Stream via LLM directly — avoids CoreAgent graph checkpointer
+        # Stream via LLM directly — avoids CoreAgent graph checkpointer
         # during goal-completion synthesis (same class of leak as execute streaming).
         synthesis_start = time.perf_counter()
         logger.info(
@@ -244,7 +244,7 @@ class SynthesisGenerator:
         )
 
     def _synthesis_max_chars(self) -> int:
-        """Return max total extracted text for system + evidence payload (IG-317)."""
+        """Return max total extracted text for system + evidence payload."""
         max_chars = _DEFAULT_SYNTHESIS_EVIDENCE_MAX
         if self._soothe_config is not None:
             cap = self._soothe_config.agent.loop.report_output.synthesis_max_chars
@@ -257,7 +257,7 @@ def generate_user_fallback_summary(
     state: LoopState,
     plan_result: PlanResult,
 ) -> str:
-    """Generate user-friendly fallback summary (RFC-211 / IG-199 / IG-299).
+    """Generate user-friendly fallback summary (RFC-211 /).
 
     NEVER leak internal evidence_summary to users.
     Generate user-friendly completion summary instead.

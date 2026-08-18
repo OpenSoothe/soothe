@@ -1,4 +1,4 @@
-"""Minimal plan-generate wire schema and adapter (IG-568).
+"""Minimal plan-generate wire schema and adapter.
 
 LLMs emit ``PlanGenerationWire``; ``plan_generation_wire_to_model`` builds runtime
 ``PlanGeneration`` with derived ``type``, ``execution_mode``, and step routing.
@@ -196,7 +196,7 @@ def plan_generation_wire_to_model(wire: PlanGenerationWire) -> PlanGeneration:
     for index, step in enumerate(wire.steps):
         step_id = (step.id or "").strip() or f"{index + 1:02d}"
         deps = _normalize_dependency_list(step.dependencies) or None
-        # IG-656: plan-wave ``delegate`` is ignored (all built-in wires are intake-only).
+        # plan-wave ``delegate`` is ignored (all built-in wires are intake-only).
         plan_steps.append(
             PlanGenerateStep(
                 id=step_id,

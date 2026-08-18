@@ -1,4 +1,4 @@
-"""Tests for two-pass intake classification (RFC-630, IG-554)."""
+"""Tests for two-pass intake classification (RFC-630)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -80,7 +80,7 @@ class TestClientIntakeScope:
 
 
 class TestTwoPassPrompts:
-    """Prompt content guards for two-pass intake (IG-554)."""
+    """Prompt content guards for two-pass intake."""
 
     def test_pass1_prompt_has_social_and_work_rules(self) -> None:
         assert "SOCIAL" in INTAKE_PASS1_SYSTEM_PROMPT
@@ -128,7 +128,7 @@ class TestTwoPassPrompts:
 
 @pytest.mark.asyncio
 class TestIntakeClassifier:
-    """Test the two-pass intake classifier with mocked LLM (RFC-630, IG-554)."""
+    """Test the two-pass intake classifier with mocked LLM (RFC-630)."""
 
     def _mock_two_pass_result(
         self,

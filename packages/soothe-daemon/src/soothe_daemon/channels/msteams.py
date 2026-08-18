@@ -65,7 +65,7 @@ MSTEAMS_REF_LOCK_FILENAME = "msteams_conversations.lock"
 MSTEAMS_REF_TOUCH_INTERVAL_S = 300
 # Reserved top-level key in the meta sidecar marking that the legacy ref-schema
 # migration (meta sidecar backfill) has completed at least once. Used to verify
-# IG-646 D8's decommission criterion ("loaded once post-upgrade, verify via audit").
+# D8's decommission criterion ("loaded once post-upgrade, verify via audit").
 MSTEAMS_REF_META_MIGRATION_KEY = "__migration__"
 MSTEAMS_REF_META_MIGRATION_SCHEMA = "msteams_refs_v1"
 
@@ -659,7 +659,7 @@ class MSTeamsChannel(Channel):
         After the legacy backfill (meta sidecar first-run timestamp init)
         completes, the migration-complete sentinel is recorded on the instance
         (``self._refs_migration``) and persisted on the next
-        ``_save_refs_locked`` so IG-646 D8's decommission criterion ("verify
+        ``_save_refs_locked`` so D8's decommission criterion ("verify
         via audit") can be confirmed from the meta sidecar on disk.
         """
         main_data, meta_data, meta_exists = self._load_refs_raw()
@@ -880,7 +880,7 @@ class MSTeamsChannel(Channel):
                     }
                     for key, ref in self._conversation_refs.items()
                 }
-                # Persist the migration-complete sentinel (IG-646 D8) so the
+                # Persist the migration-complete sentinel (D8) so the
                 # meta sidecar on disk records that legacy backfill has run.
                 if isinstance(self._refs_migration, dict):
                     refs_meta[MSTEAMS_REF_META_MIGRATION_KEY] = self._refs_migration

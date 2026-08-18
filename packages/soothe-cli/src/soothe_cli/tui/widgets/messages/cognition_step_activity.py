@@ -37,7 +37,7 @@ from soothe_cli.tui.widgets.messages._helpers import (
     _card_item_indent,
 )
 
-# Todo item status → phase_icon input (IG-664).
+# Todo item status → phase_icon input.
 _TODO_STATUS_TO_PHASE: dict[str, str] = {
     "pending": "pending",
     "in_progress": "running",
@@ -52,7 +52,7 @@ _TODO_STATUS_TO_PHASE: dict[str, str] = {
 
 @dataclass
 class StepToolRow:
-    """One tool invocation row on the step card (IG-402 / RFC-628).
+    """One tool invocation row on the step card (RFC-628).
 
     Task delegation rows use ``is_task_row=True`` as flat markers. Subgraph tools
     (type ``t``) stay on the step card for per-task counts; they are not rendered
@@ -149,7 +149,7 @@ def compact_step_title_meta(
     max_retry_attempts: int = 0,
     format_token: Any = None,
 ) -> str:
-    """Compact middot meta for the step title (IG-664).
+    """Compact middot meta for the step title.
 
     Forms: `` · 45s · 12/1 · ↑8.1K ↓2.0K · ↻1/3``. Description is not truncated;
     callers append this string after the full step brief.
@@ -224,7 +224,7 @@ def has_task_activity_body(
     subagent_notes_by_task: dict[str, list[str]],
     todos: list[dict[str, str]] | None = None,
 ) -> bool:
-    """True when the step card should show the task-activity tree panel (IG-513/IG-664)."""
+    """True when the step card should show the task-activity tree panel."""
     if todos:
         return True
     if subagent_notes or subagent_notes_by_task:
@@ -626,7 +626,7 @@ def append_tool_activity_lines(
 
 
 class StepCardStatusLine:
-    """Pure footer status line builders (pending / completed; no Running — IG-664)."""
+    """Pure footer status line builders (pending / completed; no Running)."""
 
     @staticmethod
     def footer_pending(
@@ -668,7 +668,7 @@ class StepCardStatusLine:
 
 
 class StepActivityTree:
-    """Pure render: To-do + Tool-use sections under the step title (IG-664).
+    """Pure render: To-do + Tool-use sections under the step title.
 
     Task rows are flat markers under Tool-use. While a task is running, the marker
     line shows that task's subgraph tool count. Nested child tool lines are not

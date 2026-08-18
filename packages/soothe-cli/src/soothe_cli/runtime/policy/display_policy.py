@@ -4,7 +4,7 @@ This module centralizes all event filtering, content processing, and display
 policy decisions in one place. Both CLI and TUI renderers use this policy
 to determine:
 
-1. Which events to show/hide (fixed “normal”-equivalent gating, IG-343)
+1. Which events to show/hide (fixed “normal”-equivalent gating)
 2. Which message types are internal vs user-facing
 4. How to handle different event categories
 
@@ -53,7 +53,7 @@ class DisplayPolicy:
     This class centralizes all decisions about what to show/hide
     and how to process events for display.
 
-    Event visibility uses a single fixed ceiling equivalent to the former **normal** mode (IG-343).
+    Event visibility uses a single fixed ceiling equivalent to the former **normal** mode.
     """
 
     # ==========================================================================

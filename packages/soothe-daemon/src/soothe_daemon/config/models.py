@@ -240,7 +240,7 @@ class ThreadPoolConfig(BaseModel):
     Each thread has a dedicated asyncio event loop. One reused SootheRunner per
     worker (``prepare_for_request`` between turns) balances startup cost and isolation.
 
-    PostgreSQL Pool Sharing (IG-406):
+    PostgreSQL Pool Sharing:
     Daemon-level singleton pools are shared by ALL threads in the pool. This is
     efficient because threads share the same memory space and asyncio event loops
     can access shared AsyncConnectionPool instances. Defaults use persistence.postgres.pool_min_size
@@ -250,7 +250,7 @@ class ThreadPoolConfig(BaseModel):
     Trade-offs vs WorkerPoolConfig:
     - Lower spawn overhead (milliseconds vs ~8s subprocess)
     - Shared memory space (no config pickling required)
-    - PostgreSQL pools shared across threads (IG-406 singleton)
+    - PostgreSQL pools shared across threads (singleton)
     - No CPU parallelism (GIL blocks across threads)
     - Less crash isolation (thread crash affects daemon process)
 
@@ -276,13 +276,13 @@ class ThreadPoolConfig(BaseModel):
         default=16,
         ge=1,
         le=64,
-        description="Minimum threads to keep pooled (IG-553: 16 baseline for burst handling)",
+        description="Minimum threads to keep pooled (16 baseline for burst handling)",
     )
     max_pool_size: int = Field(
         default=96,
         ge=1,
         le=128,
-        description="Maximum threads to scale up (IG-553: 96 for 50–100 concurrent loops)",
+        description="Maximum threads to scale up (96 for 50–100 concurrent loops)",
     )
     idle_timeout_seconds: int = Field(
         default=300,
@@ -340,7 +340,7 @@ class StaleWorkerReapConfig(BaseModel):
 
 
 class LoopGcConfig(BaseModel):
-    """Background GC for idle loops (IG-430, IG-466).
+    """Background GC for idle loops.
 
     Single periodic sweeper that runs two passes per tick:
     - Ephemeral pass: ``is_ephemeral=True`` loops idle past ``ephemeral_idle_hours``.
@@ -411,7 +411,7 @@ class LoopStatusReconciliationConfig(BaseModel):
 
 
 class MemoryProfilingConfig(BaseModel):
-    """Memory profiling and leak detection configuration (IG-475).
+    """Memory profiling and leak detection configuration.
 
     Uses Python's built-in tracemalloc for allocation tracking with minimal
     overhead. Provides HTTP endpoints for real-time memory inspection.

@@ -1,6 +1,6 @@
 """Daemon-side stream delivery shaping for loop event broadcast (RFC-614).
 
-Three goal_completion delivery modes (IG-441):
+Three goal_completion delivery modes:
 
 - ``batch``: Buffer entire goal_completion synthesis, emit one ``AIMessageChunk``
   with ``chunk_position="last"`` at ``strange_loop.completed``. No real-time
@@ -16,7 +16,7 @@ Three goal_completion delivery modes (IG-441):
      elapse since the last block. The final block at ``strange_loop.completed``
      carries ``chunk_position="last"`` and ``stream_terminal=true``. Each block reuses the same
      ``phase="goal_completion"`` tag so the TUI continues appending to the same
-     ``AssistantMessage`` card (see IG-440 for chunk identity preservation).
+     ``AssistantMessage`` card (see for chunk identity preservation).
 
 - ``streaming``: Raw passthrough at the LLM's native generation speed. Every
   goal_completion chunk is forwarded immediately with no buffering. Highest
@@ -268,7 +268,7 @@ class StreamDeliveryCoalescer:
 
     Supports:
     - goal_completion batching (batch / adaptive modes)
-    - plain assistant text coalescing per namespace (RFC-614 / IG-426)
+    - plain assistant text coalescing per namespace (RFC-614)
     - dropping noop ``updates`` tuples
     """
 
@@ -292,7 +292,7 @@ class StreamDeliveryCoalescer:
     ) -> None:
         self._mode: StreamDeliveryMode = mode
         self._adaptive_threshold_chars = adaptive_threshold_chars
-        # IG-441: chunked-streaming phase 2 controls
+        # chunked-streaming phase 2 controls
         self._adaptive_block_chars = max(adaptive_block_chars, 1)
         self._adaptive_block_interval_s = max(adaptive_block_interval_ms, 50) / 1000.0
         self._file_output_threshold_chars = file_output_threshold_chars
@@ -309,7 +309,7 @@ class StreamDeliveryCoalescer:
         self._text_buffers: dict[tuple[str, ...], _TextCoalesceBuffer] = {}
         self._tool_batches: dict[tuple[str, ...], _ToolBatchBuffer] = {}
         self._turn_complete_pending = False
-        # IG-441: per-turn phase tracker for goal_completion delivery.
+        # per-turn phase tracker for goal_completion delivery.
         # - ``streaming`` → individual chunk passthrough (mode ``streaming`` stays here
         #   forever; mode ``adaptive`` starts here and transitions on threshold).
         # - ``chunked_streaming`` → block flushes (mode ``adaptive`` after threshold).
@@ -339,12 +339,12 @@ class StreamDeliveryCoalescer:
 
     @property
     def goal_completion_block_flush_count(self) -> int:
-        """Number of intermediate goal_completion block flushes this turn (IG-441)."""
+        """Number of intermediate goal_completion block flushes this turn."""
         return self._gc_block_flush_count
 
     @property
     def goal_completion_phase(self) -> Literal["streaming", "chunked_streaming", "batch"]:
-        """Current adaptive goal_completion phase (IG-441; for diagnostics/tests)."""
+        """Current adaptive goal_completion phase (; for diagnostics/tests)."""
         return self._gc_phase
 
     def consume_turn_complete_pending(self) -> bool:
@@ -388,7 +388,7 @@ class StreamDeliveryCoalescer:
         ns = tuple(namespace) if namespace else ()
         now = time.monotonic()
         out_prefix = self._flush_due_tool_batches(now)
-        # IG-441: time-based block flush in adaptive chunked-streaming phase
+        # time-based block flush in adaptive chunked-streaming phase
         out_prefix.extend(self._maybe_flush_goal_completion_block(now))
 
         if mode == "updates":
@@ -542,7 +542,7 @@ class StreamDeliveryCoalescer:
         self,
         tuples: list[tuple[tuple[str, ...], str, Any]],
     ) -> list[tuple[tuple[str, ...], str, Any]]:
-        """Emit ``soothe.stream.end`` after terminal content frames (IG-556)."""
+        """Emit ``soothe.stream.end`` after terminal content frames."""
         extended = list(tuples)
         for ns, mode, data in tuples:
             if mode != "messages":
@@ -717,7 +717,7 @@ class StreamDeliveryCoalescer:
           is reached.
         - ``chunked_streaming``: accumulate into the goal_completion buffer
           and flush intermediate blocks when char or time thresholds are met
-          (IG-441).
+          .
         """
         wire_data = prepare_stream_data_for_wire((msg, metadata))
         msg_wire = wire_data[0] if isinstance(wire_data, (tuple, list)) and wire_data else msg
@@ -794,7 +794,7 @@ class StreamDeliveryCoalescer:
         """Flush the goal_completion buffer as an intermediate or final block.
 
         Each block keeps the same ``phase="goal_completion"`` tag so the TUI
-        appends it onto the same ``AssistantMessage`` card (IG-440). Only the
+        appends it onto the same ``AssistantMessage`` card. Only the
         final block carries ``chunk_position="last"``.
         """
         if self._gc is None or not self._gc.parts:

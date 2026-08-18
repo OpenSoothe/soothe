@@ -1,14 +1,14 @@
 """Bounded evidence gathering phase (RFC-220 ``bounded_evidence_gather``).
 
-Placeholder: ledger-driven bounded tool rounds land in IG-394 / future work. Topology edge is
+Placeholder: ledger-driven bounded tool rounds land in / future work. Topology edge is
 wired so validation and repair loops can attach without reshaping the outer graph.
 
-IG-476: Detects fresh-loop conditions and shortcuts evaluate by setting a synthetic
+Detects fresh-loop conditions and shortcuts evaluate by setting a synthetic
 StatusAssessment and routing directly to plan_generate.
 
-IG-671: Structural keep reuses a healthy in-flight plan without evaluate/generate.
+Structural keep reuses a healthy in-flight plan without evaluate/generate.
 
-IG-672: Non-shortcut paths route to the ``evaluate`` station (inventory + assess).
+Non-shortcut paths route to the ``evaluate`` station (inventory + assess).
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def _structural_keep_config(ctx: LoopRuntimeContext) -> tuple[bool, int]:
 
 
 def _try_structural_keep(ctx: LoopRuntimeContext) -> dict[str, Any] | None:
-    """Reuse in-flight plan when structural gates pass (IG-671)."""
+    """Reuse in-flight plan when structural gates pass."""
     enabled, max_streak = _structural_keep_config(ctx)
     state = ctx.loop_state
     block = structural_keep_block_reason(state, enabled=enabled, max_streak=max_streak)
@@ -66,9 +66,9 @@ def _try_structural_keep(ctx: LoopRuntimeContext) -> dict[str, Any] | None:
 async def node_bounded_evidence_gather(
     ctx: LoopRuntimeContext, _state: dict[str, Any]
 ) -> dict[str, Any]:
-    """Detect fresh-loop / structural-keep shortcuts before evaluate (IG-476, IG-671).
+    """Detect fresh-loop / structural-keep shortcuts before evaluate.
 
-    Fresh complex skips evaluate. Mid-loop always continues to evaluate (IG-676).
+    Fresh complex skips evaluate. Mid-loop always continues to evaluate.
     """
     logger.info(
         "[EvidenceGather] start loop_id=%s iteration=%s",

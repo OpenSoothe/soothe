@@ -1,4 +1,4 @@
-"""Tests for RFC-214 user message envelopes (scenario-based format, IG-508)."""
+"""Tests for RFC-214 user message envelopes (scenario-based format)."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def test_execute_message_uses_execution_task_label() -> None:
 
 
 def test_execute_message_vision_context_is_subordinate() -> None:
-    """IG-674: vision facts as VISION CONTEXT; never peer GOAL; scope instructions."""
+    """vision facts as VISION CONTEXT; never peer GOAL; scope instructions."""
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Extract labels from the screenshot",
@@ -80,7 +80,7 @@ def test_execute_message_skill_context_after_execution_task() -> None:
 
 
 def test_execute_message_no_intent_section() -> None:
-    """IG-508: INTENT section removed from execute-step message."""
+    """INTENT section removed from execute-step message."""
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Analyze logs",
@@ -90,7 +90,7 @@ def test_execute_message_no_intent_section() -> None:
 
 
 def test_execute_message_no_task_section() -> None:
-    """IG-508: TASK section removed; instructions live in INSTRUCTIONS."""
+    """TASK section removed; instructions live in INSTRUCTIONS."""
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Analyze logs",

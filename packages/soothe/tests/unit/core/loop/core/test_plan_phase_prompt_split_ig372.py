@@ -1,4 +1,4 @@
-"""Plan-assess vs plan-generate system prompt split (IG-372)."""
+"""Plan-assess vs plan-generate system prompt split."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def test_assess_system_uses_plan_assess_not_full_execute_loop() -> None:
 
 
 def test_generate_system_includes_policies_and_plan_generate() -> None:
-    """Generate phase keeps execution policies and schema-aligned plan-generate instructions (IG-329)."""
+    """Generate phase keeps execution policies and schema-aligned plan-generate instructions."""
     state = LoopState(goal="g", thread_id="t1", iteration=0, max_iterations=8)
     ctx = PlanContext(workspace=None)
     builder = PromptBuilder()
@@ -148,7 +148,7 @@ def test_generate_user_query_in_plan_context_user_message() -> None:
 
 
 def test_generate_includes_plan_step_id_hint_after_prior_steps_ig388() -> None:
-    """Plan-generate human adds continuation hint when the goal already has step ids (IG-388)."""
+    """Plan-generate human adds continuation hint when the goal already has step ids."""
     state = LoopState(goal="g", thread_id="t1", iteration=1, max_iterations=8)
     state.add_step_result(
         StepExecutionRecord(step_id="ABC-01", success=True, duration_ms=1, thread_id="t1")

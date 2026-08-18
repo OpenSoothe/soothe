@@ -1,4 +1,4 @@
-"""Plan evaluate station (IG-672): inventory (gap) then assess in one stem node.
+"""Plan evaluate station: inventory (gap) then assess in one stem node.
 
 Logical subgraph phases (parent LangGraph station ``evaluate``):
 
@@ -39,7 +39,7 @@ _DEFAULT_MAX_CONCURRENCY = 4
 _DEFAULT_MIN_FACETS = 2
 _MAX_FACETS = 8
 
-# Structural delimiter split for goal_description / GOAL seeds (IG-557 / IG-672).
+# Structural delimiter split for goal_description / GOAL seeds.
 _FACET_SPLIT_RE = re.compile(r"[\n;]+|(?:\d+[\).\]]\s+)|(?:[-*]\s+)")
 
 
@@ -101,9 +101,9 @@ def _min_facets(ctx: LoopRuntimeContext) -> int:
 def should_run_inventory(ctx: LoopRuntimeContext) -> bool:
     """True when evaluate should run gap inventory before assess.
 
-    Inventory is always enabled for applicable mid-goal paths (IG-672). Skips
+    Inventory is always enabled for applicable mid-goal paths. Skips
     are structural only: trivial intake, or new_goal with no execute evidence
-    (IG-676 mid-loop intake policy).
+    (mid-loop intake policy).
     """
     state = ctx.loop_state
     intake = getattr(state.intent, "intake_label", None) if state.intent is not None else None
@@ -120,7 +120,7 @@ def should_run_inventory(ctx: LoopRuntimeContext) -> bool:
 
 
 def seed_inventory_facets(ctx: LoopRuntimeContext) -> list[str]:
-    """Deterministic facet labels for parallel inventory (IG-672)."""
+    """Deterministic facet labels for parallel inventory."""
     state = ctx.loop_state
     seeds: list[str] = []
 
@@ -387,7 +387,7 @@ def _loop_planner(ctx: LoopRuntimeContext) -> Any:
 
 
 async def node_plan_evaluate(ctx: LoopRuntimeContext, state: dict[str, Any]) -> dict[str, Any]:
-    """Evaluate station: inventory then assess (IG-672).
+    """Evaluate station: inventory then assess.
 
     Parent graph sees one station. Internal phases mirror the evaluate subgraph.
     Langfuse: parent ``evaluate`` span; children ``evaluate-gap`` /

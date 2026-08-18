@@ -13,7 +13,7 @@ from soothe_cli.tui import app as app_module
 def test_run_textual_tui_uses_caller_cwd(monkeypatch) -> None:
     """run_textual_tui passes caller's cwd (os.getcwd()), not config workspace.
 
-    Per IG-344, the TUI uses the caller's actual cwd for thread isolation,
+    Per, the TUI uses the caller's actual cwd for thread isolation,
     not the daemon-level default workspace (~/.soothe/Workspace).
     """
     captured: dict[str, Any] = {}

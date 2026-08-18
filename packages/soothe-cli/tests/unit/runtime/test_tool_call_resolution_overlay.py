@@ -47,7 +47,7 @@ def test_streaming_overlay_reflects_latest_parsed_json(
 
 
 def test_streaming_overlay_omits_empty_parsed_dict(chunk_last: AIMessageChunk) -> None:
-    """IG-300: parsed ``{}`` must not appear in the overlay (no mergeable kwargs)."""
+    """parsed ``{}`` must not appear in the overlay (no mergeable kwargs)."""
     pending: dict[str, Any] = {
         "g1": {
             "name": "glob",

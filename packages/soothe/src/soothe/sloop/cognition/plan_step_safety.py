@@ -97,7 +97,7 @@ def filter_filler_plan_steps(
 
 
 def render_plan_coverage(state: LoopState) -> str:
-    """Render deterministic plan step coverage for assess prompts (IG-557)."""
+    """Render deterministic plan step coverage for assess prompts."""
     decision = state.current_decision
     if decision is None or not decision.steps:
         return ""
@@ -211,7 +211,7 @@ def normalize_status_assessment(
     assessment: StatusAssessment,
     gap: PlanGapAnalysis | None = None,
 ) -> StatusAssessment:
-    """Coerce structurally inconsistent assess output (IG-589, no content heuristics)."""
+    """Coerce structurally inconsistent assess output (no content heuristics)."""
     if assessment.status != "done":
         return assessment
 
@@ -367,7 +367,7 @@ def assess_respects_gap_analysis(
     assessment: StatusAssessment,
     gap: PlanGapAnalysis | None,
 ) -> bool:
-    """Return False when assess contradicts gap analysis (IG-557, IG-589)."""
+    """Return False when assess contradicts gap analysis."""
     if gap is None:
         return True
     if gap.distance_from_goal in ("far", "moderate", "near"):

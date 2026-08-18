@@ -1,4 +1,4 @@
-"""Plan-phase ledger projection (IG-380, IG-555)."""
+"""Plan-phase ledger projection."""
 
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ def test_synthesis_projection_keeps_execute_step_only() -> None:
     assert extract_join(proj) == "exec-hexec-ai"
 
 
-# ── IG-662: Synthesis current-goal focus ──────────────────────────────────────
+# ── Synthesis current-goal focus ──────────────────────────────────────
 
 
 def test_ig662_synthesis_excludes_prior_goal_execute_steps() -> None:
@@ -170,7 +170,7 @@ def test_ig662_synthesis_single_goal_unchanged() -> None:
     assert _SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY.strip() not in extract_join(proj)
 
 
-# ── IG-555: Prior Goal Completion Bias Mitigation ─────────────────────────────
+# ── Prior Goal Completion Bias Mitigation ─────────────────────────────
 
 
 def test_ig555_new_goal_projection_includes_boundary() -> None:
@@ -197,7 +197,7 @@ def test_ig555_new_goal_projection_includes_boundary() -> None:
 
 
 def test_ig555_boundary_marker_constant_defined() -> None:
-    """IG-555 boundary marker contains key instructions."""
+    """boundary marker contains key instructions."""
     assert "<PRIOR_GOAL_CONTEXT" in _GOAL_COMPLETION_CONTEXT_BOUNDARY
     assert "reference_resolution" in _GOAL_COMPLETION_CONTEXT_BOUNDARY
     assert "DO NOT use" in _GOAL_COMPLETION_CONTEXT_BOUNDARY

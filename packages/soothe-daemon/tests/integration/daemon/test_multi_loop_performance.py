@@ -1,11 +1,11 @@
-"""IG-534 Phase 0: Multi-loop performance isolation load harness.
+"""Phase 0: Multi-loop performance isolation load harness.
 
 Tests daemon streaming path under multiple concurrent loops to validate:
 1. Correctness (B): No silent event loss, terminal frames delivered
 2. Fairness (A): Cross-loop isolation, no unbounded interference
 3. Capacity: N concurrent heavy loops without starvation
 
-IG-535: Defaults tuned for 32 concurrent loops (production multi-tenant workloads).
+Defaults tuned for 32 concurrent loops (production multi-tenant workloads).
 
 CI Mode: When SOOTHE_CI_MODE=true, reduces loop counts and durations for faster CI runs.
 
@@ -41,7 +41,7 @@ class CIMode:
     """
 
     # Multi-loop test scaling
-    MULTI_LOOP_COUNT = 8 if SOOTHE_CI_MODE else 32  # IG-535 baseline: 32
+    MULTI_LOOP_COUNT = 8 if SOOTHE_CI_MODE else 32  # baseline: 32
     MULTI_LOOP_N64 = 16 if SOOTHE_CI_MODE else 64  # Phase 2 gate: 64
     MULTI_LOOP_EVENTS = 25 if SOOTHE_CI_MODE else 100
     MULTI_LOOP_TIMEOUT = 5.0 if SOOTHE_CI_MODE else 10.0
@@ -127,7 +127,7 @@ class MultiLoopMetrics:
         self.loops.append(loop)
 
     def get_summary(self) -> dict[str, Any]:
-        """Generate metrics summary for IG-534 exit criteria."""
+        """Generate metrics summary for exit criteria."""
         total_events = sum(len(loop.events_received) for loop in self.loops)
         goal_completion_delivered = sum(1 for loop in self.loops if loop.goal_completion_received)
         loops_with_terminal = sum(1 for loop in self.loops if loop.terminal_frames_received)
@@ -182,23 +182,23 @@ class MultiLoopMetrics:
 
 
 # ============================================================================
-# Phase 1 Exit Criteria Tests (IG-534)
+# Phase 1 Exit Criteria Tests
 # ============================================================================
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_multi_loop_goal_completion_delivery() -> None:
-    """IG-534 Phase 1 exit criterion: 0 terminal delivery failures.
+    """Phase 1 exit criterion: 0 terminal delivery failures.
 
-    IG-535: Validates at 32 concurrent loops (production baseline).
+    Validates at 32 concurrent loops (production baseline).
     CI Mode: Scales down to 8 loops for faster CI runs.
 
     Simulates N loops each receiving synthesis streams with goal_completion
     tail frames. Validates that every loop receives its terminal frame even
     under concurrent load.
     """
-    num_loops = CIMode.MULTI_LOOP_COUNT  # IG-535: 32 (CI: 8)
+    num_loops = CIMode.MULTI_LOOP_COUNT  # 32 (CI: 8)
     events_per_loop = CIMode.MULTI_LOOP_EVENTS
     bus = EventBus()
     metrics = MultiLoopMetrics()
@@ -269,7 +269,7 @@ async def test_multi_loop_goal_completion_delivery() -> None:
     assert critical_drops == 0, f"CRITICAL events dropped: {critical_drops}"
     assert high_drops == 0, f"HIGH events dropped: {high_drops}"
 
-    print(f"\n=== IG-534 Phase 1: goal_completion delivery ({CIMode.summary()}) ===")
+    print(f"\n=== Phase 1: goal_completion delivery ({CIMode.summary}) ===")
     print(f"Loops: {num_loops}, Duration: {summary['test_duration_sec']:.2f}s")
     print(f"Goal completions delivered: {summary['goal_completion_delivered']}/{num_loops}")
     print(f"Event bus drops: {metrics.event_bus_drops}")
@@ -278,16 +278,16 @@ async def test_multi_loop_goal_completion_delivery() -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_multi_loop_fairness_under_pressure() -> None:
-    """IG-534 Phase 2 gate: cross-loop isolation under concurrent load.
+    """Phase 2 gate: cross-loop isolation under concurrent load.
 
-    IG-535: Validates at 32 concurrent loops (production baseline).
+    Validates at 32 concurrent loops (production baseline).
     CI Mode: Scales down to 8 loops for faster CI runs.
 
     Validates that all loops receive events regardless of relative load.
     The fairness criterion is that each loop receives at least 75% of its
     published events even when one loop floods the bus.
     """
-    num_loops = CIMode.MULTI_LOOP_COUNT  # IG-535: 32 (CI: 8)
+    num_loops = CIMode.MULTI_LOOP_COUNT  # 32 (CI: 8)
     bus = EventBus()
     metrics = MultiLoopMetrics()
 
@@ -357,14 +357,14 @@ async def test_multi_loop_fairness_under_pressure() -> None:
             f"while heavy loop got {heavy_received}"
         )
 
-    print(f"\n=== IG-534 Phase 2: Cross-loop fairness ({CIMode.summary()}) ===")
+    print(f"\n=== Phase 2: Cross-loop fairness ({CIMode.summary}) ===")
     print(f"Events received: heavy={heavy_received}, light={light_received_counts}")
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_multi_loop_n64_start_delay_gate() -> None:
-    """IG-534 Phase 2 deferred gate: p95 cross-loop start delay ≤ 2× baseline at N=64.
+    """Phase 2 deferred gate: p95 cross-loop start delay ≤ 2× baseline at N=64.
 
     CI Mode: Scales down to N=16 for faster CI runs.
     """
@@ -413,7 +413,7 @@ async def test_multi_loop_n64_start_delay_gate() -> None:
     )
     assert summary["loops_with_terminal_frames"] >= num_loops
 
-    print(f"\n=== IG-534 Phase 2: N={num_loops} start-delay gate ({CIMode.summary()}) ===")
+    print(f"\n=== Phase 2: N={num_loops} start-delay gate ({CIMode.summary}) ===")
     print(f"latency_spread_ratio={summary['latency_spread_ratio']:.2f}")
     print(f"p95_first_event_ms={summary['first_event_latency_p95_ms']:.2f}")
 
@@ -421,7 +421,7 @@ async def test_multi_loop_n64_start_delay_gate() -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_goal_completion_blocks_on_full_queue() -> None:
-    """IG-534: goal_completion frames block when queue full (not dropped).
+    """goal_completion frames block when queue full (not dropped).
 
     Validates that synthesis tail frames wait for queue space instead of
     being silently dropped, even when queue is at capacity.
@@ -464,19 +464,19 @@ async def test_goal_completion_blocks_on_full_queue() -> None:
     assert isinstance(data, (tuple, list))
     assert data[0].get("phase") == "goal_completion"
 
-    print("\n=== IG-534: goal_completion blocking behavior ===")
+    print("\n=== goal_completion blocking behavior ===")
     print("goal_completion blocked successfully until queue space available")
 
 
 # ============================================================================
-# Phase 3 Exit Criteria Tests (IG-534)
+# Phase 3 Exit Criteria Tests
 # ============================================================================
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_phase3_synthesis_visible_p95_under_5s() -> None:
-    """IG-534 Phase 3: p95 synthesis delivery within 5s under 32-loop load.
+    """Phase 3: p95 synthesis delivery within 5s under 32-loop load.
 
     CI Mode: Scales down to 8 loops for faster CI runs.
     """
@@ -526,14 +526,14 @@ async def test_phase3_synthesis_visible_p95_under_5s() -> None:
         f"p95 synthesis visible {summary['synthesis_visible_p95_ms']:.0f}ms exceeds 5s gate"
     )
 
-    print(f"\n=== IG-534 Phase 3: synthesis visible gate ({CIMode.summary()}) ===")
+    print(f"\n=== Phase 3: synthesis visible gate ({CIMode.summary}) ===")
     print(f"synthesis_visible_p95_ms={summary['synthesis_visible_p95_ms']:.2f}")
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_phase3_first_chunk_p50_under_load() -> None:
-    """IG-534 Phase 3: first-chunk p50 stays low under concurrent 32-loop load.
+    """Phase 3: first-chunk p50 stays low under concurrent 32-loop load.
 
     CI Mode: Scales down to 8 loops for faster CI runs.
     """
@@ -574,7 +574,7 @@ async def test_phase3_first_chunk_p50_under_load() -> None:
         f"p50 first-chunk {summary['first_event_latency_p50_ms']:.0f}ms exceeds 240ms gate"
     )
 
-    print(f"\n=== IG-534 Phase 3: time-to-first-chunk gate ({CIMode.summary()}) ===")
+    print(f"\n=== Phase 3: time-to-first-chunk gate ({CIMode.summary}) ===")
     print(f"first_event_latency_p50_ms={summary['first_event_latency_p50_ms']:.2f}")
 
 
@@ -585,7 +585,7 @@ async def test_phase3_first_chunk_p50_under_load() -> None:
 
 @pytest.mark.asyncio
 async def test_event_bus_drop_counter_observable() -> None:
-    """IG-534 Phase 0: drop counters are queryable for observability."""
+    """Phase 0: drop counters are queryable for observability."""
     bus = EventBus()
     queue: asyncio.Queue[tuple[dict, Any]] = asyncio.Queue(maxsize=1)
 
@@ -605,5 +605,5 @@ async def test_event_bus_drop_counter_observable() -> None:
     assert key in counts, f"Drop counter missing for {key}"
     assert counts[key] >= 1, "Drop counter should record NORMAL drops"
 
-    print("\n=== IG-534 Phase 0: Drop counters ===")
+    print("\n=== Phase 0: Drop counters ===")
     print(f"Drop counts: {counts}")

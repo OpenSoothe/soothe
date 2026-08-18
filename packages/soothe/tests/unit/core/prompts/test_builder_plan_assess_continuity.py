@@ -1,4 +1,4 @@
-"""IG-557 Phase C: PREVIOUS ASSESSMENT inline from CE last_assessment."""
+"""Phase C: PREVIOUS ASSESSMENT inline from CE last_assessment."""
 
 from __future__ import annotations
 

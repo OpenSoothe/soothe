@@ -78,7 +78,7 @@ class _DeferredStepComplete(NamedTuple):
 
 
 class CognitionStepMessage(Vertical):
-    """Agent-loop act step card (RFC-628 / IG-664).
+    """Agent-loop act step card (RFC-628).
 
     Header is the full step description plus compact live meta while running
     (`` · 45s · 12/1 · ↑8.1K ↓2.0K``). Activity nests under To-do then Tool-use.
@@ -159,7 +159,7 @@ class CognitionStepMessage(Vertical):
         self._start_time: float | None = None
         self._animation_timer: Timer | None = None
         self._last_rows_animation_refresh: float = 0.0
-        # IG-420: Throttling for refresh methods
+        # Throttling for refresh methods
         self._last_tools_refresh: float | None = None
         self._last_header_refresh: float | None = None
         self._tools_refresh_pending = False
@@ -179,7 +179,7 @@ class CognitionStepMessage(Vertical):
         self._last_tool_call_count: int = 0
         self._last_summary: str = ""
         self._input_tokens: int = 0
-        # IG-504: Retry tracking for running status display
+        # Retry tracking for running status display
         self._retry_attempt: int = 0
         self._max_retry_attempts: int = 0
         self._retry_error_type: str | None = None
@@ -203,7 +203,7 @@ class CognitionStepMessage(Vertical):
         """Whether detail panel currently holds clarification Q/A content."""
         self._has_result_preview: bool = False
         """Whether detail panel currently holds a goal_completion result preview."""
-        # Intake-only orphan SubAgent card (IG-602); empty on normal step cards.
+        # Intake-only orphan SubAgent card ; empty on normal step cards.
         self._subagent_type: str = ""
         self._subagent_task_idx: int = 0
         self._invocation_id: str = ""
@@ -267,7 +267,7 @@ class CognitionStepMessage(Vertical):
         return " · " + " ".join(parts)
 
     def _compact_title_meta_suffix(self) -> str:
-        """Live compact meta for the step title while running (IG-664)."""
+        """Live compact meta for the step title while running."""
         if self._status != "running":
             return ""
         from soothe_cli.runtime.state.session_stats import format_token_count
@@ -564,7 +564,7 @@ class CognitionStepMessage(Vertical):
         return normalized_task_note_key(self._step_id, task_tool_call_id)
 
     def set_todos(self, todos: list[Any] | None) -> None:
-        """Replace CoreAgent todo list shown under the Todo section (IG-664)."""
+        """Replace CoreAgent todo list shown under the Todo section."""
         if self._apply_todos_payload(todos):
             self._sync_step_card_surface()
 
@@ -1003,7 +1003,7 @@ class CognitionStepMessage(Vertical):
         if tcid in self._row_index:
             self.update_tool_args(tcid, args)
             return
-        # IG-517: Deduplicate task rows by semantic identity before creating.
+        # Deduplicate task rows by semantic identity before creating.
         # Multiple streaming chunks may arrive with different raw tool_call_ids
         # for the same delegation (same subagent_type + description). Check for
         # existing task row with matching semantics, not just tool_call_id.
@@ -1242,7 +1242,7 @@ class CognitionStepMessage(Vertical):
         return out
 
     def snapshot_tool_rows(self) -> list[dict[str, Any]]:
-        """Serialize tool rows for ``MessageData`` (IG-402)."""
+        """Serialize tool rows for ``MessageData``."""
         return [
             {
                 "id": r.tool_call_id,
@@ -1291,7 +1291,7 @@ class CognitionStepMessage(Vertical):
         self._sync_step_card_surface()
 
     def _sync_running_status_text(self) -> None:
-        """Hide the Running footer; live meta lives on the step title (IG-664)."""
+        """Hide the Running footer; live meta lives on the step title."""
         if self._status != "running":
             return
         if self._status_widget is not None:
@@ -1360,7 +1360,7 @@ class CognitionStepMessage(Vertical):
             self._animation_timer = None
 
     def set_retry_status(self, attempt: int, max_attempts: int, error_type: str) -> None:
-        """IG-504: Update retry status for running animation display.
+        """Update retry status for running animation display.
 
         Args:
             attempt: Current attempt number (1-indexed).

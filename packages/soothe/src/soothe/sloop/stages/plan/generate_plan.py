@@ -1,8 +1,8 @@
 """Plan generation node (RFC-220 ``plan_generate`` after assess + pre-generate).
 
-IG-476: Also handles fresh-loop bypass where bounded_evidence_gather sets synthetic assessment.
+Also handles fresh-loop bypass where bounded_evidence_gather sets synthetic assessment.
 RFC-630: Also handles the ``simple`` intake branch (lightweight plan, synthetic assessment).
-IG-654: Complex goals may use a single CoreAgent execute step.
+Complex goals may use a single CoreAgent execute step.
 """
 
 from __future__ import annotations
@@ -28,9 +28,9 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
 
     Assessment can come from:
     1. plan_assess node (normal flow)
-    2. bounded_evidence_gather (fresh-loop bypass, IG-476)
+    2. bounded_evidence_gather (fresh-loop bypass)
     3. synthetic, when reached via the ``simple`` intake branch (RFC-630)
-    4. synthetic, when Approve hands off from the planner subagent (IG-660)
+    4. synthetic, when Approve hands off from the planner subagent
     """
     strange_loop = ctx.strange_loop
     state = ctx.loop_state
@@ -48,7 +48,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         )
         return _PLAN_GENERATE_FATAL
 
-    # IG-660: hydrate approved-plan grounding from scratch when handoff is active.
+    # hydrate approved-plan grounding from scratch when handoff is active.
     if getattr(ctx.scratch, "planner_implement_handoff", False):
         if not (getattr(state, "approved_plan_markdown", None) or "").strip():
             from soothe.sloop.plans.artifact import strip_plan_frontmatter
@@ -60,7 +60,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
                 state.approved_plan_path = getattr(ctx.scratch, "plan_artifact_path", None)
         logger.info("[PlanGenerate] Implementing operator-approved plan artifact")
 
-    # IG-476: Log when using fresh-loop bypass assessment
+    # Log when using fresh-loop bypass assessment
     if assessment.assessment_reasoning and assessment.assessment_reasoning.startswith(
         FRESH_LOOP_BYPASS_PREFIX
     ):
@@ -71,7 +71,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
 
     await emit_plan_phase_status(ctx, label=_PLAN_GENERATE_STATUS_LABEL)
 
-    # RFC-630 / IG-676: simple intake uses the cheaper lightweight plan call.
+    # RFC-630 / simple intake uses the cheaper lightweight plan call.
     intake_label = getattr(state.intent, "intake_label", None) if state.intent else None
     if mid_loop_use_lightweight_generate(intake_label):
         logger.info("[PlanGenerate] Using lightweight generate for simple intake branch")
@@ -114,7 +114,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         },
     )
 
-    # IG-660: one-shot handoff — stop injecting APPROVED PLAN on later waves.
+    # one-shot handoff — stop injecting APPROVED PLAN on later waves.
     ctx.scratch.planner_implement_handoff = False
     state.approved_plan_markdown = None
     state.approved_plan_path = None

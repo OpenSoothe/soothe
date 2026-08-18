@@ -1,9 +1,9 @@
-"""Process-scoped SQLite checkpoint coalesce flush (IG-647 / RFC-803).
+"""Process-scoped SQLite checkpoint coalesce flush (RFC-803).
 
 Mirrors ``LoopPersistenceWriter`` for SQLite: managers enqueue; one worker
 drains onto the shared checkpoints ``SqliteStoreRuntime``.
 
-Threading model (IG-571): asyncio primitives (``Event``, worker task) are bound
+Threading model: asyncio primitives (``Event``, worker task) are bound
 to the daemon main loop via ``bind_main_loop``. Worker threads running on their
 own event loops call ``submit_*`` methods, which marshal work onto the bound
 loop via ``asyncio.run_coroutine_threadsafe``. This prevents the

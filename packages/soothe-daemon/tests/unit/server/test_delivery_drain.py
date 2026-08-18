@@ -67,7 +67,7 @@ async def test_await_loop_delivery_drained_waits_for_backlog() -> None:
 
 @pytest.mark.asyncio
 async def test_await_loop_delivery_drained_waits_for_delivery_ack() -> None:
-    """IG-556 P1.3: drain gates on client delivery_ack for terminal frames."""
+    """P1.3: drain gates on client delivery_ack for terminal frames."""
     bus = EventBus()
     manager = ClientSessionManager(bus)
     loop_id = "loop-ack-1"

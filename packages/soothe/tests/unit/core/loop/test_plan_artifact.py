@@ -1,4 +1,4 @@
-"""Unit tests for plan artifact helpers (RFC-633 / IG-658)."""
+"""Unit tests for plan artifact helpers (RFC-633)."""
 
 from __future__ import annotations
 

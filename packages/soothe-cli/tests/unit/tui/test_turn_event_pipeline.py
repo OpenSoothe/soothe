@@ -197,7 +197,7 @@ async def test_pipeline_propagates_processor_errors() -> None:
 
 
 def test_turn_apply_batcher_flushes_on_high_priority() -> None:
-    """IG-534 §3.4: HIGH priority chunks bypass batch accumulation."""
+    """§3.4: HIGH priority chunks bypass batch accumulation."""
     batcher: TurnApplyBatcher[str] = TurnApplyBatcher(max_batch_size=10, max_batch_delay_ms=50)
 
     @dataclass
@@ -213,7 +213,7 @@ def test_turn_apply_batcher_flushes_on_high_priority() -> None:
 
 @pytest.mark.asyncio
 async def test_run_turn_pipeline_records_latency_stats() -> None:
-    """IG-534 Phase 3: pipeline records time-to-first-chunk latency."""
+    """Phase 3: pipeline records time-to-first-chunk latency."""
     from types import SimpleNamespace
 
     latency = TurnLatencyStats(turn_start_monotonic=time.monotonic())

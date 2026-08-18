@@ -1,9 +1,9 @@
 """Tests for RFC-630 ``route_by_intent`` branch dispatch and the trivial branch.
 
-Covers IG-528 test groups 2 (routing truth table), 4 (branch node sequence),
+Covers test groups 2 (routing truth table), 4 (branch node sequence),
 and 6 (trivial-branch synth plan + mislabel recovery).
 
-IG-554: Routing guard tests for new_goal_created constraint blocking chitchat.
+Routing guard tests for new_goal_created constraint blocking chitchat.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_route_by_intent_continuation_trivial() -> None:
-    """Mid-loop trivial enters gather_evidence (default spine; IG-676)."""
+    """Mid-loop trivial enters gather_evidence (default spine;)."""
     state = {
         "is_continuation": True,
         "is_fresh_goal": False,
@@ -348,11 +348,11 @@ def test_trivial_plan_has_no_synthetic_reasoning_prefix() -> None:
     assert plan.decision.steps[0].requires_tool_use is False
 
 
-# -- IG-554: Routing guard tests (new_goal_created constraint) --------------
+# -- Routing guard tests (new_goal_created constraint) --------------
 
 
 def test_routing_guard_blocks_chitchat_on_new_goal() -> None:
-    """IG-554: chitchat fast-path blocked when new_goal_created=True."""
+    """chitchat fast-path blocked when new_goal_created=True."""
     state = {
         "is_continuation": False,
         "intake_label": IntakeLabel.CHITCHAT,
@@ -364,7 +364,7 @@ def test_routing_guard_blocks_chitchat_on_new_goal() -> None:
 
 
 def test_routing_guard_blocks_chitchat_label_on_new_goal() -> None:
-    """IG-554: chitchat label forced to complex when new_goal_created=True."""
+    """chitchat label forced to complex when new_goal_created=True."""
     state = {
         "is_continuation": False,
         "intake_label": IntakeLabel.CHITCHAT,
@@ -375,7 +375,7 @@ def test_routing_guard_blocks_chitchat_label_on_new_goal() -> None:
 
 
 def test_routing_guard_allows_chitchat_on_existing_goal() -> None:
-    """IG-554: chitchat allowed when new_goal_created=False (resume existing)."""
+    """chitchat allowed when new_goal_created=False (resume existing)."""
     state = {
         "is_continuation": False,
         "intake_label": IntakeLabel.CHITCHAT,
@@ -386,7 +386,7 @@ def test_routing_guard_allows_chitchat_on_existing_goal() -> None:
 
 
 def test_routing_guard_complex_not_blocked_by_new_goal() -> None:
-    """IG-554: complex label not affected by routing guard."""
+    """complex label not affected by routing guard."""
     state = {
         "is_continuation": False,
         "intake_label": IntakeLabel.COMPLEX,
@@ -396,7 +396,7 @@ def test_routing_guard_complex_not_blocked_by_new_goal() -> None:
 
 
 def test_routing_guard_simple_not_blocked_by_new_goal() -> None:
-    """IG-554: simple label not affected by routing guard."""
+    """simple label not affected by routing guard."""
     state = {
         "is_continuation": False,
         "intake_label": IntakeLabel.SIMPLE,
@@ -406,7 +406,7 @@ def test_routing_guard_simple_not_blocked_by_new_goal() -> None:
 
 
 def test_routing_guard_trivial_not_blocked_by_new_goal() -> None:
-    """IG-554: trivial label not affected by routing guard."""
+    """trivial label not affected by routing guard."""
     state = {
         "is_continuation": False,
         "intake_label": IntakeLabel.TRIVIAL,
@@ -416,7 +416,7 @@ def test_routing_guard_trivial_not_blocked_by_new_goal() -> None:
 
 
 def test_routing_guard_missing_new_goal_defaults_false() -> None:
-    """IG-554: missing new_goal_created defaults to False (chitchat allowed)."""
+    """missing new_goal_created defaults to False (chitchat allowed)."""
     state = {
         "is_continuation": False,
         "intake_label": IntakeLabel.CHITCHAT,

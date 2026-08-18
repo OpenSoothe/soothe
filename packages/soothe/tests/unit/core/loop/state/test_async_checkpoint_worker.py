@@ -1,4 +1,4 @@
-"""Tests for process-scoped SQLite checkpoint coalesce flush (IG-647)."""
+"""Tests for process-scoped SQLite checkpoint coalesce flush."""
 
 from __future__ import annotations
 

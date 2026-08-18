@@ -1,4 +1,4 @@
-"""Langfuse parent span for the evaluate station (IG-672).
+"""Langfuse parent span for the evaluate station.
 
 Wraps inventory + assess so LangChain planner generations nest under one
 ``evaluate`` observation on the goal-loop trace.

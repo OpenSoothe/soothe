@@ -1,4 +1,4 @@
-"""Ephemeral loop garbage collection and shared loop teardown (IG-430)."""
+"""Ephemeral loop garbage collection and shared loop teardown."""
 
 from __future__ import annotations
 

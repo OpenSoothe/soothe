@@ -1,4 +1,4 @@
-"""Pre-graph intake shares GoalLoopTrace with strange-loop-graph (IG-540)."""
+"""Pre-graph intake shares GoalLoopTrace with strange-loop-graph."""
 
 from __future__ import annotations
 

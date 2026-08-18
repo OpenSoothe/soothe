@@ -350,7 +350,7 @@ def resolve_stream_tool_name(
             pend_name = str(pend.get("name") or "").strip()
             if pend_name and pend_name != "tool":
                 return pend_name
-    # IG-418: Extract tool name from unified format
+    # Extract tool name from unified format
     _sid, _type_code, _, tool_info = parse_unified_tool_call_id(tcid)
     if tool_info:
         # tool_info is like "ls:0" or "task:5" - extract the tool name
@@ -423,7 +423,7 @@ def resolve_tool_invocations_for_display(
         stream_args = streaming_overlay.get(tid, {})
         name = tc_name or block_name or ""
         if not name or name == "tool":
-            # IG-418: Extract tool name from unified format
+            # Extract tool name from unified format
             _sid, _type_code, _, tool_info = parse_unified_tool_call_id(tid)
             if tool_info:
                 head = tool_info.split(":")[0].split(".")[0].strip()

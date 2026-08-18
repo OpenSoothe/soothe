@@ -1,11 +1,11 @@
-"""Thread-to-asyncio stream response bridge (IG-429, IG-477).
+"""Thread-to-asyncio stream response bridge.
 
 Eliminates poll-delayed delivery from worker threads into the daemon event loop.
-IG-477: Added backpressure handling to prevent unbounded queue growth.
+Added backpressure handling to prevent unbounded queue growth.
 
 NOTE: The semaphore backpressure here is a defensive optimization, not the root
-fix for IG-477 OOM. The root cause was LangGraph checkpointer channel history
-loaded on every astream tick (see IG-477 for details). Backpressure helps bound
+fix for OOM. The root cause was LangGraph checkpointer channel history
+loaded on every astream tick (see for details). Backpressure helps bound
 in-flight chunks but alone did not resolve the memory leak.
 """
 
@@ -30,13 +30,13 @@ WORKER_MSG_TIMEOUT = "timeout"
 # Backpressure: block worker thread until a delivery slot is available.
 _DEFAULT_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = 5.0
 _GOAL_COMPLETION_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = 60.0
-# IG-549: Execute phase can run for minutes (browser_use, long searches); use longer timeout
+# Execute phase can run for minutes (browser_use, long searches); use longer timeout
 _EXECUTE_PHASE_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = 30.0
 
-# IG-477: Limit in-flight chunk deliveries (blocks worker thread when full)
-# IG-535: Tuned for 32 concurrent loops - 100 slots per worker allows heavier per-loop streams
+# Limit in-flight chunk deliveries (blocks worker thread when full)
+# Tuned for 32 concurrent loops - 100 slots per worker allows heavier per-loop streams
 _MAX_PENDING_CALLBACKS = 200  # Slot count for the shared default pool (no worker_id)
-_DEFAULT_SLOTS_PER_WORKER = 100  # IG-535: Increased from 50 for dense streaming workloads
+_DEFAULT_SLOTS_PER_WORKER = 100  # Increased from 50 for dense streaming workloads
 
 # Semaphore slots per worker thread — isolates backpressure across pool workers.
 _worker_pending_slots: dict[str, threading.Semaphore] = {}
@@ -69,7 +69,7 @@ def _chunk_is_goal_completion(payload: Any) -> bool:
 def _chunk_is_execute_phase(payload: Any) -> bool:
     """Return True when a worker chunk carries execute phase content.
 
-    IG-549: Execute phase can run for minutes during tool execution (browser_use,
+    Execute phase can run for minutes during tool execution (browser_use,
     long searches). These chunks should use longer timeout to avoid being dropped.
     """
     if not isinstance(payload, tuple) or len(payload) < 3:
@@ -92,11 +92,11 @@ class ResponsePusher:
     Uses ``call_soon_threadsafe`` so chunks are delivered without polling the
     worker response queue on a fixed interval.
 
-    IG-477: Semaphore backpressure blocks the worker thread when too many chunks
+    Semaphore backpressure blocks the worker thread when too many chunks
     are in flight, preventing LangGraph state from growing without bound when
     downstream delivery is slow.
 
-    Per-worker semaphores (IG-534) prevent one loop from exhausting the global
+    Per-worker semaphores  prevent one loop from exhausting the global
     in-flight budget shared across unrelated workers.
     """
 
@@ -118,7 +118,7 @@ class ResponsePusher:
         available (semaphore acquire). This applies backpressure to LangGraph
         ``astream`` so memory cannot grow unbounded when the consumer is slow.
 
-        IG-549: Uses longer timeout for execute-phase and goal_completion chunks
+        Uses longer timeout for execute-phase and goal_completion chunks
         since these can run for minutes during long tool execution (browser_use,
         web searches).
         """
@@ -127,7 +127,7 @@ class ResponsePusher:
 
         acquired_slot = False
         if msg_type == WORKER_MSG_CHUNK:
-            # IG-549: Tiered timeout based on chunk phase
+            # Tiered timeout based on chunk phase
             if _chunk_is_goal_completion(payload):
                 acquire_timeout = _GOAL_COMPLETION_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS
             elif _chunk_is_execute_phase(payload):

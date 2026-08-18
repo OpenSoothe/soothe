@@ -162,7 +162,7 @@ class TestAgentDecision:
         assert composite_step_id("001", "KFA") == "KFA-001"
 
     def test_assign_plan_step_ids_remaps_dependencies(self) -> None:
-        """IG-303: preserve model suffix; in-plan dependency rewrite."""
+        """preserve model suffix; in-plan dependency rewrite."""
 
         d0 = StepAction(
             id="001",
@@ -194,7 +194,7 @@ class TestAgentDecision:
         assert out.steps[2].dependencies == ["KFA-002", "step_001"]
 
     def test_assign_plan_step_ids_digit_alias_dependency_ig379(self) -> None:
-        """Numeric dependency string maps to the unique digit-only step id (IG-379)."""
+        """Numeric dependency string maps to the unique digit-only step id."""
         d0 = StepAction(id="01", description="First", expected_output="o")
         d1 = StepAction(
             id="02",
@@ -400,8 +400,8 @@ class TestPlanResult:
         assert replan.should_replan() is True
 
     def test_plan_action_validation(self) -> None:
-        """IG-264: Keep CAN have decision (optional); new requires decision when not done."""
-        # IG-264: plan_action='keep' CAN have decision (no longer raises ValueError)
+        """Keep CAN have decision (optional); new requires decision when not done."""
+        # plan_action='keep' CAN have decision (no longer raises ValueError)
         # This validation was relaxed to allow optional decision when keeping
 
         # Still enforce: plan_action='new' requires decision when not done
@@ -666,7 +666,7 @@ class TestStepResult:
         assert "Error: Error occurred" in evidence
 
     def test_to_evidence_string_subagent_includes_delegate_preview(self):
-        """Subagent steps surface bounded delegate preview for planning (IG-356)."""
+        """Subagent steps surface bounded delegate preview for planning."""
         result = StepExecutionRecord(
             step_id="s1",
             success=True,
@@ -767,7 +767,7 @@ class TestLoopState:
         assert state.has_remaining_steps() is False
 
     def test_dependency_completion_ids_survives_completed_cache_clear(self) -> None:
-        """Historical successes in ``step_results`` still satisfy dependencies (IG-346)."""
+        """Historical successes in ``step_results`` still satisfy dependencies."""
         state = LoopState(goal="Count READMEs", thread_id="t1")
         state.add_step_result(
             StepExecutionRecord(
@@ -801,7 +801,7 @@ class TestLoopState:
 
 
 class TestGoalContinuousStepIdsIg388:
-    """Goal-scoped sequential local step ids after plan-generate (IG-388)."""
+    """Goal-scoped sequential local step ids after plan-generate."""
 
     def test_trailing_numeric_suffix_hyphen_and_legacy(self) -> None:
         assert trailing_numeric_suffix_from_step_id("KFA-07") == 7

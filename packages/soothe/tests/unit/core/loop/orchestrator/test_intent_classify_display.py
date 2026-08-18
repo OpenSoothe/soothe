@@ -1,4 +1,4 @@
-"""Display helpers for intake classification progress events (IG-554)."""
+"""Display helpers for intake classification progress events."""
 
 from __future__ import annotations
 

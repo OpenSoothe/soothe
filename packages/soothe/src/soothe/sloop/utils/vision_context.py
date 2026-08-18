@@ -1,4 +1,4 @@
-"""Extract daemon vision-preflight blocks for execute-step context (IG-674).
+"""Extract daemon vision-preflight blocks for execute-step context.
 
 Daemon ``enrich_user_text_with_vision`` appends a delimited summary::
 

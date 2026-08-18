@@ -1,4 +1,4 @@
-"""Compile the Strange Loop LangGraph (RFC-220, IG-663 stem stations, IG-672 evaluate).
+"""Compile the Strange Loop LangGraph (RFC-220, stem stations, evaluate).
 
 The graph checkpoint key uses ``{loop_id}__strange_loop`` via
 ``configurable.thread_id`` (see ``checkpoint_keys``) when a checkpointer is
@@ -78,14 +78,14 @@ def _is_real_checkpointer(obj: Any) -> bool:
 
 
 def build_strange_loop_graph(ctx: LoopRuntimeContext):
-    """Build and compile the Loop orchestrator graph (RFC-220 / IG-663 / IG-672).
+    """Build and compile the Loop orchestrator graph (RFC-220 /).
 
     The compiled graph is given the same checkpointer the CoreAgent uses.
     Without a checkpointer LangGraph's ``interrupt(...)`` cannot persist
     across ``ainvoke`` calls, so a clarification suspended in
     ``await_user`` could never be resumed via ``Command(resume=...)``
     on the next user input — the user's text would be classified as a new
-    goal and the prior interrupt would dangle (RFC-622 / IG-462).
+    goal and the prior interrupt would dangle (RFC-622).
     """
 
     async def intake(state: dict[str, Any]) -> dict[str, Any]:

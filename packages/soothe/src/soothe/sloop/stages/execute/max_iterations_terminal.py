@@ -51,7 +51,7 @@ async def emit_max_iterations_terminal(ctx: LoopRuntimeContext) -> None:
         plan_action="new",
         decision=_default_agent_decision(state.goal),
         evidence_summary=state.evidence_summary,
-        goal_progress="none",  # IG-399
+        goal_progress="none",  #
         next_action="I've hit the iteration limit; I'll pause here.",
     )
     await ctx.emit(

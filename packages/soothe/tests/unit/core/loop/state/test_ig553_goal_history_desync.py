@@ -1,4 +1,4 @@
-"""Tests for IG-553 goal_history desync fixes."""
+"""Tests for goal_history desync fixes."""
 
 from __future__ import annotations
 

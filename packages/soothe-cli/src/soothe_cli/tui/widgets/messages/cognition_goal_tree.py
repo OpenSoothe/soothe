@@ -690,7 +690,7 @@ class CognitionGoalTreeMessage(Vertical):
         self,
         *,
         status: str,
-        goal_progress: str,  # IG-399: descriptive level instead of float
+        goal_progress: str,  # descriptive level instead of float
         completion_summary: str,
         total_steps: int,
         duration_ms: int | None = None,
@@ -705,7 +705,7 @@ class CognitionGoalTreeMessage(Vertical):
             duration_ms: Optional wall-clock goal duration. When omitted, falls
                 back to the sum of completed step durations.
         """
-        # IG-399: Map descriptive levels to percentage display
+        # Map descriptive levels to percentage display
         progress_map = {
             "none": "0%",
             "low": "20%",

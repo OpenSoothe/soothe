@@ -1,4 +1,4 @@
-"""Golden tests for LangGraph ``astream`` chunk normalization (IG-218)."""
+"""Golden tests for LangGraph ``astream`` chunk normalization."""
 
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ def test_iter_namespaced_tool_messages_skips_root() -> None:
 
 
 def test_iter_messages_delegate_scan_finds_namespaced_task_tool() -> None:
-    """Explore-style subgraphs may emit the parent ``task`` return under a namespace (IG-355)."""
+    """Explore-style subgraphs may emit the parent ``task`` return under a namespace."""
     msg = ToolMessage(content="explore-final-body", tool_call_id="tc-explore", name="task")
     chunk = (("functions.task:0",), "messages", (msg, {}))
     out = list(iter_messages_for_delegate_task_scan(chunk))

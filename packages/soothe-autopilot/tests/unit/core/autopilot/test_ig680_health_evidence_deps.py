@@ -1,4 +1,4 @@
-"""IG-680: health remove guards, workspace inherit, consensus evidence, deps chain."""
+"""health remove guards, workspace inherit, consensus evidence, deps chain."""
 
 from __future__ import annotations
 
@@ -385,7 +385,7 @@ class TestDecomposeCooldown:
 class TestHealthSkipConsensusExhaustedReset:
     @pytest.mark.asyncio
     async def test_skip_reset_when_send_back_budget_exhausted(self, mock_config: MagicMock) -> None:
-        """IG-691: health must not reactivate consensus-exhausted suspends."""
+        """health must not reactivate consensus-exhausted suspends."""
         ce = ContextEngine()
         goal = await ce.create_goal("Integrate wave 1", priority=78)
         ce.claim_goal(goal.id, loop_id="w1")

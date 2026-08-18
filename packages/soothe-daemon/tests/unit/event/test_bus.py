@@ -228,7 +228,7 @@ async def test_event_batch_blocks_when_queue_near_capacity() -> None:
 
 
 def test_drop_counter_increments_on_normal_drop() -> None:
-    """IG-534 Phase 0: Drop counter tracks NORMAL drops by topic."""
+    """Phase 0: Drop counter tracks NORMAL drops by topic."""
     from soothe_daemon.event.bus import _increment_drop_counter, get_event_bus_drop_counts
 
     # Reset state

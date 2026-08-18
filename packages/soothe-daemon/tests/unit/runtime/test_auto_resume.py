@@ -1,4 +1,4 @@
-"""Unit tests for IG-670 auto-resume eligibility classification."""
+"""Unit tests for auto-resume eligibility classification."""
 
 from __future__ import annotations
 

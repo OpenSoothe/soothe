@@ -196,7 +196,7 @@ class TestCoreAgentClass:
 
 
 class TestCoreAgentStateRetrieval:
-    """Tests for checkpointer-aware graph state reads (IG-477 / IG-519)."""
+    """Tests for checkpointer-aware graph state reads."""
 
     @pytest.mark.asyncio
     async def test_aget_state_returns_none_without_checkpointer(self) -> None:

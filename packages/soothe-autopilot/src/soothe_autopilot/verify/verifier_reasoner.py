@@ -55,7 +55,7 @@ class DecomposeSuggestionResponse(BaseModel):
 
 
 class WireDependencyResponse(BaseModel):
-    """LLM response for dependency wiring (IG-680)."""
+    """LLM response for dependency wiring."""
 
     goal_id: str
     depends_on: list[str] = Field(default_factory=list)

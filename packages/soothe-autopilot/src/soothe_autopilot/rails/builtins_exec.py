@@ -227,7 +227,7 @@ class RailBuiltinExecutor:
         """Register or replace job state for a root goal id.
 
         Merges prior in-memory state and on-disk ``rail_state.json``, then
-        hydrates annotations from CE ``GoalNode.rail_*`` (IG-691).
+        hydrates annotations from CE ``GoalNode.rail_*``.
         """
         async with self._lock:
             loaded = self._load_rail_state_unlocked(state.job_id)
@@ -300,7 +300,7 @@ class RailBuiltinExecutor:
         *,
         rail_id: str | None = None,
     ) -> None:
-        """Mirror rail annotations onto the CE GoalNode (IG-678 P2-2)."""
+        """Mirror rail annotations onto the CE GoalNode (P2-2)."""
         goal = self._ce._dag.get_goal(goal_id)
         if goal is None:
             return
@@ -507,7 +507,7 @@ class RailBuiltinExecutor:
         )
 
     def _tags_by_goal_unlocked(self, job_id: str) -> dict[str, list[str]]:
-        """Union in-memory annotations with CE ``rail_tags`` (IG-691)."""
+        """Union in-memory annotations with CE ``rail_tags``."""
         out: dict[str, list[str]] = {}
         state = self._jobs.get(job_id)
         if state is not None:
@@ -534,7 +534,7 @@ class RailBuiltinExecutor:
             return self._tags_by_goal_unlocked(job_id)
 
     async def ensure_trigger_tags(self, job_id: str, goal_id: str) -> list[str]:
-        """Fail-closed repair: hydrate annotation tags from CE ``rail_tags`` (IG-692).
+        """Fail-closed repair: hydrate annotation tags from CE ``rail_tags``.
 
         When in-memory annotations lack tags after restart, copy CE tags into
         the annotation map and return the resolved tag list.
@@ -1536,7 +1536,7 @@ class RailBuiltinExecutor:
         )
 
     async def _do_retry_maker(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:
-        """Replace a single failed maker; preserve completed siblings (IG-693)."""
+        """Replace a single failed maker; preserve completed siblings."""
         if not trigger_goal_id:
             return BuiltinResult(status="skipped", detail="no trigger maker")
         state = await self._require(job_id)

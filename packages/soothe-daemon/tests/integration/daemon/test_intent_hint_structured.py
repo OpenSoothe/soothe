@@ -1,4 +1,4 @@
-"""Integration tests for structured ``intent_hint=text_completion`` turns (IG-419)."""
+"""Integration tests for structured ``intent_hint=text_completion`` turns."""
 
 from __future__ import annotations
 

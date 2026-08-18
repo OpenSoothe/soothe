@@ -1,4 +1,4 @@
-"""Tests for structural loop-continuation controls (IG-558)."""
+"""Tests for structural loop-continuation controls."""
 
 from __future__ import annotations
 

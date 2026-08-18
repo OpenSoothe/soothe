@@ -53,7 +53,7 @@ class EventProcessor:
     Handles all event routing, state management, and filtering.
     Delegates display to RendererProtocol implementation.
 
-    Display policy is fixed to the former **normal** client mode (IG-343).
+    Display policy is fixed to the former **normal** client mode.
     When ``headless_output`` is True, RFC-614 loop-tagged main-graph assistant
     text is emitted; tools and progress are not rendered.
 
@@ -79,7 +79,7 @@ class EventProcessor:
             renderer: Callback interface for display.
             presentation_engine: Shared engine; if omitted, uses renderer's
                 ``presentation_engine`` when present, else a new instance.
-            tui_debug: When True, emit INFO logs on logger ``soothe.ux.tui.trace`` (IG-129).
+            tui_debug: When True, emit INFO logs on logger ``soothe.ux.tui.trace``.
             headless_output: Headless CLI: loop-tagged main answers only, no tool/progress UI.
             streaming_mode: Client display mode — ``batch`` (default) or ``streaming``.
         """
@@ -239,7 +239,7 @@ class EventProcessor:
     def _suppress_main_assistant_body_for_headless_obj(
         self, msg: AIMessage, *, is_main: bool
     ) -> bool:
-        """Headless stdout: only RFC-614 loop-tagged finals (IG-343 / IG-345).
+        """Headless stdout: only RFC-614 loop-tagged finals.
 
         Suppresses unphased execute-wave narration on the main graph; ``goal_completion``,
         ``goal_completion``, ``chitchat``, etc. are routed via ``assistant_output_phase`` before this path.
@@ -273,7 +273,7 @@ class EventProcessor:
         is_chunk: bool,
         phase: str,
     ) -> None:
-        """Display logic for RFC-614 loop-tagged assistant messages (IG-317 / IG-343)."""
+        """Display logic for RFC-614 loop-tagged assistant messages."""
         if phase not in LOOP_ASSISTANT_OUTPUT_PHASES:
             return
         if self._headless_output and phase in self._HEADLESS_SUPPRESSED_PHASES:
@@ -531,7 +531,7 @@ class EventProcessor:
         namespace: tuple[str, ...],
     ) -> None:
         """Handle AIMessage objects."""
-        # Headless (IG-343): drop subgraph chatter unless RFC-614 loop-tagged output,
+        # Headless: drop subgraph chatter unless RFC-614 loop-tagged output,
         # which is emitted via _dispatch_loop_tagged_assistant_text as main-visible text.
         if self._headless_output and not is_main:
             lo = assistant_output_phase(msg)
@@ -550,7 +550,7 @@ class EventProcessor:
         tcs = normalize_tool_calls_list(raw_tcs)
         has_tc_args = tool_calls_have_any_arg_dict(raw_tcs)
 
-        # Accumulate streaming tool args (IG-053)
+        # Accumulate streaming tool args
         tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
         self._state.last_active_tool_call_id = accumulate_tool_call_chunks(
             self._state.pending_tool_calls,
@@ -678,7 +678,7 @@ class EventProcessor:
         content = msg.content if isinstance(msg.content, str) else str(msg.content)
         brief = extract_tool_brief(tool_name, content)
 
-        # Finalize pending tool call if needed (IG-053)
+        # Finalize pending tool call if needed
         parsed_args, pending, needs_emit, raw_args_str = finalize_pending_tool_call(
             self._state.pending_tool_calls,
             tool_call_id,
@@ -756,7 +756,7 @@ class EventProcessor:
             )
             return
 
-        # Accumulate streaming tool args from tool_call_chunks (IG-053)
+        # Accumulate streaming tool args from tool_call_chunks
         tool_call_chunks = msg.get("tool_call_chunks", [])
         if isinstance(tool_call_chunks, list) and tool_call_chunks:
             self._state.last_active_tool_call_id = accumulate_tool_call_chunks(
@@ -877,7 +877,7 @@ class EventProcessor:
 
         brief = extract_tool_brief(tool_name, content)
 
-        # Finalize pending tool call if needed (IG-053)
+        # Finalize pending tool call if needed
         parsed_args, pending, needs_emit, raw_args_str = finalize_pending_tool_call(
             self._state.pending_tool_calls,
             tool_call_id,

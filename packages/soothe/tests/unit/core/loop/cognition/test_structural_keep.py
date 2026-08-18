@@ -1,4 +1,4 @@
-"""Tests for structural plan keep gates (IG-671 / IG-683)."""
+"""Tests for structural plan keep gates."""
 
 from __future__ import annotations
 

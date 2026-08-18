@@ -1,4 +1,4 @@
-"""Dataclasses and types for execute wave management (IG-493, IG-130, IG-356).
+"""Dataclasses and types for execute wave management.
 
 This module provides the data structures used during parallel and dependency
 execute step processing: result containers, budget tracking, wave markers,
@@ -29,7 +29,7 @@ StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
 
 @dataclass
 class _ExecuteStepResult:
-    """Collected result from execute-step stream (IG-493).
+    """Collected result from execute-step stream.
 
     Used instead of raw tuple for clarity and extensibility.
     """
@@ -51,7 +51,7 @@ class _ExecuteStepResult:
 
 @dataclass
 class _ActStreamBudget:
-    """Mutable counters for a single CoreAgent stream (IG-130)."""
+    """Mutable counters for a single CoreAgent stream."""
 
     max_subagent_tasks_per_wave: int = 0
     max_tool_calls_per_step: int = _DEFAULT_MAX_TOOL_CALLS_PER_STEP
@@ -63,7 +63,7 @@ class _ActStreamBudget:
 
 @dataclass(frozen=True, slots=True)
 class _StreamCollectChunk:
-    """One yield from ``Executor._stream_and_collect`` (IG-493 extension).
+    """One yield from ``Executor._stream_and_collect`` (extension).
 
     Two modes:
     - Wire event: ``event`` set, other summary fields at defaults.

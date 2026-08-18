@@ -1,4 +1,4 @@
-"""Project StrangeLoop ledger messages for plan-assess / plan-generate (IG-380, RFC-214).
+"""Project StrangeLoop ledger messages for plan-assess / plan-generate (RFC-214).
 
 RFC-214: The complete ledger includes all phases (plan_assess, plan_generate,
 execute_step). Plan-assess, plan-generate, and continuation-assess prompts omit prior
@@ -42,7 +42,7 @@ ExecuteProjectionMode = Literal["goal_boundary", "mid_goal"]
 
 @dataclass
 class ProjectedExecuteStepInput:
-    """Result of execute-step graph ledger projection (IG-542)."""
+    """Result of execute-step graph ledger projection."""
 
     messages: list[BaseMessage] = field(default_factory=list)
     cross_goal_projected: bool = False
@@ -73,7 +73,7 @@ _MID_GOAL_CURRENT_PHASES = frozenset(
 # rows do not bleed into the next goal's "current segment".
 _GOAL_TERMINAL_PHASES: frozenset[str] = frozenset({PHASE_GOAL_COMPLETION, PHASE_GOAL_INTERRUPTED})
 
-# IG-555: Boundary marker for prior goal completion in planning projections.
+# Boundary marker for prior goal completion in planning projections.
 # Prevents planner anchoring on prior "Recommended next actions" instead of
 # decomposing the current goal independently.
 _GOAL_COMPLETION_CONTEXT_BOUNDARY = (
@@ -83,7 +83,7 @@ _GOAL_COMPLETION_CONTEXT_BOUNDARY = (
     "Decompose the current goal independently based on its scope.\n"
 )
 
-# IG-662: Boundary for prior terminal units in goal-completion synthesis.
+# Boundary for prior terminal units in goal-completion synthesis.
 # Keeps the report focused on the current goal; prior text is status only.
 _SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY = (
     '<PRIOR_GOAL_CONTEXT role="status_reference">\n'
@@ -254,7 +254,7 @@ def project_loop_messages_for_plan(
     loop_messages: list[BaseMessage],
     ledger_cfg: PlanPromptLedgerConfig | None,
 ) -> list[BaseMessage]:
-    """Return ledger messages for plan LLM prompts (IG-380).
+    """Return ledger messages for plan LLM prompts.
 
     Args:
         loop_messages: RFC-214 ledger from ``LoopState.loop_messages``.
@@ -335,14 +335,14 @@ def _project_planner_ledger_mid_goal_isolated(
 ) -> list[BaseMessage]:
     """Mid-goal planner projection: Slice A prior goals + current-goal segment only.
 
-    IG-555: Slice A includes boundary marker to prevent planner anchoring.
+    Slice A includes boundary marker to prevent planner anchoring.
     """
     exec_cfg = _execute_prompt_ledger_config(soothe_config)
     slice_a = project_cross_goal_completion_tail(
         loop_messages,
         k=exec_cfg.cross_goal_completion_tail,
         ledger_cfg=ledger_cfg,
-        include_boundary=True,  # IG-555: prevent planner anchoring
+        include_boundary=True,  # prevent planner anchoring
     )
     seg_start = _current_goal_segment_start(loop_messages)
     current_segment = [
@@ -371,13 +371,13 @@ def project_planner_ledger(
     exclude_phases: frozenset[str] | None = None,
     soothe_config: Any | None = None,
 ) -> list[BaseMessage]:
-    """Project CE ledger for planner prompts with ``new_goal`` / ``mid_goal`` phase filter (IG-538).
+    """Project CE ledger for planner prompts with ``new_goal`` / ``mid_goal`` phase filter.
 
     Args:
         loop_messages: Full RFC-214 ledger from ``LoopState.loop_messages``.
         mode: ``new_goal`` excludes ``execute_step`` by default; ``mid_goal`` uses Slice A
             (prior ``goal_completion`` units) plus the current goal segment only.
-        ledger_cfg: Optional tail/char caps (IG-380).
+        ledger_cfg: Optional tail/char caps.
         exclude_phases: Extra phase tags to omit in addition to ``plan_assess``.
         soothe_config: Optional SootheConfig for execute Slice A ``cross_goal_completion_tail``.
 
@@ -527,7 +527,7 @@ def project_planner_ledger_for_assess(
     *,
     soothe_config: Any | None = None,
 ) -> list[BaseMessage]:
-    """Assess-only ledger projection: current-goal execute AI rows only (IG-557)."""
+    """Assess-only ledger projection: current-goal execute AI rows only."""
     assess_cfg = _assess_prompt_ledger_config(soothe_config)
 
     execute_ai = _collect_assess_execute_ai(loop_messages, mode)
@@ -556,7 +556,7 @@ def project_continuation_assess_ledger(
 ) -> list[BaseMessage]:
     """Lean ledger for continuation-assess: last goal_completion unit only (mirrors intake).
 
-    IG-555: Includes boundary marker to prevent anchoring on prior recommendations.
+    Includes boundary marker to prevent anchoring on prior recommendations.
     """
     return project_last_goal_completion_for_intake(loop_messages, ledger_cfg, include_boundary=True)
 
@@ -639,7 +639,7 @@ def _compact_goal_completion_unit_for_projection(
 
     Args:
         unit: Human/AI pair for a goal_completion ledger phase.
-        include_boundary: When True (default), prepend IG-555 boundary marker
+        include_boundary: When True (default), prepend boundary marker
             to prevent planner anchoring. Set False for execute-step Slice A
             where prior actions genuinely help execution grounding.
 
@@ -668,13 +668,13 @@ def _compact_goal_interrupted_unit_for_projection(
     """Rewrite goal_interrupted human envelopes for downstream prompt projection.
 
     Unlike completed goals, interrupted goals' leftover work SHOULD anchor the
-    new plan — that is the whole point of carry-forward. So the IG-555
+    new plan — that is the whole point of carry-forward. So the
     anti-anchoring boundary marker is NOT applied by default; the human envelope
     is rewritten to a short label naming the interrupt cause.
 
     Args:
         unit: Human/AI pair for a goal_interrupted ledger phase.
-        include_boundary: When True, prepend IG-555 boundary marker (rarely
+        include_boundary: When True, prepend boundary marker (rarely
             wanted for interrupted goals; provided for parity).
 
     Returns:
@@ -701,7 +701,7 @@ def _compact_terminal_unit_for_projection(
 ) -> list[BaseMessage]:
     """Dispatch a terminal unit to its phase-specific compaction.
 
-    ``goal_completion`` units use the IG-555 anti-anchoring boundary by default;
+    ``goal_completion`` units use the anti-anchoring boundary by default;
     ``goal_interrupted`` units do not (their leftover work should anchor).
     """
     # Detect the unit's phase from its first human/AI row.
@@ -724,7 +724,7 @@ def project_last_goal_completion_for_intake(
     *,
     include_boundary: bool = True,
 ) -> list[BaseMessage]:
-    """Project the last ``goal_completion`` ledger unit into intake classify input (IG-540).
+    """Project the last ``goal_completion`` ledger unit into intake classify input.
 
     Uses the same ``goal_completion`` resolution as execute Slice A. The synthesis
     human envelope is rewritten to a short label so the classifier focuses on the
@@ -733,7 +733,7 @@ def project_last_goal_completion_for_intake(
     Args:
         loop_messages: Full RFC-214 ledger loaded from CE persistence.
         ledger_cfg: Optional caps (same knobs as plan prompts).
-        include_boundary: When True (default), prepend IG-555 boundary marker.
+        include_boundary: When True (default), prepend boundary marker.
             Set False for intake Pass 2 where classifier needs prior scope signal.
 
     Returns:
@@ -958,13 +958,13 @@ def project_cross_goal_completion_tail(
     ledger_cfg: PlanPromptLedgerConfig | None,
     include_boundary: bool = False,
 ) -> list[BaseMessage]:
-    """Project K prior-goal ``goal_completion`` units for execute Slice A (IG-542).
+    """Project K prior-goal ``goal_completion`` units for execute Slice A.
 
     Args:
         loop_messages: Full RFC-214 ledger.
         k: Maximum number of prior goal completion units to project.
         ledger_cfg: Optional caps.
-        include_boundary: When False (default for execute), omit IG-555 boundary marker
+        include_boundary: When False (default for execute), omit boundary marker
             since prior actions genuinely help execution grounding. Set True for
             planner projections where anchoring prevention is needed.
 
@@ -1242,7 +1242,7 @@ def project_loop_messages_for_core_agent(
 
 
 def _compact_terminal_unit_for_synthesis(unit: list[BaseMessage]) -> list[BaseMessage]:
-    """Compact a prior terminal unit for goal-completion synthesis (IG-662).
+    """Compact a prior terminal unit for goal-completion synthesis.
 
     Rewrites the human envelope with a synthesis status-reference boundary and
     truncates the AI body so the model can mention prior status without
@@ -1282,7 +1282,7 @@ def _project_prior_goal_for_synthesis(
     before_index: int,
     ledger_cfg: PlanPromptLedgerConfig | None,
 ) -> list[BaseMessage]:
-    """Project one compacted prior terminal unit for synthesis (IG-662)."""
+    """Project one compacted prior terminal unit for synthesis."""
     found = resolve_goal_terminal_unit(loop_messages, before_index)
     if found is None:
         return []
@@ -1295,7 +1295,7 @@ def project_loop_messages_for_synthesis(
     loop_messages: list[BaseMessage],
     ledger_cfg: PlanPromptLedgerConfig | None = None,
 ) -> list[BaseMessage]:
-    """Return ledger messages for goal-synthesis prompts (RFC-214, IG-662).
+    """Return ledger messages for goal-synthesis prompts (RFC-214).
 
     Unlike plan-assess / plan-generate, synthesis injects only ``execute_step``
     human/AI turns from the **current goal segment** — plan-phase reasoning and

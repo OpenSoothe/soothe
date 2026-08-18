@@ -164,7 +164,7 @@ def filter_redundant_stream_tool_updates(
 
     Task delegations, ``write_todos``, and ``_subgraph_tool`` placeholders are never
     treated as complete — the TUI needs those wire events for subagent labels and
-    the step-card Todo section (IG-664).
+    the step-card Todo section.
     """
     if not updates:
         return []

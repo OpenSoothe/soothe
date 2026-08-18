@@ -1,4 +1,4 @@
-"""Unit tests for IG-653 plan-phase timing log helpers."""
+"""Unit tests for plan-phase timing log helpers."""
 
 from __future__ import annotations
 

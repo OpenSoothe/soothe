@@ -1,4 +1,4 @@
-"""Tests for loop_input content normalization (IG-361)."""
+"""Tests for loop_input content normalization."""
 
 from __future__ import annotations
 

@@ -287,7 +287,7 @@ def test_unknown_envelope_is_suppressed_and_warns_once(
 
     They are suppressed (the safe default) AND logged at WARNING the first time
     a particular (type, mode) pair is observed, so a future schema change does
-    not silently drop user payloads the way the IG-435 regression did.
+    not silently drop user payloads the way the regression did.
     """
     # Use a unique shape so the throttle set does not already contain it.
     novel = {"type": "event", "mode": "future_mode_42", "data": {}}

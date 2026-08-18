@@ -80,10 +80,10 @@ if TYPE_CHECKING:
 # per plan-generate (loop 7ea9) before json_schema succeeds.
 _PLANNER_JSON_METHODS: tuple[str | None, ...] = ("json_schema", "json_mode")
 
-# IG-503: Network resilience retry configuration
+# Network resilience retry configuration
 _NETWORK_RETRY_MAX_ATTEMPTS = 3
 
-# IG-668: the assess raw-text fallback is a ~250-token salvage call. Left on the
+# the assess raw-text fallback is a ~250-token salvage call. Left on the
 # execute-sized budget (600s x 11 attempts) a runaway thinking model can stall the
 # loop for hours, so bound it hard and cap its generation.
 _ASSESS_FALLBACK_TIMEOUT_S = 90
@@ -94,7 +94,7 @@ logger = logging.getLogger(__name__)
 
 
 def _plan_phase_chat_model(model: Any) -> Any:
-    """Return model for RFC-604 assess/plan structured calls (IG-358).
+    """Return model for RFC-604 assess/plan structured calls.
 
     Binds ``temperature=0`` when the chat model supports it so structured JSON is
     faster and more deterministic on most providers.
@@ -106,7 +106,7 @@ def _plan_phase_chat_model(model: Any) -> Any:
 
 
 def _assess_fallback_chat_model(model: Any) -> Any:
-    """Return the assess model with a bounded output budget for raw fallback (IG-668).
+    """Return the assess model with a bounded output budget for raw fallback.
 
     The fallback drops ``response_format``, so nothing else stops a thinking model
     from generating until the provider's own cap.
@@ -118,7 +118,7 @@ def _assess_fallback_chat_model(model: Any) -> Any:
 
 
 def _prompt_chars_for_messages(messages: list[Any]) -> int:
-    """Sum estimated content chars across prompt messages (IG-653)."""
+    """Sum estimated content chars across prompt messages."""
     return sum(estimate_content_chars(getattr(m, "content", None)) for m in messages)
 
 
@@ -130,7 +130,7 @@ def _log_plan_phase_timing(
     iteration: int,
     lightweight: bool | None = None,
 ) -> None:
-    """Emit stable INFO timing for split-path plan phases (IG-653).
+    """Emit stable INFO timing for split-path plan phases.
 
     Grep: ``[Plan] phase=evaluate-gap|evaluate-assess|generate``.
     """
@@ -161,7 +161,7 @@ def _parse_status_assessment_from_raw_message(response: Any) -> Any:
 
     Thinking models (e.g. qwen via coding-plan) often emit valid assessment JSON
     in ``content`` or ``additional_kwargs["reasoning_content"]`` while LangChain's
-    function-calling parser surfaces ``json: null`` in traces. IG-668: they also
+    function-calling parser surfaces ``json: null`` in traces. they also
     emit tag-wrapped YAML and section envelopes, so parse both shapes.
     """
     from soothe_nano.llm.response_text import _extract_json_str_from_response
@@ -252,8 +252,8 @@ class LLMPlanner:
             config: Optional configuration for shared context XML in prompts.
             plan_evaluate_assess_model: Model for evaluate assess / continuation calls.
             plan_generate_model: Default model for plan-generate calls (complex/think).
-            plan_generate_model_simple: Model for simple/lightweight generate (IG-671).
-            plan_generate_model_near_gap: Model for near-gap generate (IG-671).
+            plan_generate_model_simple: Model for simple/lightweight generate.
+            plan_generate_model_near_gap: Model for near-gap generate.
             plan_evaluate_gap_model: Model for evaluate inventory (gap) calls.
             loop_id: Optional loop identifier for Langfuse trace correlation.
         """
@@ -269,7 +269,7 @@ class LLMPlanner:
         self._plan_evaluate_gap_model = plan_evaluate_gap_model or self._plan_evaluate_assess_model
         self._config = config
         self._loop_id = loop_id
-        # Set by evaluate station to nest LLM runs under the goal-loop trace (IG-672).
+        # Set by evaluate station to nest LLM runs under the goal-loop trace.
         self._pinned_trace_id: str | None = None
         self._prompt_builder = PromptBuilder(config)
 
@@ -281,7 +281,7 @@ class LLMPlanner:
         lightweight: bool,
         approved_plan: bool = False,
     ) -> Any:
-        """Pick generate model by intake / gap distance (IG-671)."""
+        """Pick generate model by intake / gap distance."""
         from soothe.sloop.intention.models import IntakeLabel
 
         if lightweight or approved_plan:
@@ -307,10 +307,10 @@ class LLMPlanner:
         thread_id: str | None,
         phase: str,
     ) -> dict[str, Any] | None:
-        """RunnableConfig for planner LLM calls when Langfuse is enabled (IG-369).
+        """RunnableConfig for planner LLM calls when Langfuse is enabled.
 
         When ``_pinned_trace_id`` is set (evaluate station), generations share the
-        goal-loop trace and nest under the active ``evaluate`` observation (IG-672).
+        goal-loop trace and nest under the active ``evaluate`` observation.
         """
         if self._config is None:
             return None
@@ -334,7 +334,7 @@ class LLMPlanner:
 
     @staticmethod
     def _evaluate_langfuse_phase_name(trace_name: str, phase: str) -> str | None:
-        """Map evaluate subgraph phases to IG-672 Langfuse display names."""
+        """Map evaluate subgraph phases to Langfuse display names."""
         from soothe.utils.observability.langfuse._names import (
             evaluate_assess_continuation_langfuse_run_display_name,
             evaluate_assess_langfuse_run_display_name,
@@ -377,7 +377,7 @@ class LLMPlanner:
         )
 
     def _assess_fallback_rate_limit_config(self) -> LLMRateLimitConfig:
-        """Tight timeout policy for the assess raw-text fallback (IG-668).
+        """Tight timeout policy for the assess raw-text fallback.
 
         A failed fallback costs one default assessment; an unbounded one costs the
         whole loop, so never let it inherit the execute-sized retry ladder.
@@ -476,7 +476,7 @@ class LLMPlanner:
         *,
         thread_id: str | None,
     ) -> tuple[Any, Any]:
-        """StatusAssessment call with raw response for CE audit (IG-557).
+        """StatusAssessment call with raw response for CE audit.
 
         Returns both the parsed assessment and the raw LLM response object.
         Assess pairs are not recorded in the CE ledger.
@@ -495,7 +495,7 @@ class LLMPlanner:
         model = _plan_phase_chat_model(self._plan_evaluate_assess_model)
         lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="evaluate-assess")
 
-        # IG-503: Retry loop for transient network errors
+        # Retry loop for transient network errors
         network_attempts = 0
         last_error: Exception | None = None
 
@@ -526,7 +526,7 @@ class LLMPlanner:
                 raise
 
             except Exception as e:
-                # Check for transient network error (IG-503)
+                # Check for transient network error
                 if is_transient_network_error(e):
                     network_attempts += 1
                     last_error = e
@@ -631,7 +631,7 @@ class LLMPlanner:
         exclude_goal_id: str | None = None,
         context_bundle: Any | None = None,
     ) -> Any:
-        """RFC-226: discriminator via unified planner assembly (RFC-214 §4, IG-538).
+        """RFC-226: discriminator via unified planner assembly (RFC-214 §4).
 
         Routes a follow-up agentic query to bootstrap or plan_generate using the
         same system + projected ledger + task envelope shape as plan-assess.
@@ -758,7 +758,7 @@ class LLMPlanner:
             goal: Goal description for fallback decision
             iteration: Current iteration for varied fallback
             thread_id: Thread id for Langfuse session correlation.
-            generate_model: Optional override for the generate chat model (IG-671).
+            generate_model: Optional override for the generate chat model.
 
         Returns:
             Tuple of (PlanGeneration, raw_response) or (PlanGeneration, None) on fallback.
@@ -870,7 +870,7 @@ class LLMPlanner:
                         ]
                     continue
             except Exception as e:
-                # IG-503: Check for transient network error first
+                # Check for transient network error first
                 if is_transient_network_error(e):
                     # Retry with exponential backoff (separate counter)
                     network_attempts = 0
@@ -975,7 +975,7 @@ class LLMPlanner:
         assessment: Any,
         plan_result: Any,
     ) -> Any:
-        """Combine StatusAssessment and PlanGeneration results (RFC-604, IG-152).
+        """Combine StatusAssessment and PlanGeneration results (RFC-604).
 
         Keeps derived ``next_action`` on ``PlanResult`` for internal orchestration.
 
@@ -1090,7 +1090,7 @@ class LLMPlanner:
     ) -> Any:
         """Assess-only planner call used by split graph flow (RFC-214).
 
-        Persists ``StatusAssessment`` on the CE goal node (IG-557); does not
+        Persists ``StatusAssessment`` on the CE goal node ; does not
         append ``plan_assess`` ledger pairs.
         """
         if context_bundle is None and context_engine is not None:
@@ -1139,7 +1139,7 @@ class LLMPlanner:
                     assessment.goal_progress,
                 )
 
-        # IG-454: Check for stuck loop patterns
+        # Check for stuck loop patterns
         stuck_reason = detect_stuck_loop(state)
         if stuck_reason:
             logger.warning("[Plan] Stuck detected: %s, forcing replan", stuck_reason)
@@ -1175,7 +1175,7 @@ class LLMPlanner:
         *,
         context_engine: Any | None = None,
     ) -> Any:
-        """Read-only gap analysis before plan-assess (IG-557)."""
+        """Read-only gap analysis before plan-assess."""
         from soothe.sloop.state.schemas import PlanGapAnalysis
 
         context_bundle = None
@@ -1246,7 +1246,7 @@ class LLMPlanner:
         context_engine: Any | None = None,
         leg_index: int = 0,
     ) -> Any:
-        """Read-only single-facet inventory leg for parallel evaluate (IG-672)."""
+        """Read-only single-facet inventory leg for parallel evaluate."""
         from soothe.sloop.state.schemas import GoalComponentStatus
 
         context_bundle = None
@@ -1384,7 +1384,7 @@ class LLMPlanner:
         ):
             keep_block = assess_keep_block_reason(state)
             if keep_block is not None:
-                # IG-683: defense in depth — do not short-circuit generate after a
+                # defense in depth — do not short-circuit generate after a
                 # failed wave even if assess status is still "continue".
                 logger.warning(
                     "[PlanGen] Reject keep short-circuit (%s); generating new plan",
@@ -1405,7 +1405,7 @@ class LLMPlanner:
                     require_goal_completion=assessment.require_goal_completion,
                 )
 
-        # Build DAG context for progressive planning (IG-400)
+        # Build DAG context for progressive planning
         dag_context = None
         if plan_manager is not None:
             dag_ctx = plan_manager.get_planning_context()
@@ -1569,7 +1569,7 @@ class LLMPlanner:
     ) -> Any:
         """Plan execution using two-call architecture (RFC-604).
 
-        StatusAssessment call: lightweight status check (compact assess-only system prompt, IG-372)
+        StatusAssessment call: lightweight status check (compact assess-only system prompt)
         Plan wire call: conditional plan generation (execution policies + plan-generate instructions)
 
         Returns combined PlanResult with evidence-based metrics applied.
@@ -1646,7 +1646,7 @@ class LLMPlanner:
                             state.iteration,
                         )
 
-                # Early completion: apply goal-completion policy (IG-298)
+                # Early completion: apply goal-completion policy
                 if can_complete_early:
                     from soothe.context.planning_completion import (
                         determine_goal_completion_needs,
@@ -1689,7 +1689,7 @@ class LLMPlanner:
                         full_output=last_ledger_ai_content(state) or None,
                     )
                 else:
-                    # Build DAG context for progressive planning (IG-400)
+                    # Build DAG context for progressive planning
                     dag_context = None
                     if plan_manager is not None:
                         dag_ctx = plan_manager.get_planning_context()

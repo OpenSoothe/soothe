@@ -1,4 +1,4 @@
-"""Sticky TUI composer modes: Auto / Manual / Plan (IG-682).
+"""Sticky TUI composer modes: Auto / Manual / Plan.
 
 ``auto`` / ``manual`` map to the RFC-622 ``clarification_mode`` wire field.
 ``plan`` is a sticky planner-routing mode that sets ``preferred_subagent=planner``

@@ -1,4 +1,4 @@
-"""Tests for wave metrics aggregation in Executor (IG-132)."""
+"""Tests for wave metrics aggregation in Executor."""
 
 import pytest
 
@@ -160,7 +160,7 @@ def test_aggregate_metrics_context_window_estimation(mock_core_agent, config, st
 
     executor._aggregate_wave_metrics(step_results, output, [], state)
 
-    # Tiktoken estimates 500 tokens for 4000 'x' chars (IG-151)
+    # Tiktoken estimates 500 tokens for 4000 'x' chars
     assert state.total_tokens_used == 500
     # Should be ~0.25% of 200k context limit
     assert 0.002 <= state.context_percentage_consumed <= 0.003

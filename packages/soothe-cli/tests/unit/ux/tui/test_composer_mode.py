@@ -1,4 +1,4 @@
-"""Unit tests for sticky composer mode helpers (IG-682)."""
+"""Unit tests for sticky composer mode helpers."""
 
 from __future__ import annotations
 

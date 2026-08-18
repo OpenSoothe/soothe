@@ -1,4 +1,4 @@
-"""IG-672: evaluate station Langfuse parent span + child run names."""
+"""evaluate station Langfuse parent span + child run names."""
 
 from __future__ import annotations
 

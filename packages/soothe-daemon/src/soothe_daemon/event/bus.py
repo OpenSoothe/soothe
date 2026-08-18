@@ -1,6 +1,6 @@
 """Event bus for topic-based event routing (RFC-0013).
 
-IG-258 Phase 2: Lock-free publish with reader-writer pattern.
+Phase 2: Lock-free publish with reader-writer pattern.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# IG-392: When consumer < producer, NORMAL/HIGH drops can happen at very high rate
+# When consumer < producer, NORMAL/HIGH drops can happen at very high rate
 # (streaming + subagents). Per-drop WARNING spam obscures real issues and I/O. Throttle
 # to at most one WARNING per topic per interval. (Timeout is correlated, not causal:
 # the queue fills during long streams; timeout ends the wait.)
@@ -29,13 +29,13 @@ _HIGH_DROP_LOG_LAST: dict[str, float] = {}
 _NO_SUBSCRIBER_LOG_LAST: dict[str, float] = {}
 _DROP_LOG_INTERVAL_SEC = 5.0
 
-# IG-534 Phase 0: Drop counters for observability (thread-safe for concurrent publishers)
+# Phase 0: Drop counters for observability (thread-safe for concurrent publishers)
 _drop_counters: dict[str, int] = {}  # key: f"{priority}|{topic}"
 _drop_counters_lock = threading.Lock()
 
 
 def _increment_drop_counter(priority: str, topic: str) -> int:
-    """Increment drop counter and return current total (IG-534)."""
+    """Increment drop counter and return current total."""
     key = f"{priority}|{topic}"
     with _drop_counters_lock:
         _drop_counters[key] = _drop_counters.get(key, 0) + 1
@@ -43,7 +43,7 @@ def _increment_drop_counter(priority: str, topic: str) -> int:
 
 
 def get_event_bus_drop_counts() -> dict[str, int]:
-    """Return snapshot of drop counters for daemon_status (IG-534 Phase 0).
+    """Return snapshot of drop counters for daemon_status (Phase 0).
 
     Returns dict mapping ``priority|topic`` to cumulative drop count.
     """
@@ -149,7 +149,7 @@ def _is_user_visible_for_backpressure(
 
 
 class EventBus:
-    """Async pub/sub event bus with lock-free publishing (IG-258 Phase 2).
+    """Async pub/sub event bus with lock-free publishing (Phase 2).
 
     Phase 2 improvements:
     - Lock-free publish (no asyncio.Lock in hot path)
@@ -157,13 +157,13 @@ class EventBus:
     - Direct dict read (atomic in Python)
     - Multiple concurrent publishers (no contention)
 
-    IG-475: Added cleanup_orphaned_topics() to remove topics with no subscribers.
+    Added cleanup_orphaned_topics to remove topics with no subscribers.
 
     The event bus implements topic-based routing where publishers emit
     events to specific topics and subscribers receive events for topics
     they've subscribed to.
 
-    Topic format (IG-408):
+    Topic format:
         ``loop:{loop_id}`` — primary; client subscriptions and daemon ``_broadcast``
         scoped delivery.
         ``global`` — daemon-wide frames (e.g. some status, command_response).
@@ -186,14 +186,14 @@ class EventBus:
         """Initialize the event bus with lock-free publish (Phase 2).
 
         Args:
-            event_size_stats: Optional collector for streaming wire-size stats (IG-403).
+            event_size_stats: Optional collector for streaming wire-size stats.
         """
         # Regular dict (atomic read, no lock needed)
         self._subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = {}
-        # Write lock only for subscribe/unsubscribe (IG-258 Phase 2)
+        # Write lock only for subscribe/unsubscribe (Phase 2)
         self._write_lock = asyncio.Lock()
         self._event_size_stats = event_size_stats
-        # IG-475: Track orphaned topics for cleanup
+        # Track orphaned topics for cleanup
         self._topics_with_no_subscribers_log: set[str] = set()
 
     async def publish(
@@ -202,14 +202,14 @@ class EventBus:
         event: dict[str, Any],
         event_meta: EventMeta | None = None,
     ) -> None:
-        """Publish event to all subscribers with lock-free hot path (IG-258 Phase 2).
+        """Publish event to all subscribers with lock-free hot path (Phase 2).
 
         Phase 2 improvement: No lock acquisition for publish (reader operation).
         - Direct dict read (atomic in Python)
         - Multiple concurrent publishers
         - No contention in hot path
 
-        Implements priority-aware overflow strategy (IG-258 Phase 1):
+        Implements priority-aware overflow strategy (Phase 1):
         - CRITICAL events: Never dropped, block until space available
         - HIGH events: Rarely dropped, warn if dropped
         - NORMAL events: Drop when full; one throttled warning per topic per interval
@@ -218,12 +218,12 @@ class EventBus:
         Args:
             topic: Topic identifier (e.g., "loop:abc123")
             event: Event dictionary to broadcast
-            event_meta: Optional EventMeta for filtering (RFC-0022) and priority (IG-258)
+            event_meta: Optional EventMeta for filtering (RFC-0022) and priority
         """
         if self._event_size_stats is not None:
             self._event_size_stats.record_event_dict(event)
 
-        # NO LOCK! Direct dict read (atomic in Python) - IG-258 Phase 2
+        # NO LOCK! Direct dict read (atomic in Python) - Phase 2
         queues = self._subscribers.get(topic, set()).copy()
 
         # Early return if no subscribers (no lock needed)
@@ -271,7 +271,7 @@ class EventBus:
         )
 
         # Fast drop when already at capacity (avoids exception per put on hot path).
-        # HIGH events must not be dropped here (IG-258: "Rarely dropped"); they fall
+        # HIGH events must not be dropped here ("Rarely dropped"); they fall
         # through to put_nowait and block on QueueFull instead.
         if not block_on_full and priority == EventPriority.NORMAL and queue_size >= queue_max:
             _increment_drop_counter("NORMAL", topic)
@@ -302,7 +302,7 @@ class EventBus:
             queue.put_nowait((event, event_meta))
         except asyncio.QueueFull:
             # CRITICAL and protected events block until space is available.
-            # HIGH events also block: per IG-258 they are "rarely dropped" and carry
+            # HIGH events also block: per they are "rarely dropped" and carry
             # tool/subagent results whose loss corrupts client state under load.
             if block_on_full or priority == EventPriority.HIGH:
                 if priority == EventPriority.HIGH:
@@ -342,7 +342,7 @@ class EventBus:
             topic: Topic identifier to subscribe to
             queue: AsyncIO queue to receive events
         """
-        # Write lock for subscribe (writer operation) - IG-258 Phase 2
+        # Write lock for subscribe (writer operation) - Phase 2
         async with self._write_lock:
             if topic not in self._subscribers:
                 self._subscribers[topic] = set()
@@ -357,7 +357,7 @@ class EventBus:
             topic: Topic identifier to unsubscribe from
             queue: Queue to remove from subscribers
         """
-        # Write lock for unsubscribe (writer operation) - IG-258 Phase 2
+        # Write lock for unsubscribe (writer operation) - Phase 2
         async with self._write_lock:
             if topic in self._subscribers:
                 self._subscribers[topic].discard(queue)
@@ -372,7 +372,7 @@ class EventBus:
         Args:
             queue: Queue to remove from all subscribers
         """
-        # Write lock for unsubscribe_all (writer operation) - IG-258 Phase 2
+        # Write lock for unsubscribe_all (writer operation) - Phase 2
         async with self._write_lock:
             topics_to_remove = []
             for topic in self._subscribers:
@@ -386,7 +386,7 @@ class EventBus:
         logger.debug("Unsubscribed queue from all topics")
 
     async def cleanup_orphaned_topics(self) -> int:
-        """Remove topics with empty subscriber sets (IG-475).
+        """Remove topics with empty subscriber sets.
 
         Periodically called by daemon to clean up topics that were not properly
         removed during unsubscribe (e.g., due to race conditions or early disconnects).

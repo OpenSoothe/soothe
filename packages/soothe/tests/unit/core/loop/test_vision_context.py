@@ -1,4 +1,4 @@
-"""Tests for daemon vision-preflight extraction (IG-674)."""
+"""Tests for daemon vision-preflight extraction."""
 
 from __future__ import annotations
 

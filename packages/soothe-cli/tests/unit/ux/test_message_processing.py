@@ -1,4 +1,4 @@
-"""Test message processing utilities (see IG-053)."""
+"""Test message processing utilities (see)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from soothe_sdk.display.message_processing import (
 
 
 class TestAccumulateToolCallChunks:
-    """Streaming tool_call_chunks accumulation (IG-053)."""
+    """Streaming tool_call_chunks accumulation."""
 
     def test_dict_args_on_first_chunk_serializes_for_parse(self) -> None:
         """When the first chunk carries args as a dict, briefs/cards can resolve."""

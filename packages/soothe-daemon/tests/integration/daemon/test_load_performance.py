@@ -1,4 +1,4 @@
-"""Phase 1 validation tests for IG-258 concurrent performance optimizations.
+"""Phase 1 validation tests for concurrent performance optimizations.
 
 This test suite validates the 6 Phase 1 optimizations under production-like load:
 1. Input queue limit + backpressure (bounded queue, DAEMON_BUSY rejection)
@@ -8,7 +8,7 @@ This test suite validates the 6 Phase 1 optimizations under production-like load
 5. Sender loop batching (50ms window, batched delivery)
 6. Queue depth monitoring (80% threshold warnings)
 
-Test scenarios from IG-258 Testing Strategy:
+Test scenarios from Testing Strategy:
 - Burst inputs: 100 clients, 10 inputs/sec each
 - Sustained moderate load: 50 clients, continuous
 - Event flood: 10k events/second

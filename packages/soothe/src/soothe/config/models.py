@@ -666,7 +666,7 @@ class GoalContextConfig(BaseModel):
 
 
 class PlanPromptLedgerConfig(BaseModel):
-    """Caps for RFC-214 ledger copies sent to plan-assess / plan-generate (IG-380).
+    """Caps for RFC-214 ledger copies sent to plan-assess / plan-generate.
 
     All limits use 0 to mean unlimited (preserve legacy behavior: full ledger, no copies).
     When any limit is positive, the plan phase uses deep-copied, trimmed messages only.
@@ -684,7 +684,7 @@ class PlanPromptLedgerConfig(BaseModel):
         le=2_000_000,
         description=(
             "Max total extracted characters for plan ledger projection "
-            "(0 = unlimited; IG-671 default 24000)"
+            "(0 = unlimited; default 24000)"
         ),
     )
     plan_ledger_max_message_chars: int = Field(
@@ -693,13 +693,13 @@ class PlanPromptLedgerConfig(BaseModel):
         le=500_000,
         description=(
             "Max extracted characters per ledger message in plan projection "
-            "(0 = unlimited; IG-671 default 3000)"
+            "(0 = unlimited; default 3000)"
         ),
     )
 
 
 class PlanEvaluatePromptConfig(BaseModel):
-    """Evaluate-station prompt assembly knobs (inventory + assess; IG-557 / IG-672)."""
+    """Evaluate-station prompt assembly knobs (inventory + assess;)."""
 
     ledger_max_messages: int = Field(
         default=24,
@@ -732,7 +732,7 @@ class PlanEvaluatePromptConfig(BaseModel):
 
 
 class ExecutePromptLedgerConfig(BaseModel):
-    """Caps for execute-step CoreAgent ledger projection (IG-542)."""
+    """Caps for execute-step CoreAgent ledger projection."""
 
     cross_goal_completion_tail: int = Field(
         default=3,
@@ -758,7 +758,7 @@ class ExecutePromptLedgerConfig(BaseModel):
 
 
 class LoopCheckpointConfig(BaseModel):
-    """Loop checkpoint and recovery configuration (RFC-203, IG-670).
+    """Loop checkpoint and recovery configuration (RFC-203).
 
     Args:
         progressive: Save checkpoint after each step/goal completion.
@@ -778,7 +778,7 @@ class LoopCheckpointConfig(BaseModel):
 
 
 class LoopCheckpointAsyncConfig(BaseModel):
-    """Async checkpoint write configuration (RFC-803 Phase 6, IG-550).
+    """Async checkpoint write configuration (RFC-803 Phase 6).
 
     Checkpoint writes are always coalesced and non-blocking. PostgreSQL uses the
     process-scoped persistence writer; SQLite uses a per-manager flush worker.
@@ -853,7 +853,7 @@ class OutputStreamingConfig(BaseModel):
     Controls how goal_completion synthesis and other assistant outputs are
     delivered from daemon to client.
 
-    Three delivery modes (IG-441):
+    Three delivery modes:
 
     - ``batch``: Buffer the entire goal_completion synthesis. Emit a single
       ``AIMessageChunk`` with ``chunk_position="last"`` when the agent loop
@@ -919,7 +919,7 @@ class OutputStreamingConfig(BaseModel):
         le=1000,
         description=(
             "Daemon WebSocket batching interval (milliseconds). "
-            "IG-534 Phase 3: 100ms default for TUI clients (faster perceived response); "
+            "Phase 3: 100ms default for TUI clients (faster perceived response); "
             "use 300 for headless consumers to reduce network overhead."
         ),
     )
@@ -954,7 +954,7 @@ class OutputStreamingConfig(BaseModel):
         le=16384,
         description=(
             "Chars per intermediate block in adaptive chunked-streaming phase "
-            "(IG-441). Higher values reduce frame count; lower values smooth UX. "
+            ". Higher values reduce frame count; lower values smooth UX. "
             "Default 500 aligns with adaptive_threshold_chars so the first block "
             "after cutover is the same size as one streamed chunk window."
         ),
@@ -965,7 +965,7 @@ class OutputStreamingConfig(BaseModel):
         le=2000,
         description=(
             "Max milliseconds between intermediate block flushes in adaptive "
-            "chunked-streaming phase (IG-441). Time-based fallback so slow streams "
+            "chunked-streaming phase. Time-based fallback so slow streams "
             "still show progress before adaptive_block_chars accumulates."
         ),
     )
@@ -1146,7 +1146,7 @@ class StrangeLoopRulesConfig(BaseModel):
 
 
 class StrangeLoopConfig(BaseModel):
-    """Configuration for agent loop execution mode (RFC-201, IG-407: unified config).
+    """Configuration for agent loop execution mode (RFC-201, unified config).
 
     Unified configuration consolidating agentic behavior fields and loop execution controls.
     Behavior fields are placed directly under loop.* for easy access.
@@ -1169,14 +1169,14 @@ class StrangeLoopConfig(BaseModel):
         execute_deliverable_assess: Fast LLM assess mode when structural deliverable checks are inconclusive.
         strange_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
         final_response: Whether to always synthesize a final CoreAgent report (default),
-            reuse last Execute assistant text when structurally eligible, or use auto heuristics (IG-199, IG-580).
+            reuse last Execute assistant text when structurally eligible, or use auto heuristics.
         working_memory: Working memory / spill configuration (RFC-203).
         goal_context: Goal context injection for Plan/Execute phases (RFC-217).
         report_output: Goal report display and synthesis limits.
         output_streaming: Enable streaming mode for all AI outputs (true=stream, false=batch).
         goal_completion_mode: How planner completion (`require_goal_completion`) combines with
-            execution heuristics when the goal is assessed as done (IG-298).
-        plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts (IG-380).
+            execution heuristics when the goal is assessed as done.
+        plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts.
         checkpoint: Progressive checkpoint persistence and startup resume (RFC-203).
         concurrency: Parallelism caps and step scheduling strategy.
         plan_evaluate_assess_model_role: Router role for evaluate assess LLM calls (default ``fast``).
@@ -1248,7 +1248,7 @@ class StrangeLoopConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _reject_nano_middleware_and_legacy_keys(cls, data: Any) -> Any:
-        """Keep nano middleware knobs out of ``agent.loop`` (IG-631 / IG-681)."""
+        """Keep nano middleware knobs out of ``agent.loop``."""
         if not isinstance(data, dict):
             return data
         banned_middleware = (
@@ -1446,12 +1446,12 @@ class StrangeLoopConfig(BaseModel):
 
     plan_evaluate_prompt: PlanEvaluatePromptConfig = Field(
         default_factory=PlanEvaluatePromptConfig,
-        description="Evaluate inventory/assess projection and envelope settings (IG-672).",
+        description="Evaluate inventory/assess projection and envelope settings.",
     )
 
     execute_prompt_ledger: ExecutePromptLedgerConfig = Field(
         default_factory=ExecutePromptLedgerConfig,
-        description="Execute-step CoreAgent ledger projection (IG-542)",
+        description="Execute-step CoreAgent ledger projection ",
     )
 
     checkpoint: LoopCheckpointConfig = Field(
@@ -1468,7 +1468,7 @@ class StrangeLoopConfig(BaseModel):
         default="fast",
         description=(
             "Router model role for evaluate assess structured LLM calls "
-            "(status assessment and continuation routing; IG-672)."
+            "(status assessment and continuation routing;)."
         ),
     )
 
@@ -1476,7 +1476,7 @@ class StrangeLoopConfig(BaseModel):
         default="fast",
         description=(
             "Router model role for evaluate inventory (gap) structured LLM calls "
-            "(coverage map before assess; IG-672)."
+            "(coverage map before assess;)."
         ),
     )
 
@@ -1489,7 +1489,7 @@ class StrangeLoopConfig(BaseModel):
         default="fast",
         description=(
             "Router model role for simple/lightweight plan-generate and approved-plan "
-            "implement handoff (IG-671)."
+            "implement handoff."
         ),
     )
 
@@ -1497,7 +1497,7 @@ class StrangeLoopConfig(BaseModel):
         default="fast",
         description=(
             "Router model role for plan-generate when gap distance is near/at_goal "
-            "and the last execute wave succeeded (IG-671)."
+            "and the last execute wave succeeded."
         ),
     )
 
@@ -1505,7 +1505,7 @@ class StrangeLoopConfig(BaseModel):
         default=True,
         description=(
             "When true, mid-loop iterations with a healthy in-flight plan skip "
-            "evaluate/generate and reuse remaining steps (IG-671)."
+            "evaluate/generate and reuse remaining steps."
         ),
     )
 
@@ -1515,7 +1515,7 @@ class StrangeLoopConfig(BaseModel):
         le=50,
         description=(
             "Force a full evaluate path after this many consecutive structural "
-            "keeps (0 = no streak cap; IG-671)."
+            "keeps (0 = no streak cap;)."
         ),
     )
 
@@ -1523,7 +1523,7 @@ class StrangeLoopConfig(BaseModel):
         default="sequential",
         description=(
             "Inventory strategy inside the evaluate station: one PlanGapAnalysis "
-            "call (sequential) or per-facet fan-out (parallel; IG-672)."
+            "call (sequential) or per-facet fan-out (parallel;)."
         ),
     )
 
@@ -1540,7 +1540,7 @@ class StrangeLoopConfig(BaseModel):
         le=8,
         description=(
             "Use parallel inventory only when seeded facet count is at least this; "
-            "otherwise fall back to sequential (IG-672)."
+            "otherwise fall back to sequential."
         ),
     )
 
@@ -1548,14 +1548,14 @@ class StrangeLoopConfig(BaseModel):
         default=90.0,
         ge=5.0,
         le=300.0,
-        description="Soft wall-clock budget for the evaluate inventory phase (IG-672).",
+        description="Soft wall-clock budget for the evaluate inventory phase.",
     )
 
     plan_evaluate_gap_leg_timeout_seconds: float = Field(
         default=45.0,
         ge=5.0,
         le=180.0,
-        description="Soft timeout per parallel inventory leg (IG-672).",
+        description="Soft timeout per parallel inventory leg.",
     )
 
     goal_synthesis_model_role: ModelRole = Field(
@@ -1612,7 +1612,7 @@ class ClarificationConfig(BaseModel):
             "evaluate",
             "planner_subagent_review",
             "rail_pause",
-            # dual-read persisted / pre-IG-672 origin strings
+            # dual-read persisted / pre-origin strings
             "plan_generate",
             "plan_assess",
             "plan_gap_analysis",

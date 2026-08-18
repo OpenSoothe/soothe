@@ -1,4 +1,4 @@
-"""Shared worker-thread SootheRunner lifecycle helpers (IG-506)."""
+"""Shared worker-thread SootheRunner lifecycle helpers."""
 
 from __future__ import annotations
 

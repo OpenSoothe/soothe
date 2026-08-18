@@ -78,7 +78,7 @@ class _FakeFactory:
 
 
 def _mock_consensus_model(*, decision: str = "accept", reasoning: str = "test") -> MagicMock:
-    """Consensus model stub compatible with invoke_structured_chat_typed (IG-678)."""
+    """Consensus model stub compatible with invoke_structured_chat_typed."""
     verdict = ConsensusVerdict(decision=decision, reasoning=reasoning)  # type: ignore[arg-type]
     structured = MagicMock()
     structured.ainvoke = AsyncMock(return_value=verdict.model_dump())

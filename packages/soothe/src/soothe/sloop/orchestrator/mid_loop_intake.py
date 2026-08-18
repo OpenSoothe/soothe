@@ -1,4 +1,4 @@
-"""Mid-loop intake-tier policy (IG-676).
+"""Mid-loop intake-tier policy.
 
 Fresh goals use special graph entry (inject / skip-evaluate). Mid-loop goals
 share one spine entry (``gather_evidence``); intake only tunes station behavior.

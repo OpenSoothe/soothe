@@ -71,7 +71,7 @@ def test_token_budget_suffix_output_only() -> None:
 
 
 def test_record_token_usage_refreshes_running_title_meta() -> None:
-    """Token counts appear in compact title meta immediately (IG-664)."""
+    """Token counts appear in compact title meta immediately."""
     card = CognitionStepMessage("TKN-07", "Token stats", id="stp-tkn-run")
     card._status = "running"
     card._start_time = 0.0

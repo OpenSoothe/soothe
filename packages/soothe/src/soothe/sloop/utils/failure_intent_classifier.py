@@ -1,4 +1,4 @@
-"""Failure intent classification for reflection (IG-433)."""
+"""Failure intent classification for reflection."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for the app-level Shift+Tab composer-mode cycle (IG-682)."""
+"""Tests for the app-level Shift+Tab composer-mode cycle."""
 
 from __future__ import annotations
 

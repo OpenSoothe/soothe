@@ -436,7 +436,7 @@ def run_textual_tui(
         initial_prompt: Auto-submit prompt on launch
     """
 
-    # Caller cwd is forwarded as the loop workspace hint (IG-344).
+    # Caller cwd is forwarded as the loop workspace hint.
     # Daemon workspace is ephemeral TEMP unless SOOTHE_WORKSPACE env set.
     cwd = os.getcwd()
 

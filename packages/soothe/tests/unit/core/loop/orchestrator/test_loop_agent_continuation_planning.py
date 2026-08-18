@@ -247,7 +247,7 @@ async def test_continuation_complex_goal_produces_multi_step_plan() -> None:
 
 @pytest.mark.asyncio
 async def test_continuation_new_goal_projection_includes_boundary_marker() -> None:
-    """IG-555: iter=0 continuation plan prompts include prior-goal boundary marker."""
+    """iter=0 continuation plan prompts include prior-goal boundary marker."""
     goal = "build image then run e2e"
     ctx, _ = await _make_continuation_context(goal=goal)
     # loop_messages is CE-backed once bound (see LoopState.loop_messages property),

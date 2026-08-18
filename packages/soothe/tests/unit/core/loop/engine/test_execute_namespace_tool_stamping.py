@@ -1,4 +1,4 @@
-"""Tests for unified tool_call_id rewriting on ToolMessages (IG-514)."""
+"""Tests for unified tool_call_id rewriting on ToolMessages."""
 
 from __future__ import annotations
 

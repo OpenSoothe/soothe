@@ -326,7 +326,7 @@ class TestWaveIdFormat:
 
 
 class TestLoopAIMessageChunkWireRoundtrip:
-    """IG-440: LoopAIMessageChunk must keep chunk identity across the wire.
+    """LoopAIMessageChunk must keep chunk identity across the wire.
 
     The synthesis pipeline streams ``LoopAIMessageChunk`` instances tagged with
     ``phase="goal_completion"``. The TUI's streaming branch checks
@@ -354,7 +354,7 @@ class TestLoopAIMessageChunkWireRoundtrip:
         wire = prepare_stream_message_for_wire(chunk)
         assert wire["type"] == "AIMessageChunk", (
             "AIMessageChunk wire tag must be preserved; collapsing to 'ai' "
-            "breaks the TUI synthesis stream branch (IG-440)."
+            "breaks the TUI synthesis stream branch."
         )
         assert wire.get("phase") == "goal_completion"
 

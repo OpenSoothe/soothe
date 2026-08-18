@@ -55,7 +55,7 @@ class TestEnvironmentSection:
         section = build_soothe_environment_section(model="claude-opus-4-6")
 
         # RFC-207: Removed SOOTHE_ prefix from ENVIRONMENT tag
-        # IG-183: Removed version attribute for cache optimization
+        # Removed version attribute for cache optimization
         assert "<ENVIRONMENT>" in section
         assert "</ENVIRONMENT>" in section
         assert "<platform>" in section
@@ -78,7 +78,7 @@ class TestWorkspaceSection:
         section = build_soothe_workspace_section(Path("/tmp/test"))
 
         # RFC-207: Removed SOOTHE_ prefix from WORKSPACE tag
-        # IG-183: Removed version attribute for cache optimization
+        # Removed version attribute for cache optimization
         assert "<WORKSPACE>" in section
         assert "</WORKSPACE>" in section
         assert "<root>" in section
@@ -121,7 +121,7 @@ class TestThreadSection:
 
         section = build_soothe_thread_section(thread_context)
 
-        # IG-183: Removed version attribute for cache optimization
+        # Removed version attribute for cache optimization
         assert "<SOOTHE_THREAD>" in section
         assert "</SOOTHE_THREAD>" in section
         assert "abc123" in section
@@ -153,7 +153,7 @@ class TestProtocolsSection:
 
         section = build_soothe_protocols_section(protocol_summary)
 
-        # IG-183: Removed version attribute for cache optimization
+        # Removed version attribute for cache optimization
         assert "<SOOTHE_PROTOCOLS>" in section
         assert 'id="memory"' in section
         assert 'id="planner"' in section

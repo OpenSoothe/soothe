@@ -21,7 +21,7 @@ from soothe_cli.tui.preview_limits import STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
-# IG-420: TUI refresh throttling - minimum interval between widget refreshes
+# TUI refresh throttling - minimum interval between widget refreshes
 _DEFAULT_TUI_REFRESH_INTERVAL_MS = 800
 """Default minimum interval between TUI refreshes in milliseconds."""
 
@@ -319,4 +319,4 @@ def _strip_success_exit_line(text: str) -> str:
 
 # Preview limits imported from preview_limits module
 _STEP_TOOL_PREVIEW_ROWS = STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
-"""Collapsed step/task activity preview shows this many rows (IG-402)."""
+"""Collapsed step/task activity preview shows this many rows."""

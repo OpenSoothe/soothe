@@ -1,4 +1,4 @@
-"""Schemas for StrangeLoop execution (RFC-201, IG-153, RFC-214)."""
+"""Schemas for StrangeLoop execution (RFC-201,, RFC-214)."""
 
 from __future__ import annotations
 
@@ -61,11 +61,11 @@ class EvidenceEntry(BaseModel):
 
 StepKind = Literal["action", "ask_user"]
 """Step kind. ``action`` runs through CoreAgent; ``ask_user`` short-circuits
-into the clarification relay (RFC-622, IG-462)."""
+into the clarification relay (RFC-622)."""
 
 
 class PlanGenerateStep(BaseModel):
-    """Single step in plan-generate structured output (RFC-604, IG-329, IG-508).
+    """Single step in plan-generate structured output (RFC-604,).
 
     Separate from ``StepAction`` so the LLM schema omits executor-only fields
     (``subagent``, ``evidence_refs``). Converted to ``StepAction`` when building
@@ -80,7 +80,7 @@ class PlanGenerateStep(BaseModel):
         id: Step identifier (auto-generated if omitted).
         description: Brief summary for TUI display and logging (under 20 words).
         full_description: Detailed execution prompt with key inputs, file paths,
-            identifiers, and context needed to execute independently (IG-508).
+            identifiers, and context needed to execute independently.
         expected_output: Expected result for evidence accumulation.
         dependencies: Step IDs this depends on (for DAG execution).
         continues_from: Completed composite step ids from prior plan waves (merged into dependencies).
@@ -119,7 +119,7 @@ class PlanGenerateStep(BaseModel):
 
 
 def strip_unrequested_step_delegates(steps: list[StepAction]) -> list[StepAction]:
-    """Clear all plan-wave subagent wiring from generated steps (IG-656).
+    """Clear all plan-wave subagent wiring from generated steps.
 
     Built-in wire specialists are intake-only and never reach plan-generate, so
     any planner-emitted delegate hint is dropped and execute picks its own tools.
@@ -200,16 +200,16 @@ def step_actions_to_plan_generate_steps(steps: list[StepAction]) -> list[PlanGen
 class StepAction(BaseModel):
     """Single step in execution strategy.
 
-    IG-264: Keep execution-critical fields (used by executor).
-    IG-508: ``full_description`` carries detailed execution context.
-    RFC-622 / IG-462: ``kind`` and ``questions`` carry planner-emitted
+    Keep execution-critical fields (used by executor).
+    ``full_description`` carries detailed execution context.
+    RFC-622 / ``kind`` and ``questions`` carry planner-emitted
     ``ask_user`` steps through to the clarification relay.
 
     Attributes:
-        id: Step identifier; after plan assembly use ``assign_plan_step_ids`` (IG-303: ``<PLANID>-<model-id>``).
+        id: Step identifier; after plan assembly use ``assign_plan_step_ids`` (``<PLANID>-<model-id>``).
         description: Brief summary for TUI display and logging (under 20 words).
         full_description: Detailed execution prompt with key inputs, file paths,
-            identifiers, and context needed to execute independently (IG-508).
+            identifiers, and context needed to execute independently.
         expected_output: Expected result for evidence accumulation.
         dependencies: Step IDs this depends on (for DAG execution).
         kind: ``action`` (normal CoreAgent execution) or ``ask_user``
@@ -298,7 +298,7 @@ class AgentDecision(BaseModel):
 
         Uses :func:`~soothe.context.dag_utils.expand_dependency_satisfaction_ids`
         so model-local dependency tokens (e.g. ``01``) match prior-wave composite ids
-        (e.g. ``KFA-01``) when unambiguous, consistent with the unified plan DAG (IG-400).
+        (e.g. ``KFA-01``) when unambiguous, consistent with the unified plan DAG.
 
         Args:
             completed_step_ids: Set of completed step IDs
@@ -410,7 +410,7 @@ def prepare_decision_for_plan_scoping(
 
 
 def composite_step_id(raw_id: str, plan_id: str) -> str:
-    """Build scoped step id ``PLAN-MODEL``; idempotent if ``raw_id`` already has this plan prefix (IG-303)."""
+    """Build scoped step id ``PLAN-MODEL``; idempotent if ``raw_id`` already has this plan prefix."""
     prefix = f"{plan_id}-"
     if raw_id.startswith(prefix):
         return raw_id
@@ -427,7 +427,7 @@ def _resolve_in_plan_dependency(dep: str, id_map: dict[str, str]) -> str:
        leave ``dep`` unchanged and log once.
     3. Case-insensitive match against raw step ids when exactly one step matches.
 
-    Otherwise returns ``dep`` unchanged (cross-plan / historical composite refs, IG-346).
+    Otherwise returns ``dep`` unchanged (cross-plan / historical composite refs).
 
     Args:
         dep: Dependency string from the model.
@@ -448,7 +448,7 @@ def _resolve_in_plan_dependency(dep: str, id_map: dict[str, str]) -> str:
             return id_map[matches[0]]
         if len(matches) > 1:
             logger.warning(
-                "Ambiguous numeric dependency %r matches in-plan step ids %s; leaving as-is (IG-379)",
+                "Ambiguous numeric dependency %r matches in-plan step ids %s; leaving as-is ",
                 d,
                 matches,
             )
@@ -478,13 +478,13 @@ def assign_plan_step_ids(
     *,
     plan_id: str,
 ) -> AgentDecision:
-    """Scope model step ids with ``plan_id`` and remap in-plan ``dependencies`` (IG-303).
+    """Scope model step ids with ``plan_id`` and remap in-plan ``dependencies``.
 
     Each step becomes ``composite_step_id(step.id, plan_id)``, preserving the model suffix
     (e.g. ``001`` → ``KFA-001``). Dependency edges between steps in this decision are
     rewritten via :func:`_resolve_in_plan_dependency` (exact id, digit-alias, or
     single case-insensitive match); other dependency strings (e.g. cross-wave refs)
-    are unchanged (IG-346, IG-379).
+    are unchanged.
 
     Args:
         decision: Parsed or merged execution decision.
@@ -519,7 +519,7 @@ _STEP_ID_TRAILING_DIGITS = re.compile(r"(\d+)$")
 
 
 def trailing_numeric_suffix_from_step_id(step_id: str) -> int | None:
-    """Parse a positive integer suffix used for goal-continuous step numbering (IG-388).
+    """Parse a positive integer suffix used for goal-continuous step numbering.
 
     Prefer the segment after the last hyphen (``KFA-07`` → 7). If there is no hyphen,
     use the last run of digits (``step_004`` → 4). Returns None when no digits found.
@@ -544,7 +544,7 @@ def trailing_numeric_suffix_from_step_id(step_id: str) -> int | None:
 
 
 def max_goal_step_numeric_suffix(state: LoopState) -> int:
-    """Largest numeric step suffix seen so far on this goal (IG-388).
+    """Largest numeric step suffix seen so far on this goal.
 
     Scans successful/failed ``step_results``, ``completed_step_ids``, and any in-flight
     ``current_decision`` steps so new plans do not reuse lower indices.
@@ -573,7 +573,7 @@ def max_goal_step_numeric_suffix(state: LoopState) -> int:
 
 
 def next_goal_local_step_id_start(state: LoopState) -> int:
-    """Next free 1-based local step index for a new plan wave on this goal (IG-388)."""
+    """Next free 1-based local step index for a new plan wave on this goal."""
     return max_goal_step_numeric_suffix(state) + 1
 
 
@@ -607,7 +607,7 @@ def renumber_decision_local_step_ids_for_goal_continuation(
     decision: AgentDecision,
     state: LoopState,
 ) -> AgentDecision:
-    """Assign consecutive local step ids starting after the goal's max suffix (IG-388).
+    """Assign consecutive local step ids starting after the goal's max suffix.
 
     Models often emit ``01``, ``02`` on every plan-generate call; this rewrites new-plan
     steps to ``next``, ``next+1``, … before ``assign_plan_step_ids`` scopes them with
@@ -642,12 +642,12 @@ def renumber_decision_local_step_ids_for_goal_continuation(
 
 
 class PlanResult(BaseModel):
-    """Plan phase output with full reasoning chain (RFC-604, IG-152, IG-153).
+    """Plan phase output with full reasoning chain (RFC-604,).
 
     Result of the Plan-And-Execute loop's Plan phase, which combines planning,
     progress assessment, and goal-distance estimation in a single structured response.
 
-    IG-399: Descriptive progress levels instead of numeric, removed confidence field.
+    Descriptive progress levels instead of numeric, removed confidence field.
 
     Attributes:
         status: Whether to finish, continue current plan, or replan.
@@ -666,10 +666,10 @@ class PlanResult(BaseModel):
     status: Literal["continue", "replan", "done"]
     evidence_summary: str = ""
     goal_progress: GoalProgress = "none"
-    """Descriptive progress level inherited from assessment (IG-399)."""
+    """Descriptive progress level inherited from assessment."""
 
     assessment_reasoning: str = Field(default="", max_length=500)
-    """Reserved; assess-phase schema has no separate justification string (IG-329)."""
+    """Reserved; assess-phase schema has no separate justification string."""
 
     next_action: str = Field(default="", max_length=500)
     """Internal next-step hint for loop orchestration (not forwarded to TUI)."""
@@ -709,7 +709,7 @@ class PlanResult(BaseModel):
     def _validate_plan_action(self) -> PlanResult:
         """Ensure keep/new and decision align when status requires execution.
 
-        IG-264: plan_action='keep' CAN have decision (optional, not enforced).
+        plan_action='keep' CAN have decision (optional, not enforced).
         Only enforce that plan_action='new' requires decision when not done.
         """
         if self.status != "done" and self.plan_action == "new" and self.decision is None:
@@ -733,8 +733,8 @@ class StatusAssessment(BaseModel):
     """StatusAssessment: quick progress/status check (RFC-604).
 
     Lightweight schema for status assessment, generates ~50-80 tokens.
-    IG-264: Minimal fields (status, progress) - 60% token reduction.
-    IG-399: Descriptive progress levels instead of numeric.
+    Minimal fields (status, progress) - 60% token reduction.
+    Descriptive progress levels instead of numeric.
 
     Attributes:
         status: Whether to finish, continue current plan, or replan.
@@ -747,15 +747,15 @@ class StatusAssessment(BaseModel):
 
     status: Literal["continue", "replan", "done"]
     goal_progress: GoalProgress = "none"
-    """Descriptive progress level - easier for LLMs to estimate accurately (IG-399)."""
+    """Descriptive progress level - easier for LLMs to estimate accurately."""
     assessment_reasoning: str = ""
     """Brief status justification."""
     require_goal_completion: bool = Field(default=False)
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
     terminal_readiness: Literal["not_ready", "ready_with_gaps", "ready"] = "not_ready"
-    """IG-589: explicit terminal readiness when status may be done."""
+    """explicit terminal readiness when status may be done."""
     gap_alignment: bool = True
-    """IG-589: assess agrees with latest PlanGapAnalysis (structured self-report)."""
+    """assess agrees with latest PlanGapAnalysis (structured self-report)."""
     effects: list[GoalEffect] = Field(
         default_factory=list,
         max_length=8,
@@ -767,7 +767,7 @@ class StatusAssessment(BaseModel):
 
 
 class GoalComponentStatus(BaseModel):
-    """One decomposed facet of the current GOAL and its evidence state (IG-557)."""
+    """One decomposed facet of the current GOAL and its evidence state."""
 
     component: str = Field(max_length=120)
     status: Literal["not_started", "partial", "satisfied", "blocked"]
@@ -777,7 +777,7 @@ class GoalComponentStatus(BaseModel):
 
 
 class PlanGapAnalysis(BaseModel):
-    """Explicit evidence inventory + distance from GOAL (feeds plan-assess, IG-557)."""
+    """Explicit evidence inventory + distance from GOAL (feeds plan-assess)."""
 
     components: list[GoalComponentStatus] = Field(min_length=1, max_length=8)
     evidence_summary: str = Field(max_length=2048)
@@ -886,7 +886,7 @@ DEFAULT_MAX_PLAN_STEPS_PER_WAVE = 10
 class PlanGeneration(BaseModel):
     """Runtime plan-generate result (RFC-604).
 
-    Built server-side from ``PlanGenerationWire`` LLM output (IG-568). Not sent
+    Built server-side from ``PlanGenerationWire`` LLM output. Not sent
     directly as the structured-output schema to plan-generate models.
 
     Attributes:
@@ -961,8 +961,8 @@ class StepExecutionRecord(BaseModel):
         thread_id: Thread used for execution
         tool_call_count: Main-graph tool calls during execution (excludes subgraph).
         subgraph_tool_call_count: Namespaced subagent tool calls during execution.
-        subagent_task_completions: Completed ``task`` tool results at graph root (IG-130).
-        hit_subagent_cap: True when streaming stopped early due to subagent task cap (IG-130).
+        subagent_task_completions: Completed ``task`` tool results at graph root.
+        hit_subagent_cap: True when streaming stopped early due to subagent task cap.
         hit_tool_budget: True when streaming stopped early due to per-step tool call cap.
     """
 
@@ -1068,7 +1068,7 @@ class StepExecutionRecord(BaseModel):
             return f"Step {self.step_id}: ✓ {tool_name} (size: {size} bytes)"
 
 
-# Memory bounds for unbounded lists (IG-475)
+# Memory bounds for unbounded lists
 MAX_STEP_RESULTS_PER_GOAL = 50  # Cap historical step results
 MAX_LOOP_MESSAGES_PER_GOAL = 200  # Cap message ledger
 MAX_ACTION_HISTORY_PER_GOAL = 20  # Cap action descriptions
@@ -1106,7 +1106,7 @@ def _step_node_to_result(node: Any) -> StepExecutionRecord:
 class LoopState(BaseModel):
     """State for agentic loop (RFC-201, RFC-214).
 
-    IG-475: Bounded lists prevent memory leaks from unbounded accumulation during
+    Bounded lists prevent memory leaks from unbounded accumulation during
     long-running queries with many iterations.
 
     Attributes:
@@ -1120,7 +1120,7 @@ class LoopState(BaseModel):
         iteration: Current iteration number
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
-        plan_id: Active plan scope (3 uppercase letters); new plan allocates, keep reuses (IG-303).
+        plan_id: Active plan scope (3 uppercase letters); new plan allocates, keep reuses.
         completed_step_ids: Set of completed step IDs (CE-backed property when bound)
         previous_plan: Previous Plan phase result
         step_results: All step results from execution (CE-backed property when bound)
@@ -1130,8 +1130,8 @@ class LoopState(BaseModel):
         working_memory: Loop working-memory instance (RFC-203) when enabled.
         loop_messages: RFC-214: Unified message ledger (CE-backed property when bound).
         last_wave_answer_from_delegate_final: True when the latest execute wave answer came from ``task`` tool returns
-            (``task_tool_aggregate`` provenance), not root-graph assistant stream (IG-355).
-        last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps (IG-199).
+            (``task_tool_aggregate`` provenance), not root-graph assistant stream.
+        last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps.
         continue_loop: RFC-225 flag — True when this loop has prior goals (carrier for executor wiring).
         prior_progress: RFC-227 per-wave digest produced by executor, consumed by plan-assess/plan-generate.
     """
@@ -1145,7 +1145,7 @@ class LoopState(BaseModel):
         default=None,
         description="Skill reference text for execute-step SKILL_CONTEXT when goal expanded from /skill:.",
     )
-    # IG-660: one-shot approved intake-planner artifact for plan_generate grounding.
+    # one-shot approved intake-planner artifact for plan_generate grounding.
     approved_plan_path: str | None = Field(
         default=None,
         description="Workspace path of the approved plan artifact (cleared after first plan_generate).",
@@ -1232,7 +1232,7 @@ class LoopState(BaseModel):
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     total_duration_ms: int = 0
 
-    # Last Act wave metrics for Plan prompts (IG-130, IG-132)
+    # Last Act wave metrics for Plan prompts
     last_wave_tool_call_count: int = 0
     last_wave_subagent_task_count: int = 0
     last_wave_hit_subagent_cap: bool = False
@@ -1248,7 +1248,7 @@ class LoopState(BaseModel):
         description="Chronological action descriptions for progression tracking",
     )
 
-    # Last Execute wave provenance for auto final response (IG-199, IG-355, IG-580)
+    # Last Execute wave provenance for auto final response
     last_wave_answer_from_delegate_final: bool = False
     last_execute_wave_parallel_multi_step: bool = False
     continue_loop: bool = False  # RFC-225: True when loop has prior goals
@@ -1259,7 +1259,7 @@ class LoopState(BaseModel):
         description="Most-recent execute wave snapshot for plan-phase grounding.",
     )
 
-    # IG-671: consecutive structural keeps before forcing a full gap/assess path.
+    # consecutive structural keeps before forcing a full gap/assess path.
     structural_keep_streak: int = Field(
         default=0,
         ge=0,
@@ -1291,7 +1291,7 @@ class LoopState(BaseModel):
         default=None,
         description="Skill body from /skill: expansion; seeded into skill_activation by executor.",
     )
-    intent: Any | None = None  # IG-268: Intent classification for response length intelligence
+    intent: Any | None = None  # Intent classification for response length intelligence
     response_language: Any | None = Field(
         default=None,
         description="Pass 1 detected language for user-facing prose (en|zh|ja|ko|other).",
@@ -1301,7 +1301,7 @@ class LoopState(BaseModel):
         description="RoutingClassification for Plan + Execute.",
     )
 
-    # Thread tracking for step isolation (IG-477: message injection, no checkpoint fork)
+    # Thread tracking for step isolation (message injection, no checkpoint fork)
     step_thread_ids: dict[str, str] = Field(
         default_factory=dict,
         description="Maps step_id → thread_id used for execution.",
@@ -1488,7 +1488,7 @@ class LoopState(BaseModel):
             return self._step_results_cache
 
     def add_step_result(self, result: StepExecutionRecord) -> None:
-        """Add step result and update completed set with bounded accumulation (IG-475).
+        """Add step result and update completed set with bounded accumulation.
 
         When CE is bound, this is a no-op — CE writes (``complete_step``,
         ``fail_step``) are the sole mutation path. When CE is not bound,
@@ -1502,7 +1502,7 @@ class LoopState(BaseModel):
         self._step_results_cache.append(result)
         if result.success:
             self._completed_step_ids_cache.add(result.step_id)
-        # IG-475: Trim old results to prevent unbounded memory growth
+        # Trim old results to prevent unbounded memory growth
         if len(self._step_results_cache) > MAX_STEP_RESULTS_PER_GOAL:
             excess = len(self._step_results_cache) - MAX_STEP_RESULTS_PER_GOAL
             self._step_results_cache = self._step_results_cache[excess:]
@@ -1511,7 +1511,7 @@ class LoopState(BaseModel):
         """Step IDs that satisfy ``StepAction.dependencies`` edges.
 
         Combines ``completed_step_ids`` with every successful ``step_results`` ID so
-        cross-wave dependencies keep resolving after replans (IG-346).
+        cross-wave dependencies keep resolving after replans.
 
         Returns:
             Union of completed IDs for dependency checks.
@@ -1531,14 +1531,14 @@ class LoopState(BaseModel):
         return ids
 
     def add_action_to_history(self, action: str) -> None:
-        """Add action description to history with bounded accumulation (IG-475).
+        """Add action description to history with bounded accumulation.
 
         Args:
             action: Action description text
         """
         if action and action.strip():
             self.action_history.append(action.strip())
-            # IG-475: Trim old actions to prevent unbounded growth
+            # Trim old actions to prevent unbounded growth
             if len(self.action_history) > MAX_ACTION_HISTORY_PER_GOAL:
                 self.action_history = self.action_history[-MAX_ACTION_HISTORY_PER_GOAL:]
 
@@ -1564,7 +1564,7 @@ class LoopState(BaseModel):
         return self.current_decision.has_remaining_steps(self.dependency_completion_ids())
 
     def trim_loop_messages(self) -> None:
-        """Trim loop_messages to bounded size (IG-475).
+        """Trim loop_messages to bounded size.
 
         When CE is bound, trimming is unnecessary — CE ledger is authoritative
         and the _build_loop_messages_from_ce helper applies its own bound.
@@ -1583,7 +1583,7 @@ class LoopState(BaseModel):
             )
 
     def trim_evidence_ledger(self) -> None:
-        """Trim evidence_ledger to bounded size (IG-475).
+        """Trim evidence_ledger to bounded size.
 
         Keeps the most recent evidence entries for plan validation.
         """
@@ -1597,7 +1597,7 @@ class LoopState(BaseModel):
             )
 
     def clear_goal_state(self) -> None:
-        """Clear execution state after goal completion (IG-475).
+        """Clear execution state after goal completion.
 
         Called by goal_completion node to reset state for the next query.
         Prevents task leakage where pending state from one query persists
@@ -1636,7 +1636,7 @@ class LoopState(BaseModel):
         # Trim but don't fully clear loop_messages - keep recent context
         self.trim_loop_messages()
 
-        # IG-477补充：清理未绑定的dict，防止跨goal累积
+        # 补充：清理未绑定的dict，防止跨goal累积
         self.invoked_skill_bodies.clear()
         self.cached_mcp_resources.clear()
 

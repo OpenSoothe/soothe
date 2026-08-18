@@ -1,4 +1,4 @@
-"""Unit tests for plan generation benchmark utilities (IG-536)."""
+"""Unit tests for plan generation benchmark utilities."""
 
 from __future__ import annotations
 

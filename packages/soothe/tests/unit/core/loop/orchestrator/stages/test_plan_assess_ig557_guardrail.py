@@ -1,4 +1,4 @@
-"""IG-557 mid-goal execution-evidence guard for plan_assess."""
+"""mid-goal execution-evidence guard for plan_assess."""
 
 from __future__ import annotations
 

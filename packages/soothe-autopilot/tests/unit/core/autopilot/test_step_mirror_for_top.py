@@ -1,4 +1,4 @@
-"""Tests for mirroring worker StepDAG progress onto Autopilot CE (IG-689)."""
+"""Tests for mirroring worker StepDAG progress onto Autopilot CE."""
 
 from __future__ import annotations
 

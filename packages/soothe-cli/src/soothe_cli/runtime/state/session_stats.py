@@ -111,7 +111,7 @@ class SessionStats:
 
 @dataclass
 class TurnLatencyStats:
-    """IG-534 Phase 3: end-to-end turn latency observability.
+    """Phase 3: end-to-end turn latency observability.
 
     Attributes:
         turn_start_monotonic: Monotonic timestamp when the turn began.

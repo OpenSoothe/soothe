@@ -258,7 +258,7 @@ async def test_delete_thread(mock_durability, mock_config, tmp_path):
     run_dir.mkdir(parents=True)
     (run_dir / "test.txt").write_text("test")
 
-    # Mock the internal store and its methods (async methods after IG-258 Phase 2)
+    # Mock the internal store and its methods (async methods after Phase 2)
     mock_store = SimpleNamespace(
         load=AsyncMock(return_value={"thread_id": "test123", "status": "active"}),
         delete=AsyncMock(),

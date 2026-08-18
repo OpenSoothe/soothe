@@ -190,7 +190,7 @@ def test_synthesis_system_prompt_includes_agent_instructions(tmp_path) -> None:
 
 
 def test_system_prompt_includes_scenario_list() -> None:
-    """IG-524: Available scenarios moved to system prompt for caching."""
+    """Available scenarios moved to system prompt for caching."""
     classification = ScenarioClassification(
         scenario="general_summary",
         sections=["Summary"],
@@ -223,7 +223,7 @@ def test_system_prompt_uses_synthesis_instructions_wrapper_and_anti_echo_rules()
 
 
 def test_system_prompt_empty_sections_asks_model_to_design_outline() -> None:
-    """IG-652: heuristic path leaves sections empty; Phase 2 invents outline."""
+    """heuristic path leaves sections empty; Phase 2 invents outline."""
     classification = ScenarioClassification(
         scenario="general_summary",
         sections=[],
@@ -236,7 +236,7 @@ def test_system_prompt_empty_sections_asks_model_to_design_outline() -> None:
 
 
 def test_system_prompt_includes_cli_formatting_rules() -> None:
-    """IG-552 / IG-652: synthesis system prompt instructs tables, bullets, and mermaid."""
+    """/ synthesis system prompt instructs tables, bullets, and mermaid."""
     classification = ScenarioClassification(
         scenario="general_summary",
         sections=["Summary"],
@@ -253,7 +253,7 @@ def test_system_prompt_includes_cli_formatting_rules() -> None:
 
 
 def test_system_prompt_includes_scenario_format_hint() -> None:
-    """IG-552: per-scenario layout hints are injected for the matched scenario."""
+    """per-scenario layout hints are injected for the matched scenario."""
     classification = ScenarioClassification(
         scenario="decision_analysis",
         sections=["Context", "Options", "Trade-offs", "Recommendation"],

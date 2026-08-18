@@ -43,7 +43,7 @@ def test_resume_node_mapping() -> None:
     assert resume_node_for_clarification_origin(ORIGIN_EXECUTE) == ORIGIN_EXECUTE
     assert resume_node_for_clarification_origin(ORIGIN_PLAN_GENERATE) == ORIGIN_PLAN_GENERATE
     assert resume_node_for_clarification_origin(ORIGIN_PLAN_EVALUATE) == ORIGIN_PLAN_EVALUATE
-    # Legacy assess / gap origins resume into evaluate (IG-672).
+    # Legacy assess / gap origins resume into evaluate.
     assert resume_node_for_clarification_origin("assess") == ORIGIN_PLAN_EVALUATE
     assert resume_node_for_clarification_origin("analyze_gaps") == ORIGIN_PLAN_EVALUATE
     assert resume_node_for_clarification_origin("plan_assess") == ORIGIN_PLAN_EVALUATE

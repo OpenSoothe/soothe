@@ -1,4 +1,4 @@
-"""Tests for validate_message() covering ALL message types (RFC-450 §6.3, IG-522 Phase 8).
+"""Tests for validate_message covering ALL message types (RFC-450 §6.3, Phase 8).
 
 For each (type, method) pair in PARAMS_REGISTRY, this file tests:
 - Valid params → empty error list

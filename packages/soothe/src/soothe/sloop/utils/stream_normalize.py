@@ -111,7 +111,7 @@ def iter_messages_for_delegate_task_scan(chunk: Any) -> Iterator[ToolMessage]:
 
     Root-graph chunks are handled by :func:`iter_messages_for_act_aggregation`. Compiled
     subgraphs (e.g. Deep Research) may emit the parent delegation's ``ToolMessage`` only under a
-    non-empty LangGraph namespace; those must still contribute delegate-final text (IG-355).
+    non-empty LangGraph namespace; those must still contribute delegate-final text.
 
     Args:
         chunk: Raw ``astream`` chunk.
@@ -139,7 +139,7 @@ def iter_messages_for_act_aggregation(chunk: Any) -> Iterator[BaseMessage]:
 
     Subgraph AIMessages are excluded on purpose: orchestration context stays compact.
     Delegate **final** user-visible text for completion is taken from ``task`` ``ToolMessage``
-    payloads collected separately (IG-355), not by merging namespaced assistant streams here.
+    payloads collected separately, not by merging namespaced assistant streams here.
 
     Args:
         chunk: Raw chunk from ``CoreAgent.astream`` / ``CompiledStateGraph.astream``.

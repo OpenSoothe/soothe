@@ -45,9 +45,9 @@ def test_envelope_wraps_flat_ai_message_dict() -> None:
 
 
 def test_envelope_wraps_flat_chunk_dict() -> None:
-    """IG-440: AIMessageChunk identity is preserved on the wire.
+    """AIMessageChunk identity is preserved on the wire.
 
-    Pre-IG-440 the wire collapsed ``AIMessageChunk`` → ``ai`` so the client
+    Pre-the wire collapsed ``AIMessageChunk`` → ``ai`` so the client
     restored it as plain ``AIMessage``. That broke the TUI synthesis stream
     branch (``isinstance(msg, AIMessageChunk)``), silently dropping every
     chunk after the first. The fix keeps the chunk tag intact end-to-end.

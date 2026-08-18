@@ -1,4 +1,4 @@
-"""Loop Graph channel schema for LangGraph routing (RFC-220, RFC-630, IG-554)."""
+"""Loop Graph channel schema for LangGraph routing (RFC-220, RFC-630)."""
 
 from __future__ import annotations
 
@@ -34,16 +34,16 @@ class LoopGraphState(TypedDict, total=False):
     # route_after_preprocess for fresh trivial/simple inject vs gather_evidence.
     intake_label: IntakeLabel | None
     # RFC-630: structural continuation overlay (continue_loop_mode + prior goals).
-    # Kept for ledger/prompts; preprocess routing uses ``is_fresh_goal`` (IG-676).
+    # Kept for ledger/prompts; preprocess routing uses ``is_fresh_goal``.
     is_continuation: bool | None
-    # IG-676: True for first goal with no prior loop work. Fresh trivial/simple
+    # True for first goal with no prior loop work. Fresh trivial/simple
     # inject → commit_plan; all mid-loop and fresh complex → gather_evidence.
     is_fresh_goal: bool | None
-    # IG-554: True when daemon created a new goal record (fresh loop or new goal
+    # True when daemon created a new goal record (fresh loop or new goal
     # on idle loop). Used by route_after_preprocess routing guard to block chitchat
     # fast-path when structural admission contradicts social classification.
     new_goal_created: bool | None
-    # IG-554: derived intake fields for routing and downstream consumers.
+    # derived intake fields for routing and downstream consumers.
     is_task: bool | None
     scope: IntakeLabel | None
     has_deliverable: bool | None
@@ -51,7 +51,7 @@ class LoopGraphState(TypedDict, total=False):
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None
     last_clarification_origin: ClarificationOrigin | None
-    # IG-660: Approve cleared planner wire; route_after_wired_subagent → generate_plan.
+    # Approve cleared planner wire; route_after_wired_subagent → generate_plan.
     planner_implement_handoff: bool | None
     # Set true when execute synthesizes a step result on the
     # clarification-resume path (no scratch decision / plan_result). Routing

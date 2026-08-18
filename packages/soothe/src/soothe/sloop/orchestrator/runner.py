@@ -1,6 +1,6 @@
 """Invoke the compiled Strange Loop graph (RFC-220).
 
-Langfuse (IG-367, IG-396): outer ``ainvoke`` receives the LangChain callback handler so the
+Langfuse: outer ``ainvoke`` receives the LangChain callback handler so the
 Loop Graph run nests planner / CoreAgent spans under one trace; ``langfuse_session_id`` is the
 conversation ``thread_id``; Runnable ``configurable.thread_id`` is
 ``{loop_id}__strange_loop`` for checkpoint isolation from CoreAgent. Metadata adds
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def _langfuse_goal_output_text(ctx: LoopRuntimeContext) -> str:
-    """Best-effort final user-visible text for Langfuse trace output (IG-395)."""
+    """Best-effort final user-visible text for Langfuse trace output."""
     from soothe.sloop.engine.continuation_context import ledger_goal_completion_text
     from soothe.sloop.intention.models import IntakeLabel
 

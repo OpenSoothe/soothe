@@ -1,4 +1,4 @@
-"""Tests for IG-483: Adapter Hardening + Projection Wiring."""
+"""Tests for Adapter Hardening + Projection Wiring."""
 
 from __future__ import annotations
 

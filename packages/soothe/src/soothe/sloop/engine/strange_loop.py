@@ -161,7 +161,7 @@ class StrangeLoop:
             plan_action="new",
             decision=_default_agent_decision(goal),
             evidence_summary="",
-            goal_progress="none",  # IG-399
+            goal_progress="none",  #
             next_action="I need to stop here before completion.",
         )
 
@@ -171,16 +171,16 @@ class StrangeLoop:
         thread_id: str,
         workspace: str | None = None,
         max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
-        loop_id: str | None = None,  # IG-246: explicit loop_id parameter
+        loop_id: str | None = None,  # explicit loop_id parameter
         intent: Any | None = None,  # Intent classification
-        routing_classification: Any | None = None,  # IG-349, IG-383: RoutingClassification
+        routing_classification: Any | None = None,  # , RoutingClassification
         intent_classifier: Any | None = None,
         preferred_subagent: str | None = None,
-        shared_pool: Any | None = None,  # IG-406: SharedPostgreSQLPool for high-concurrency
+        shared_pool: Any | None = None,  # SharedPostgreSQLPool for high-concurrency
         clarification_policy: Any | None = None,  # RFC-622: ClarificationPolicy injection
         clarification_answer: bool = False,  # RFC-622: hint that goal is a resume answer
         clarification_answers: list[str] | None = None,  # RFC-622: per-question answer list
-        resume_interrupted: bool = False,  # IG-670: daemon crash recovery admission
+        resume_interrupted: bool = False,  # daemon crash recovery admission
         goal_trace: Any | None = None,  # GoalLoopTrace when Langfuse enabled
         preamble: list[Any] | None = None,  # RFC-222 §Goal-Report-Pair Projection
     ) -> AsyncGenerator[tuple[str, Any], None]:
@@ -197,10 +197,10 @@ class StrangeLoop:
             intent: IntentClassification (RFC-225). When omitted, the graph entry
                 ``intent_classify`` node runs classification. Loop continuation is
                 derived from the checkpoint.
-            shared_pool: SharedPostgreSQLPool for high-concurrency (IG-406).
+            shared_pool: SharedPostgreSQLPool for high-concurrency.
                 - new_goal: Normal goal execution flow
                 - chitchat: Handled via graph fast-path and runner chitchat response
-            routing_classification: ``RoutingClassification`` for CoreAgent middleware (IG-383).
+            routing_classification: ``RoutingClassification`` for CoreAgent middleware.
             clarification_policy: Optional ``ClarificationPolicy`` (RFC-622) used by
                 the loop graph's ``await_clarification`` node. When ``None``, clarification
                 requests are deferred via the legacy no-policy path.
@@ -283,8 +283,8 @@ class StrangeLoop:
             preferred_subagent = None
             routing_classification = None
 
-        # Initialize StrangeLoop state manager (RFC-205, IG-246: loop_id parameter, IG-055: config)
-        # IG-406: Pass shared_pool for high-concurrency support
+        # Initialize StrangeLoop state manager (RFC-205, loop_id parameter, config)
+        # Pass shared_pool for high-concurrency support
         state_manager = StrangeLoopStateManager(
             loop_id,
             config=self.config,
@@ -335,7 +335,7 @@ class StrangeLoop:
                     loop_id=state_manager.loop_id,
                 )
 
-            # IG-554 Stage 1: Pass 1 ∥ checkpoint.load (social fast-path before graph).
+            # Stage 1: Pass 1 ∥ checkpoint.load (social fast-path before graph).
             pass1_token_sink = None
             if (
                 preclassified_intent is None
@@ -467,7 +467,7 @@ class StrangeLoop:
                         state_manager.loop_id,
                         main_thread_id,
                     )
-            # IG-325: valid resume of a running checkpoint (structural plan-bootstrap guard)
+            # valid resume of a running checkpoint (structural plan-bootstrap guard)
             recovery_valid_resume = False
             goal_record = None
             iteration = 0
@@ -853,7 +853,7 @@ class StrangeLoop:
                     persistence_backend,
                 )
 
-            # IG-554 Stage 2: apply Pass 2 scope result and surface reasoning to TUI.
+            # Stage 2: apply Pass 2 scope result and surface reasoning to TUI.
             if pass2_needed and preclassified_intent is not None:
                 state.intent = preclassified_intent
                 state.response_language = normalize_response_language(
@@ -909,7 +909,7 @@ class StrangeLoop:
                         state_manager.loop_id,
                     )
 
-            # IG-684: resume interrupted work on the same CE goal + step DAG.
+            # resume interrupted work on the same CE goal + step DAG.
             if ce_goal is None and (
                 interrupt_resume_in_place or (recovery_valid_resume and resume_interrupted)
             ):

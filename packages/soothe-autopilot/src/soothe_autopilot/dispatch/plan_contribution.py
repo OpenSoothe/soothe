@@ -39,7 +39,7 @@ def synthesize_sloop_response(plan_result: Any | None) -> str:
     then completed decision step descriptions. Never uses the goal text.
 
     The autopilot wire does not clip length here — consensus already takes the
-    full Agent Response (IG-690).
+    full Agent Response.
     """
     if plan_result is None:
         return ""

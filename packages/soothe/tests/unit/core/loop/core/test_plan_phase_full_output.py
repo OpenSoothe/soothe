@@ -1,4 +1,4 @@
-"""PlanPhase full_output handling (IG-370)."""
+"""PlanPhase full_output handling."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for daemon lifecycle semantics (IG-085, RFC-0013).
+"""Tests for daemon lifecycle semantics (RFC-0013).
 
 Tests that daemon persists across client sessions and only explicit
 'soothed stop' shuts down the daemon.
@@ -28,7 +28,7 @@ class _FakeRunner:
 
 @pytest.mark.asyncio
 async def test_daemon_persists_after_client_disconnect() -> None:
-    """Test that daemon keeps running after client disconnects (IG-085)."""
+    """Test that daemon keeps running after client disconnects."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True
@@ -51,7 +51,7 @@ async def test_daemon_persists_after_client_disconnect() -> None:
 
 @pytest.mark.asyncio
 async def test_daemon_persists_after_exit_command() -> None:
-    """Test that daemon keeps running after /exit command (IG-085)."""
+    """Test that daemon keeps running after /exit command."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True
@@ -68,13 +68,13 @@ async def test_daemon_persists_after_exit_command() -> None:
         {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )
 
-    # IG-085: Daemon should KEEP RUNNING
+    # Daemon should KEEP RUNNING
     assert daemon._running is True
 
 
 @pytest.mark.asyncio
 async def test_daemon_persists_after_quit_command() -> None:
-    """Test that daemon keeps running after /quit command (IG-085)."""
+    """Test that daemon keeps running after /quit command."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True
@@ -91,13 +91,13 @@ async def test_daemon_persists_after_quit_command() -> None:
         {"type": "command_request", "command": "quit", "loop_id": "loop-1", "params": {}}
     )
 
-    # IG-085: Daemon should KEEP RUNNING
+    # Daemon should KEEP RUNNING
     assert daemon._running is True
 
 
 @pytest.mark.asyncio
 async def test_multiple_clients_connect_disconnect_daemon_persists() -> None:
-    """Test that daemon keeps running across multiple client sessions (IG-085)."""
+    """Test that daemon keeps running across multiple client sessions."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True
@@ -132,7 +132,7 @@ async def test_multiple_clients_connect_disconnect_daemon_persists() -> None:
 
 @pytest.mark.asyncio
 async def test_only_explicit_stop_shutdowns_daemon() -> None:
-    """Test that only explicit stop() call shuts down daemon (IG-085)."""
+    """Test that only explicit stop call shuts down daemon."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True
@@ -155,7 +155,7 @@ async def test_only_explicit_stop_shutdowns_daemon() -> None:
 
 @pytest.mark.asyncio
 async def test_cancel_command_does_not_stop_daemon() -> None:
-    """Test that /cancel command doesn't stop daemon (IG-085)."""
+    """Test that /cancel command doesn't stop daemon."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True
@@ -191,7 +191,7 @@ async def test_daemon_detach_message_handler() -> None:
 
 @pytest.mark.asyncio
 async def test_daemon_lifecycle_comprehensive_scenario() -> None:
-    """Comprehensive test: multiple operations, daemon persists throughout (IG-085)."""
+    """Comprehensive test: multiple operations, daemon persists throughout."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True

@@ -479,7 +479,7 @@ class AutopilotGetJobParams(ParamsBase):
 
 
 class AutopilotTopParams(ParamsBase):
-    """Params for method=autopilot_top, type=request (IG-679 / IG-688).
+    """Params for method=autopilot_top, type=request.
 
     Attributes:
         include_terminal: When true, include completed/failed/cancelled goals
@@ -510,7 +510,7 @@ class DisconnectParams(EmptyParams):
 
 
 class DeliveryAckParams(ParamsBase):
-    """Params for method=delivery_ack, type=notification (IG-556 stream drain)."""
+    """Params for method=delivery_ack, type=notification (stream drain)."""
 
     loop_id: str = Field(..., min_length=1)
     seq: int = Field(..., ge=0)

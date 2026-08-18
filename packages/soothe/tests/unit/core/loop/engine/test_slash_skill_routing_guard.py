@@ -1,4 +1,4 @@
-"""A ``/skill:`` submission owns execution and suppresses specialist routing (IG-669)."""
+"""A ``/skill:`` submission owns execution and suppresses specialist routing."""
 
 from __future__ import annotations
 

@@ -347,7 +347,7 @@ class LoopRailInterpreter:
         siblings = {g.id: g.status for g in descendants}
         tags_by_goal = await self._builtins.tags_by_goal(event.job_id)
         trigger_tags = list(tags_by_goal.get(event.goal_id or "", []))
-        # IG-692: fail-closed — repair empty trigger tags from CE before guards.
+        # fail-closed — repair empty trigger tags from CE before guards.
         if event.goal_id and not trigger_tags:
             repaired = await self._builtins.ensure_trigger_tags(event.job_id, event.goal_id)
             if repaired:

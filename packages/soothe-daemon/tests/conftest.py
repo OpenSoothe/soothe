@@ -19,7 +19,7 @@ if str(_DAEMON_TESTS_DIR) not in sys.path:
 def _close_sqlite_runtime_registry():
     """Session backstop: release every ``SqliteStoreRuntime`` after each test.
 
-    See ``packages/soothe/tests/conftest.py`` for the full rationale.  IG-647's
+    See ``packages/soothe/tests/conftest.py`` for the full rationale.  's
     process-global ``SqliteRuntimeRegistry`` leaks a Runtime (4 open sqlite3
     connections) per unreleased ``acquire()``; without this backstop the
     suite exhausts file descriptors (``OSError: [Errno 24]``) under the macOS

@@ -36,10 +36,10 @@ def run_headless(
     # Get WebSocket URL for daemon checks
     ws_url = websocket_url_from_config(cfg)
 
-    # Auto-start daemon if not running (RFC-0013) - WebSocket RPC checks (IG-174 Phase 1)
+    # Auto-start daemon if not running (RFC-0013) - WebSocket RPC checks (Phase 1)
     async def _run_headless_pipeline() -> int:
         """Ensure daemon is reachable, then run the headless daemon session."""
-        # Check if daemon is live and ready (IG-489: wait for readiness, not just port-live)
+        # Check if daemon is live and ready (wait for readiness, not just port-live)
         daemon_live = await is_daemon_live(
             ws_url, timeout=5.0, wait_for_ready=True, ready_timeout=30.0
         )
@@ -62,7 +62,7 @@ def run_headless(
                 stderr=subprocess.DEVNULL,
             )
 
-            # Wait for daemon to become fully ready with timeout (IG-489)
+            # Wait for daemon to become fully ready with timeout
             daemon_live = await is_daemon_live(
                 ws_url, timeout=2.0, wait_for_ready=True, ready_timeout=_DAEMON_START_WAIT_TIMEOUT
             )

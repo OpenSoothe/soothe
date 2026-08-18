@@ -1,4 +1,4 @@
-"""Wire coercion for StatusAssessment structured LLM output (IG-668).
+"""Wire coercion for StatusAssessment structured LLM output.
 
 Thinking models emit the assessment under a section wrapper
 (``{"PLAN_ASSESS": {...}}``), or as tag-wrapped YAML instead of JSON, or with

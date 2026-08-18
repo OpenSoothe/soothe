@@ -129,7 +129,7 @@ class AutopilotService:
                 ``consensus_model`` when unset.
             goal_persist_store: Optional ``AsyncPersistStore`` for persisting
                 the ContextEngine DAG snapshot across daemon restarts.
-                Also backs the job↔loop membership index (IG-677).
+                Also backs the job↔loop membership index.
             soothe_config: Optional full ``SootheConfig`` for Veritas on rail
                 ``pause_for_user`` (IG-737). When unset, pause fails open to
                 CE suspend.
@@ -145,7 +145,7 @@ class AutopilotService:
         self._running = False
         self._dreaming = False
         self._scheduling_task: asyncio.Task | None = None
-        # IG-680: health removals cascade through service cancel when monitor is wired.
+        # health removals cascade through service cancel when monitor is wired.
         if self._monitor is not None:
             self._monitor.bind_service_cancel(self.cancel_goal)
             self._monitor.bind_suspend_notify_scan(self.scan_notify_suspend_timeouts)
@@ -553,7 +553,7 @@ class AutopilotService:
             workspace: Optional client workspace path. When set, workers execute
                 in this directory and scheduling-time reservation uses it.
             cron_job_id: Optional cron job ID for tracking recurring job goals (RFC-229).
-            rail_id: Optional LoopRail id (IG-678 / RFC-231 §10). When None,
+            rail_id: Optional LoopRail id (RFC-231 §10). When None,
                 resolved via LLM auto-pick then workspace/config defaults.
             verification_rules: Optional operator criteria (RFC-228; stored on goal).
 
@@ -641,7 +641,7 @@ class AutopilotService:
         if resolved_rail and goal.parent_id is None:
             goal.rail_id = resolved_rail
             goal.role = goal.role or "root"
-        # IG-677: root goals are jobs — ensure membership record exists.
+        # root goals are jobs — ensure membership record exists.
         if goal.parent_id is None:
             await self._job_loop_index.ensure_job(goal.id)
             # IG-702: durable submit contract under jobs/{job_id}/GOAL.md.
@@ -1253,7 +1253,7 @@ class AutopilotService:
     async def pause_job(self, job_id: str, *, reason: str = "user_pause") -> GoalNode | None:
         """Suspend a job root and all non-terminal descendants; stop workers.
 
-        IG-678 P1-1: unlike a bare ``CE.suspend_goal`` on the root, this
+        P1-1: unlike a bare ``CE.suspend_goal`` on the root, this
         cancels in-flight child workers so pause actually stops work.
 
         Args:
@@ -1285,7 +1285,7 @@ class AutopilotService:
         return await self._ce.get_goal(job_id)
 
     async def resume_job(self, job_id: str) -> GoalNode | None:
-        """Reactivate a paused job and fire rail ``user_intervention`` (IG-678 P2).
+        """Reactivate a paused job and fire rail ``user_intervention`` (P2).
 
         Reactivates the root and any suspended descendants paused with it.
         """
@@ -1632,7 +1632,7 @@ class AutopilotService:
         await self._maybe_notify_job_root(goal_id)
 
     async def _mirror_plan_decision(self, goal_id: str, payload: dict[str, Any]) -> None:
-        """Apply worker ``plan_decision`` steps onto the Autopilot CE goal (IG-689).
+        """Apply worker ``plan_decision`` steps onto the Autopilot CE goal.
 
         Worker StrangeLoop CEs are loop-scoped; ``autopilot top`` reads the daemon
         Autopilot CE. Mirror planned StepDAG nodes so the live forest can list STEPs.
@@ -1739,7 +1739,7 @@ class AutopilotService:
         return delta
 
     async def _mirror_step_completed(self, goal_id: str, payload: dict[str, Any]) -> None:
-        """Apply worker ``step_completed`` onto the Autopilot CE goal (IG-689)."""
+        """Apply worker ``step_completed`` onto the Autopilot CE goal."""
         sid = str(payload.get("step_id") or "").strip()
         if not sid:
             return
@@ -1825,7 +1825,7 @@ class AutopilotService:
 
         Progress events (``plan_decision``, ``step_started``, ``step_completed``)
         are mirrored onto the Autopilot CE StepDAG so ``autopilot top`` can list
-        STEPs with live status (IG-689).
+        STEPs with live status.
 
         On a successful completion: mark goal completed in ContextEngine,
         store the contribution if a context store is wired, return the
@@ -2732,7 +2732,7 @@ class AutopilotService:
         return snapshot
 
     async def list_job_loops(self, job_id: str) -> list[dict[str, Any]]:
-        """Return durable loop membership history for a job (IG-677)."""
+        """Return durable loop membership history for a job."""
         entries = await self._job_loop_index.list_loops(job_id)
         return [e.model_dump(mode="json") for e in entries]
 
@@ -2768,7 +2768,7 @@ class AutopilotService:
         return total
 
     async def top_snapshot(self, *, include_terminal: bool = False) -> dict[str, Any]:
-        """Build jobs → goals → loops snapshot for CLI top (IG-679 / IG-688).
+        """Build jobs → goals → loops snapshot for CLI top.
 
         Filters use CE ``TERMINAL_STATES`` for goals (unless
         ``include_terminal``) and ``status == "active"`` for JobLoopIndex

@@ -120,7 +120,7 @@ async def test_plan_with_dependencies_drains_ready_chain() -> None:
 
 
 def test_ledger_execute_ai_content_single_step_fills_from_chunks_ig373() -> None:
-    """Trailing empty AIMessage after chunks must not produce empty ledger body (IG-373)."""
+    """Trailing empty AIMessage after chunks must not produce empty ledger body."""
     mock_agent = _make_mock_agent()
     executor = Executor(mock_agent, max_parallel_steps=4, context_engine=_make_ce())
     messages: list = [

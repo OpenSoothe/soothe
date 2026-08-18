@@ -1,4 +1,4 @@
-"""Per-loop in-flight broadcast budget (IG-534 Phase 2.2).
+"""Per-loop in-flight broadcast budget (Phase 2.2).
 
 Limits how many stream frames one loop may push toward the EventBus concurrently.
 Excess producers block only that loop's stream consumer, not other loops.

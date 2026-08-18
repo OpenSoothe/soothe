@@ -185,7 +185,7 @@ class IdentityService(IdentityProtocol):
         Matches ``acquire`` in ``_init_writer_sync``: every store that pulls a
         ``SqliteStoreRuntime`` from the process registry must release it, or the
         registry (and its 1 + reader-pool open connections) leaks for the
-        process lifetime (IG-647). Idempotent and safe when never initialized.
+        process lifetime. Idempotent and safe when never initialized.
         """
         with self._writer_thread_lock:
             if self._backend == "sqlite":

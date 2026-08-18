@@ -1,4 +1,4 @@
-"""Tests for Pass1 structural continuation bypass in StrangeLoop (IG-558)."""
+"""Tests for Pass1 structural continuation bypass in StrangeLoop."""
 
 from __future__ import annotations
 

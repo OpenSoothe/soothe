@@ -1,4 +1,4 @@
-"""IG-672: evaluate inventory soft-fail, routing helpers, and assess feed-forward."""
+"""evaluate inventory soft-fail, routing helpers, and assess feed-forward."""
 
 from __future__ import annotations
 

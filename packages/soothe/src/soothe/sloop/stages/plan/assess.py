@@ -1,10 +1,10 @@
 """Assess-only planning node (RFC-220 split plan flow).
 
-RFC-226 / IG-676: iter=0 mid-loop goals — trivial may run ``assess_continuation``;
+RFC-226 / iter=0 mid-loop goals — trivial may run ``assess_continuation``;
 simple/complex skip the discriminator and route to ``plan_generate``.
 
-IG-555: Reject terminal done at complex iter=0 before any step results (anti-anchoring).
-IG-654: Complex goals may use a single CoreAgent execute step.
+Reject terminal done at complex iter=0 before any step results (anti-anchoring).
+Complex goals may use a single CoreAgent execute step.
 """
 
 from __future__ import annotations
@@ -326,7 +326,7 @@ def _reject_ig555_premature_complete(
     state: LoopState,
     intake_label: IntakeLabel | None,
 ) -> bool:
-    """IG-555 iter=0 complex anti-anchoring. Returns True when routing must continue_generate."""
+    """iter=0 complex anti-anchoring. Returns True when routing must continue_generate."""
     if state.iteration == 0 and intake_label == IntakeLabel.COMPLEX and not state.step_results:
         logger.warning(
             "[Plan] Reject terminal assess for complex intake at iter=0 "
@@ -342,7 +342,7 @@ async def _route_goal_completion_if_terminal(
     assessment: StatusAssessment,
     context: Any,
 ) -> dict[str, Any] | None:
-    """Terminal routing keyed on authoritative assess status (IG-589)."""
+    """Terminal routing keyed on authoritative assess status."""
     if assessment.status != "done":
         return None
 
@@ -503,8 +503,8 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     if terminal_route is not None:
         return terminal_route
 
-    # IG-671: reuse in-flight plan without entering generate_plan.
-    # IG-683: refuse keep when the last wave failed (or stuck) — force replan.
+    # reuse in-flight plan without entering generate_plan.
+    # refuse keep when the last wave failed (or stuck) — force replan.
     if (
         derive_plan_action(
             assessment_status=assessment.status,

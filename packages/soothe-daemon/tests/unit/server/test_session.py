@@ -84,7 +84,7 @@ async def test_subscribe_loop_preserves_stream_delivery_when_omitted():
 
 @pytest.mark.asyncio
 async def test_stream_delivery_isolated_per_client_on_same_loop():
-    """IG-534 §3.2: subscribing client B must not overwrite client A's preference."""
+    """§3.2: subscribing client B must not overwrite client A's preference."""
     bus = EventBus()
     manager = ClientSessionManager(bus)
 
@@ -461,7 +461,7 @@ async def test_session_count():
 
 
 def test_get_batch_timeout_reads_strange_loop_output_streaming() -> None:
-    """Sender loop must resolve streaming interval from ``agent.loop`` config (IG-407)."""
+    """Sender loop must resolve streaming interval from ``agent.loop`` config."""
     from soothe.config import SootheConfig
 
     config = SootheConfig()
@@ -473,7 +473,7 @@ def test_get_batch_timeout_reads_strange_loop_output_streaming() -> None:
 
 
 def test_queue_has_high_priority_detects_high_event() -> None:
-    """IG-436: _queue_has_high_priority returns True for HIGH priority events."""
+    """_queue_has_high_priority returns True for HIGH priority events."""
     from soothe.events import EventPriority
 
     from soothe_daemon.server.session import _queue_has_high_priority
@@ -516,7 +516,7 @@ def test_queue_has_high_priority_detects_high_event() -> None:
 
 
 def test_queue_has_high_priority_handles_tuple_and_non_tuple() -> None:
-    """IG-436: _queue_has_high_priority handles various queue item formats."""
+    """_queue_has_high_priority handles various queue item formats."""
     from soothe_daemon.server.session import _queue_has_high_priority
 
     queue: asyncio.Queue = asyncio.Queue()
@@ -535,7 +535,7 @@ def test_queue_has_high_priority_handles_tuple_and_non_tuple() -> None:
 
 @pytest.mark.asyncio
 async def test_sender_loop_flushes_high_priority_immediately() -> None:
-    """IG-436: HIGH priority events bypass batch fill loop."""
+    """HIGH priority events bypass batch fill loop."""
     from soothe.events import EventPriority
 
     bus = EventBus()
@@ -587,7 +587,7 @@ async def test_sender_loop_flushes_high_priority_immediately() -> None:
 
 @pytest.mark.asyncio
 async def test_sender_loop_batches_normal_priority() -> None:
-    """IG-436: NORMAL priority events still batch normally."""
+    """NORMAL priority events still batch normally."""
     from soothe.config import SootheConfig
 
     config = SootheConfig()
@@ -628,7 +628,7 @@ async def test_sender_loop_batches_normal_priority() -> None:
 
 @pytest.mark.asyncio
 async def test_await_loop_delivery_drained_with_high_priority() -> None:
-    """IG-436: Drain adds extra settle margin for HIGH priority events."""
+    """Drain adds extra settle margin for HIGH priority events."""
     from soothe.events import EventPriority
 
     bus = EventBus()

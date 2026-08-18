@@ -1,4 +1,4 @@
-"""Pure step-card activity module: row classification and stats (RFC-628, IG-513)."""
+"""Pure step-card activity module: row classification and stats (RFC-628)."""
 
 from __future__ import annotations
 
@@ -95,7 +95,7 @@ def test_count_distinct_tool_call_ids_dedupes() -> None:
 
 
 def test_step_activity_tree_shows_collapsed_tool_overflow() -> None:
-    """IG-546: Step card shows +N more tools when preview is capped."""
+    """Step card shows +N more tools when preview is capped."""
     from types import SimpleNamespace
 
     from soothe_cli.tui.widgets.messages.cognition_step_activity import StepActivityTree

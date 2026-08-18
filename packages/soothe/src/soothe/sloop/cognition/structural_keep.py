@@ -1,4 +1,4 @@
-"""In-flight plan reuse helpers (IG-671 structural keep + shared keep PlanResult).
+"""In-flight plan reuse helpers (structural keep + shared keep PlanResult).
 
 Deterministic gates only — no keyword/content judgment on user text.
 """
@@ -25,7 +25,7 @@ KEEP_NEXT_ACTION = "I'll continue with the remaining steps in the current plan."
 
 
 def detect_stuck_loop(state: LoopState) -> str | None:
-    """Detect repeated actions or consecutive step failures (IG-454 / IG-683)."""
+    """Detect repeated actions or consecutive step failures."""
     if len(state.action_history) >= _STUCK_ACTION_REPEAT_THRESHOLD:
         recent_actions = state.get_recent_actions(_STUCK_ACTION_REPEAT_THRESHOLD)
         if len(recent_actions) == _STUCK_ACTION_REPEAT_THRESHOLD:
@@ -54,7 +54,7 @@ def assess_keep_block_reason(state: LoopState) -> str | None:
 
     Structural keep already refuses a failed last wave. Assess keep and the
     PlanGen keep short-circuit previously ignored that gate, so failed steps
-    (including stream stalls) were retried forever via ``skip_generate`` (IG-683).
+    (including stream stalls) were retried forever via ``skip_generate``.
     """
     if not state.step_results:
         return None

@@ -1,4 +1,4 @@
-"""Unit tests for RFC-228 guidance absorption + dispatch injection (IG-678 P0)."""
+"""Unit tests for RFC-228 guidance absorption + dispatch injection (P0)."""
 
 from __future__ import annotations
 

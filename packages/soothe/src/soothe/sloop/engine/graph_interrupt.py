@@ -22,12 +22,12 @@ logger = logging.getLogger(__name__)
 _STREAM_POLL_INTERVAL_S = 0.5
 _MAX_INTERRUPT_ITERATIONS = 50
 
-# IG-549: Heartbeat interval for long-running tool execution.
+# Heartbeat interval for long-running tool execution.
 # When no chunks arrive for this duration, emit a heartbeat event to keep
 # the stream alive and prevent client disconnects.
 _STREAM_HEARTBEAT_INTERVAL_S = 10.0
 
-# IG-681: Secondary safety net — max heartbeat sentinels emitted while no
+# Secondary safety net — max heartbeat sentinels emitted while no
 # root-level tool is active. At the default 10s heartbeat interval,
 # 360 sentinels = 1 hour of inactivity. Suspended while tools are active
 # so long-running tools (task, browser_use, Gradle) are not killed; those
@@ -46,7 +46,7 @@ class StreamChunkClass:
     result_tool_call_id: str | None = None
 
 
-# IG-549: Sentinel object returned when heartbeat interval elapses without a chunk.
+# Sentinel object returned when heartbeat interval elapses without a chunk.
 # Executor consumes this and can optionally emit a step_progress event.
 _STREAM_HEARTBEAT_SENTINEL = object()
 
@@ -184,11 +184,11 @@ def _detect_tool_boundary(chunk: Any) -> str:
 class GraphStreamChunkReader:
     """Persistent async-iterator reader for CoreAgent graph streams.
 
-    Keeps a single pending ``__anext__()`` task alive across IG-549 heartbeat
+    Keeps a single pending ``__anext__`` task alive across heartbeat
     sentinels so long-running tool/subagent execution is not aborted when the
     client receives keep-alive events.
 
-    IG-681: Tool-aware inactivity tracking:
+    Tool-aware inactivity tracking:
 
     - **Idle timer** (``idle_timeout``): resets on every real chunk. Fires only
       when no root-level tools are pending — the deadlock gap after the last

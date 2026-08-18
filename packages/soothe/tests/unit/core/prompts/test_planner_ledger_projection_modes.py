@@ -1,4 +1,4 @@
-"""Tests for planner ledger projection modes (IG-538)."""
+"""Tests for planner ledger projection modes."""
 
 from __future__ import annotations
 

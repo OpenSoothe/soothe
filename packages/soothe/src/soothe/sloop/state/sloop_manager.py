@@ -1,11 +1,11 @@
-"""StrangeLoop State Manager (RFC-205, RFC-216, IG-055).
+"""StrangeLoop State Manager (RFC-205, RFC-216).
 
 Manages checkpoint lifecycle: initialize, save, load, recovery.
 RFC-216: Multi-thread spanning with loop_id as primary key.
 RFC-215: Unified global SQLite persistence backend (databases/checkpoints.db).
-IG-055: PostgreSQL backend support using soothe_checkpoints database.
-IG-258 Phase 2: Connection pooling to eliminate database lock contention.
-IG-406: Shared pool for high-concurrency (200+ threads) support.
+PostgreSQL backend support using soothe_checkpoints database.
+Phase 2: Connection pooling to eliminate database lock contention.
+Shared pool for high-concurrency (200+ threads) support.
 """
 
 from __future__ import annotations
@@ -50,9 +50,9 @@ logger = logging.getLogger(__name__)
 class StrangeLoopStateManager:
     """Manages StrangeLoop checkpoint lifecycle (RFC-216: loop-scoped, multi-thread).
 
-    IG-055: Configuration-driven backend selection (PostgreSQL or SQLite).
+    Configuration-driven backend selection (PostgreSQL or SQLite).
     Uses PostgreSQL soothe_checkpoints database when configured, SQLite fallback.
-    IG-258 Phase 2: Connection pooling for concurrent checkpoint operations.
+    Phase 2: Connection pooling for concurrent checkpoint operations.
     """
 
     def __init__(
@@ -68,7 +68,7 @@ class StrangeLoopStateManager:
             loop_id: Loop identifier (UUID or existing). None generates new UUID.
             reader_pool_size: Number of reader connections for concurrent reads (Phase 2).
             config: SootheConfig for backend selection (PostgreSQL vs SQLite).
-            shared_pool: SharedPostgreSQLPool for high-concurrency (IG-406).
+            shared_pool: SharedPostgreSQLPool for high-concurrency.
         """
         self.loop_id = loop_id or str(uuid.uuid4())
         self.run_dir = PersistenceDirectoryManager.get_loop_directory(
@@ -76,11 +76,11 @@ class StrangeLoopStateManager:
         )  # For reports/working_memory
         self._checkpoint: StrangeLoopCheckpoint | None = None
 
-        # IG-055: Backend selection based on persistence.default_backend
+        # Backend selection based on persistence.default_backend
         self._backend_type = "sqlite"  # Default
         self._postgres_backend = None
         self._postgres_dsn = None
-        self._shared_pool = shared_pool  # IG-406: Shared pool reference
+        self._shared_pool = shared_pool  # Shared pool reference
 
         if config and config.persistence.default_backend == "postgresql":
             self._backend_type = "postgresql"
@@ -102,12 +102,12 @@ class StrangeLoopStateManager:
                 self.loop_id,
             )
 
-        # IG-647: process-scoped SqliteStoreRuntime (no private connections)
+        # process-scoped SqliteStoreRuntime (no private connections)
         self._reader_pool_size = reader_pool_size
         self._sqlite_runtime = None
         self._init_lock = asyncio.Lock()
 
-        # RFC-803 / IG-550: async coalesced checkpoint writes (always on).
+        # RFC-803 / async coalesced checkpoint writes (always on).
         # Coerce to float: a non-numeric ``flush_interval`` (e.g. from an
         # incomplete mock config) would make ``asyncio.sleep`` raise TypeError
         # on every tick; the worker's broad ``except Exception`` would swallow
@@ -137,7 +137,7 @@ class StrangeLoopStateManager:
         self._config = config
         self._loop_writer = None
 
-        # IG-647 P1b: process-scoped SQLite coalesce (no per-manager flush worker)
+        # P1b: process-scoped SQLite coalesce (no per-manager flush worker)
         self._sqlite_flush = None
         self._last_save_checkpoint: StrangeLoopCheckpoint | None = None
         self._checkpoint_write_lock = asyncio.Lock()
@@ -159,14 +159,14 @@ class StrangeLoopStateManager:
         return self._loop_writer
 
     async def _ensure_backend_initialized(self) -> None:
-        """Lazy backend initialization (IG-055: PostgreSQL or SQLite).
+        """Lazy backend initialization (PostgreSQL or SQLite).
 
-        IG-406: Uses shared pool when provided for high-concurrency support.
+        Uses shared pool when provided for high-concurrency support.
         Ensures appropriate backend is ready for operations.
         """
         if self._backend_type == "postgresql":
             if self._postgres_backend is None:
-                # IG-406: Use shared pool if provided (high-concurrency mode)
+                # Use shared pool if provided (high-concurrency mode)
                 if self._shared_pool is not None:
                     from soothe.sloop.checkpoints.postgres_backend import (
                         PostgreSQLPersistenceBackend,
@@ -191,7 +191,7 @@ class StrangeLoopStateManager:
                                     self.loop_id,
                                 )
                 else:
-                    # IG-055: Create dedicated pool (single-threaded/low-concurrency mode)
+                    # Create dedicated pool (single-threaded/low-concurrency mode)
                     from soothe.sloop.checkpoints.postgres_backend import (
                         PostgreSQLPersistenceBackend,
                     )
@@ -206,7 +206,7 @@ class StrangeLoopStateManager:
                                 "StrangeLoop PostgreSQL backend ready: loop_id=%s", self.loop_id
                             )
         else:
-            # SQLite: process-scoped Runtime (IG-647 / RFC-801)
+            # SQLite: process-scoped Runtime (RFC-801)
             if self._sqlite_runtime is None:
                 async with self._init_lock:
                     if self._sqlite_runtime is None:
@@ -244,7 +244,7 @@ class StrangeLoopStateManager:
     ) -> StrangeLoopCheckpoint:
         """Create new loop for thread (RFC-216: loop-scoped).
 
-        IG-258 Phase 2: Database schema initialized lazily by writer connection.
+        Phase 2: Database schema initialized lazily by writer connection.
         RFC-626 Phase 3: Initialize with schema_version 5.0 and execution_checkpoint.
 
         Args:
@@ -351,13 +351,13 @@ class StrangeLoopStateManager:
     async def load(self) -> StrangeLoopCheckpoint | None:
         """Load existing loop checkpoint (RFC-216: by loop_id).
 
-        IG-055: Backend-aware load (PostgreSQL or SQLite).
-        IG-258 Phase 2: Use reader connection pool for concurrent reads (SQLite).
+        Backend-aware load (PostgreSQL or SQLite).
+        Phase 2: Use reader connection pool for concurrent reads (SQLite).
 
         Returns:
             StrangeLoopCheckpoint if exists and valid (v2.0 schema), None otherwise
         """
-        # IG-055: PostgreSQL backend
+        # PostgreSQL backend
         if self._backend_type == "postgresql":
             await self._ensure_backend_initialized()
             checkpoint = await self._postgres_backend.load_checkpoint(self.loop_id)
@@ -557,10 +557,10 @@ class StrangeLoopStateManager:
         include_goal_history: bool = False,
         durable: bool = False,
     ) -> None:
-        """Save checkpoint to database (IG-055: PostgreSQL or SQLite).
+        """Save checkpoint to database (PostgreSQL or SQLite).
 
-        IG-258 Phase 2: Use single writer connection for SQLite consistency.
-        IG-055: PostgreSQL uses connection pool for async operations.
+        Phase 2: Use single writer connection for SQLite consistency.
+        PostgreSQL uses connection pool for async operations.
         RFC-803 Phase 6: Fire-and-forget async writes with periodic flush.
 
         Args:
@@ -1134,7 +1134,7 @@ class StrangeLoopStateManager:
         *,
         reason: Literal["user_clear", "finalized", "expired"] = "user_clear",
     ) -> dict[str, Any]:
-        """Archive loop checkpoint and mark as finalized (IG-500).
+        """Archive loop checkpoint and mark as finalized.
 
         Saves checkpoint to archive storage, preserving goal_history and metrics.
         Used by /clear command to preserve loop history before creating fresh loop.
@@ -1193,7 +1193,7 @@ class StrangeLoopStateManager:
         self,
         old_thread_id: str,
     ) -> tuple[str, StrangeLoopCheckpoint]:
-        """Create fresh loop after /clear (IG-500).
+        """Create fresh loop after /clear.
 
         Generates new loop_id with fresh state (empty goal_history, reset metrics).
         Thread_id reused for immediate continuation. Workspace metadata from the
@@ -1300,10 +1300,10 @@ class StrangeLoopStateManager:
         await backend.update_loop_metadata(loop_id, **metadata)
 
     async def close(self) -> None:
-        """Close backend connection pools (IG-404, IG-406).
+        """Close backend connection pools.
 
-        IG-404: Prevent pool exhaustion in concurrent execution.
-        IG-406: Shared pools are closed at daemon level, not per-StrangeLoop.
+        Prevent pool exhaustion in concurrent execution.
+        Shared pools are closed at daemon level, not per-StrangeLoop.
         RFC-803 Phase 6: Force final checkpoint flush before closing.
 
         Must be called after StrangeLoop completes to release database connections.
@@ -1371,11 +1371,11 @@ class StrangeLoopStateManager:
         if self._postgres_backend is not None:
             await self._postgres_backend.close()
             self._postgres_backend = None
-            # IG-406: Clear shared pool reference but don't close it
+            # Clear shared pool reference but don't close it
             self._shared_pool = None
             logger.debug("Released PostgreSQL backend for loop %s", self.loop_id)
 
-        # Release process-scoped SQLite Runtime ref (IG-647)
+        # Release process-scoped SQLite Runtime ref
         if self._sqlite_runtime is not None:
             from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
 

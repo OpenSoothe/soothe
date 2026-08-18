@@ -1,6 +1,6 @@
-"""Parallel execute records RFC-214 ledger rows for Plan-assess (IG-374).
+"""Parallel execute records RFC-214 ledger rows for Plan-assess.
 
-IG-493: Ledger records only CoreAgent input + final assistant response.
+Ledger records only CoreAgent input + final assistant response.
 Tool outputs (delegate_final, ToolMessage) are never recorded to ledger.
 """
 
@@ -93,7 +93,7 @@ def test_append_parallel_wave_ledger_success_and_exception() -> None:
 
 
 def test_append_parallel_wave_ledger_delegate_fallback() -> None:
-    """IG-493: delegate_final is ignored; only final AI response is used."""
+    """delegate_final is ignored; only final AI response is used."""
     mock_agent = object()
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
@@ -116,13 +116,13 @@ def test_append_parallel_wave_ledger_delegate_fallback() -> None:
             tool_call_count=1,
         ),
         messages=[AIMessage(content="", tool_calls=[{"name": "task", "id": "tc1", "args": {}}])],
-        delegate_final="answer from task tool only",  # IGNORED per IG-493
+        delegate_final="answer from task tool only",  # IGNORED per
         output="",  # Empty output -> empty ledger
     )
     ex._append_parallel_wave_ledger(state, steps, [result])
     ledger_msgs = ce.ledger.get_messages()
     assert len(ledger_msgs) == 2
-    # IG-493: Empty AIMessage content + empty output -> empty ledger
+    # Empty AIMessage content + empty output -> empty ledger
     assert ledger_msgs[1].content == ""
 
 
@@ -186,7 +186,7 @@ def test_last_tool_result_block_caps_long_tool_output() -> None:
 
 
 def test_append_parallel_wave_ledger_attaches_last_tool_result() -> None:
-    """Ledger AI body carries assistant prose; tool output NOT injected (IG-493)."""
+    """Ledger AI body carries assistant prose; tool output NOT injected."""
     mock_agent = object()
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
@@ -224,7 +224,7 @@ def test_append_parallel_wave_ledger_attaches_last_tool_result() -> None:
 
 
 def test_append_parallel_wave_ledger_assistant_response_is_full_not_truncated_ig480() -> None:
-    """IG-480: Ledger stores assistant's full response (no truncation)."""
+    """Ledger stores assistant's full response (no truncation)."""
     mock_agent = object()
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
@@ -271,7 +271,7 @@ def test_outcome_summary_text_ignores_empty_summary_dict() -> None:
 def test_append_parallel_wave_ledger_prioritizes_assistant_response_over_raw_tool_output_ig480() -> (
     None
 ):
-    """IG-480/IG-493: Final assistant response is used, not raw tool output."""
+    """/Final assistant response is used, not raw tool output."""
     mock_agent = object()
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
@@ -312,7 +312,7 @@ def test_append_parallel_wave_ledger_prioritizes_assistant_response_over_raw_too
 
 
 def test_append_parallel_wave_ledger_task_tool_uses_output_fallback_ig493() -> None:
-    """IG-493: When messages have no AI text, output is used for ledger."""
+    """When messages have no AI text, output is used for ledger."""
     mock_agent = object()
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
@@ -345,7 +345,7 @@ def test_append_parallel_wave_ledger_task_tool_uses_output_fallback_ig493() -> N
     ex._append_parallel_wave_ledger(state, steps, [result])
     ledger_msgs = ce.ledger.get_messages()
     ai_body = ledger_msgs[1].content or ""
-    # IG-493: Uses output fallback when messages have no AI text
+    # Uses output fallback when messages have no AI text
     assert "## Result" in ai_body
     assert "**Total Files: 312**" in ai_body
 
@@ -494,7 +494,7 @@ def test_extract_final_assistant_text_module_prefers_chunked_text() -> None:
 
 
 def test_resolve_execute_step_ledger_ai_content_uses_output_fallback_ig493() -> None:
-    """IG-493: When messages have no AI text, output is used."""
+    """When messages have no AI text, output is used."""
     ex = Executor(object(), max_parallel_steps=4, context_engine=_make_ce())
 
     # Messages with AIMessage content - use it

@@ -95,7 +95,7 @@ class AutopilotMonitor:
         self._bus.subscribe(INTERNAL_GOAL_FAILED, self._on_goal_failed)
 
     def bind_service_cancel(self, cancel_goal: Any) -> None:
-        """Wire AutopilotService.cancel_goal into health/post-completion removals (IG-680)."""
+        """Wire AutopilotService.cancel_goal into health/post-completion removals."""
 
         async def _cancel(goal_id: str, reason: str) -> Any:
             return await cancel_goal(goal_id, reason=reason)
@@ -359,7 +359,7 @@ class AutopilotMonitor:
             await self._apply_backoff_decision(decision, failed_goal_id=goal_id)
 
     async def _apply_backoff_decision(self, decision: Any, *, failed_goal_id: str) -> None:
-        """Apply backoff decision to the CE DAG (IG-678 P1-2, IG-697).
+        """Apply backoff decision to the CE DAG (P1-2).
 
         Prefer retrying the failed goal while ``retry_count < max_retries``.
         Never transition ``failed → suspended`` (illegal in CE). When retry

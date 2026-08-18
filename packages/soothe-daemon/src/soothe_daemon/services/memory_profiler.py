@@ -1,11 +1,11 @@
-"""Memory profiling service using tracemalloc (IG-475, IG-477).
+"""Memory profiling service using tracemalloc.
 
 Provides real-time memory inspection via tracemalloc with:
 - HTTP endpoints for snapshot comparison and top allocations
 - Automatic periodic logging of memory growth
 - Integration with daemon lifecycle
-- IG-477: Large allocation sampling (captures multi-MB objects)
-- IG-477: Queue depth metrics for stream backpressure debugging
+- Large allocation sampling (captures multi-MB objects)
+- Queue depth metrics for stream backpressure debugging
 
 tracemalloc is chosen over objgraph/meliae because:
 - Built-in to Python 3.4+ (no external dependencies)
@@ -30,17 +30,17 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# IG-477: Minimum size for "large allocation" sampling (KB)
+# Minimum size for "large allocation" sampling (KB)
 LARGE_ALLOCATION_THRESHOLD_KB = 100.0
 
 
 class MemoryProfiler:
-    """Memory profiling service using tracemalloc (IG-475, IG-477).
+    """Memory profiling service using tracemalloc.
 
     Start/stop integrates with daemon lifecycle. Provides methods for
     taking snapshots, comparing allocations, and getting memory stats.
 
-    IG-477 additions:
+    additions:
     - `get_large_allocations()`: Captures multi-MB objects that standard
       statistics("lineno") misses due to count-based aggregation
     - `get_queue_metrics()`: Reports response queue depths for diagnosing
@@ -159,7 +159,7 @@ class MemoryProfiler:
                 )
             result["top_allocations_by_traceback"] = top_tracebacks
 
-            # IG-477: Large allocations (>100KB) ranked by size
+            # Large allocations (>100KB) ranked by size
             result["large_allocations"] = self.get_large_allocations(
                 snapshot=current_snapshot, min_size_kb=LARGE_ALLOCATION_THRESHOLD_KB
             )
@@ -188,7 +188,7 @@ class MemoryProfiler:
     ) -> list[dict[str, Any]]:
         """Get allocations larger than threshold, ranked by size.
 
-        IG-477: This captures large single objects (multi-MB strings/buffers)
+        This captures large single objects (multi-MB strings/buffers)
         that statistics("lineno") misses because it groups by count.
 
         Args:
@@ -228,7 +228,7 @@ class MemoryProfiler:
     def get_queue_metrics(self) -> dict[str, Any]:
         """Get queue depths from thread pool for backpressure debugging.
 
-        IG-477: Reports response queue depths to diagnose stream backpressure
+        Reports response queue depths to diagnose stream backpressure
         issues. When queues are near capacity (100), it indicates client
         delivery is slower than worker production.
 
@@ -249,7 +249,7 @@ class MemoryProfiler:
             "workers_by_loop_count": len(pool._workers_by_loop_id),
             "workers": {},
             "config": {
-                "response_queue_maxsize": 100,  # IG-477: hardcoded bound
+                "response_queue_maxsize": 100,  # hardcoded bound
             },
         }
 

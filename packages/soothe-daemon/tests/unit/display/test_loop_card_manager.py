@@ -225,7 +225,7 @@ async def test_live_cognition_custom_events_bind_to_ledger(isolated_display_db) 
 
 @pytest.mark.asyncio
 async def test_debounced_flush_coalesces_rapid_ingests(monkeypatch) -> None:
-    """Multiple stream frames within the debounce window produce one bind pass (IG-546)."""
+    """Multiple stream frames within the debounce window produce one bind pass."""
     manager = LoopCardManager(
         SimpleNamespace(_runner=MagicMock()),
         flush_debounce_ms=100,
@@ -252,7 +252,7 @@ async def test_debounced_flush_coalesces_rapid_ingests(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_ingest_stream_tuple_returns_before_flush_completes(monkeypatch) -> None:
-    """Stream ingest must not block on ledger flush (IG-534 §2.3)."""
+    """Stream ingest must not block on ledger flush (§2.3)."""
     manager = LoopCardManager(
         SimpleNamespace(_runner=MagicMock()),
         flush_debounce_ms=50,
@@ -291,7 +291,7 @@ async def test_stop_for_loop_releases_in_memory_state(isolated_display_db) -> No
 
 @pytest.mark.asyncio
 async def test_ingest_overflow_preserves_frames(monkeypatch) -> None:
-    """Overflow deque must not drop frames when the bounded queue is full (IG-546)."""
+    """Overflow deque must not drop frames when the bounded queue is full."""
     manager = LoopCardManager(
         SimpleNamespace(_runner=MagicMock()),
         ingest_queue_maxsize=2,
@@ -451,7 +451,7 @@ async def test_freeze_goal_display_snapshots_current_user_segment_only(
 async def test_second_flush_appends_update_and_broadcasts_card_frames(
     isolated_display_db,
 ) -> None:
-    """IG-655: subsequent binds append updates instead of replace_with wipe."""
+    """subsequent binds append updates instead of replace_with wipe."""
     broadcasted: list[dict[str, Any]] = []
 
     async def _broadcast(msg: dict[str, Any]) -> None:

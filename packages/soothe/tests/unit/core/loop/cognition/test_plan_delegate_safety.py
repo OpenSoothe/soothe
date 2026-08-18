@@ -24,7 +24,7 @@ def test_strip_unrequested_step_delegates_clears_all_wiring() -> None:
 
 
 def test_strip_unrequested_clears_catalog_delegate() -> None:
-    """IG-656: no plan-wave keep-path — even non-intake delegates are stripped."""
+    """no plan-wave keep-path — even non-intake delegates are stripped."""
     steps = [
         StepAction(
             id="01",

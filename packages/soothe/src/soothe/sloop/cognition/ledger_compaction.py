@@ -2,7 +2,7 @@
 
 The RFC-214 ledger records plan-generate turns as (LoopHumanMessage, LoopAIMessage)
 pairs so later turns can see prior reasoning. Plan-assess pairs are no longer
-recorded (IG-557); assess continuity uses CE ``GoalNode.last_assessment``.
+recorded ; assess continuity uses CE ``GoalNode.last_assessment``.
 
 The recorded human may carry ``GOAL:``. The duplicated goal anchors recency away
 from the latest evidence (ablation D1). ``compact_planning_human_content`` rewrites

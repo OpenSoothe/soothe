@@ -1,4 +1,4 @@
-"""Execute-step ledger projection (IG-542)."""
+"""Execute-step ledger projection."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for centralized Act-wave finalize resolution (IG-357)."""
+"""Tests for centralized Act-wave finalize resolution."""
 
 from __future__ import annotations
 

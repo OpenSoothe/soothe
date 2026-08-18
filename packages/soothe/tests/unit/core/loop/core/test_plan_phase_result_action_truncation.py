@@ -1,4 +1,4 @@
-"""Test PlanResult next_action derivation (IG-152).
+"""Test PlanResult next_action derivation.
 
 Verifies that PlanResult.next_action is derived from plan-generate output
 (step descriptions and reasoning) when the LLM no longer emits next_action.
@@ -73,7 +73,7 @@ def test_next_action_empty_when_final_has_no_steps() -> None:
 
 
 def test_schema_max_length_updated() -> None:
-    """IG-152: PlanResult schema should allow longer next_action (500 chars)."""
+    """PlanResult schema should allow longer next_action (500 chars)."""
     long_action = (
         "Execute comprehensive analysis of the UX module architecture by reading "
         "implementation files from cli/, shared/, and tui/ directories, examining "
@@ -106,7 +106,7 @@ def test_schema_max_length_updated() -> None:
 
 
 def test_early_completion_preserves_action() -> None:
-    """IG-264: Early completion (status=done) derives simple completion message."""
+    """Early completion (status=done) derives simple completion message."""
     result = PlanResult(
         status="done",
         goal_progress="complete",
@@ -121,7 +121,7 @@ def test_early_completion_preserves_action() -> None:
 
 
 def test_word_boundary_respect_in_cli_display() -> None:
-    """IG-152: CLI pipeline should truncate at word boundaries for display."""
+    """CLI pipeline should truncate at word boundaries for display."""
     from soothe_nano.utils.text_preview import preview_first
 
     long_action = (

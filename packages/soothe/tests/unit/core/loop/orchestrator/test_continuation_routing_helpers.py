@@ -1,4 +1,4 @@
-"""Unit tests for shared goal-entry helpers (IG-676)."""
+"""Unit tests for shared goal-entry helpers."""
 
 from __future__ import annotations
 

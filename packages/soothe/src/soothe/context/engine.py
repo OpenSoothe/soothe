@@ -52,7 +52,7 @@ VALID_GOAL_TRANSITIONS: dict[str, frozenset[str]] = {
     "blocked": frozenset({"pending", "completed", "failed", "cancelled"}),
     "validated": frozenset({"completed", "failed", "cancelled"}),
     "awaiting_clarification": frozenset({"pending", "completed", "failed", "cancelled"}),
-    # IG-684: interrupt resume may re-queue a cancelled mid-goal attempt.
+    # interrupt resume may re-queue a cancelled mid-goal attempt.
     "cancelled": frozenset({"pending"}),
 }
 
@@ -486,7 +486,7 @@ class ContextEngine:
         *,
         iteration: int,
     ) -> None:
-        """Overwrite per-goal assess audit snapshot (RFC-624, IG-557)."""
+        """Overwrite per-goal assess audit snapshot (RFC-624)."""
         goal = self._dag.get_goal(goal_id)
         if goal is not None:
             goal.last_assessment = assessment.model_dump(mode="json")
@@ -500,7 +500,7 @@ class ContextEngine:
         *,
         iteration: int,
     ) -> None:
-        """Overwrite per-goal gap analysis audit snapshot (IG-557)."""
+        """Overwrite per-goal gap analysis audit snapshot."""
         goal = self._dag.get_goal(goal_id)
         if goal is not None:
             goal.last_gap_analysis = gap.model_dump(mode="json")
@@ -620,7 +620,7 @@ class ContextEngine:
 
         Increments send_back_count. When budget is exhausted, transitions to
         ``failed`` so host recovery (LoopRail / monitor / engine health) can
-        act — never operator-wait ``suspended`` (IG-707; unifies IG-693).
+        act — never operator-wait ``suspended`` (; unifies).
 
         Args:
             goal_id: Goal to send back.
@@ -710,7 +710,7 @@ class ContextEngine:
         )
 
     async def retry_failed_goal(self, goal_id: str, *, reason: str = "") -> GoalNode:
-        """Re-queue a failed goal when retry budget remains (IG-678 P1-2).
+        """Re-queue a failed goal when retry budget remains (P1-2).
 
         Increments ``retry_count``. When budget is exhausted, leaves the goal
         failed and raises ``ValueError``. Prior ``error`` (and optional
@@ -761,7 +761,7 @@ class ContextEngine:
         reason: str = "",
         max_engine_recoveries: int = 2,
     ) -> GoalNode:
-        """Engine liveness recovery: failed → pending after budgets (IG-697).
+        """Engine liveness recovery: failed → pending after budgets.
 
         Used when backoff retry budget is exhausted or rail recovery did not
         fire, but the DAG is deadlocked (pending dependents blocked by this

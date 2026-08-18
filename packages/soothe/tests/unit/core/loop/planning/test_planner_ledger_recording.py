@@ -1,4 +1,4 @@
-"""Integration tests: planner assess CE audit (IG-557 Phase G).
+"""Integration tests: planner assess CE audit (Phase G).
 
 ``LLMPlanner.assess_status`` persists ``StatusAssessment`` on the CE goal node.
 ``LLMPlanner.generate_from_assessment`` still records plan-generate ledger pairs.

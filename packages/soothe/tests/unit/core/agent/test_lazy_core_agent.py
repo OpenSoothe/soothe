@@ -1,4 +1,4 @@
-"""Unit tests for LazyCoreAgent (IG-506)."""
+"""Unit tests for LazyCoreAgent."""
 
 from __future__ import annotations
 

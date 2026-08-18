@@ -1,4 +1,4 @@
-"""Tests for resume-time thread binding in ``bind_execution_thread_for_loop`` (IG-455).
+"""Tests for resume-time thread binding in ``bind_execution_thread_for_loop``.
 
 Per RFC-223 the main StrangeLoop checkpoint thread id equals the ``loop_id``:
 the runtime in ``soothe.core.loop.engine.strange_loop`` normalizes any

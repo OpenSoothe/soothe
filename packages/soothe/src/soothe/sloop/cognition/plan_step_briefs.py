@@ -30,9 +30,9 @@ def synthesize_full_description(
     *,
     vision_summary: str | None = None,
 ) -> str:
-    """Build a step-local execution brief without referencing the overall goal (IG-508).
+    """Build a step-local execution brief without referencing the overall goal.
 
-    When ``vision_summary`` is set (IG-674), append capped image facts so execute
+    When ``vision_summary`` is set, append capped image facts so execute
     briefs retain vision-preflight detail without restating the parent GOAL.
     """
     desc = (step.description or "").strip()

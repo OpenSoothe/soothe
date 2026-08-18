@@ -1,4 +1,4 @@
-"""Tests for IG-302 synthesis isolated LangGraph checkpoint thread."""
+"""Tests for synthesis isolated LangGraph checkpoint thread."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def _recording_llm(captured: dict) -> _RecordingLlm:
 
 @pytest.mark.asyncio
 async def test_generate_synthesis_astream_uses_isolated_thread_and_workspace() -> None:
-    """Synthesis LLM astream must use a fresh thread_id + workspace for checkpointer (IG-302)."""
+    """Synthesis LLM astream must use a fresh thread_id + workspace for checkpointer."""
     captured: dict = {}
     llm = _recording_llm(captured)
 
@@ -100,7 +100,7 @@ async def test_generate_synthesis_astream_uses_isolated_thread_and_workspace() -
 
 @pytest.mark.asyncio
 async def test_generate_synthesis_sets_finalize_langfuse_run_name(monkeypatch) -> None:
-    """Phase-2 synthesis uses the same run-name convention as execute-step (IG-377 pattern)."""
+    """Phase-2 synthesis uses the same run-name convention as execute-step (pattern)."""
     captured: dict = {}
     llm = _recording_llm(captured)
 

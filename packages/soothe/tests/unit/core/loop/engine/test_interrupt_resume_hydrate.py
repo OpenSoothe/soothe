@@ -1,4 +1,4 @@
-"""Tests for interrupt-resume CE goal reuse helpers (IG-684)."""
+"""Tests for interrupt-resume CE goal reuse helpers."""
 
 from __future__ import annotations
 

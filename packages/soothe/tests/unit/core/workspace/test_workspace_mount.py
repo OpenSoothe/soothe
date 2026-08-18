@@ -1,4 +1,4 @@
-"""Tests for workspace host convention path mapping (RFC-621, IG-458)."""
+"""Tests for workspace host convention path mapping (RFC-621)."""
 
 from __future__ import annotations
 

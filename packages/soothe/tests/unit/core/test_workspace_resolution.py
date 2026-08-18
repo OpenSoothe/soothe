@@ -1,4 +1,4 @@
-"""Unit tests for unified workspace resolution (IG-116)."""
+"""Unit tests for unified workspace resolution."""
 
 from __future__ import annotations
 

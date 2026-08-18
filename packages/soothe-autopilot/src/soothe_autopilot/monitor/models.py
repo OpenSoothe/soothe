@@ -50,7 +50,7 @@ class DecomposeSuggestion:
 
 @dataclass
 class WireDependencySuggestion:
-    """Suggestion to set hard depends_on edges on a goal (IG-680)."""
+    """Suggestion to set hard depends_on edges on a goal."""
 
     goal_id: str
     depends_on: list[str]

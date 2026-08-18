@@ -1,4 +1,4 @@
-"""Apply daemon ``soothe.card.*`` wire frames to the TUI (RFC-413 / IG-655).
+"""Apply daemon ``soothe.card.*`` wire frames to the TUI (RFC-413).
 
 Thin re-export of ``soothe_sdk.display.card_wire`` so the TUI keeps a stable
 import path. Structural cards mount from that projection; raw stream handlers

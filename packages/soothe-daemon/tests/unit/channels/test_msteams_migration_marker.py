@@ -1,4 +1,4 @@
-"""Unit tests for the MS Teams ref migration audit marker (IG-646 D8).
+"""Unit tests for the MS Teams ref migration audit marker (D8).
 
 Covers the persisted migration-complete sentinel written to
 ``msteams_conversations_meta.json`` after legacy ref-schema backfill.

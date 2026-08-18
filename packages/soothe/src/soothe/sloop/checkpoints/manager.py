@@ -1,7 +1,7 @@
 """StrangeLoop checkpoint persistence manager.
 
 RFC-215: StrangeLoop Persistence Backend Architecture
-IG-055: Backend-agnostic delegation pattern supporting PostgreSQL and SQLite
+Backend-agnostic delegation pattern supporting PostgreSQL and SQLite
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class StrangeLoopCheckpointPersistenceManager:
     """Manager for StrangeLoop checkpoint persistence.
 
-    IG-055: Backend-agnostic delegation pattern.
+    Backend-agnostic delegation pattern.
     Respects persistence.default_backend configuration (PostgreSQL or SQLite).
     """
 
@@ -41,7 +41,7 @@ class StrangeLoopCheckpointPersistenceManager:
             config: SootheConfig for backend selection. If None, uses SQLite.
             display_loop_purger: Optional callable that purges a loop's display
                 card data (``delete_loop(loop_id)``). Injected by the daemon,
-                which owns the display card store (IG-635 PR-2). No-op when None
+                which owns the display card store (PR-2). No-op when None
                 (keeps the host free of daemon imports).
         """
         self._display_loop_purger = display_loop_purger
@@ -518,7 +518,7 @@ class StrangeLoopCheckpointPersistenceManager:
         )
 
     async def close(self) -> None:
-        """Close backend connection pools (IG-404: prevent pool exhaustion).
+        """Close backend connection pools (prevent pool exhaustion).
 
         Must be called when manager is no longer needed to release database connections.
         Critical for concurrent execution where multiple managers may exist.

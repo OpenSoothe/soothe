@@ -244,7 +244,7 @@ class ThreadContextManager:
         store = getattr(self._durability, "_store", None)
         update_index = getattr(self._durability, "_update_thread_index", None)
         if store and callable(getattr(store, "save", None)):
-            # IG-258 Phase 2: Use async save method
+            # Phase 2: Use async save method
             await store.save(f"thread:{matched_thread_id}", recovered.model_dump(mode="json"))
             if callable(update_index):
                 await update_index(matched_thread_id, action="add")

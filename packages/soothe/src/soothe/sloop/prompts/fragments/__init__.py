@@ -1,7 +1,7 @@
-"""Prefetched static StrangeLoop prompt fragments (IG-183).
+"""Prefetched static StrangeLoop prompt fragments.
 
 All fragments are read once at import time to maximize prompt cache hit rate.
-Cache Strategy (RFC-104, IG-183):
+Cache Strategy (RFC-104):
 - Static fragments loaded at module init (0 file I/O per request)
 - Module constants reused across all StrangeLoop invocations
 - Estimated cache hit rate: >95% for static content
@@ -26,15 +26,15 @@ def _read(relative: str, *, strip: bool = False) -> str:
 # Plan-phase instructions (``plan/``)
 # ---------------------------------------------------------------------------
 
-# Plan-assess only: matches StatusAssessment schema (IG-372)
+# Plan-assess only: matches StatusAssessment schema
 PLAN_ASSESS_INSTRUCTIONS_FRAGMENT = _read("plan/assess_instructions.xml", strip=True)
 
 PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT = _read("plan/gap_analysis_instructions.xml", strip=True)
 
-# Plan-generate only: matches PlanGenerationWire schema (IG-568)
+# Plan-generate only: matches PlanGenerationWire schema
 PLAN_GENERATE_INSTRUCTIONS_FRAGMENT = _read("plan/generate_instructions.xml", strip=True)
 
-# Continuation discriminator (RFC-226, RFC-214 §4, IG-538)
+# Continuation discriminator (RFC-226, RFC-214 §4)
 PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT = _read("plan/continuation_discriminate.xml", strip=True)
 
 STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT = _read("plan/structured_plan_parse.xml")

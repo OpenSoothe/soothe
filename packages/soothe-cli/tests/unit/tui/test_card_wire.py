@@ -1,4 +1,4 @@
-"""Tests for TUI card wire helpers (IG-655)."""
+"""Tests for TUI card wire helpers."""
 
 from __future__ import annotations
 

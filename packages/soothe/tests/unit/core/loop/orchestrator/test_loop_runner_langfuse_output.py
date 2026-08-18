@@ -1,4 +1,4 @@
-"""Runner helpers for Langfuse goal output text (IG-395)."""
+"""Runner helpers for Langfuse goal output text."""
 
 from unittest.mock import MagicMock
 

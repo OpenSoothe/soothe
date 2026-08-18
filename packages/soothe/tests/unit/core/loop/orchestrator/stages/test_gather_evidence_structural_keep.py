@@ -1,4 +1,4 @@
-"""gather_evidence structural keep and simple gap skip (IG-671)."""
+"""gather_evidence structural keep and simple gap skip."""
 
 from __future__ import annotations
 

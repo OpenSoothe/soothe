@@ -1,9 +1,9 @@
-"""Prefetched static prompt fragments for cache optimization (IG-183).
+"""Prefetched static prompt fragments for cache optimization.
 
 This module loads static XML fragments at import time to maximize prompt cache hit rate.
 All fragments are read once and cached as module constants.
 
-Cache Strategy (RFC-104, IG-183):
+Cache Strategy (RFC-104):
 - Static fragments loaded at module init (0 file I/O per request)
 - Module constants reused across all agent invocations
 - Estimated cache hit rate: >95% for static content

@@ -1,10 +1,10 @@
-"""Host-specific Langfuse display-name helpers for StrangeLoop runtime (IG-663 / IG-672).
+"""Host-specific Langfuse display-name helpers for StrangeLoop runtime.
 
 Run-name suffixes align with stem stations where they name a graph station
 or the primary LLM under that station. Kebab-case matches existing Langfuse
 tags (``strange-loop-graph``, ``execute-step``).
 
-Evaluate subgraph (IG-672): parent ``evaluate`` with children
+Evaluate subgraph: parent ``evaluate`` with children
 ``evaluate-gap`` / ``evaluate-gap-leg-{i}`` / ``evaluate-assess``.
 """
 
@@ -38,7 +38,7 @@ def execute_step_langfuse_run_display_name(trace_name: str | None) -> str:
 
 
 def evaluate_langfuse_run_display_name(trace_name: str | None) -> str:
-    """Return parent evaluate-station span name (IG-672)."""
+    """Return parent evaluate-station span name."""
     return _with_trace_prefix(trace_name, _HOST_EVALUATE_RUN_NAME)
 
 

@@ -1,4 +1,4 @@
-"""Scenario classifier for synthesis generation (RFC-616, IG-300, IG-652).
+"""Scenario classifier for synthesis generation (RFC-616,).
 
 Determines synthesis style from goal + intent + execution pattern using a fast
 model with structured output. Outline ``sections`` are suggestions (or empty
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_SCENARIO_RULES = ScenarioRulesConfig()
 
-# Built-in scenario style names → short descriptions (IG-652).
+# Built-in scenario style names → short descriptions.
 # Outline section lists are no longer hardcoded here; the classify LLM designs
 # goal-specific suggestions and Phase 2 may adapt them.
 _SCENARIO_DESCRIPTIONS: dict[str, str] = {
@@ -46,9 +46,9 @@ _SCENARIO_DESCRIPTIONS: dict[str, str] = {
     "general_summary": "Simple summarization fallback",
 }
 
-# Per-scenario CLI layout hints for goal-completion synthesis (IG-552 / IG-652).
+# Per-scenario CLI layout hints for goal-completion synthesis.
 # Layout examples only — not outline authority. Markdown tables, bullets, and
-# mermaid fences render in the Rich TUI (IG-657 terminal diagram expand).
+# mermaid fences render in the Rich TUI (terminal diagram expand).
 SCENARIO_FORMAT_HINTS: dict[str, str] = {
     "code_architecture_design": (
         "Bullets/tables first. Component inventory: GFM table (Name | Role | Location). "
@@ -103,12 +103,12 @@ _JSON_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | 
 
 
 def format_hint_for_scenario(scenario: str) -> str:
-    """Return CLI layout hint for a synthesis scenario name (IG-552)."""
+    """Return CLI layout hint for a synthesis scenario name."""
     return SCENARIO_FORMAT_HINTS.get(scenario, SCENARIO_FORMAT_HINTS["custom"])
 
 
 class ScenarioClassification(BaseModel):
-    """Scenario classification result for synthesis generation (IG-300 / IG-652).
+    """Scenario classification result for synthesis generation.
 
     Produced by ScenarioClassifier from goal + intent + execution pattern.
     Guides Phase 2 synthesis with style + optional outline suggestions + focus.
@@ -138,7 +138,7 @@ class ScenarioClassification(BaseModel):
 
 
 def _extract_execution_summary(state: LoopState) -> dict:
-    """Extract execution metadata from state step results (IG-300).
+    """Extract execution metadata from state step results.
 
     Args:
         state: Loop state with step_results.
@@ -277,7 +277,7 @@ def _heuristic_classify(
     *,
     scenario_rules: ScenarioRulesConfig | None = None,
 ) -> ScenarioClassification | None:
-    """Config-driven fast-path that skips the classify LLM call (IG-652).
+    """Config-driven fast-path that skips the classify LLM call.
 
     Sets scenario style + focus/emphasis only. Leaves ``sections`` empty so
     Phase 2 invents the report outline (builtins are not outline authority).
@@ -343,7 +343,7 @@ async def classify_synthesis_scenario(
     *,
     soothe_config: Any | None = None,
 ) -> ScenarioClassification:
-    """Classify synthesis scenario from goal + intent + execution pattern (IG-300).
+    """Classify synthesis scenario from goal + intent + execution pattern.
 
     Uses a heuristic fast-path for obvious cases, then falls back to the LLM
     for ambiguous ones.  The LLM call uses the supplied ``llm_client`` which

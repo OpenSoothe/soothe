@@ -1,4 +1,4 @@
-"""IG-557 Phase A: assess-only projection and v2 task envelope."""
+"""Phase A: assess-only projection and v2 task envelope."""
 
 from __future__ import annotations
 

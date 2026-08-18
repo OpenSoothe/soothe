@@ -1,4 +1,4 @@
-"""CLI-specific configuration class (IG-174 Phase 3)."""
+"""CLI-specific configuration class (Phase 3)."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ class CLIConfig:
     """Override daemon streaming mode: 'streaming' or 'batch'."""
 
     # Composer mode (Auto / Manual / Plan). Auto/Manual map to RFC-622
-    # clarification_mode; Plan is sticky preferred_subagent=planner (IG-682).
+    # clarification_mode; Plan is sticky preferred_subagent=planner.
     clarification_mode: str | None = None
     """'manual', 'auto', or 'plan'. None = auto-detect from TTY (auto)."""
 

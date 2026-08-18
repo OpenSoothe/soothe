@@ -1,4 +1,4 @@
-"""Unit tests for PresentationEngine action deduplication (IG-143)."""
+"""Unit tests for PresentationEngine action deduplication."""
 
 from soothe_cli.runtime.presentation.engine import PresentationEngine
 

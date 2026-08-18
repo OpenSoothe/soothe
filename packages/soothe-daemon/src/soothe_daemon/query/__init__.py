@@ -1,4 +1,4 @@
-"""Query execution infrastructure for the daemon (IG-110).
+"""Query execution infrastructure for the daemon.
 
 This submodule provides:
 - QueryEngine: Query execution lifecycle, streaming, cancellation

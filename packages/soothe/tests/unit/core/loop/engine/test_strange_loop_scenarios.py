@@ -222,7 +222,7 @@ class MockLoopPlanner:
     async def analyze_plan_gap(
         self, goal: str, state: Any, context: PlanContext, *, context_engine: Any | None = None
     ) -> Any:
-        """Read-only gap analysis (IG-557); stub returns no gaps."""
+        """Read-only gap analysis ; stub returns no gaps."""
         return None
 
     async def plan(self, goal: str, state, context: PlanContext) -> PlanResult:

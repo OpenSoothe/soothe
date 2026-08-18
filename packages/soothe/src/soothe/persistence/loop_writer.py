@@ -1,9 +1,9 @@
-"""Unified high-performance loop persistence writer (IG-550).
+"""Unified high-performance loop persistence writer.
 
 Process-scoped singleton coalescing checkpoint and ContextEngine writes onto a
 shared PostgreSQL pool with bounded shutdown and goal-boundary transactions.
 
-IG-571: asyncio tasks and loop-bound locks run on a single bound event loop
+asyncio tasks and loop-bound locks run on a single bound event loop
 (typically the daemon main loop). Worker threads call ``submit_*`` to schedule
 work via ``asyncio.run_coroutine_threadsafe``.
 """

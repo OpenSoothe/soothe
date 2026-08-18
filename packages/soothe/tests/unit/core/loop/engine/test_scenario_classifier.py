@@ -64,7 +64,7 @@ def test_heuristic_single_step_returns_general_summary() -> None:
     result = _heuristic_classify("count readmes", "agentic", summary)
     assert result is not None
     assert result.scenario == "general_summary"
-    assert result.sections == []  # IG-652: Phase 2 invents outline
+    assert result.sections == []  # Phase 2 invents outline
 
 
 def test_heuristic_zero_successful_steps_returns_investigation() -> None:
@@ -193,7 +193,7 @@ async def test_heuristic_skips_llm_for_single_step() -> None:
 
 
 def test_scenario_classification_allows_empty_sections() -> None:
-    """IG-652: empty sections are valid; Phase 2 invents the outline."""
+    """empty sections are valid; Phase 2 invents the outline."""
     result = ScenarioClassification(
         scenario="general_summary",
         sections=[],
@@ -204,7 +204,7 @@ def test_scenario_classification_allows_empty_sections() -> None:
 
 
 def test_format_hint_for_scenario_builtin_and_custom_fallback() -> None:
-    """IG-552: every built-in scenario has a format hint; unknown uses custom."""
+    """every built-in scenario has a format hint; unknown uses custom."""
     hint = format_hint_for_scenario("code_architecture_design")
     assert "GFM table" in hint
     assert "mermaid" in hint

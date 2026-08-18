@@ -157,7 +157,7 @@ class PlanPhase:
         context_engine: Any | None = None,
         leg_index: int = 0,
     ) -> Any:
-        """Run a single-facet inventory leg (parallel evaluate; IG-672)."""
+        """Run a single-facet inventory leg (parallel evaluate;)."""
         self._prepare_state_evidence(state)
         return await self._loop_planner.analyze_plan_gap_component(
             goal=goal,

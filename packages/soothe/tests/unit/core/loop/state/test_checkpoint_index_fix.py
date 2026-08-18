@@ -251,12 +251,12 @@ class TestOrphanedGoalRecovery:
         checkpoint.status = "running"
         await sm.save(checkpoint)
 
-        # Finalize goal (IG-055: resets current_goal_index to -1)
+        # Finalize goal (resets current_goal_index to -1)
         await sm.finalize_goal(goal)
 
         # Load should NOT repair (status=idle is correct)
         loaded = await sm.load()
-        assert loaded.current_goal_index == -1  # IG-055: Reset to -1 after completion
+        assert loaded.current_goal_index == -1  # Reset to -1 after completion
         assert loaded.status == "idle"  # Correct status
         assert loaded.goal_history[0].status == "completed"
 

@@ -426,7 +426,7 @@ class _StartupMixin:
         await self._send_to_agent(queued_line, skip_daemon_send_turn=True)
 
     async def _discover_skills(self) -> list[ExtendedSkillMetadata]:
-        """Discover skills from daemon via WebSocket RPC (IG-174 Phase 2).
+        """Discover skills from daemon via WebSocket RPC (Phase 2).
 
         Fetches wire-safe skill metadata from daemon. No local filesystem
         access — all skill discovery and invocation handled by daemon.
@@ -509,8 +509,8 @@ class _StartupMixin:
 
         ws_url = websocket_url_from_config(self._daemon_config)
 
-        # Check daemon status via WebSocket RPC (IG-174 Phase 1)
-        # Wait for daemon to be fully ready, not just port-live (IG-489)
+        # Check daemon status via WebSocket RPC (Phase 1)
+        # Wait for daemon to be fully ready, not just port-live
         daemon_live = await is_daemon_live(
             ws_url,
             timeout=5.0,
@@ -519,7 +519,7 @@ class _StartupMixin:
         )
 
         if not daemon_live:
-            # CLI does NOT control daemon start/stop per architectural separation (IG-174/IG-175)
+            # CLI does NOT control daemon start/stop per architectural separation
             raise ConnectionError(
                 f"Soothe daemon not running at {ws_url}. "
                 f"Please start the daemon with: soothed start"
@@ -562,7 +562,7 @@ class _StartupMixin:
         except NoMatches:
             logger.warning("Welcome banner not found during daemon ready transition")
 
-        # IG-228: Start background event reader if the loop is already running
+        # Start background event reader if the loop is already running
         loop_state = event.status_event.get("state", "")
         if loop_state == "running" and self._daemon_session is not None:
             logger.info(
@@ -687,7 +687,7 @@ class _StartupMixin:
         # language in skill bodies.
         _get_lexer("python")
 
-        # Mermaid expand path (IG-657) — first goal-completion report with a
+        # Mermaid expand path — first goal-completion report with a
         # flowchart should not pay termaid import cost mid-render.
         try:
             import termaid  # noqa: F401

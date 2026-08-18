@@ -101,7 +101,7 @@ class FileChangePreviewWidget(Vertical):
     """Base class for filesystem change preview cards.
 
     Renders expanded while the tool call is pending so diff/content is visible.
-    Finalized cards collapse by default; click toggles expanded details (IG-544).
+    Finalized cards collapse by default; click toggles expanded details.
     """
 
     ALLOW_SELECT = True

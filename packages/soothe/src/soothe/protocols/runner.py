@@ -99,7 +99,7 @@ class LoopRunRequest:
     # treating user_input as a single answer string (broadcast to all questions
     # if there are several).
     clarification_answers: list[str] | None = None
-    # IG-670: daemon auto-resume of an interrupted ``status=running`` goal.
+    # daemon auto-resume of an interrupted ``status=running`` goal.
     # Skips Pass 1 social fast-path, preserves ``recovery_valid_resume``, and
     # must not cancel the in-flight goal (unlike bare continue/resume keywords).
     resume_interrupted: bool = False

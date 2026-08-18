@@ -12,7 +12,7 @@ All daemon delivery stages funnel through the predicates below:
 ## Why centralize
 
 Visibility rules silently drop frames. A bug here is invisible until users
-report "no output". The IG-435 regression (loop ``…81ec`` postmortem) shipped
+report "no output". The regression (loop ``…81ec`` postmortem) shipped
 because ``mode=messages`` envelopes were not enumerated as a wire shape;
 they fell through to "unknown event type → DEBUG tier → suppress" and every
 synthesized answer was dropped.
@@ -104,7 +104,7 @@ _ALWAYS_CLIENT_WIRE_TOP_TYPES = frozenset(
     }
 )
 
-# Clients always receive normal-tier-or-quieter catalog events only (IG-343).
+# Clients always receive normal-tier-or-quieter catalog events only.
 _CLIENT_WIRE_VERBOSITY_CEILING: VerbosityLevel = "normal"
 
 # LangGraph stream modes that can appear under ``{"type": "event", "mode": ...}``.

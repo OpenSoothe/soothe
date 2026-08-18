@@ -500,7 +500,7 @@ def build_stream_config(
         workspace: Workspace directory for in-process TUI runs. When
             omitted, uses `Path.cwd()` (resolved). Mirrored to
             `configurable["workspace"]` for middleware and task-tool propagation
-            (IG-341, RFC-103).
+            (RFC-103).
 
     Returns:
         Config dict with `configurable` and `metadata` keys.

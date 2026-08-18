@@ -1,4 +1,4 @@
-"""SQLite persistence for liveness heartbeat (IG-466 follow-up: status reconciliation)."""
+"""SQLite persistence for liveness heartbeat (follow-up: status reconciliation)."""
 
 from __future__ import annotations
 

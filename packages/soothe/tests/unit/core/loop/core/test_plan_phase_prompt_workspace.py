@@ -77,7 +77,7 @@ def test_build_loop_plan_messages_omits_workspace_rules_without_workspace() -> N
 
 
 def test_build_loop_plan_messages_omits_working_memory_in_plan_human_ig371() -> None:
-    """Plan-context human does not embed WORKING_MEMORY; ledger carries execution context (IG-371)."""
+    """Plan-context human does not embed WORKING_MEMORY; ledger carries execution context."""
     state = LoopState(goal="g", thread_id="t1", max_iterations=8)
     ctx = PlanContext(
         workspace=None,
@@ -156,7 +156,7 @@ def test_build_loop_plan_messages_plan_continue_when_steps_remain() -> None:
 
 
 def test_build_plan_messages_appends_ledger_loop_messages() -> None:
-    """Assess projection keeps execute AI only between system and task envelope (IG-557)."""
+    """Assess projection keeps execute AI only between system and task envelope."""
     state = LoopState(goal="read readme", thread_id="t1", max_iterations=8, iteration=1)
     state._loop_messages_cache = [
         LoopHumanMessage(

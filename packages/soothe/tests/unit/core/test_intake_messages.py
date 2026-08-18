@@ -1,4 +1,4 @@
-"""Unit tests for intake ledger recording and prior projection (IG-540, IG-554)."""
+"""Unit tests for intake ledger recording and prior projection."""
 
 from __future__ import annotations
 
@@ -95,7 +95,7 @@ class TestIntakePriorGoalProjection:
             LoopHumanMessage(content="finalize", phase="goal_completion"),
             LoopAIMessage(content="synthesized report", phase="goal_completion"),
         ]
-        # IG-555: Default includes boundary marker for planning projections
+        # Default includes boundary marker for planning projections
         projected = project_last_goal_completion_for_intake(ledger, None)
         assert len(projected) == 2
         assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() in projected[0].content
@@ -103,7 +103,7 @@ class TestIntakePriorGoalProjection:
         assert projected[-1].content == "synthesized report"
 
     def test_intake_pass2_omits_boundary_marker(self) -> None:
-        """IG-555: Intake Pass 2 projection omits boundary (classifier needs prior scope)."""
+        """Intake Pass 2 projection omits boundary (classifier needs prior scope)."""
         from soothe.sloop.prompts.plan_ledger_projection import (
             _GOAL_COMPLETION_CONTEXT_BOUNDARY,
             project_last_goal_completion_for_intake,

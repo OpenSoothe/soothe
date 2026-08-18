@@ -180,7 +180,7 @@ from soothe_cli.tui.widgets.messages.cognition_goal_tree import _normalize_step_
 
 logger = logging.getLogger(__name__)
 
-# IG-504: LLM retry event type for step card status display
+# LLM retry event type for step card status display
 LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
 # Plan-phase cognition card (not yet in soothe_sdk.core.events exports used by CLI).
 STRANGE_LOOP_REASONED = "soothe.cognition.strange_loop.reasoned"
@@ -256,7 +256,7 @@ class TextualUIAdapter:
         """Map of StrangeLoop act step IDs to step card widgets."""
 
         self._step_by_namespace: dict[tuple[Any, ...], CognitionStepMessage] = {}
-        """Active step card per stream namespace (main-agent tool aggregation, IG-402)."""
+        """Active step card per stream namespace (main-agent tool aggregation)."""
 
         self._last_completed_main_step_execute_prose: str = ""
         """Execute-phase prose frozen when the main-namespace step completes.
@@ -2127,7 +2127,7 @@ async def apply_tool_call_wire_update(
                 raw_args=raw_args_stream,
             )
             # Explicit Todo ingest: do not rely solely on add_tool_call side effects
-            # when coalesce skips a later messages-path refresh (IG-664).
+            # when coalesce skips a later messages-path refresh.
             if str(name or "").strip() == "write_todos":
                 setter = getattr(step_w, "set_todos", None)
                 if callable(setter):
@@ -2338,7 +2338,7 @@ async def _maybe_set_thinking_spinner(
 
 
 def _reject_step_tool_rows(adapter: TextualUIAdapter) -> None:
-    """Mark step-aggregated tool rows rejected and drop pending bindings (IG-402)."""
+    """Mark step-aggregated tool rows rejected and drop pending bindings."""
     for tcid, stw in list(adapter._tool_to_step.items()):
         stw.set_tool_rejected(tcid)
     adapter._tool_to_step.clear()
@@ -2996,7 +2996,7 @@ async def execute_task_textual(
             if no sandbox is active.
         workspace: Resolved project directory (status-bar cwd / daemon bootstrap)
             mirrored into stream ``configurable.workspace``; when omitted,
-            ``build_stream_config`` uses ``Path.cwd()`` (IG-341).
+            ``build_stream_config`` uses ``Path.cwd``.
         turn_stats: Pre-created `SessionStats` to accumulate into.
 
             When the caller holds a reference to the same object, stats are
@@ -3103,7 +3103,7 @@ async def execute_task_textual(
     adapter._goal_completion_mounted_this_turn = False
     adapter._goal_tree_message = None
     tool_call_buffers: dict[str | int, dict] = {}
-    # Streaming tool-call args (``tool_call_chunks``) — mirrors EventProcessor / IG-053
+    # Streaming tool-call args (``tool_call_chunks``) — mirrors EventProcessor /
     pending_tool_calls_lc: dict[str, dict[str, Any]] = {}
     last_active_tool_call_id: str = ""  # For orphan chunk attachment
     streaming_overlay: dict[str, dict[str, Any]] = {}
@@ -4400,7 +4400,7 @@ async def execute_task_textual(
                                         )
                                     continue
 
-                            # IG-504: Handle LLM retry events for step card status display
+                            # Handle LLM retry events for step card status display
                             if event_type == LLM_RETRY_ATTEMPT:
                                 # Find the running step card for this thread and update retry status
                                 attempt = int(data.get("attempt", 0))
@@ -4547,7 +4547,7 @@ async def execute_task_textual(
 
                             if ns_key and not is_step_card_tool_scope(ns_key=ns_key):
                                 router.on_subgraph_namespace(ns_key)
-                            # IG-602: orphan intake-only wire events carry invocation_id
+                            # orphan intake-only wire events carry invocation_id
                             # without a task-namespace binding.
                             if (
                                 event_type.startswith("soothe.subagent.")
@@ -4597,7 +4597,7 @@ async def execute_task_textual(
                 )
             await _maybe_set_thinking_spinner(adapter, clarification_pending=clarification_pending)
 
-        # Flush any remaining text from all namespaces (IG-426: parallelized)
+        # Flush any remaining text from all namespaces (parallelized)
         flush_tasks: list[Any] = []
         for ns_key, pending_text in list(pending_text_by_namespace.items()):
             if pending_text:

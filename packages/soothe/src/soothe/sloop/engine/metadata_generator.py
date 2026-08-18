@@ -14,7 +14,7 @@ from typing import Any
 from soothe_sdk.utils import get_outcome_type
 
 # Bounded excerpt for planner reflection (per-tool metadata); wave-level joins use the same cap
-# via import in the executor (IG-356, IG-357).
+# via import in the executor.
 PLANNER_OUTCOME_PREVIEW_CAP = 2500
 
 
@@ -212,7 +212,7 @@ def _extract_subagent_metadata(result: Any) -> dict[str, Any]:
 
     Returns:
         Metadata dict with completed status, artifacts_created, entities,
-        and optional ``task_return_preview`` (bounded excerpt of this ``task`` return; IG-357).
+        and optional ``task_return_preview`` (bounded excerpt of this ``task`` return;).
     """
     content = result if isinstance(result, str) else str(result)
 

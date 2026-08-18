@@ -11,7 +11,7 @@ from typing import Any
 
 from soothe_nano.agent.subagent_catalog import spec_subagent_name
 
-# Canonical allowlist for wired specialists (all intake-only after IG-656).
+# Canonical allowlist for wired specialists (all intake-only after).
 INTAKE_ONLY_WIRE_SUBAGENTS = frozenset(
     {
         "planner",

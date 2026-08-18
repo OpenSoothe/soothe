@@ -1,4 +1,4 @@
-"""Tests for plan-generate wire schema and adapter (IG-568)."""
+"""Tests for plan-generate wire schema and adapter."""
 
 from __future__ import annotations
 

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class ExtendedSkillMetadata(TypedDict):
-    """Wire-safe skill metadata from daemon RPC (IG-174 Phase 2).
+    """Wire-safe skill metadata from daemon RPC (Phase 2).
 
     This TypedDict represents skill metadata fetched from daemon via WebSocket RPC.
     All fields are wire-safe (no Path objects, use str representations).

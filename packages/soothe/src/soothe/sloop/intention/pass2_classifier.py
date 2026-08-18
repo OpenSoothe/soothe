@@ -1,4 +1,4 @@
-"""Pass 2 classifier: scope classification (RFC-630 IG-554).
+"""Pass 2 classifier: scope classification (RFC-630).
 
 3-class scope (trivial|simple|complex) for work requests. Prior-goal projection
 is included for reference resolution. Runs only when Pass 1 returns is_task=True.
@@ -51,7 +51,7 @@ def clip_pass2_reasoning(reasoning: str | None) -> str:
 
 
 class IntakePass2Classifier:
-    """Pass 2: scope classification for work requests (RFC-630 IG-554).
+    """Pass 2: scope classification for work requests (RFC-630).
 
     Classifies as trivial, simple, or complex. Prior-goal projection included
     for reference resolution ("apply it"). On structured-output failure,

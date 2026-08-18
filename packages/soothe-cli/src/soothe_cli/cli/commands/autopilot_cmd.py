@@ -106,7 +106,7 @@ def _rail_label(entity: dict[str, Any] | None) -> str:
 
 
 def _resolve_submit_workspace(explicit: str | None) -> str:
-    """Resolve workspace for autopilot submit (IG-344 aligned with headless/TUI)."""
+    """Resolve workspace for autopilot submit (aligned with headless/TUI)."""
     raw = (
         explicit.strip()
         if explicit and explicit.strip()
@@ -728,7 +728,7 @@ def _sort_jobs_newest_first(jobs: list[dict]) -> list[dict]:
 
 @dataclass
 class TopViewState:
-    """Interactive view flags for autopilot top (IG-688 / IG-694 / IG-698)."""
+    """Interactive view flags for autopilot top."""
 
     include_terminal: bool = False
     steps_mode: Literal["off", "active", "all"] = "active"

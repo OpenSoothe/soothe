@@ -1,4 +1,4 @@
-"""Unit tests for greenfield-system rail + CE builtins (IG-687)."""
+"""Unit tests for greenfield-system rail + CE builtins."""
 
 from __future__ import annotations
 
@@ -614,7 +614,7 @@ async def test_rail_job_root_dispatch_skipped() -> None:
 
 @pytest.mark.asyncio
 async def test_tags_by_goal_falls_back_to_ce_rail_tags() -> None:
-    """IG-691: empty RailJobState still exposes CE rail_tags for guards."""
+    """empty RailJobState still exposes CE rail_tags for guards."""
     ce = ContextEngine()
     root = await ce.create_goal("Build system", priority=70)
     integ = await ce.create_goal(
@@ -641,7 +641,7 @@ async def test_tags_by_goal_falls_back_to_ce_rail_tags() -> None:
 
 @pytest.mark.asyncio
 async def test_bind_job_hydrates_annotations_from_ce(tmp_path: Path) -> None:
-    """IG-691: rebind after empty state restores tags from GoalNode."""
+    """rebind after empty state restores tags from GoalNode."""
     ce = ContextEngine()
     root = await ce.create_goal("Build system", priority=70, workspace=str(tmp_path))
     integ = await ce.create_goal(
@@ -664,7 +664,7 @@ async def test_bind_job_hydrates_annotations_from_ce(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_rail_state_persists_across_new_executor(tmp_path: Path) -> None:
-    """IG-691: rail_state.json restores annotations after process restart."""
+    """rail_state.json restores annotations after process restart."""
     jobs_root = tmp_path / "jobs"
     ce = ContextEngine()
     root = await ce.create_goal("Build system", priority=70, workspace=str(tmp_path))

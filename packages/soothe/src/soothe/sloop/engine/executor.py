@@ -1,6 +1,6 @@
 """Execute phase logic for StrangeLoop (RFC-201).
 
-Act-wave visible answer resolution is integrated here (IG-355, IG-356, IG-357).
+Act-wave visible answer resolution is integrated here.
 
 After each Execute wave, auto goal completion and headless replay read the
 latest non-planning assistant message from the orchestration ledger via
@@ -9,11 +9,11 @@ latest non-planning assistant message from the orchestration ledger via
 - **root_assistant_stream** — aggregated root-graph ``AIMessage`` / chunk text (same path as act
   aggregation for the main graph).
 - **task_tool_aggregate** — ordered ``task`` ``ToolMessage`` bodies (delegate finals), including
-  parallel waves merged with ``\\n\\n---\\n\\n`` (IG-356).
+  parallel waves merged with ``\\n\\n---\\n\\n``.
 - **none** — no usable text (empty wave).
 
 ``last_wave_answer_from_delegate_final`` on ``LoopState`` remains the boolean hook for runner
-replay (IG-355); it is True iff provenance is ``task_tool_aggregate``.
+replay ; it is True iff provenance is ``task_tool_aggregate``.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, Tool
 from langgraph.errors import GraphRecursionError
 from langgraph.types import Command, Interrupt
 
-# IG-519: Import registry directly (removed ToolConcurrencyMiddleware from stack)
+# Import registry directly (removed ToolConcurrencyMiddleware from stack)
 from soothe_nano.middleware.tool_call_args_registry import init_tool_call_args_registry
 from soothe_nano.middleware.tool_optimization_middleware import get_tool_reuse_metrics_snapshot
 from soothe_nano.utils.text_preview import (
@@ -168,7 +168,7 @@ def _log_dependency_execution_residual(
     local_done: set[str],
     failed_sticky: set[str],
 ) -> None:
-    """Emit a warning when dependency execution stopped with steps never started (IG-379).
+    """Emit a warning when dependency execution stopped with steps never started.
 
     Typical causes: unsatisfied or mistyped dependency ids, cycles, or steps blocked behind
     failures (failed step ids are not in ``local_done`` but are excluded from ``never_started``).
@@ -251,7 +251,7 @@ class Executor:
             max_parallel_steps: Max steps to run **concurrently** in one batch. ``execute`` repeats
                 batches until all ready steps finish (e.g. 4 ready steps and ``2`` → two batches of 2).
                 ``0`` means unlimited (RFC-201 / concurrency).
-            config: Optional Soothe config for Act wave caps (IG-130).
+            config: Optional Soothe config for Act wave caps.
             goal_context_manager: Optional GoalContextManager for goal briefing injection (RFC-217).
             loop_id: Optional loop identifier for Langfuse trace correlation.
             clarification_detector: When set with ``clarification_capture`` and
@@ -300,7 +300,7 @@ class Executor:
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
     ) -> dict[str, Any]:
-        """Merge Langfuse callback into RunnableConfig with execute-phase run name (IG-377)."""
+        """Merge Langfuse callback into RunnableConfig with execute-phase run name."""
         parent_runnable_config: dict[str, Any] | None = None
         try:
             from langgraph.config import get_config as _lg_get_config
@@ -428,7 +428,7 @@ class Executor:
 
     @staticmethod
     async def _maybe_aclose_act_stream(stream: Any, *, reason: str) -> None:
-        """Close the graph stream when Act consumption stops early (IG-477)."""
+        """Close the graph stream when Act consumption stops early."""
         aclose = getattr(stream, "aclose", None)
         if aclose is None:
             return
@@ -607,7 +607,7 @@ class Executor:
     ) -> _PendingInterruptFetch:
         """Read pending LangGraph interrupts from ``aget_state`` after a stream ends.
 
-        IG-477: Avoid ``stream_mode`` ``updates`` during execute streaming — each update
+        Avoid ``stream_mode`` ``updates`` during execute streaming — each update
         carries a full graph state snapshot (~400 MiB during subgraph tool streaming).
 
         Returns:
@@ -676,7 +676,7 @@ class Executor:
         loop_state_view: LoopStateView | None = None,
         origin_node: ClarificationOrigin = ORIGIN_EXECUTE,
         resume_answer_payload: dict[str, Any] | None = None,
-        step_id: str | None = None,  # IG-549: for heartbeat correlation
+        step_id: str | None = None,  # for heartbeat correlation
     ) -> AsyncGenerator[Any, None]:
         """Run ``CoreAgent.astream`` with interrupt handling.
 
@@ -689,7 +689,7 @@ class Executor:
         - When ``resume_answer_payload`` is set, the first CoreAgent call
           uses it as the initial ``Command(resume=...)`` (re-entry after the
           policy answered a prior clarification).
-        - IG-549: Heartbeat sentinels are yielded during long waits to keep
+        - Heartbeat sentinels are yielded during long waits to keep
           the stream alive and prevent client disconnects during slow tool
           execution (browser_use, long searches).
         """
@@ -721,7 +721,7 @@ class Executor:
                     except asyncio.CancelledError:
                         raise
 
-                    # IG-549: Forward heartbeat as a raw LangGraph custom chunk so
+                    # Forward heartbeat as a raw LangGraph custom chunk so
                     # ``_stream_and_collect`` can wrap and fan it out once.
                     if chunk is _STREAM_HEARTBEAT_SENTINEL:
                         yield (
@@ -948,7 +948,7 @@ class Executor:
         parallel_multi_step: bool,
         delegate_final_text: str | None = None,
     ) -> None:
-        """Apply resolved Act-wave visible text to state (IG-199, IG-355, IG-357).
+        """Apply resolved Act-wave visible text to state.
 
         Resolution is centralized in :func:`~soothe.sloop.engine.executor.compute_act_wave_finalize`.
         """
@@ -1071,7 +1071,7 @@ class Executor:
         state.last_wave_output_length = output_length
         state.last_wave_error_count = error_count
 
-        # Context window metrics with actual token usage (IG-151, IG-579)
+        # Context window metrics with actual token usage
         from soothe.sloop.utils.token_usage import extract_token_usage_from_messages
 
         token_usage = extract_token_usage_from_messages(messages)
@@ -1093,7 +1093,7 @@ class Executor:
             estimated_tokens = count_tokens(output)
             state.total_tokens_used += estimated_tokens
 
-        # Use configurable context limit (IG-151)
+        # Use configurable context limit
         if self._config is not None:
             context_limit = self._config.agent.loop.context_window_limit
             state.context_percentage_consumed = min(1.0, state.total_tokens_used / context_limit)
@@ -1218,7 +1218,7 @@ class Executor:
         steps: list[StepAction],
         gather_results: list[Any],
     ) -> None:
-        """Append RFC-214 Human/AI ledger pairs for each parallel step (IG-374).
+        """Append RFC-214 Human/AI ledger pairs for each parallel step.
 
         Execute waves record per-step ledger rows so subsequent ``plan-assess`` /
         ``plan-generate`` prompts built in ``PromptBuilder`` see prior step evidence.
@@ -1264,7 +1264,7 @@ class Executor:
                 _record_ledger_message(self._context_engine, ai_err_msg, "execute_step")
                 continue
 
-            # IG-493: unpack _ExecuteStepResult dataclass
+            # unpack _ExecuteStepResult dataclass
             result: _ExecuteStepResult = raw
             content = self._resolve_execute_step_ledger_ai_content(
                 step_messages=result.messages,
@@ -1273,7 +1273,7 @@ class Executor:
             )
             content = self._finalize_execute_step_ledger_ai_content(content)
 
-            # IG-493: Debug logging for step execution ledger
+            # Debug logging for step execution ledger
             logger.debug(
                 "[Ledger] step=%s success=%s input='%s' output='%s' ai_text_len=%d",
                 step.id,
@@ -1327,7 +1327,7 @@ class Executor:
     ) -> str:
         """Resolve execute-step ledger AI content: final assistant response.
 
-        IG-493: For step execution, the ledger records only:
+        For step execution, the ledger records only:
         1. CoreAgent input message (HumanMessage)
         2. Final assistant response (AIMessage/AIMessageChunk text, or accumulated output)
 
@@ -1336,10 +1336,10 @@ class Executor:
 
         Args:
             step_messages: Messages collected from stream (AIMessage, AIMessageChunk, ToolMessage).
-            delegate_final: Ignored per IG-493 (raw task tool output).
+            delegate_final: Ignored per (raw task tool output).
             output: Accumulated text chunks from stream (fallback when messages have no AI text).
         """
-        _ = delegate_final  # Ignored per IG-493
+        _ = delegate_final  # Ignored per
         ai_text = self._extract_final_assistant_text_from_step_messages(step_messages)
         if ai_text:
             return ai_text
@@ -1683,7 +1683,7 @@ class Executor:
                         all_step_results.append(step_result)
                         yield step_result
                     else:
-                        # IG-493: result is _ExecuteStepResult dataclass
+                        # result is _ExecuteStepResult dataclass
                         res: _ExecuteStepResult = result
                         if n_steps == 1:
                             single_wave_messages = res.messages
@@ -1727,7 +1727,7 @@ class Executor:
             await asyncio.gather(*tasks, return_exceptions=True)
 
         # RFC-214: parallel waves must update the ledger so Plan-assess
-        # receives prior execute evidence via ``state.loop_messages`` (IG-374).
+        # receives prior execute evidence via ``state.loop_messages``.
         self._append_parallel_wave_ledger(state, steps, gather_results)
 
         parallel_multi = len(steps) > 1
@@ -1822,15 +1822,15 @@ class Executor:
         returned ``_ExecuteStepResult.events`` list.
 
         RFC-211: Collects outcome metadata instead of full output string.
-        IG-355: Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
-        IG-477: Thread isolation via __step_<id> namespace; predecessor context via ledger
+        Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
+        Thread isolation via __step_<id> namespace; predecessor context via ledger
         projection into graph input (no checkpoint fork).
 
         Args:
             step: StepAction with description and optional hints
             thread_id: Logical thread ID for StepExecutionRecord, logs, and durability lookups
             workspace: Thread-specific workspace path (RFC-103)
-            routing_classification: Loop routing payload for middleware (IG-349, IG-383).
+            routing_classification: Loop routing payload for middleware.
             continue_loop_mode: True when this loop has prior goals (RFC-225);
                 flows into LangGraph state so middleware injects loop-continuation guidance.
             loop_state: When set, generates isolated thread ID; multi-dep steps inject
@@ -1849,7 +1849,7 @@ class Executor:
                 default=self._max_tool_calls_per_step(),
             ),
         )
-        # IG-519: Init tool_call_args_registry directly (semaphore removed, registry preserved)
+        # Init tool_call_args_registry directly (semaphore removed, registry preserved)
         init_tool_call_args_registry()
 
         try:
@@ -1860,7 +1860,7 @@ class Executor:
                 budget.max_tool_calls_per_step,
             )
 
-            # IG-477: Thread isolation for parallel safety; predecessor context via injection.
+            # Thread isolation for parallel safety; predecessor context via injection.
             fork_thread_id = thread_id  # Default to main thread
 
             if loop_state is not None and loop_state.current_decision is not None:
@@ -1979,7 +1979,7 @@ class Executor:
                     loop_state_view=self._clarification_loop_state_view,
                     origin_node=ORIGIN_EXECUTE,
                     resume_answer_payload=self._clarification_resume_answer_payload,
-                    step_id=step.id,  # IG-549: for heartbeat correlation
+                    step_id=step.id,  # for heartbeat correlation
                 )
 
                 pass_output = ""
@@ -2087,7 +2087,7 @@ class Executor:
             )
 
             # RFC-105: Snapshot skill_activation from graph state back into LoopState
-            # IG-519: Only call aget_state when checkpointer is configured.
+            # Only call aget_state when checkpointer is configured.
             # Without checkpointer, skill_activation lives in LoopState via middleware hooks.
             if (
                 loop_state is not None
@@ -2122,7 +2122,7 @@ class Executor:
                 )
 
             # Note: tool_call_ids are now in unified format within messages chunks
-            # No separate binding events needed (IG-416 simplified design)
+            # No separate binding events needed (simplified design)
 
             primary_outcome = self._build_step_outcome_from_stream(
                 outcomes=stream_outcomes,
@@ -2135,7 +2135,7 @@ class Executor:
                     k: int(v) for k, v in execution_metrics.items()
                 }
 
-            # IG-148: Add CoreAgent input/output evidence
+            # Add CoreAgent input/output evidence
             primary_outcome["step_input"] = envelope  # HumanMessage content sent to Layer 1
             primary_outcome["output_summary"] = create_output_summary(output)  # Truncated findings
 
@@ -2202,7 +2202,7 @@ class Executor:
                 ),
                 messages=messages,
                 delegate_final=delegate_final,
-                output=output,  # IG-493: accumulated text for ledger fallback
+                output=output,  # accumulated text for ledger fallback
                 human_core_agent_message_id=human_core_agent_message_id,
                 ai_core_agent_message_id=ai_core_agent_message_id,
             )
@@ -2279,7 +2279,7 @@ class Executor:
                 ),
                 messages=[],
                 delegate_final="",
-                output="",  # IG-493: empty output for error case
+                output="",  # empty output for error case
             )
 
     async def _stream_and_collect(
@@ -2297,16 +2297,16 @@ class Executor:
         result.
 
         RFC-211: Also extracts tool_call_id and generates outcome metadata.
-        IG-151: Collects AIMessage objects for token usage extraction.
-        IG-355: Collects ``task`` tool return text (delegate finals) for goal completion when
+        Collects AIMessage objects for token usage extraction.
+        Collects ``task`` tool return text (delegate finals) for goal completion when
         subgraph AIMessages are not folded into root-graph act aggregation.
-        IG-416: Rewrites root-graph AI and ``ToolMessage`` ``tool_call_id`` values to unified
+        Rewrites root-graph AI and ``ToolMessage`` ``tool_call_id`` values to unified
         ``{step_id}:s:{tool_fragment}`` so streamed tool rows and tool results share stable ids.
         Tracks ToolMessage.status="error" and Error: tool bodies for outcome metadata.
 
         Args:
             stream: Async iterator from agent.astream()
-            budget: Optional Act wave budget (subagent ``task`` cap, IG-130).
+            budget: Optional Act wave budget (subagent ``task`` cap).
             step_id: When set, rewrite root-graph tool_call_ids to unified format
                 ``{step_id}:s:{tool_fragment}`` for consistent TUI rendering.
             step_description: Execute-step brief copied onto ``task`` kwargs when the
@@ -2335,17 +2335,17 @@ class Executor:
         search_calls_total = 0
         search_calls_shell_fallback = 0
         evidence_reads_total = 0
-        messages: list[BaseMessage] = []  # IG-151: Collect messages for token extraction
+        messages: list[BaseMessage] = []  # Collect messages for token extraction
         delegate_task_final_parts: list[str] = []
         delegate_task_ids_seen: set[str] = set()
         tool_args = ToolCallArgsCollector()
         subgraph_task_binder = _SubgraphNamespaceTaskBinder()
 
-        # RFC-211: Collect per-tool outcome metadata (structured, no filesystem cache; IG-387)
+        # RFC-211: Collect per-tool outcome metadata (structured, no filesystem cache;)
         outcomes: list[dict] = []
 
         no_progress_watchdog_triggered = 0
-        # IG-681: use idle_timeout (tool-aware) for no-progress watchdog.
+        # use idle_timeout (tool-aware) for no-progress watchdog.
         watchdog_seconds = self._dispatch_idle_seconds()
         last_progress_at = time.perf_counter()
 
@@ -2506,7 +2506,7 @@ class Executor:
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 _ns_chunk, mode_chunk, data_chunk = chunk
                 stream_ns = _ns_chunk if _ns_chunk else ()
-                # IG-416: Unify message tool_call_ids for client row/result matching.
+                # Unify message tool_call_ids for client row/result matching.
                 emit_chunk = chunk
                 tool_update_events: list[dict[str, Any]] = []
                 if (
@@ -2517,7 +2517,7 @@ class Executor:
                 ):
                     msg0 = data_chunk[0]
                     task_idx: int | None = None
-                    # IG-514: execute:* namespaces (root or sole-child /N reuse) are step-level.
+                    # execute:* namespaces (root or sole-child /N reuse) are step-level.
                     if _ns_chunk and not is_step_level_execute_namespace_key(_ns_chunk):
                         task_idx = subgraph_task_binder.task_idx_for_namespace(stream_ns)
                     if isinstance(msg0, (AIMessage, AIMessageChunk)):
@@ -2550,7 +2550,7 @@ class Executor:
                                 tool_args,
                             )
                         )
-                        # IG-493: Collect namespaced AIMessages for ledger recording.
+                        # Collect namespaced AIMessages for ledger recording.
                         # iter_messages_for_act_aggregation filters out subgraph messages,
                         # but the final synthesis from task subagent should be captured.
                         if _ns_chunk and isinstance(msg0, (AIMessage, AIMessageChunk)):
@@ -2663,7 +2663,7 @@ class Executor:
                 )
                 raw_tcid = str(getattr(tm, "tool_call_id", "") or "").strip()
                 tname = str(getattr(tm, "name", "") or "unknown").strip() or "unknown"
-                # Rewrite provider ID to unified ID for args lookup (IG-416).
+                # Rewrite provider ID to unified ID for args lookup.
                 # Namespaced ToolMessages may have provider IDs; subgraph_placeholder_update
                 # requires unified IDs. Ingest from invocation registry and map to unified ID.
                 subgraph_task_idx: int | None = None
@@ -2774,7 +2774,7 @@ class Executor:
         Parses common error types (especially OpenAI API errors) to extract
         actionable information for the judge to understand failures.
 
-        IG-295: Enhanced timeout errors include retry metadata for planner revision.
+        Enhanced timeout errors include retry metadata for planner revision.
 
         Args:
             exc: The exception that occurred
@@ -2791,7 +2791,7 @@ class Executor:
         if _is_recoverable_tool_network_error(exc):
             return _format_tool_network_error(exc)
 
-        # IG-295: Enhanced timeout error with metadata
+        # Enhanced timeout error with metadata
         if isinstance(exc, EnhancedTimeoutError):
             parts = [
                 f"Request timed out after {exc.retries} retries",
@@ -2853,7 +2853,7 @@ class Executor:
         - HTTP 413 (request too large)
         - OpenAI error code "invalid_parameter_error"
 
-        Retryable errors (IG-295):
+        Retryable errors:
         - EnhancedTimeoutError (timeout with retries exhausted at middleware)
 
         Args:
@@ -2865,13 +2865,13 @@ class Executor:
         from langchain_core.exceptions import ContextOverflowError
         from soothe_deepagents.middleware.llm_rate_limit import EnhancedTimeoutError
 
-        # Enhanced timeout error (IG-295) - retries exhausted at middleware
+        # Enhanced timeout error - retries exhausted at middleware
         if isinstance(exc, EnhancedTimeoutError):
             # Classified as "execution" (retryable) but retries already attempted
             # Planner can still revise plan based on timeout metadata
             return "execution"
 
-        # IG-681 / IG-683: stream stall / tool wall-clock — planner should replan
+        # / stream stall / tool wall-clock — planner should replan
         if isinstance(exc, DispatchTimeoutError):
             return "timeout"
 

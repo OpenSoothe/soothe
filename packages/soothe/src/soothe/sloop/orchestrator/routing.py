@@ -1,4 +1,4 @@
-"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630, IG-663, IG-672, IG-676)."""
+"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630,,)."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 def route_after_evidence_gather(state: dict[str, Any]) -> str:
-    """Route from gather_evidence based on fresh-loop / structural keep (IG-476, IG-671)."""
+    """Route from gather_evidence based on fresh-loop / structural keep."""
     route = state.get("evidence_gather_route")
     if route == "keep_plan":
         logger.info("[routing] route_after_evidence_gather → commit_plan (structural keep)")
@@ -37,7 +37,7 @@ def route_after_evidence_gather(state: dict[str, Any]) -> str:
     if route == "plan_generate_skip_evaluate":
         logger.info("[routing] route_after_evidence_gather → generate_plan (fresh-loop skip)")
         return GENERATE_PLAN
-    # IG-672: mid-goal path is always evaluate.
+    # mid-goal path is always evaluate.
     logger.info("[routing] route_after_evidence_gather → evaluate")
     return EVALUATE
 
@@ -58,7 +58,7 @@ def _pending_clarification(state: dict[str, Any]) -> bool:
 
 
 def route_after_preprocess(state: dict[str, Any]) -> str:
-    """RFC-630 / IG-676: branch dispatch after enter_loop.
+    """RFC-630 / branch dispatch after enter_loop.
 
     Priority (first match wins):
 

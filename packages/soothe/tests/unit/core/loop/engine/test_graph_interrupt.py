@@ -1,4 +1,4 @@
-"""Tests for tool-aware dispatch timeout in GraphStreamChunkReader (IG-681).
+"""Tests for tool-aware dispatch timeout in GraphStreamChunkReader.
 
 Covers:
 - Deadlock detection (no chunks, no root tool pending)

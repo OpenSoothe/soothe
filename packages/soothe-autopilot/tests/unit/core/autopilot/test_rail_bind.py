@@ -1,4 +1,4 @@
-"""Unit tests for AutopilotService LoopRail bind (IG-678 P2 / IG-728)."""
+"""Unit tests for AutopilotService LoopRail bind (P2)."""
 
 from __future__ import annotations
 

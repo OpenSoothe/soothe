@@ -1,6 +1,6 @@
 """CronJobStore — Database persistence for cron jobs (RFC-229).
 
-SQLite-backed storage via process-scoped ``SqliteStoreRuntime`` (IG-647).
+SQLite-backed storage via process-scoped ``SqliteStoreRuntime``.
 """
 
 from __future__ import annotations

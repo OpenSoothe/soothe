@@ -1,6 +1,6 @@
 """Resolve which LoopRail (if any) applies to a job submit.
 
-Deterministic cascade (IG-678): explicit → workspace ``.rail-default`` →
+Deterministic cascade: explicit → workspace ``.rail-default`` →
 config ``default_rail`` → None.
 
 LLM auto-pick (RFC-231 §10 / IG-728): when submit omits ``rail_id``, optionally

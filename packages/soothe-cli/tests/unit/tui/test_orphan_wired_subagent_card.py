@@ -1,4 +1,4 @@
-"""IG-602: orphan wired-subagent SubAgent card mount / complete."""
+"""orphan wired-subagent SubAgent card mount / complete."""
 
 from __future__ import annotations
 

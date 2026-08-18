@@ -1,4 +1,4 @@
-"""Tests for the step deliverable gate (IG-569)."""
+"""Tests for the step deliverable gate."""
 
 from __future__ import annotations
 

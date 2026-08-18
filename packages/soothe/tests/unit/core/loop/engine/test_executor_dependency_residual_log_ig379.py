@@ -1,4 +1,4 @@
-"""IG-379: dependency-mode residual step logging."""
+"""dependency-mode residual step logging."""
 
 from __future__ import annotations
 

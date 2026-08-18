@@ -1,4 +1,4 @@
-"""Loop-scoped isolation for the daemon client plane (IG-408).
+"""Loop-scoped isolation for the daemon client plane.
 
 Minimal API for other modules:
     - ``bind_execution_thread_for_loop``: align runner + registry with loop metadata

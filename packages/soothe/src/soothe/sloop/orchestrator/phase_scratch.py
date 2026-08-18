@@ -27,9 +27,9 @@ class LoopPhaseScratch:
     decision: AgentDecision | None = None
     iteration_perf_start: float | None = None
     step_results: list[Any] = field(default_factory=list)
-    # RFC-633 / IG-658: intake planner *subagent* review gate (not StrangeLoop plan_*)
+    # RFC-633 / intake planner *subagent* review gate (not StrangeLoop plan_*)
     plan_artifact_path: str | None = None
     plan_artifact_markdown: str | None = None
     planner_subagent_review_comments: str | None = None
-    # IG-660: Approve → StrangeLoop plan_generate handoff (one-shot).
+    # Approve → StrangeLoop plan_generate handoff (one-shot).
     planner_implement_handoff: bool = False

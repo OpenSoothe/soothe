@@ -1,4 +1,4 @@
-"""Loop Graph ``init_or_resume`` node (RFC-220, RFC-630, IG-554, IG-599, IG-676).
+"""Loop Graph ``init_or_resume`` node (RFC-220, RFC-630,,).
 
 Hydrates intent/routing from intake classified in the graph entry node.
 Surfaces ``intake_label``, ``is_fresh_goal``, and ``is_continuation`` for routing.
@@ -6,7 +6,7 @@ Fresh trivial/simple inject a pseudo single-step plan; mid-loop goals share the
 default ``gather_evidence`` spine. Wired specialists set
 ``intent_route=wired_subagent`` (plan built in ``invoke_wired_subagent``).
 
-IG-554: ``new_goal_created`` blocks chitchat fast-path when daemon already
+``new_goal_created`` blocks chitchat fast-path when daemon already
 committed to agentic work.
 """
 
@@ -72,7 +72,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
     is_continuation = is_structural_continuation(ctx)
     is_fresh = is_fresh_goal(ctx)
 
-    # IG-554: new_goal_created signals daemon committed to agentic work.
+    # new_goal_created signals daemon committed to agentic work.
     new_goal_created = not getattr(ctx, "recovery_valid_resume", False)
 
     is_task = intake_label != IntakeLabel.CHITCHAT if intake_label is not None else None
@@ -136,7 +136,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
                 intent_route="wired_subagent",
             )
 
-    # Fresh trivial/simple only: mid-loop never injects (IG-676).
+    # Fresh trivial/simple only: mid-loop never injects.
     if (
         is_fresh
         and intake_label in (IntakeLabel.TRIVIAL, IntakeLabel.SIMPLE)

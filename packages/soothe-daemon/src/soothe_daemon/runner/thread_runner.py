@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_RESPONSE_QUEUE_MAXSIZE = 200  # IG-535: dense streaming under many concurrent loops
+_RESPONSE_QUEUE_MAXSIZE = 200  # dense streaming under many concurrent loops
 _WORKER_READY_TIMEOUT_SECONDS = 45.0
 
 # Last error per worker thread (survives unexpected thread exit for watchdog logs).
@@ -149,7 +149,7 @@ def _thread_worker_body(
     Behavior:
         - Creates dedicated asyncio event loop at startup
         - Wait for requests on request_queue (with idle timeout)
-        - Reuse one SootheRunner per worker when ``reuse_runner`` (IG-506)
+        - Reuse one SootheRunner per worker when ``reuse_runner``
         - Execute request, stream results to response_queue
         - Check cancel_event between chunks for cooperative cancellation
         - Exit on stop_event, idle timeout (scaled workers only), or max requests
@@ -468,7 +468,7 @@ class ThreadPool:
         - response_queue for sending responses back
         - cancel_event for cooperative cancellation
 
-    Workers reuse one SootheRunner per thread (IG-506) and stream results tagged
+    Workers reuse one SootheRunner per thread  and stream results tagged
     with request_id for routing to the correct pending request.
 
     Lifecycle:
@@ -607,7 +607,7 @@ class ThreadPool:
             self._idle_timeout_seconds,
             self._max_requests_per_thread,
         )
-        # IG-534: Guidance for thread pool sizing relative to concurrent loops
+        # Guidance for thread pool sizing relative to concurrent loops
         if self._max_pool_size < 4:
             logger.warning(
                 "ThreadPool: max_pool_size=%d is small; recommend ≥4 for multi-loop workloads "
@@ -914,7 +914,7 @@ class ThreadPool:
             logger.exception("ThreadPool: failed to respawn dead worker %s", worker.worker_id)
 
     async def _worker_health_watchdog(self) -> None:
-        """Dead-worker recovery and idle stale-queue drain (no chunk relay; IG-429)."""
+        """Dead-worker recovery and idle stale-queue drain (no chunk relay;)."""
         loop = asyncio.get_event_loop()
 
         while self._running:
@@ -1150,7 +1150,7 @@ class ThreadPool:
                         finally:
                             self._waiting_for_worker_slot -= 1
 
-                # IG-477: Bound response queue to prevent memory leak
+                # Bound response queue to prevent memory leak
                 response_queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=_RESPONSE_QUEUE_MAXSIZE)
                 self._pending_responses[request_id] = response_queue
                 self._workers_by_loop_id[request.loop_id] = worker.worker_id

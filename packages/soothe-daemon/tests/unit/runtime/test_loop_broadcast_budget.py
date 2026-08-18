@@ -1,4 +1,4 @@
-"""Tests for per-loop broadcast budget (IG-534 Phase 2.2)."""
+"""Tests for per-loop broadcast budget (Phase 2.2)."""
 
 from __future__ import annotations
 

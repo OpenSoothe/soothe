@@ -7,7 +7,7 @@ from __future__ import annotations
 _CONTINUE_KEYWORDS = frozenset({"continue", "resume", "proceed"})
 
 # Single-token lines that resume an *interrupted* in-flight goal in place
-# (same StrangeLoop goal + CE step DAG). Includes ``retry`` (loop 9e20 / IG-684).
+# (same StrangeLoop goal + CE step DAG). Includes ``retry`` (loop 9e20).
 _INTERRUPT_RESUME_KEYWORDS = frozenset({"continue", "resume", "proceed", "retry"})
 
 

@@ -261,7 +261,7 @@ class GoalNode(BaseModel):
     send_back_count: int = 0  # Consensus send-backs
     max_send_backs: int = 3
     attempts_after_crash: int = 0  # RFC-222 H4
-    # Engine liveness recovery after retry/send_back budgets (IG-697)
+    # Engine liveness recovery after retry/send_back budgets
     engine_recovery_count: int = 0
 
     # Workspace (from Goal, RFC-222). Submit contract lives in
@@ -282,10 +282,10 @@ class GoalNode(BaseModel):
     # Operator verification criteria (RFC-228 job_create; host maturity in RFC-230)
     verification_rules: str | None = None
 
-    # Job-level maturity snapshot (RFC-230 / IG-692) — set on rail job roots
+    # Job-level maturity snapshot (RFC-230) — set on rail job roots
     maturity: dict[str, Any] | None = None
 
-    # LoopRail binding (IG-678 P2) — job-scoped policy metadata on the DAG
+    # LoopRail binding (P2) — job-scoped policy metadata on the DAG
     rail_id: str | None = None
     rail_tags: list[str] = Field(default_factory=list)
     branch_id: str | None = None
@@ -313,7 +313,7 @@ class GoalNode(BaseModel):
     # execution elapsed counts only the current run, not queue wait.
     started_at: datetime | None = None
 
-    # Plan-assess audit (IG-557; not replayed into assess prompts except Phase C inline)
+    # Plan-assess audit (; not replayed into assess prompts except Phase C inline)
     last_assessment: dict[str, Any] | None = None
     last_assessment_iteration: int | None = None
     last_gap_analysis: dict[str, Any] | None = None
@@ -528,7 +528,7 @@ class GoalStepDAG(BaseModel):
     def recover_active_goals(self) -> list[str]:
         """Reset goals stuck in 'active' to 'pending' (crash recovery).
 
-        Increments ``attempts_after_crash`` on each recovered goal (IG-678 P1-3).
+        Increments ``attempts_after_crash`` on each recovered goal (P1-3).
         """
         recovered: list[str] = []
         now = datetime.now(UTC)

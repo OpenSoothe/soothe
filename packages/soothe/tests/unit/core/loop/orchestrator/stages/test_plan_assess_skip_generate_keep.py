@@ -1,4 +1,4 @@
-"""Assess routes skip_generate when continue + remaining steps (IG-671)."""
+"""Assess routes skip_generate when continue + remaining steps."""
 
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ async def test_assess_replan_continues_generate() -> None:
 
 @pytest.mark.asyncio
 async def test_assess_keep_rejected_after_failed_step() -> None:
-    """IG-683: last-step failure must not skip_generate / keep the dead plan."""
+    """last-step failure must not skip_generate / keep the dead plan."""
     ctx = _make_ctx()
     ctx.loop_state._step_results_cache = [
         StepExecutionRecord(

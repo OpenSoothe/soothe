@@ -1,6 +1,6 @@
-"""Intent classification module (RFC-225, RFC-630, IG-554).
+"""Intent classification module (RFC-225, RFC-630).
 
-Two-pass LLM intake (RFC-630 IG-554):
+Two-pass LLM intake (RFC-630):
 - Pass 1 (social vs task) via ``IntakePass1Classifier``.
 - Pass 2 (scope: trivial|simple|complex) via ``IntakePass2Classifier``.
 - Full orchestration via ``TwoPassIntakeCoordinator``.

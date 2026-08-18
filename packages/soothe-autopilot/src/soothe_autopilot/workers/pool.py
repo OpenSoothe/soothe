@@ -1,4 +1,4 @@
-"""WorkerPool — sticky-affinity wrapper over LoopRunnerFactory (RFC-222 / IG-677).
+"""WorkerPool — sticky-affinity wrapper over LoopRunnerFactory (RFC-222).
 
 WorkerPool is the daemon-owned abstraction over RFC-221's per-loop_id
 runners. Capacity is tracked by reusable **slots**; each goal assignment
@@ -95,7 +95,7 @@ class WorkerSlot:
     def release_to_idle(self, success: bool = True) -> None:
         """Return this slot to idle after a goal finishes (success or failure).
 
-        Failed dispatches must not permanently remove capacity (IG-678 P0-4).
+        Failed dispatches must not permanently remove capacity (P0-4).
         ``last_dispatch_ok`` records outcome for observability only.
         """
         if self.current_goal_id:
@@ -115,7 +115,7 @@ class WorkerSlot:
 
 
 class WorkerPool:
-    """Sticky-affinity wrapper over LoopRunnerFactory (RFC-222 / IG-677).
+    """Sticky-affinity wrapper over LoopRunnerFactory (RFC-222).
 
     Args:
         factory: source of ``LoopRunnerProtocol`` instances.

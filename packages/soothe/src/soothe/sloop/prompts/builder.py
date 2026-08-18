@@ -93,7 +93,7 @@ class PromptBuilder:
         SystemMessage: environment, workspace, policies, instructions (static)
         HumanMessage: goal, evidence, prior conversation (dynamic)
 
-    IG-183: Uses prefetched fragments for cache optimization.
+    Uses prefetched fragments for cache optimization.
     """
 
     def __init__(self, config: SootheConfig | None = None) -> None:
@@ -119,7 +119,7 @@ class PromptBuilder:
         inline_assessment: Any | None = None,
         plan_gap: Any | None = None,
     ) -> list[BaseMessage]:
-        """Build SystemMessage + projected ledger + task envelope (RFC-214 §4, IG-538)."""
+        """Build SystemMessage + projected ledger + task envelope (RFC-214 §4)."""
         from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
@@ -254,7 +254,7 @@ class PromptBuilder:
         """Construct static context: policies and phase instructions.
 
         Maps RFC-206 SYSTEM_CONTEXT + INSTRUCTIONS layers to SystemMessage.
-        Uses prefetched fragments for cache optimization (IG-183).
+        Uses prefetched fragments for cache optimization.
 
         Workspace path semantics, ENVIRONMENT, WORKSPACE metadata, and
         AGENT_INSTRUCTIONS live on execute-step CoreAgent system prompts only —
@@ -262,7 +262,7 @@ class PromptBuilder:
         stability.
 
         Section ordering:
-        - **assess** (IG-372): PLAN_ASSESS_INSTRUCTIONS, then conditional blocks.
+        - **assess** : PLAN_ASSESS_INSTRUCTIONS, then conditional blocks.
         - **generate**: EXECUTION_POLICIES, PLAN_GENERATE_INSTRUCTIONS, conditional blocks.
         - **continuation**: PLAN_CONTINUATION_DISCRIMINATE, conditional blocks.
 
@@ -271,7 +271,7 @@ class PromptBuilder:
         Args:
             context: Planning context with workspace, capabilities
             state: Optional loop state for iteration limits and capability context
-            plan_phase: Which planner LLM call this system prompt serves (IG-372).
+            plan_phase: Which planner LLM call this system prompt serves.
             context_bundle: Optional ContextBundle (RFC-624). When provided, project/agent/memory
                 instructions from the bundle replace or supplement disk reads.
         """
@@ -344,7 +344,7 @@ class PromptBuilder:
 
         StrangeLoop ledger messages are appended separately in ``build_plan_messages`` so the
         plan model sees native human/AI turns instead of a single flattened block.
-        Execute-step evidence lives in those ledger messages (IG-368).
+        Execute-step evidence lives in those ledger messages.
 
         Uses scenario-based structured text (GOAL/CONTEXT/TASK) instead
         of XML envelopes.

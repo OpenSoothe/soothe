@@ -1,4 +1,4 @@
-"""Routing for structural keep from gather_evidence (IG-671)."""
+"""Routing for structural keep from gather_evidence."""
 
 from __future__ import annotations
 

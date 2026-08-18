@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class GoalLoopTrace:
-    """Shared Langfuse trace for one agentic goal turn (IG-540).
+    """Shared Langfuse trace for one agentic goal turn.
 
     Stages use a fresh handler pinned to ``trace_id`` so LangChain invocations do not
     open separate root traces. Pass through runner → classifier → graph invoke.

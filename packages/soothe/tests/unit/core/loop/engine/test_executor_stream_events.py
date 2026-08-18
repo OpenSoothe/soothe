@@ -60,7 +60,7 @@ async def test_stream_and_collect_forwards_step_heartbeat_custom_event() -> None
 async def test_interrupt_resume_emits_raw_tuple_on_heartbeat(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """IG-549: heartbeat must be a LangGraph tuple for ``_stream_and_collect`` to wrap it."""
+    """heartbeat must be a LangGraph tuple for ``_stream_and_collect`` to wrap it."""
     monkeypatch.setattr(
         "soothe.sloop.engine.graph_interrupt._STREAM_HEARTBEAT_INTERVAL_S",
         0.15,

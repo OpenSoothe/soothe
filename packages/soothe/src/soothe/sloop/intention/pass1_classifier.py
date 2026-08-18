@@ -1,4 +1,4 @@
-"""Pass 1 classifier: social vs task (RFC-630 IG-554).
+"""Pass 1 classifier: social vs task (RFC-630).
 
 Binary decision with no prior context. Returns ``is_task`` boolean plus
 ``social_response`` for fast-path END when social.
@@ -77,7 +77,7 @@ def build_pass1_task_fallback(
 
 
 def _log_pass1_result(result: IntakePass1LLMResult) -> None:
-    """Log Pass 1 reasoning at info for log-file visibility (IG-554)."""
+    """Log Pass 1 reasoning at info for log-file visibility."""
     reasoning = (result.reasoning or "").strip()
     if reasoning:
         logger.info(
@@ -94,7 +94,7 @@ def _log_pass1_result(result: IntakePass1LLMResult) -> None:
 
 
 class IntakePass1Classifier:
-    """Pass 1: binary social vs task classification (RFC-630 IG-554).
+    """Pass 1: binary social vs task classification (RFC-630).
 
     Clean decision boundary with no prior context projection. Returns ``is_task``
     boolean and ``social_response`` for fast-path END on social queries.

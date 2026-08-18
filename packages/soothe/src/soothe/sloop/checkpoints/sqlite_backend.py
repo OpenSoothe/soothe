@@ -1,7 +1,7 @@
 """SQLite backend for StrangeLoop checkpoint persistence.
 
 RFC-215: StrangeLoop Persistence Backend Architecture
-IG-055: Backend-agnostic implementation with connection pooling
+Backend-agnostic implementation with connection pooling
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ _SLIM_GOAL_RECORD_COLUMNS = frozenset(
 class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     """SQLite backend for StrangeLoop checkpoint persistence.
 
-    IG-647 / RFC-801: process-scoped ``SqliteStoreRuntime`` per database file.
+    / RFC-801: process-scoped ``SqliteStoreRuntime`` per database file.
     """
 
     def __init__(self, db_path: Path, pool_size: int = 5) -> None:
@@ -100,7 +100,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         """Run ``sync_fn(conn, *args)`` on a leased Runtime reader."""
         return await self._runtime.run_read(lambda conn: sync_fn(conn, *args))
 
-    # IG-055: Implement abstract interface methods
+    # Implement abstract interface methods
 
     async def register_loop(
         self,

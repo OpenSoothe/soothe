@@ -1,4 +1,4 @@
-"""IG-557 Phase G: CE last_assessment audit without plan_assess ledger pairs."""
+"""Phase G: CE last_assessment audit without plan_assess ledger pairs."""
 
 from __future__ import annotations
 

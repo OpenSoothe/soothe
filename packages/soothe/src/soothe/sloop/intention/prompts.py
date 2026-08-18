@@ -1,4 +1,4 @@
-"""LLM prompts for two-pass intake classification (RFC-630, IG-554).
+"""LLM prompts for two-pass intake classification (RFC-630).
 
 - ``INTAKE_PASS1_SYSTEM_PROMPT``: Social vs task (no prior context).
 - ``INTAKE_PASS2_SYSTEM_PROMPT``: Scope (trivial/simple/complex).

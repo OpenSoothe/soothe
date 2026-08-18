@@ -1,4 +1,4 @@
-"""Tests for IG-429 ResponsePusher (zero poll-delay thread bridge)."""
+"""Tests for ResponsePusher (zero poll-delay thread bridge)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for structured plan parser (IG-433)."""
+"""Tests for structured plan parser."""
 
 from soothe.sloop.cognition.parser import parse_plan_from_text
 

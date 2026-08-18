@@ -1,4 +1,4 @@
-"""Unit tests for integration port isolation (IG-622)."""
+"""Unit tests for integration port isolation."""
 
 from __future__ import annotations
 

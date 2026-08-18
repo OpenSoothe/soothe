@@ -1,4 +1,4 @@
-"""Clarification verification-stage origin constants (RFC-622, RFC-633, IG-663, IG-672).
+"""Clarification verification-stage origin constants (RFC-622, RFC-633,).
 
 Two different planning concepts must not be conflated:
 
@@ -32,7 +32,7 @@ ORIGIN_PLAN_GENERATE: Final = GENERATE_PLAN
 """StrangeLoop planning-stage ``generate_plan`` station clarification."""
 
 ORIGIN_PLAN_EVALUATE: Final = EVALUATE
-"""StrangeLoop planning-stage ``evaluate`` station clarification (IG-672)."""
+"""StrangeLoop planning-stage ``evaluate`` station clarification."""
 
 # --- Planner subagent review (intake specialist; not StrangeLoop plan_*) -----
 
@@ -69,7 +69,7 @@ CLARIFICATION_ORIGINS: frozenset[str] = frozenset(
     }
 )
 
-# Persisted interrupt origins from pre-IG-663 / pre-IG-672 runs.
+# Persisted interrupt origins from pre-/ pre-runs.
 _LEGACY_CLARIFICATION_ORIGINS: frozenset[str] = frozenset(
     {
         "plan_generate",

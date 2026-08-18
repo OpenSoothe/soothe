@@ -276,7 +276,7 @@ class AutopilotSootheRunner(SootheRunner):
 
         - PlanResult.is_done() True → ``completed``
         - PlanResult status indicates retryable / incomplete → ``needs_replan``
-        - None (clarification exit / empty terminal) → ``needs_replan`` (IG-680)
+        - None (clarification exit / empty terminal) → ``needs_replan``
         - Anything else → ``failed``
         """
         if plan_result is None:

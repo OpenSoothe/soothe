@@ -64,7 +64,7 @@ class _FakeRunnerFactory:
 
 
 class _SlowCancelRunner(_FakeRunner):
-    """Simulates subagent unwind: cancellation delivers after a delay (IG-398)."""
+    """Simulates subagent unwind: cancellation delivers after a delay."""
 
     def __init__(self, unwind_delay: float = 0.05) -> None:
         super().__init__()
@@ -333,7 +333,7 @@ def _daemon_factory(
 
 @pytest.mark.asyncio
 async def test_cancel_does_not_emit_legacy_success_or_early_idle() -> None:
-    """cancel_loop must not broadcast legacy success or forge idle (IG-398)."""
+    """cancel_loop must not broadcast legacy success or forge idle."""
     broadcasts: list[dict[str, Any]] = []
     runner = _SlowCancelRunner(unwind_delay=0.02)
     daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)

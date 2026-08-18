@@ -1,4 +1,4 @@
-"""Planner-emitted ``ask_user`` step routing through ``node_execute`` (IG-462)."""
+"""Planner-emitted ``ask_user`` step routing through ``node_execute``."""
 
 from __future__ import annotations
 

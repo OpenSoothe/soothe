@@ -1,4 +1,4 @@
-"""Vision preflight for daemon input with image attachments (IG-327)."""
+"""Vision preflight for daemon input with image attachments."""
 
 from __future__ import annotations
 

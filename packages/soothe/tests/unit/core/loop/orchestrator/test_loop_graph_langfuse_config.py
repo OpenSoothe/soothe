@@ -1,4 +1,4 @@
-"""Loop graph RunnableConfig + Langfuse bridge (RFC-220, IG-367, IG-396, IG-540)."""
+"""Loop graph RunnableConfig + Langfuse bridge (RFC-220,,)."""
 
 from unittest.mock import MagicMock, patch
 

@@ -1,4 +1,4 @@
-"""Tests for RFC-226 LLMPlanner.assess_continuation discriminator (IG-538 assembly)."""
+"""Tests for RFC-226 LLMPlanner.assess_continuation discriminator (assembly)."""
 
 from __future__ import annotations
 

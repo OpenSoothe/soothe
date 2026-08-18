@@ -114,7 +114,7 @@ class SootheRunner(
         self._identity_runtime = identity_runtime
         self._checkpointer_pool = None  # Will be set if using PostgreSQL
 
-        # Initialize intent classifier (IG-226: core.intention module).
+        # Initialize intent classifier (core.intention module).
         # Unified classification is always enabled; classifier is omitted only if fast model is unavailable.
         fast_model = None
         try:
@@ -214,7 +214,7 @@ class SootheRunner(
         # Client-visible loop id for the active ``astream`` (daemon loop scope / logging).
         self._client_loop_id_for_stream: str | None = None
 
-        # IG-406: Shared PostgreSQL pool for StrangeLoop state persistence
+        # Shared PostgreSQL pool for StrangeLoop state persistence
         # Initialized lazily in async context for high-concurrency support
         self._sloop_shared_pool: Any = None  # SharedPostgreSQLPool | None
 
@@ -244,7 +244,7 @@ class SootheRunner(
         return self._core_agent
 
     def prepare_for_request(self) -> None:
-        """Reset per-request runner mirrors without recompiling CoreAgent (IG-506)."""
+        """Reset per-request runner mirrors without recompiling CoreAgent."""
         self._clear_query_scoped_runner_state()
         self._client_loop_id_for_stream = None
 
@@ -274,7 +274,7 @@ class SootheRunner(
         self._current_thread_id = thread_id
 
     def _clear_query_scoped_runner_state(self) -> None:
-        """Clear per-query mirrors on this singleton runner (IG-110).
+        """Clear per-query mirrors on this singleton runner.
 
         Per-call state is held in local variables of ``astream``; this resets
         CLI/debug pointers so cancelled or completed runs do not leak into
@@ -283,7 +283,7 @@ class SootheRunner(
         self._current_plan = None
 
     def thread_context_manager(self) -> Any:
-        """Return ``ThreadContextManager`` for durability/thread operations (IG-110).
+        """Return ``ThreadContextManager`` for durability/thread operations.
 
         Callers outside core (e.g. daemon) should use this instead of reading
         ``runner._durability`` directly.
@@ -313,7 +313,7 @@ class SootheRunner(
     async def get_sloop_shared_pool(self) -> Any:
         """Get or initialize the shared PostgreSQL pool for StrangeLoop state.
 
-        IG-406: Singleton pool for high-concurrency (200+ threads) support.
+        Singleton pool for high-concurrency (200+ threads) support.
         Pool is shared across all StrangeLoopStateManager instances.
 
         Returns:
@@ -453,7 +453,7 @@ class SootheRunner(
         """Clean up resources during shutdown.
 
         Stops background indexer tasks and closes connection pools.
-        IG-406: Closes shared StrangeLoop PostgreSQL pool at daemon shutdown.
+        Closes shared StrangeLoop PostgreSQL pool at daemon shutdown.
 
         For SQLite checkpointers, closes the underlying ``aiosqlite`` connection.
         That library runs a non-daemon worker thread; leaving it open prevents the
@@ -481,7 +481,7 @@ class SootheRunner(
             except Exception:
                 logger.debug("Failed to close checkpointer pool", exc_info=True)
 
-        # IG-406: Clear reference to shared StrangeLoop PostgreSQL pool
+        # Clear reference to shared StrangeLoop PostgreSQL pool
         # NOTE: Do NOT close the global singleton here - it's shared across all threads
         # in thread_pool mode. Pool is closed at daemon shutdown via LoopRunnerFactory.
         self._sloop_shared_pool = None
@@ -598,7 +598,7 @@ class SootheRunner(
         clarification_mode: str | None = None,  # RFC-622 per-request override
         clarification_answer: bool = False,  # RFC-622: resume hint
         clarification_answers: list[str] | None = None,  # RFC-622: per-question answers
-        resume_interrupted: bool = False,  # IG-670: daemon crash recovery
+        resume_interrupted: bool = False,  # daemon crash recovery
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
@@ -619,7 +619,7 @@ class SootheRunner(
             workspace: Thread-specific workspace path (RFC-103). When omitted, resolved via
                 ``resolve_workspace_for_stream`` (daemon default, then cwd). The
                 resolved path is always a non-empty absolute directory string for this call.
-            preferred_subagent: Optional subagent hint merged into StrangeLoop (IG-349).
+            preferred_subagent: Optional subagent hint merged into StrangeLoop.
             intake_scope: Optional client-forced intake scope
                 (``trivial``|``simple``|``complex``); skips Pass 1+2 LLM when set.
             client_loop_id: Daemon client loop scope for logging and stream correlation.

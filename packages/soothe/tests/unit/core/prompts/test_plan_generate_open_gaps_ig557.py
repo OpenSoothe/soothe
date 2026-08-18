@@ -1,4 +1,4 @@
-"""IG-557 Phase F: gap-informed plan-generate OPEN GAPS envelope."""
+"""Phase F: gap-informed plan-generate OPEN GAPS envelope."""
 
 from __future__ import annotations
 

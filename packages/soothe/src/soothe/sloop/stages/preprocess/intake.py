@@ -1,4 +1,4 @@
-"""Loop Graph entry node: LLM intake classification (RFC-220, RFC-630, IG-554).
+"""Loop Graph entry node: LLM intake classification (RFC-220, RFC-630).
 
 When intake was not pre-classified in the pre-graph gather, this node runs
 the two-pass coordinator. Pre-classified intents (Pass 1 social early-exit
@@ -105,7 +105,7 @@ def _should_skip_intent_classify(ctx: LoopRuntimeContext) -> bool:
 
 
 async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Classify user intake using two-pass architecture (RFC-630 IG-554)."""
+    """Classify user intake using two-pass architecture (RFC-630)."""
     if _should_skip_intent_classify(ctx):
         logger.info("[Intent] Skipping graph entry classification (clarification resume)")
         return {}

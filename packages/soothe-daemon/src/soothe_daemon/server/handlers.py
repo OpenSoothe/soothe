@@ -1,4 +1,4 @@
-"""Client connection handling for the daemon (IG-110).
+"""Client connection handling for the daemon.
 
 Heavy logic lives in ``message_router`` and ``query_engine``; this mixin wires
 transport entrypoints and the input queue loop.
@@ -111,7 +111,7 @@ class DaemonHandlersMixin:
         await self._message_router.dispatch(client_id, msg)
 
     async def _process_loop_input_message(self, loop_id: str, msg: dict[str, Any]) -> None:
-        """Process one loop-scoped message from ``LoopInputDispatcher`` (IG-408).
+        """Process one loop-scoped message from ``LoopInputDispatcher``.
 
         Supported ``msg["type"]`` values for user turns: ``input`` (normalized queue
         payload from ``loop_input`` RPC) or ``loop_input`` (wire-shaped dict with

@@ -1,4 +1,4 @@
-"""Envelope peeling for planner structured-output payloads (IG-668).
+"""Envelope peeling for planner structured-output payloads.
 
 Thinking models sometimes emit the requested object nested under a single
 wrapper key named after the prompt section (``{"PLAN_ASSESS": {...}}``) instead

@@ -1,4 +1,4 @@
-"""Pre-graph intake progress events surfaced before graph pump (IG-554)."""
+"""Pre-graph intake progress events surfaced before graph pump."""
 
 from __future__ import annotations
 

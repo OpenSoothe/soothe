@@ -1,4 +1,4 @@
-"""PostgreSQLPersistenceBackend pool ownership (IG-406 shared pool)."""
+"""PostgreSQLPersistenceBackend pool ownership (shared pool)."""
 
 from __future__ import annotations
 

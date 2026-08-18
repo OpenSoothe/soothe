@@ -116,7 +116,7 @@ GOAL_DEFERRED = "soothe.cognition.goal.deferred"
 # Autopilot mode switching
 AUTOPILOT_MODE_SWITCHED = "soothe.cognition.autopilot.mode_switched"
 
-# Intent classification (IG-518)
+# Intent classification
 INTENT_CLASSIFIED = "soothe.cognition.intent.classified"
 
 # Plan cognition (client UX)
@@ -134,7 +134,7 @@ STRANGE_LOOP_PLAN_PHASE = "soothe.cognition.strange_loop.plan.phase"
 STRANGE_LOOP_REASONED = "soothe.cognition.strange_loop.reasoned"
 STRANGE_LOOP_CONTEXT_COMPACTED = "soothe.cognition.strange_loop.context.compacted"  # RFC-224
 
-# Intake-only wired specialist lifecycle (IG-602 / RFC-630 §6.3.3)
+# Intake-only wired specialist lifecycle (RFC-630 §6.3.3)
 WIRED_SUBAGENT_STARTED = "soothe.cognition.wired_subagent.started"
 WIRED_SUBAGENT_COMPLETED = "soothe.cognition.wired_subagent.completed"
 WIRED_SUBAGENT_FAILED = "soothe.cognition.wired_subagent.failed"
@@ -297,11 +297,9 @@ class StrangeLoopCompletedEvent(LifecycleEvent):
     )
     thread_id: str
     status: str
-    goal_progress: Literal[
-        "none", "low", "medium", "high", "complete"
-    ]  # IG-399: descriptive levels
+    goal_progress: Literal["none", "low", "medium", "high", "complete"]  # descriptive levels
     evidence_summary: str
-    # IG-267: Include goal for CLI display trophy message
+    # Include goal for CLI display trophy message
     goal: str = ""
     # One-line UI summary for TUI/registry (avoid duplicating streamed full_output).
     completion_summary: str = ""
@@ -480,7 +478,7 @@ class PlanDagSnapshotEvent(ProtocolEvent):
 
 
 class IntentClassifiedEvent(ProtocolEvent):
-    """Intent classification result for client visibility (IG-518).
+    """Intent classification result for client visibility.
 
     Emitted after intent-classify determines an agentic intent,
     providing reasoning for why the query requires tool execution

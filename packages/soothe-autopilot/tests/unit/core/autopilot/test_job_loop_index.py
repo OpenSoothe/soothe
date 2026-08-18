@@ -1,4 +1,4 @@
-"""Tests for JobLoopIndex durable membership (IG-677)."""
+"""Tests for JobLoopIndex durable membership."""
 
 from __future__ import annotations
 

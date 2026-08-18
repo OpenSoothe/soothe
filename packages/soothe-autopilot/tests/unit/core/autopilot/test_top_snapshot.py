@@ -1,4 +1,4 @@
-"""Unit tests for autopilot top snapshot filters (IG-679)."""
+"""Unit tests for autopilot top snapshot filters."""
 
 from __future__ import annotations
 

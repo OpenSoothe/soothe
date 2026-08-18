@@ -130,19 +130,19 @@ async def _fetch_provider_config(provider_name: str) -> dict[str, Any] | None:
 class ModelConfig:
     """TUI-facing view over daemon config providers and router.
 
-    Per IG-174/IG-175 architectural separation, this class is transitioning to
+    Per /architectural separation, this class is transitioning to
     fetch config from daemon via WebSocket RPC instead of local SootheConfig.
     Currently in transition period - gracefully degrades when daemon not reachable.
     """
 
     @classmethod
     def load(cls) -> ModelConfig:
-        """Load config from daemon (TODO: IG-175 Phase 2).
+        """Load config from daemon (TODO: Phase 2).
 
         During transition, returns empty instance when daemon not reachable.
         Full implementation will fetch defaults/providers from daemon RPC.
         """
-        # TODO(IG-175): Replace with async daemon RPC fetch
+        # TODO: Replace with async daemon RPC fetch
         # Currently returns empty instance for graceful degradation
         logger.debug("ModelConfig.load() returning empty instance during daemon RPC transition")
         return cls(_cfg=None)
@@ -151,46 +151,46 @@ class ModelConfig:
         """Initialize from an optional pre-loaded config.
 
         Args:
-            _cfg: Config instance (None during IG-175 transition).
+            _cfg: Config instance (None during transition).
         """
         self._cfg = _cfg
         self.default_model: str | None = None
         self.recent_model: str | None = None
-        # TODO(IG-175): Fetch default model from daemon RPC
+        # TODO: Fetch default model from daemon RPC
 
     def get_kwargs(self, provider: str, model_name: str | None = None) -> dict[str, Any]:
         """Return kwargs for ``init_chat_model`` for this provider.
 
-        TODO(IG-175): Fetch from daemon RPC.
+        TODO: Fetch from daemon RPC.
         Currently returns empty dict during transition.
         """
         if not provider:
             return {}
-        # TODO(IG-175): Implement daemon RPC fetch
+        # TODO: Implement daemon RPC fetch
         logger.debug("get_kwargs returning empty dict during daemon RPC transition")
         return {}
 
     def get_base_url(self, provider: str) -> str | None:
         """Resolved ``api_base_url`` for the named provider.
 
-        TODO(IG-175): Fetch from daemon RPC.
+        TODO: Fetch from daemon RPC.
         Currently returns None during transition.
         """
         if not provider:
             return None
-        # TODO(IG-175): Implement daemon RPC fetch
+        # TODO: Implement daemon RPC fetch
         logger.debug("get_base_url returning None during daemon RPC transition")
         return None
 
     def get_api_key_env(self, provider: str) -> str | None:
         """Infer env var name from provider ``api_key``.
 
-        TODO(IG-175): Fetch from daemon RPC.
+        TODO: Fetch from daemon RPC.
         Currently falls back to static map during transition.
         """
         if not provider:
             return None
-        # TODO(IG-175): Implement daemon RPC fetch
+        # TODO: Implement daemon RPC fetch
         # Fallback to static map during transition
         return PROVIDER_API_KEY_ENV.get(provider)
 
@@ -278,7 +278,7 @@ IMPLICIT_AUTH_PROVIDERS: frozenset[str] = frozenset(
 def get_credential_env_var(provider: str) -> str | None:
     """Return the primary API-key env var name for ``provider``, if known.
 
-    Per IG-174, fetches provider config from daemon via RPC.
+    Per, fetches provider config from daemon via RPC.
     Falls back to hardcoded env var mapping if daemon not reachable.
     """
     if provider and not _in_running_loop():
@@ -510,7 +510,7 @@ def parse_models_list_response(
 def get_available_models() -> list[ModelProfileEntry]:
     """List models declared on daemon config (for ``/model`` UI).
 
-    Per IG-174 architectural separation, CLI fetches providers from daemon via RPC.
+    Per architectural separation, CLI fetches providers from daemon via RPC.
     Returns empty list if daemon not reachable.
     """
     try:
@@ -600,7 +600,7 @@ def get_model_profiles(cli_override: dict[str, Any] | None = None) -> dict[str, 
 def has_provider_credentials(provider: str) -> bool | None:
     """Check credentials using daemon config when available.
 
-    Per IG-174, fetches provider config from daemon via RPC.
+    Per, fetches provider config from daemon via RPC.
     Falls back to environment variables if daemon not reachable.
     """
     if not provider:

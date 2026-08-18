@@ -1,4 +1,4 @@
-"""Unit tests for autopilot top CLI rendering (IG-679 / IG-686 / IG-688 / IG-694 / IG-698)."""
+"""Unit tests for autopilot top CLI rendering (/ /)."""
 
 from __future__ import annotations
 

@@ -45,7 +45,7 @@ def _ensure_default_config_dir() -> Path:
 def default_soothe_config_path() -> Path:
     """Default path of the nano-owned agent config YAML the daemon loads.
 
-    Split layout (IG-631): ``~/.soothe/config/nano.yml``. Host overlay lives in
+    Split layout: ``~/.soothe/config/nano.yml``. Host overlay lives in
     ``soothe.yml`` beside it and is composed when present.
     """
     return _ensure_default_config_dir() / "nano.yml"
@@ -86,7 +86,7 @@ class SootheDaemonConfig(BaseSettings):
         ),
     )
 
-    # --- Concurrency / safety (IG-138, IG-258) ------------------------------
+    # --- Concurrency / safety ------------------------------
 
     max_concurrent_threads: int = Field(
         default=100, description="Maximum concurrent threads (0 = unlimited)"
@@ -147,7 +147,7 @@ class SootheDaemonConfig(BaseSettings):
         ge=1,
         description=(
             "Maximum queued stream frames per loop for background display-card binding "
-            "(IG-534 §2.3). Saturated queues drop oldest frames."
+            "(§2.3). Saturated queues drop oldest frames."
         ),
     )
     card_flush_debounce_ms: int = Field(
@@ -155,12 +155,12 @@ class SootheDaemonConfig(BaseSettings):
         ge=0,
         le=2000,
         description=(
-            "Debounce window for coalescing card-ledger binds after stream ingest (IG-546). "
+            "Debounce window for coalescing card-ledger binds after stream ingest. "
             "0 disables debounce (flush on every frame)."
         ),
     )
 
-    # --- EventBus distribution stats (IG-403) -------------------------------
+    # --- EventBus distribution stats -------------------------------
 
     event_size_stats_enabled: bool = Field(
         default=True,
@@ -180,15 +180,14 @@ class SootheDaemonConfig(BaseSettings):
     loop_gc: LoopGcConfig = Field(
         default_factory=LoopGcConfig,
         description=(
-            "Periodic loop garbage collection — runs ephemeral and empty-loop passes "
-            "per tick (IG-466)"
+            "Periodic loop garbage collection — runs ephemeral and empty-loop passes per tick "
         ),
     )
     loop_status_reconciliation: LoopStatusReconciliationConfig = Field(
         default_factory=LoopStatusReconciliationConfig,
         description=(
             "Periodic reconciliation of stale status=running rows whose runner "
-            "is no longer active (IG-466 follow-up)"
+            "is no longer active (follow-up)"
         ),
     )
     stale_worker_reap: StaleWorkerReapConfig = Field(
@@ -196,7 +195,7 @@ class SootheDaemonConfig(BaseSettings):
         description="Periodic cleanup of orphaned worker_pool subprocesses",
     )
 
-    # --- Memory profiling (IG-475) -------------------------------------------
+    # --- Memory profiling -------------------------------------------
 
     memory_profiling: MemoryProfilingConfig = Field(
         default_factory=MemoryProfilingConfig,
