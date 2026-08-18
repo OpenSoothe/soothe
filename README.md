@@ -11,19 +11,27 @@
   🎥 [Watch the demo video on Vimeo](https://player.vimeo.com/video/1185023866?h=72febe1ed2) · 📖 [Documentation Wiki](https://mirasoth.github.io/soothe/)
 </div>
 
-✨ Soothe is a **goal-driven orchestration framework**—an *Agentic OS* for 24/7 autonomous work that keeps humans out of the execution loop. Built on [soothe-nano](https://github.com/mirasoth/soothe-nano) and [soothe-enhanced deepagents](https://github.com/mirasoth/soothe-deepagents), it adds a persistent **agentic loop** and **goal engine**: context carries across sessions, long-running goals keep moving, interdependent objectives coordinate in a typed dependency graph, and complex tasks steer themselves to completion. Move from *human-in-the-loop* to **agent-in-the-loop**—define intent, let Soothe handle execution.
+> **Define intent. Let Soothe handle the rest.**
+
+Soothe is a **goal-driven orchestration framework** for 24/7 autonomous agents. It keeps humans out of the execution loop: you describe *what* you want, and Soothe plans, executes, and steers the work to completion — across sessions, across goals, across time.
+
+Built on [soothe-nano](https://github.com/mirasoth/soothe-nano) and an [enhanced deepagents](https://github.com/mirasoth/soothe-deepagents), it adds a persistent **agentic loop** and **goal engine**: context carries across sessions, long-running goals keep moving, and interdependent objectives coordinate through a typed dependency graph. Move from *human-in-the-loop* to **agent-in-the-loop**.
 
 ---
 
-## ✨ Design Pillars
+## ✨ Vision
 
-Five design choices make Soothe more than another agent loop.
+We believe autonomous agents should work the way great teams do: given a clear objective, they plan, act, remember, and adapt — without someone watching every step.
 
-- 🎯 **Goal-driven, natively** — A goal is a first-class, persisted entity: a 7-state lifecycle in a typed dependency DAG (`depends_on` / `informs` / `conflicts_with`), not a prompt string. Three-level execution keeps the loop a pure, fungible unit that knows nothing about sibling goals or scheduling; the daemon dispatches one goal at a time. You interact with **loops**, and thread IDs are an internal detail.
-- 🔁 **Strange-loop cognitive architecture** — StrangeLoop is a compiled LangGraph graph—not an imperative `while` loop—running plan → assess → execute per goal with **goal-pull** flow: it actively pulls the next ready goal and reports back. Two-phase planning (cheap assessment, then conditional generation, skipped when done) saves tokens; evidence-bound steps validate before execute. The sharp line: the loop is the *runner*, not the consciousness.
-- 🧠 **Unified context engine** — One DAG is the sole source of truth for goals, steps, **and** the message ledger—the ledger is derivable from step-execution records, not a parallel store. Lineage is first-class: every goal and step stores the reasoning that created it, so projections show *why*, not just *what*. Bounded structured projection plus in-place thread compaction handle the context window—complementary, not overlapping.
-- 🔄 **Autopilot & long-term working** — A persistent daemon owns 24/7 state: `/detach` keeps a loop running while your client exits, and crash recovery bounds re-execution loss to one bundle of work per goal. Async backoff reasons over failures without blocking the scheduler, and a Layer-3 consensus loop double-checks "is it really done?" with a send-back budget. *Dreaming mode (memory consolidation, goal anticipation) is in progress.*
-- 🌐 **Standard WebSocket protocol** — A published AsyncAPI 3.0 spec is the single source of truth: Pydantic wire schemas are generated from it and a CI drift check keeps code and spec in lockstep. Hybrid envelope (`proto/type/method/params/id`), schema validation at the transport boundary, capability negotiation with `readiness_state`, and a full `subscribe → next → complete` lifecycle. One wire contract, no compatibility shims.
+Soothe is built on five ideas:
+
+- 🎯 **Goals, not prompts** — A goal is a first-class, persisted entity with its own lifecycle, not a string in a prompt. Soothe tracks dependencies between goals, coordinates them, and keeps each one moving.
+- 🔁 **A loop that thinks** — StrangeLoop is a compiled plan → assess → execute graph that actively pulls the next ready goal and reports back. Two-phase planning keeps it frugal; evidence-bound steps keep it honest.
+- 🧠 **One memory, one truth** — A single DAG is the source of truth for goals, steps, and the message ledger. Every record stores the reasoning that created it, so projections show *why*, not just *what*.
+- 🔄 **Always-on, never-loses** — A persistent daemon owns 24/7 state. `/detach` keeps a loop running while your client exits; crash recovery bounds re-execution loss to one bundle of work per goal.
+- 🌐 **One wire contract** — A published AsyncAPI 3.0 spec is the single source of truth for the WebSocket protocol. Schema validation at the transport boundary, capability negotiation, full `subscribe → next → complete` lifecycle. No compatibility shims.
+
+---
 
 ## What Can Soothe Do?
 
@@ -40,7 +48,9 @@ Five design choices make Soothe more than another agent loop.
 | ✅ | **Single-Session Autonomy** — End-to-end goal execution |
 | ✅ | **Cross-Thread Continuity** — Persistent context across threads |
 | ✅ | **Multi-Goal Orchestration** — Interdependent long-horizon workflows |
-| ⏳ | **Benchmark Reproduction** — [Compiler experiment](https://github.com/anthropics/claudes-c-compiler) |  
+| ⏳ | **Benchmark Reproduction** — [Compiler experiment](https://github.com/anthropics/claudes-c-compiler) |
+
+---
 
 ## Quick Start
 
@@ -51,7 +61,7 @@ soothed start
 soothe -p "Your first task"   # requires a running daemon
 ```
 
-Submit an Autopilot job from a workspace `GOAL.md` on the `greenfield-system` rail:
+Or submit a long-running Autopilot job from a `GOAL.md`:
 
 ```bash
 soothed start
@@ -60,7 +70,7 @@ soothe autopilot submit -f GOAL.md --rail greenfield-system
 soothe autopilot top   # live jobs / goals / loops dashboard
 ```
 
-**[Quick Start guide](docs/wiki/getting-started/Quick-Start.md)** — install, Docker, local daemon, first prompt.
+📖 **[Quick Start guide](docs/wiki/getting-started/Quick-Start.md)** — install, Docker, local daemon, first prompt.
 
 ### Language clients
 
@@ -71,13 +81,15 @@ soothe autopilot top   # live jobs / goals / loops dashboard
 | Go | [`soothe-client-go`](https://github.com/mirasoth/soothe-client-go) | [![Go](https://img.shields.io/github/v/release/mirasoth/soothe-client-go?label=go)](https://github.com/mirasoth/soothe-client-go/releases) |
 | Rust | [`soothe-client`](https://crates.io/crates/soothe-client) | [![crates.io](https://img.shields.io/crates/v/soothe-client.svg)](https://crates.io/crates/soothe-client) |
 
-**[Clients guide](docs/wiki/clients.md)** — install, API tiers (`DaemonSession` / `CommandClient` / `Client`), protocol notes.
+📖 **[Clients guide](docs/wiki/clients.md)** — install, API tiers, protocol notes.
+
+---
 
 ## Documentation
 
 | Resource | Description |
 |----------|-------------|
-| [Wiki](https://mirasoth.github.io/soothe/) | User, operator, and developer guides ([source](docs/wiki/)) |
+| [Wiki](https://mirasoth.github.io/soothe/) | User, operator, and developer guides |
 | [Quick Start](docs/wiki/getting-started/Quick-Start.md) | Install, daemon, first prompt |
 | [Language clients](docs/wiki/clients.md) | Python / TypeScript / Go / Rust WebSocket SDKs |
 | [Configuration guide](docs/wiki/configuration-guide/) | YAML, env vars, zero-config |
