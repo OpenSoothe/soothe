@@ -27,6 +27,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.20] - 2026-08-18
+
+### Changed
+- **sloop**: StrangeLoop v2 graph topology overhaul — introduce a
+  `LoopNode` base class with `pre`/`project`/`prompt`/`process`/`post`
+  lifecycle; replace the route-key bag with a typed `RouteDecision`;
+  fold `validate_plan`→`commit_plan` and `begin_iteration`→`check_limits`
+  (14→12 nodes, 11→8 routers). Centralize
+  `[SystemMessage, projected_ledger, HumanMessage]` assembly in
+  `GraphPromptWrapper`. Add intake/generate_plan/station Langfuse parent
+  spans. Unify orchestrator modules (runtime_context/checkpoint/
+  continuation/stations), reorganize cognition submodules, consolidate
+  clarification origin mapping into `origins.py`, remove
+  `LEGACY_TO_STATION` and dead code, delete archived drafts, and
+  default clarification mode to manual.
+- **sloop**: suppress Pass 1 task reasoning from the resume topic.
+  Pass 1 social-vs-task reasoning was previously surfaced as a TUI
+  cognition card and reused as the resume topic text for task results.
+  The surfacing is removed so `pass1_reasoning_text` stays empty,
+  letting the resume topic fall back to the user's own request text for
+  all task results. Social chitchat handling is unchanged.
+- **cli**: add bare command alias support in the TUI — implement bare
+  command alias resolution in the execution module and register bare
+  command aliases in the command registry.
+
+### Fixed
+- **docs**: fix RFC archive path references
+  (`docs/specs/archive/` → `docs/archive/specs/`) across the README,
+  RFC-900, rfc-history, rfc-index, and the rfc-standard template; add
+  RFC-613 to the archived list and fix RFC-505/700 supersession refs.
+
+### Removed
+- **autopilot**: drop redundant early `_subscribed` init (set in if/else
+  branches so the flag still reflects subscription state), unused
+  `snapshot_for_job` method in `job_loop_index`, and unused
+  `_max_audit_entries` and `_thread` fields from the config reload path.
+- **chore**: scrub internal IG identifiers from comments and docstrings
+  across all owned packages (soothe, soothe-autopilot, soothe-daemon,
+  soothe-cli), keeping RFC references where still relevant. Archive 11
+  completed design drafts from `docs/drafts/` to `docs/archive/drafts/`.
+  No behavior changes — comments and docstrings only.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.19...v0.10.20
+
 ## [v0.10.19] - 2026-08-18
 
 ### Fixed
