@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe.sloop.cognition.step_deliverable import TRIVIAL_DIRECT_EXPECTED_OUTPUT
 from soothe.sloop.engine.executor import Executor
+from soothe.sloop.engine.step_deliverable import TRIVIAL_DIRECT_EXPECTED_OUTPUT
 from soothe.sloop.engine.step_wave_types import _StreamCollectChunk
 from soothe.sloop.state.schemas import StepAction
 

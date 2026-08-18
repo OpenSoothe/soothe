@@ -20,9 +20,10 @@ from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.continuation import mid_loop_allow_inventory
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.prompts.plan_ledger_projection import (
-    _current_goal_has_execute_ledger,
+    current_goal_has_execute_ledger,
     resolve_planner_projection_mode,
 )
+from soothe.sloop.stages.plan._helpers import resolve_loop_planner
 from soothe.sloop.stages.plan.assess import node_plan_assess
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 from soothe.sloop.state.schemas import GoalComponentStatus, PlanGapAnalysis
@@ -112,7 +113,7 @@ def should_run_inventory(ctx: LoopRuntimeContext) -> bool:
         intake_label=intake,
         projection_mode=mode,
         has_step_results=bool(state.step_results),
-        has_execute_ledger=_current_goal_has_execute_ledger(state),
+        has_execute_ledger=current_goal_has_execute_ledger(state),
     )
     if not allowed and mode == "new_goal" and intake != IntakeLabel.TRIVIAL:
         logger.info("[Plan] evaluate inventory skipped (reason=iter0_no_execution)")
@@ -376,16 +377,6 @@ async def run_inventory(ctx: LoopRuntimeContext) -> PlanGapAnalysis | None:
     return gap
 
 
-def _loop_planner(ctx: LoopRuntimeContext) -> Any:
-    """Return the underlying LLMPlanner when available (for Langfuse pin)."""
-    strange_loop = ctx.strange_loop
-    planner = getattr(strange_loop, "loop_planner", None)
-    if planner is not None:
-        return planner
-    phase = getattr(strange_loop, "plan_phase", None)
-    return getattr(phase, "_loop_planner", None) if phase is not None else None
-
-
 async def node_plan_evaluate(ctx: LoopRuntimeContext, state: dict[str, Any]) -> dict[str, Any]:
     """Evaluate station: inventory then assess.
 
@@ -404,7 +395,7 @@ async def node_plan_evaluate(ctx: LoopRuntimeContext, state: dict[str, Any]) -> 
     ctx.scratch.plan_gap = None
     out: dict[str, Any] = {}
     config = getattr(ctx.strange_loop, "config", None)
-    planner = _loop_planner(ctx)
+    planner = resolve_loop_planner(ctx)
     prior_pin = bind_planner_langfuse_trace(planner, ctx.goal_trace)
 
     try:

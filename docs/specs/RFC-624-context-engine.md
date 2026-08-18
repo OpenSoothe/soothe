@@ -189,7 +189,7 @@ Plan waves accumulate into a single flat `StepDAG` per goal. Cross-wave edges us
 - Built from `GoalNode.steps` (preferred) or `LoopState.step_results` (fallback).
 - Lists completed / pending / failed steps with composite id, status, description, outcome snippet.
 - Includes next local id range and explicit cross-wave dependency rules.
-- Module: `soothe.sloop.cognition.step_anchor_registry`.
+- Module: `soothe.sloop.prompts.step_anchor_registry`.
 
 **Plan DAG Normalizer** (deterministic post-process):
 

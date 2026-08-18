@@ -16,6 +16,7 @@ from soothe.sloop.orchestrator.continuation import (
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.stations import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
+from soothe.sloop.stages.plan._helpers import resolve_loop_planner
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 from soothe.sloop.utils.goal_text import resolve_planning_goal
 
@@ -33,6 +34,9 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     2. bounded_evidence_gather (fresh-loop bypass)
     3. synthetic, when reached via the ``simple`` intake branch (RFC-630)
     4. synthetic, when Approve hands off from the planner subagent
+
+    Langfuse: parent ``generate-plan`` span; planner LLM pinned to the goal-loop
+    trace for the duration of this station (including lightweight generate).
     """
     strange_loop = ctx.strange_loop
     state = ctx.loop_state
@@ -73,33 +77,73 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
 
     await emit_plan_phase_status(ctx, label=_PLAN_GENERATE_STATUS_LABEL)
 
+    from soothe.utils.observability.langfuse import (
+        bind_planner_langfuse_trace,
+        generate_plan_langfuse_span_async,
+        restore_planner_langfuse_trace,
+    )
+
+    config = getattr(strange_loop, "config", None)
+    planner = resolve_loop_planner(ctx)
+    prior_pin = bind_planner_langfuse_trace(planner, ctx.goal_trace)
+
     # RFC-630 / simple intake uses the cheaper lightweight plan call.
     intake_label = getattr(state.intent, "intake_label", None) if state.intent else None
-    if mid_loop_use_lightweight_generate(intake_label):
-        logger.info("[PlanGenerate] Using lightweight generate for simple intake branch")
-        plan_result = await strange_loop.plan_phase.generate_lightweight(
-            goal=resolve_planning_goal(state),
-            state=state,
-            context=context,
-            assessment=assessment,
-            plan_manager=plan_manager,
-            context_engine=ctx.ce,
-            checkpoint=ctx.checkpoint,
-            exclude_goal_id=exclude_goal_id,
-            plan_gap=ctx.scratch.plan_gap,
-        )
-    else:
-        plan_result = await strange_loop.plan_phase.generate_from_assessment(
-            goal=resolve_planning_goal(state),
-            state=state,
-            context=context,
-            assessment=assessment,
-            plan_manager=plan_manager,
-            context_engine=ctx.ce,
-            checkpoint=ctx.checkpoint,
-            exclude_goal_id=exclude_goal_id,
-            plan_gap=ctx.scratch.plan_gap,
-        )
+    lightweight = mid_loop_use_lightweight_generate(intake_label)
+
+    try:
+        async with generate_plan_langfuse_span_async(
+            soothe_config=config,
+            goal_trace=ctx.goal_trace,
+            metadata={
+                "iteration": state.iteration,
+                "thread_id": state.thread_id,
+                "lightweight": lightweight,
+            },
+        ) as span:
+            if lightweight:
+                logger.info("[PlanGenerate] Using lightweight generate for simple intake branch")
+                plan_result = await strange_loop.plan_phase.generate_lightweight(
+                    goal=resolve_planning_goal(state),
+                    state=state,
+                    context=context,
+                    assessment=assessment,
+                    plan_manager=plan_manager,
+                    context_engine=ctx.ce,
+                    checkpoint=ctx.checkpoint,
+                    exclude_goal_id=exclude_goal_id,
+                    plan_gap=ctx.scratch.plan_gap,
+                )
+            else:
+                plan_result = await strange_loop.plan_phase.generate_from_assessment(
+                    goal=resolve_planning_goal(state),
+                    state=state,
+                    context=context,
+                    assessment=assessment,
+                    plan_manager=plan_manager,
+                    context_engine=ctx.ce,
+                    checkpoint=ctx.checkpoint,
+                    exclude_goal_id=exclude_goal_id,
+                    plan_gap=ctx.scratch.plan_gap,
+                )
+
+            if span is not None:
+                try:
+                    step_n = (
+                        len(plan_result.decision.steps) if plan_result.decision is not None else 0
+                    )
+                    span.update(
+                        output={
+                            "status": plan_result.status,
+                            "plan_action": plan_result.plan_action,
+                            "steps": step_n,
+                            "lightweight": lightweight,
+                        }
+                    )
+                except Exception:
+                    logger.debug("[Plan] generate-plan Langfuse span.update failed", exc_info=True)
+    finally:
+        restore_planner_langfuse_trace(planner, prior_pin)
 
     await emit_plan_phase_status(ctx, label=_PLAN_GENERATE_STATUS_LABEL)
 

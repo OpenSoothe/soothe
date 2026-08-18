@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from soothe.context.models import GoalNode, StepExecution, StepNode
-from soothe.sloop.cognition.step_anchor_registry import build_step_anchor_registry
+from soothe.sloop.prompts.step_anchor_registry import build_step_anchor_registry
 from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 
 

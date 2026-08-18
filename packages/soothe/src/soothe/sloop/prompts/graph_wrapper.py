@@ -663,7 +663,7 @@ class GraphPromptWrapper:
         step_id_hint = None
         step_anchor_registry = None
         if kind == "generate":
-            from soothe.sloop.cognition.step_anchor_registry import (
+            from soothe.sloop.prompts.step_anchor_registry import (
                 build_step_anchor_registry,
             )
 

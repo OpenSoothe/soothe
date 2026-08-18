@@ -309,15 +309,15 @@ class LLMPlanner:
     ) -> dict[str, Any] | None:
         """RunnableConfig for planner LLM calls when Langfuse is enabled.
 
-        When ``_pinned_trace_id`` is set (evaluate station), generations share the
-        goal-loop trace and nest under the active ``evaluate`` observation.
+        When ``_pinned_trace_id`` is set (evaluate / generate_plan stations),
+        generations share the goal-loop trace.
         """
         if self._config is None:
             return None
         base: dict[str, Any] = {}
         tn = (self._config.observability.langfuse.trace_name or "").strip()
-        # Prefer host display helpers for evaluate child phases when available.
-        run_name = self._evaluate_langfuse_phase_name(tn, phase) or (
+        # Prefer host display helpers for plan-station phases when available.
+        run_name = self._planner_langfuse_phase_name(tn, phase) or (
             f"{tn}:{phase}" if tn else phase
         )
         merged = merge_langfuse_runnable_config(
@@ -333,13 +333,14 @@ class LLMPlanner:
         return merged
 
     @staticmethod
-    def _evaluate_langfuse_phase_name(trace_name: str, phase: str) -> str | None:
-        """Map evaluate subgraph phases to Langfuse display names."""
+    def _planner_langfuse_phase_name(trace_name: str, phase: str) -> str | None:
+        """Map plan-station phases to Langfuse display names."""
         from soothe.utils.observability.langfuse._names import (
             evaluate_assess_continuation_langfuse_run_display_name,
             evaluate_assess_langfuse_run_display_name,
             evaluate_gap_langfuse_run_display_name,
             evaluate_gap_leg_langfuse_run_display_name,
+            generate_plan_langfuse_run_display_name,
         )
 
         tn = trace_name or None
@@ -356,6 +357,8 @@ class LLMPlanner:
             except ValueError:
                 idx = 0
             return evaluate_gap_leg_langfuse_run_display_name(tn, leg_index=idx)
+        if phase == "generate-plan":
+            return generate_plan_langfuse_run_display_name(tn)
         return None
 
     def _llm_rate_limit_config(self) -> LLMRateLimitConfig:
@@ -1474,7 +1477,7 @@ class LLMPlanner:
                 break
 
         if human_msg is not None and ai_response is not None:
-            from soothe.sloop.cognition.ledger_compaction import (
+            from soothe.sloop.utils.ledger_compaction import (
                 compact_planning_human_content,
             )
             from soothe.sloop.utils.messages import LoopAIMessage, _record_ledger_message

@@ -15,6 +15,7 @@ from soothe_sdk.protocols.planner import StepResult as SdkStepResult
 from soothe.config import SOOTHE_HOME
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.sloop.cognition.phase import PlanPhase
+from soothe.sloop.intention import build_pass1_task_fallback
 from soothe.sloop.intention.models import (
     IntakePass1Confidence,
     IntakePass1LLMResult,
@@ -22,7 +23,6 @@ from soothe.sloop.intention.models import (
     build_loop_routing_classification,
     normalize_response_language,
 )
-from soothe.sloop.intention.pass1_classifier import build_pass1_task_fallback
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.state.schemas import (
     AgentDecision,
@@ -39,6 +39,11 @@ from soothe.sloop.utils.reflection import _default_agent_decision
 from soothe.sloop.utils.structural_continuation import (
     has_resumable_interrupted_goal,
     is_loop_control_signal,
+)
+from soothe.utils.observability.langfuse import (
+    IntakeLangfuseSpan,
+    SootheLangfuse,
+    open_intake_langfuse_span,
 )
 
 from .anchor_manager import CheckpointAnchorManager
@@ -308,6 +313,7 @@ class StrangeLoop:
         )
 
         runtime_ctx: LoopRuntimeContext | None = None
+        intake_span = IntakeLangfuseSpan()
         try:
             # RFC-217: Goal context config for CE-backed goal context injection
             from soothe.config.models import GoalContextConfig
@@ -328,12 +334,31 @@ class StrangeLoop:
                 and not clarification_answer
                 and self.config.observability.langfuse.enabled
             ):
-                from soothe.utils.observability.langfuse import SootheLangfuse
-
                 active_goal_trace = SootheLangfuse(self.config).begin_goal_loop(
                     session_id=main_thread_id,
                     loop_id=state_manager.loop_id,
                 )
+
+            # Parent span so Pass 1 / Pass 2 generations nest under one intake
+            # station instead of landing at the trace root. Turns that classify
+            # inside the graph (or not at all) leave it inert; the graph entry
+            # station opens its own span.
+            intake_runs_pre_graph = (
+                preclassified_intent is None
+                and intent_classifier is not None
+                and not clarification_answer
+            )
+            if intake_runs_pre_graph:
+                intake_span = open_intake_langfuse_span(
+                    active_goal_trace,
+                    metadata={"loop_id": state_manager.loop_id},
+                    input_text=goal_user_submission or execution_goal,
+                )
+            intake_goal_trace = (
+                active_goal_trace.with_intake_parent_span(intake_span.parent_span_id)
+                if active_goal_trace is not None
+                else None
+            )
 
             # Stage 1: Pass 1 ∥ checkpoint.load (social fast-path before graph).
             pass1_token_sink = None
@@ -384,7 +409,7 @@ class StrangeLoop:
                             execution_goal,
                             prior_response_language=prior_language,
                             observability_metadata={"thread_id": main_thread_id},
-                            goal_trace=active_goal_trace,
+                            goal_trace=intake_goal_trace,
                         )
                 except Exception as exc:
                     logger.warning(
@@ -429,6 +454,10 @@ class StrangeLoop:
                             "[StrangeLoop] Pre-graph social fast-path (Pass1 confidence=%s)",
                             pass1_result.confidence,
                         )
+                        # The graph never runs on this turn, so nothing downstream
+                        # would close the span or export the batched observations.
+                        intake_span.end(output=social_intent.chitchat_response or "social")
+                        SootheLangfuse(self.config).flush()
                         yield (
                             "intent_fast_path",
                             {
@@ -814,7 +843,7 @@ class StrangeLoop:
                         )
                         if pass1_result is not None
                         else None,
-                        goal_trace=active_goal_trace,
+                        goal_trace=intake_goal_trace,
                         observability_metadata={"thread_id": main_thread_id},
                         observability_phase="pre-stream",
                         observability_component="intake.pass2",
@@ -849,6 +878,7 @@ class StrangeLoop:
 
             # Stage 2: apply Pass 2 scope result and surface reasoning to TUI.
             if pass2_needed and preclassified_intent is not None:
+                intake_span.end(output=str(preclassified_intent.intake_label))
                 state.intent = preclassified_intent
                 state.response_language = normalize_response_language(
                     preclassified_intent.response_language
@@ -1132,6 +1162,9 @@ class StrangeLoop:
             from soothe.sloop.stages.complete.finalize import (
                 await_goal_completion_tail_persistence,
             )
+
+            # No-op once the intake stage closed it on its own path.
+            intake_span.end()
 
             # Drain checkpoint finalize before closing pools so a background save cannot
             # restart the async flush worker and block the thread-pool worker cleanup.

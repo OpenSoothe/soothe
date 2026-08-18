@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe.sloop.cognition.step_completion_report import (
+from soothe.sloop.engine.step_completion_report import (
     summarize_step_completion_report,
 )
 

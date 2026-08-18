@@ -204,8 +204,10 @@ class SynthesisGenerator:
             parent_runnable_config = None
 
         if self._soothe_config is not None:
+            from soothe.utils.observability.langfuse import finalize_langfuse_run_display_name
+
             tn = (self._soothe_config.observability.langfuse.trace_name or "").strip()
-            run_name = f"{tn}:finalize" if tn else "finalize"
+            run_name = finalize_langfuse_run_display_name(tn or None)
             graph_config = merge_langfuse_runnable_config(
                 graph_config,
                 self._soothe_config,

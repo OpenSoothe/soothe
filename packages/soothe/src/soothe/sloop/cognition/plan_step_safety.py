@@ -355,10 +355,10 @@ def assess_may_route_complete(
         return True
 
     from soothe.sloop.prompts.plan_ledger_projection import (
-        _current_goal_has_execute_ledger,
+        current_goal_has_execute_ledger,
     )
 
-    if not state.step_results and not _current_goal_has_execute_ledger(state):
+    if not state.step_results and not current_goal_has_execute_ledger(state):
         return False
     return not state.has_remaining_steps()
 

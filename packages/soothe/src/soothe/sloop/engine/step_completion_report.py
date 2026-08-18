@@ -1,4 +1,4 @@
-"""LLM step-completion progress line for TUI cognition cards (display-only, no ledger)."""
+"""LLM step-completion progress line for TUI display (no ledger write)."""
 
 from __future__ import annotations
 
@@ -76,20 +76,27 @@ async def summarize_step_completion_report(
     )
 
     if goal_trace is not None:
-        config = goal_trace.intake_invoke_config(
+        from soothe.utils.observability.langfuse import execute_step_langfuse_run_display_name
+
+        cfg = getattr(goal_trace, "soothe_config", None) or soothe_config
+        tn = (cfg.observability.langfuse.trace_name or "").strip() if cfg is not None else ""
+        config = goal_trace.pinned_llm_invoke_config(
             purpose="step_completion_report",
             component="executor.step_completion_report",
             phase="execute_step",
+            run_name=execute_step_langfuse_run_display_name(tn or None),
         )
     elif soothe_config is not None:
         from soothe_sdk.observability.langfuse import SootheLangfuse
 
-        trace_name = (soothe_config.observability.langfuse.trace_name or "").strip()
+        from soothe.utils.observability.langfuse import execute_step_langfuse_run_display_name
+
+        tn = (soothe_config.observability.langfuse.trace_name or "").strip()
         config = SootheLangfuse(soothe_config).traced_llm(
             purpose="step_completion_report",
             component="executor.step_completion_report",
             phase="execute_step",
-            run_name=f"step_completion_report:{trace_name or 'query'}",
+            run_name=execute_step_langfuse_run_display_name(tn or None),
         )
     else:
         config = {}

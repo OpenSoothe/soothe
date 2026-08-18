@@ -218,7 +218,7 @@ def _compact_intent_classify_human_for_projection(msg: BaseMessage) -> BaseMessa
     """Rewrite ``GOAL:`` to ``GOAL RECAP:`` on projected intent-classify humans (D1)."""
     if getattr(msg, "phase", None) != "intent_classify" or not _is_loop_human_message(msg):
         return msg
-    from soothe.sloop.cognition.ledger_compaction import compact_planning_human_content
+    from soothe.sloop.utils.ledger_compaction import compact_planning_human_content
 
     text = extract_text_from_message_content(getattr(msg, "content", ""))
     compacted = compact_planning_human_content(text)
@@ -727,7 +727,7 @@ def project_last_goal_completion_for_intake(
     return []
 
 
-def _current_goal_has_execute_ledger(state: LoopState) -> bool:
+def current_goal_has_execute_ledger(state: LoopState) -> bool:
     """True when the active plan already has execute_step rows in the orchestration ledger."""
     decision = state.current_decision
     if decision is None:
@@ -750,7 +750,7 @@ def resolve_execute_projection_mode(state: LoopState) -> ExecuteProjectionMode:
         # CE-bound loops record execute_step ledger per wave; step_results stay empty
         # until record_iteration. Treat in-flight plan execution as mid_goal so Slice A
         # does not replay same-goal execute rows as cross-goal completion units.
-        if _current_goal_has_execute_ledger(state):
+        if current_goal_has_execute_ledger(state):
             return "mid_goal"
         if state.dependency_completion_ids():
             return "mid_goal"

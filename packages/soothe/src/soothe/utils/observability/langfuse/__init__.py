@@ -13,13 +13,20 @@ from soothe_sdk.observability.langfuse._trace_io import (
     patch_langfuse_trace_goal_io,
 )
 
+from soothe.utils.observability.langfuse._client import flush_langfuse_events
 from soothe.utils.observability.langfuse._evaluate_span import (
     bind_planner_langfuse_trace,
-    evaluate_langfuse_span,
     evaluate_langfuse_span_async,
     restore_planner_langfuse_trace,
 )
+from soothe.utils.observability.langfuse._generate_plan_span import (
+    generate_plan_langfuse_span_async,
+)
 from soothe.utils.observability.langfuse._goal_loop import GoalLoopTrace
+from soothe.utils.observability.langfuse._intake_span import (
+    IntakeLangfuseSpan,
+    open_intake_langfuse_span,
+)
 from soothe.utils.observability.langfuse._names import (
     evaluate_assess_continuation_langfuse_run_display_name,
     evaluate_assess_langfuse_run_display_name,
@@ -27,7 +34,10 @@ from soothe.utils.observability.langfuse._names import (
     evaluate_gap_leg_langfuse_run_display_name,
     evaluate_langfuse_run_display_name,
     execute_step_langfuse_run_display_name,
+    finalize_langfuse_run_display_name,
+    generate_plan_langfuse_run_display_name,
     intake_langfuse_run_display_name,
+    intake_phase_langfuse_run_display_name,
     loop_graph_langfuse_run_display_name,
 )
 
@@ -50,9 +60,16 @@ class SootheLangfuse(_SdkSootheLangfuse):
             loop_id=loop_id,
         )
 
+    def flush(self) -> None:
+        """Export buffered observations for turns that end before the graph runs."""
+        if not self.enabled or self._config is None:
+            return
+        flush_langfuse_events(self._config)
+
 
 __all__ = [
     "GoalLoopTrace",
+    "IntakeLangfuseSpan",
     "SootheLangfuse",
     "bind_planner_langfuse_trace",
     "evaluate_assess_continuation_langfuse_run_display_name",
@@ -60,12 +77,17 @@ __all__ = [
     "evaluate_gap_langfuse_run_display_name",
     "evaluate_gap_leg_langfuse_run_display_name",
     "evaluate_langfuse_run_display_name",
-    "evaluate_langfuse_span",
     "evaluate_langfuse_span_async",
     "execute_step_langfuse_run_display_name",
+    "finalize_langfuse_run_display_name",
+    "flush_langfuse_events",
+    "generate_plan_langfuse_run_display_name",
+    "generate_plan_langfuse_span_async",
     "intake_langfuse_run_display_name",
+    "intake_phase_langfuse_run_display_name",
     "loop_graph_langfuse_run_display_name",
     "merge_langfuse_runnable_config",
+    "open_intake_langfuse_span",
     "patch_langfuse_trace_goal_io",
     "resolve_langfuse_config_str",
     "restore_planner_langfuse_trace",

@@ -32,18 +32,18 @@ def test_evaluate_langfuse_display_names() -> None:
 
 def test_planner_maps_evaluate_langfuse_phases() -> None:
     assert (
-        LLMPlanner._evaluate_langfuse_phase_name("soothe", "evaluate-assess")
+        LLMPlanner._planner_langfuse_phase_name("soothe", "evaluate-assess")
         == "soothe:evaluate-assess"
     )
     assert (
-        LLMPlanner._evaluate_langfuse_phase_name("soothe", "evaluate-gap") == "soothe:evaluate-gap"
+        LLMPlanner._planner_langfuse_phase_name("soothe", "evaluate-gap") == "soothe:evaluate-gap"
     )
     assert (
-        LLMPlanner._evaluate_langfuse_phase_name("soothe", "evaluate-gap-leg-1")
+        LLMPlanner._planner_langfuse_phase_name("soothe", "evaluate-gap-leg-1")
         == "soothe:evaluate-gap-leg-1"
     )
-    assert LLMPlanner._evaluate_langfuse_phase_name("soothe", "assess") is None
-    assert LLMPlanner._evaluate_langfuse_phase_name("soothe", "analyze-gaps") is None
+    assert LLMPlanner._planner_langfuse_phase_name("soothe", "assess") is None
+    assert LLMPlanner._planner_langfuse_phase_name("soothe", "analyze-gaps") is None
 
 
 def test_planner_langfuse_config_pins_trace() -> None:

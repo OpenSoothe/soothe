@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import BaseMessage
 
-from soothe.sloop.intention.chitchat_fallbacks import pick_generic_chitchat_fallback
 from soothe.sloop.prompts.plan_ledger_projection import (
     project_last_goal_completion_for_intake,
 )
 
+from .chitchat_fallbacks import pick_generic_chitchat_fallback
 from .models import (
     IntakeLabel,
     IntakePass1LLMResult,
@@ -25,6 +25,7 @@ from .models import (
     IntentClassification,
     ResponseLanguage,
     derive_task_complexity_from_intake,
+    intent_classification_from_pass2,
 )
 from .two_pass_coordinator import TwoPassIntakeCoordinator, TwoPassIntakeResult
 
@@ -36,15 +37,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def prior_projection_text_from_messages(
+def _prior_projection_text_from_messages(
     loop_messages: list[BaseMessage] | None,
     ledger_cfg: Any | None,
 ) -> str | None:
-    """Build prior-goal summary text for Pass 2 from ledger messages.
-
-    Intake Pass 2 omits boundary marker since classifier needs prior
-    scope signal for reference resolution, not planning anchoring prevention.
-    """
+    """Build prior-goal summary text for Pass 2 from ledger messages."""
     if not loop_messages:
         return None
     projected = project_last_goal_completion_for_intake(
@@ -125,7 +122,7 @@ class IntentClassifier:
         ledger_cfg = (
             self._soothe_config.agent.loop.plan_prompt_ledger if self._soothe_config else None
         )
-        prior_projection = prior_projection_text_from_messages(loop_messages, ledger_cfg)
+        prior_projection = _prior_projection_text_from_messages(loop_messages, ledger_cfg)
 
         pass2_result = await self._two_pass.classify_scope(
             query,
@@ -137,10 +134,12 @@ class IntentClassifier:
             },
             goal_trace=goal_trace,
         )
-        intent = self._pass2_to_intent(
-            pass2_result,
+        intent = self._patch_missing_fields(
+            intent_classification_from_pass2(
+                pass2_result,
+                response_language=pass1_response_language,
+            ),
             query,
-            pass1_response_language=pass1_response_language,
         )
         await self._record_pass2_ledger(
             query=query,
@@ -184,7 +183,7 @@ class IntentClassifier:
         ledger_cfg = (
             self._soothe_config.agent.loop.plan_prompt_ledger if self._soothe_config else None
         )
-        prior_projection = prior_projection_text_from_messages(loop_messages, ledger_cfg)
+        prior_projection = _prior_projection_text_from_messages(loop_messages, ledger_cfg)
 
         two_pass_result = await self._two_pass.classify(
             query,
@@ -244,26 +243,6 @@ class IntentClassifier:
             return self._fallback(query)
         return self._patch_missing_fields(intent, query)
 
-    def _pass2_to_intent(
-        self,
-        pass2_result: IntakePass2LLMResult,
-        query: str,
-        *,
-        pass1_response_language: ResponseLanguage | None = None,
-    ) -> IntentClassification:
-        """Convert Pass 2 scope result to IntentClassification."""
-        intake_label = pass2_result.to_intake_label()
-        intent = IntentClassification(
-            intake_label=intake_label,
-            reasoning=pass2_result.reasoning,
-            chitchat_response=None,
-            multi_phase=pass2_result.multi_phase,
-            requires_tool_use=pass2_result.requires_tool_use,
-            response_language=pass1_response_language,
-            task_complexity=derive_task_complexity_from_intake(intake_label),
-        )
-        return self._patch_missing_fields(intent, query)
-
     async def _record_pass2_ledger(
         self,
         *,
@@ -275,7 +254,7 @@ class IntentClassifier:
         """Append Pass 2 intake pair to the CE ledger when CE is available."""
         if context_engine is None:
             return
-        from soothe.sloop.cognition.ledger_compaction import (
+        from soothe.sloop.utils.ledger_compaction import (
             compact_planning_human_content,
         )
         from soothe.sloop.utils.messages import (
@@ -339,4 +318,4 @@ class IntentClassifier:
         return intent
 
 
-__all__ = ["IntentClassifier", "prior_projection_text_from_messages"]
+__all__ = ["IntentClassifier"]

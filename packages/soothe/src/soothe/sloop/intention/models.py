@@ -352,3 +352,21 @@ class IntakePass2LLMResult(BaseModel):
     def to_intake_label(self) -> IntakeLabel:
         """Convert scope to IntakeLabel for routing."""
         return IntakeLabel(self.scope)
+
+
+def intent_classification_from_pass2(
+    pass2_result: IntakePass2LLMResult,
+    *,
+    response_language: ResponseLanguage | None = None,
+) -> IntentClassification:
+    """Build ``IntentClassification`` from a Pass 2 scope result."""
+    intake_label = pass2_result.to_intake_label()
+    return IntentClassification(
+        intake_label=intake_label,
+        reasoning=pass2_result.reasoning,
+        chitchat_response=None,
+        multi_phase=pass2_result.multi_phase,
+        requires_tool_use=pass2_result.requires_tool_use,
+        response_language=response_language,
+        task_complexity=derive_task_complexity_from_intake(intake_label),
+    )

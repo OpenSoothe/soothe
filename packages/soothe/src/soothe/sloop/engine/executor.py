@@ -51,12 +51,6 @@ from soothe.sloop.clarification import (
     ClarificationOrigin,
     LoopStateView,
 )
-from soothe.sloop.cognition.step_deliverable import (
-    StepDeliverableVerdict,
-    evaluate_step_deliverable,
-    resolve_step_deliverable_spec,
-    step_has_deliverable_gate,
-)
 from soothe.sloop.engine.act_wave_finalize import (
     DELEGATE_FINAL_WAVE_CAP,
     _aggregate_tool_calls_from_step_messages,
@@ -81,6 +75,12 @@ from soothe.sloop.engine.graph_interrupt import (
 )
 from soothe.sloop.engine.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
+)
+from soothe.sloop.engine.step_deliverable import (
+    StepDeliverableVerdict,
+    evaluate_step_deliverable,
+    resolve_step_deliverable_spec,
+    step_has_deliverable_gate,
 )
 from soothe.sloop.engine.step_predecessor_context import (
     build_dependent_execution_hints,
@@ -323,8 +323,12 @@ class Executor:
                 pinned_trace_id_from_config,
             )
 
+            from soothe.utils.observability.langfuse import (
+                execute_step_langfuse_run_display_name,
+            )
+
             tn = (self._config.observability.langfuse.trace_name or "").strip()
-            run_name = f"{tn}:execute-step" if tn else "execute-step"
+            run_name = execute_step_langfuse_run_display_name(tn or None)
             graph_config = merge_langfuse_runnable_config(
                 base,
                 self._config,
@@ -1234,7 +1238,7 @@ class Executor:
         for i, step in enumerate(steps):
             raw = wave_gather_slot(gather_results, i)
             envelope = self._compose_execute_step_envelope(step, loop_state=state)
-            from soothe.sloop.cognition.ledger_compaction import (
+            from soothe.sloop.utils.ledger_compaction import (
                 compact_execute_human_content,
             )
 
@@ -1360,7 +1364,7 @@ class Executor:
     ) -> tuple[str, str]:
         """Return compact execute-step human/ai pair for completion reporting."""
         envelope = self._compose_execute_step_envelope(step, loop_state=state)
-        from soothe.sloop.cognition.ledger_compaction import (
+        from soothe.sloop.utils.ledger_compaction import (
             compact_execute_human_content,
         )
 
@@ -1386,7 +1390,7 @@ class Executor:
         human, ai = self._build_step_report_pair_content(step, result, state)
         if not human.strip() and not ai.strip():
             return None
-        from soothe.sloop.cognition.step_completion_report import (
+        from soothe.sloop.engine.step_completion_report import (
             summarize_step_completion_report,
         )
 

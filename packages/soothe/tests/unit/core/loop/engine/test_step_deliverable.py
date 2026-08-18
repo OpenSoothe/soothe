@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.sloop.cognition.step_deliverable import (
+from soothe.sloop.engine.step_deliverable import (
     TRIVIAL_DIRECT_EXPECTED_OUTPUT,
     StepDeliverableSpec,
     evaluate_step_deliverable_structural,

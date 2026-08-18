@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import soothe.sloop.state.schemas  # noqa: F401 — break circular import
-from soothe.sloop.cognition.ledger_compaction import (
+from soothe.sloop.state.schemas import StepAction
+from soothe.sloop.utils.ledger_compaction import (
     compact_execute_human_content,
     compact_planning_human_content,
 )
-from soothe.sloop.state.schemas import StepAction
 
 
 def test_compact_human_rewrites_goal_to_goal_recap() -> None:

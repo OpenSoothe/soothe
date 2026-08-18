@@ -1,7 +1,7 @@
 """Step deliverable gate for execute action retry (RFC-630).
 
-Replaces the legacy ``## Result`` substring contract with structural evidence checks,
-optional fast-LLM assessment, and failure-mode-specific retry instructions.
+Structural evidence checks, optional fast-LLM assessment, and
+failure-mode-specific retry instructions.
 """
 
 from __future__ import annotations
@@ -249,20 +249,27 @@ async def assess_step_deliverable_llm(
     schema = StepDeliverableAssessment.model_json_schema()
 
     if goal_trace is not None:
-        config = goal_trace.intake_invoke_config(
+        from soothe.utils.observability.langfuse import execute_step_langfuse_run_display_name
+
+        cfg = getattr(goal_trace, "soothe_config", None) or soothe_config
+        tn = (cfg.observability.langfuse.trace_name or "").strip() if cfg is not None else ""
+        config = goal_trace.pinned_llm_invoke_config(
             purpose="assess_step_deliverable",
             component="executor.step_deliverable",
             phase="execute_step",
+            run_name=execute_step_langfuse_run_display_name(tn or None),
         )
     elif soothe_config is not None:
         from soothe_sdk.observability.langfuse import SootheLangfuse
 
-        trace_name = (soothe_config.observability.langfuse.trace_name or "").strip()
+        from soothe.utils.observability.langfuse import execute_step_langfuse_run_display_name
+
+        tn = (soothe_config.observability.langfuse.trace_name or "").strip()
         config = SootheLangfuse(soothe_config).traced_llm(
             purpose="assess_step_deliverable",
             component="executor.step_deliverable",
             phase="execute_step",
-            run_name=f"step_deliverable:{trace_name or 'query'}",
+            run_name=execute_step_langfuse_run_display_name(tn or None),
         )
     else:
         config = {}
