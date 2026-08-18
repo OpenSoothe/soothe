@@ -64,10 +64,17 @@ def _runtime_ctx(
     recovery_valid_resume: bool,
     goal_record: GoalIndexEntry | None = None,
 ) -> SimpleNamespace:
-    """Build a minimal runtime context duck-typed for ``node_iteration_gate``."""
+    """Build a minimal runtime context duck-typed for ``node_iteration_gate``.
+
+    RFC-903 P3: ``begin_iteration`` folded into ``check_limits``, so the
+    non-terminal branch now accesses ``strange_loop`` (for checkpointer),
+    ``anchor_manager``, and ``scratch``.
+    """
     checkpoint = SimpleNamespace(
         thread_health_metrics=ThreadHealthMetrics(thread_id="t", last_updated=datetime.now(UTC)),
     )
+    from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+
     return SimpleNamespace(
         loop_state=LoopState(
             goal="retry",
@@ -80,6 +87,10 @@ def _runtime_ctx(
         goal_record=goal_record,
         emit=AsyncMock(),
         state_manager=SimpleNamespace(save=AsyncMock()),
+        # RFC-903 P3: folded begin_iteration needs these on the non-terminal branch
+        strange_loop=SimpleNamespace(config=None, core_agent=None),
+        anchor_manager=SimpleNamespace(capture_iteration_start_anchor=AsyncMock()),
+        scratch=LoopPhaseScratch(),
     )
 
 
@@ -135,8 +146,16 @@ async def test_iteration_gate_grants_grace_iteration_on_resumed_goal() -> None:
 
     result = await node_iteration_gate(ctx, {})  # type: ignore[arg-type]
 
-    assert result == {}
-    ctx.emit.assert_not_awaited()
+    # RFC-903 P3: begin_iteration folded into check_limits. The non-terminal
+    # branch now emits iteration_started and clears stale route keys
+    # (resume_synth etc.) instead of returning {}.
+    assert result == {
+        "plan_route": None,
+        "assess_route": None,
+        "last_outcome": None,
+        "resume_synth": None,
+    }
+    ctx.emit.assert_awaited_once()  # iteration_started
 
 
 @pytest.mark.asyncio
@@ -289,8 +308,15 @@ class TestCancelRetryContinueLifecycle:
             goal_record=reactivated,
         )
         result = await node_iteration_gate(gate_ctx, {})  # type: ignore[arg-type]
-        assert result == {}
-        gate_ctx.emit.assert_not_awaited()
+        # RFC-903 P3: folded begin_iteration emits iteration_started + clears
+        # stale route keys on the non-terminal branch.
+        assert result == {
+            "plan_route": None,
+            "assess_route": None,
+            "last_outcome": None,
+            "resume_synth": None,
+        }
+        gate_ctx.emit.assert_awaited_once()  # iteration_started
 
     @pytest.mark.asyncio
     async def test_cancel_persists_cursor_not_incremented(self) -> None:
@@ -416,7 +442,13 @@ class TestCancelRetryContinueLifecycle:
         resumed_ctx = _runtime_ctx(
             iteration=5, max_iterations=5, recovery_valid_resume=True, goal_record=reactivated
         )
-        assert await node_iteration_gate(resumed_ctx, {}) == {}  # type: ignore[arg-type]
+        # RFC-903 P3: folded begin_iteration emits + clears route keys.
+        assert await node_iteration_gate(resumed_ctx, {}) == {  # type: ignore[arg-type]
+            "plan_route": None,
+            "assess_route": None,
+            "last_outcome": None,
+            "resume_synth": None,
+        }
 
         # Second turn: not resumed → boundary check reapplies, hard-exit.
         next_ctx = _runtime_ctx(

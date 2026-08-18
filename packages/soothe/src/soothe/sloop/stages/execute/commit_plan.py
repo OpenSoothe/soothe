@@ -5,6 +5,12 @@ subclass. The missing-``plan_result`` guard and the no-decision guard move
 into ``pre`` via ``GuardOutcome``; the fallback-decision logic stays in
 ``process``. The legacy ``node_resolve_decision`` function is retained as a
 thin wrapper.
+
+RFC-903 P3: ``validate_plan`` is folded into this node's ``post()`` — the
+deterministic evidence-binding check runs here, eliminating the separate
+``VALIDATE_PLAN`` station and its two routers (``route_after_resolve_decision``,
+``route_after_validate_evidence``). The legacy ``node_validate_evidence_bindings``
+function is retained for backward compatibility with tests/imports.
 """
 
 from __future__ import annotations
@@ -13,6 +19,7 @@ import logging
 from typing import Any
 
 from soothe.sloop.cognition.plan_dag_normalizer import normalize_plan_dag
+from soothe.sloop.orchestrator.evidence import validate_plan_evidence
 from soothe.sloop.orchestrator.node_base import GuardOutcome, LoopNode, NodeResult, RouteDecision
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.state.schemas import (
@@ -124,6 +131,23 @@ class CommitPlanNode(LoopNode):
                 ctx.ce.defer_save()
             except Exception:
                 logger.warning("[resolve_decision] CE save failed", exc_info=True)
+
+        # RFC-903 P3: folded validate_plan into commit_plan.process().
+        # Deterministic evidence-binding validation — reject plans whose steps
+        # lack valid evidence refs when the ledger is non-empty. Previously
+        # this was a separate VALIDATE_PLAN node with two routers
+        # (route_after_resolve_decision, route_after_validate_evidence).
+        if not validate_plan_evidence(strange_loop.config, loop_state, decision):
+            logger.error("[Plan] Evidence validation failed for planned steps")
+            return NodeResult(
+                payload=None,
+                events=[
+                    (
+                        "fatal_error",
+                        {"error": "Plan evidence validation failed", "step_id": ""},
+                    )
+                ],
+            )
 
         # Calculate cumulative step counts for TUI display
         done_count = sum(1 for r in loop_state.step_results if r.success)

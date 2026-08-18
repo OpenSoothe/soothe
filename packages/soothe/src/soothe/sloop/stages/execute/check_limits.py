@@ -4,14 +4,24 @@ Migrated to ``LoopNode`` (RFC-903 P2): the node is a ``CheckLimitsNode``
 subclass. Terminal branches (max_iterations, rate_limited) emit their own
 completion events in ``process`` and return ``RouteDecision(kind="terminal")``.
 The legacy ``node_iteration_gate`` function is retained as a thin wrapper.
+
+RFC-903 P3: ``begin_iteration`` is folded into this node's ``process()``
+non-terminal branch — scratch reset, start anchor capture, and
+``iteration_started`` emission happen here, eliminating the separate
+``BEGIN_ITERATION`` station and the unconditional edge to ``GATHER_EVIDENCE``.
+The legacy ``node_iteration_start`` function is retained for backward
+compatibility with tests/imports.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
+from soothe.sloop.orchestrator.checkpointer import core_agent_checkpointer
 from soothe.sloop.orchestrator.node_base import LoopNode, NodeResult, RouteDecision
+from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.stages.execute.max_iterations_terminal import emit_max_iterations_terminal
 
@@ -82,7 +92,31 @@ class CheckLimitsNode(LoopNode):
             await emit_rate_limit_terminal(ctx)
             return NodeResult(payload="rate_limited")
 
-        return NodeResult(payload="continue")
+        # RFC-903 P3: folded begin_iteration into the non-terminal branch.
+        # Scratch reset, start anchor capture, and iteration_started emission
+        # previously lived in a separate BEGIN_ITERATION node.
+        strange_loop = ctx.strange_loop
+        loop_state = ctx.loop_state
+
+        ctx.scratch = LoopPhaseScratch(iteration_perf_start=time.perf_counter())
+
+        events: list[tuple[str, dict[str, Any]]] = [
+            (
+                "iteration_started",
+                {
+                    "iteration": loop_state.iteration,
+                    "max_iterations": loop_state.max_iterations,
+                },
+            )
+        ]
+
+        await ctx.anchor_manager.capture_iteration_start_anchor(
+            iteration=loop_state.iteration,
+            thread_id=loop_state.thread_id,
+            checkpointer=core_agent_checkpointer(strange_loop),
+        )
+
+        return NodeResult(payload="continue", events=events)
 
     def post(
         self,
@@ -95,7 +129,18 @@ class CheckLimitsNode(LoopNode):
                 kind="terminal",
                 state_patch={"last_outcome": result.payload},
             )
-        return RouteDecision(kind="proceed")
+        # RFC-226 fix: clear resume_synth to prevent stale flag from prior
+        # clarification synthesis from affecting subsequent goals/iterations.
+        # Previously cleared by the folded begin_iteration node.
+        return RouteDecision(
+            kind="proceed",
+            state_patch={
+                "plan_route": None,
+                "assess_route": None,
+                "last_outcome": None,
+                "resume_synth": None,
+            },
+        )
 
 
 # Singleton instance for the graph builder.

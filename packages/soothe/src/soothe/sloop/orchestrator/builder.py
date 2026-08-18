@@ -13,12 +13,10 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from soothe.sloop.stages.complete.finalize import node_goal_completion
-from soothe.sloop.stages.execute.begin_iteration import node as begin_iteration_node
 from soothe.sloop.stages.execute.check_limits import node as check_limits_node
 from soothe.sloop.stages.execute.commit_plan import node as commit_plan_node
 from soothe.sloop.stages.execute.execute import node_execute
 from soothe.sloop.stages.execute.record_progress import node_record_iteration
-from soothe.sloop.stages.execute.validate_plan import node as validate_plan_node
 from soothe.sloop.stages.plan.evaluate import node_plan_evaluate
 from soothe.sloop.stages.plan.gather_evidence import node_bounded_evidence_gather
 from soothe.sloop.stages.plan.generate_plan import node_plan_generate
@@ -31,6 +29,7 @@ from .checkpointer import core_agent_checkpointer
 from .node_base import wrap_node
 from .routing import (
     route_after_clarification,
+    route_after_commit,
     route_after_evaluate,
     route_after_evidence_gather,
     route_after_execute,
@@ -38,15 +37,12 @@ from .routing import (
     route_after_plan,
     route_after_preprocess,
     route_after_record_iteration,
-    route_after_resolve_decision,
-    route_after_validate_evidence,
     route_after_wired_subagent,
 )
 from .runtime_context import LoopRuntimeContext
 from .state import LoopGraphState
 from .stations import (
     AWAIT_USER,
-    BEGIN_ITERATION,
     CHECK_LIMITS,
     COMMIT_PLAN,
     DELEGATE,
@@ -58,7 +54,6 @@ from .stations import (
     GENERATE_PLAN,
     INTAKE,
     RECORD_PROGRESS,
-    VALIDATE_PLAN,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,15 +95,10 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
 
     # Migrated nodes (RFC-903 P2): wrap_node detects LoopNode vs legacy.
     _check_limits_fn = wrap_node("check_limits", check_limits_node, ctx)
-    _begin_iteration_fn = wrap_node("begin_iteration", begin_iteration_node, ctx)
     _commit_plan_fn = wrap_node("commit_plan", commit_plan_node, ctx)
-    _validate_plan_fn = wrap_node("validate_plan", validate_plan_node, ctx)
 
     async def check_limits(state: dict[str, Any]) -> dict[str, Any]:
         return await _check_limits_fn(state)
-
-    async def begin_iteration(state: dict[str, Any]) -> dict[str, Any]:
-        return await _begin_iteration_fn(state)
 
     async def gather_evidence(state: dict[str, Any]) -> dict[str, Any]:
         return await node_bounded_evidence_gather(ctx, state)
@@ -125,9 +115,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     async def commit_plan(state: dict[str, Any]) -> dict[str, Any]:
         return await _commit_plan_fn(state)
 
-    async def validate_plan(state: dict[str, Any]) -> dict[str, Any]:
-        return await _validate_plan_fn(state)
-
     async def execute(state: dict[str, Any]) -> dict[str, Any]:
         return await node_execute(ctx, state)
 
@@ -142,13 +129,11 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_node(ENTER_LOOP, enter_loop)
     graph.add_node(DELEGATE, delegate)
     graph.add_node(CHECK_LIMITS, check_limits)
-    graph.add_node(BEGIN_ITERATION, begin_iteration)
     graph.add_node(GATHER_EVIDENCE, gather_evidence)
     graph.add_node(EVALUATE, evaluate)
     graph.add_node(GENERATE_PLAN, generate_plan)
     graph.add_node(FINALIZE, finalize)
     graph.add_node(COMMIT_PLAN, commit_plan)
-    graph.add_node(VALIDATE_PLAN, validate_plan)
     graph.add_node(EXECUTE, execute)
     graph.add_node(RECORD_PROGRESS, record_progress)
     graph.add_node(AWAIT_USER, await_user)
@@ -175,12 +160,14 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             END: END,
         },
     )
+    # RFC-903 P3: begin_iteration folded into check_limits. The gate now
+    # routes directly to gather_evidence on the non-terminal branch (previously
+    # routed to BEGIN_ITERATION → GATHER_EVIDENCE unconditionally).
     graph.add_conditional_edges(
         CHECK_LIMITS,
         route_after_iteration_gate,
-        {BEGIN_ITERATION: BEGIN_ITERATION, END: END},
+        {GATHER_EVIDENCE: GATHER_EVIDENCE, END: END},
     )
-    graph.add_edge(BEGIN_ITERATION, GATHER_EVIDENCE)
     graph.add_conditional_edges(
         GATHER_EVIDENCE,
         route_after_evidence_gather,
@@ -211,14 +198,13 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         },
     )
     graph.add_edge(FINALIZE, END)
+    # RFC-903 P3: validate_plan folded into commit_plan. The evidence
+    # validation now runs in CommitPlanNode.process(); commit_plan routes
+    # directly to execute or END (previously: commit_plan → validate_plan →
+    # execute, with two routers).
     graph.add_conditional_edges(
         COMMIT_PLAN,
-        route_after_resolve_decision,
-        {VALIDATE_PLAN: VALIDATE_PLAN, END: END},
-    )
-    graph.add_conditional_edges(
-        VALIDATE_PLAN,
-        route_after_validate_evidence,
+        route_after_commit,
         {EXECUTE: EXECUTE, END: END},
     )
     graph.add_conditional_edges(

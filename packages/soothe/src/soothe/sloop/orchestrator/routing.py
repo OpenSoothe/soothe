@@ -12,7 +12,6 @@ from soothe.sloop.intention.models import IntakeLabel
 from .state import PLAN_ROUTE_GOAL_DONE
 from .stations import (
     AWAIT_USER,
-    BEGIN_ITERATION,
     CHECK_LIMITS,
     COMMIT_PLAN,
     DELEGATE,
@@ -22,7 +21,6 @@ from .stations import (
     GATHER_EVIDENCE,
     GENERATE_PLAN,
     RECORD_PROGRESS,
-    VALIDATE_PLAN,
 )
 
 logger = logging.getLogger(__name__)
@@ -121,10 +119,14 @@ route_by_intent = route_after_preprocess
 
 
 def route_after_iteration_gate(state: dict[str, Any]) -> str:
-    """End graph after max-iteration or rate-limit terminal; otherwise begin iteration."""
+    """End graph after max-iteration or rate-limit terminal; otherwise gather evidence.
+
+    RFC-903 P3: previously routed to ``BEGIN_ITERATION`` (now folded into
+    ``check_limits``); routes directly to ``GATHER_EVIDENCE``.
+    """
     if state.get("last_outcome") in ("max_iterations", "rate_limited"):
         return END
-    return BEGIN_ITERATION
+    return GATHER_EVIDENCE
 
 
 def route_after_plan(state: dict[str, Any]) -> str:
@@ -152,11 +154,17 @@ def route_after_evaluate(state: dict[str, Any]) -> str:
     return GENERATE_PLAN
 
 
-def route_after_resolve_decision(state: dict[str, Any]) -> str:
-    """Stop on planner fatal; otherwise validate plan evidence refs."""
+def route_after_commit(state: dict[str, Any]) -> str:
+    """Stop on commit/evidence-validation fatal; otherwise CoreAgent execute.
+
+    RFC-903 P3: collapses ``route_after_resolve_decision`` and
+    ``route_after_validate_evidence`` into one router. Evidence validation
+    now runs in ``CommitPlanNode.process()``; fatal from either the decision
+    resolve or the validation surfaces as ``last_outcome == "fatal"``.
+    """
     if state.get("last_outcome") == "fatal":
         return END
-    return VALIDATE_PLAN
+    return EXECUTE
 
 
 def route_after_wired_subagent(state: dict[str, Any]) -> str:
@@ -172,13 +180,6 @@ def route_after_wired_subagent(state: dict[str, Any]) -> str:
         return GENERATE_PLAN
     logger.info("[routing] route_after_wired_subagent → finalize")
     return FINALIZE
-
-
-def route_after_validate_evidence(state: dict[str, Any]) -> str:
-    """Stop on validation fatal; otherwise CoreAgent execute."""
-    if state.get("last_outcome") == "fatal":
-        return END
-    return EXECUTE
 
 
 def route_after_execute(state: dict[str, Any]) -> str:
