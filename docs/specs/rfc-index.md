@@ -746,7 +746,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-06-28
   - Dependencies: RFC-101, RFC-102, RFC-222
 
-- **RFC-903**: [Sloop Phase-Subgraph Topology and Node Lifecycle](RFC-903-sloop-phase-subgraph-topology.md)
+- **RFC-903**: [Sloop Graph Topology and Node Lifecycle](RFC-903-sloop-graph-topology.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-08-18
@@ -827,7 +827,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 | RFC-630 | Start-Phase LLM Intake and Branch Routing | Draft | 2026-06-30 |
 | RFC-629 | Client Library — Core Upgrade and Appkit Architecture | Draft | 2026-06-30 |
 | RFC-902 | Same-File Edit Concurrency and Optimization | Draft | 2026-06-28 |
-| RFC-903 | Sloop Phase-Subgraph Topology and Node Lifecycle | Draft | 2026-08-18 |
+| RFC-903 | Sloop Graph Topology and Node Lifecycle | Draft | 2026-08-18 |
 | RFC-228 | Autopilot Job IPC Commands | Proposed | 2026-06-04 |
 
 ### Supersede Relationships
@@ -876,7 +876,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 - **RFC-629**: Client Library — Core Upgrade and Appkit Architecture (Python + Go + TypeScript) (2026-06-30, Draft; updated 2026-07-17)
 - **RFC-450**: Unified Daemon Communication Protocol — rewritten with protocol-1 wire contract (2026-06-28, Draft)
 - **RFC-902**: Same-File Edit Concurrency and Optimization (2026-06-28, Draft)
-- **RFC-903**: Sloop Phase-Subgraph Topology and Node Lifecycle (2026-08-18, Draft)
+- **RFC-903**: Sloop Graph Topology and Node Lifecycle (2026-08-18, Draft)
 - **RFC-628**: Cognition Step Card Display (2026-06-26, Implemented)
 - **RFC-627**: Unified LLM Utilities Module (2026-06-17, Implemented)
 - **RFC-626**: Entity Model and State Management Consolidation — LoopState Elimination (2026-06-16)

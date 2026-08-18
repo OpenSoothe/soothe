@@ -2,19 +2,23 @@
 
 > Design doc synthesizing patterns discovered in the IHQ-01 inventory of the
 > StrangeLoop LangGraph codebase (`packages/soothe/src/soothe/sloop/`).
-> Status: **Draft for review** — no code changes proposed yet.
+> Status: **P1–P3 implemented** (commits `ffaa88890`, `fb493aa34`, `da849dc24`).
 >
-> **Revision 2026-08-18:** Merged with `docs/drafts/2026-08-18-sloop-graph-topology-design.md`.
-> This revision supersedes the original flat-graph + 3-hook proposal with:
-> (a) a 5-method lifecycle separating projection and prompt-injection as
-> distinct stages, (b) a phase-subgraph topology (4 phase subgraphs + residual
-> sidecars) instead of flat-graph node-folding, (c) a typed `RouteDecision`
-> sum type replacing the free-form route-key dict, and (d) native LangGraph
-> `interrupt()` for return-to-sender clarification origins plus a residual
-> sidecar for non-return origins. The original flat-graph fold proposals
-> (validate_plan → commit_plan, begin_iteration → check_limits) are retained
-> as *internal* simplifications within the execute phase subgraph.
-> Superseded material is marked **[orig]** where retained for context.
+> **Revision 2026-08-18 (post-implementation):** The phase-subgraph topology
+> (P4–P5) is **withdrawn**. Implementation revealed that 6 of 8 routers fan
+> across phase boundaries, so LangGraph subgraphs — which can only route
+> internally — don't compose cleanly with the cross-phase routing. The flat
+> graph with `LoopNode` lifecycle + node folds (P1–P3) is the target topology.
+> See RFC-903 §13 for the full rationale.
+>
+> **P1–P3 delivered:**
+> - `LoopNode` 5-method base class + `RouteDecision` + `GuardOutcome` + `wrap_node`
+> - 4 simple nodes migrated (`begin_iteration`, `check_limits`, `commit_plan`, `validate_plan`)
+> - `validate_plan` folded into `commit_plan`, `begin_iteration` folded into `check_limits`
+> - Topology: 14→12 nodes, 11→8 conditional routers
+>
+> **Future phases (P6–P7):** Native `interrupt()` for return-to-sender
+> clarification origins + residual sidecar for non-return origins.
 
 ---
 
