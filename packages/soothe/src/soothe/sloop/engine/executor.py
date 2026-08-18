@@ -620,6 +620,7 @@ class Executor:
         pending_interrupts: dict[str, Any] = {}
         interrupt_occurred = False
         captured_clarification = False
+        uncapturable_ask_user = False
         clarification_enabled = (
             detector is not None and capture is not None and loop_state_view is not None
         )
@@ -662,12 +663,21 @@ class Executor:
                     capture.set(request)  # type: ignore[union-attr]
                     captured_clarification = True
                     continue
+                # Empty/malformed ask_user — do not auto-resume-spin.
+                logger.warning(
+                    "[executor] uncapturable ask_user interrupt id=%s; "
+                    "stopping without auto-resume",
+                    interrupt_obj.id,
+                )
+                uncapturable_ask_user = True
+                continue
             pending_interrupts[interrupt_obj.id] = interrupt_obj.value
             interrupt_occurred = True
         return _PendingInterruptFetch(
             pending_interrupts=pending_interrupts,
             interrupt_occurred=interrupt_occurred,
             captured_clarification=captured_clarification,
+            uncapturable_ask_user=uncapturable_ask_user,
         )
 
     async def _core_agent_astream_with_interrupt_resume(
@@ -703,6 +713,9 @@ class Executor:
             if resume_answer_payload is not None
             else stream_input
         )
+        if resume_answer_payload is not None:
+            # One-shot: do not reuse across later steps sharing this Executor.
+            self._clarification_resume_answer_payload = None
         while True:
             chunk_iter = self._execute_stream(
                 current_input,
@@ -754,6 +767,13 @@ class Executor:
                 origin_node=origin_node,
             )
             if fetch.captured_clarification:
+                return
+            if fetch.uncapturable_ask_user:
+                logger.error(
+                    "[executor] uncapturable ask_user; ending CoreAgent stream without "
+                    "auto-resume (step_id=%s)",
+                    step_id,
+                )
                 return
 
             if not fetch.interrupt_occurred:

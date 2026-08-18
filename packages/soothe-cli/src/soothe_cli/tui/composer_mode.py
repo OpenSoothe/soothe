@@ -3,6 +3,9 @@
 ``auto`` / ``manual`` map to the RFC-622 ``clarification_mode`` wire field.
 ``plan`` is a sticky planner-routing mode that sets ``preferred_subagent=planner``
 so operators need not type ``/plan`` on every turn.
+
+Default composer mode is ``manual`` so interactive TUI sessions relay
+clarification questions to the operator unless they opt into Auto or Plan.
 """
 
 from __future__ import annotations
@@ -20,20 +23,20 @@ VALID_COMPOSER_MODES: frozenset[str] = frozenset(COMPOSER_MODE_ORDER)
 
 
 def normalize_composer_mode(mode: str | None) -> str:
-    """Clamp an arbitrary value to a valid composer mode (default ``auto``)."""
+    """Clamp an arbitrary value to a valid composer mode (default ``manual``)."""
     if mode in VALID_COMPOSER_MODES:
         return mode
-    return COMPOSER_MODE_AUTO
+    return COMPOSER_MODE_MANUAL
 
 
 def next_composer_mode(current: str) -> str:
     """Advance Auto → Manual → Plan → Auto.
 
-    Unknown values normalize to ``auto`` (same as a first Shift+Tab from a
-    garbage seed), without advancing past Auto in that step.
+    Unknown values normalize to ``manual`` (same as a first Shift+Tab from a
+    garbage seed), without advancing past Manual in that step.
     """
     if current not in VALID_COMPOSER_MODES:
-        return COMPOSER_MODE_AUTO
+        return COMPOSER_MODE_MANUAL
     idx = COMPOSER_MODE_ORDER.index(current)
     return COMPOSER_MODE_ORDER[(idx + 1) % len(COMPOSER_MODE_ORDER)]
 

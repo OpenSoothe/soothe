@@ -110,11 +110,15 @@ class InteractiveClarificationPolicy:
         else:
             return None
 
-        if len(answers) == expected:
-            return answers
-        if len(answers) == 1 and expected > 1:
+        stripped = [a.strip() for a in answers]
+        if any(not a for a in stripped):
+            return None
+
+        if len(stripped) == expected:
+            return stripped
+        if len(stripped) == 1 and expected > 1:
             # broadcast single answer when caller didn't split per-question
-            return answers * expected
+            return stripped * expected
         return None
 
 

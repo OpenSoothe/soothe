@@ -92,6 +92,13 @@ class ClarificationPolicy(Protocol):
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer: ...
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _view_to_state(view: LoopStateView) -> dict[str, Any]:
     return {
         "goal_id": view.goal_id,
@@ -107,12 +114,14 @@ def _view_to_state(view: LoopStateView) -> dict[str, Any]:
     }
 
 
-def _view_from_state(d: Mapping[str, Any]) -> LoopStateView:
+def _view_from_state(d: Mapping[str, Any] | Any) -> LoopStateView:
+    if not isinstance(d, Mapping):
+        d = {}
     return LoopStateView(
         goal_id=str(d.get("goal_id", "")),
         goal_description=str(d.get("goal_description", "")),
         user_request=str(d.get("user_request", "")),
-        iteration=int(d.get("iteration", 0)),
+        iteration=_safe_int(d.get("iteration", 0)),
         intent_classification=d.get("intent_classification"),
         plan_summary=d.get("plan_summary"),
         recent_step_outputs=tuple(d.get("recent_step_outputs", []) or []),
@@ -138,8 +147,18 @@ def request_from_state(d: Mapping[str, Any]) -> ClarificationRequest:
     if origin not in ACCEPTED_CLARIFICATION_ORIGINS:
         msg = f"invalid origin_node: {origin!r}"
         raise ValueError(msg)
+    raw_questions = d.get("questions", []) or []
+    if isinstance(raw_questions, str):
+        questions = (raw_questions.strip(),) if raw_questions.strip() else ()
+    elif isinstance(raw_questions, (list, tuple)):
+        questions = tuple(str(q).strip() for q in raw_questions if str(q).strip())
+    else:
+        questions = ()
+    if not questions:
+        msg = "clarification request requires at least one non-empty question"
+        raise ValueError(msg)
     return ClarificationRequest(
-        questions=tuple(d.get("questions", []) or []),
+        questions=questions,
         origin_node=origin,  # type: ignore[arg-type]
         origin_interrupt_id=str(d.get("origin_interrupt_id", "")),
         loop_state=_view_from_state(d.get("loop_state", {})),

@@ -1,15 +1,9 @@
 """Loop graph node that resolves a pending clarification (RFC-622).
 
-Invoked when a prior node (``execute``, StrangeLoop ``plan_generate`` /
-``plan_assess``, or planner-subagent ``planner_subagent_review``) detected an
-``ask_user`` interrupt / review gate and set ``pending_clarification``
-on the loop state.
-
-The node calls into the runtime's :class:`ClarificationPolicy`. On success
-it writes ``pending_clarification_answer`` so the originating node can resume
-CoreAgent with the answer. On :class:`ClarificationDeferredError` it marks
-the goal as ``awaiting_clarification`` and terminates the loop with
-``last_outcome="deferred"``.
+Invoked when a prior node set ``pending_clarification`` (execute ask_user,
+planner-subagent review, etc.). Dispatches to ``ClarificationPolicy``; on
+success writes ``pending_clarification_answer``. On defer, parks via CE when
+wired and sets ``last_outcome="deferred"`` while keeping graph pending.
 """
 
 from __future__ import annotations
@@ -22,22 +16,17 @@ from soothe.sloop.clarification.protocol import (
     ClarificationDeferredError,
     answer_to_state,
     request_from_state,
+    request_to_state,
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 
 logger = logging.getLogger(__name__)
 
-# Short event_type names emitted via ``ctx.emit``; the runner dispatch
-# (``_runner_strange_loop.py``) wraps them in the corresponding wire events
-# (``soothe.loop.clarification.*``) before yielding to the stream.
 _EVT_CLARIFICATION_REQUESTED = "clarification_requested"
 _EVT_CLARIFICATION_ANSWERED = "clarification_answered"
 _EVT_CLARIFICATION_DEFERRED = "clarification_deferred"
-
-_QUESTION_SUMMARY_CHARS = 240
-
-# Internal event type for goal unblocked notification (RFC-622, RFC-625)
 _EVT_GOAL_UNBLOCKED = "goal_unblocked"
+_QUESTION_SUMMARY_CHARS = 240
 
 
 async def node_await_clarification(
@@ -64,22 +53,20 @@ async def node_await_clarification(
             "last_outcome": "fatal",
         }
 
+    pending_dict: dict[str, Any] = (
+        dict(pending) if isinstance(pending, dict) else request_to_state(request)
+    )
+
     policy = ctx.clarification_policy
     if policy is None:
         logger.warning("[await_clarification] no clarification policy configured; deferring")
-        await ctx.emit(
-            _EVT_CLARIFICATION_DEFERRED,
-            {
-                "reason": "no clarification policy configured",
-                "question_summary": _summary(request.questions),
-            },
+        return await _hard_defer(
+            ctx,
+            pending_dict,
+            reason="no clarification policy configured",
+            defer_kind="explicit",
+            questions=request.questions,
         )
-        await ctx.mark_goal_status("awaiting_clarification", reason="no policy configured")
-        return {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
-            "last_outcome": "deferred",
-        }
 
     requested_payload: dict[str, Any] = {
         "questions": list(request.questions),
@@ -87,23 +74,8 @@ async def node_await_clarification(
         "mode": _mode_for_policy(policy, origin_node=request.origin_node),
     }
     if request.origin_node == ORIGIN_PLANNER_SUBAGENT_REVIEW:
-        scratch = getattr(ctx, "scratch", None)
-        plan_path = getattr(scratch, "plan_artifact_path", None)
-        plan_markdown = getattr(scratch, "plan_artifact_markdown", None)
-        if not plan_path and isinstance(pending, dict):
-            plan_path = pending.get("plan_path")
-        if not plan_markdown and isinstance(pending, dict):
-            plan_markdown = pending.get("plan_markdown")
-        if plan_path:
-            requested_payload["plan_path"] = str(plan_path)
-        if plan_markdown:
-            requested_payload["plan_markdown"] = str(plan_markdown)
+        _attach_planner_review_payload(requested_payload, ctx, pending)
 
-    # LangGraph re-runs this node from the top on Command(resume=...). Skip the
-    # TUI announcement on that first re-entry so Reject/Approve do not remount an
-    # empty plan-review widget (scratch is empty until hydrate). Clear the sticky
-    # resume inputs after a successful answer so a later park in the same graph
-    # invocation (planner rewrite after "More comments") re-emits the request.
     resume_turn = bool(
         (getattr(ctx, "clarification_resume_answers", None) or [])
         or (getattr(ctx, "clarification_resume_text", None) or "").strip()
@@ -121,21 +93,26 @@ async def node_await_clarification(
         answer = await policy.answer(request)
     except ClarificationDeferredError as exc:
         logger.warning("[await_clarification] policy deferred (kind=%s): %s", exc.kind, exc.reason)
-        await ctx.emit(
-            _EVT_CLARIFICATION_DEFERRED,
-            {
-                "reason": exc.reason,
-                "defer_kind": exc.kind,
-                "question_summary": _summary(request.questions),
-                "questions": list(request.questions),
-            },
+        return await _hard_defer(
+            ctx,
+            pending_dict,
+            reason=exc.reason,
+            defer_kind=exc.kind,
+            questions=request.questions,
         )
-        await ctx.mark_goal_status("awaiting_clarification", reason=exc.reason)
-        return {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
-            "last_outcome": "deferred",
-        }
+
+    if answer.defer:
+        logger.warning(
+            "[await_clarification] policy returned defer=True (source=%s); parking",
+            answer.source,
+        )
+        return await _hard_defer(
+            ctx,
+            pending_dict,
+            reason="policy returned defer=True",
+            defer_kind="explicit",
+            questions=request.questions,
+        )
 
     await ctx.emit(
         _EVT_CLARIFICATION_ANSWERED,
@@ -146,42 +123,76 @@ async def node_await_clarification(
         },
     )
 
-    # RFC-622 / RFC-625: Emit goal_unblocked event when clarification resolves
-    # so AutopilotService can immediately trigger scheduling instead of waiting
-    # for the next poll cycle. This is critical for responsive autopilot mode.
-    # The goal was in awaiting_clarification (BLOCKED_STATES) and now transitions
-    # back to pending (ready for scheduling).
-    goal_id = getattr(request.loop_state, "goal_id", None)
-    loop_id = getattr(ctx.state_manager, "loop_id", None)
-    if goal_id:
-        await ctx.emit(
-            _EVT_GOAL_UNBLOCKED,
-            {
-                "goal_id": goal_id,
-                "old_status": "awaiting_clarification",
-                "new_status": "pending",
-                "reason": "clarification resolved",
-                "loop_id": loop_id,
-            },
-        )
-        logger.info(
-            "[await_clarification] clarification resolved, goal %s unblocked (loop=%s)",
-            goal_id,
-            loop_id,
-        )
+    unblocked = await ctx.resolve_parked_clarification(list(answer.answers))
+    if unblocked:
+        goal_id = getattr(request.loop_state, "goal_id", None) or getattr(ctx, "ce_goal_id", None)
+        loop_id = getattr(ctx.state_manager, "loop_id", None)
+        if goal_id:
+            await ctx.emit(
+                _EVT_GOAL_UNBLOCKED,
+                {
+                    "goal_id": goal_id,
+                    "old_status": "awaiting_clarification",
+                    "new_status": "pending",
+                    "reason": "clarification resolved",
+                    "loop_id": loop_id,
+                },
+            )
+            logger.info(
+                "[await_clarification] clarification resolved, goal %s unblocked (loop=%s)",
+                goal_id,
+                loop_id,
+            )
 
     if resume_turn:
         ctx.clarification_resume_answers = None
         ctx.clarification_resume_text = None
 
-    # keep ``pending_clarification`` alive alongside the answer so the
-    # originating node (``execute`` / ``plan_*``) can pair them on re-entry
-    # — it needs ``origin_interrupt_id`` to know which CoreAgent interrupt
-    # (or planner-emitted step) is being resumed. The originating node clears
-    # both channels once it has consumed the pair.
+    # Keep pending alongside the answer so the origin node can pair
+    # origin_interrupt_id; that node clears both channels after consume.
+    return {"pending_clarification_answer": answer_to_state(answer)}
+
+
+async def _hard_defer(
+    ctx: LoopRuntimeContext,
+    pending: dict[str, Any],
+    *,
+    reason: str,
+    defer_kind: str,
+    questions: tuple[str, ...],
+) -> dict[str, Any]:
+    await ctx.emit(
+        _EVT_CLARIFICATION_DEFERRED,
+        {
+            "reason": reason,
+            "defer_kind": defer_kind,
+            "question_summary": _summary(questions),
+            "questions": list(questions),
+        },
+    )
+    await ctx.park_for_clarification(pending, reason=reason)
     return {
-        "pending_clarification_answer": answer_to_state(answer),
+        "pending_clarification_answer": None,
+        "last_outcome": "deferred",
     }
+
+
+def _attach_planner_review_payload(
+    payload: dict[str, Any],
+    ctx: LoopRuntimeContext,
+    pending: Any,
+) -> None:
+    scratch = getattr(ctx, "scratch", None)
+    plan_path = getattr(scratch, "plan_artifact_path", None)
+    plan_markdown = getattr(scratch, "plan_artifact_markdown", None)
+    if not plan_path and isinstance(pending, dict):
+        plan_path = pending.get("plan_path")
+    if not plan_markdown and isinstance(pending, dict):
+        plan_markdown = pending.get("plan_markdown")
+    if plan_path:
+        payload["plan_path"] = str(plan_path)
+    if plan_markdown:
+        payload["plan_markdown"] = str(plan_markdown)
 
 
 def _summary(questions: tuple[str, ...]) -> str:

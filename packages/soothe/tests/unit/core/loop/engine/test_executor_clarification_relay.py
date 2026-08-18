@@ -124,6 +124,67 @@ async def test_ask_user_interrupt_captured_and_stream_stops() -> None:
 
 
 @pytest.mark.asyncio
+async def test_empty_ask_user_does_not_auto_resume_spin() -> None:
+    """Malformed ask_user must stop without empty Command(resume) iterations."""
+    core = _StubCoreAgent()
+    empty_ask = Interrupt(
+        value={"type": "ask_user", "questions": ["  ", ""]},
+        id="i-empty",
+    )
+    # Only one scripted stream turn — a spin would try to call astream again
+    # and raise IndexError on _scripts.pop(0).
+    core.queue([], state_interrupts=(empty_ask,))
+    capture = ClarificationCapture()
+
+    executor = _make_executor(
+        core,
+        clarification_detector=ClarificationDetector(),
+        clarification_capture=capture,
+        clarification_loop_state_view=_view(),
+    )
+    stream = executor._core_agent_astream_with_interrupt_resume(
+        {"messages": []},
+        {},
+        detector=executor._clarification_detector,
+        capture=executor._clarification_capture,
+        loop_state_view=executor._clarification_loop_state_view,
+        origin_node="execute",
+    )
+    _ = [c async for c in stream]
+
+    assert capture.pending_request is None
+    assert len(core.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_resume_answer_payload_cleared_after_use() -> None:
+    core = _StubCoreAgent()
+    core.queue([])
+    capture = ClarificationCapture()
+    payload = {"iX": {"answers": ["auth flows"]}}
+    executor = _make_executor(
+        core,
+        clarification_detector=ClarificationDetector(),
+        clarification_capture=capture,
+        clarification_loop_state_view=_view(),
+        clarification_resume_answer_payload=payload,
+    )
+
+    stream = executor._core_agent_astream_with_interrupt_resume(
+        {"messages": []},
+        {},
+        detector=executor._clarification_detector,
+        capture=executor._clarification_capture,
+        loop_state_view=executor._clarification_loop_state_view,
+        origin_node="execute",
+        resume_answer_payload=payload,
+    )
+    _ = [c async for c in stream]
+
+    assert executor._clarification_resume_answer_payload is None
+
+
+@pytest.mark.asyncio
 async def test_action_approval_still_auto_resumed_when_relay_active() -> None:
     core = _StubCoreAgent()
     core.queue([], state_interrupts=(_action_approval_interrupt("iA"),))

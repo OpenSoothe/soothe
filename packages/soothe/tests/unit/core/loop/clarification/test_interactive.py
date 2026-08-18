@@ -84,6 +84,13 @@ async def test_defers_on_count_mismatch(monkeypatch: pytest.MonkeyPatch) -> None
         await policy.answer(_request(num_questions=3))
 
 
+async def test_defers_on_blank_answers(monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub_interrupt(monkeypatch, {"answers": ["  "]})
+    policy = InteractiveClarificationPolicy()
+    with pytest.raises(ClarificationDeferredError):
+        await policy.answer(_request())
+
+
 async def test_answer_does_not_reemit_clarification_requested(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

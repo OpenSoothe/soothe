@@ -108,6 +108,35 @@ def test_clarification_resume_command_goto_recovery_when_interrupt_orphaned() ->
     assert answer.get("source") == "human"
 
 
+def test_clarification_resume_command_fail_closed_when_origin_missing() -> None:
+    snap = SimpleNamespace(interrupts=(), tasks=(), values={})
+    cmd = _clarification_resume_command(
+        snapshot=snap,
+        resume_answers=["x"],
+        loop_id="loop-1",
+    )
+    assert cmd is None
+
+
+def test_clarification_resume_command_uses_pending_origin_when_last_missing() -> None:
+    from soothe.sloop.orchestrator.stations import EXECUTE
+
+    snap = SimpleNamespace(
+        interrupts=(),
+        tasks=(),
+        values={
+            "pending_clarification": {"origin_node": "execute", "questions": ["q"]},
+        },
+    )
+    cmd = _clarification_resume_command(
+        snapshot=snap,
+        resume_answers=["a"],
+        loop_id="loop-1",
+    )
+    assert isinstance(cmd, Command)
+    assert cmd.goto == EXECUTE
+
+
 @pytest.mark.asyncio
 async def test_run_intake_only_passes_isolated_config() -> None:
     from unittest.mock import AsyncMock, patch

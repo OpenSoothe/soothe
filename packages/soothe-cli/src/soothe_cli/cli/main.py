@@ -197,8 +197,7 @@ def main(
             help=(
                 "Composer mode: 'manual' (relay AI questions to you), "
                 "'auto' (veritas auto-answers), or 'plan' (sticky planner "
-                "routing without typing /plan). Default: 'manual' when stdin "
-                "is a TTY, 'auto' otherwise."
+                "routing without typing /plan). Default: 'manual'."
             ),
         ),
     ] = None,

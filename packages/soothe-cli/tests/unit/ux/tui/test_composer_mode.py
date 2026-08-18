@@ -21,9 +21,9 @@ from soothe_cli.tui.composer_mode import (
         ("auto", COMPOSER_MODE_AUTO),
         ("manual", COMPOSER_MODE_MANUAL),
         ("plan", COMPOSER_MODE_PLAN),
-        (None, COMPOSER_MODE_AUTO),
-        ("garbage", COMPOSER_MODE_AUTO),
-        ("", COMPOSER_MODE_AUTO),
+        (None, COMPOSER_MODE_MANUAL),
+        ("garbage", COMPOSER_MODE_MANUAL),
+        ("", COMPOSER_MODE_MANUAL),
     ],
 )
 def test_normalize_composer_mode(raw: str | None, expected: str) -> None:
@@ -36,7 +36,7 @@ def test_normalize_composer_mode(raw: str | None, expected: str) -> None:
         ("auto", "manual"),
         ("manual", "plan"),
         ("plan", "auto"),
-        ("garbage", "auto"),
+        ("garbage", "manual"),
     ],
 )
 def test_next_composer_mode(current: str, expected: str) -> None:
@@ -49,7 +49,7 @@ def test_next_composer_mode(current: str, expected: str) -> None:
         ("auto", "auto", None),
         ("manual", "manual", None),
         ("plan", "auto", "planner"),
-        ("garbage", "auto", None),
+        ("garbage", "manual", None),
     ],
 )
 def test_resolve_composer_wire_fields(mode: str, wire_clar: str, sticky: str | None) -> None:

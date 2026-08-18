@@ -1944,13 +1944,24 @@ class AutopilotService:
                         outcome=outcome,
                     )
                 elif outcome == "needs_replan":
-                    # IG-707: clarification / empty PlanResult → send_back (or
-                    # fail on budget exhaust), never operator-wait suspend.
+                    # Clarification hard-defer parks via CE (awaiting_clarification).
+                    # Do not send_back over that park — leave the goal blocked until
+                    # answered / goal_unblocked (IG-749).
                     narrative = (
                         str(data.get("evidence_summary", "")).strip()
                         or str(data.get("error_text", "")).strip()
                         or "Worker needs replan (insufficient terminal evidence)"
                     )
+                    parked = False
+                    try:
+                        goal = self._ce.get_goal_sync(goal_id)
+                        parked = goal is not None and goal.status == "awaiting_clarification"
+                    except Exception:
+                        logger.warning(
+                            "Failed to read goal status before needs_replan handling %s",
+                            goal_id,
+                            exc_info=True,
+                        )
                     try:
                         await self._commit_loop_end_report(
                             goal_id,
@@ -1958,13 +1969,19 @@ class AutopilotService:
                             summary=narrative,
                             contribution=contribution,
                         )
-                        await self._apply_send_back_or_fail(
-                            goal_id,
-                            reason=narrative,
-                            loop_id=worker.loop_id,
-                        )
+                        if parked:
+                            logger.info(
+                                "Goal %s parked awaiting_clarification; skipping send_back",
+                                goal_id,
+                            )
+                        else:
+                            await self._apply_send_back_or_fail(
+                                goal_id,
+                                reason=narrative,
+                                loop_id=worker.loop_id,
+                            )
                     except Exception:
-                        logger.exception("send_back/fail raised for needs_replan %s", goal_id)
+                        logger.exception("needs_replan handling raised for goal %s", goal_id)
                 else:  # failed
                     evidence = EvidenceBundle(
                         structured={

@@ -1,10 +1,11 @@
 """Clarification relay for the Agent Loop (RFC-622).
 
-When CoreAgent emits an ``ask_user`` interrupt (or ends a turn with a plain-text
-question), the loop bubbles the question up through a :class:`ClarificationPolicy`
-that returns a real answer (from a human via the TUI, or from the ``veritas``
-subagent in autonomous mode). The loop then resumes CoreAgent with the answer
-instead of the empty-string fallback that previously caused replan spins.
+When CoreAgent emits a structured ``ask_user`` interrupt, the loop bubbles the
+question up through a :class:`ClarificationPolicy` that returns a real answer
+(from a human via the TUI, or from the ``veritas`` subagent in autonomous mode).
+The loop then resumes CoreAgent with the answer instead of the empty-string
+fallback that previously caused replan spins. Plain-text questions are not
+treated as clarifications.
 """
 
 from __future__ import annotations

@@ -48,6 +48,8 @@ class ClarificationDeferredEvent(SootheEvent):
     reason: str = ""
     question_summary: str = ""
     questions: list[str] = []
+    # RFC-623 taxonomy: explicit | low_confidence | structured_output_failed | answer_was_question
+    defer_kind: str = ""
 
     model_config = ConfigDict(extra="allow")
 

@@ -87,9 +87,69 @@ class LoopRuntimeContext:
         """CoreAgent graph (checkpoint key = ``thread_id``, not loop_id)."""
         return self.strange_loop.core_agent
 
-    async def mark_goal_status(self, status: str, reason: str = "") -> None:
-        """Update the running goal's status (best-effort).
+    async def park_for_clarification(
+        self,
+        pending: dict[str, Any],
+        *,
+        reason: str = "",
+    ) -> None:
+        """Persist a hard-defer park so the goal stays resumable (RFC-622).
 
-        Solo loop: logs only. Autopilot subclasses should notify the scheduler.
+        When a Context Engine handle is wired (``ce`` + ``ce_goal_id``), calls
+        ``mark_awaiting_clarification`` so Autopilot skips redispatch
+        (``BLOCKED_STATES``). Solo / no-CE runs log only.
         """
-        logger.info("[ClarificationRelay] goal status -> %s (reason=%s)", status, reason)
+        logger.info(
+            "[ClarificationRelay] goal status -> awaiting_clarification (reason=%s)",
+            reason,
+        )
+        ce = self.ce
+        goal_id = self.ce_goal_id
+        if ce is None or not goal_id:
+            return
+        mark = getattr(ce, "mark_awaiting_clarification", None)
+        if not callable(mark):
+            return
+        try:
+            await mark(goal_id, pending, reason=reason)
+        except Exception:
+            logger.exception(
+                "[ClarificationRelay] CE mark_awaiting_clarification failed for goal %s",
+                goal_id,
+            )
+
+    async def resolve_parked_clarification(self, answers: list[str]) -> bool:
+        """Unblock a CE-parked goal after clarification answers arrive.
+
+        Returns:
+            True when the goal was in ``awaiting_clarification`` and was
+            transitioned (caller should emit ``goal_unblocked``). False when
+            there is no CE park to resolve (interactive first-shot path).
+        """
+        ce = self.ce
+        goal_id = self.ce_goal_id
+        if ce is None or not goal_id:
+            return False
+        get_goal = getattr(ce, "get_goal", None)
+        answer_fn = getattr(ce, "answer_clarification", None)
+        if not callable(get_goal) or not callable(answer_fn):
+            return False
+        try:
+            goal = await get_goal(goal_id)
+        except Exception:
+            logger.exception(
+                "[ClarificationRelay] CE get_goal failed for goal %s",
+                goal_id,
+            )
+            return False
+        if goal is None or getattr(goal, "status", None) != "awaiting_clarification":
+            return False
+        try:
+            await answer_fn(goal_id, list(answers))
+        except Exception:
+            logger.exception(
+                "[ClarificationRelay] CE answer_clarification failed for goal %s",
+                goal_id,
+            )
+            return False
+        return True

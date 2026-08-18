@@ -14,7 +14,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
-from soothe_cli.tui.composer_mode import COMPOSER_MODE_AUTO, normalize_composer_mode
+from soothe_cli.tui.composer_mode import COMPOSER_MODE_MANUAL, normalize_composer_mode
 from soothe_cli.tui.config import get_glyphs
 
 logger = logging.getLogger(__name__)
@@ -73,10 +73,9 @@ class ModelLabel(Widget):
 class ClarificationModeBadge(Static):
     """Visual block showing the active composer mode (Auto / Manual / Plan).
 
-    ``Auto`` renders as muted/dim text — matching the welcome banner's
-    ``Loop:`` line — to stay visually quiet in the default state. ``Manual``
-    keeps a bold orange pill so the override stands out. ``Plan`` uses a teal
-    pill for sticky planner routing.
+    Default is ``Manual`` (bold orange pill) so operators see that
+    clarifications will be relayed. ``Auto`` renders as muted/dim text.
+    ``Plan`` uses a teal pill for sticky planner routing.
     """
 
     DEFAULT_CSS = """
@@ -101,9 +100,9 @@ class ClarificationModeBadge(Static):
     }
     """
 
-    mode: reactive[str] = reactive(COMPOSER_MODE_AUTO, init=False)
+    mode: reactive[str] = reactive(COMPOSER_MODE_MANUAL, init=False)
 
-    def __init__(self, *args: Any, mode: str = COMPOSER_MODE_AUTO, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, mode: str = COMPOSER_MODE_MANUAL, **kwargs: Any) -> None:
         """Initialize with the badge text already rendered so it shows on first paint."""
         initial = normalize_composer_mode(mode)
         super().__init__(initial.capitalize(), *args, **kwargs)
@@ -216,7 +215,7 @@ class StatusBar(Horizontal):
     }
     """
     mode: reactive[str] = reactive("normal", init=False)
-    clarification_mode: reactive[str] = reactive(COMPOSER_MODE_AUTO, init=False)
+    clarification_mode: reactive[str] = reactive(COMPOSER_MODE_MANUAL, init=False)
     status_message: reactive[str] = reactive("", init=False)
     session_tip: reactive[str] = reactive("", init=False)
     tip_is_notification: reactive[bool] = reactive(False, init=False)

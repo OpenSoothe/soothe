@@ -67,13 +67,13 @@ def test_cycle_tolerates_missing_status_bar() -> None:
     assert app._composer_mode == "manual"
 
 
-def test_cycle_treats_unknown_initial_value_as_auto() -> None:
-    """A garbage starting value normalises to Auto on the first cycle."""
+def test_cycle_treats_unknown_initial_value_as_manual() -> None:
+    """A garbage starting value normalises to Manual on the first cycle."""
     app = _AppHarness(initial="garbage")
     app.cycle_composer_mode()
-    assert app._composer_mode == "auto"
-    app.cycle_composer_mode()
     assert app._composer_mode == "manual"
+    app.cycle_composer_mode()
+    assert app._composer_mode == "plan"
 
 
 def test_shift_tab_action_cycles_mode() -> None:

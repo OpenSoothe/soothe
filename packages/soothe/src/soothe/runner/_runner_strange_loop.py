@@ -766,10 +766,16 @@ class StrangeLoopMixin:
 
                 elif event_type == "clarification_deferred":
                     payload = event_data if isinstance(event_data, dict) else {}
+                    questions_raw = payload.get("questions") or []
+                    questions = (
+                        [str(q) for q in questions_raw] if isinstance(questions_raw, list) else []
+                    )
                     yield custom_event(
                         ClarificationDeferredEvent(
                             reason=str(payload.get("reason") or ""),
                             question_summary=str(payload.get("question_summary") or ""),
+                            questions=questions,
+                            defer_kind=str(payload.get("defer_kind") or ""),
                         ).to_dict()
                     )
 

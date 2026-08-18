@@ -55,6 +55,20 @@ def test_request_from_state_rejects_unknown_origin() -> None:
         request_from_state(bad)
 
 
+def test_request_from_state_rejects_empty_questions() -> None:
+    bad = request_to_state(_request())
+    bad["questions"] = ["  ", ""]
+    with pytest.raises(ValueError, match="non-empty question"):
+        request_from_state(bad)
+
+
+def test_request_from_state_safe_iteration_coerce() -> None:
+    raw = request_to_state(_request())
+    raw["loop_state"]["iteration"] = "not-an-int"
+    restored = request_from_state(raw)
+    assert restored.loop_state.iteration == 0
+
+
 def test_answer_roundtrip() -> None:
     original = ClarificationAnswer(
         answers=("auth flows",),

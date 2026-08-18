@@ -80,6 +80,24 @@ async def test_high_confidence_returns_answer() -> None:
 
 
 @pytest.mark.asyncio
+async def test_empty_answers_defer_explicit() -> None:
+    policy = AutoClarificationPolicy(
+        _veritas_returning(
+            VeritasAnswerSchema(
+                answers=["  "],
+                confidence=0.95,
+                defer=False,
+                rationale="blank",
+            )
+        )
+    )
+    with pytest.raises(ClarificationDeferredError) as exc_info:
+        await policy.answer(_request())
+    assert exc_info.value.kind == "explicit"
+    assert "empty answer" in exc_info.value.reason
+
+
+@pytest.mark.asyncio
 async def test_low_confidence_defers_with_kind() -> None:
     policy = AutoClarificationPolicy(
         _veritas_returning(VeritasAnswerSchema(answers=["guess"], confidence=0.2, defer=False))

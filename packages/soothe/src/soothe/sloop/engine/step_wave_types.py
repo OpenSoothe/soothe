@@ -118,6 +118,8 @@ class _PendingInterruptFetch:
     pending_interrupts: dict[str, Any] = field(default_factory=dict)
     interrupt_occurred: bool = False
     captured_clarification: bool = False
+    # Structured ask_user present but detector rejected it (empty questions, etc.).
+    uncapturable_ask_user: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -138,7 +138,7 @@ class _StartupMixin:
                 PlanQuickViewOverlay,
             )
 
-        # Seed the badge from the app-level composer mode (CLI flag, default Auto).
+        # Seed the badge from the app-level composer mode (CLI flag, default Manual).
         self._status_bar.set_clarification_mode(self._composer_mode)
 
         # Seed the status footer with the first rotating tip and start rotation.

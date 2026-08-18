@@ -47,7 +47,7 @@ class CLIConfig:
     # Composer mode (Auto / Manual / Plan). Auto/Manual map to RFC-622
     # clarification_mode; Plan is sticky preferred_subagent=planner.
     clarification_mode: str | None = None
-    """'manual', 'auto', or 'plan'. None = auto-detect from TTY (auto)."""
+    """'manual', 'auto', or 'plan'. None = Manual (TUI default)."""
 
     # Resume behavior: when the launcher finds an active loop on startup,
     # auto-resume it (True) or prompt the user (False, default).

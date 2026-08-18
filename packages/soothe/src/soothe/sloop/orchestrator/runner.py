@@ -105,13 +105,17 @@ def _clarification_resume_command(
     snapshot: Any,
     resume_answers: list[str],
     loop_id: str,
-) -> Any:
-    """Build ``Command(resume=…)`` or orphaned-interrupt ``goto`` recovery."""
+) -> Any | None:
+    """Build ``Command(resume=…)`` or orphaned-interrupt ``goto`` recovery.
+
+    Returns:
+        A LangGraph ``Command``, or ``None`` when the orphaned origin cannot be
+        mapped to a safe resume station (caller falls back to normal invoke).
+    """
     from langgraph.types import Command
 
     from soothe.sloop.clarification.origins import resume_node_for_clarification_origin
     from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
-    from soothe.sloop.orchestrator.stations import DELEGATE
 
     if snapshot_has_resumable_interrupt(snapshot):
         logger.info(
@@ -123,9 +127,19 @@ def _clarification_resume_command(
 
     values = getattr(snapshot, "values", {}) or {}
     origin = values.get("last_clarification_origin")
+    if origin is None:
+        pending = values.get("pending_clarification")
+        if isinstance(pending, dict):
+            origin = pending.get("origin_node")
     goto = resume_node_for_clarification_origin(str(origin) if origin is not None else None)
     if goto is None:
-        goto = DELEGATE
+        logger.error(
+            "[runner] pending clarification without live interrupt and no safe "
+            "resume station (loop=%s origin=%s); falling back to normal invocation",
+            loop_id,
+            origin,
+        )
+        return None
     answer_state = answer_to_state(
         ClarificationAnswer(answers=tuple(resume_answers), source="human")
     )
@@ -177,11 +191,19 @@ async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
                 # returns answers paired 1:1 with questions instead of
                 # broadcasting a single concatenated string.
                 resume_answers = [str(a) for a in answer_list] if answer_list else [answer_text]
-                graph_input = _clarification_resume_command(
+                resume_cmd = _clarification_resume_command(
                     snapshot=snapshot,
                     resume_answers=resume_answers,
                     loop_id=loop_id,
                 )
+                if resume_cmd is not None:
+                    graph_input = resume_cmd
+                else:
+                    logger.warning(
+                        "[runner] clarification resume aborted (unsafe origin); "
+                        "falling back to normal invocation (loop=%s)",
+                        loop_id,
+                    )
             else:
                 logger.warning(
                     "[runner] clarification_answer flag set but no pending clarification "

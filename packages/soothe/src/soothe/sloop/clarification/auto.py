@@ -116,8 +116,16 @@ class AutoClarificationPolicy:
                 kind=kind,
             )
 
+        answers = tuple(str(a).strip() for a in result.answers)
+        if not answers or any(not a for a in answers):
+            raise ClarificationDeferredError(
+                "veritas returned empty answer(s)",
+                request,
+                kind="explicit",
+            )
+
         return ClarificationAnswer(
-            answers=tuple(result.answers),
+            answers=answers,
             source="veritas",
             confidence=result.confidence,
             defer=False,

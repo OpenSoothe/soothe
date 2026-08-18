@@ -87,8 +87,8 @@ in `packages/`. These are the highest-priority gaps.
 | **RFC-616** | Scenario-Driven Goal Completion Synthesis | `synthesis.py` exists in `sloop/engine/` but scenario classifier (`scenario_classifier.py`) is present; full scenario-driven synthesis path partial. |
 | **RFC-618** | Plan Subagent with Explore Delegation | `subagent_catalog.py` lists `planner` as intake-only wired; explore delegation (RFC-618) partially superseded by RFC-633. Explore agent itself absent. |
 | **RFC-619** | Deep Research Subagent (Phase 2 `academic_research`) | `deep_research` listed in `subagent_catalog.py` INTAKE_ONLY set; Phase 2 `academic_research` not implemented. |
-| **RFC-622** | CoreAgent Clarification Relay + Veritas subagent TUI toggle | Veritas exists (`subagents/veritas/`); clarification relay (`CoreAgentClarificationRelay`) and TUI mode toggle not fully wired. |
-| **RFC-623** | Veritas Auto-Mode Robustness | Veritas implementation exists but auto-mode robustness spec points not fully covered. |
+| **RFC-622** | CoreAgent Clarification Relay + Veritas subagent TUI toggle | Relay wired (`sloop/clarification/`, `await_user`, CE park on hard-defer per IG-749). Remaining gap: full CLI `goal answer` UX polish. |
+| **RFC-623** | Veritas Auto-Mode Robustness | DeferKind + interactive fallback wired; empty-answer / wire `defer_kind` covered in IG-749. |
 | **RFC-630** | Start-Phase LLM Intake and Branch Routing | `sloop/intention/` two-pass classifier exists; branch routing (§10) wiring partial. |
 | **RFC-603** | Reasoning Quality & Progressive Actions | `sloop/cognition/` has phase/planner; progressive actions spec (RFC-603) not fully aligned. |
 | **RFC-606** | DeepAgents CLI TUI Migration | Migration largely done (CLI/TUI in `soothe-cli`); remaining phases per RFC §Implementation Phases incomplete. |

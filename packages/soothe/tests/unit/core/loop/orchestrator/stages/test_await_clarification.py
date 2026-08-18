@@ -30,7 +30,9 @@ class _StubStateManager:
 class _StubCtx:
     policy: Any = None
     emitted: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
-    status_marks: list[tuple[str, str]] = field(default_factory=list)
+    parks: list[tuple[dict[str, Any], str]] = field(default_factory=list)
+    resolve_parked: bool = False
+    resolve_answers: list[list[str]] = field(default_factory=list)
     state_manager: _StubStateManager = field(default_factory=_StubStateManager)
     scratch: Any = None
     clarification_resume_text: str | None = None
@@ -43,8 +45,12 @@ class _StubCtx:
     async def emit(self, name: str, payload: dict[str, Any]) -> None:
         self.emitted.append((name, payload))
 
-    async def mark_goal_status(self, status: str, reason: str = "") -> None:
-        self.status_marks.append((status, reason))
+    async def park_for_clarification(self, pending: dict[str, Any], *, reason: str = "") -> None:
+        self.parks.append((pending, reason))
+
+    async def resolve_parked_clarification(self, answers: list[str]) -> bool:
+        self.resolve_answers.append(list(answers))
+        return self.resolve_parked
 
 
 def _pending_state() -> dict[str, Any]:
@@ -107,18 +113,26 @@ async def test_success_writes_answer_and_clears_pending() -> None:
     # ``soothe.loop.clarification.*`` wire events before yielding.
     assert "clarification_requested" in names
     assert "clarification_answered" in names
-    assert ctx.status_marks == []
-    # RFC-622 / RFC-625: Verify goal_unblocked event is emitted when clarification resolves
+    assert ctx.parks == []
+    # Interactive first-shot (no CE park) must not emit a fake goal_unblocked.
+    assert not any(n == "goal_unblocked" for n, _ in ctx.emitted)
+
+
+async def test_success_emits_goal_unblocked_when_ce_park_resolved() -> None:
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("auth flows",), source="human"))
+    ctx = _StubCtx(policy=policy, resolve_parked=True)
+
+    await node_await_clarification(ctx, _pending_state())
+
     unblocked_payloads = [p for n, p in ctx.emitted if n == "goal_unblocked"]
     assert len(unblocked_payloads) == 1
     assert unblocked_payloads[0]["goal_id"] == "g"
     assert unblocked_payloads[0]["old_status"] == "awaiting_clarification"
     assert unblocked_payloads[0]["new_status"] == "pending"
-    assert unblocked_payloads[0]["reason"] == "clarification resolved"
-    assert unblocked_payloads[0]["loop_id"] == "test-loop-123"
+    assert ctx.resolve_answers == [["auth flows"]]
 
 
-async def test_deferred_marks_status_and_terminates() -> None:
+async def test_deferred_parks_and_keeps_pending() -> None:
     req = ClarificationRequest(
         questions=("What aspect to refine?",),
         origin_node="execute",
@@ -144,12 +158,25 @@ async def test_deferred_marks_status_and_terminates() -> None:
     result = await node_await_clarification(ctx, _pending_state())
 
     assert result["last_outcome"] == "deferred"
-    assert result["pending_clarification"] is None
-    assert ctx.status_marks == [("awaiting_clarification", "low confidence")]
+    # Keep graph pending (do not clear); only clear the answer channel.
+    assert "pending_clarification" not in result
+    assert result["pending_clarification_answer"] is None
+    assert len(ctx.parks) == 1
+    assert ctx.parks[0][1] == "low confidence"
     deferred_payloads = [p for n, p in ctx.emitted if n == "clarification_deferred"]
     assert len(deferred_payloads) == 1
     assert deferred_payloads[0]["defer_kind"] == "low_confidence"
     assert deferred_payloads[0]["reason"] == "low confidence"
+
+
+async def test_answer_defer_true_parks() -> None:
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human", defer=True))
+    ctx = _StubCtx(policy=policy)
+    result = await node_await_clarification(ctx, _pending_state())
+    assert result["last_outcome"] == "deferred"
+    assert result["pending_clarification_answer"] is None
+    assert len(ctx.parks) == 1
+    assert any(n == "clarification_deferred" for n, _ in ctx.emitted)
 
 
 @pytest.mark.parametrize(
@@ -196,7 +223,10 @@ async def test_missing_policy_defers() -> None:
     ctx = _StubCtx(policy=None)
     result = await node_await_clarification(ctx, _pending_state())
     assert result["last_outcome"] == "deferred"
-    assert ctx.status_marks[0][0] == "awaiting_clarification"
+    assert len(ctx.parks) == 1
+    assert ctx.parks[0][1] == "no clarification policy configured"
+    assert result["pending_clarification_answer"] is None
+    assert "pending_clarification" not in result
 
 
 async def test_malformed_pending_returns_fatal() -> None:
