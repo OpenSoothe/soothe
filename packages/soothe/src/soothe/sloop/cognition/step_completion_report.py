@@ -34,6 +34,8 @@ async def summarize_step_completion_report(
     """Summarize a completed execute step for TUI cognition display.
 
     Uses only the single-step human/ai pair (no prior steps or goal messages).
+    Delegates message assembly to :class:`GraphPromptWrapper` so the system
+    prompt lives in one place alongside all other LLM-invoking nodes.
 
     Args:
         human_content: Compact execute-step human input (ledger-style).
@@ -46,11 +48,12 @@ async def summarize_step_completion_report(
     Returns:
         First-person summary text, or None when input is empty or the call fails.
     """
-    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
     from soothe_nano.llm.invoke_policy import (
         await_with_llm_call_policy,
         llm_rate_limit_config_from,
     )
+
+    from soothe.sloop.prompts.graph_wrapper import GraphPromptWrapper
 
     human = (human_content or "").strip()[:_CONTENT_CAP]
     ai = (ai_content or "").strip()[:_CONTENT_CAP]
@@ -65,12 +68,12 @@ async def summarize_step_completion_report(
             else 50
         )
 
-    system = _STEP_COMPLETION_REPORT_SYSTEM.format(max_words=word_limit)
-    messages = [
-        SystemMessage(content=system),
-        HumanMessage(content=human or "(no step input)"),
-        AIMessage(content=ai or "(no step output)"),
-    ]
+    wrapper = GraphPromptWrapper(soothe_config)
+    messages = wrapper.build_step_completion_messages(
+        human_content=human,
+        ai_content=ai,
+        max_words=word_limit,
+    )
 
     if goal_trace is not None:
         config = goal_trace.intake_invoke_config(

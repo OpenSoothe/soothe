@@ -12,14 +12,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage
 
 from soothe.sloop.engine.scenario_classifier import (
     ScenarioClassification,
     format_hint_for_scenario,
-)
-from soothe.sloop.prompts.plan_ledger_projection import (
-    project_loop_messages_for_synthesis,
 )
 from soothe.sloop.prompts.user_message import (
     _goal_text,
@@ -102,35 +99,23 @@ def build_synthesis_messages(
     ledger_cfg: PlanPromptLedgerConfig | None = None,
     agent_instructions_max_chars: int = 8000,
 ) -> list[BaseMessage]:
-    """Assemble system + execute ledger + TASK human for goal-completion synthesis."""
-    from soothe.sloop.prompts.user_message import UserMessageBuilder
+    """Assemble system + execute ledger + TASK human for goal-completion synthesis.
 
-    user_goal = normalize_user_query(user_query if user_query is not None else state.goal)
-    system_text = render_synthesis_system_prompt(
-        classification,
-        user_goal=user_goal,
-        workspace=state.workspace,
+    Delegates to :class:`GraphPromptWrapper` for centralized projection and
+    system-prompt assembly so synthesis shares the same pipeline as planner
+    calls.
+    """
+    from soothe.sloop.prompts.graph_wrapper import GraphPromptWrapper
+
+    wrapper = GraphPromptWrapper()
+    return wrapper.build_synthesis_messages(
+        state=state,
+        classification=classification,
+        user_query=user_query,
+        max_chars=max_chars,
+        ledger_cfg=ledger_cfg,
         agent_instructions_max_chars=agent_instructions_max_chars,
-        response_language=getattr(state, "response_language", None),
     )
-    ledger_msgs = list(
-        project_loop_messages_for_synthesis(state.loop_messages, ledger_cfg),
-    )
-    human_text = UserMessageBuilder().build_synthesis_message()
-
-    while max_chars > 0:
-        total = len(system_text) + _messages_text_len(ledger_msgs) + len(human_text)
-        if total <= max_chars:
-            break
-        if ledger_msgs:
-            ledger_msgs.pop(0)
-            continue
-        break
-
-    out: list[BaseMessage] = [SystemMessage(content=system_text)]
-    out.extend(ledger_msgs)
-    out.append(HumanMessage(content=human_text))
-    return out
 
 
 __all__ = [
