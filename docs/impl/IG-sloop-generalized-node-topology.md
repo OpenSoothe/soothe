@@ -114,8 +114,12 @@ Each phase was a standalone commit with `verify_finally.sh` green.
 - [x] All existing StrangeLoop tests pass without modification.
 - [x] `./scripts/verify_finally.sh` green.
 - [x] Node count reduced 14→12, router count 11→8.
-- [x] `BEGIN_ITERATION`/`VALIDATE_PLAN` no longer graph nodes.
-- [x] `normalize_station` maps legacy IDs for checkpoint resume compat.
+- [x] `BEGIN_ITERATION`/`VALIDATE_PLAN` no longer graph nodes; their station
+      constants are removed (persisted checkpoints resume at the folding
+      station).
+- [x] `normalize_station` maps the 5 persisted legacy clarification origins to
+      their canonical resume station; `LEGACY_TO_STATION` is trimmed to
+      reachable entries only.
 - [x] `test_loop_graph_topology.py` asserts the folded node set.
 
 ---

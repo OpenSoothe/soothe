@@ -1,8 +1,10 @@
 """StrangeLoop stem station IDs.
 
-Canonical LangGraph node names for the flat Loop Graph. Legacy IDs remain
-accepted via ``normalize_station`` for persisted clarification origins and
-dual-read of older ledger ``phase`` tags.
+Canonical LangGraph node names for the flat Loop Graph. ``normalize_station``
+maps persisted legacy clarification origins to their canonical resume station
+for checkpoint-resume compatibility (RFC-903 §normalize_station). Ledger
+dual-read of older ``phase`` tags is handled separately by
+``PLANNING_LEDGER_PHASES`` / ``INTAKE_LEDGER_PHASES``.
 
 Client/CLI wire deliverable phases (``goal_completion``, ``execute_step``) and
 checkpoint ledger phases that soothe-sdk filters (``intent_classify``,
@@ -25,11 +27,12 @@ GENERATE_PLAN: Final = "generate_plan"
 
 # --- Execute ---
 COMMIT_PLAN: Final = "commit_plan"
-VALIDATE_PLAN: Final = "validate_plan"
 EXECUTE: Final = "execute"
 RECORD_PROGRESS: Final = "record_progress"
 CHECK_LIMITS: Final = "check_limits"
-BEGIN_ITERATION: Final = "begin_iteration"
+# RFC-903 P3: ``validate_plan`` and ``begin_iteration`` were folded into
+# ``commit_plan`` and ``check_limits`` respectively. Their station constants
+# are removed; persisted checkpoints resume at the folding station.
 
 # --- Complete ---
 FINALIZE: Final = "finalize"
@@ -68,38 +71,22 @@ PLANNING_LEDGER_PHASES: frozenset[str] = frozenset(
 
 INTAKE_LEDGER_PHASES: frozenset[str] = frozenset({INTAKE, PHASE_LEDGER_INTAKE})
 
-# Legacy LangGraph / origin ids → canonical station (resume + normalize).
+# Legacy clarification origins → canonical resume station. Only the origins
+# in ``_ACCEPTED_CLARIFICATION_ORIGINS`` (origins.py) ever reach this dict via
+# ``normalize_station``; entries for old graph-node ids were unreachable and
+# have been removed. Folded stations (``validate_plan``, ``begin_iteration``)
+# are absent — persisted checkpoints resume at their folding station.
 LEGACY_TO_STATION: dict[str, str] = {
-    "intent_classify": INTAKE,
-    "init_or_resume": ENTER_LOOP,
-    "bounded_evidence_gather": GATHER_EVIDENCE,
-    "plan_gap_analysis": EVALUATE,
-    "plan_assess": EVALUATE,
-    "analyze_gaps": EVALUATE,
-    "assess": EVALUATE,
+    # Legacy planning origins persisted by pre-RFC-903 runs.
     "plan_generate": GENERATE_PLAN,
-    "resolve_decision": COMMIT_PLAN,
-    "validate_evidence_bindings": VALIDATE_PLAN,
-    "record_iteration": RECORD_PROGRESS,
-    "iteration_gate": CHECK_LIMITS,
-    "iteration_start": BEGIN_ITERATION,
-    "goal_completion": FINALIZE,
-    "await_clarification": AWAIT_USER,
-    "invoke_wired_subagent": DELEGATE,
-    INTAKE: INTAKE,
-    ENTER_LOOP: ENTER_LOOP,
-    GATHER_EVIDENCE: GATHER_EVIDENCE,
+    "plan_assess": EVALUATE,
+    "plan_gap_analysis": EVALUATE,
+    "assess": EVALUATE,
+    "analyze_gaps": EVALUATE,
+    # Canonical identity entries for the clarification-origin stations.
     EVALUATE: EVALUATE,
     GENERATE_PLAN: GENERATE_PLAN,
-    COMMIT_PLAN: COMMIT_PLAN,
-    VALIDATE_PLAN: VALIDATE_PLAN,
     EXECUTE: EXECUTE,
-    RECORD_PROGRESS: RECORD_PROGRESS,
-    CHECK_LIMITS: CHECK_LIMITS,
-    BEGIN_ITERATION: BEGIN_ITERATION,
-    FINALIZE: FINALIZE,
-    AWAIT_USER: AWAIT_USER,
-    DELEGATE: DELEGATE,
 }
 
 
@@ -119,7 +106,6 @@ def normalize_station(station_or_legacy: str | None) -> str | None:
 
 __all__ = [
     "AWAIT_USER",
-    "BEGIN_ITERATION",
     "CHECK_LIMITS",
     "COMMIT_PLAN",
     "DELEGATE",
@@ -131,7 +117,6 @@ __all__ = [
     "GENERATE_PLAN",
     "INTAKE",
     "INTAKE_LEDGER_PHASES",
-    "LEGACY_TO_STATION",
     "PHASE_EXECUTE_STEP",
     "PHASE_GOAL_COMPLETION",
     "PHASE_GOAL_INTERRUPTED",
@@ -141,6 +126,5 @@ __all__ = [
     "PHASE_LEDGER_INTAKE",
     "PLANNING_LEDGER_PHASES",
     "RECORD_PROGRESS",
-    "VALIDATE_PLAN",
     "normalize_station",
 ]

@@ -70,8 +70,8 @@ When RFC-903 is **Accepted**:
   **partially superseded** by this RFC.
 - The `validate_plan` and `begin_iteration` nodes are **folded** into
   `commit_plan` and `check_limits` respectively. They are no longer graph
-  nodes; their station constants are retained for `normalize_station` backward
-  compat.
+  nodes; their station constants are removed and persisted checkpoints resume
+  at the folding station.
 - The `route_after_resolve_decision` and `route_after_validate_evidence`
   routers are replaced by a single `route_after_commit` router.
 - The route-key bag of flags (`plan_route`, `assess_route`,
@@ -216,9 +216,14 @@ Unchanged.
 
 ### `stations.normalize_station`
 
-Unchanged and normative. `BEGIN_ITERATION` and `VALIDATE_PLAN` constants are
-retained for legacy ID mapping even though the nodes no longer exist as graph
-nodes.
+Normative. Maps persisted legacy clarification origins to their canonical
+resume station. `LEGACY_TO_STATION` is trimmed to the reachable legacy planning
+origins (`plan_generate`, `plan_assess`, `plan_gap_analysis`, `assess`,
+`analyze_gaps`) plus identity entries for the clarification-origin stations.
+The folded `VALIDATE_PLAN` / `BEGIN_ITERATION` constants are removed; their
+dict entries pointed at deleted nodes and were unreachable through the single
+caller (`resume_node_for_clarification_origin`, which pre-filters via
+`_ACCEPTED_CLARIFICATION_ORIGINS`).
 
 ---
 
@@ -246,8 +251,9 @@ Unchanged from RFC-220. The `LoopNode` base driver **may** auto-emit
   isolation per node.
 - **Folds**: the `test_loop_graph_topology.py` test asserts the folded node set
   (no `begin_iteration`/`validate_plan` as graph nodes).
-- **Compat**: `normalize_station` + `LEGACY_TO_STATION` tests remain the
-  guardrail for wire/ledger phase stability.
+- **Compat**: `normalize_station` maps the 5 persisted legacy clarification
+  origins to their canonical resume station; the dict is trimmed to reachable
+  entries only.
 - **Isolation**: the RFC-220 isolation tests (Loop Graph `thread_id` ≠ CoreAgent
   `thread_id`) remain unchanged.
 
