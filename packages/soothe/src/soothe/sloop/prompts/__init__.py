@@ -8,10 +8,11 @@ system templates, context XML, project instructions, loader) stay in
 from .decompose import (
     APPROVED_PLAN_EXECUTE_HINT,
     DECOMPOSE_TASK_TOOL_DESCRIPTION,
-    DECOMPOSITION_VS_TODOS_BLOCK,
+    THREAD_POLICY_SYSTEM_ADDENDUM,
     WRITE_TODOS_SYSTEM_ADDENDUM,
     WRITE_TODOS_TOOL_DESCRIPTION,
     do_or_decompose_instruction_lines,
+    user_finish_or_split_hint_lines,
 )
 from .graph_wrapper import (
     GraphCallKind,
@@ -38,7 +39,6 @@ from .user_message import (
 
 __all__ = [
     "APPROVED_PLAN_EXECUTE_HINT",
-    "DECOMPOSITION_VS_TODOS_BLOCK",
     "DECOMPOSE_TASK_TOOL_DESCRIPTION",
     "EXECUTION_TASK_LABEL",
     "GraphCallKind",
@@ -46,6 +46,7 @@ __all__ = [
     "PRIOR_PROGRESS_MAX_CHARS",
     "PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS",
     "ProjectionResult",
+    "THREAD_POLICY_SYSTEM_ADDENDUM",
     "UserMessageBuilder",
     "WRITE_TODOS_SYSTEM_ADDENDUM",
     "WRITE_TODOS_TOOL_DESCRIPTION",
@@ -59,4 +60,5 @@ __all__ = [
     "project_loop_messages_for_synthesis",
     "projected_ledger_has_goal_completion",
     "render_prior_steps_tree",
+    "user_finish_or_split_hint_lines",
 ]

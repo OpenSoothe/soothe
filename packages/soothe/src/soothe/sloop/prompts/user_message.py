@@ -264,10 +264,6 @@ class UserMessageBuilder:
         if workspace_state:
             sections.append(("WORKSPACE STATE", workspace_state))
 
-        from soothe.sloop.prompts.decompose import DECOMPOSITION_VS_TODOS_BLOCK
-
-        sections.append(("DECOMPOSITION vs TODOS", DECOMPOSITION_VS_TODOS_BLOCK.strip()))
-
         return _render_sections(sections)
 
     def build_synthesis_message(self) -> str:

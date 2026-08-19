@@ -9,7 +9,6 @@ from soothe.sloop.decompose.runtime import (
     reset_decompose_runtime,
 )
 from soothe.sloop.decompose.tool import build_decompose_task_tool
-from soothe.sloop.prompts.decompose import DECOMPOSITION_VS_TODOS_BLOCK
 from soothe.sloop.prompts.user_message import UserMessageBuilder
 
 
@@ -51,11 +50,11 @@ def test_decompose_tool_errors_without_runtime() -> None:
     assert result.startswith("Error:")
 
 
-def test_execute_envelope_includes_decompose_guidance() -> None:
+def test_execute_envelope_is_instance_focused() -> None:
     msg = UserMessageBuilder().build_execute_step_message(
         "Do the thing",
         step_id="S1",
     )
-    assert "DECOMPOSITION vs TODOS" in msg
-    assert "decompose_task" in msg
-    assert DECOMPOSITION_VS_TODOS_BLOCK.strip().split("\n")[0] in msg or "write_todos" in msg
+    assert "EXECUTION TASK:" in msg
+    assert "DECOMPOSITION vs TODOS" not in msg
+    assert "FINISH HERE" not in msg

@@ -48,8 +48,8 @@ def test_execute_step_message_includes_approved_plan_section() -> None:
     assert "path: /ws/.soothe/plans/demo.md" in msg
     assert "Use OAuth" in msg
     assert "decompose_task" in msg
-    assert "DECOMPOSITION vs TODOS" in msg
-    assert "APPROVED PLAN is present" in msg
+    assert "DECOMPOSITION vs TODOS" not in msg
+    assert "FINISH HERE" not in msg
 
 
 def test_approved_plan_section_body_empty_without_markdown() -> None:

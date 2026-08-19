@@ -53,7 +53,9 @@ def test_awrap_model_call_injects_decompose_tool() -> None:
         reset_decompose_runtime(tokens)
 
     assert "decompose_task" in _tool_names(forwarded)
-    assert "write_todos (this thread only)" in forwarded.system_message.content
+    content = forwarded.system_message.content
+    assert "This thread: finish vs split" in content
+    assert "write_todos (this thread only)" in content
 
 
 def test_injection_uses_configurable_step_id_without_contextvar() -> None:

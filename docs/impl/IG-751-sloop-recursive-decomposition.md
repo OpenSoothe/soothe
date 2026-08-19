@@ -101,7 +101,8 @@ proposal validation.
 
 - Bind `decompose_task` in executor on every step THREAD.
 - Proposal sink on `LoopRuntimeContext` / `executor.decompose_proposals`.
-- THREAD prompt: DECOMPOSITION vs TODOS; override TodoListMiddleware copy.
+- THREAD system: `THREAD_POLICY_SYSTEM_ADDENDUM` (finish vs split + write_todos);
+  user envelope instance-only; override TodoListMiddleware copy.
 - Do **not** implement nano middleware for decompose.
 
 ## 4b. P2 — Deterministic reconcile (done)

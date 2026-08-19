@@ -284,19 +284,19 @@ def build_dependent_execution_hints(
     expected_output: str | None,
     is_dag_root: bool | None = None,
 ) -> ExecuteStepEnvelopeBody:
-    """Build EXPECTED OUTPUT and INSTRUCTIONS bodies for an execute-step envelope."""
-    from soothe.sloop.prompts.decompose import do_or_decompose_instruction_lines
+    """Build EXPECTED OUTPUT and slim INSTRUCTIONS for the execute user envelope.
+
+    Finish-vs-split policy and search hygiene live in system + tool schemas
+    (``THREAD_POLICY_SYSTEM_ADDENDUM``); user keeps instance scope only.
+    """
+    from soothe.sloop.prompts.decompose import user_finish_or_split_hint_lines
 
     root = bool(step.is_dag_root if is_dag_root is None else is_dag_root)
     instruction_lines = [
-        *do_or_decompose_instruction_lines(is_dag_root=root),
+        *user_finish_or_split_hint_lines(is_dag_root=root),
         "- Complete only this EXECUTION TASK; do not do work meant for other "
         "tasks that will run in later threads",
-        "- Execute the work described in EXECUTION TASK above",
-        "- Use the suggested approach when provided",
-        "- Produce output matching the expected output specification",
-        "- Prefer one broad native search (grep/glob) then targeted reads; avoid repeated equivalent scans",
-        "- Reuse prior search results in this thread; switch to edit/apply once evidence is sufficient",
+        "- Produce output matching the EXPECTED OUTPUT specification",
     ]
     if has_predecessor_evidence:
         instruction_lines.insert(

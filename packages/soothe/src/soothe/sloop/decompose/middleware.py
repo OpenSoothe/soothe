@@ -16,7 +16,7 @@ from langchain.agents.middleware.types import (
 from soothe.sloop.decompose.runtime import current_step_id
 from soothe.sloop.decompose.tool import build_decompose_task_tool
 from soothe.sloop.prompts.decompose import (
-    WRITE_TODOS_SYSTEM_ADDENDUM,
+    THREAD_POLICY_SYSTEM_ADDENDUM,
     WRITE_TODOS_TOOL_DESCRIPTION,
 )
 from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_STEP_ID_KEY
@@ -69,14 +69,14 @@ def _strip_decompose_tool(tools: list[Any]) -> list[Any]:
 
 
 class DecomposeTaskMiddleware(AgentMiddleware):
-    """Inject ``decompose_task`` + intra-step write_todos guidance on step THREADS.
+    """Inject ``decompose_task`` + THREAD policy on step threads.
 
     Active when a StrangeLoop step id is bound (contextvar or LangGraph
     configurable ``soothe_decompose_step_id``). Hidden on non-step threads
     (synthesis, intake specialists, etc.).
 
-    ``tools`` registers ``decompose_task`` with the agent tool node so the call
-    is executable; visibility to the model stays gated per THREAD.
+    System gets finish-vs-split / write_todos / hygiene policy; tool schemas
+    carry the contracts; user envelope stays instance-focused.
     """
 
     tools = [_DECOMPOSE_TOOL]
@@ -95,7 +95,7 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         tools = _ensure_decompose_tool(tools)
 
         system = request.system_message
-        addendum = WRITE_TODOS_SYSTEM_ADDENDUM
+        addendum = THREAD_POLICY_SYSTEM_ADDENDUM
         if system is not None and hasattr(system, "content"):
             content = system.content
             if isinstance(content, str) and addendum not in content:

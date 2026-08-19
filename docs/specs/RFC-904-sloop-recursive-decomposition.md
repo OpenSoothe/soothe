@@ -302,9 +302,11 @@ THREAD **MUST** override `TodoListMiddleware` prompts so `write_todos` is
 
 Non-StrangeLoop CoreAgent sessions **MAY** keep stock `write_todos` prompts.
 
-THREAD envelopes **MUST** include a `DECOMPOSITION vs TODOS` block (Step
-Context Registry). Normative prompt copy lives in the design draft §5.1 and
-**SHOULD** be mirrored in implementation templates.
+THREAD **system** prompts **MUST** include finish-vs-split / write_todos /
+tool-hygiene policy (`THREAD_POLICY_SYSTEM_ADDENDUM`). User envelopes stay
+instance-focused (EXECUTION TASK, evidence, EXPECTED OUTPUT) with at most a
+one-line finish/split reminder. Normative copy lives in
+`soothe.sloop.prompts.decompose`.
 
 ---
 
@@ -466,7 +468,7 @@ formalization (historical reference; RFC-904 is normative).
 
 1. GapResult type vs alias over existing schemas.
 2. `proposing` as CE status vs ExecutionState scratch.
-3. Exact Step Context Registry layout beyond the DECOMPOSITION vs TODOS block.
+3. Exact Step Context Registry layout beyond the THREAD system policy addendum.
 4. Supersede old parent at replacement claim vs commit (lean: on commit).
 5. Optional sloop turn-guard timing (lean: after observed violations).
 
