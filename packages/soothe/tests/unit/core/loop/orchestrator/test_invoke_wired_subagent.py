@@ -289,7 +289,7 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     assert ctx.preferred_subagent is None
     assert ctx.scratch.planner_implement_handoff is True
     assert ctx.scratch.plan_result is None
-    assert ctx.scratch.plan_assessment is not None
+    assert ctx.scratch.plan_assessment is None
     assert ctx.loop_state.approved_plan_markdown is not None
     assert "Do the migration" in ctx.loop_state.approved_plan_markdown
     ledger = ctx.loop_state._loop_messages_cache

@@ -157,6 +157,23 @@ As distinct graph nodes: `GATHER_EVIDENCE`, per-iteration `EVALUATE`,
 
 DELEGATE remains a THREAD execution mode, not a plan-time station.
 
+### Intake planner handoff (RFC-633)
+
+The intake-only ``planner`` wire subagent remains outside the DISPATCH spine.
+On operator **Approve**, StrangeLoop **MUST** route to **DISPATCH** (not
+``plan_generate``) and **MUST** ground the goal root THREAD with the approved
+solution report:
+
+1. Persist ``approved_plan_path`` / ``approved_plan_markdown`` on ``LoopState``.
+2. DISPATCH stamps the body into the root ``StepNode.full_description``
+   (one-shot; then clear the LoopState fields).
+3. THREAD envelope **MAY** also surface an ``APPROVED PLAN`` section while the
+   fields remain set (belt-and-suspenders for no-CE fallbacks).
+4. THREAD prompts **SHOULD** prefer ``decompose_task`` along the plan's Changes
+   rather than re-planning from scratch.
+
+Reject / More-comments behavior is unchanged from RFC-633.
+
 New stations **MUST** be `LoopNode` subclasses (RFC-903).
 
 ### Wave / barrier
@@ -459,3 +476,4 @@ formalization (historical reference; RFC-904 is normative).
 |------|---------|
 | 2026-08-19 | Proposed from approved design draft; draft archived under `docs/archive/drafts/` |
 | 2026-08-19 | Documented deprecation/archive eligibility for related RFCs (partial supersession; no premature archive) |
+| 2026-08-19 | Intake planner Approve → DISPATCH root grounding (approved plan → root THREAD) |

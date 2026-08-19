@@ -56,8 +56,9 @@ framing are refined in IG-659.
 ## 3. Non-goals
 
 - Replacing StrangeLoop `LLMPlanner` / plan-execute waves for complex intake
-  (Approve hands the approved artifact to StrangeLoop `plan_generate`; it does
-  **not** compile Changes markdown directly into an `AgentDecision`).
+  (Approve grounds the DISPATCH root THREAD with the approved artifact; it does
+  **not** compile Changes markdown directly into an `AgentDecision`, and does
+  **not** enter `plan_generate`).
 - Nested `task` / explore subagent revival.
 - Desktop-specific plan UI (TUI first; AppKit can consume the same wire events later).
 - Auto-starting a **second** CE goal after Approve (same-loop handoff only).
@@ -73,10 +74,15 @@ host        → write `.soothe/plans/...md`
             → pending_clarification (origin=planner_subagent_review)
             → await_clarification (RFC-622 interrupt)
 TUI         → plan body + path footer + Approve/Reject/More comments
-resume      → Approve → plan_generate → execute… → goal_completion
+resume      → Approve → DISPATCH (root grounded with approved plan) →
+              THREAD do-or-decompose → … → goal_completion
               Reject  → goal_completion (rejected status text)
               Comments→ re-invoke planner with prior plan + comments → review again
 ```
+
+> After RFC-904, Approve **MUST NOT** enter ``plan_generate``. The approved
+> markdown grounds the DISPATCH root THREAD; CE StepDAG children come from
+> ``decompose_task``.
 
 > Naming: `planner_subagent_review` is the intake **planner subagent** human
 > gate. It is **not** StrangeLoop `plan_generate` / `plan_assess` (those are
@@ -135,7 +141,8 @@ non-empty free text before resume.
 gate only; not StrangeLoop `plan_generate`/`plan_assess`, not other wired
 subagents).
 `route_after_wired_subagent` → `await_clarification` when pending;
-→ `plan_generate` when Approve sets `planner_implement_handoff`;
+→ `DISPATCH` when Approve sets `planner_implement_handoff` (root grounded;
+handoff cleared on first DISPATCH);
 → `goal_completion` otherwise (Reject / non-planner wires).
 `route_after_clarification` → `invoke_wired_subagent` for `planner_subagent_review`.
 
@@ -143,7 +150,7 @@ subagents).
 
 | Parsed action | Behavior |
 |---------------|----------|
-| Approve | Mark plan frontmatter `status: approved`; clear clarification and planner wire; short ledger note; set `planner_implement_handoff`; route to StrangeLoop `plan_generate` with the approved artifact as grounding (same CE goal) |
+| Approve | Mark plan frontmatter `status: approved`; clear clarification and planner wire; short ledger note; set `planner_implement_handoff`; route to StrangeLoop `DISPATCH` with the approved artifact grounding the root THREAD (same CE goal) |
 | Reject | Mark `status: rejected`; `goal_completion` with short rejection note |
 | More comments | Append comments to planner input; re-run planner; rewrite plan file; re-enter review |
 
@@ -170,8 +177,9 @@ Parsing uses case-insensitive prefixes on Q1 (`approve`, `reject`,
    auto-Approve/Reject even when clarification mode is `auto`. This does not
    force-manual StrangeLoop `plan_generate` / `plan_assess` clarifications
    or other wired subagents.
-4. Reject completes the goal; Approve hands off to StrangeLoop `plan_generate`
-   (does not complete yet); More comments revises the plan and asks again.
+4. Reject completes the goal; Approve hands off to StrangeLoop `DISPATCH`
+   (does not complete yet; approved plan grounds the root THREAD); More
+   comments revises the plan and asks again.
 5. Non-planner intake wires still route directly to `goal_completion` (no review gate).
 
 ## 7. References

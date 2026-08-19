@@ -1145,14 +1145,21 @@ class LoopState(BaseModel):
         default=None,
         description="Skill reference text for execute-step SKILL_CONTEXT when goal expanded from /skill:.",
     )
-    # one-shot approved intake-planner artifact for plan_generate grounding.
+    # one-shot approved intake-planner artifact for DISPATCH root grounding
+    # (RFC-904); legacy plan_generate also consumed these fields.
     approved_plan_path: str | None = Field(
         default=None,
-        description="Workspace path of the approved plan artifact (cleared after first plan_generate).",
+        description=(
+            "Workspace path of an operator-approved intake plan artifact "
+            "(cleared after DISPATCH grounds the root, or after legacy plan_generate)."
+        ),
     )
     approved_plan_markdown: str | None = Field(
         default=None,
-        description="Frontmatter-stripped approved plan body for plan_generate (cleared after first use).",
+        description=(
+            "Frontmatter-stripped approved plan body for DISPATCH root grounding "
+            "(cleared after first consume)."
+        ),
     )
     thread_id: str
     workspace: str | None = None  # Thread-specific workspace (RFC-103)

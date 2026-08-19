@@ -66,6 +66,70 @@ async def test_dispatch_creates_root_and_claims() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dispatch_grounds_root_with_approved_plan() -> None:
+    ce = ContextEngine()
+    goal = await ce.create_goal("migrate auth", loop_id="L1")
+    ctx = _ctx_with_ce(ce, goal.id, goal="migrate auth")
+    ctx.loop_state.approved_plan_path = "/ws/.soothe/plans/demo.md"
+    ctx.loop_state.approved_plan_markdown = (
+        "# Solution\n\nUse OAuth.\n\n## Changes\n\n- Add token store\n"
+    )
+    node = DispatchNode()
+    result = await node(ctx, {})
+    assert result["dispatch_route"] == "execute"
+    refreshed = await ce.get_goal(goal.id)
+    assert refreshed is not None
+    root_id = ctx.scratch.decision.steps[0].id
+    full = refreshed.steps.nodes[root_id].full_description or ""
+    assert "<!-- soothe:approved-plan -->" in full
+    assert "APPROVED PLAN" in full
+    assert "Use OAuth" in full
+    assert "decompose_task" in full
+    assert ctx.loop_state.approved_plan_markdown is None
+    assert ctx.loop_state.approved_plan_path is None
+
+
+@pytest.mark.asyncio
+async def test_dispatch_clears_planner_implement_handoff() -> None:
+    ce = ContextEngine()
+    goal = await ce.create_goal("migrate auth", loop_id="L1")
+    ctx = _ctx_with_ce(ce, goal.id, goal="migrate auth")
+    ctx.scratch.planner_implement_handoff = True
+    ctx.loop_state.approved_plan_markdown = "# Solution\n\nUse OAuth.\n"
+    node = DispatchNode()
+    result = await node(ctx, {})
+    assert result["dispatch_route"] == "execute"
+    assert result.get("planner_implement_handoff") is False
+    assert ctx.scratch.planner_implement_handoff is False
+    assert ctx.loop_state.approved_plan_markdown is None
+
+
+@pytest.mark.asyncio
+async def test_dispatch_does_not_re_ground_already_stamped_root() -> None:
+    ce = ContextEngine()
+    goal = await ce.create_goal("migrate auth", loop_id="L1")
+    stamped = "migrate auth\n\n<!-- soothe:approved-plan -->\n## APPROVED PLAN\n\nold body\n"
+    await ce.add_step(
+        goal.id,
+        StepNode(
+            id="ROOT",
+            description="migrate auth",
+            full_description=stamped,
+            status="pending",
+        ),
+    )
+    ctx = _ctx_with_ce(ce, goal.id, goal="migrate auth")
+    ctx.loop_state.approved_plan_markdown = "# Solution\n\nNew body that must not replace\n"
+    ctx.loop_state.approved_plan_path = "/ws/.soothe/plans/new.md"
+    node = DispatchNode()
+    await node(ctx, {})
+    refreshed = await ce.get_goal(goal.id)
+    assert refreshed is not None
+    assert refreshed.steps.nodes["ROOT"].full_description == stamped
+    assert ctx.loop_state.approved_plan_markdown is None
+
+
+@pytest.mark.asyncio
 async def test_reconcile_commits_and_routes_dispatch() -> None:
     ce = ContextEngine()
     goal = await ce.create_goal("do work", loop_id="L1")

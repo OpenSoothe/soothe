@@ -7,8 +7,9 @@ orphan SubAgent card, record Human/AI execute-step ledger rows.
 
 For ``planner`` (RFC-633): persist ``.soothe/plans/`` artifact and pause
 on RFC-622 clarification (Approve / Reject / More comments). Approve hands off
-to StrangeLoop ``plan_generate``; Reject routes to ``goal_completion``. Other
-wires still route directly to ``goal_completion``.
+to StrangeLoop ``DISPATCH`` (root grounded with the approved plan); Reject
+routes to ``goal_completion``. Other wires still route directly to
+``goal_completion``.
 """
 
 from __future__ import annotations
@@ -399,7 +400,8 @@ async def _handle_planner_subagent_review_answer(
 
     # Clarification-resume turns rebuild LoopPhaseScratch; reinject a trivial
     # plan so Reject → goal_completion can ledger_direct without a fatal.
-    # Approve clears plan_result and hands off to StrangeLoop plan_generate.
+    # Approve clears plan_result and hands off to StrangeLoop DISPATCH
+    # (RFC-904); the approved markdown grounds the root THREAD.
     if ctx.scratch.plan_result is None:
         ctx.scratch.plan_result = build_trivial_plan(
             goal_text,
@@ -416,18 +418,16 @@ async def _handle_planner_subagent_review_answer(
     if action == "approve":
         if path:
             update_plan_artifact_status(path, "approved")
-        # Short note only — full body stays on scratch for plan_generate grounding.
+        # Short note only — full body stays on loop_state for DISPATCH grounding.
         note = "Plan approved. Proceeding to implement."
         if path:
             note = f"{note}\n\nSaved to: `{path}`"
         _record_wired_execute_ledger(
             ctx, goal_text=goal_text, report=note, wire=wire, step_id=step_id
         )
-        from soothe.sloop.orchestrator.continuation import fresh_loop_bypass_assessment
-
-        # StrangeLoop will own the decision; drop the intake trivial plan.
+        # StrangeLoop DISPATCH owns the decision; drop the intake trivial plan.
+        # No synthetic plan_assessment — Approve no longer enters plan_generate.
         ctx.scratch.plan_result = None
-        ctx.scratch.plan_assessment = fresh_loop_bypass_assessment()
         ctx.scratch.planner_subagent_review_comments = None
         ctx.scratch.planner_implement_handoff = True
         ctx.preferred_subagent = None

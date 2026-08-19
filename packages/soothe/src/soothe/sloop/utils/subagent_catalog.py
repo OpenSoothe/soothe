@@ -2,7 +2,7 @@
 
 Allowlisted specialists in ``INTAKE_ONLY_WIRE_SUBAGENTS`` are omitted from the
 open CoreAgent ``task`` catalog and plan-wave ``delegate`` surface. They are
-reached only via Pass 2 / slash → ``invoke_wired_subagent``.
+reached only via slash / ``preferred_subagent`` → ``invoke_wired_subagent``.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ def resolve_wire_subagent(
     *,
     wire_subagent: str | None = None,
 ) -> str | None:
-    """Return wired subagent name when Pass 2 / slash named an allowlisted specialist."""
+    """Return wired subagent name when slash / preferred_subagent named an allowlist hit."""
     name = (wire_subagent or "").strip()
     if name and name in INTAKE_ONLY_WIRE_SUBAGENTS:
         return name

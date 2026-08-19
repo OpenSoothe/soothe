@@ -8,6 +8,9 @@ DECOMPOSITION vs TODOS:
 - write_todos: ephemeral checklist inside this step; keep working after.
 - Prefer complete if you can finish now. Prefer decompose_task only for
   schedulable split. Prefer write_todos only for in-thread tracking.
+- When APPROVED PLAN is present: treat Changes as the preferred child-step
+  outline — call decompose_task to schedule them rather than re-planning from
+  scratch or finishing everything in this one thread.
 """
 
 WRITE_TODOS_SYSTEM_ADDENDUM = """\

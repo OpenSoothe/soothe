@@ -3,7 +3,7 @@
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
 **Last Updated**: 2026-08-19
-**Total RFCs**: 91 (82 active + 9 archived)
+**Total RFCs**: 92 (83 active + 9 archived)
 
 > Summary statistics (by status and kind) live in [rfc-index.md](rfc-index.md).
 
@@ -723,49 +723,52 @@ RFCs are organized into numbered series by category:
 
 ### 2xx - StrangeLoop & Cognition
 
-- RFC-200: Autonomous Goal Management Loop
-- RFC-201: StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
-- RFC-203: StrangeLoop State & Memory Architecture
-- RFC-204: Autopilot Mode (Layer 3 Extension)
-- RFC-206: Hierarchical Prompt Architecture with System/User Separation
-- RFC-207: StrangeLoop Thread Management & Goal Context
+- RFC-200: Autonomous Goal Management Loop *(archived 2026-06-16)*
+- RFC-201: StrangeLoop Plan-Execute Loop Architecture
+- RFC-203: StrangeLoop State & Memory Architecture *(archived 2026-06-16)*
+- RFC-204: Autopilot Mode
+- RFC-206: Hierarchical Prompt Architecture
+- RFC-207: StrangeLoop Thread Lifecycle & Goal Context Management
 - RFC-211: Layer 2 Tool Result Optimization
 - RFC-213: StrangeLoop Reasoning Quality & Robustness
 - RFC-214: Volatility-Tiered Prompt Architecture & Unified Message Ledger
-- RFC-803: StrangeLoop Checkpoint Backend Architecture
-- RFC-207: StrangeLoop Thread Lifecycle & Goal Context (supersedes RFC-216)
+- RFC-216: StrangeLoop Multi-Thread Infinite Lifecycle *(archived)*
 - RFC-217: Goal Context Management for StrangeLoop
 - RFC-218: StrangeLoop Checkpoint Tree Architecture
 - RFC-219: Goal Completion Module Architecture
 - RFC-220: LangGraph Agent Loop Orchestrator
-- RFC-903: Sloop Graph Topology and Node Lifecycle (revises RFC-220 topology + node contract)
-- RFC-221: LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution
-- RFC-222: Autopilot and Goal Engine Architecture (Daemon-Owned)
+- RFC-221: Loop Runner Protocol and Subprocess Isolation
+- RFC-222: Autopilot Daemon Architecture
 - RFC-223: Thread Inheritance with LangGraph Checkpoint Forking
 - RFC-224: Automatic Context Window Management
 - RFC-225: Loop Continuity and Goal Record Enrichment
 - RFC-226: Continuation-Aware plan_assess and Post-Execute Fast Exit
 - RFC-227: Plan-Assess Prior-Progress Digest
-- RFC-228: Autopilot Job IPC Commands for Desktop Integration
+- RFC-228: Autopilot Job IPC Commands
+- RFC-229: Cron Service for Autopilot
+- RFC-230: Job Maturity Assessment for Autopilot Rails
+- RFC-231: LoopRail and Rail Exec (Composable Verb Bodies)
+- RFC-232: Flat WavePlan Wire Ingest (Semi-Structured, No Nesting)
 
 ### 3xx - Protocols
 
-- RFC-300: Context and Memory Architecture Design
+- RFC-300: Context and Memory Architecture Design *(archived 2026-06-16)*
 - RFC-301: Protocol Registry
+- RFC-302: ContextProtocol Architecture
+- RFC-303: MemoryProtocol Architecture
+- RFC-304: PlannerProtocol Architecture
+- RFC-305: PolicyProtocol Architecture
+- RFC-306: DurabilityProtocol Architecture
+- RFC-307: IdentityProtocol Architecture
 
 ### 4xx - Daemon & Transport
 
-- RFC-302: ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval
 - RFC-401: Event Processing & Filtering
-- RFC-303: MemoryProtocol: Cross-Thread Memory & Context Separation
 - RFC-403: Unified Event Naming Semantics
-- RFC-304: PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern
-- RFC-305: PolicyProtocol: Permission Checking & Scope Matching
-- RFC-306: DurabilityProtocol: Thread Lifecycle & Metadata Management
-- RFC-411: Event Stream Replay & History Reconstruction
+- RFC-411: Event Stream Replay & History Reconstruction *(archived 2026-06-16)*
 - RFC-412: MCP Management
 - RFC-413: Server-Owned Display Card Ledger
-- RFC-450: Unified Daemon Communication Protocol for WebSocket IPC
+- RFC-450: Unified Daemon Communication Protocol
 - RFC-452: Unified Thread Management Architecture
 - RFC-454: Slash Command Architecture
 
@@ -776,34 +779,55 @@ RFCs are organized into numbered series by category:
 - RFC-502: Unified Presentation Engine
 - RFC-503: Loop-First User Experience Architecture
 - RFC-504: Loop Management CLI Commands
-- RFC-505: Soothe Desktop Client Architecture *(archived 2026-06-04)*
+- RFC-505: Soothe Desktop Client Architecture *(archived)*
 
 ### 6xx - Plugin System & Extensions
 
 - RFC-600: Plugin Extension Specification
 - RFC-601: Built-in Plugin Agents
-- RFC-801: SQLite Backend for Persistence, Durability, and Vector Store
 - RFC-603: Reasoning Quality & Progressive Actions
 - RFC-604: Plan Phase Robustness (Three-Layer Defense)
-- RFC-605: Explore Subagent and Parallel Spawning
-- RFC-606: DeepAgents CLI TUI Migration
+- RFC-605: Explore Subagent and Parallel Spawning *(archived 2026-06-16)*
+- RFC-606: DeepAgents CLI TUI Migration Specification
 - RFC-607: Progressive Display Refinements Post-Migration
 - RFC-610: SDK Module Structure Refactoring
-- RFC-802: Persistence Architecture Refactor
-- RFC-613: Explore Agent — LLM-Orchestrated Iterative Search *(archived 2026-08-17)*
+- RFC-613: Explore Agent — LLM-Orchestrated Iterative Search *(archived)*
 - RFC-614: Unified Daemon → Client Streaming Messaging Framework
 - RFC-616: Scenario-Driven Goal Completion Synthesis
-- RFC-901: OperationSecurityProtocol: Unified Workspace and Tool Operation Security
 - RFC-618: Plan Subagent — Structured Planning with Explore Delegation
 - RFC-619: Deep Research Subagent
-- RFC-620: Unified Channel Architecture for Extensible Communication Endpoints
-- RFC-621: Workspace Host Convention: Path Mapping for Containerized Daemon
+- RFC-620: Unified Channel Architecture
+- RFC-621: Workspace Host Convention for Container Deployments
 - RFC-622: CoreAgent Clarification Relay
 - RFC-623: Veritas Auto-Mode Robustness
+- RFC-624: Context Engine
+- RFC-625: AutopilotMonitor and ContextEngine Unification
+- RFC-626: Entity Model and State Management Consolidation
+- RFC-627: Unified LLM Utilities Module
+- RFC-628: Cognition Step Card & SubAgent Card Display
+- RFC-629: Client Library — Core Upgrade and Appkit Architecture
+- RFC-630: Start-Phase LLM Intake and Branch Routing
+- RFC-631: Goal-Bound Display Snapshots
+- RFC-632: Loop-Scoped Router Profile Override
+- RFC-633: Planner Plan Artifact and Human Review
 
 ### 7xx - Product & Applications
 
-- RFC-700: Desktop App Product Redesign *(archived 2026-06-04)*
+- RFC-700: Desktop App Product Redesign *(archived)*
+
+### 8xx - Persistence
+
+- RFC-801: SQLite Backend Specification
+- RFC-802: Persistence Architecture Refactor
+- RFC-803: StrangeLoop Checkpoint Backend Architecture
+
+### 9xx - Process / Deprecation / Sloop
+
+- RFC-900: RFC Deprecation List and Number Segment Reclassification Scheme
+- RFC-901: OperationSecurityProtocol for Workspace and Tool Execution
+- RFC-902: Same-File Edit Concurrency and Optimization
+- RFC-903: Sloop Graph Topology and Node Lifecycle
+- RFC-904: Sloop Recursive Step Decomposition
 
 ---
 

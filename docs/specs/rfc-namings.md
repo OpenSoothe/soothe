@@ -2,10 +2,11 @@
 
 This document defines the terminology and naming conventions used in this project.
 
-**Last Updated**: 2026-08-18
+**Last Updated**: 2026-08-19
 
-> Note: Also covers start-phase intake & branch routing terms (RFC-630) and
-> LoopRail streaming slice / worktree terms (RFC-231 §9, RFC-232).
+> Note: Also covers start-phase intake & branch routing terms (RFC-630),
+> LoopRail streaming slice / worktree terms (RFC-231 §9, RFC-232), and
+> recursive step decomposition terms (RFC-904).
 
 ## Core Terminology
 
@@ -76,6 +77,8 @@ This document defines the terminology and naming conventions used in this projec
 | `StepRowIndex` | Single-pass classification of all `StepToolRow` entries (main, orphan, task children, totals). Built by `StepRowClassifier`. | RFC-628 |
 | Surface sync | `_sync_step_card_surface()` — unified repaint of activity tree, footer, optional tools panel, and running timer. | RFC-628 |
 | Total tool count | Footer stat: distinct non-task tool rows on the step (main + subgraph + orphan). Not main-agent-only. | RFC-628 |
+| Goal-bound display snapshot | Immutable, collapsed display record written when a goal completes (`running → idle`). Loop history recovery concatenates frozen snapshots for completed goals plus the live card tail for the active goal. | RFC-631 |
+| Loop-scoped router profile override | TUI `/model-router` command that selects a named `router_profiles` entry for the current StrangeLoop. Subsequent turns resolve chat `ModelRouter` roles from the selected preset. `/clear` or a new loop drops the override. | RFC-632 |
 
 ### Progress Event Terms
 
@@ -194,7 +197,7 @@ This document defines the terminology and naming conventions used in this projec
 | Term | Definition | Introduced In |
 |------|------------|---------------|
 | Intake LLM | Two-pass fast-model classification: Pass 1 social vs task, Pass 2 scope (`trivial \| simple \| complex`). Runs overlapped with pre-graph IO. Replaces the binary `IntentClassifier` LLM + its `_is_likely_agentic` heuristic bypass. Intake never selects a specialist (IG-669). | RFC-630 |
-| Wired-subagent route | When slash `preferred_subagent` resolves to an allowlisted specialist, StrangeLoop sets `intent_route=wired_subagent` and runs `invoke_wired_subagent`. Intake-only specialists (`browser_use`, `deep_research`, `academic_research`) direct-invoke then `goal_completion`. `planner` additionally writes `.soothe/plans/` and pauses on `planner_subagent_review` (Approve/Reject/More comments) per RFC-633 — not StrangeLoop `plan_generate`/`plan_assess`. | RFC-630, RFC-633 |
+| Wired-subagent route | When slash `preferred_subagent` resolves to an allowlisted specialist, StrangeLoop sets `intent_route=wired_subagent` and runs `invoke_wired_subagent`. Intake-only specialists (`browser_use`, `deep_research`, `academic_research`) direct-invoke then `goal_completion`. `planner` additionally writes `.soothe/plans/` and pauses on `planner_subagent_review` (Approve/Reject/More comments) per RFC-633 — not StrangeLoop `plan_generate`/`plan_assess`. On Approve, route to DISPATCH and ground the root THREAD with the approved plan (RFC-904). | RFC-630, RFC-633, RFC-904 |
 | Intake-only subagent | Specialist registered for wired invoke but omitted from the open CoreAgent `task` catalog and plan `delegate` surface (`planner`, `browser_use`, `deep_research`, `academic_research`). | RFC-630 |
 | Orphan SubAgent card | SubAgent card with empty parent step / `task` row, mounted for intake-only wired invoke. Registry key `wire:{subagent}:{invocation_id}`. | RFC-628 |
 | `wired_subagent_started` / `completed` / `failed` / `cancelled` | StrangeLoop lifecycle envelopes for the intake-only direct invoke; TUI mounts and completes the orphan SubAgent card. Wire progress is forwarded `soothe.subagent.*` customs stamped with `invocation_id`; planner recon also forwards `soothe.stream.tool_call.update`. | RFC-630, RFC-633 |
@@ -269,6 +272,22 @@ This document defines the terminology and naming conventions used in this projec
 | `SqliteRuntimeRegistry` | Process map of absolute path → `SqliteStoreRuntime` with refcount; closes and WAL-checkpoints on daemon shutdown. | RFC-801 |
 | `databases/` layout | All purpose SQLite files under `$SOOTHE_DATA_DIR/databases/{purpose}.db` (e.g. `checkpoints.db`, `persist.db`, `vectors.db`). Hard cut; no legacy path shims. | RFC-801, RFC-802 |
 | Purpose DB file | Unified `{purpose}.db` name for a logical store (checkpoints, context, display, cron, identity, metadata, persist, vectors, memory). | RFC-801, RFC-802 |
+
+### Recursive Step Decomposition Terms (RFC-904)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| `StepDAG` | Goal-scoped directed acyclic graph of steps owned by the Context Engine (CE). Each step is a thread; CE reconciles proposals and commits children. Replaces upfront plan waves. | RFC-624, RFC-904 |
+| `decompose_task` | Executor-bound tool that emits a `DecompositionProposal` for child steps. Distinct from `write_todos` (intra-step UX) and from goal-level `apply_llm_subgoals`. | RFC-904 |
+| `DecompositionProposal` | Structured output of `decompose_task`: proposed child steps with descriptions, dependencies, and execution hints. CE reconciles (deterministic by default; LLM only on conflict). | RFC-904 |
+| Reconcile | CE process of merging `DecompositionProposal`s into the StepDAG: deterministic by default, LLM only on dependency conflict. Proposals wait on the reconcile barrier; completions/failures land immediately. | RFC-904 |
+| Root step | The top-level step of a goal's StepDAG, created after intake pass1 classifies a task (vs chitchat). | RFC-904 |
+| `GapResult` | Structured result from ROOT_EVAL coverage assessment when gaps are recoverable; carried in projection when re-dispatching a new root. | RFC-904 |
+| `ROOT_EVAL` | Assess-only evaluation invoked when the StepDAG is tree-green (all leaves complete). Determines coverage; recoverable gaps re-dispatch a new root with `GapResult`. | RFC-904 |
+| B-lazy replacement | Interior node failure strategy: happy-path interior nodes are not re-invoked; failed interior nodes get replacement nodes lazily. Coverage eval runs only at tree-green. | RFC-904 |
+| Tree-green | State where all leaf steps in the StepDAG are complete; triggers `ROOT_EVAL` coverage assessment. | RFC-904 |
+| Do-or-decompose | Guiding principle: scope is discovered in execution, not by pass2 pre-classification. A step either completes or calls `decompose_task`. | RFC-904 |
+| Pass1 | Intake classification (chitchat vs task) retained from RFC-630. Pass2 (trivial/simple/complex scope pre-classification) is removed by RFC-904. | RFC-630, RFC-904 |
 
 ### Code Naming
 

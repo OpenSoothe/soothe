@@ -674,17 +674,17 @@ class UserMessageBuilder:
 
         approved_body = (approved_plan_markdown or "").strip()
         if approved_body:
-            approved_lines: list[str] = []
-            path = (approved_plan_path or "").strip()
-            if path:
-                approved_lines.append(f"path: {path}")
-            approved_lines.append(
-                "Operator approved this solution report. Implement it via StrangeLoop "
-                "steps; do not re-litigate the Solution unless blocked."
+            from soothe.sloop.plans.grounding import approved_plan_section_body
+
+            sections.append(
+                (
+                    "APPROVED PLAN",
+                    approved_plan_section_body(
+                        approved_plan_markdown=approved_body,
+                        approved_plan_path=approved_plan_path,
+                    ),
+                )
             )
-            approved_lines.append("")
-            approved_lines.append(approved_body)
-            sections.append(("APPROVED PLAN", "\n".join(approved_lines)))
 
         sections.append(
             (
@@ -749,6 +749,8 @@ class UserMessageBuilder:
         skill_context: str | None = None,
         mcp_resource_blocks: list[str] | None = None,
         include_decompose_guidance: bool = False,
+        approved_plan_path: str | None = None,
+        approved_plan_markdown: str | None = None,
     ) -> str:
         """Build user message for an execute-step (simplified, no INTENT/TASK).
 
@@ -767,6 +769,8 @@ class UserMessageBuilder:
             mcp_resource_blocks: Optional pre-resolved MCP resource blocks.
             include_decompose_guidance: When True, append DECOMPOSITION vs TODOS
                 (RFC-904 / ``agent.loop.decompose.enabled``).
+            approved_plan_path: Optional path of an operator-approved intake plan.
+            approved_plan_markdown: Optional approved plan body (frontmatter stripped).
 
         Returns:
             Structured text message for the execute-step LoopHumanMessage.
@@ -788,6 +792,20 @@ class UserMessageBuilder:
 
         if (prior_goals or "").strip():
             sections.append(("PRIOR GOALS", prior_goals.strip()))
+
+        approved_body = (approved_plan_markdown or "").strip()
+        if approved_body:
+            from soothe.sloop.plans.grounding import approved_plan_section_body
+
+            sections.append(
+                (
+                    "APPROVED PLAN",
+                    approved_plan_section_body(
+                        approved_plan_markdown=approved_body,
+                        approved_plan_path=approved_plan_path,
+                    ),
+                )
+            )
 
         if (expected_output or "").strip():
             sections.append(("EXPECTED OUTPUT", expected_output.strip()))

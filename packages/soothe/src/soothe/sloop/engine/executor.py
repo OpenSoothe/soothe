@@ -597,6 +597,9 @@ class Executor:
             if loop_state is not None
             else None
         )
+        from soothe.sloop.plans.grounding import peek_approved_plan_from_state
+
+        approved_md, approved_path = peek_approved_plan_from_state(loop_state)
         return UserMessageBuilder().build_execute_step_message(
             step_goal_text,
             step_id=step.id,
@@ -608,6 +611,8 @@ class Executor:
             vision_context=vision_context,
             skill_context=loop_state.skill_context if loop_state else None,
             include_decompose_guidance=self._decompose_enabled(),
+            approved_plan_path=approved_path,
+            approved_plan_markdown=approved_md,
         )
 
     async def _fetch_pending_interrupts_from_state(

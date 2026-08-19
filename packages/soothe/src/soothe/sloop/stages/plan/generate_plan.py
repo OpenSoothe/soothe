@@ -33,7 +33,8 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     1. plan_assess node (normal flow)
     2. bounded_evidence_gather (fresh-loop bypass)
     3. synthetic, when reached via the ``simple`` intake branch (RFC-630)
-    4. synthetic, when Approve hands off from the planner subagent
+    4. synthetic, on the legacy path when ``planner_implement_handoff`` still
+       routes into this station (live Approve → DISPATCH instead)
 
     Langfuse: parent ``generate-plan`` span; planner LLM pinned to the goal-loop
     trace for the duration of this station (including lightweight generate).
@@ -54,7 +55,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         )
         return _PLAN_GENERATE_FATAL
 
-    # hydrate approved-plan grounding from scratch when handoff is active.
+    # Legacy: hydrate approved-plan fields when handoff still enters plan_generate.
     if getattr(ctx.scratch, "planner_implement_handoff", False):
         if not (getattr(state, "approved_plan_markdown", None) or "").strip():
             from soothe.sloop.plans.artifact import strip_plan_frontmatter
@@ -64,7 +65,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             if body:
                 state.approved_plan_markdown = body
                 state.approved_plan_path = getattr(ctx.scratch, "plan_artifact_path", None)
-        logger.info("[PlanGenerate] Implementing operator-approved plan artifact")
+        logger.info("[PlanGenerate] Implementing operator-approved plan artifact (legacy)")
 
     # Log when using fresh-loop bypass assessment
     if assessment.assessment_reasoning and assessment.assessment_reasoning.startswith(
@@ -160,10 +161,11 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         },
     )
 
-    # one-shot handoff — stop injecting APPROVED PLAN on later waves.
+    # Legacy one-shot handoff clear (live path clears on DISPATCH).
     ctx.scratch.planner_implement_handoff = False
-    state.approved_plan_markdown = None
-    state.approved_plan_path = None
+    from soothe.sloop.plans.grounding import consume_approved_plan_from_state
+
+    consume_approved_plan_from_state(state)
 
     plan_route: PlanRoute = PLAN_ROUTE_GOAL_DONE if plan_result.is_done() else PLAN_ROUTE_EXECUTE
     step_n = len(plan_result.decision.steps) if plan_result.decision is not None else 0

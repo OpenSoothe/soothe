@@ -54,6 +54,7 @@ async def _ensure_root_step(ctx: LoopRuntimeContext) -> str | None:
     goal = await _maybe_await(ce.get_goal(goal_id))
     if goal is None:
         return None
+    root_id: str | None = None
     if goal.steps.nodes:
         # Prefer an existing root (no parent).
         for node in goal.steps.nodes.values():
@@ -61,23 +62,73 @@ async def _ensure_root_step(ctx: LoopRuntimeContext) -> str | None:
                 "superseded",
                 "skipped",
             ):
-                return node.id
-        return next(iter(goal.steps.nodes))
+                root_id = node.id
+                break
+        if root_id is None:
+            root_id = next(iter(goal.steps.nodes))
+    else:
+        goal_text = resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or "Execute task"
+        plan_id = allocate_plan_id()
+        root_id = f"{plan_id}-01"
+        root = StepNode(
+            id=root_id,
+            description=goal_text,
+            full_description=goal_text,
+            status="pending",
+            parent_step_id=None,
+            plan_iteration=0,
+        )
+        await _maybe_await(ce.add_step(goal_id, root))
+        logger.info("[dispatch] created root step %s for goal %s", root_id, goal_id)
 
-    goal_text = resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or "Execute task"
-    plan_id = allocate_plan_id()
-    root_id = f"{plan_id}-01"
-    root = StepNode(
-        id=root_id,
-        description=goal_text,
-        full_description=goal_text,
-        status="pending",
-        parent_step_id=None,
-        plan_iteration=0,
-    )
-    await _maybe_await(ce.add_step(goal_id, root))
-    logger.info("[dispatch] created root step %s for goal %s", root_id, goal_id)
+    await _ground_root_with_approved_plan(ctx, root_id)
     return root_id
+
+
+async def _ground_root_with_approved_plan(ctx: LoopRuntimeContext, root_id: str) -> None:
+    """Stamp operator-approved intake plan onto the root THREAD description (RFC-904)."""
+    from soothe.sloop.plans.grounding import (
+        compose_root_full_description,
+        consume_approved_plan_from_state,
+        peek_approved_plan_from_state,
+        root_already_grounded,
+    )
+
+    body, path = peek_approved_plan_from_state(ctx.loop_state)
+    if not body:
+        return
+    ce = ctx.ce
+    goal_id = ctx.ce_goal_id
+    if ce is None or not goal_id:
+        return
+    goal = await _maybe_await(ce.get_goal(goal_id))
+    if goal is None:
+        return
+    node = goal.steps.nodes.get(root_id)
+    if node is None:
+        return
+    if root_already_grounded(node.full_description):
+        consume_approved_plan_from_state(ctx.loop_state)
+        return
+
+    goal_text = (
+        (node.description or "").strip()
+        or resolve_user_request(ctx.loop_state)
+        or ctx.loop_state.goal
+        or "Execute task"
+    )
+    node.full_description = compose_root_full_description(
+        goal_text,
+        approved_plan_markdown=body,
+        approved_plan_path=path,
+    )
+    consume_approved_plan_from_state(ctx.loop_state)
+    logger.info(
+        "[dispatch] grounded root %s with approved plan (%d chars%s)",
+        root_id,
+        len(body),
+        f", path={path}" if path else "",
+    )
 
 
 class DispatchNode(LoopNode):
@@ -234,10 +285,12 @@ class DispatchNode(LoopNode):
     ) -> RouteDecision:
         payload = result.payload if isinstance(result.payload, dict) else {}
         route = str(payload.get("dispatch_route") or "execute")
-        return RouteDecision(
-            kind="proceed",
-            state_patch={"dispatch_route": route},
-        )
+        patch: dict[str, Any] = {"dispatch_route": route}
+        # One-shot Approve handoff ends on first DISPATCH (cleared even if no body).
+        if getattr(ctx.scratch, "planner_implement_handoff", False):
+            ctx.scratch.planner_implement_handoff = False
+            patch["planner_implement_handoff"] = False
+        return RouteDecision(kind="proceed", state_patch=patch)
 
 
 node = DispatchNode()

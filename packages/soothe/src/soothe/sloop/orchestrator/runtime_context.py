@@ -51,7 +51,7 @@ class LoopPhaseScratch:
     plan_artifact_path: str | None = None
     plan_artifact_markdown: str | None = None
     planner_subagent_review_comments: str | None = None
-    # Approve → StrangeLoop plan_generate handoff (one-shot).
+    # Approve → StrangeLoop DISPATCH handoff (one-shot; cleared on first DISPATCH).
     planner_implement_handoff: bool = False
     # RFC-904: proposals from the just-finished THREAD wave.
     decompose_proposals: list[Any] = field(default_factory=list)

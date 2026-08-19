@@ -87,4 +87,5 @@ def test_build_plan_generate_message_includes_approved_plan_section() -> None:
     assert "APPROVED PLAN" in msg
     assert "path: /ws/.soothe/plans/demo.md" in msg
     assert "Use OAuth" in msg
-    assert "do not re-litigate" in msg
+    assert "do not re-litigate" in msg.lower() or "Do not re-litigate" in msg
+    assert "decompose_task" in msg
