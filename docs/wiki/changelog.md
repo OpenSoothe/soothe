@@ -27,6 +27,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.22] - 2026-08-19
+
+### Fixed
+- **sloop**: eliminate a timestamp race in the Pass 1 prompt test where
+  `build_intake_pass1_system_prompt` and `build_prompt_timestamp_block`
+  fetched time independently; both now accept an optional `ctx` so a
+  single context can be reused. Production callers are unaffected.
+
+### Changed
+- **sloop**: recursive step decomposition (RFC-904) is now always-on for
+  step THREADS. The `agent.loop.decompose.enabled` flag is removed;
+  `decompose_task` + finish-vs-split guidance is always injected, with
+  budgets still under `agent.loop.decompose.*`. Operator-approved intake
+  plans ground directly onto the root THREAD description at DISPATCH,
+  replacing the legacy plan-generation handoff. The entire legacy plan
+  spine (plan_generate/assess/evaluate/gather_evidence, LLM planner
+  protocol, `PromptBuilder`, plan ledger projectors, and associated
+  config fields/templates) is deleted. Decompose prompts move into the
+  `prompts` package and are de-jargoned (task/thread/subtasks
+  vocabulary); finish/split policy moves to a system addendum, slimming
+  the user envelope. Prior-goals projection is dropped and predecessor
+  evidence is deduped when Slice B replays it. Pass 2 scope classifier is
+  removed — Pass 1 drives all task routing. Includes CI apt-mirror
+  hardening (pin to canonical archive, cover deb822 `.sources` files).
+- **autopilot**: add goal GC and stale-runtime reconciliation. A periodic
+  `gc_orphaned_goals` watchdog cancels non-terminal goals whose job root
+  is already terminal; `reconcile_stale_reservations` releases workspace
+  reservations and ghost-active WorkerPool slots when a completion chunk
+  never reached `_consume_worker_stream`; the daemon calls
+  `reconcile_stale_worker` when demoting a stale autopilot-owned loop,
+  freeing the slot/reservation and re-queueing (or cancelling) the
+  stranded goal. Gated by `AutopilotConfig.gc_enabled` and rate-limited
+  by `gc_interval_seconds`.
+- **autopilot**: add SLA monitor and alert pipeline SLO hardening. New
+  `soothe_autopilot/sla` package (models + monitor) tracks alert
+  pipeline latency SLOs; the notify router and webhook sink are
+  hardened for alert drift scenarios. Adds `benchmark_alert_pipeline.py`
+  and BM-006 benchmark doc, plus SLO/SLA monitor unit tests.
+- **context**: consolidate the projection layer and remove dead code
+  (IG-750). `ContextBundle` is stripped to fields prompt consumers
+  actually read (`active_goal`, `goal_lineage`, `step_lineage`,
+  `prior_goals`); memory-instruction loading moves to the
+  `SemanticLoader` call site. O(n²) char-budget trim loops in
+  `ledger.py`, `plan_ledger_projection.py`, and `graph_wrapper` become
+  single-pass O(N). Langfuse `trace_context` gets a read/write property
+  so base-class `__init__` can set it; `TraceBody` import path is fixed.
+  Drops unused `ModelConfigError`/`get_credential_env_var` (cli) and
+  `tool_lookup_step_id`/`intent_classify` run name (sdk). Drift
+  governance is documented as IG-tracked, removing stale drift IGs and
+  wiki runbook links.
+- **docs**: simplify wiki structure and compress root docs — fix broken
+  goal-engine→context-engine links, consolidate
+  `capabilities/subagents.md` into a single canonical wiki page, update
+  the architecture module map to the real monorepo DAG, add redirect
+  stubs for moved wiki pages, and tighten verbose prose in
+  `rfc-methodology-guide.md`, `threshold-tuning.md`, `rfc-history.md`,
+  `rfc-index.md`, `agent-skill-spec.md`, and `index.md`.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.21...v0.10.22
+
 ## [v0.10.21] - 2026-08-19
 
 ### Fixed
