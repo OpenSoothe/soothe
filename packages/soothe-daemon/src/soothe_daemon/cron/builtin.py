@@ -36,8 +36,8 @@ class BuiltinJobSpec:
     priority: int = 50
 
 
-#: Registry of all built-in cron jobs. Currently empty; the daemon's
-#: ``seed_builtin_jobs`` pass is a no-op until jobs are added here.
+#: Registry of all built-in cron jobs. Seeded on daemon startup when
+#: ``cron.enable_builtin_jobs`` is true.
 BUILTIN_JOBS: tuple[BuiltinJobSpec, ...] = ()
 
 

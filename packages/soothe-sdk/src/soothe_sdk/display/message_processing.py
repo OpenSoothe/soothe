@@ -272,14 +272,6 @@ def ingest_tool_call_stream_state(
     return last_active_id
 
 
-def tool_lookup_step_id(tool_call_id: str) -> str:
-    """Return the execute-step id encoded in a unified tool_call_id, if any."""
-    from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
-
-    sid, _, _, _ = parse_unified_tool_call_id(str(tool_call_id).strip())
-    return sid or ""
-
-
 def _pending_or_overlay_id_matches_lookup(
     candidate_id: str,
     lookup_id: str,

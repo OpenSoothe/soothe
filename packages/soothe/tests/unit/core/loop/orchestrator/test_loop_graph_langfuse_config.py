@@ -87,6 +87,7 @@ def test_build_loop_graph_invoke_config_passes_conversation_thread_to_langfuse_m
 
 def test_build_loop_graph_invoke_config_uses_goal_trace_pinned_id() -> None:
     """Graph invoke pins handler to goal trace id so intake shares one trace."""
+    pytest.importorskip("langfuse")
     cfg = SootheConfig()
     cfg.observability.langfuse.enabled = True
     cfg.observability.langfuse.trace_name = "soothe-dev"

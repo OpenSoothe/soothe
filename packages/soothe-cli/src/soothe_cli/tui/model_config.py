@@ -69,13 +69,6 @@ def _in_running_loop() -> bool:
     return True
 
 
-# Model configuration error (stub for now)
-class ModelConfigError(Exception):
-    """Error in model configuration."""
-
-    pass
-
-
 @dataclass(frozen=True, slots=True)
 class ModelSpec:
     """Parsed ``provider:model`` specification for TUI helpers."""
@@ -221,7 +214,6 @@ def resolve_env_var(var_name: str) -> str:
         Resolved value from environment, or empty string if not found.
     """
     import os
-    import re
 
     # Case 1: Pattern resolution (${VAR} syntax)
     pattern = r"\$\{([^}]+)\}"
@@ -273,31 +265,6 @@ IMPLICIT_AUTH_PROVIDERS: frozenset[str] = frozenset(
         "ollama",
     }
 )
-
-
-def get_credential_env_var(provider: str) -> str | None:
-    """Return the primary API-key env var name for ``provider``, if known.
-
-    Per, fetches provider config from daemon via RPC.
-    Falls back to hardcoded env var mapping if daemon not reachable.
-    """
-    if provider and not _in_running_loop():
-        # Try to fetch from daemon
-        try:
-            import asyncio
-
-            provider_data = asyncio.run(_fetch_provider_config(provider))
-            if provider_data and provider_data.get("api_key"):
-                api_key = provider_data["api_key"]
-                # Extract env var from ${ENV_VAR} syntax
-                m = re.match(r"^\$\{([^}]+)\}\s*$", str(api_key).strip())
-                if m:
-                    return m.group(1)
-        except Exception:
-            logger.debug("Could not fetch provider config from daemon", exc_info=True)
-
-    # Fallback to hardcoded mapping
-    return PROVIDER_API_KEY_ENV.get(provider)
 
 
 # Loop configuration for TUI preferences

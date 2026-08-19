@@ -1025,11 +1025,7 @@ class ContextEngineConfig(BaseModel):
 
     Args:
         projection_max_goals: Max goals in projection output.
-        projection_max_steps_per_goal: Max steps per goal in projection output.
-        projection_max_ledger_chars: Max total chars for ledger summary in projection.
-        projection_max_ledger_messages: Max messages in projection ledger output.
         projection_max_lineage_chars: Max chars for lineage context in projection.
-        projection_max_project_instructions_chars: Max chars for project instructions.
     """
 
     projection_max_goals: int = Field(
@@ -1038,46 +1034,18 @@ class ContextEngineConfig(BaseModel):
         le=50,
         description="Max goals in CE projection output",
     )
-    projection_max_steps_per_goal: int = Field(
-        default=10,
-        ge=1,
-        le=100,
-        description="Max steps per goal in CE projection output",
-    )
-    projection_max_ledger_chars: int = Field(
-        default=4000,
-        ge=0,
-        le=500_000,
-        description="Max total chars for ledger summary in CE projection (0 = unlimited)",
-    )
-    projection_max_ledger_messages: int = Field(
-        default=20,
-        ge=0,
-        le=500,
-        description="Max messages in CE projection ledger output (0 = unlimited)",
-    )
     projection_max_lineage_chars: int = Field(
         default=2000,
         ge=0,
         le=100_000,
         description="Max chars for lineage context in CE projection (0 = unlimited)",
     )
-    projection_max_project_instructions_chars: int = Field(
-        default=8000,
-        ge=0,
-        le=500_000,
-        description="Max chars for project instructions in CE projection (0 = unlimited)",
-    )
 
     def to_projection_config(self) -> ProjectionConfig:
         """Build a ``ProjectionConfig`` from these settings."""
         return ProjectionConfig(
             max_goals=self.projection_max_goals,
-            max_steps_per_goal=self.projection_max_steps_per_goal,
-            max_ledger_chars=self.projection_max_ledger_chars,
-            max_ledger_messages=self.projection_max_ledger_messages,
             max_lineage_chars=self.projection_max_lineage_chars,
-            max_project_instructions_chars=self.projection_max_project_instructions_chars,
         )
 
 
@@ -1085,11 +1053,7 @@ class ProjectionConfig(BaseModel):
     """Limits for bounded CE projection (local nano stub)."""
 
     max_goals: int = 5
-    max_steps_per_goal: int = 10
-    max_ledger_chars: int = 4000
-    max_ledger_messages: int = 20
     max_lineage_chars: int = 2000
-    max_project_instructions_chars: int = 8000
 
 
 class CompletionRulesConfig(BaseModel):

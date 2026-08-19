@@ -193,24 +193,30 @@ def _trim_total_chars_front(
     if max_chars <= 0 or not messages:
         return messages, False
 
-    def total_len(ms: list[BaseMessage]) -> int:
-        return sum(_message_text_len(m) for m in ms)
+    # Single-pass O(N): precompute per-message lengths, then find the cut index.
+    lengths = [_message_text_len(m) for m in messages]
+    total = sum(lengths)
+    if total <= max_chars:
+        return messages, False
 
-    out = list(messages)
-    shrunk = False
-    while out and total_len(out) > max_chars:
-        if len(out) == 1:
-            m0 = out[0]
-            text = extract_text_from_message_content(getattr(m0, "content", ""))
-            if len(text) <= max_chars:
-                break
+    start = 0
+    while start < len(messages) - 1 and total > max_chars:
+        total -= lengths[start]
+        start += 1
+
+    out = list(messages[start:])
+    shrunk = start > 0
+
+    # If the single remaining message still exceeds the budget, hard-clip it.
+    if len(out) == 1:
+        m0 = out[0]
+        text = extract_text_from_message_content(getattr(m0, "content", ""))
+        if len(text) > max_chars:
             marker = "\n…[truncated for plan prompt]\n"
             clipped = text[: max(0, max_chars - len(marker))] + marker
             out[0] = _set_message_content(m0, clipped)
             shrunk = True
-            break
-        out.pop(0)
-        shrunk = True
+
     return out, shrunk
 
 

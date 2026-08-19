@@ -25,7 +25,8 @@ This guide covers production deployment patterns, monitoring setup, security har
 | Security | [Security Hardening](security.md) | Reverse proxy, TLS, access control |
 | Scaling | [Scaling Strategies](scaling.md) | Horizontal scaling, load balancing |
 | Backup & Recovery | [Backup Recovery](backup-recovery.md) | PostgreSQL backup, disaster recovery |
-| RFC Drift Runbook | [RFC Drift Runbook](rfc-drift-runbook.md) | Quarterly audit, CI gate, alert handler ops |
+| Dashboard User Guide | [Dashboard User Guide](dashboard-user-guide.md) | Langfuse, CLI `top`, TUI cards — usage walkthroughs |
+| Dashboard Data Dictionary | [Dashboard Data Dictionary](dashboard-data-dictionary.md) | Field-level reference for metrics, dimensions, sources |
 
 ## Deployment Architecture
 

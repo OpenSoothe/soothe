@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -122,13 +123,6 @@ def _format_dag_context(dag_ctx: Any) -> str:
     from soothe.sloop.prompts.user_message import _render_dag_status as _render
 
     return _render(dag_ctx)
-
-
-def _messages_text_len(messages: list[BaseMessage]) -> int:
-    """Sum extracted text length across messages (for char-budget trimming)."""
-    from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
-
-    return sum(len(extract_text_from_message_content(getattr(m, "content", ""))) for m in messages)
 
 
 @dataclass
@@ -312,14 +306,17 @@ class GraphPromptWrapper:
 
         parts.append(build_response_language_hint(language) + "\n")
 
-        # Context-bundle supplementary instructions (plan-generate only).
-        if context_bundle is not None and kind not in ("assess", "gap"):
-            if context_bundle.memory_instructions:
-                parts.append(
-                    "<MEMORY_INSTRUCTIONS>\n"
-                    + context_bundle.memory_instructions
-                    + "\n</MEMORY_INSTRUCTIONS>\n"
-                )
+        # Memory instructions (plan-generate only; loaded lazily at the call site).
+        if kind not in ("assess", "gap"):
+            from soothe.context.semantic import SemanticLoader
+
+            workspace = getattr(state, "workspace", None) if state is not None else None
+            semantic = SemanticLoader(
+                workspace=Path(workspace) if isinstance(workspace, str) and workspace else None,
+            )
+            memory_text = semantic.load_memory()
+            if memory_text:
+                parts.append("<MEMORY_INSTRUCTIONS>\n" + memory_text + "\n</MEMORY_INSTRUCTIONS>\n")
 
         # Prior-conversation follow-up policy (plan-generate only).
         if recent_messages and kind not in ("assess", "gap"):
@@ -520,14 +517,26 @@ class GraphPromptWrapper:
         human_text = UserMessageBuilder().build_synthesis_message()
 
         budget = max_chars
-        while budget > 0:
-            total = len(system_text) + _messages_text_len(ledger_msgs) + len(human_text)
-            if total <= budget:
-                break
-            if ledger_msgs:
-                ledger_msgs.pop(0)
-                continue
-            break
+        if budget > 0:
+            # Single-pass O(N): precompute fixed costs and per-message lengths,
+            # then find the cut index without re-summing on each iteration.
+            from soothe.sloop.utils.stream_normalize import (
+                extract_text_from_message_content,
+            )
+
+            fixed = len(system_text) + len(human_text)
+            msg_lengths = [
+                len(extract_text_from_message_content(getattr(m, "content", "")))
+                for m in ledger_msgs
+            ]
+            ledger_total = sum(msg_lengths)
+            total = fixed + ledger_total
+            if total > budget:
+                start = 0
+                while start < len(ledger_msgs) and total > budget:
+                    total -= msg_lengths[start]
+                    start += 1
+                ledger_msgs = ledger_msgs[start:]
 
         out: list[BaseMessage] = [SystemMessage(content=system_text)]
         out.extend(ledger_msgs)

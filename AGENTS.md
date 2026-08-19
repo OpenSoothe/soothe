@@ -147,6 +147,37 @@ AI agents MUST NOT add AI tools or assistants as co-authors, reviewers, or attri
 
 If a hook or template inserts an AI co-author trailer, remove it before committing.
 
+### 12. Drift Governance (MUST)
+Spec↔code drift (divergence between RFCs/IGs and the implementation) is tracked
+through **canonical documentation mechanisms only** — not ad-hoc dashboard
+infrastructure, cron jobs, or parallel tracking systems.
+
+- **No drift-refresh cron infrastructure** — do **not** re-introduce
+  `DriftRefreshConfig`, `DriftTriggerHook`, `builtin:drift-refresh-*` cron jobs,
+  or drift-dashboard data dictionaries. These were removed because they
+  duplicated the RFC/IG review process without adding governance value.
+- **Gap-tracking scripts** (e.g. `scripts/auto_gap_report.py`,
+  `scripts/create_drift_backlog_issues.sh`) MUST write output into
+  `docs/impl/` with an `IG-` prefix and be triaged through the standard IG
+  lifecycle — never through a separate dashboard or backlog system.
+- **Drift findings are IGs, not dashboards** — when a spec↔code gap is
+  discovered, file an IG in `docs/impl/` (`IG-XXX-gap-*.md`). Do not create
+  standalone drift-tracking documents (e.g. `IG-gap-tracking-report.md`,
+  `IG-spec-vs-code-gap-inventory.md`) outside the numbered IG process.
+- **Config fields** — do **not** add `cron.drift_refresh` or equivalent
+  drift-dashboard config blocks to any `config/*.template.yml` or packaged
+  template copy. Drift governance is a documentation process, not a runtime
+  config concern.
+- **Wiki/docs references** — deployment guides and troubleshooting indexes
+  MUST NOT link to drift runbooks or drift dashboards. If drift-related
+  content is needed, document it under the IG that addresses the specific
+  gap, not under a generic "drift" page.
+- **Incidental "drift" mentions** — the word "drift" in comments,
+  docstrings, or error messages describing unrelated concepts (timestamp
+  drift, message-shape drift, pin drift) is fine and is **not** governed by
+  this rule. This rule applies only to spec↔code drift governance
+  infrastructure.
+
 ---
 
 ## 📁 Structure

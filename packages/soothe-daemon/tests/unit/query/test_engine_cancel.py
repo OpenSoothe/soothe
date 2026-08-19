@@ -273,6 +273,9 @@ def _daemon_factory(
     daemon_config = SootheDaemonConfig(
         max_query_duration_minutes=0,
         max_concurrent_threads=100,
+        cancel_retry_count=1,
+        cancel_retry_interval_seconds=0.5,
+        cancel_force_kill_timeout_seconds=5.0,
     )
 
     return SimpleNamespace(

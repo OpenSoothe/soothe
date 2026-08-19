@@ -224,3 +224,15 @@ async def test_show_job_ownership(temp_store: CronJobStore) -> None:
     assert (await svc.show_job("own001", DEFAULT_CRON_USER_ID)) is not None
     assert await svc.show_job("own001", "other-user") is None
     await svc.stop()
+
+
+@pytest.mark.asyncio
+async def test_seed_builtin_jobs_disabled(temp_store: CronJobStore) -> None:
+    """When enable_builtin_jobs is false, seeding is a no-op."""
+    cfg = _mock_config()
+    cfg.cron.enable_builtin_jobs = False
+    svc = CronService(config=cfg, store=temp_store)
+
+    created = await svc.seed_builtin_jobs()
+    assert created == 0
+    await svc.stop()

@@ -158,9 +158,18 @@ if LANGFUSE_AVAILABLE:
             self._system_hint_by_thread: dict[str, str] = {}
             self._generation_traced_inputs: dict[UUID, list[Any]] = {}
 
+        @property
+        def trace_context(self) -> dict[str, str] | None:
+            """Public read view of the pinned trace context (set by base ``__init__``)."""
+            return getattr(self, "_trace_context", None)
+
+        @trace_context.setter
+        def trace_context(self, value: dict[str, str] | None) -> None:
+            self._trace_context = value
+
         def _get_parent_observation(self, parent_run_id: UUID | None) -> Any:
             obs = super()._get_parent_observation(parent_run_id)
-            trace_context = getattr(self, "trace_context", None)
+            trace_context = self.trace_context
             if parent_run_id is not None or not trace_context:
                 return obs
             if _is_langfuse_root_client(obs):

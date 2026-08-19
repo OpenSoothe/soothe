@@ -194,35 +194,44 @@ class TestPromptBuilderContextBundle:
         assert "<MEMORY_INSTRUCTIONS>" not in str(system_msg.content)
 
     def test_build_plan_messages_with_bundle_supplements_system(self) -> None:
-        """ContextBundle injects memory instructions into system (not agent/project rules)."""
+        """Memory instructions are loaded via SemanticLoader, not ContextBundle.
+
+        Finding 2 (IG-750): ``memory_instructions`` was removed from
+        ``ContextBundle``.  The graph wrapper now loads ``MEMORY.md`` directly
+        via ``SemanticLoader.load_memory()`` at the call site.
+        """
+        from pathlib import Path
+
         from soothe_sdk.protocols.planner import PlanContext
 
         from soothe.sloop.prompts.builder import PromptBuilder
         from soothe.sloop.state.schemas import LoopState
 
         builder = PromptBuilder()
-        state = LoopState(goal="Test goal", thread_id="t1")
-        context = PlanContext(workspace="/tmp/test")
 
-        bundle = ContextBundle(
-            project_instructions="Custom project instructions",
-            agent_instructions="Agent-specific instructions",
-            memory_instructions="Memory-based instructions",
-        )
+        # Create a workspace with a MEMORY.md file.
+        import tempfile
 
-        messages = builder.build_plan_messages(
-            "Test goal",
-            state,
-            context,
-            plan_phase="generate",
-            context_bundle=bundle,
-        )
-        system_content = str(messages[0].content)
-        assert "Custom project instructions" not in system_content
-        assert "Agent-specific instructions" not in system_content
-        assert "<AGENT_INSTRUCTIONS>" not in system_content
-        assert "<MEMORY_INSTRUCTIONS>" in system_content
-        assert "Memory-based instructions" in system_content
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            (workspace / "MEMORY.md").write_text("Memory-based instructions", encoding="utf-8")
+            state = LoopState(goal="Test goal", thread_id="t1", workspace=str(workspace))
+            context = PlanContext(workspace=str(workspace))
+
+            # Bundle no longer carries memory/project/agent instructions.
+            bundle = ContextBundle()
+
+            messages = builder.build_plan_messages(
+                "Test goal",
+                state,
+                context,
+                plan_phase="generate",
+                context_bundle=bundle,
+            )
+            system_content = str(messages[0].content)
+            # Memory instructions are loaded from MEMORY.md by SemanticLoader.
+            assert "<MEMORY_INSTRUCTIONS>" in system_content
+            assert "Memory-based instructions" in system_content
 
     def test_build_plan_messages_with_bundle_supplements_human(self) -> None:
         """ContextBundle injects goal/step lineage into generate human (not assess)."""
@@ -237,7 +246,6 @@ class TestPromptBuilderContextBundle:
 
         bundle = ContextBundle(
             goal_lineage="Root → Child",
-            goal_progress="2/5 completed",
             step_lineage="Reasoning trace here",
         )
 

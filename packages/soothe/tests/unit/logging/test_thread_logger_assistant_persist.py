@@ -120,13 +120,12 @@ def test_tail_records_stay_buffered_without_explicit_flush(tmp_path: Path) -> No
     """
     logger = ThreadLogger(thread_dir=str(tmp_path), thread_id="tail")
 
-    # First write triggers a flush (initial condition); make a second write
-    # after the interval so the buffer is empty going into the tail writes.
-    import time
-
+    # Seed the buffer and flush deterministically so it starts empty for the
+    # tail writes.  (Previously relied on time.sleep(1.05) to trigger a
+    # time-based flush, which is flaky under suite load.)
     logger._write_record({"timestamp": "t1", "kind": "event", "data": {"x": 1}})
-    time.sleep(1.05)
     logger._write_record({"timestamp": "t2", "kind": "event", "data": {"x": 2}})
+    logger._flush_buffer()  # type: ignore[attr-defined]
 
     # Tail writes: arrive within the 1s interval, no further writes follow.
     msg = AIMessage(content="FINAL ANSWER")

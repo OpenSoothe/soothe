@@ -207,9 +207,14 @@ class LedgerManager:
             content = getattr(m, "content", "")
             return len(content) if isinstance(content, str) else 0
 
-        out = list(messages)
-        while out and sum(_text_len(m) for m in out) > max_chars:
-            if len(out) == 1:
-                break
-            out.pop(0)
-        return out
+        # Single-pass O(N): precompute per-message lengths, find the cut index.
+        lengths = [_text_len(m) for m in messages]
+        total = sum(lengths)
+        if total <= max_chars:
+            return list(messages)
+
+        start = 0
+        while start < len(messages) - 1 and total > max_chars:
+            total -= lengths[start]
+            start += 1
+        return list(messages[start:])

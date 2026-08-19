@@ -1,9 +1,7 @@
 # RFC Methodology Guide
 
 > Synthesized from RFC-900 (lifecycle/reclassification), the RFC template,
-> `rfc-namings.md`, `rfc-index.md`, IG-744 (gap/drift report),
-> IG-spec-vs-code-gap-inventory, IG-gap-triage-matrix,
-> IG-gap-criticality-impact-criteria.
+> `rfc-namings.md`, `rfc-index.md`, and IG-744 (gap/drift report).
 >
 > This guide is a **reusable playbook**: it distills the methodology scattered
 > across governance RFCs and implementation guides into a single reference.

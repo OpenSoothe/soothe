@@ -42,3 +42,7 @@ agent:
 
   loop:
     final_response: always_synthesize
+
+# Develop: cron service enabled for local evals (defaults from template).
+cron: {}
+

@@ -25,7 +25,13 @@ def _merge_trace_fields_via_ingestion(
         return False
     try:
         from langfuse._utils import _get_timestamp
-        from langfuse.api.resources.ingestion.types.trace_body import TraceBody
+
+        try:
+            from langfuse.api.ingestion.types.trace_body import TraceBody
+        except ImportError:
+            from langfuse.api.resources.ingestion.types.trace_body import (
+                TraceBody,
+            )
 
         kwargs: dict[str, Any] = {
             "id": trace_id,

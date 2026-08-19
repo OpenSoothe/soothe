@@ -22,7 +22,6 @@ from soothe.sloop.prompts.user_message import (
     _goal_text,
     flatten_user_message_content,
 )
-from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
 
 if TYPE_CHECKING:
     from soothe.config.models import PlanPromptLedgerConfig
@@ -44,10 +43,6 @@ def flatten_execute_human_content(content: str) -> str:
     ``EXECUTION TASK:`` / ``GOAL:`` sections.
     """
     return flatten_user_message_content(content)
-
-
-def _messages_text_len(messages: list[BaseMessage]) -> int:
-    return sum(len(extract_text_from_message_content(getattr(m, "content", ""))) for m in messages)
 
 
 def render_synthesis_system_prompt(
