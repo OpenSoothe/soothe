@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from soothe.context.decomposition import DecompositionProposal, ProposedSubtask
-from soothe.sloop.decompose.prompts import DECOMPOSITION_VS_TODOS_BLOCK
 from soothe.sloop.decompose.runtime import (
     bind_decompose_runtime,
     current_step_id,
     reset_decompose_runtime,
 )
 from soothe.sloop.decompose.tool import build_decompose_task_tool
+from soothe.sloop.prompts.decompose import DECOMPOSITION_VS_TODOS_BLOCK
 from soothe.sloop.prompts.user_message import UserMessageBuilder
 
 

@@ -5,15 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.sloop.prompts.decompose import APPROVED_PLAN_EXECUTE_HINT
+
 logger = logging.getLogger(__name__)
 
 _APPROVED_PLAN_MARKER = "<!-- soothe:approved-plan -->"
-
-_APPROVED_PLAN_EXECUTE_HINT = (
-    "Operator approved this solution report. Prefer `decompose_task` to turn "
-    "Changes into durable StepDAG children; execute only work that stays in this "
-    "thread. Do not re-litigate the Solution unless blocked."
-)
 
 
 def approved_plan_section_body(
@@ -29,7 +25,7 @@ def approved_plan_section_body(
     path = (approved_plan_path or "").strip()
     if path:
         lines.append(f"path: {path}")
-    lines.append(_APPROVED_PLAN_EXECUTE_HINT)
+    lines.append(APPROVED_PLAN_EXECUTE_HINT)
     lines.append("")
     lines.append(body)
     return "\n".join(lines)

@@ -282,25 +282,31 @@ def build_dependent_execution_hints(
     *,
     has_predecessor_evidence: bool,
     expected_output: str | None,
+    is_dag_root: bool | None = None,
 ) -> ExecuteStepEnvelopeBody:
     """Build EXPECTED OUTPUT and INSTRUCTIONS bodies for an execute-step envelope."""
+    from soothe.sloop.prompts.decompose import do_or_decompose_instruction_lines
+
+    root = bool(step.is_dag_root if is_dag_root is None else is_dag_root)
     instruction_lines = [
-        "- Complete only this step's deliverable; do not execute work assigned to other plan steps",
-        "- Execute the step described in EXECUTION TASK above",
+        *do_or_decompose_instruction_lines(is_dag_root=root),
+        "- Complete only this EXECUTION TASK; do not do work meant for other "
+        "tasks that will run in later threads",
+        "- Execute the work described in EXECUTION TASK above",
         "- Use the suggested approach when provided",
         "- Produce output matching the expected output specification",
         "- Prefer one broad native search (grep/glob) then targeted reads; avoid repeated equivalent scans",
-        "- Reuse prior search results in this step; switch to edit/apply once evidence is sufficient",
+        "- Reuse prior search results in this thread; switch to edit/apply once evidence is sufficient",
     ]
     if has_predecessor_evidence:
         instruction_lines.insert(
             0,
-            "- Prior execute-step ledger turns are authoritative; "
-            "do not repeat completed discovery steps",
+            "- Prior task outcomes in the ledger are authoritative; "
+            "do not repeat completed discovery work",
         )
         instruction_lines.insert(
             1,
-            "- Apply fixes or follow-up actions using concrete details from prior step outcomes",
+            "- Apply fixes or follow-up actions using concrete details from prior outcomes",
         )
     expected_body = f"- {expected_output.strip()}" if (expected_output or "").strip() else None
     return ExecuteStepEnvelopeBody(

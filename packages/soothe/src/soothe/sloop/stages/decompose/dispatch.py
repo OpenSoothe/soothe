@@ -42,6 +42,7 @@ def _step_action_from_node(node: StepNode) -> StepAction:
         dependencies=list(node.dependencies) or None,
         execution_hint=hint,
         kind=kind,  # type: ignore[arg-type]
+        is_dag_root=node.parent_step_id is None,
     )
 
 
@@ -170,7 +171,7 @@ class DispatchNode(LoopNode):
                 resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or "Execute task"
             )
             plan_id = allocate_plan_id()
-            step = StepAction(id=f"{plan_id}-01", description=goal_text)
+            step = StepAction(id=f"{plan_id}-01", description=goal_text, is_dag_root=True)
             decision = AgentDecision(
                 type="execute_steps",
                 execution_mode="parallel",

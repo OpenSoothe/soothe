@@ -41,6 +41,7 @@ def build_trivial_plan(
         description=goal,
         expected_output=TRIVIAL_DIRECT_EXPECTED_OUTPUT,
         requires_tool_use=requires_tool_use,
+        is_dag_root=True,
     )
     if resolved_wire:
         step = step.model_copy(

@@ -5,6 +5,14 @@ system templates, context XML, project instructions, loader) stay in
 ``soothe.prompts``.
 """
 
+from .decompose import (
+    APPROVED_PLAN_EXECUTE_HINT,
+    DECOMPOSE_TASK_TOOL_DESCRIPTION,
+    DECOMPOSITION_VS_TODOS_BLOCK,
+    WRITE_TODOS_SYSTEM_ADDENDUM,
+    WRITE_TODOS_TOOL_DESCRIPTION,
+    do_or_decompose_instruction_lines,
+)
 from .graph_wrapper import (
     GraphCallKind,
     GraphPromptWrapper,
@@ -29,6 +37,9 @@ from .user_message import (
 )
 
 __all__ = [
+    "APPROVED_PLAN_EXECUTE_HINT",
+    "DECOMPOSITION_VS_TODOS_BLOCK",
+    "DECOMPOSE_TASK_TOOL_DESCRIPTION",
     "EXECUTION_TASK_LABEL",
     "GraphCallKind",
     "GraphPromptWrapper",
@@ -36,9 +47,12 @@ __all__ = [
     "PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS",
     "ProjectionResult",
     "UserMessageBuilder",
+    "WRITE_TODOS_SYSTEM_ADDENDUM",
+    "WRITE_TODOS_TOOL_DESCRIPTION",
     "_format_dag_context",
     "_prior_goals_from_checkpoint",
     "current_goal_has_execute_ledger",
+    "do_or_decompose_instruction_lines",
     "flatten_user_message_content",
     "project_loop_messages_for_core_agent",
     "project_loop_messages_for_plan",

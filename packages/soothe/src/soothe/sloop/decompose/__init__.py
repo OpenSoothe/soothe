@@ -1,12 +1,9 @@
-"""Recursive step decomposition helpers (RFC-904 / IG-751)."""
+"""Recursive step decomposition helpers (RFC-904 / IG-751).
+
+Prompt copy lives in ``soothe.sloop.prompts.decompose``.
+"""
 
 from soothe.sloop.decompose.middleware import DecomposeTaskMiddleware
-from soothe.sloop.decompose.prompts import (
-    DECOMPOSE_TASK_TOOL_DESCRIPTION,
-    DECOMPOSITION_VS_TODOS_BLOCK,
-    WRITE_TODOS_SYSTEM_ADDENDUM,
-    WRITE_TODOS_TOOL_DESCRIPTION,
-)
 from soothe.sloop.decompose.reconcile import (
     ReconcileRejection,
     ReconcileResult,
@@ -20,8 +17,17 @@ from soothe.sloop.decompose.runtime import (
     reset_decompose_runtime,
 )
 from soothe.sloop.decompose.tool import build_decompose_task_tool
+from soothe.sloop.prompts.decompose import (
+    APPROVED_PLAN_EXECUTE_HINT,
+    DECOMPOSE_TASK_TOOL_DESCRIPTION,
+    DECOMPOSITION_VS_TODOS_BLOCK,
+    WRITE_TODOS_SYSTEM_ADDENDUM,
+    WRITE_TODOS_TOOL_DESCRIPTION,
+    do_or_decompose_instruction_lines,
+)
 
 __all__ = [
+    "APPROVED_PLAN_EXECUTE_HINT",
     "DECOMPOSITION_VS_TODOS_BLOCK",
     "DECOMPOSE_TASK_TOOL_DESCRIPTION",
     "WRITE_TODOS_SYSTEM_ADDENDUM",
@@ -32,6 +38,7 @@ __all__ = [
     "ReconcileResult",
     "bind_decompose_runtime",
     "build_decompose_task_tool",
+    "do_or_decompose_instruction_lines",
     "drain_executor_proposals",
     "plan_commit_from_proposals",
     "reconcile_proposals_deterministic",

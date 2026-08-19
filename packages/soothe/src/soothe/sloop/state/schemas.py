@@ -220,6 +220,7 @@ class StepAction(BaseModel):
         subagent: Named subagent when ``execution_hint='subagent'``.
         requires_tool_use: When set, execute deliverable gate requires successful tool use
             (from Pass 2 intake for trivial steps).
+        is_dag_root: True when this step has no CE ``parent_step_id`` (RFC-904 root).
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -238,6 +239,10 @@ class StepAction(BaseModel):
     execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto"
     subagent: str | None = None
     requires_tool_use: bool | None = None
+    is_dag_root: bool = Field(
+        default=False,
+        description="True when CE StepNode has no parent_step_id (root THREAD).",
+    )
 
     @model_validator(mode="after")
     def _validate_ask_user(self) -> StepAction:

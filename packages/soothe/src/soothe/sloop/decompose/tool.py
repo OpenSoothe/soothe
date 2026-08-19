@@ -9,12 +9,12 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from soothe.context.decomposition import DecompositionProposal, ProposedSubtask
-from soothe.sloop.decompose.prompts import DECOMPOSE_TASK_TOOL_DESCRIPTION
 from soothe.sloop.decompose.runtime import (
     current_proposal_sink,
     current_step_id,
     current_wave_seq,
 )
+from soothe.sloop.prompts.decompose import DECOMPOSE_TASK_TOOL_DESCRIPTION
 
 logger = logging.getLogger(__name__)
 
