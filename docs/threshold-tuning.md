@@ -192,6 +192,30 @@ and `max_engine_recoveries` are both 2 (not 3) because a third retry on a
 failing goal is almost always a deterministic failure that retries will not
 fix — better to surface it than burn the budget.
 
+### 3.4a Loop Pool Capacity (RFC-222)
+
+Distinct from the Autopilot budgets above: these cap the StrangeLoop *worker
+pool*, not the goal scheduler. A loop can be reused across parent→child
+lineage, so pool capacity and scheduled parallelism are independent axes.
+
+| Field | Path | Default | Bounds | Enforcer |
+|-------|------|---------|--------|----------|
+| `max_loops` | `autopilot.max_loops` | 16 | 1–32 | `WorkerPool` |
+| `loop_idle_timeout` | `autopilot.loop_idle_timeout` | 300 | ≥10 | `WorkerPool` |
+| `auto_resume_max_loops` | `persistence.auto_resume_max_loops` | 16 | 1–64 | Daemon startup |
+
+**Rationale.** `max_loops` (16) is sized for ~2 Autopilot jobs at
+`max_parallel_goals=3` plus ~3 interactive CLI StrangeLoops, with headroom
+for parent→child reuse without pool starvation. It is deliberately larger
+than `max_parallel_goals` (3) because scheduled goals reuse loops rather
+than each spawning a fresh worker. The 32 ceiling prevents unbounded thread
+growth under a misconfigured fleet. `loop_idle_timeout` (300s) keeps a warm
+loop around for reuse within a 5-minute window — short enough to release
+memory between bursts, long enough to amortize loop spin-up cost across
+rapid successive dispatches. `auto_resume_max_loops` (16) caps concurrent
+startup resume so a crashed daemon with many incomplete loops does not
+thunder the provider on restart.
+
 ### 3.5 Rate-Limit Circuit Breaker
 
 | Field | Path | Default | Enforcer |
@@ -294,6 +318,36 @@ exist to keep prompts within the model's input budget and to produce
 deterministic truncation (so two runs of the same trace yield the same
 prompt). Changing them affects token cost and retrieval quality, not
 control flow.
+
+### 3.11 Nano-Owned Middleware Thresholds (cross-reference)
+
+The following threshold families are **defined in the `soothe-nano` PyPI
+package**, not in this monorepo's `config/models.py`. They appear in
+`config/nano.template.yml` as operator-facing overlays, but their defaults
+and validators live upstream. Tune them per the nano package's own docs;
+this section records *which knobs exist* and *what they bound* so operators
+have a single index. Do not edit the nano template here without
+re-releasing `soothe-nano` — the packaged copy under
+`packages/soothe-daemon/src/soothe_daemon/setup/templates/nano.yml` is a
+mirror, not the source of truth.
+
+| Family | Key fields (nano.yml path) | Bounds |
+|--------|----------------------------|--------|
+| **LLM rate limiter** | `agent.middleware.llm_rate_limit.{rpm_limit, concurrent_limit, global_concurrent_limit, call_timeout_seconds, call_timeout_max_seconds, max_timeout_retries, timeout_retry_multiplier, max_rate_limit_retries, rate_limit_backoff_base, rate_limit_backoff_max, rate_limit_retry_timeout_seconds}` | Sized for ~2 Autopilot jobs + ~3 CLI StrangeLoops (`rpm_limit=180`, `concurrent_limit=4`, `global_concurrent_limit=18`) |
+| **Tool timeout** | `agent.middleware.tool_timeout.{default_seconds, per_tool.<tool>, skip_tools_with_internal_timeout}` | `default=60s`; per-tool overrides (e.g. `grep`/`read_file=30s`, `browser_use=1800s`, `task=18000s`) |
+| **Tool call limit** | `agent.middleware.tool_call_limit.{global_thread_limit, global_run_limit, tool_specific_limits.<tool>.{thread_limit, run_limit}}` | `global_thread_limit=200`, `global_run_limit=200`; network tools capped at 5/thread, 3/run |
+| **Tool retry** | `agent.middleware.tool_retry.{max_retries, backoff_factor, initial_delay}` | `max_retries=3`, `backoff_factor=2.0`, `initial_delay=1.0` |
+| **Report output** | `agent.middleware.report_output.{display_threshold, preview_chars, synthesis_max_chars}` | `display_threshold=20000`, `preview_chars=500` |
+| **Code interpreter** | `agent.code_interpreter.{memory_limit_mb, timeout_seconds, max_ptc_calls, max_result_size}` | `memory_limit_mb=128`, `timeout_seconds=30`, `max_ptc_calls=50`, `max_result_size=100000` |
+| **Context window (nano side)** | `agent.middleware.context_window_limit` | `200000` — mirrored by the host `agent.loop.context_window_limit` in §3.2; keep them aligned |
+
+**Tuning note.** The LLM rate limiter is the most common source of
+operator-visible regressions: raising `concurrent_limit` without raising
+`global_concurrent_limit` (or vice versa) produces silent queueing. The two
+are a *pair* — `concurrent_limit` bounds per-thread in-flight calls,
+`global_concurrent_limit` bounds process-wide. Raise both together, and
+confirm the provider's RPM quota supports the new `rpm_limit` before
+deploying.
 
 ## 4. Rollback Procedures
 
