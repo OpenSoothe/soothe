@@ -152,6 +152,7 @@ class AutopilotService:
             self._monitor.bind_sla_scan(self.scan_sla_overdue)
             self._monitor.bind_dag_persist(self._persist_goals)
             self._monitor.bind_resource_reconcile(self.reconcile_goal_resources)
+            self._monitor.bind_gc_scan(self.gc_orphaned_goals)
 
         # RFC-222 revised (Phase C): WorkerPool-driven dispatch.
         # Capacity: ``max_loops`` (pool size) and ``max_parallel_goals``
@@ -466,6 +467,20 @@ class AutopilotService:
             except Exception:
                 logger.warning(
                     "[Autopilot] crash recovery: resource reconcile failed", exc_info=True
+                )
+            # Release any workspace reservations held by goals that recover()
+            # just reset to pending. Idempotent and safe on a fresh start.
+            try:
+                released = await self.reconcile_stale_reservations()
+                if released:
+                    logger.info(
+                        "[Autopilot] crash recovery: released %d stale reservation(s)",
+                        released,
+                    )
+            except Exception:
+                logger.warning(
+                    "[Autopilot] crash recovery: reservation reconcile failed",
+                    exc_info=True,
                 )
 
         if self._monitor is not None:
@@ -2604,11 +2619,228 @@ class AutopilotService:
                     )
             except Exception:
                 logger.debug("reconcile: drain failed for goal %s", goal.id, exc_info=True)
+            # Release any leaked worker slot + workspace reservation for goals
+            # that reached a terminal/suspended state without the completion
+            # chunk reaching ``_consume_worker_stream``. Idempotent via
+            # ``_released_goals``. Also cancels a lingering dispatch task.
+            if goal.assigned_loop_id:
+                try:
+                    await self._release_goal_runtime(
+                        goal.id,
+                        loop_id=goal.assigned_loop_id,
+                        success=goal.status == "completed",
+                        end_status=goal.status
+                        if goal.status in ("completed", "failed", "cancelled")
+                        else "failed",
+                    )
+                    await self._release_worker_after_cancel(goal.id, goal.assigned_loop_id)
+                    reconciled += 1
+                    logger.info(
+                        "reconcile: released leaked runtime for %s goal %s (loop %s)",
+                        goal.status,
+                        goal.id,
+                        goal.assigned_loop_id,
+                    )
+                except Exception:
+                    logger.debug(
+                        "reconcile: runtime release failed for goal %s",
+                        goal.id,
+                        exc_info=True,
+                    )
+        # Release stale workspace reservations + ghost-active worker slots
+        # whose goal is no longer active (catches lost completion chunks).
+        reconciled += await self.reconcile_stale_reservations()
         # Recycle worktrees for terminal job roots (rail jobs with a workspace
         # under .soothe/worktrees/).
         recycled_worktrees = await self._reconcile_terminal_job_worktrees()
         reconciled += recycled_worktrees
         return reconciled
+
+    async def reconcile_stale_reservations(self) -> int:
+        """Release workspace reservations + ghost-active worker slots.
+
+        Scans two leak sources that survive when a goal's
+        ``GoalCompletionChunk`` never reaches ``_consume_worker_stream`` (the
+        runner crashed, the daemon's stale-loop reconciler demoted the loop
+        without notifying Autopilot, etc.):
+
+        - **WorkspaceReservation entries** held by goal_ids that are no
+          longer in an active/scheduled state. With ``strict_overlap=True``
+          a single stale reservation blocks every goal sharing that
+          workspace, so this is the silent killer.
+        - **WorkerPool slots** still ``active`` whose ``current_goal_id`` is
+          terminal or missing — the slot was never ``mark_idle``'d.
+
+        Idempotent and safe to call from the watchdog or crash recovery.
+        Returns the count of resources released.
+        """
+        released = 0
+        if self._workspace_reservation is not None:
+            for goal_id, workspace in list(
+                self._workspace_reservation.active_reservations().items()
+            ):
+                goal = self._ce.get_goal_sync(goal_id)
+                # Release if the goal is gone, terminal, suspended, or has no
+                # active/scheduled status (pending goals re-acquire on dispatch).
+                if goal is None or goal.status in TERMINAL_STATES or goal.status in ("suspended",):
+                    if self._workspace_reservation.release(goal_id):
+                        released += 1
+                        logger.info(
+                            "reconcile: released stale reservation for goal %s (%s)",
+                            goal_id,
+                            workspace,
+                        )
+        if self._worker_pool is not None:
+            for worker in self._worker_pool.active_workers():
+                goal_id = worker.current_goal_id
+                if not goal_id:
+                    # Ghost-active slot with no current goal — force idle.
+                    await self._worker_pool.mark_idle(worker.loop_id, success=False)
+                    released += 1
+                    logger.info(
+                        "reconcile: released ghost-active worker %s (no current goal)",
+                        worker.loop_id,
+                    )
+                    continue
+                goal = self._ce.get_goal_sync(goal_id)
+                if goal is not None and goal.status in TERMINAL_STATES:
+                    await self._worker_pool.mark_idle(worker.loop_id, success=False)
+                    if self._workspace_reservation is not None:
+                        self._workspace_reservation.release(goal_id)
+                    released += 1
+                    logger.info(
+                        "reconcile: released worker %s for terminal goal %s",
+                        worker.loop_id,
+                        goal_id,
+                    )
+        return released
+
+    async def reconcile_stale_worker(self, loop_id: str) -> int:
+        """Release a worker slot + reservation for a stale loop.
+
+        Called by the daemon's stale-loop reconciler (``server/core.py``)
+        when it demotes a loop ``running → idle`` because no active runner
+        exists. That reconciler only updates the persistence-layer loop
+        status; it does not touch AutopilotService's WorkerPool or
+        WorkspaceReservation. This method closes that gap so a demoted loop
+        frees the worker slot and, if the goal is stranded ``active``,
+        re-queues it (or cancels it when the job root is already terminal).
+
+        Returns the count of resources released.
+        """
+        released = 0
+        # 1. Release the WorkerPool slot owning this loop, if any.
+        if self._worker_pool is not None:
+            worker = self._worker_pool.get_worker(loop_id)
+            if worker is not None and worker.status == "active":
+                goal_id = worker.current_goal_id
+                await self._worker_pool.mark_idle(loop_id, success=False)
+                released += 1
+                logger.info(
+                    "reconcile: released stale worker %s (daemon demoted loop)",
+                    loop_id,
+                )
+                # 2. Re-queue or cancel the stranded goal.
+                if goal_id:
+                    await self._requeue_or_cancel_stranded_goal(goal_id, loop_id=loop_id)
+        # 3. Release the workspace reservation for any goal bound to this loop.
+        if self._workspace_reservation is not None:
+            for goal_id, _ws in list(self._workspace_reservation.active_reservations().items()):
+                goal = self._ce.get_goal_sync(goal_id)
+                if goal is not None and goal.assigned_loop_id == loop_id:
+                    if self._workspace_reservation.release(goal_id):
+                        released += 1
+        return released
+
+    async def _requeue_or_cancel_stranded_goal(self, goal_id: str, *, loop_id: str | None) -> None:
+        """Re-queue an active goal stranded by a stale loop, or cancel it.
+
+        If the job root is terminal, the goal is an orphan → cancel it via
+        ``_cancel_open_goal_node`` so worker teardown + reservation release
+        happen correctly. Otherwise reset to ``pending`` so the scheduler
+        re-dispatches on the next tick.
+        """
+        goal = await self._ce.get_goal(goal_id)
+        if goal is None:
+            return
+        if goal.status in TERMINAL_STATES:
+            # Already terminal — just ensure the reservation is freed.
+            if self._workspace_reservation is not None:
+                self._workspace_reservation.release(goal_id)
+            return
+        root_id = self._resolve_job_id(goal)
+        root = self._ce.get_goal_sync(root_id) if root_id else None
+        if root is not None and root.status in TERMINAL_STATES:
+            logger.info(
+                "reconcile: cancelling stranded orphan goal %s (job %s terminal)",
+                goal_id,
+                root_id,
+            )
+            await self._cancel_open_goal_node(goal, reason="gc: stale loop, job terminal")
+        else:
+            # Job still open — re-queue so the scheduler picks it up again.
+            goal.status = "pending"
+            goal.assigned_loop_id = None
+            goal.updated_at = datetime.now(UTC)
+            logger.info(
+                "reconcile: re-queued stranded goal %s (loop %s was stale)",
+                goal_id,
+                loop_id,
+            )
+
+    async def gc_orphaned_goals(self) -> int:
+        """Cancel non-terminal goals whose job root is already terminal.
+
+        Periodic GC scan wired into the monitor watchdog tick. When a job
+        root reaches a terminal state (``completed``/``cancelled``/
+        ``failed``) while children are still ``pending``/``active``/
+        ``suspended``, those children are orphans — the scheduler keeps
+        trying to dispatch them against a dead job, and (with strict
+        workspace overlap) they may be blocked indefinitely by a sibling's
+        stale reservation. This cancels them via ``_cancel_open_goal_node``
+        so worker teardown + reservation release happen correctly.
+
+        Gated by ``AutopilotConfig.gc_enabled``. Returns the count of
+        cancelled orphans.
+        """
+        if not getattr(self._config, "gc_enabled", True):
+            return 0
+        try:
+            goals = await self._ce.list_goals()
+        except Exception:
+            logger.debug("gc_orphaned_goals: list_goals failed", exc_info=True)
+            return 0
+        # Cache root status to avoid walking parent chains repeatedly.
+        root_status_cache: dict[str, str] = {}
+
+        def _root_status(goal: GoalNode) -> str | None:
+            root_id = self._resolve_job_id(goal)
+            if not root_id:
+                return None
+            if root_id not in root_status_cache:
+                root = self._ce.get_goal_sync(root_id)
+                root_status_cache[root_id] = root.status if root else "missing"
+            return root_status_cache[root_id]
+
+        cancelled = 0
+        for goal in goals:
+            if goal.parent_id is None:
+                continue  # job roots are never orphans of themselves
+            if goal.status in TERMINAL_STATES:
+                continue
+            status = _root_status(goal)
+            if status in TERMINAL_STATES or status == "missing":
+                try:
+                    await self._cancel_open_goal_node(
+                        goal, reason=f"gc: job {self._resolve_job_id(goal)} terminal"
+                    )
+                    cancelled += 1
+                except Exception:
+                    logger.warning("gc: failed to cancel orphaned goal %s", goal.id, exc_info=True)
+        if cancelled:
+            await self._persist_goals()
+            logger.info("GC: cancelled %d orphaned goal(s) under terminal jobs", cancelled)
+        return cancelled
 
     async def _reconcile_terminal_job_worktrees(self) -> int:
         """Recycle worktrees for terminal rail job roots (crash recovery)."""

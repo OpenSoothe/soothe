@@ -14,6 +14,9 @@ agent:
     max_goal_depth: 5
     # Cap goal fan-out under typical provider concurrency quotas.
     max_parallel_goals: 3
+    # Goal GC — cancel non-terminal goals whose job root is already terminal.
+    gc_enabled: true
+    gc_interval_seconds: 120
     max_send_backs: 3
     max_engine_recoveries: 2
     checkpoint_interval: 10

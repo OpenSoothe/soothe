@@ -342,6 +342,27 @@ class AutopilotConfig(BaseModel):
     # Independent of ``max_loops`` (WorkerPool capacity). Autopilot owns goal
     # fan-out; StrangeLoop runners are single-goal workers.
 
+    # === Goal GC (orphan reclamation) ===
+    gc_enabled: bool = Field(
+        default=True,
+        description=(
+            "Enable the periodic goal-GC scan. When True (default), the "
+            "autopilot watchdog cancels non-terminal goals whose job root is "
+            "already terminal (completed/cancelled/failed), so orphaned "
+            "children cannot linger forever under a dead job."
+        ),
+    )
+    gc_interval_seconds: int = Field(
+        default=120,
+        ge=10,
+        le=3600,
+        description=(
+            "Minimum interval between goal-GC scans. The scan piggybacks on "
+            "the monitor watchdog tick, so the effective cadence is the "
+            "larger of this and verify_interval/verify_idle_interval."
+        ),
+    )
+
     # === Orchestration (from old autopilot) ===
     max_send_backs: int = Field(default=3, ge=1, le=10)
     max_engine_recoveries: int = Field(

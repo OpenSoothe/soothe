@@ -1376,6 +1376,27 @@ class SootheDaemon(DaemonHandlersMixin):
                     updated_at_raw,
                     cfg.stale_running_seconds,
                 )
+                # Close the autopilot-side gap: the persistence-layer demote
+                # above only flips the loop row. If this is an autopilot
+                # worker loop, also release the WorkerPool slot and
+                # WorkspaceReservation it held — otherwise a lost
+                # completion chunk leaves them pinned and (with strict
+                # workspace overlap) blocks every pending goal sharing
+                # that workspace.
+                if self._autopilot_service is not None:
+                    try:
+                        from soothe_autopilot.workers.pool import (
+                            is_autopilot_worker_loop_id,
+                        )
+
+                        if is_autopilot_worker_loop_id(loop_id):
+                            await self._autopilot_service.reconcile_stale_worker(loop_id)
+                    except Exception:
+                        logger.debug(
+                            "Autopilot stale-worker reconcile failed for %s",
+                            loop_id,
+                            exc_info=True,
+                        )
             except Exception:
                 logger.warning(
                     "Failed to demote stale loop %s",

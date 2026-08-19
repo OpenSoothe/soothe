@@ -133,3 +133,54 @@ async def test_fresh_running_loop_not_demoted(
         assert meta["status"] == "running"
     finally:
         await close_client_safely(client)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_autopilot_loop_demoted_releases_worker_via_hook(
+    websocket_daemon_status_reconciliation: tuple[SootheDaemon, int],
+) -> None:
+    """Demoting a stale autopilot-owned loop calls AutopilotService.reconcile_stale_worker.
+
+    This closes the gap where the persistence-layer demote flipped the loop
+    row to idle but left the WorkerPool slot + WorkspaceReservation pinned
+    on the autopilot side (the "ghost-active worker" failure). The hook is
+    fail-soft: a missing autopilot service (autopilot disabled) must not
+    break reconciliation.
+    """
+    daemon, port = websocket_daemon_status_reconciliation
+    client = await _connect_client(port)
+    try:
+        # Use an autopilot-owned loop id shape so is_autopilot_worker_loop_id matches.
+        loop_id = "autopilot__080c916c__aabbccdd000000000000000000000001"
+        stale_updated = (datetime.now(UTC) - timedelta(minutes=10)).isoformat()
+        await daemon._persistence_manager.update_loop_metadata(
+            loop_id,
+            status="running",
+            updated_at=stale_updated,
+        )
+        assert loop_id not in daemon._active_stream_loop_ids
+
+        # If autopilot is enabled, spy on the hook; if not, the call is a no-op
+        # and reconciliation must still succeed (fail-soft).
+        calls: list[str] = []
+        if daemon._autopilot_service is not None:
+            original = daemon._autopilot_service.reconcile_stale_worker
+
+            async def _spy(loop_id_arg: str) -> int:
+                calls.append(loop_id_arg)
+                return await original(loop_id_arg)
+
+            daemon._autopilot_service.reconcile_stale_worker = _spy  # type: ignore[method-assign]
+
+        demoted = await run_reconciliation_once(daemon)
+        assert demoted >= 1
+
+        meta = await daemon._persistence_manager.get_loop_metadata(loop_id)
+        assert meta is not None
+        assert meta["status"] == "idle"
+
+        if daemon._autopilot_service is not None:
+            assert calls == [loop_id]
+    finally:
+        await close_client_safely(client)

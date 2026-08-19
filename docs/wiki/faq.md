@@ -570,7 +570,7 @@ class MyPlugin:
         return f"Result: {arg}"
 ```
 
-See [Channel Plugin Guide](channel-plugin-guide.md).
+See [Extension Patterns](capabilities/extension-patterns.md).
 
 ### How do I create a custom subagent?
 
@@ -596,7 +596,7 @@ async def create_agent(model, config, context):
     return CompiledSubAgent(...)
 ```
 
-See [Channel Plugin Guide](channel-plugin-guide.md).
+See [Extension Patterns](capabilities/extension-patterns.md).
 
 ---
 

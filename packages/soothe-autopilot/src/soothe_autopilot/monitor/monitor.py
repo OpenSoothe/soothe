@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
@@ -84,6 +85,8 @@ class AutopilotMonitor:
         self._suspend_notify_scan: Any = None
         self._sla_scan: Any = None
         self._resource_reconcile: Any = None
+        self._gc_scan: Any = None
+        self._last_gc_at: float = 0.0
         self._verify_task: asyncio.Task[None] | None = None
         # RFC-222 §Goal-Report-Pair: backoff reasoner uses the projector to
         # see the same ancestor transcript the executing worker does.
@@ -513,7 +516,12 @@ class AutopilotMonitor:
             logger.info("DAG health report: %s", report.reasoning)
 
     async def _run_watchdog_tick(self) -> None:
-        """Suspend-notify scan + SLA scan + resource reconcile (always, even when LLM skipped)."""
+        """Suspend-notify scan + SLA scan + resource reconcile + goal GC.
+
+        All run every tick regardless of whether the LLM health tick was
+        skipped, so orphaned runtime resources and orphaned goals are
+        drained even when periodic verification is off.
+        """
         try:
             if self._suspend_notify_scan is not None:
                 await self._suspend_notify_scan()
@@ -531,6 +539,33 @@ class AutopilotMonitor:
                     logger.info("Resource watchdog reconciled %d resource(s)", count)
         except Exception:
             logger.debug("Resource reconcile failed", exc_info=True)
+        await self._run_gc_scan_if_due()
+
+    async def _run_gc_scan_if_due(self) -> None:
+        """Run the goal-GC scan when ``gc_interval_seconds`` has elapsed.
+
+        The watchdog tick fires every verify_interval/verify_idle_interval;
+        the GC scan is rate-limited to ``gc_interval_seconds`` so a short
+        verify cadence does not make GC thrash.
+        """
+        if self._gc_scan is None:
+            return
+        ap = self._autopilot_cfg()
+        if ap is not None and not bool(getattr(ap, "gc_enabled", True)):
+            return
+        interval = (
+            float(getattr(ap, "gc_interval_seconds", 120) or 120) if ap is not None else 120.0
+        )
+        now = time.monotonic()
+        if now - self._last_gc_at < interval:
+            return
+        self._last_gc_at = now
+        try:
+            cancelled = await self._gc_scan()
+            if cancelled:
+                logger.info("Goal GC cancelled %d orphaned goal(s)", cancelled)
+        except Exception:
+            logger.debug("Goal GC scan failed", exc_info=True)
 
     async def _verification_loop(self) -> None:
         """Background DAG health verification with dynamic LLM gating.
@@ -570,6 +605,16 @@ class AutopilotMonitor:
         race windows. It runs on the same cadence as DAG verification.
         """
         self._resource_reconcile = reconcile_fn
+
+    def bind_gc_scan(self, scan_fn: Any) -> None:
+        """Wire AutopilotService.gc_orphaned_goals into the watchdog tick.
+
+        The GC scan cancels non-terminal goals whose job root is already
+        terminal (completed/cancelled/failed). Rate-limited by
+        ``gc_interval_seconds`` so the watchdog's verify cadence does not
+        make it thrash. Gated by ``gc_enabled``.
+        """
+        self._gc_scan = scan_fn
 
     async def _verify_post_completion(self, goal_id: str) -> None:
         """LLM-driven analysis after goal completion."""
