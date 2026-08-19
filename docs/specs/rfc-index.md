@@ -37,10 +37,10 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Status | Count |
 |--------|-------|
-| Draft | 40 |
+| Draft | 38 |
 | Proposed | 2 |
 | Accepted | 1 |
-| Implemented | 29 |
+| Implemented | 31 |
 | Implemented (partial) | 10 |
 | Implemented (Partially Superseded) | 1 |
 | Archived | 9 |
@@ -534,19 +534,20 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Updated: 2026-06-02
 - **RFC-622**: [CoreAgent Clarification Relay](RFC-622-coreagent-clarification-relay.md)
   - Kind: Architecture Design
-  - Status: Draft
+  - Status: Implemented
   - Created: 2026-06-02
   - Depends on: RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)
   - Supersedes: Empty-answer auto-resume behavior currently encoded in `sloop/engine/graph_interrupt.py::build_auto_resume_payload` for `type=="ask_user"` interrupts.
   - Authors: Soothe Team
+  - Updated: 2026-08-19
 - **RFC-623**: [Veritas Auto-Mode Robustness](RFC-623-veritas-auto-mode-robustness.md)
   - Kind: Implementation Interface Design
-  - Status: Draft
+  - Status: Implemented
   - Created: 2026-06-03
   - Depends on: RFC-622 (CoreAgent Clarification Relay), RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-403 (Unified Event Naming)
   - Supersedes: ---
   - Authors: Soothe Team
-  - Updated: 2026-06-03
+  - Updated: 2026-08-19
 - **RFC-624**: [Context Engine](RFC-624-context-engine.md)
   - Kind: Architecture Design
   - Status: Implemented (partial)
@@ -670,6 +671,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Depends on: RFC-220, RFC-604, RFC-622, RFC-633, RFC-803
 - **RFC-904**: [Sloop Recursive Step Decomposition](RFC-904-sloop-recursive-decomposition.md)
   - Kind: Architecture Design
-  - Status: Proposed
+  - Status: Proposed (deletion portion landed via IG-752/IG-753; recursive topology not yet implemented)
   - Created: 2026-08-19
+  - Updated: 2026-08-19 (partial implementation note — IG-752/IG-753)
   - Depends on: RFC-220, RFC-624, RFC-630, RFC-903, RFC-622, RFC-219, RFC-803

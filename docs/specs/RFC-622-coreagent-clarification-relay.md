@@ -2,11 +2,11 @@
 
 **RFC**: 622
 **Title**: CoreAgent Clarification Relay
-**Status**: Draft
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-06-02
 **Authors**: Soothe Team
-**Updated**: 2026-06-02
+**Updated**: 2026-08-19
 **Depends on**: RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)
 **Supersedes**: Empty-answer auto-resume behavior currently encoded in `sloop/engine/graph_interrupt.py::build_auto_resume_payload` for `type=="ask_user"` interrupts.
 

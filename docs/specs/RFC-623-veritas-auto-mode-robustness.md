@@ -2,10 +2,10 @@
 
 **RFC**: 623
 **Title**: Veritas Auto-Mode Robustness
-**Status**: Draft
+**Status**: Implemented
 **Kind**: Implementation Interface Design
 **Created**: 2026-06-03
-**Last Updated**: 2026-06-03
+**Last Updated**: 2026-08-19
 **Authors**: Soothe Team
 **Depends on**: RFC-622 (CoreAgent Clarification Relay), RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-403 (Unified Event Naming)
 **Supersedes**: ---

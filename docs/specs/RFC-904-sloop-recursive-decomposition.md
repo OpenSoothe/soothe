@@ -14,6 +14,28 @@
 
 ---
 
+> **Partial Implementation Note (2026-08-19)**: The **deletion portion** of
+> this RFC has landed via
+> [IG-752](../impl/IG-752-delete-legacy-plan-spine.md) (plan-spine station
+> removal — `generate_plan` / `assess` / `evaluate` / `gather_evidence` /
+> `commit_plan` / `check_limits`; clarification resume remapped to DISPATCH;
+> iteration budget gate re-homed onto DISPATCH) and
+> [IG-753](../impl/IG-753-delete-llm-planner.md) (`LLMPlanner` / `PlanPhase`
+> removal; `resolve_planner` → None; pass2 prompt stack, `plan_evaluate_*` /
+> `plan_structural_keep_*` config, and `StatusAssessment` /
+> `PlanGapAnalysis` / `ContinuationAssessment` deletion).
+>
+> The **recursive decomposition topology** — DISPATCH / THREAD / RECONCILE /
+> ROOT_EVAL stations, executor-bound `decompose_task`, CE reconciliation
+> (deterministic + conflict LLM), B-lazy failure replacement, ROOT_EVAL gap
+> handling, and StepDAG schema extensions (`parent_step_id`,
+> `replacement_of`, `decomposed` / `superseded` statuses) — remains
+> **Proposed** and is not yet implemented.
+>
+> RFC status stays **Proposed** pending topology implementation. The deletion
+> landings are tracked under IG-752 / IG-753 rather than advancing this RFC
+> to Implemented.
+
 ## Abstract
 
 StrangeLoop single-goal execution **must** replace the rigid
@@ -481,3 +503,4 @@ formalization (historical reference; RFC-904 is normative).
 | 2026-08-19 | Proposed from approved design draft; draft archived under `docs/archive/drafts/` |
 | 2026-08-19 | Documented deprecation/archive eligibility for related RFCs (partial supersession; no premature archive) |
 | 2026-08-19 | Intake planner Approve → DISPATCH root grounding (approved plan → root THREAD) |
+| 2026-08-19 | Added Partial Implementation Note: deletion portion landed via IG-752/IG-753; recursive decomposition topology remains Proposed |

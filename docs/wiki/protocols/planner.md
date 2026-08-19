@@ -1,205 +1,201 @@
 ---
-title: "PlannerProtocol & LoopPlannerProtocol"
+title: "PlannerProtocol & Planner Subagent"
 parent: Protocols
 grand_parent: Wiki
 nav_order: 6
 description: >-
-  Planning protocols for structured plan generation, two-phase loop planning, and continuation routing.
+  Planning contracts and the intake-only planner subagent. The host PlannerProtocol
+  interface is defined but unimplemented; live planning is the nano wire subagent
+  (RFC-633) and the recursive decomposition spine (RFC-904, Proposed).
 ---
 
-# PlannerProtocol & LoopPlannerProtocol
+# PlannerProtocol & Planner Subagent
 
-**RFCs**: 304 (Planner), 604 (LoopPlanner two-phase), 226 (continuation routing)
+**RFCs**: 304 (Planner protocol), 633 (planner subagent: readonly recon → solution report → human review), 904 (recursive decomposition spine, Proposed)
 **Locations**:
-- `packages/soothe/src/soothe/protocols/planner.py`
-- `packages/soothe/src/soothe/protocols/loop_planner.py`
-**Status**: Implemented
+- `packages/soothe-sdk/src/soothe_sdk/protocols/planner.py` — `PlannerProtocol` interface + plan data models
+- `packages/soothe/src/soothe/runner/resolver/__init__.py` — `resolve_planner()` (host resolution)
+- `soothe-nano` (PyPI): `subagents/plan/` — the live intake-only planner subagent
+**Status**: Interface defined, no host implementation. `resolve_planner` returns `None`. Live planning is delegated to the nano wire subagent (RFC-633) and the proposed recursive decomposition spine (RFC-904).
 
-## What the Planner Protocols Are
+> **Post-deletion note (2026-08-19).** The former host `LoopPlannerProtocol`
+> (two-phase assess→generate) and its continuation routing
+> (trivial/simple/complex) were deleted by
+> [IG-752](../../impl/IG-752-delete-legacy-plan-spine.md) (plan-spine station
+> removal) and [IG-753](../../impl/IG-753-delete-llm-planner.md)
+> (`LLMPlanner` / `PlanPhase` removal). RFC-904 supersedes that design. The
+> historical two-phase architecture is documented below for reference only; it
+> is **not** present in the codebase.
 
-Soothe defines two planner protocols for goal decomposition and execution planning. Both implement the **plan-driven execution** principle (RFC-000 Principle 6): complex goals are decomposed into structured, executable steps with dependency tracking — not executed ad hoc.
+## What Planning Looks Like Now
 
-1. **`PlannerProtocol`** — goal decomposition into structured plans with steps, reflection, and revision. The "create a plan from a goal" interface.
-2. **`LoopPlannerProtocol`** — the StrangeLoop Plan phase: assess progress each iteration and decide the next executable fragment. The "what should I do next in this loop?" interface.
+Soothe no longer has an in-process host planner driving a plan/eval/execute
+spine. After the RFC-904 DISPATCH cutover, planning splits into two surfaces:
 
-They serve different lifecycles: `PlannerProtocol` creates the initial decomposition; `LoopPlannerProtocol` drives iterative re-planning within a running loop.
+1. **`PlannerProtocol`** (interface only) — a marker protocol in
+   `soothe_sdk.protocols.planner` that CoreAgent / runner builders may accept.
+   The host provides **no implementation**: `resolve_planner()` returns `None`.
+   The protocol exists to keep the `planner=` builder parameter and the plan
+   data models (`Plan`, `PlanStep`, `StepResult`, `Reflection`, …) stable across
+   the deletion.
+2. **Planner subagent** (live) — an intake-only nano wire subagent (RFC-633,
+   Draft) that produces a **solution report** artifact for human review. This
+   is the only active "planner" a user interacts with.
+3. **Recursive decomposition spine** (Proposed, partial) — RFC-904 replaces the
+   deleted plan spine with DISPATCH / THREAD / RECONCILE / ROOT_EVAL stations
+   and an executor-bound `decompose_task`. The deletion half has landed; the
+   topology half is still Proposed.
 
-## PlannerProtocol
+## PlannerProtocol (interface, no host implementation)
 
-### Role
+### Location
 
-`PlannerProtocol` takes a goal and available context, then decomposes it into a `Plan` — an ordered list of `PlanStep`s with DAG dependencies and concurrency configuration. It also handles:
+`packages/soothe-sdk/src/soothe_sdk/protocols/planner.py`
 
-- **`create_plan(goal, context) → Plan`** — decompose a goal into steps.
-- **`revise_plan(plan, reflection, thread_id?) → Plan`** — revise a plan based on reflection feedback (e.g., a step failed). Optional `thread_id` for Langfuse session correlation.
-- **`reflect(plan, step_results, goal_context?, sloop_result?) → Reflection`** — evaluate progress and recommend goal changes, including goal directives for autonomous management.
+`PlannerProtocol` is a `@runtime_checkable` marker `Protocol` — it declares no
+methods. It marks "a planner implementation attached to CoreAgent." The same
+module ships the plan data models the rest of the system still references:
 
-### DAG-Based Step Dependencies
+- `Plan` / `PlanStep` — structured decomposition with DAG `depends_on` and
+  `execution_hint` (`tool` | `subagent` | `remote` | `auto`).
+- `ConcurrencyPolicy` (from `soothe_sdk.protocols.concurrency`) — parallelism
+  knobs carried on `Plan.concurrency`.
+- `StepResult` / `StepReport` / `GoalReport` — execution evidence and reports.
+- `PlanContext` — context bundle (recent messages, capabilities, completed
+  steps, routing classification, workspace, thread id).
+- `Reflection` / `GoalDirective` — reflection output and goal-management
+  directives.
 
-Steps declare dependencies via `depends_on` (a list of step IDs). This forms a DAG that the executor respects:
+### Host resolution: `resolve_planner() → None`
 
-```
-S1 (research) → S2 (design) → S3 (implement) ─┐
-                              S4 (write tests) ─┘→ S5 (integration tests)
-```
+`packages/soothe/src/soothe/runner/resolver/__init__.py` exposes
+`resolve_planner(config, model)`. After the RFC-904 DISPATCH cutover
+(IG-752/IG-753), it **always returns `None`**: StrangeLoop no longer constructs
+an `LLMPlanner`. The function is kept as a stable API for runner / CoreAgent
+builder callers that still pass `planner=` into nano `AgentBuilder`; those
+callers receive `None` and proceed without a host planner.
 
-Steps with no unmet dependencies can run in parallel. The DAG enables parallel execution *where safe* while preventing invalid orderings (you can't write tests before the design exists).
+## Planner Subagent (RFC-633, Draft — the live planner)
 
-### Execution Hints
+The active planner is an **intake-only nano wire subagent** defined in
+`soothe-nano` (`subagents/plan/`, layout per IG-659). It is invoked from
+StrangeLoop pass2/slash via `invoke_wired_subagent(planner)` and runs a
+**readonly grounding → solution report → human review** workflow:
 
-Each `PlanStep` carries an `execution_hint` guiding how it should run:
+1. **Readonly recon** — the planner may bind readonly filesystem tools
+   (`ls`, `glob`, `grep`, `read_file`, `file_info`) to ground a solution. Tool
+   output is **internal evidence**, not the deliverable; recon must gather
+   enough fact that the report can prescribe edits without scheduling further
+   reads. Each tool call emits `soothe.stream.tool_call.update` via the wire
+   bridge (orphan SubAgent card shows tool activity).
+2. **Solution report artifact** — the deliverable is a markdown report
+   (Goal, Solution, optional Design principles / Architecture changes,
+   concrete Changes as edit/add/remove steps, Evidence, risks, open questions)
+   persisted at `{workspace}/.soothe/plans/{UTC-compact}-{slug}.md`. Changes
+   must be concrete edits, **not** an investigation roadmap of further reads.
+3. **Human review** — StrangeLoop pauses via the RFC-622 clarification relay
+   (origin `planner_subagent_review`) so the operator can:
+   - **Approve** — grounds the DISPATCH root THREAD with the approved artifact.
+     After RFC-904, Approve **must not** enter `plan_generate` (that station no
+     longer exists); CE `StepDAG` children come from `decompose_task`.
+   - **Reject** — `goal_completion` with a rejected status.
+   - **More comments** — re-invoke the planner with the prior plan + comments,
+     then review again.
 
-- **`tool`** — direct tool invocation
-- **`subagent`** — delegate to a named subagent
-- **`remote`** — delegate to a remote agent
-- **`auto`** — planner/runtime selects the appropriate method (default)
+> **Naming.** `planner_subagent_review` is the intake **planner subagent**
+> human gate. It is **not** the deleted StrangeLoop `plan_generate` /
+> `plan_assess` host planning-stage nodes.
 
-This lets the planner encode routing intent ("this step needs the research subagent") without the executor hardcoding logic.
+### Non-goals (RFC-633)
 
-### ConcurrencyPolicy
+- Does **not** compile the approved markdown directly into an `AgentDecision`.
+- Does **not** enter `plan_generate` (removed).
+- Does **not** auto-start a second CE goal after Approve (same-loop handoff
+  only).
+- Does **not** revive nested `task` / explore subagents.
 
-Every `Plan` carries a `ConcurrencyPolicy` controlling parallelism at multiple levels:
+## Recursive Decomposition Spine (RFC-904, Proposed — partial)
 
-- `max_parallel_steps` — concurrent plan steps in one batch
-- `max_parallel_subagents` — concurrent subagents
-- `global_max_llm_calls` — cross-level circuit breaker for LLM invocations
-- `step_parallelism` — scheduling strategy: `sequential`, `dependency` (DAG-aware), or `max`
+RFC-904 replaces the rigid plan/exec/eval station spine with **recursive,
+LLM-driven step decomposition**, where the Context Engine (CE) is the active
+source of truth for a goal's `StepDAG`.
 
-A special value: `0` means "unlimited." The `global_max_llm_calls` circuit breaker prevents rate-limit exhaustion across steps and subagents. Autopilot goal fan-out uses `agent.autopilot.max_parallel_goals` (not loop concurrency).
+- After intake **pass1** (chitchat vs task — retained), a task becomes the
+  **root step** of its StepDAG.
+- Each step thread either **completes** or calls executor-bound
+  **`decompose_task`**, which emits a `DecompositionProposal`.
+- CE **reconciles** proposals (deterministic by default; LLM only on conflict)
+  and commits children. Completions/failures land immediately; only proposals
+  wait on the reconcile barrier.
+- Interior failure uses **B-lazy** replacement nodes. Coverage is assessed only
+  at **tree-green** via **ROOT_EVAL** (assess-only); recoverable gaps re-dispatch
+  a new root with `GapResult` in projection.
+- **Pass2** (trivial/simple/complex) is **removed**. **Pass1** is **retained**.
+- CoreAgent **`write_todos`** remains intra-step UX and **must not** create
+  StepDAG nodes. Autopilot goal-level decomposition (`apply_llm_subgoals`) is
+  unchanged and unmerged.
 
-## LoopPlannerProtocol
+### Implementation status (2026-08-19)
 
-### Role
+The **deletion portion** has landed:
 
-`LoopPlannerProtocol` is the StrangeLoop Plan phase. Each loop iteration, it answers: "is the goal complete? If not, what's the next executable fragment?" It returns a unified `PlanResult` with a `plan_action` of either `'keep'` (use existing plan) or `'new'` (here's a new decision).
+- [IG-752](../../impl/IG-752-delete-legacy-plan-spine.md) — removed plan-spine
+  stations (`generate_plan` / `assess` / `evaluate` / `gather_evidence` /
+  `commit_plan` / `check_limits`); clarification resume remapped to DISPATCH;
+  iteration budget gate re-homed onto DISPATCH.
+- [IG-753](../../impl/IG-753-delete-llm-planner.md) — removed `LLMPlanner` /
+  `PlanPhase`; `resolve_planner` → `None`; deleted `StatusAssessment` /
+  `PlanGapAnalysis` / `ContinuationAssessment`; trimmed the pass2 prompt stack
+  and `plan_evaluate_*` / `plan_structural_keep_*` config.
 
-### The Two-Phase Architecture (RFC-604)
+The **recursive decomposition topology** — DISPATCH / THREAD / RECONCILE /
+ROOT_EVAL stations, executor-bound `decompose_task`, CE reconciliation
+(deterministic + conflict LLM), B-lazy failure replacement, ROOT_EVAL gap
+handling, and StepDAG schema extensions (`parent_step_id`, `replacement_of`,
+`decomposed` / `superseded` statuses) — remains **Proposed** and is not yet
+implemented. RFC status stays **Proposed** pending topology implementation; the
+deletion landings are tracked under IG-752 / IG-753 rather than advancing
+RFC-904 to Implemented.
 
-The key design decision: **assessment and generation are separate phases**.
+## Historical: LoopPlannerProtocol (deleted)
 
-- **Phase 1 — `assess_status(goal, state, context) → StatusAssessment`**: a lightweight check: is the goal complete, incomplete, or failed? Should we continue, retry, or abort?
-- **Phase 2 — `generate_from_assessment(...) → PlanResult`**: expensive plan generation, *only when assessment says work remains*.
+> This section describes code that **no longer exists**. It is retained for
+> historical context only. The design was deleted by IG-752/IG-753 and
+> superseded by RFC-904.
 
-If Phase 1 returns `complete`, Phase 2 is skipped entirely. This saves tokens — you don't generate a new plan when the goal is already done.
+The former `LoopPlannerProtocol` was the StrangeLoop Plan phase: each loop
+iteration it answered "is the goal complete? If not, what's the next executable
+fragment?" via a unified `PlanResult` with `plan_action` of `'keep'` or
+`'new'`.
 
-The unified `plan()` method orchestrates both phases: assess first, generate only if needed.
+### Two-phase architecture (RFC-604, deleted)
 
-### Continuation Routing (RFC-226, coordinated with RFC-630 intake)
+Assessment and generation were separate phases:
 
-Mid-loop follow-ups coordinate **intake label** with optional **continuation-assess**:
+- **Phase 1 — `assess_status(...) → StatusAssessment`**: a lightweight
+  complete/incomplete/failed check (continue / retry / abort).
+- **Phase 2 — `generate_from_assessment(...) → PlanResult`**: expensive plan
+  generation, only when assessment said work remained.
 
-| Intake (continuation turn) | Route | Continuation-assess LLM |
-|----------------------------|-------|-------------------------|
+If Phase 1 returned `complete`, Phase 2 was skipped. The unified `plan()`
+method orchestrated both. These types (`StatusAssessment`, `PlanGapAnalysis`,
+`ContinuationAssessment`) and the `assess` / `generate_plan` stations were
+deleted by IG-752/IG-753.
+
+### Continuation routing (RFC-226, deleted)
+
+Mid-loop follow-ups coordinated an **intake label** with optional
+**continuation-assess**:
+
+| Intake (continuation turn) | Former route | Continuation-assess LLM |
+|----------------------------|-------------|-------------------------|
 | `trivial` | `plan_assess` → bootstrap or `plan_generate` | Only for ambiguous trivial goals |
 | `simple` | `plan_assess` → bootstrap or `plan_generate` | Enabled (same discriminator path) |
 | `complex` | `bounded_evidence_gather` → full spine | Skipped |
 | `continue` keyword | deterministic bootstrap | Skipped |
 
-`assess_continuation()` is the continuation discriminator (`bootstrap` vs `plan_generate`) for
-`trivial` and `simple` follow-ups. `complex` still skips discriminator and escalates directly.
-
-### Progressive Planning with PlanManager
-
-Both `plan()` and `generate_from_assessment()` accept an optional `plan_manager` parameter for **DAG-aware progressive planning**. Instead of regenerating the entire plan each iteration, `PlanManager` evolves the existing plan graph — adding/removing steps as understanding grows. This is more token-efficient and preserves execution continuity.
-
-### PlanResult
-
-The unified return carries:
-- `status` — `complete` / `incomplete` / `failed`
-- `plan_action` — `keep` (use existing plan) or `new` (new decision provided)
-- `decision` — the new execution decision (only when `plan_action='new'`)
-- `ux_preview` / `evidence_summary` — user-facing and structured summaries
-
-## Backend: LLMPlanner
-
-A single unified implementation (`LLMPlanner`) implements **both** protocols. Key characteristics:
-
-- Two-phase architecture (RFC-604): `StatusAssessment` → conditional `PlanGeneration`
-- Model-agnostic (works with any LangChain chat model)
-- Progressive planning via `PlanManager`
-- Continuation routing (RFC-226)
-- Token-efficient schema trimming (IG-329) — strips unnecessary fields from LLM-bound schemas
-
-> **History note**: Earlier versions had multiple planner tiers (`AutoPlanner`, `ClaudePlanner`, `SubagentPlanner`). IG-150 consolidated these into the unified `LLMPlanner`.
-
-## Integration Points
-
-### Planner ↔ StrangeLoop
-
-The Plan → Execute cycle:
-
-```
-Plan phase (LoopPlanner):
-  1. assess_status() → StatusAssessment
-  2. generate_from_assessment() → PlanResult (if incomplete)
-  3. Return decision (keep/new)
-
-Execute phase (CoreAgent):
-  1. Execute decision via tools/subagents
-  2. Collect results into StepResult
-  3. Update plan/step status
-
-→ next iteration → Plan phase again
-```
-
-### Planner ↔ Context
-
-`PlanContext` carries `capabilities` (available tools/subagents), `workspace`, `thread_id`, and `completed_steps` (a summary dict of step ID → result). The planner uses completed-step summaries to make informed decisions about what to do next — it doesn't re-examine raw outputs.
-
-### Planner ↔ Working Memory
-
-`LoopPlannerProtocol` receives `LoopState` which includes `step_results` and the prior plan. `LoopWorkingMemoryProtocol.render_for_reason()` provides a bounded view of recent outcomes injected into the planner's prompt. See [loop-protocols.md](loop-protocols.md).
-
-## Design Rationale
-
-### Why Two-Phase Architecture?
-
-Token efficiency. Phase 1 (assessment) is a lightweight structured LLM call; Phase 2 (generation) is expensive. Skipping Phase 2 when the goal is complete avoids wasteful plan generation. In a multi-iteration loop, this compounds — most iterations after completion are cheap assessments, not full replans.
-
-### Why DAG Dependencies?
-
-Complex goals require ordered execution: design before implementation, implementation before tests. But naive sequential execution wastes time when steps are independent. The DAG enables parallel execution where safe while preventing invalid orderings.
-
-### Why Concurrency Limits?
-
-Uncontrolled parallelism exhausts LLM rate limits and causes resource contention. `ConcurrencyPolicy` makes limits configurable per deployment — a dev machine caps at 2 parallel steps; a production cluster allows more. The `global_max_llm_calls` cross-level breaker is the safety net that prevents cascading rate-limit failures.
-
-## Gotchas
-
-- **`plan_action='keep'` means no new decision** — when the assessment says "keep existing plan," `PlanResult.decision` is `None`. Consumers must check `plan_action` before accessing `decision`.
-- **`revise_plan` is separate from `reflect`** — reflection evaluates progress and recommends changes; revision actually produces a new plan. They're often chained but are distinct operations.
-- **`execution_hint='auto'` is a suggestion, not a guarantee** — the runtime may override based on available capabilities.
-- **Concurrency `0` means unlimited** — not "disabled." This is a footgun if you expect `0` to mean "no parallelism."
-
-## Configuration
-
-```yaml
-agent:
-  protocols:
-    planner:
-      enabled: true
-      llm_role: planner
-      max_iterations: 8
-      concurrency:
-        max_parallel_steps: 2
-        max_parallel_subagents: 4
-        global_max_llm_calls: 5
-        step_parallelism: dependency
-```
-
-Resolved via `resolve_planner(config)` and `resolve_loop_planner(config)` — both return `LLMPlanner` instances.
-
-## Specification Reference
-
-- **RFC-304**: Planner Protocol Architecture
-- **RFC-604**: Two-phase architecture (Reason Phase Robustness)
-- **RFC-226**: Continuation-Aware Plan Assessment
-- **RFC-211**: Layer2 Tool Result Optimization (outcome metadata)
-- **RFC-624**: Context Engine (Autonomous Goal Management)
-- **RFC-200**: Autonomous Goal Management (archived, superseded by RFC-624)
-
-## Related Documentation
-
-- [StrangeLoop Architecture](../core/strangeloop.md)
-- [Execution Protocols](execution-protocols.md) — runner orchestrates the planner
-- [Loop Protocols](loop-protocols.md) — working memory feeds the planner
+`assess_continuation()` was the continuation discriminator (`bootstrap` vs
+`plan_generate`) for `trivial` and `simple` follow-ups. RFC-904 removes pass2
+(trivial/simple/complex) entirely; pass1 chitchat gating is retained. The
+`plan_assess` / `plan_generate` / `assess_route` / `plan_route` graph channels
+were collapsed by IG-753.
