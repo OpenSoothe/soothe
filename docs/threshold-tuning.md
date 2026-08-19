@@ -276,7 +276,8 @@ Defined in `config/constants.py`. Selected entries:
 | Constant | Default | Purpose |
 |----------|---------|---------|
 | `DEFAULT_MAX_FIELD_CHARS` | 2000 | Generic field truncation |
-| `PRIOR_PROGRESS_MAX_CHARS` | 25000 | Prior-progress context bound |
+| `PRIOR_STEP_EVIDENCE_MAX_CHARS` | 4000 | Fallback predecessor evidence paste |
+| `PRIOR_STEPS_SUMMARY_OUTCOME_PREVIEW_CHARS` | 160 | PRIOR STEPS outcome preview |
 | `VISION_CONTEXT_MAX_CHARS` | 4000 | Vision evidence cap |
 | `CONTINUATION_ASSESS_REASONING_MAX_CHARS` | 240 | Continuation reasoning bound |
 | `GOAL_PREVIEW_MAX_CHARS` | 120 | Goal preview truncation |

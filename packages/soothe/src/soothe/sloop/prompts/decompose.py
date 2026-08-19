@@ -53,9 +53,6 @@ working; marking todos done is not task completion.
   is sufficient.
 """
 
-# Backward-compatible alias (tests / older imports).
-WRITE_TODOS_SYSTEM_ADDENDUM = THREAD_POLICY_SYSTEM_ADDENDUM
-
 WRITE_TODOS_TOOL_DESCRIPTION = """\
 Create or replace the todo list for THIS thread's in-progress work only.
 Args: todos: [{content, status}] with status pending|in_progress|completed.
@@ -101,18 +98,10 @@ def user_finish_or_split_hint_lines(*, is_dag_root: bool) -> list[str]:
     return [_CHILD_USER_HINT]
 
 
-# Deprecated name: prefer ``user_finish_or_split_hint_lines``.
-def do_or_decompose_instruction_lines(*, is_dag_root: bool) -> list[str]:
-    """Alias for ``user_finish_or_split_hint_lines``."""
-    return user_finish_or_split_hint_lines(is_dag_root=is_dag_root)
-
-
 __all__ = [
     "APPROVED_PLAN_EXECUTE_HINT",
     "DECOMPOSE_TASK_TOOL_DESCRIPTION",
     "THREAD_POLICY_SYSTEM_ADDENDUM",
-    "WRITE_TODOS_SYSTEM_ADDENDUM",
     "WRITE_TODOS_TOOL_DESCRIPTION",
-    "do_or_decompose_instruction_lines",
     "user_finish_or_split_hint_lines",
 ]

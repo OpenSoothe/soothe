@@ -54,11 +54,6 @@ DEFAULT_MAX_DESCRIPTION_CHARS: int = 2000
 
 _EVIDENCE_SUMMARY_MAX_CHARS: int = 2000
 
-# ── Prior-progress envelope (user message & render path) ────────────────────
-
-PRIOR_PROGRESS_MAX_CHARS: int = 25_000
-PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS: int = 160
-
 # ── Vision context brief ────────────────────────────────────────────────────
 
 VISION_CONTEXT_MAX_CHARS: int = 4000

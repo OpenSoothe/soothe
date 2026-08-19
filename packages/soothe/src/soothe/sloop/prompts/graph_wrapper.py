@@ -59,34 +59,6 @@ def _parse_prior_conversation_xml(msg_xml: str) -> tuple[Literal["human", "ai"],
     return None
 
 
-def _prior_goals_from_checkpoint(
-    checkpoint: Any | None,
-    *,
-    exclude_goal_id: str | None,
-) -> list[Any]:
-    """Build ``PriorGoalSummary`` rows from checkpoint goal index (metadata only)."""
-    from soothe.context.projection import PriorGoalSummary
-
-    if checkpoint is None:
-        return []
-    out: list[PriorGoalSummary] = []
-    for rec in checkpoint.goal_history:
-        if exclude_goal_id and rec.goal_id == exclude_goal_id:
-            continue
-        if rec.status not in ("completed", "cancelled", "failed"):
-            continue
-        out.append(
-            PriorGoalSummary(
-                goal_id=rec.goal_id,
-                description=rec.goal_id,
-                status=rec.status,
-                step_summary="",
-                completion_text="",
-            )
-        )
-    return out
-
-
 def _format_dag_context(dag_ctx: Any) -> str:
     """Format DagPlanningContext as plain-text DAG STATUS section for prompt injection."""
     if not dag_ctx or not dag_ctx.has_prior_state:

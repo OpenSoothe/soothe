@@ -71,14 +71,14 @@ _GOAL_COMPLETION_CONTEXT_BOUNDARY = (
 )
 
 # Boundary for prior terminal units in goal-completion synthesis.
-# Keeps the report focused on the current goal; prior text is status only.
+# The full prior report is kept below; this marker only scopes it as reference
+# so the model writes for the CURRENT request without reprinting prior output.
 _SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY = (
     '<PRIOR_GOAL_CONTEXT role="status_reference">\n'
-    "Prior goal outcome below is background status only.\n"
+    "Prior goal report below is background context for the CURRENT request.\n"
     "Write the report for the CURRENT request using current-goal evidence.\n"
     "Do not reprint or expand the prior report; at most one short status mention.\n"
 )
-_SYNTHESIS_PRIOR_COMPLETION_PREVIEW_CHARS = 400
 
 
 def projected_ledger_has_goal_completion(projected: list[BaseMessage]) -> bool:
@@ -898,11 +898,11 @@ def project_loop_messages_for_core_agent(
 
 
 def _compact_terminal_unit_for_synthesis(unit: list[BaseMessage]) -> list[BaseMessage]:
-    """Compact a prior terminal unit for goal-completion synthesis.
+    """Rewrite a prior terminal unit's human envelope for goal-completion synthesis.
 
-    Rewrites the human envelope with a synthesis status-reference boundary and
-    truncates the AI body so the model can mention prior status without
-    reprinting the full prior report.
+    Only the human envelope is replaced with a status-reference boundary; the AI
+    terminal report is kept in full so the prior goal's completion report stays
+    in the projection. Global ``plan_prompt_ledger`` caps still bound total size.
     """
     phase: str | None = None
     for msg in unit:
@@ -911,23 +911,20 @@ def _compact_terminal_unit_for_synthesis(unit: list[BaseMessage]) -> list[BaseMe
             phase = p
             break
     if phase == "goal_interrupted":
-        compact_human = "Prior goal was interrupted. Brief status follows."
+        compact_human = "Prior goal was interrupted. Full report follows."
     else:
-        compact_human = "Prior goal completed. Brief status follows."
+        compact_human = "Prior goal completed. Full report follows."
     compact_human = _SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY + compact_human
 
     out: list[BaseMessage] = []
     for msg in unit:
         copy_msg = _deep_copy_message(msg)
-        if phase is not None and getattr(copy_msg, "phase", None) == phase:
-            if _is_loop_human_message(copy_msg):
-                copy_msg = _set_message_content(copy_msg, compact_human)
-            elif _is_loop_ai_message(copy_msg):
-                text = extract_text_from_message_content(getattr(copy_msg, "content", ""))
-                preview_limit = _SYNTHESIS_PRIOR_COMPLETION_PREVIEW_CHARS
-                if preview_limit > 0 and len(text) > preview_limit:
-                    text = text[: preview_limit - 1].rstrip() + "…"
-                copy_msg = _set_message_content(copy_msg, text)
+        if (
+            phase is not None
+            and getattr(copy_msg, "phase", None) == phase
+            and _is_loop_human_message(copy_msg)
+        ):
+            copy_msg = _set_message_content(copy_msg, compact_human)
         out.append(copy_msg)
     return out
 

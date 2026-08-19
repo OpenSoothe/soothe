@@ -11,11 +11,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from soothe.config.constants import (
-    PRIOR_PROGRESS_MAX_CHARS,
-    PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS,
-)
-from soothe.context.projection import PriorGoalSummary
 from soothe.sloop.utils.vision_context import merge_vision_instructions
 
 # Strip legacy StrangeLoop suffix accidentally baked into goal text or stored checkpoints.
@@ -61,45 +56,6 @@ def _render_sections(sections: list[tuple[str, str]]) -> str:
             continue
         parts.append(f"{label}:\n{text}")
     return "\n\n".join(parts)
-
-
-def _render_prior_goals_tree(
-    prior_goals: list[PriorGoalSummary],
-    *,
-    completion_in_ledger: bool,
-    completion_preview_chars: int = 160,
-) -> str:
-    """Render prior goals as nested list with GOAL labels (RFC-214 §4.4)."""
-    if not prior_goals:
-        return ""
-    blocks: list[str] = []
-    for summary in prior_goals:
-        description = (summary.description or "").strip()
-        if not description:
-            continue
-        status = (summary.status or "unknown").strip()
-        lines = [f"- GOAL: {description} ({status})"]
-        step_summary = (summary.step_summary or "").strip()
-        if step_summary:
-            for step_line in step_summary.splitlines():
-                step_line = step_line.strip()
-                if not step_line:
-                    continue
-                if step_line.startswith("- "):
-                    lines.append(f"  {step_line}")
-                else:
-                    lines.append(f"  - {step_line}")
-        if completion_in_ledger:
-            lines.append("  - outcome: see prior assistant message")
-        else:
-            completion = (summary.completion_text or "").strip()
-            if completion:
-                preview = completion
-                if completion_preview_chars > 0 and len(preview) > completion_preview_chars:
-                    preview = preview[: completion_preview_chars - 1].rstrip() + "…"
-                lines.append(f"  - outcome: {preview}")
-        blocks.append("\n".join(lines))
-    return "\n\n".join(blocks)
 
 
 def render_prior_steps_tree(
@@ -183,7 +139,6 @@ class UserMessageBuilder:
         expected_output: str | None = None,
         instructions: str | None = None,
         prior_steps: str | None = None,
-        prior_goals: str | None = None,
         vision_context: str | None = None,
         workspace_state: str | None = None,
         skill_context: str | None = None,
@@ -199,8 +154,8 @@ class UserMessageBuilder:
             short_description: Brief step title shown on the TUI card header.
             expected_output: Bullet-list expected output body (EXPECTED OUTPUT section).
             instructions: Bullet-list execution instructions (INSTRUCTIONS section).
-            prior_steps: Transitive predecessor step descriptions and statuses.
-            prior_goals: Prior goals tree at goal boundary (metadata only).
+            prior_steps: Transitive predecessor step descriptions and statuses
+                (fallback only when predecessor ledger pairs are not projected).
             vision_context: Daemon vision-preflight summary body ; subordinate
                 to EXECUTION TASK — never a peer GOAL section.
             workspace_state: Optional lightweight workspace diff summary.
@@ -226,9 +181,6 @@ class UserMessageBuilder:
 
         if (prior_steps or "").strip():
             sections.append(("PRIOR STEPS", prior_steps.strip()))
-
-        if (prior_goals or "").strip():
-            sections.append(("PRIOR GOALS", prior_goals.strip()))
 
         approved_body = (approved_plan_markdown or "").strip()
         if approved_body:
@@ -321,10 +273,7 @@ def flatten_user_message_content(content: str) -> str:
 
 __all__ = [
     "EXECUTION_TASK_LABEL",
-    "PRIOR_PROGRESS_MAX_CHARS",
-    "PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS",
     "UserMessageBuilder",
-    "_render_prior_goals_tree",
     "flatten_user_message_content",
     "render_prior_steps_tree",
 ]

@@ -21,9 +21,7 @@ from soothe.sloop.prompts.decompose import (
     APPROVED_PLAN_EXECUTE_HINT,
     DECOMPOSE_TASK_TOOL_DESCRIPTION,
     THREAD_POLICY_SYSTEM_ADDENDUM,
-    WRITE_TODOS_SYSTEM_ADDENDUM,
     WRITE_TODOS_TOOL_DESCRIPTION,
-    do_or_decompose_instruction_lines,
     user_finish_or_split_hint_lines,
 )
 
@@ -31,7 +29,6 @@ __all__ = [
     "APPROVED_PLAN_EXECUTE_HINT",
     "DECOMPOSE_TASK_TOOL_DESCRIPTION",
     "THREAD_POLICY_SYSTEM_ADDENDUM",
-    "WRITE_TODOS_SYSTEM_ADDENDUM",
     "WRITE_TODOS_TOOL_DESCRIPTION",
     "DecomposeTaskMiddleware",
     "ProposalSink",
@@ -39,7 +36,6 @@ __all__ = [
     "ReconcileResult",
     "bind_decompose_runtime",
     "build_decompose_task_tool",
-    "do_or_decompose_instruction_lines",
     "drain_executor_proposals",
     "plan_commit_from_proposals",
     "reconcile_proposals_deterministic",

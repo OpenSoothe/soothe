@@ -261,19 +261,57 @@ def predecessor_messages_for_step(
     )
 
 
+def predecessor_execute_in_ledger(
+    loop_messages: list[Any],
+    step: StepAction,
+    decision: AgentDecision,
+    *,
+    exclude_step_ids: frozenset[str] | None = None,
+) -> bool:
+    """True when at least one predecessor execute_step row will project as Slice B."""
+    return bool(
+        predecessor_messages_for_step(
+            loop_messages,
+            step,
+            decision,
+            max_messages=1,
+            exclude_step_ids=exclude_step_ids,
+        )
+    )
+
+
 def template_hydrate_step_brief(
     step: StepAction,
     predecessor_evidence: str,
+    *,
+    evidence_in_ledger: bool = False,
 ) -> str:
-    """Heuristic brief expansion when LLM hydration is unavailable."""
+    """Heuristic brief expansion when LLM hydration is unavailable.
+
+    When ``evidence_in_ledger`` is True (Slice B will replay predecessor
+    Human/AI pairs), do not paste evidence into the brief — that would
+    duplicate the projected ledger.
+    """
     parts = [
         (step.full_description or step.description or "").strip(),
         "",
-        "Use the prior step evidence below as authoritative input.",
-        "Do NOT repeat discovery or diagnostic actions already completed.",
     ]
-    if predecessor_evidence.strip():
-        parts.extend(["", "Prior step evidence:", predecessor_evidence.strip()])
+    if evidence_in_ledger:
+        parts.extend(
+            [
+                "Prior task outcomes appear in earlier assistant messages; they are authoritative.",
+                "Do NOT repeat discovery or diagnostic actions already completed.",
+            ]
+        )
+    else:
+        parts.extend(
+            [
+                "Use the prior step evidence below as authoritative input.",
+                "Do NOT repeat discovery or diagnostic actions already completed.",
+            ]
+        )
+        if predecessor_evidence.strip():
+            parts.extend(["", "Prior step evidence:", predecessor_evidence.strip()])
     return "\n".join(parts).strip()
 
 
@@ -324,6 +362,7 @@ __all__ = [
     "build_prior_step_evidence",
     "build_prior_steps_summaries",
     "build_prior_steps_summary_block",
+    "predecessor_execute_in_ledger",
     "predecessor_messages_for_step",
     "step_needs_brief_hydration",
     "template_hydrate_step_brief",

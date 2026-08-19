@@ -6,7 +6,7 @@ from soothe.sloop.engine.step_predecessor_context import build_dependent_executi
 from soothe.sloop.prompts.decompose import (
     DECOMPOSE_TASK_TOOL_DESCRIPTION,
     THREAD_POLICY_SYSTEM_ADDENDUM,
-    do_or_decompose_instruction_lines,
+    user_finish_or_split_hint_lines,
 )
 from soothe.sloop.prompts.user_message import UserMessageBuilder
 from soothe.sloop.state.schemas import StepAction
@@ -30,8 +30,8 @@ def test_decompose_tool_description_leads_with_decision() -> None:
 
 
 def test_root_vs_child_instruction_lines() -> None:
-    root = do_or_decompose_instruction_lines(is_dag_root=True)
-    child = do_or_decompose_instruction_lines(is_dag_root=False)
+    root = user_finish_or_split_hint_lines(is_dag_root=True)
+    child = user_finish_or_split_hint_lines(is_dag_root=False)
     assert any("full goal" in line for line in root)
     assert any("Prefer finish" in line for line in child)
     assert not any("StepDAG" in line for line in root + child)

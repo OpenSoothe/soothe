@@ -488,11 +488,27 @@ class Executor:
         state: LoopState,
         decision: AgentDecision,
     ) -> None:
-        """Expand vague dependent-step briefs using predecessor evidence (P2)."""
+        """Expand vague dependent-step briefs using predecessor evidence (P2).
+
+        When Slice B will project predecessor execute Human/AI pairs, skip
+        embedding that evidence into ``full_description`` (avoids duplicating
+        the same findings in EXECUTION TASK and the ledger replay).
+        """
         if not self._step_brief_hydration_enabled():
             return
+        from soothe.sloop.engine.step_predecessor_context import (
+            predecessor_execute_in_ledger,
+        )
+
         for step in steps:
             if not step_needs_brief_hydration(step):
+                continue
+            if predecessor_execute_in_ledger(state.loop_messages, step, decision):
+                logger.info(
+                    "[Execute] skip brief evidence embed for step %s; "
+                    "predecessor ledger projects as Slice B",
+                    step.id,
+                )
                 continue
             evidence = build_prior_step_evidence(step, decision, state)
             if not evidence.strip():
@@ -528,21 +544,10 @@ class Executor:
         predecessor_projected: bool = False,
     ) -> str:
         """Build the execute-step user envelope (task + hints; ledger slices projected separately)."""
-        from soothe.sloop.prompts.graph_wrapper import _prior_goals_from_checkpoint
-        from soothe.sloop.prompts.user_message import (
-            UserMessageBuilder,
-            _render_prior_goals_tree,
-        )
+        from soothe.sloop.prompts.user_message import UserMessageBuilder
 
         has_predecessor_ledger = bool(step.dependencies) or predecessor_projected
         prior_steps = ""
-        prior_goals = ""
-        exec_cfg = None
-        if self._config is not None:
-            exec_cfg = getattr(
-                getattr(self._config.agent, "loop", None), "execute_prompt_ledger", None
-            )
-
         if (
             loop_state is not None
             and loop_state.current_decision is not None
@@ -555,16 +560,6 @@ class Executor:
                 loop_state,
                 evidence_in_ledger=False,
             )
-        if cross_goal_projected and self._checkpoint is not None:
-            tail_k = 1
-            if exec_cfg is not None:
-                tail_k = max(1, int(getattr(exec_cfg, "cross_goal_completion_tail", 3) or 3))
-            summaries = _prior_goals_from_checkpoint(self._checkpoint, exclude_goal_id=None)
-            if summaries:
-                prior_goals = _render_prior_goals_tree(
-                    summaries[-tail_k:],
-                    completion_in_ledger=True,
-                )
 
         has_prior_completion_in_ledger = bool(
             loop_state is not None and ledger_goal_completion_text(loop_state.loop_messages).strip()
@@ -600,7 +595,6 @@ class Executor:
             expected_output=envelope_body.expected_output,
             instructions=envelope_body.instructions,
             prior_steps=prior_steps or None,
-            prior_goals=prior_goals or None,
             vision_context=vision_context,
             skill_context=loop_state.skill_context if loop_state else None,
             approved_plan_path=approved_path,

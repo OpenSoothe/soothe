@@ -150,3 +150,19 @@ def test_template_hydrate_step_brief_embeds_evidence() -> None:
     )
     assert "Do NOT repeat discovery" in brief
     assert "lint error in foo.py" in brief
+
+
+def test_template_hydrate_step_brief_skips_evidence_when_in_ledger() -> None:
+    step = StepAction(
+        id="02",
+        description="Fix identified failures",
+        dependencies=["01"],
+    )
+    brief = template_hydrate_step_brief(
+        step,
+        "Step 01 — verify (completed)\n---\n✗ lint error in foo.py",
+        evidence_in_ledger=True,
+    )
+    assert "earlier assistant messages" in brief
+    assert "lint error in foo.py" not in brief
+    assert "Prior step evidence:" not in brief
