@@ -868,9 +868,8 @@ def project_loop_messages_for_core_agent(
 ) -> list[BaseMessage]:
     """Return ledger messages for CoreAgent thread (RFC-214).
 
-    Filters to only execute_step phase messages. Plan-phase messages
-    (plan_assess, plan_generate) are NOT injected into CoreAgent thread,
-    keeping CoreAgent's history focused on tool execution.
+    Filters to only execute_step phase messages. Historical plan-spine ledger
+    turns are not injected into the CoreAgent thread.
 
     Args:
         loop_messages: RFC-214 complete ledger from ``LoopState.loop_messages``.

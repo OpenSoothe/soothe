@@ -461,10 +461,9 @@ class StepPlanningSubengine:
 class StepPlanManagerAdapter:
     """Binds goal_id to StepPlanningSubengine to satisfy the PlanManager duck-typed interface.
 
-    The existing orchestrator nodes (plan_assess, plan_generate, resolve_decision,
-    record_iteration, goal_completion, execute_steps) call 5 methods on the
-    plan_manager object. This adapter binds a specific goal_id so the method
-    signatures match exactly.
+    The existing orchestrator stations (DISPATCH, execute, record_progress,
+    finalize, etc.) call a small set of methods on the plan_manager object.
+    This adapter binds a specific goal_id so the method signatures match.
 
     ~30 lines vs the previous ContextEnginePlanAdapter at 420+ lines with
     150 lines of duplicated heuristic logic.

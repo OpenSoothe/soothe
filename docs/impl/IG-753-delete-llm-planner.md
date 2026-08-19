@@ -27,10 +27,12 @@ continuation prompt stack and unused ``plan_evaluate_*`` /
 | Remove ``LoopState.structural_keep_streak`` | Done |
 | Delete ``StatusAssessment`` / ``PlanGapAnalysis`` / ``ContinuationAssessment`` | Done |
 | Remove scratch ``plan_assessment`` / ``plan_gap`` | Done |
+| Drop exported historical station IDs; live ``CLARIFICATION_ORIGINS`` only | Done |
+| Collapse dead ``plan_route`` / ``assess_route`` graph channels | Done |
 
 ## 3. Kept
 
 - ``trivial_plan``, Approve grounding, ``emit_plan_phase_status``
 - ``PlanResult`` / ``AgentDecision`` / ``PriorProgressDigest``
 - ``plan_prompt_ledger`` / ``execute_prompt_ledger`` / synthesis + execute prompts
-- Historical ledger phase tags / clarification origin acceptance (resume → DISPATCH)
+- ``PLANNING_LEDGER_PHASES`` + legacy clarification origin acceptance (resume → DISPATCH)

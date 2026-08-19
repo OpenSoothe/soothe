@@ -41,8 +41,6 @@ def _graph_flags(
         "is_continuation": is_continuation,
         "is_fresh_goal": is_fresh,
         "new_goal_created": new_goal_created,
-        "plan_route": None,
-        "assess_route": None,
         "last_outcome": None,
         "resume_synth": None,
         "dispatch_route": None,

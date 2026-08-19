@@ -303,8 +303,8 @@ async def test_force_manual_does_not_affect_other_origins() -> None:
 
 
 @pytest.mark.asyncio
-async def test_force_manual_does_not_apply_to_strange_loop_plan_origins() -> None:
-    """StrangeLoop plan_generate/plan_assess stay eligible for veritas auto-answer."""
+async def test_force_manual_does_not_apply_to_legacy_plan_origins() -> None:
+    """Legacy plan-spine origins stay eligible for veritas auto-answer."""
     policy = AutoClarificationPolicy(
         _veritas_returning(
             VeritasAnswerSchema(answers=["ok"], confidence=0.9, defer=False, rationale="ok")

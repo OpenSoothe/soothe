@@ -700,9 +700,9 @@ class PlanResult(BaseModel):
     terminal_after_execute: bool = Field(default=False)
     """RFC-226: when True, the plan asserts its single step IS the goal completion.
 
-    The Loop Graph routes from ``record_iteration`` directly to ``goal_completion``,
-    skipping the iter=1 ``plan_assess`` status check. Set by the continuation-aware
-    plan_assess for bootstrap actions; default False elsewhere.
+    The Loop Graph routes from ``record_progress`` directly toward finalize /
+    goal completion when this flag is set (e.g. trivial one-step plans).
+    Default False elsewhere.
     """
 
     @model_validator(mode="after")
@@ -1047,13 +1047,12 @@ class LoopState(BaseModel):
         default=None,
         description="Skill reference text for execute-step SKILL_CONTEXT when goal expanded from /skill:.",
     )
-    # one-shot approved intake-planner artifact for DISPATCH root grounding
-    # (RFC-904); legacy plan_generate also consumed these fields.
+    # one-shot approved intake-planner artifact for DISPATCH root grounding (RFC-904).
     approved_plan_path: str | None = Field(
         default=None,
         description=(
             "Workspace path of an operator-approved intake plan artifact "
-            "(cleared after DISPATCH grounds the root, or after legacy plan_generate)."
+            "(cleared after DISPATCH grounds the root)."
         ),
     )
     approved_plan_markdown: str | None = Field(

@@ -1556,7 +1556,7 @@ class ClarificationConfig(BaseModel):
             "With a human attached, the interactive TUI relay is used; otherwise "
             "the loop defers. Default is ``planner_subagent_review`` only — the "
             "planner *subagent* Approve/Reject/Comments gate (RFC-633). This is "
-            "not StrangeLoop ``plan_generate`` / ``plan_assess``."
+            "not a legacy StrangeLoop plan-spine origin."
         ),
     )
 

@@ -205,7 +205,7 @@ async def test_init_or_resume_trivial_injects_pseudo_plan() -> None:
 
 @pytest.mark.asyncio
 async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
-    """Trivial intake must not bypass plan_assess when loop continuation is active."""
+    """Trivial intake still routes through DISPATCH when loop continuation is active."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
@@ -301,7 +301,7 @@ async def test_init_or_resume_simple_injects_trivial_plan() -> None:
 
 @pytest.mark.asyncio
 async def test_init_or_resume_complex_does_not_inject_synth_plan() -> None:
-    """The complex label leaves scratch empty — the full spine runs plan_assess/generate."""
+    """The complex label leaves scratch empty — DISPATCH owns the root step."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(

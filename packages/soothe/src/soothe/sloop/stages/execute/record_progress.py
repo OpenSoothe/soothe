@@ -141,9 +141,8 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
                 "[record_iteration] CE record_action/set_previous_plan failed", exc_info=True
             )
 
-    # RFC-226: terminal bootstrap fast-exit — when the plan asserts that its single
-    # step IS the goal completion (continuation bootstrap path), route straight to
-    # goal_completion and skip the iter=1 plan_assess status check.
+    # RFC-226: terminal one-step fast-exit — when the plan asserts that its
+    # single step IS the goal completion, route straight to finalize.
     terminal = bool(getattr(plan_result, "terminal_after_execute", False))
 
     # Both "continue" and "replan" status cycle back to iteration_gate for next iteration

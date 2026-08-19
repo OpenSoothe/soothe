@@ -13,8 +13,7 @@ unwired plan-spine stations, remapped clarification resume to `DISPATCH`,
 re-homed the iteration budget gate onto DISPATCH, and removed spine-only unit
 tests.
 
-**Follow-up:** deleting `LLMPlanner` / `PlanPhase` and plan prompt kinds
-(still constructed for Langfuse pin / unit tests).
+**Follow-up:** deleting `LLMPlanner` / `PlanPhase` and plan prompt kinds — see IG-753.
 
 ---
 
@@ -30,7 +29,6 @@ tests.
 ## 3. Kept
 
 - `stages/plan/phase_status.py`
-- `PlanResult` / `AgentDecision` / ledger phase tags
+- `PlanResult` / `AgentDecision` / ledger phase tags (`PLANNING_LEDGER_PHASES`)
 - `plans/grounding.py`
-- Historical station string constants (docs / ledger dual-read)
-- `LLMPlanner` (follow-up)
+- Legacy clarification origins (resume → DISPATCH); not exported as live station IDs

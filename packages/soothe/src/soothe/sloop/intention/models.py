@@ -6,8 +6,8 @@ Intent classification produces a 4-class intake label (RFC-630) —
 in-flight loop is derived structurally inside ``StrangeLoop`` from the loaded
 checkpoint, not classified here.
 
-Two-pass intake (RFC-630): Pass 1 (social vs task) → Pass 2 (scope).
-Pass 1 returns ``is_task`` boolean; Pass 2 returns ``scope`` for work requests.
+Two-pass intake historically (RFC-630): Pass 1 (social vs task). Pass 2 scope
+pre-classification was removed under RFC-904; DISPATCH owns decomposition.
 
 CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
 ``soothe_sdk.intention.models`` and re-exported here.
@@ -31,8 +31,8 @@ class IntakeLabel(StrEnum):
 
     - ``chitchat``: small talk (greetings, thanks, casual banter); the intake
       LLM piggybacks ``chitchat_response`` and the runner emits it directly.
-    - ``trivial``: trivia, single obvious tool call, or direct answer; pseudo
-      1-step plan via execute (no plan_assess/plan_generate).
+    - ``trivial``: trivia, single obvious tool call, or direct answer; DISPATCH
+      grounds a one-step root (no multi-step decomposition).
     - ``simple``: single focused deliverable CoreAgent can finish in one execute.
     - ``complex``: multi-phase / parallel workstreams / durable phase gates.
     """
@@ -68,7 +68,7 @@ class IntentClassification(BaseModel):
 
     4-class LLM intake classification:
     - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.
-    - ``trivial``: direct execute via pseudo 1-step plan (no plan_assess/generate).
+    - ``trivial``: direct execute via one-step DISPATCH root.
     - ``simple``/``complex``: agentic goals of increasing effort; the runner /
       StrangeLoop derive loop continuation structurally from the checkpoint.
 

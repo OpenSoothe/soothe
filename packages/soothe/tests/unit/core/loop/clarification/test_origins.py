@@ -16,22 +16,25 @@ from soothe.sloop.clarification.origins import (
 )
 
 
-def test_clarification_origins_cover_all_stages() -> None:
+def test_clarification_origins_are_live_only() -> None:
     assert CLARIFICATION_ORIGINS == {
         ORIGIN_EXECUTE,
-        ORIGIN_PLAN_GENERATE,
-        ORIGIN_PLAN_EVALUATE,
         ORIGIN_PLANNER_SUBAGENT_REVIEW,
         ORIGIN_RAIL_PAUSE,
     }
 
 
-def test_strange_loop_planning_origins_exclude_planner_subagent_review() -> None:
+def test_strange_loop_planning_origins_are_legacy_plan_spine() -> None:
     assert ORIGIN_PLANNER_SUBAGENT_REVIEW not in STRANGELOOP_PLANNING_ORIGINS
     assert ORIGIN_EXECUTE not in STRANGELOOP_PLANNING_ORIGINS
     assert STRANGELOOP_PLANNING_ORIGINS == {
         ORIGIN_PLAN_GENERATE,
         ORIGIN_PLAN_EVALUATE,
+        "plan_generate",
+        "plan_assess",
+        "plan_gap_analysis",
+        "assess",
+        "analyze_gaps",
     }
 
 
@@ -62,4 +65,6 @@ def test_rail_pause_not_force_manual_by_default() -> None:
 def test_accepted_includes_legacy_origins() -> None:
     assert "plan_assess" in ACCEPTED_CLARIFICATION_ORIGINS
     assert "assess" in ACCEPTED_CLARIFICATION_ORIGINS
+    assert ORIGIN_PLAN_GENERATE in ACCEPTED_CLARIFICATION_ORIGINS
+    assert ORIGIN_PLAN_GENERATE not in CLARIFICATION_ORIGINS
     assert "plan_assess" not in CLARIFICATION_ORIGINS
