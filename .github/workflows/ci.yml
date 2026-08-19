@@ -33,8 +33,11 @@ jobs:
 
     - name: Install system dependencies
       run: |
+        # Pin to canonical archive; Azure mirror (azure.archive.ubuntu.com) is flaky
+        sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
         sudo apt-get update
         sudo apt-get install -y libxml2-dev libxslt-dev ripgrep silversearcher-ag
+      timeout-minutes: 5
 
     - name: Install dependencies (workspace)
       run: uv sync --frozen --all-packages --all-extras
@@ -76,8 +79,11 @@ jobs:
 
     - name: Install system dependencies
       run: |
+        # Pin to canonical archive; Azure mirror (azure.archive.ubuntu.com) is flaky
+        sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
         sudo apt-get update
         sudo apt-get install -y libxml2-dev libxslt-dev
+      timeout-minutes: 5
 
     - name: Install dependencies (workspace)
       run: uv sync --frozen --all-packages --all-extras
