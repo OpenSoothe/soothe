@@ -164,3 +164,55 @@ class TestStepDAGProperties:
         assert dag.completed_step_ids() == {"S1"}
         assert dag.pending_step_ids() == {"S2"}
         assert dag.failed_step_ids() == set()
+
+
+class TestStepDAGDecomposeStatuses:
+    """RFC-904 / IG-751 status and tree_green helpers."""
+
+    def test_decomposed_not_ready(self) -> None:
+        dag = StepDAG()
+        dag.add_step(StepNode(id="R", description="root"))
+        dag.mark_decomposed("R")
+        assert dag.ready_steps() == set()
+        assert dag.nodes["R"].status == "decomposed"
+
+    def test_superseded_not_ready(self) -> None:
+        dag = StepDAG()
+        dag.add_step(StepNode(id="S1", description="old"))
+        dag.mark_superseded("S1")
+        assert dag.ready_steps() == set()
+
+    def test_tree_green_single_completed_root(self) -> None:
+        dag = StepDAG()
+        dag.add_step(StepNode(id="R", description="root"))
+        dag.mark_completed("R", StepExecution())
+        assert dag.tree_green() is True
+
+    def test_tree_green_with_decomposed_parent_and_completed_leaf(self) -> None:
+        dag = StepDAG()
+        dag.add_step(StepNode(id="R", description="root"))
+        dag.add_step(StepNode(id="C1", description="child", parent_step_id="R"))
+        dag.mark_decomposed("R")
+        dag.mark_completed("C1", StepExecution())
+        assert dag.tree_green() is True
+
+    def test_tree_green_false_when_pending(self) -> None:
+        dag = StepDAG()
+        dag.add_step(StepNode(id="R", description="root"))
+        assert dag.tree_green() is False
+
+    def test_tree_green_false_when_failed(self) -> None:
+        dag = StepDAG()
+        dag.add_step(StepNode(id="R", description="root"))
+        dag.mark_failed("R", StepExecution(error="x"))
+        assert dag.tree_green() is False
+
+    def test_lineage_depth(self) -> None:
+        dag = StepDAG()
+        dag.add_step(StepNode(id="R", description="root"))
+        dag.add_step(StepNode(id="A", description="a", parent_step_id="R"))
+        dag.add_step(StepNode(id="B", description="b", parent_step_id="A"))
+        assert dag.lineage_depth("R") == 1
+        assert dag.lineage_depth("A") == 2
+        assert dag.lineage_depth("B") == 3
+        assert dag.lineage_depth("missing") == 0

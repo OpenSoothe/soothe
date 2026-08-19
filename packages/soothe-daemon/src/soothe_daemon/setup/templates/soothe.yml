@@ -122,6 +122,16 @@ agent:
     enabled: true
     # Shared StrangeLoop budget (interactive + Autopilot workers). Do not redefine under autopilot.
     max_iterations: 99
+    # Recursive step decomposition (RFC-904). Keep disabled until IG-751 cutover.
+    decompose:
+      enabled: false
+      max_depth: 5
+      max_steps: 50
+      max_recompose: 2
+      max_waves: 10
+      max_branch_root: 5
+      max_branch_inner: 3
+      reconcile_model_role: fast
     max_plan_steps_per_wave: 10
     max_tool_calls_per_step: 100
     dispatch_idle_seconds: 300

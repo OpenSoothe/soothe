@@ -1187,6 +1187,59 @@ class StrangeLoopRulesConfig(BaseModel):
     plan_safety: PlanSafetyRulesConfig = Field(default_factory=PlanSafetyRulesConfig)
 
 
+class DecomposeLoopConfig(BaseModel):
+    """Recursive step decomposition budgets (RFC-904 / IG-751).
+
+    When ``enabled`` is false, StrangeLoop keeps the plan/eval spine. When true
+    (after cutover), DISPATCH/RECONCILE/ROOT_EVAL owns the loop.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable recursive step decomposition (RFC-904). Default off until cutover.",
+    )
+    max_depth: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Max parent_step_id lineage depth per goal.",
+    )
+    max_steps: int = Field(
+        default=50,
+        ge=1,
+        le=500,
+        description="Max total StepNodes per goal (including superseded).",
+    )
+    max_recompose: int = Field(
+        default=2,
+        ge=0,
+        le=20,
+        description="Max B-lazy recompose attempts per lineage replacement chain.",
+    )
+    max_waves: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Max root gap re-dispatch waves (replaces max-iterations for decompose path).",
+    )
+    max_branch_root: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Max children per root-level decompose_task proposal.",
+    )
+    max_branch_inner: int = Field(
+        default=3,
+        ge=1,
+        le=50,
+        description="Max children per non-root decompose_task proposal.",
+    )
+    reconcile_model_role: str = Field(
+        default="fast",
+        description="Router model role for conflict-triggered CE reconcile LLM.",
+    )
+
+
 class StrangeLoopConfig(BaseModel):
     """Configuration for agent loop execution mode (RFC-201, unified config).
 
@@ -1235,6 +1288,7 @@ class StrangeLoopConfig(BaseModel):
         plan_evaluate_gap_leg_timeout_seconds: Soft timeout per parallel inventory leg.
         plan_evaluate_prompt: Evaluate projection/envelope knobs (inventory + assess).
         goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default ``default``).
+        decompose: Recursive step decomposition budgets (RFC-904); ``enabled`` default false.
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
     parallel_pre_stream) are always enabled by design and not configurable.
@@ -1613,6 +1667,11 @@ class StrangeLoopConfig(BaseModel):
     rules: StrangeLoopRulesConfig = Field(
         default_factory=StrangeLoopRulesConfig,
         description="Declarative completion, scenario, and plan-safety thresholds",
+    )
+
+    decompose: DecomposeLoopConfig = Field(
+        default_factory=DecomposeLoopConfig,
+        description="Recursive step decomposition (RFC-904); enabled default false.",
     )
 
 

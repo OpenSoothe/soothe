@@ -3,12 +3,18 @@
 Located in soothe.context as foundational infrastructure.
 """
 
+from soothe.context.decomposition import (
+    DecompositionProposal,
+    ProposedSubtask,
+    StepOutcome,
+)
 from soothe.context.engine import ContextEngine
 from soothe.context.ledger import LedgerManager
 from soothe.context.models import (
     BLOCKED_STATES,
     TERMINAL_STATES,
     EvidenceEntry,
+    ExecutionHint,
     GoalNode,
     GoalStatus,
     GoalStepDAG,
@@ -29,7 +35,11 @@ __all__ = [
     "ContextBundle",
     "ProjectionConfig",
     "ProjectionEngine",
+    "DecompositionProposal",
+    "ProposedSubtask",
+    "StepOutcome",
     "EvidenceEntry",
+    "ExecutionHint",
     "GoalNode",
     "StepNode",
     "StepExecution",
