@@ -3,12 +3,12 @@
 **RFC**: 201
 **Title**: StrangeLoop Plan-Execute Loop Architecture (Consolidated)
 **Status**: Implemented (Partially Superseded)
-**Partially Superseded By**: RFC-220 (§loop driver), RFC-222 (GoalEngine daemon-ownership), RFC-225 (loop-centric model)
+**Partially Superseded By**: RFC-220 (§loop driver), RFC-222 (GoalEngine daemon-ownership), RFC-225 (loop-centric model), RFC-904 (recursive step decomposition — upfront plan waves)
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Last Updated**: 2026-08-08
+**Last Updated**: 2026-08-19
 **Dependencies**: RFC-000, RFC-001, RFC-100
-**Related**: RFC-203 (State), RFC-207 (Thread), RFC-213 (Reasoning), RFC-219 (Goal Completion), RFC-220 (LangGraph Orchestrator)
+**Related**: RFC-203 (State), RFC-207 (Thread), RFC-213 (Reasoning), RFC-219 (Goal Completion), RFC-220 (LangGraph Orchestrator), RFC-904
 
 ---
 
@@ -21,8 +21,9 @@
 | §Thread continuation | Replaced | RFC-225 (loop-centric derivation) |
 | §Goal completion flow | Extracted | RFC-219 (GoalCompletionModule) |
 | §Plan assessment | Enhanced | RFC-213 (two-phase reasoning) |
+| §Plan-Execute upfront plan waves | Partially superseded | RFC-904 (goal-as-root + do-or-decompose) |
 
-**Preserved sections**: Plan-Execute structure, CoreAgent delegation, evidence accumulation
+**Preserved sections**: CoreAgent delegation, evidence accumulation (until RFC-904 cutover retires evidence stations)
 
 ---
 

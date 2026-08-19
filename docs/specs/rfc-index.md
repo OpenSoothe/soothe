@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-08-18
-**Total RFCs**: 91 (82 active, 9 archived, 7 reclassified, 2 process specifications)
+**Last Updated**: 2026-08-19
+**Total RFCs**: 92 (83 active, 9 archived, 7 reclassified, 2 process specifications)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -134,7 +134,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 - **RFC-201**: [StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)](RFC-201-strangeloop-plan-execute-loop.md)
   - Kind: Architecture Design
   - Status: Implemented (Partially Superseded)
-  - Partially Superseded By: RFC-220 (§loop driver)
+  - Partially Superseded By: RFC-220 (§loop driver); RFC-904 (upfront plan waves)
   - Created: 2026-04-17
 
 - **RFC-203**: [StrangeLoop State & Memory Architecture](../archive/specs/RFC-203-strangeloop-state-memory.md) ⚠️ **ARCHIVED**
@@ -169,6 +169,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-04-17
   - Authors: Claude Code
+  - Partially Superseded By: RFC-904 (assess+generate → ROOT_EVAL + decompose_task)
 
 - **RFC-214**: [Volatility-Tiered Prompt Architecture & Unified Message Ledger](RFC-214-strangeloop-loop-message-surface.md)
   - Kind: Architecture Design
@@ -203,6 +204,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-05-05
   - Implemented: 2026-08-11
   - Supersedes: RFC-201 §loop driver (imperative Plan → Execute driver)
+  - Partially Superseded By: RFC-903 (node lifecycle); RFC-904 (recursive step decomposition)
 
 - **RFC-221**: [LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution](RFC-221-loop-runner-protocol-and-ray.md)
   - Kind: Architecture Design
@@ -589,6 +591,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Updated: 2026-06-15
   - Depends on: RFC-000, RFC-200, RFC-201, RFC-214, RFC-803
   - Authors: Soothe Team
+  - Amended by: RFC-904 (StepDAG reconcile / status extensions)
 
 - **RFC-625**: [AutopilotMonitor as ContextEngine Monitor Submodule — GoalEngine Deletion](RFC-625-autopilot-monitor-context-engine-unification.md)
   - Kind: Architecture Design
@@ -640,6 +643,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Depends on: RFC-220, RFC-225, RFC-226, RFC-503
   - Extends: RFC-225 (intent taxonomy), RFC-220 (orchestrator topology)
   - Supersedes: IG-518 `_is_likely_agentic` heuristic bypass
+  - Partially Superseded By: RFC-904 (Pass 2 removed; Pass 1 retained)
   - Authors: Xiaming Chen
 
 - **RFC-631**: [Goal-Bound Display Snapshots](RFC-631-goal-display-snapshots.md)
@@ -736,10 +740,19 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 - **RFC-903**: [Sloop Graph Topology and Node Lifecycle](RFC-903-sloop-graph-topology.md)
   - Kind: Architecture Design
-  - Status: Draft
+  - Status: Proposed
   - Created: 2026-08-18
   - Dependencies: RFC-220, RFC-604, RFC-622, RFC-633, RFC-803
   - Revises: RFC-220 §Loop Graph Topology, §State and Schemas (node contract)
+  - Further revised by: RFC-904
+
+- **RFC-904**: [Sloop Recursive Step Decomposition](RFC-904-sloop-recursive-decomposition.md)
+  - Kind: Architecture Design
+  - Status: Proposed
+  - Created: 2026-08-19
+  - Dependencies: RFC-220, RFC-624, RFC-630, RFC-903, RFC-622, RFC-219, RFC-803
+  - Revises: RFC-220 topology (plan/eval spine); RFC-201 upfront plan waves; RFC-213 assess+generate; RFC-624 StepDAG; RFC-630 Pass 2
+  - Design draft: `docs/archive/drafts/2026-08-19-sloop-recursive-decomposition-design.md`
 
 ---
 
@@ -769,6 +782,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 | RFC | Title | Status | Created |
 |-----|-------|--------|---------|
+| RFC-904 | Sloop Recursive Step Decomposition | Proposed | 2026-08-19 |
 | RFC-903 | Sloop Graph Topology and Node Lifecycle | Proposed | 2026-08-18 |
 | RFC-232 | Flat WavePlan Wire Ingest (Semi-Structured, No Nesting) | Draft | 2026-08-07 |
 | RFC-231 | LoopRail and Rail Exec (Composable Verb Bodies) | Draft | 2026-08-07 |

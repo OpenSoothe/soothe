@@ -5,15 +5,18 @@
 **Status**: Implemented (Phases 1, 3a–3d, 4 Stage 1 done; Phase 4 Stage 2 in progress)
 **Kind**: Architecture Design
 **Created**: 2026-06-12
-**Updated**: 2026-08-08 (report-commit API addendum; workspace inherit 2026-08-04)
+**Updated**: 2026-08-19 (RFC-904 StepDAG reconcile / status extensions)
 **Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (StrangeLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-803 (Persistence Backend)
-**Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture), RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification — `commit_goal_report`), RFC-626 (Entity Model and State Management Consolidation), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-680](../archive/impl/IG-680-autopilot-dag-health-evidence-deps.md)
+**Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture), RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification — `commit_goal_report`), RFC-626 (Entity Model and State Management Consolidation), RFC-904 (recursive step decomposition), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-680](../archive/impl/IG-680-autopilot-dag-health-evidence-deps.md)
+**Amended by**: RFC-904 (§StepDAG statuses/fields, proposal reconcile, Step Context Registry)
 
 ---
 
 ## Abstract
 
 This RFC introduces `ContextEngine`, a unified interface for context management across Soothe's GoalEngine (goal-level) and StrangeLoop (execution-level). ContextEngine consolidates scattered context handling — goal DAG, step DAG, message ledger, working memory, and project instructions — into a single module with clear ownership boundaries. It provides a unified Goal+Step DAG data structure with lineage tracking, a bounded projection mechanism that outputs structured data for prompt templates, and pluggable persistence.
+
+> **Amendment note (RFC-904):** Recursive step decomposition extends `StepNode` / `StepStatus` (`decomposed`, `superseded`, lineage fields, `replacement_of`), makes CE the active **proposal reconciler** for in-goal StepDAG growth, and retires Step Anchor Registry in favor of a THREAD **Step Context Registry**. Goal-level `apply_llm_subgoals` / goal-directive `"decompose"` remain separate (RFC-625); RFC-904's `decompose_task` is step-scoped only.
 
 Phase 1 delivers ContextEngine as a standalone module in `soothe.context` with no changes to existing code. Phase 2 wires it into GoalEngine. Phase 3 wires it into StrangeLoop via an adapter pattern that guarantees behavioral equivalence with the existing Plan-Exec loop. Phase 4 makes CE the sole data source for goal/step/ledger state, deleting all adapters and trimming LoopState to a thin `ExecutionState` facade holding only execution-only fields.
 

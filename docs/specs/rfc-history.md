@@ -2,12 +2,26 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-08-17
-**Total RFCs**: 90 (81 active + 9 archived)
+**Last Updated**: 2026-08-19
+**Total RFCs**: 91 (82 active + 9 archived)
 
 > Summary statistics (by status and kind) live in [rfc-index.md](rfc-index.md).
 
 ## Recent Changes
+
+### 2026-08-19
+
+- **RFC-904 - Sloop Recursive Step Decomposition**
+  - Status: Proposed
+  - Kind: Architecture Design
+  - Revises: RFC-220 plan/eval spine; RFC-201 upfront plan waves; RFC-213
+    assess+generate; RFC-624 StepDAG; RFC-630 Pass 2 (pass1 retained)
+  - Design draft: `docs/archive/drafts/2026-08-19-sloop-recursive-decomposition-design.md`
+  - Companion header updates: RFC-201, RFC-213, RFC-220, RFC-624, RFC-630,
+    RFC-903
+  - Design draft moved to `docs/archive/drafts/` after formalization
+  - Related RFCs remain **active (partially superseded)** — not archived
+    (RFC-900: only fully Deprecated RFCs archive after 90 days)
 
 ### 2026-08-18
 
