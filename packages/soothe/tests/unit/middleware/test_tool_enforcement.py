@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -14,6 +15,19 @@ from soothe_sdk.intention.models import RoutingClassification
 from soothe.sloop.utils.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
 from soothe.sloop.utils.goal_step_guard import GoalStepGuardMiddleware
 from soothe.sloop.utils.intake_task_guard import IntakeOnlyTaskGuardMiddleware
+
+
+def _run_through_hook(middleware: object, request: ModelRequest) -> ModelRequest:
+    """Drive the real langchain hook so a dead hook name fails the test."""
+    seen: dict[str, ModelRequest] = {}
+
+    async def handler(req: ModelRequest) -> str:
+        seen["request"] = req
+        return "response"
+
+    awrap = getattr(middleware, "awrap_model_call")
+    asyncio.run(awrap(request, handler))
+    return seen["request"]
 
 
 def test_wire_subagent_routing_first_hop_narrows_to_task() -> None:
@@ -31,7 +45,7 @@ def test_wire_subagent_routing_first_hop_narrows_to_task() -> None:
         state={"routing_classification": classification},
     )
 
-    modified = middleware.modify_request(request)
+    modified = _run_through_hook(middleware, request)
     assert len(modified.tools) == 1
     assert getattr(modified.tools[0], "name", None) == "task"
     assert modified.state["_subagent_routing_directive"] == "plugin_agent"
@@ -52,7 +66,7 @@ def test_wire_subagent_routing_after_first_hop_keeps_full_tools() -> None:
         state={"routing_classification": classification},
     )
 
-    modified = middleware.modify_request(request)
+    modified = _run_through_hook(middleware, request)
     assert len(modified.tools) == 2
     assert "_subagent_routing_directive" not in modified.state
 
@@ -74,8 +88,8 @@ def test_intake_only_preferred_subagent_does_not_narrow_tools() -> None:
             tools=[SimpleNamespace(name="search_web"), SimpleNamespace(name="task")],
             state={"routing_classification": classification},
         )
-        scrubbed = guard.modify_request(request)
-        modified = middleware.modify_request(scrubbed)
+        scrubbed = _run_through_hook(guard, request)
+        modified = _run_through_hook(middleware, scrubbed)
         assert len(modified.tools) == 2
         preferred = getattr(modified.state["routing_classification"], "preferred_subagent", None)
         assert preferred is None
@@ -92,7 +106,7 @@ def test_goal_step_guard_keeps_tools_without_synthesis() -> None:
         state={"routing_classification": RoutingClassification(task_complexity="medium")},
     )
     with patch("langgraph.config.get_config", return_value={"configurable": {"thread_id": "t1"}}):
-        modified = middleware.modify_request(request)
+        modified = _run_through_hook(middleware, request)
 
     assert len(modified.tools) == 2
     assert "_subagent_routing_directive" not in modified.state
@@ -111,6 +125,6 @@ def test_goal_synthesis_disables_tools() -> None:
         "langgraph.config.get_config",
         return_value={"configurable": {SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY: True}},
     ):
-        modified = middleware.modify_request(request)
+        modified = _run_through_hook(middleware, request)
 
     assert modified.tools == []

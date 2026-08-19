@@ -15,8 +15,6 @@ from soothe.prompts.system_templates import (
 from soothe.sloop.intention.prompts import (
     INTAKE_PASS1_HUMAN_TASK,
     INTAKE_PASS1_SYSTEM_PROMPT,
-    INTAKE_PASS2_HUMAN_TASK,
-    INTAKE_PASS2_SYSTEM_PROMPT,
 )
 from soothe.sloop.prompts.fragments import (
     EXECUTION_POLICIES_FRAGMENT,
@@ -49,9 +47,7 @@ def test_xml_fragments_omit_internal_terms(path: Path) -> None:
     ("label", "text"),
     [
         ("intake_pass1_system", INTAKE_PASS1_SYSTEM_PROMPT),
-        ("intake_pass2_system", INTAKE_PASS2_SYSTEM_PROMPT),
         ("intake_pass1_human_task", INTAKE_PASS1_HUMAN_TASK),
-        ("intake_pass2_human_task", INTAKE_PASS2_HUMAN_TASK),
         ("plan_assess", PLAN_ASSESS_INSTRUCTIONS_FRAGMENT),
         ("plan_generate", PLAN_GENERATE_INSTRUCTIONS_FRAGMENT),
         ("plan_continuation", PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT),

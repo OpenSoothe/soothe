@@ -11,7 +11,6 @@ from .models import (
     IntakeLabel,
     IntakePass1Confidence,
     IntakePass1LLMResult,
-    IntakePass2LLMResult,
     IntakeScope,
     IntentClassification,
     ResponseLanguage,
@@ -20,7 +19,6 @@ from .models import (
     build_loop_routing_classification,
     intent_classification_from_intake_scope,
     intent_classification_from_pass1_task,
-    intent_classification_from_pass2,
     normalize_response_language,
     parse_intake_scope,
 )
@@ -33,7 +31,6 @@ __all__ = [
     "IntakePass1Classifier",
     "IntakePass1Confidence",
     "IntakePass1LLMResult",
-    "IntakePass2LLMResult",
     "IntakeScope",
     "IntentClassification",
     "ResponseLanguage",
@@ -45,7 +42,6 @@ __all__ = [
     "build_pass1_task_fallback",
     "intent_classification_from_intake_scope",
     "intent_classification_from_pass1_task",
-    "intent_classification_from_pass2",
     "normalize_response_language",
     "parse_intake_scope",
 ]

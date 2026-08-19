@@ -1,4 +1,4 @@
-"""Tests for two-pass intake classification (RFC-630)."""
+"""Tests for Pass1-only intake classification (RFC-630 / RFC-904)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,7 +10,6 @@ from soothe.sloop.intention.models import (
     IntakeLabel,
     IntakePass1Confidence,
     IntakePass1LLMResult,
-    IntakePass2LLMResult,
     IntakeScope,
     ResponseLanguage,
     derive_task_complexity_from_intake,
@@ -20,8 +19,6 @@ from soothe.sloop.intention.models import (
 from soothe.sloop.intention.prompts import (
     INTAKE_PASS1_HUMAN_TASK,
     INTAKE_PASS1_SYSTEM_PROMPT,
-    INTAKE_PASS2_HUMAN_TASK,
-    INTAKE_PASS2_SYSTEM_PROMPT,
 )
 from soothe.sloop.intention.two_pass_coordinator import TwoPassIntakeResult
 
@@ -79,8 +76,8 @@ class TestClientIntakeScope:
         assert "intake_scope=trivial" in (intent.reasoning or "")
 
 
-class TestTwoPassPrompts:
-    """Prompt content guards for two-pass intake."""
+class TestPass1Prompts:
+    """Prompt content guards for Pass 1 intake."""
 
     def test_pass1_prompt_has_social_and_work_rules(self) -> None:
         assert "SOCIAL" in INTAKE_PASS1_SYSTEM_PROMPT
@@ -99,11 +96,6 @@ class TestTwoPassPrompts:
         assert "≤25 words" in prompt
         assert "≤15 words" not in prompt
 
-    def test_pass2_prompt_has_scope_labels(self) -> None:
-        for label in ("trivial", "simple", "complex"):
-            assert label in INTAKE_PASS2_SYSTEM_PROMPT
-        assert "chitchat" not in INTAKE_PASS2_SYSTEM_PROMPT.lower()
-
     def test_pass1_human_task_is_compact(self) -> None:
         assert INTAKE_PASS1_HUMAN_TASK == "Classify the user message above. JSON only."
         assert "Identity replies" not in INTAKE_PASS1_HUMAN_TASK
@@ -112,29 +104,15 @@ class TestTwoPassPrompts:
         assert "Continue and fix the failing unit tests" in INTAKE_PASS1_SYSTEM_PROMPT
         assert "continuation-led pivot" in INTAKE_PASS1_SYSTEM_PROMPT.lower()
 
-    def test_pass2_human_task_mentions_scope(self) -> None:
-        assert "scope" in INTAKE_PASS2_HUMAN_TASK.lower()
-
-    def test_pass2_prompt_requires_first_person_reasoning(self) -> None:
-        prompt = INTAKE_PASS2_SYSTEM_PROMPT
-        assert "first-person" in prompt
-        assert "I'll / Let me" in prompt
-        assert "≤25 words" in prompt
-        assert "≤15 words" not in prompt
-        assert "multi_phase" in prompt
-        assert "wire_subagent" not in prompt
-        assert "first scan the repo and then run tests" in prompt
-
 
 @pytest.mark.asyncio
 class TestIntakeClassifier:
-    """Test the two-pass intake classifier with mocked LLM (RFC-630)."""
+    """Test the Pass1-only intake classifier with mocked LLM (RFC-904)."""
 
     def _mock_two_pass_result(
         self,
         *,
         is_task: bool,
-        intake_label: IntakeLabel,
         reasoning: str | None = None,
         social_response: str | None = None,
     ) -> TwoPassIntakeResult:
@@ -142,48 +120,35 @@ class TestIntakeClassifier:
             is_task=is_task,
             confidence=IntakePass1Confidence.HIGH,
             social_response=social_response,
-            reasoning=reasoning or "test",
+            reasoning="test" if reasoning is None else reasoning,
         )
-        if not is_task:
-            return TwoPassIntakeResult(pass1)
-        pass2 = IntakePass2LLMResult(
-            scope=IntakeScope(intake_label),
-            reasoning=reasoning if reasoning is not None else "test",
-        )
-        return TwoPassIntakeResult(pass1, pass2)
+        return TwoPassIntakeResult(pass1)
 
-    async def test_trivial_intake_classification(self) -> None:
+    async def test_task_intake_uses_complex_compatibility_label(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
-        mock_result = self._mock_two_pass_result(
-            is_task=True,
-            intake_label=IntakeLabel.TRIVIAL,
-        )
+        mock_result = self._mock_two_pass_result(is_task=True)
         with patch.object(
             classifier._two_pass, "classify", new_callable=AsyncMock
         ) as mock_classify:
             mock_classify.return_value = mock_result
             result = await classifier.classify_intake("summarize readme")
-        assert result.intake_label == IntakeLabel.TRIVIAL
+        assert result.intake_label == IntakeLabel.COMPLEX
 
     async def test_weather_query_uses_llm_intake(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
-        mock_result = self._mock_two_pass_result(
-            is_task=True,
-            intake_label=IntakeLabel.TRIVIAL,
-        )
+        mock_result = self._mock_two_pass_result(is_task=True)
         with patch.object(
             classifier._two_pass, "classify", new_callable=AsyncMock
         ) as mock_classify:
             mock_classify.return_value = mock_result
             result = await classifier.classify_intake("北京今天的天气")
         mock_classify.assert_awaited_once()
-        assert result.intake_label == IntakeLabel.TRIVIAL
+        assert result.intake_label == IntakeLabel.COMPLEX
 
     async def test_complex_intake_classification(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         mock_result = self._mock_two_pass_result(
             is_task=True,
-            intake_label=IntakeLabel.COMPLEX,
             reasoning="multi-step refactor",
         )
         with patch.object(
@@ -199,23 +164,19 @@ class TestIntakeClassifier:
             "Please help me refactor the authentication module to use OAuth2 "
             "with PKCE flow and update all the tests"
         )
-        mock_result = self._mock_two_pass_result(
-            is_task=True,
-            intake_label=IntakeLabel.TRIVIAL,
-        )
+        mock_result = self._mock_two_pass_result(is_task=True)
         with patch.object(
             classifier._two_pass, "classify", new_callable=AsyncMock
         ) as mock_classify:
             mock_classify.return_value = mock_result
             result = await classifier.classify_intake(long_query)
         mock_classify.assert_awaited()
-        assert result.intake_label == IntakeLabel.TRIVIAL
+        assert result.intake_label == IntakeLabel.COMPLEX
 
     async def test_identity_query_uses_llm_intake(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="Soothe")
         mock_result = self._mock_two_pass_result(
             is_task=False,
-            intake_label=IntakeLabel.CHITCHAT,
             social_response=(
                 "I'm Soothe, an AI assistant invented by Dr. Xiaming Chen. "
                 "How can I help you today?"
@@ -241,11 +202,7 @@ class TestIntakeClassifier:
 
     async def test_patch_missing_reasoning_uses_first_person(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
-        mock_result = self._mock_two_pass_result(
-            is_task=True,
-            intake_label=IntakeLabel.SIMPLE,
-            reasoning="",
-        )
+        mock_result = self._mock_two_pass_result(is_task=True, reasoning="")
         with patch.object(
             classifier._two_pass, "classify", new_callable=AsyncMock
         ) as mock_classify:

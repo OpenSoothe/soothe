@@ -1511,13 +1511,28 @@ class LoopState(BaseModel):
         """Step IDs that satisfy ``StepAction.dependencies`` edges.
 
         Combines ``completed_step_ids`` with every successful ``step_results`` ID so
-        cross-wave dependencies keep resolving after replans.
+        cross-wave dependencies keep resolving after replans. Decomposed parents
+        are included so a delegated step is never re-dispatched into a THREAD.
 
         Returns:
             Union of completed IDs for dependency checks.
         """
         historical = {r.step_id for r in self.step_results if r.success}
-        return set(self.completed_step_ids) | historical
+        return set(self.completed_step_ids) | historical | self.decomposed_step_ids()
+
+    def decomposed_step_ids(self) -> set[str]:
+        """Step IDs delegated to children by reconcile. Empty without CE."""
+        if self._ce is None:
+            return set()
+        try:
+            goal = self._ce.get_goal_sync(self._ce_goal_id)
+        except Exception:
+            logger.warning("decomposed_step_ids: CE query failed", exc_info=True)
+            return set()
+        if goal is None:
+            return set()
+        decomposed = goal.steps.decomposed_step_ids()
+        return set(decomposed) if isinstance(decomposed, set | frozenset | list) else set()
 
     def known_plan_ids(self) -> set[str]:
         """Plan scope ids already used in this loop for replan prefix stripping."""

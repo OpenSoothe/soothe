@@ -103,13 +103,13 @@ def test_intake_invoke_config_without_span_stays_trace_pinned() -> None:
     assert base.with_intake_parent_span(None) is base
 
     out = base.intake_invoke_config(
-        purpose="classify_pass2",
-        component="classifier.intake.pass2",
-        phase="intake_pass2",
+        purpose="classify_pass1",
+        component="classifier.intake.pass1",
+        phase="intake_pass1",
     )
     handler = out["callbacks"][0]
     assert handler.trace_context == {"trace_id": "trace-goal-1"}
-    assert out["run_name"] == "soothe-dev:intake-pass2"
+    assert out["run_name"] == "soothe-dev:intake-pass1"
 
 
 def test_pinned_llm_invoke_config_uses_explicit_run_name() -> None:

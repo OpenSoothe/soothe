@@ -13,12 +13,10 @@ from .models import (
     IntakeLabel,
     IntakePass1Confidence,
     IntakePass1LLMResult,
-    IntakePass2LLMResult,
     IntakeScope,
     IntentClassification,
     ResponseLanguage,
     intent_classification_from_pass1_task,
-    intent_classification_from_pass2,
 )
 from .pass1_classifier import IntakePass1Classifier, build_pass1_task_fallback
 
@@ -41,25 +39,14 @@ class TwoPassIntakeResult:
     __slots__ = (
         "_is_task",
         "_pass1_result",
-        "_pass2_result",
         "_intent_classification",
     )
 
-    def __init__(
-        self,
-        pass1_result: IntakePass1LLMResult,
-        pass2_result: IntakePass2LLMResult | None = None,
-    ) -> None:
+    def __init__(self, pass1_result: IntakePass1LLMResult) -> None:
         self._is_task = pass1_result.is_task
         self._pass1_result = pass1_result
-        self._pass2_result = pass2_result
 
-        if pass1_result.is_task and pass2_result is not None:
-            self._intent_classification = intent_classification_from_pass2(
-                pass2_result,
-                response_language=pass1_result.response_language,
-            )
-        elif pass1_result.is_task:
+        if pass1_result.is_task:
             self._intent_classification = intent_classification_from_pass1_task(pass1_result)
         else:
             self._intent_classification = None
@@ -83,19 +70,15 @@ class TwoPassIntakeResult:
 
     @property
     def scope(self) -> IntakeScope | None:
-        """Legacy scope field; None when Pass 2 is not used."""
-        if not self._is_task or self._pass2_result is None:
-            return None
-        return self._pass2_result.scope
+        """Legacy scope field; always None after Pass 2 removal."""
+        return None
 
     @property
     def intake_label(self) -> IntakeLabel | None:
         """Final intake label (chitchat or task→complex compatibility)."""
         if not self._is_task:
             return IntakeLabel.CHITCHAT
-        if self._pass2_result is None:
-            return IntakeLabel.COMPLEX
-        return self._pass2_result.to_intake_label()
+        return IntakeLabel.COMPLEX
 
     @property
     def intent_classification(self) -> IntentClassification | None:

@@ -315,45 +315,6 @@ def intent_classification_from_intake_scope(
     )
 
 
-class IntakePass2LLMResult(BaseModel):
-    """Structured output from Pass 2: scope classification (RFC-630).
-
-    Pass 2 classifies work scope as trivial, simple, or complex. Prior-goal
-    projection is included for reference resolution ("apply it"). The model
-    does not see ``chitchat`` as an option — Pass 1 already decided social vs task.
-
-    Args:
-        scope: Work scope: trivial (single action), simple (focused step), complex (multi-step).
-        reasoning: First-person TUI line (I'll / Let me …), ≤25 words.
-    """
-
-    scope: IntakeScope = Field(
-        description="Work scope: trivial (single action, no planning), "
-        "simple (focused step, light planning), complex (multi-step, full plan)"
-    )
-    reasoning: str = Field(
-        description=(
-            "First-person agent line for the TUI cognition card (I'll / Let me …), "
-            "≤25 words; not third-person scope commentary"
-        ),
-    )
-    multi_phase: bool = Field(
-        default=False,
-        description="True when the goal implies multiple ordered execution phases",
-    )
-    requires_tool_use: bool = Field(
-        default=False,
-        description=(
-            "True when answering requires external/live data or tool execution "
-            "(weather, web lookup, file contents). False for pure reasoning/math."
-        ),
-    )
-
-    def to_intake_label(self) -> IntakeLabel:
-        """Convert scope to IntakeLabel for routing."""
-        return IntakeLabel(self.scope)
-
-
 def intent_classification_from_pass1_task(
     pass1_result: IntakePass1LLMResult,
 ) -> IntentClassification:
@@ -368,22 +329,4 @@ def intent_classification_from_pass1_task(
         chitchat_response=None,
         response_language=pass1_result.response_language,
         task_complexity=derive_task_complexity_from_intake(IntakeLabel.COMPLEX),
-    )
-
-
-def intent_classification_from_pass2(
-    pass2_result: IntakePass2LLMResult,
-    *,
-    response_language: ResponseLanguage | None = None,
-) -> IntentClassification:
-    """Build ``IntentClassification`` from a Pass 2 scope result (legacy)."""
-    intake_label = pass2_result.to_intake_label()
-    return IntentClassification(
-        intake_label=intake_label,
-        reasoning=pass2_result.reasoning,
-        chitchat_response=None,
-        multi_phase=pass2_result.multi_phase,
-        requires_tool_use=pass2_result.requires_tool_use,
-        response_language=response_language,
-        task_complexity=derive_task_complexity_from_intake(intake_label),
     )

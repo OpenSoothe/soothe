@@ -1,7 +1,6 @@
-"""LLM prompts for two-pass intake classification (RFC-630).
+"""LLM prompts for Pass 1 intake classification (RFC-630 / RFC-904).
 
 - ``INTAKE_PASS1_SYSTEM_PROMPT``: Social vs task (no prior context).
-- ``INTAKE_PASS2_SYSTEM_PROMPT``: Scope (trivial/simple/complex).
 """
 
 from __future__ import annotations
@@ -26,7 +25,6 @@ def build_prompt_timestamp_block() -> str:
 
 
 INTAKE_PASS1_SYSTEM_PROMPT = _read_intake_fragment("pass1_system.xml")
-INTAKE_PASS2_SYSTEM_PROMPT = _read_intake_fragment("pass2_system.xml")
 INTAKE_PASS1_SOCIAL_REPLY_PROMPT = _read_intake_fragment("pass1_social_reply.xml")
 
 INTAKE_PASS1_HUMAN_TASK = "Classify the user message above. JSON only."
@@ -46,7 +44,6 @@ def build_intake_pass1_human_content(
     return "\n\n".join(parts)
 
 
-INTAKE_PASS2_HUMAN_TASK = "Classify CURRENT_GOAL scope. JSON only."
 INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK = "Write the social_response reply. JSON only."
 
 
@@ -84,8 +81,6 @@ __all__ = [
     "INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK",
     "INTAKE_PASS1_SOCIAL_REPLY_PROMPT",
     "INTAKE_PASS1_SYSTEM_PROMPT",
-    "INTAKE_PASS2_HUMAN_TASK",
-    "INTAKE_PASS2_SYSTEM_PROMPT",
     "build_intake_pass1_human_content",
     "build_intake_pass1_system_prompt",
     "build_prompt_timestamp_block",

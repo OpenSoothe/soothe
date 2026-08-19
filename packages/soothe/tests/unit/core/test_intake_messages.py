@@ -10,8 +10,6 @@ from soothe.sloop.intention import IntentClassifier
 from soothe.sloop.intention.models import (
     IntakePass1Confidence,
     IntakePass1LLMResult,
-    IntakePass2LLMResult,
-    IntakeScope,
 )
 from soothe.sloop.intention.two_pass_coordinator import TwoPassIntakeResult
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -56,10 +54,6 @@ class TestIntakeClassifierLedger:
                 social_response=None,
                 reasoning="task",
             ),
-            IntakePass2LLMResult(
-                scope=IntakeScope.COMPLEX,
-                reasoning="complex",
-            ),
         )
         with patch.object(
             classifier._two_pass, "classify", new_callable=AsyncMock
@@ -90,8 +84,8 @@ class TestIntakePriorGoalProjection:
         assert "Prior goal completed" in projected[0].content
         assert projected[-1].content == "synthesized report"
 
-    def test_intake_pass2_omits_boundary_marker(self) -> None:
-        """Intake Pass 2 projection omits boundary (classifier needs prior scope)."""
+    def test_intake_projection_omits_boundary_marker(self) -> None:
+        """Intake prior-goal projection can omit the planning boundary marker."""
         from soothe.sloop.prompts.plan_ledger_projection import (
             _GOAL_COMPLETION_CONTEXT_BOUNDARY,
             project_last_goal_completion_for_intake,
@@ -103,7 +97,6 @@ class TestIntakePriorGoalProjection:
             LoopHumanMessage(content="finalize", phase="goal_completion"),
             LoopAIMessage(content="synthesized report", phase="goal_completion"),
         ]
-        # Intake Pass 2 uses include_boundary=False for classifier scope signal
         projected = project_last_goal_completion_for_intake(ledger, None, include_boundary=False)
         assert len(projected) == 2
         assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() not in projected[0].content

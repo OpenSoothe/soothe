@@ -1914,9 +1914,13 @@ class Executor:
             if workspace:
                 configurable["workspace"] = workspace
             if self._decompose_enabled():
-                from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_ENABLED_KEY
+                from soothe.sloop.utils.config_keys import (
+                    SOOTHE_DECOMPOSE_ENABLED_KEY,
+                    SOOTHE_DECOMPOSE_STEP_ID_KEY,
+                )
 
                 configurable[SOOTHE_DECOMPOSE_ENABLED_KEY] = True
+                configurable[SOOTHE_DECOMPOSE_STEP_ID_KEY] = step.id
                 from soothe.sloop.decompose.runtime import bind_decompose_runtime
 
                 decompose_tokens = bind_decompose_runtime(

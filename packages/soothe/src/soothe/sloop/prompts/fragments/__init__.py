@@ -50,7 +50,6 @@ EXECUTION_POLICIES_FRAGMENT = _read("execute/execution_policies.xml", strip=True
 # ---------------------------------------------------------------------------
 
 INTAKE_PASS1_SYSTEM_FRAGMENT = _read("intake/pass1_system.xml", strip=True)
-INTAKE_PASS2_SYSTEM_FRAGMENT = _read("intake/pass2_system.xml", strip=True)
 INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT = _read("intake/pass1_social_reply.xml", strip=True)
 
 
@@ -58,7 +57,6 @@ __all__ = [
     "EXECUTION_POLICIES_FRAGMENT",
     "INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT",
     "INTAKE_PASS1_SYSTEM_FRAGMENT",
-    "INTAKE_PASS2_SYSTEM_FRAGMENT",
     "PLAN_ASSESS_INSTRUCTIONS_FRAGMENT",
     "PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT",
     "PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT",

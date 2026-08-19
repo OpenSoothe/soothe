@@ -141,6 +141,10 @@ class StepDAG(BaseModel):
     def completed_step_ids(self) -> set[str]:
         return {cid for cid, n in self.nodes.items() if n.status == "completed"}
 
+    def decomposed_step_ids(self) -> set[str]:
+        """Parents whose own work was delegated to committed children."""
+        return {cid for cid, n in self.nodes.items() if n.status == "decomposed"}
+
     def failed_step_ids(self) -> set[str]:
         return {cid for cid, n in self.nodes.items() if n.status == "failed"}
 

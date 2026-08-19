@@ -12,7 +12,6 @@ _HOST_LOOP_GRAPH_RUN_NAME = "strange-loop-graph"
 _HOST_INTAKE_RUN_NAME = "intake"
 _HOST_INTAKE_PHASE_RUN_NAMES = {
     "intake_pass1": "intake-pass1",
-    "intake_pass2": "intake-pass2",
     "strange_loop_graph": "intake-classify",
 }
 _HOST_EXECUTE_STEP_RUN_NAME = "execute-step"

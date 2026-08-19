@@ -88,10 +88,10 @@ class ReconcileNode(LoopNode):
                 config=cfg,
             )
             logger.info(
-                "[reconcile] committed=%s decomposed=%s rejected=%d",
+                "[reconcile] committed=%s decomposed=%s rejected=%s",
                 result.committed_step_ids,
                 result.decomposed_parent_ids,
-                len(result.rejected),
+                [f"{r.parent_step_id}:{r.reason}" for r in result.rejected],
             )
             try:
                 ctx.ce.defer_save()

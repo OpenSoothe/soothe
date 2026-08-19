@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest
+from langchain.agents.middleware.types import (
+    AgentMiddleware,
+    ContextT,
+    ModelRequest,
+    ModelResponse,
+)
 
 from soothe.sloop.decompose.prompts import (
     WRITE_TODOS_SYSTEM_ADDENDUM,
@@ -13,7 +19,10 @@ from soothe.sloop.decompose.prompts import (
 )
 from soothe.sloop.decompose.runtime import current_step_id
 from soothe.sloop.decompose.tool import build_decompose_task_tool
-from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_ENABLED_KEY
+from soothe.sloop.utils.config_keys import (
+    SOOTHE_DECOMPOSE_ENABLED_KEY,
+    SOOTHE_DECOMPOSE_STEP_ID_KEY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,20 +67,31 @@ def _ensure_decompose_tool(tools: list[Any]) -> list[Any]:
     return [*tools, _DECOMPOSE_TOOL]
 
 
+def _strip_decompose_tool(tools: list[Any]) -> list[Any]:
+    return [t for t in tools if getattr(t, "name", None) != "decompose_task"]
+
+
 class DecomposeTaskMiddleware(AgentMiddleware):
     """Inject ``decompose_task`` + intra-step write_todos guidance on step THREADS.
 
     Active when LangGraph configurable ``soothe_decompose_enabled`` is true and
     a decompose runtime step id is bound. Does not own CE reconcile.
+
+    ``tools`` registers ``decompose_task`` with the agent tool node so the call
+    is executable; visibility to the model stays gated per THREAD.
     """
+
+    tools = [_DECOMPOSE_TOOL]
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         conf = _langgraph_configurable()
-        if not conf.get(SOOTHE_DECOMPOSE_ENABLED_KEY):
-            return request
-        if not current_step_id():
-            return request
+        step_id = current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY)
+        if not conf.get(SOOTHE_DECOMPOSE_ENABLED_KEY) or not step_id:
+            tools = list(request.tools or [])
+            stripped = _strip_decompose_tool(tools)
+            return request.override(tools=stripped) if len(stripped) != len(tools) else request
 
+        logger.debug("[decompose] injecting decompose_task on step %s thread", step_id)
         tools = list(request.tools or [])
         tools = _override_write_todos_description(tools)
         tools = _ensure_decompose_tool(tools)
@@ -97,3 +117,19 @@ class DecomposeTaskMiddleware(AgentMiddleware):
                 return request.override(tools=tools, system_message=new_system)
 
         return request.override(tools=tools)
+
+    def wrap_model_call(
+        self,
+        request: ModelRequest[ContextT],
+        handler: Callable[[ModelRequest[ContextT]], ModelResponse[Any]],
+    ) -> ModelResponse[Any]:
+        """Apply decompose injection before the sync model call."""
+        return handler(self.modify_request(request))
+
+    async def awrap_model_call(
+        self,
+        request: ModelRequest[ContextT],
+        handler: Callable[[ModelRequest[ContextT]], Awaitable[ModelResponse[Any]]],
+    ) -> ModelResponse[Any]:
+        """Apply decompose injection before the async model call."""
+        return await handler(self.modify_request(request))

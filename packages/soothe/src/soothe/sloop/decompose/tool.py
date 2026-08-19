@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from langchain_core.tools import StructuredTool
@@ -14,6 +15,8 @@ from soothe.sloop.decompose.runtime import (
     current_step_id,
     current_wave_seq,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class _DecomposeTaskArgs(BaseModel):
@@ -28,6 +31,11 @@ def _run_decompose_task(task: str, subtasks: list[Any]) -> str:
     step_id = current_step_id()
     sink = current_proposal_sink()
     if not step_id or sink is None:
+        logger.warning(
+            "[decompose] decompose_task called without runtime binding (step_id=%s sink_bound=%s)",
+            step_id,
+            sink is not None,
+        )
         return (
             "Error: decompose_task is only available inside a StrangeLoop step "
             "thread with a proposal sink bound."
@@ -48,6 +56,12 @@ def _run_decompose_task(task: str, subtasks: list[Any]) -> str:
     # task arg is contextual for the model; not stored on the proposal schema
     _ = (task or "").strip()
     sink.append(proposal)
+    logger.info(
+        "[decompose] queued proposal parent=%s subtasks=%d wave=%d",
+        step_id,
+        len(parsed),
+        proposal.wave_seq,
+    )
     return (
         f"Decomposition proposal queued for step {step_id} "
         f"({len(parsed)} subtasks). This thread should end; do not continue working."
