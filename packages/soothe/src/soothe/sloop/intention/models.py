@@ -354,12 +354,29 @@ class IntakePass2LLMResult(BaseModel):
         return IntakeLabel(self.scope)
 
 
+def intent_classification_from_pass1_task(
+    pass1_result: IntakePass1LLMResult,
+) -> IntentClassification:
+    """Build task IntentClassification from Pass 1 only (RFC-904).
+
+    Scope is discovered via do-or-decompose; no Pass 2 label. Uses ``complex``
+    as a compatibility intake_label for legacy fields that still expect one.
+    """
+    return IntentClassification(
+        intake_label=IntakeLabel.COMPLEX,
+        reasoning=pass1_result.reasoning,
+        chitchat_response=None,
+        response_language=pass1_result.response_language,
+        task_complexity=derive_task_complexity_from_intake(IntakeLabel.COMPLEX),
+    )
+
+
 def intent_classification_from_pass2(
     pass2_result: IntakePass2LLMResult,
     *,
     response_language: ResponseLanguage | None = None,
 ) -> IntentClassification:
-    """Build ``IntentClassification`` from a Pass 2 scope result."""
+    """Build ``IntentClassification`` from a Pass 2 scope result (legacy)."""
     intake_label = pass2_result.to_intake_label()
     return IntentClassification(
         intake_label=intake_label,

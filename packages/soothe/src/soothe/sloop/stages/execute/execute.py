@@ -613,6 +613,13 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
 
     ctx.scratch.step_results = step_results
 
+    # RFC-904: hoist decompose proposals off the ephemeral Executor onto scratch
+    # so RECONCILE can commit after THREAD ends.
+    proposals = getattr(run_executor, "decompose_proposals", None)
+    if isinstance(proposals, list) and proposals:
+        ctx.scratch.decompose_proposals.extend(list(proposals))
+        proposals.clear()
+
     # RFC-224: Check context window and compact if needed
     if checkpointer is not None and strange_loop.config is not None:
         try:

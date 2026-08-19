@@ -22,16 +22,21 @@ from typing import Any, Final, Literal, TypedDict
 INTAKE: Final = "intake"
 ENTER_LOOP: Final = "enter_loop"
 
-# --- Plan ---
+# --- Plan (legacy spine; kept for clarification resume / unit tests) ---
 GATHER_EVIDENCE: Final = "gather_evidence"
 EVALUATE: Final = "evaluate"
 GENERATE_PLAN: Final = "generate_plan"
 
-# --- Execute ---
+# --- Execute (legacy spine) ---
 COMMIT_PLAN: Final = "commit_plan"
 EXECUTE: Final = "execute"
 RECORD_PROGRESS: Final = "record_progress"
 CHECK_LIMITS: Final = "check_limits"
+
+# --- Decompose work-queue (RFC-904) ---
+DISPATCH: Final = "dispatch"
+RECONCILE: Final = "reconcile"
+ROOT_EVAL: Final = "root_eval"
 
 # --- Complete ---
 FINALIZE: Final = "finalize"
@@ -79,6 +84,9 @@ _EvidenceGatherRoute = Literal[
     "plan_generate_skip_evaluate",
     "keep_plan",
 ]
+_DispatchRoute = Literal["execute", "root_eval", "fatal"]
+_ReconcileRoute = Literal["dispatch", "root_eval"]
+_RootEvalRoute = Literal["finalize", "dispatch"]
 
 PLAN_ROUTE_GOAL_DONE: PlanRoute = "goal_done"
 PLAN_ROUTE_EXECUTE: PlanRoute = "execute"
@@ -92,6 +100,9 @@ class LoopGraphState(TypedDict, total=False):
     intent_route: _IntentRoute | None
     assess_route: _AssessRoute | None
     evidence_gather_route: _EvidenceGatherRoute | None
+    dispatch_route: _DispatchRoute | None
+    reconcile_route: _ReconcileRoute | None
+    root_eval_route: _RootEvalRoute | None
     intake_label: str | None  # IntakeLabel at runtime
     is_continuation: bool | None
     is_fresh_goal: bool | None
@@ -112,6 +123,7 @@ __all__ = [
     "CHECK_LIMITS",
     "COMMIT_PLAN",
     "DELEGATE",
+    "DISPATCH",
     "ENTER_LOOP",
     "EVALUATE",
     "EXECUTE",
@@ -128,5 +140,7 @@ __all__ = [
     "PLAN_ROUTE_EXECUTE",
     "PLAN_ROUTE_GOAL_DONE",
     "PlanRoute",
+    "RECONCILE",
     "RECORD_PROGRESS",
+    "ROOT_EVAL",
 ]

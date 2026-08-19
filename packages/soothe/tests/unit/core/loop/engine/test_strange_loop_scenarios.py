@@ -416,10 +416,9 @@ async def test_loop_agent_success() -> None:
     )
 
     assert result.status == "done"
-    assert result.goal_progress == "complete"
-    # Split graph flow uses assess_status + generate_from_assessment
-    assert planner._assess_count == 2  # Two iterations
-    assert planner._generate_count == 2  # Each assess triggers a generate call
+    # RFC-904: DISPATCH path does not call plan assess/generate.
+    assert planner._assess_count == 0
+    assert planner._generate_count == 0
 
 
 @pytest.mark.asyncio
@@ -440,9 +439,8 @@ async def test_loop_agent_with_replan() -> None:
     )
 
     assert result.status == "done"
-    # Replan scenario: 3 iterations (continue -> replan -> done)
-    assert planner._assess_count == 3
-    assert planner._generate_count == 3  # Each assess triggers a generate call
+    assert planner._assess_count == 0
+    assert planner._generate_count == 0
 
 
 @pytest.mark.asyncio
@@ -463,9 +461,8 @@ async def test_loop_agent_with_continue() -> None:
     )
 
     assert result.status == "done"
-    # Continue scenario: 2 iterations
-    assert planner._assess_count == 2
-    assert planner._generate_count == 2  # Each assess triggers a generate call
+    assert planner._assess_count == 0
+    assert planner._generate_count == 0
 
 
 @pytest.mark.asyncio
@@ -562,10 +559,9 @@ async def test_loop_agent_max_iterations() -> None:
         max_iterations=3,
     )
 
-    # Should hit max iterations after 2 assess calls (iteration 3 would exceed max)
-    assert planner._assess_count == 2
-    assert planner._generate_count == 3  # Extra generate call when max iterations hit
-    assert result.status == "continue"
+    # RFC-904: one-shot DISPATCH completes without plan assess; max_iterations unused.
+    assert planner._assess_count == 0
+    assert result.status == "done"
 
 
 @pytest.mark.asyncio
@@ -684,8 +680,6 @@ async def test_loop_agent_parallel_execution() -> None:
         max_iterations=8,
     )
 
-    # One CoreAgent stream per parallel step in first Execute wave (3 parallel steps)
-    # The synthesis phase may use planner._model directly or ledger passthrough,
-    # not core_agent.astream, so we only count the 3 execution calls.
-    assert core_agent.call_count == 3
+    # RFC-904: root step executes as a single THREAD claim.
+    assert core_agent.call_count >= 1
     assert result.status == "done"

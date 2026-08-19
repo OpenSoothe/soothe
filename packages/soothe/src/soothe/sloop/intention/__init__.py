@@ -1,12 +1,7 @@
-"""Intent classification module (RFC-225, RFC-630).
+"""Intent classification module (RFC-225, RFC-630 pass1, RFC-904).
 
-Two-pass LLM intake (RFC-630):
-- Pass 1 (social vs task) via ``IntakePass1Classifier``.
-- Pass 2 (scope: trivial|simple|complex) via ``IntakePass2Classifier``.
-- Full orchestration via ``TwoPassIntakeCoordinator``.
-
-Loop continuation is derived structurally inside ``StrangeLoop`` from the
-loaded checkpoint, not classified here.
+Pass 1 (social vs task) via ``IntakePass1Classifier``.
+Pass 2 scope classification is removed; tasks enter do-or-decompose.
 """
 
 from __future__ import annotations
@@ -24,12 +19,12 @@ from .models import (
     TaskComplexity,
     build_loop_routing_classification,
     intent_classification_from_intake_scope,
+    intent_classification_from_pass1_task,
     intent_classification_from_pass2,
     normalize_response_language,
     parse_intake_scope,
 )
 from .pass1_classifier import IntakePass1Classifier, build_pass1_task_fallback
-from .pass2_classifier import IntakePass2Classifier
 from .two_pass_coordinator import TwoPassIntakeCoordinator, TwoPassIntakeResult
 
 __all__ = [
@@ -38,7 +33,6 @@ __all__ = [
     "IntakePass1Classifier",
     "IntakePass1Confidence",
     "IntakePass1LLMResult",
-    "IntakePass2Classifier",
     "IntakePass2LLMResult",
     "IntakeScope",
     "IntentClassification",
@@ -50,6 +44,7 @@ __all__ = [
     "build_loop_routing_classification",
     "build_pass1_task_fallback",
     "intent_classification_from_intake_scope",
+    "intent_classification_from_pass1_task",
     "intent_classification_from_pass2",
     "normalize_response_language",
     "parse_intake_scope",

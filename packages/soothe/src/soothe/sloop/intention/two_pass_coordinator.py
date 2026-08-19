@@ -1,8 +1,7 @@
-"""Two-pass intake coordinator (RFC-630).
+"""Pass1-only intake coordinator (RFC-630 pass1 + RFC-904).
 
-Orchestrates Pass 1 (social vs task) and Pass 2 (scope) classification.
-Pass 1 runs first; if social, returns immediately without Pass 2.
-If task, Pass 2 runs with prior projection for scope classification.
+Orchestrates Pass 1 (social vs task). Pass 2 scope classification is removed;
+tasks enter do-or-decompose without trivial/simple/complex pre-routing.
 """
 
 from __future__ import annotations
@@ -18,10 +17,10 @@ from .models import (
     IntakeScope,
     IntentClassification,
     ResponseLanguage,
+    intent_classification_from_pass1_task,
     intent_classification_from_pass2,
 )
 from .pass1_classifier import IntakePass1Classifier, build_pass1_task_fallback
-from .pass2_classifier import IntakePass2Classifier
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -32,11 +31,11 @@ logger = logging.getLogger(__name__)
 
 
 class TwoPassIntakeResult:
-    """Result from two-pass intake classification.
+    """Result from Pass 1 intake classification.
 
     Either:
     - is_task=False with social_response (chitchat fast-path)
-    - is_task=True with scope and IntentClassification (agentic path)
+    - is_task=True with IntentClassification (agentic path; no Pass 2)
     """
 
     __slots__ = (
@@ -55,12 +54,13 @@ class TwoPassIntakeResult:
         self._pass1_result = pass1_result
         self._pass2_result = pass2_result
 
-        # Build IntentClassification if task
         if pass1_result.is_task and pass2_result is not None:
             self._intent_classification = intent_classification_from_pass2(
                 pass2_result,
                 response_language=pass1_result.response_language,
             )
+        elif pass1_result.is_task:
+            self._intent_classification = intent_classification_from_pass1_task(pass1_result)
         else:
             self._intent_classification = None
 
@@ -83,18 +83,18 @@ class TwoPassIntakeResult:
 
     @property
     def scope(self) -> IntakeScope | None:
-        """Scope classification (trivial/simple/complex) for task queries."""
+        """Legacy scope field; None when Pass 2 is not used."""
         if not self._is_task or self._pass2_result is None:
             return None
         return self._pass2_result.scope
 
     @property
     def intake_label(self) -> IntakeLabel | None:
-        """Final intake label (chitchat/trivial/simple/complex)."""
+        """Final intake label (chitchat or task→complex compatibility)."""
         if not self._is_task:
             return IntakeLabel.CHITCHAT
         if self._pass2_result is None:
-            return None
+            return IntakeLabel.COMPLEX
         return self._pass2_result.to_intake_label()
 
     @property
@@ -109,13 +109,12 @@ class TwoPassIntakeResult:
 
 
 class TwoPassIntakeCoordinator:
-    """Orchestrates two-pass intake classification (RFC-630).
+    """Orchestrates Pass 1 intake classification (RFC-630 / RFC-904).
 
-    Pass 1: Social vs task (no prior context).
-    Pass 2: Scope classification (with prior projection), only if is_task=True.
+    Pass 1: Social vs task (no prior context). Tasks skip Pass 2.
 
     Args:
-        fast_model: Fast LLM for both passes.
+        fast_model: Fast LLM for Pass 1.
         soothe_config: Optional config for rate limiting and tracing.
     """
 
@@ -131,13 +130,12 @@ class TwoPassIntakeCoordinator:
             soothe_config,
             assistant_name=assistant_name,
         )
-        self._pass2_classifier = IntakePass2Classifier(fast_model, soothe_config)
         self._soothe_config = soothe_config
 
         if fast_model:
-            logger.debug("[TwoPassIntake] Initialized")
+            logger.debug("[Pass1Intake] Initialized")
         else:
-            logger.warning("[TwoPassIntake] No model, intake disabled")
+            logger.warning("[Pass1Intake] No model, intake disabled")
 
     async def classify(
         self,
@@ -148,21 +146,8 @@ class TwoPassIntakeCoordinator:
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
     ) -> TwoPassIntakeResult:
-        """Run two-pass intake classification.
-
-        Pass 1 runs first. If is_task=False, returns immediately with social_response.
-        If is_task=True, runs Pass 2 with prior projection for scope classification.
-
-        Args:
-            query: User input text.
-            prior_projection: Prior-goal summary for Pass 2 (reference resolution).
-            observability_metadata: Optional metadata for observability.
-            goal_trace: Optional Langfuse trace context.
-
-        Returns:
-            TwoPassIntakeResult with either social_response or intent_classification.
-        """
-        # Pass 1: social vs task
+        """Run Pass 1 intake classification (RFC-904: no Pass 2)."""
+        del prior_projection  # unused after Pass 2 removal
         pass1_result = await self._pass1_classifier.classify(
             query,
             prior_response_language=prior_response_language,
@@ -177,31 +162,20 @@ class TwoPassIntakeCoordinator:
             pass1_result.confidence,
         )
 
-        # If social, return immediately (no Pass 2)
         if not pass1_result.is_task:
             logger.info(
-                "Two-pass intake: SOCIAL (confidence=%s) - %s",
+                "Pass1 intake: SOCIAL (confidence=%s) - %s",
                 pass1_result.confidence,
                 query[:50],
             )
             return TwoPassIntakeResult(pass1_result)
 
-        # Pass 2: scope classification (with prior projection)
-        pass2_result = await self._pass2_classifier.classify(
-            query,
-            prior_projection=prior_projection,
-            observability_metadata=observability_metadata,
-            goal_trace=goal_trace,
-        )
-
         logger.info(
-            "Two-pass intake: TASK scope=%s confidence=%s - %s",
-            pass2_result.scope,
+            "Pass1 intake: TASK (confidence=%s) - %s",
             pass1_result.confidence,
             query[:50],
         )
-
-        return TwoPassIntakeResult(pass1_result, pass2_result)
+        return TwoPassIntakeResult(pass1_result)
 
     async def classify_social_only(
         self,
@@ -211,20 +185,7 @@ class TwoPassIntakeCoordinator:
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
     ) -> TwoPassIntakeResult:
-        """Run Pass 1 only (for pre-graph fast-path decision).
-
-        Use when you need to decide whether to enter the graph at all,
-        before checkpoint is loaded. If is_task=True, the caller should
-        load checkpoint and run Pass 2 separately.
-
-        Args:
-            query: User input text.
-            observability_metadata: Optional metadata for observability.
-            goal_trace: Optional Langfuse trace context.
-
-        Returns:
-            TwoPassIntakeResult (Pass 2 will be None if is_task=True).
-        """
+        """Run Pass 1 only (pre-graph fast-path). Tasks return without Pass 2."""
         pass1_result = await self._pass1_classifier.classify(
             query,
             prior_response_language=prior_response_language,
@@ -241,49 +202,16 @@ class TwoPassIntakeCoordinator:
             )
             return TwoPassIntakeResult(pass1_result)
 
-        logger.debug(
-            "Pass1-only: TASK (needs Pass 2) - %s",
-            query[:50],
-        )
-        # Return with pass2=None; caller will run Pass 2 after checkpoint load
+        logger.debug("Pass1-only: TASK - %s", query[:50])
         return TwoPassIntakeResult(pass1_result)
-
-    async def classify_scope(
-        self,
-        query: str,
-        *,
-        prior_projection: str | None = None,
-        observability_metadata: dict[str, str] | None = None,
-        goal_trace: Any | None = None,
-    ) -> IntakePass2LLMResult:
-        """Run Pass 2 only (when Pass 1 already determined is_task=True).
-
-        Args:
-            query: User input text.
-            prior_projection: Prior-goal summary for reference resolution.
-            observability_metadata: Optional metadata for observability.
-            goal_trace: Optional Langfuse trace context.
-
-        Returns:
-            IntakePass2LLMResult with scope classification.
-        """
-        return await self._pass2_classifier.classify(
-            query,
-            prior_projection=prior_projection,
-            observability_metadata=observability_metadata,
-            goal_trace=goal_trace,
-        )
 
 
 def _apply_low_confidence_fail_safe(pass1_result: IntakePass1LLMResult) -> IntakePass1LLMResult:
-    """Low-confidence social verdicts fail-safe to task (Pass 2 runs)."""
+    """Low-confidence social verdicts fail-safe to task."""
     if not pass1_result.is_task and pass1_result.confidence == IntakePass1Confidence.LOW:
         logger.info("Pass1 low-confidence social verdict overridden to task (fail-safe)")
         return build_pass1_task_fallback(response_language=pass1_result.response_language)
     return pass1_result
 
 
-__all__ = [
-    "TwoPassIntakeCoordinator",
-    "TwoPassIntakeResult",
-]
+__all__ = ["TwoPassIntakeCoordinator", "TwoPassIntakeResult"]

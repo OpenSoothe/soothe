@@ -53,6 +53,8 @@ class LoopPhaseScratch:
     planner_subagent_review_comments: str | None = None
     # Approve → StrangeLoop plan_generate handoff (one-shot).
     planner_implement_handoff: bool = False
+    # RFC-904: proposals from the just-finished THREAD wave.
+    decompose_proposals: list[Any] = field(default_factory=list)
 
 
 @dataclass

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,11 +22,8 @@ class TestIntakeClassifierLedger:
     """Intent-classify ledger recording."""
 
     async def test_records_ledger_pair_when_context_engine_provided(self) -> None:
+        """Pass 2 ledger writes are removed (RFC-904); classify still succeeds."""
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
-        pass2 = IntakePass2LLMResult(
-            scope=IntakeScope.SIMPLE,
-            reasoning="I'll read the readme.",
-        )
         mock_result = TwoPassIntakeResult(
             IntakePass1LLMResult(
                 is_task=True,
@@ -35,7 +31,6 @@ class TestIntakeClassifierLedger:
                 social_response=None,
                 reasoning="task",
             ),
-            pass2,
         )
         ce = MagicMock()
         ce.save = AsyncMock()
@@ -43,21 +38,14 @@ class TestIntakeClassifierLedger:
             classifier._two_pass, "classify", new_callable=AsyncMock
         ) as mock_classify:
             mock_classify.return_value = mock_result
-            await classifier.classify_intake(
+            intent = await classifier.classify_intake(
                 "summarize readme",
                 thread_id="thread-1",
                 context_engine=ce,
             )
-        assert ce.ledger.record_message.call_count == 2
-        ce.save.assert_awaited_once()
-        human_call = ce.ledger.record_message.call_args_list[0]
-        human_msg = human_call[0][0]
-        assert human_msg.phase == "intent_classify"
-        assert "summarize readme" in human_msg.content
-        ai_call = ce.ledger.record_message.call_args_list[1]
-        ai_msg = ai_call[0][0]
-        parsed = json.loads(ai_msg.content)
-        assert parsed["scope"] == "simple"
+        assert intent.intake_label.value == "complex"
+        assert ce.ledger.record_message.call_count == 0
+        ce.save.assert_not_awaited()
 
     async def test_skips_ledger_when_no_context_engine(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")

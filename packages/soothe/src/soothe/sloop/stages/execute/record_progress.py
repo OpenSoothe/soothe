@@ -38,12 +38,25 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
     # Record step outcomes in the plan DAG
     plan_manager.record_step_outcomes(step_results)
 
-    # RFC-624 Phase 4: async step feedback + CE persistence
+    # RFC-624 Phase 4: async step feedback + CE persistence.
+    # RFC-904: steps that queued a DecompositionProposal stay active until
+    # RECONCILE marks them ``decomposed`` — do not complete_step those ids.
+    decompose_parent_ids = {
+        getattr(p, "parent_step_id", None) for p in (ctx.scratch.decompose_proposals or [])
+    }
+    decompose_parent_ids.discard(None)
+
     if ctx.ce is not None:
         try:
             from soothe.context.models import StepExecution
 
             for r in step_results:
+                if r.step_id in decompose_parent_ids:
+                    logger.info(
+                        "[record_iteration] skip CE complete for decomposing parent %s",
+                        r.step_id,
+                    )
+                    continue
                 execution = StepExecution(
                     duration_ms=r.duration_ms,
                     thread_id=r.thread_id,

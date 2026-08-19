@@ -47,7 +47,7 @@ async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() 
 
     intent_classifier = MagicMock()
     intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.classify_scope_intake = AsyncMock(return_value=preclassified)
+    intent_classifier.pass1_task_to_intent = MagicMock(return_value=preclassified)
 
     ce_instance = MagicMock()
     ce_instance.load = AsyncMock(return_value=False)

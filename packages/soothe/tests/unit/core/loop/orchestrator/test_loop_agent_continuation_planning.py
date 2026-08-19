@@ -221,7 +221,7 @@ async def test_continuation_complex_goal_produces_multi_step_plan() -> None:
     assert ctx.scratch.plan_result is None
 
     route = route_by_intent(graph_state)
-    assert route == "gather_evidence"
+    assert route == "dispatch"
 
     evidence_out = await node_bounded_evidence_gather(ctx, graph_state)
     graph_state.update(evidence_out)
@@ -348,7 +348,7 @@ async def test_continuation_trivial_git_commit_still_bootstraps() -> None:
         "is_fresh_goal": False,
         "intake_label": IntakeLabel.TRIVIAL,
     }
-    assert route_by_intent(graph_state) == "gather_evidence"
+    assert route_by_intent(graph_state) == "dispatch"
 
     assess_out = await node_plan_assess(ctx, graph_state)
     assert assess_out.get("assess_route") == "skip_generate"
@@ -427,7 +427,7 @@ async def test_continuation_simple_skips_assess_and_forces_generate() -> None:
         "is_fresh_goal": False,
         "intake_label": IntakeLabel.SIMPLE,
     }
-    assert route_by_intent(graph_state) == "gather_evidence"
+    assert route_by_intent(graph_state) == "dispatch"
 
     assess_out = await node_plan_assess(ctx, graph_state)
     assert assess_out.get("assess_route") == "continue_generate"

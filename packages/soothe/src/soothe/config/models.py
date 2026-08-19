@@ -1195,8 +1195,8 @@ class DecomposeLoopConfig(BaseModel):
     """
 
     enabled: bool = Field(
-        default=False,
-        description="Enable recursive step decomposition (RFC-904). Default off until cutover.",
+        default=True,
+        description="Enable recursive step decomposition (RFC-904). Default on after cutover.",
     )
     max_depth: int = Field(
         default=5,

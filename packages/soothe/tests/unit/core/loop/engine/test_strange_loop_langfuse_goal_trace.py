@@ -133,7 +133,7 @@ async def test_run_with_progress_pins_goal_trace_before_pass1_and_pass2() -> Non
 
     intent_classifier = MagicMock()
     intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.classify_scope_intake = AsyncMock(return_value=preclassified)
+    intent_classifier.pass1_task_to_intent = MagicMock(return_value=preclassified)
 
     goal_trace = GoalLoopTrace(
         soothe_config=sl.config,
@@ -223,8 +223,7 @@ async def test_run_with_progress_pins_goal_trace_before_pass1_and_pass2() -> Non
     pass1_kwargs = intent_classifier.classify_pass1.await_args.kwargs
     assert pass1_kwargs["goal_trace"] is goal_trace
 
-    pass2_kwargs = intent_classifier.classify_scope_intake.await_args.kwargs
-    assert pass2_kwargs["goal_trace"] is goal_trace
+    intent_classifier.pass1_task_to_intent.assert_called()
 
     ctx_kwargs = runtime_ctx_cls.call_args.kwargs
     assert ctx_kwargs["goal_trace"] is goal_trace
@@ -243,7 +242,7 @@ async def test_pre_graph_passes_nest_under_intake_span() -> None:
 
     intent_classifier = MagicMock()
     intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.classify_scope_intake = AsyncMock(
+    intent_classifier.pass1_task_to_intent = MagicMock(
         return_value=IntentClassification(
             intake_label=IntakeLabel.SIMPLE,
             reasoning="Scope is simple.",
@@ -270,8 +269,9 @@ async def test_pre_graph_passes_nest_under_intake_span() -> None:
     ):
         pass
 
-    for call in (intent_classifier.classify_pass1, intent_classifier.classify_scope_intake):
+    for call in (intent_classifier.classify_pass1,):
         assert call.await_args.kwargs["goal_trace"].intake_parent_span_id == "span-intake-1"
+    intent_classifier.pass1_task_to_intent.assert_called()
     intake_span.end.assert_any_call(output=str(IntakeLabel.SIMPLE))
 
 
@@ -338,7 +338,7 @@ async def test_run_with_progress_skips_begin_goal_loop_when_langfuse_disabled() 
 
     intent_classifier = MagicMock()
     intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.classify_scope_intake = AsyncMock(
+    intent_classifier.pass1_task_to_intent = MagicMock(
         return_value=IntentClassification(
             intake_label=IntakeLabel.SIMPLE,
             reasoning="simple",

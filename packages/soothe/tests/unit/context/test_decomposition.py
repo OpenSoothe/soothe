@@ -38,9 +38,9 @@ class TestDecompositionProposal:
 
 
 class TestDecomposeLoopConfig:
-    def test_defaults_disabled(self) -> None:
+    def test_defaults_enabled(self) -> None:
         cfg = DecomposeLoopConfig()
-        assert cfg.enabled is False
+        assert cfg.enabled is True
         assert cfg.max_depth == 5
         assert cfg.max_branch_root == 5
         assert cfg.max_branch_inner == 3

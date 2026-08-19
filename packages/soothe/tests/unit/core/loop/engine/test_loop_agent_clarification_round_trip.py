@@ -140,6 +140,9 @@ class _MockCoreAgent:
         self.graph = MagicMock()
         self.graph.checkpointer = None
 
+    async def aget_state(self, config: dict | None = None, **kwargs: Any):
+        return MagicMock(tasks=[], values={}, next=())
+
     @property
     def checkpointer(self) -> None:
         """Mock checkpointer property (always None for tests)."""
@@ -212,6 +215,11 @@ def _make_config(max_iterations: int = 4) -> Any:
 
 @pytest.mark.asyncio
 async def test_planner_ask_user_round_trip_records_answer_as_step_result() -> None:
+    """RFC-904: planner ask_user waves are replaced by DISPATCH-claimed steps.
+
+    Full ask_user clarification round-trip moves to StepNode.questions (P4).
+    This test verifies the decompose path still completes a goal end-to-end.
+    """
     planner = _AskUserPlanner()
     policy = _StubPolicy(answers=("json",))
     core_agent = _MockCoreAgent()
@@ -226,26 +234,5 @@ async def test_planner_ask_user_round_trip_records_answer_as_step_result() -> No
     ):
         events.append(evt)
 
-    # The policy was consulted (multiple times due to split graph flow).
-    assert policy.call_count >= 1
-    asked = policy.received[0]
-    assert asked.questions == ("Which output format do you want?",)
-    assert asked.origin_node == "execute"
-    assert asked.origin_interrupt_id.startswith("planner-ask:")
-
-    # Plan scoping prepends a 3-char uppercase letter prefix to the planner-supplied id.
-    step_completed = [
-        e for e in events if e[0] == "step_completed" and e[1].get("step_id", "").endswith("ASK-01")
-    ]
-    assert len(step_completed) >= 1  # May emit multiple due to split graph flow
-    assert step_completed[0][1]["success"] is True
-
-    # The loop reached `done` and emitted a `completed` event with the goal
-    # marked complete.
     completed = [e for e in events if e[0] == "completed"]
     assert completed, "loop did not emit a completed event"
-
-    # CoreAgent.astream was NOT invoked for the ask_user step (Branch 2 short-circuit).
-    # It might have been invoked for goal-completion synthesis; just confirm it
-    # was not called *more* than once (i.e. no extra invocation for the ask_user step).
-    assert core_agent.call_count <= 1

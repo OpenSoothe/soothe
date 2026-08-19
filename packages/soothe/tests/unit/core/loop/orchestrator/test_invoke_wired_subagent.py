@@ -284,7 +284,7 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     out = await node_invoke_wired_subagent(ctx, state)  # type: ignore[arg-type]
     assert out.get("pending_clarification") is None
     assert out.get("planner_implement_handoff") is True
-    assert route_after_wired_subagent(out) == "generate_plan"
+    assert route_after_wired_subagent(out) == "dispatch"
     assert "status: approved" in plan_path.read_text(encoding="utf-8")
     assert ctx.preferred_subagent is None
     assert ctx.scratch.planner_implement_handoff is True
@@ -298,8 +298,8 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     assert not any("Do the migration" in t for t in ai_texts)
 
 
-def test_route_after_wired_subagent_handoff_to_plan_generate() -> None:
-    assert route_after_wired_subagent({"planner_implement_handoff": True}) == "generate_plan"
+def test_route_after_wired_subagent_handoff_to_dispatch() -> None:
+    assert route_after_wired_subagent({"planner_implement_handoff": True}) == "dispatch"
     assert route_after_wired_subagent({}) == "finalize"
 
 

@@ -90,7 +90,7 @@ When RFC-904 is **Accepted** / feature flag cut over:
 | RFC-903 | Remains; topology shrinks further on the same `LoopNode` / `RouteDecision` contract |
 | CE `apply_directives("decompose")` | Remains out of scope (goal DAG); must not be implemented as this RFC's step tool |
 
-Feature flag: `agent.loop.decompose.enabled` (default off until cutover green).
+Feature flag: `agent.loop.decompose.enabled` (default **true** after IG-751 P3 cutover).
 
 ---
 

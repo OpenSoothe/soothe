@@ -1,7 +1,7 @@
 # IG-751: Sloop Recursive Step Decomposition
 
 > Implementation guide for [RFC-904](../specs/RFC-904-sloop-recursive-decomposition.md).
-> Status: **In progress** (P0 done; P1 tool + prompts + middleware wired).
+> Status: **In progress** (P0–P3 done; P4 B-lazy + LLM reconcile next).
 > Design draft (archived): `docs/archive/drafts/2026-08-19-sloop-recursive-decomposition-design.md`
 
 ---
@@ -17,7 +17,7 @@ do-or-decompose driven by CE StepDAG ownership:
 3. CE reconciles proposals; completions land immediately.
 4. B-lazy failure via `replacement_of` nodes; ROOT_EVAL at tree-green.
 
-Feature flag: `agent.loop.decompose.enabled` (default `false` until P3 green).
+Feature flag: `agent.loop.decompose.enabled` (default **true** after P3).
 
 **Package:** `soothe` (context, sloop, config). Autopilot goal DAG unchanged.
 
@@ -96,12 +96,37 @@ proposal validation.
 
 ---
 
-## 4. P1+ outline (next)
+## 4. P1 — Tool & prompts (done)
 
 - Bind `decompose_task` in executor when `decompose.enabled` and step THREAD.
-- Proposal sink on `LoopRuntimeContext`.
+- Proposal sink on `LoopRuntimeContext` / `executor.decompose_proposals`.
 - THREAD prompt: DECOMPOSITION vs TODOS; override TodoListMiddleware copy.
 - Do **not** implement nano middleware for decompose.
+
+## 4b. P2 — Deterministic reconcile (done)
+
+Module: `soothe.sloop.decompose.reconcile`
+
+- `plan_commit_from_proposals` — exact description dedup, branch/depth/step
+  budgets, composite IDs (`PLAN-01`…), in-batch `depends_on_local`, cycle edge drop.
+- `reconcile_proposals_deterministic` — `ce.add_steps` + `mark_decomposed` on parents.
+- `drain_executor_proposals` — clear executor queue for the future RECONCILE node.
+- LLM conflict reconcile remains **P4**.
+
+Tests: `packages/soothe/tests/unit/core/loop/decompose/test_reconcile.py`.
+
+## 4c. P3 — Graph cutover (done)
+
+- Live graph: `INTAKE → ENTER_LOOP → DISPATCH ⇄ EXECUTE → RECORD_PROGRESS →
+  RECONCILE → ROOT_EVAL → FINALIZE` (+ `AWAIT_USER` / `DELEGATE`).
+- Pass 2 classifier removed; Pass 1 tasks map to compatibility `complex`.
+- `decompose.enabled` default **true**.
+- Legacy plan stations remain as importable modules for isolated unit tests;
+  they are not on the compiled graph.
+
+## 4d. P4 outline (next)
+
+- Conflict LLM reconcile; B-lazy; ROOT_EVAL GapResult re-dispatch.
 
 ---
 
