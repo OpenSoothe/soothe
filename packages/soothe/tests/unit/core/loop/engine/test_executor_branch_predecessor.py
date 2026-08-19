@@ -178,7 +178,7 @@ async def test_singleton_dependent_step_uses_fresh_thread_and_ledger_projection(
     assert "PRIOR STEPS:" not in envelope
     assert "PRIOR STEP EVIDENCE" not in envelope
     assert "ledger-ai-A with failure details" in str(messages[1].content)
-    assert "do not repeat completed discovery steps" in envelope
+    assert "do not repeat completed discovery work" in envelope
     assert "ledger-human-A" in str(messages[0].content)
 
 

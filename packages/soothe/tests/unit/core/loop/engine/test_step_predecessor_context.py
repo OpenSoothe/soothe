@@ -134,8 +134,8 @@ def test_build_dependent_execution_hints_includes_no_rediscovery_instruction() -
         "PRIOR STEPS and prior execute-step ledger turns are authoritative"
         not in hints.instructions
     )
-    assert "Prior execute-step ledger turns are authoritative" in hints.instructions
-    assert "do not repeat completed discovery steps" in hints.instructions
+    assert "Prior task outcomes in the ledger are authoritative" in hints.instructions
+    assert "do not repeat completed discovery work" in hints.instructions
 
 
 def test_template_hydrate_step_brief_embeds_evidence() -> None:
