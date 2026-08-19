@@ -122,4 +122,4 @@ MemUMemory composes three layers:
 - **[Backends Overview](index.md)** — Backend layer introduction
 - **[Vector Store Backends](vector-store-backends.md)** — Semantic search engine
 - **[Durability Backends](durability-backends.md)** — Triggers memory consolidation on archive
-- **[ContextEngine](../core/goal-engine.md)** — Where recalled memories are ingested
+- **[ContextEngine](../core/context-engine.md)** — Where recalled memories are ingested

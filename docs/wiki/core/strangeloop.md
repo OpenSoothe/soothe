@@ -170,7 +170,7 @@ In practice, you rarely instantiate StrangeLoop directly — the runner handles 
 
 ## Related
 
-- **[ContextEngine](goal-engine.md)** — goal management (top tier)
+- **[ContextEngine](context-engine.md)** — goal management (top tier)
 - **[Agent Factory](agent-factory.md)** — execution runtime (CoreAgent)
 - **[SootheRunner](runner.md)** — runner that drives StrangeLoop
 - **[RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)** — full specification

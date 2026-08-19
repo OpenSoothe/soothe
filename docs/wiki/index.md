@@ -68,7 +68,7 @@ Welcome to the Soothe documentation. This wiki provides comprehensive guides for
   - **[Agent Factory](core/agent-factory.md)** - CoreAgent construction and runtime
   - **[SootheRunner](core/runner.md)** - Protocol-orchestrated execution
   - **[StrangeLoop](core/strangeloop.md)** - Plan-Execute loop for single goals
-  - **[ContextEngine](core/goal-engine.md)** - Autonomous goal management
+  - **[ContextEngine](core/context-engine.md)** - Autonomous goal management
   - **[Event System](core/events.md)** - Event infrastructure and registration
   - **[Protocol Resolver](core/resolver.md)** - Protocol wiring from config
   - **[Workspace Management](core/workspace.md)** - Workspace resolution and validation

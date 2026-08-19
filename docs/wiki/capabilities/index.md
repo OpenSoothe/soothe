@@ -32,7 +32,7 @@ Subagents are specialized autonomous agents that perform multi-step, stateful wo
 - **SkillifyService** (`skillify:` config): Semantic skill retrieval via `search_skills`
 - **veritas** (RFC-622): Intent-grounded clarification auto-answerer
 
-→ See [Subagents Architecture](subagents.md) for design philosophy and extension patterns.
+→ See [Subagents](../subagents.md) for usage, configuration, and architecture.
 
 ### Tools — Single-Purpose Utilities
 

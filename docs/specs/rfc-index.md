@@ -11,17 +11,13 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 > synthesizing lifecycle rules and gap-triage scoring.
 
 > **⚠️ Path Restructure Notice (2026-08)**: RFCs written before the 2026-07
-> `core/` → flat package restructure contain file paths that no longer match the
-> current codebase. The canonical path mappings are:
+> `core/` → flat package restructure retain original design-time paths as
+> historical context. Canonical path mappings:
 >
 > | Old path prefix | Current path |
 > |-----------------|-------------|
-> | `soothe/core/strange_loop/core/` | `soothe/sloop/engine/` |
-> | `soothe/core/strange_loop/cognition/` | `soothe/sloop/cognition/` |
-> | `soothe/core/strange_loop/state/` | `soothe/sloop/state/` |
-> | `soothe/core/strange_loop/analysis/` | `soothe/sloop/engine/` |
-> | `soothe/core/strange_loop/utils/` | `soothe/sloop/utils/` |
-> | `soothe/core/loop/` | `soothe/sloop/` (engine, orchestrator, state) |
+> | `soothe/core/strange_loop/{core,cognition,state,analysis,utils}/` | `soothe/sloop/{engine,cognition,state,utils}/` |
+> | `soothe/core/loop/` | `soothe/sloop/` |
 > | `soothe/core/goal_engine/` | `soothe/autopilot/` |
 > | `soothe/core/runner/` | `soothe/runner/` |
 > | `soothe/core/agent/` | `soothe/coreagent/` |
@@ -31,13 +27,11 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 > | `soothe/core/middleware/` | `soothe_nano.middleware.*` (PyPI) |
 > | `soothe/core/security/` | `soothe/security/` |
 > | `soothe/core/resolver/` | `soothe/runner/resolver/` |
-> | `soothe_daemon/channels/http_rest.py` | Not implemented (removed by IG-504) |
+> | `soothe_daemon/channels/http_rest.py` | Removed (IG-504) |
 > | `soothe_daemon/protocol/errors.py` | `soothe_daemon/protocol/error_codes.py` |
 > | `ProtocolError` (daemon) | `RpcProtocolError` |
 >
-> RFCs that have been explicitly patched (paths corrected inline) are noted in
-> their individual files. All other RFCs retain their original design-time paths
-> as historical context; refer to the table above for current locations.
+> Explicitly patched RFCs note the correction inline.
 
 ## RFC Status Summary
 
@@ -268,8 +262,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-08-05
   - Updated: 2026-08-08
   - Depends on: RFC-204, RFC-222, RFC-228, RFC-624, RFC-625, RFC-630
-  - Related: RFC-231 (LoopRail + Rail Exec), RFC-232 (flat WavePlan), LoopRail design draft, IG-687, IG-691, IG-692, IG-693
-  - Notes: Host maturity latch; rail exclusivity; `slices_ready_to_spawn`; wave barriers deprecated as spawn gates (RFC-231 §8–§9)
+  - Related: RFC-231, RFC-232, IG-687, IG-691–IG-693
 
 - **RFC-231**: [LoopRail and Rail Exec (Composable Verb Bodies)](RFC-231-looprail-rail-exec.md)
   - Kind: Architecture Design
@@ -277,11 +270,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-08-07
   - Updated: 2026-08-08
   - Depends on: RFC-204, RFC-222, RFC-228, RFC-230, RFC-625, RFC-626, RFC-630
-  - Related: RFC-232 (amends §9), LoopRail design draft (promoted),
-    `2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md` (§9),
-    `2026-08-08-llm-rail-auto-pick-design.md` (§10), IG-678, IG-687, IG-691–IG-720, IG-728
-  - Notes: Normative LoopRail; Rail Exec L0/L1/L2; §9 streaming slice catalog +
-    host worktrees; CE wave-free; §10 LLM auto-pick (IG-728); follow-on IG for §9 impl
+  - Related: RFC-232 (amends §9), IG-678, IG-687, IG-691–IG-720, IG-728
 
 - **RFC-232**: [Flat WavePlan Wire Ingest (Semi-Structured, No Nesting)](RFC-232-waveplan-flat-semistructured-ingest.md)
   - Kind: Architecture Design
@@ -289,8 +278,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-08-07
   - Updated: 2026-08-08
   - Depends on: RFC-231, RFC-204, RFC-222, RFC-625, RFC-630
-  - Related: RFC-230, streaming slice DAG design draft, IG-704, IG-714, IG-718, IG-720, IG-722
-  - Notes: Flat leaf WavePlan + optional `depends_on`; nested waves rejected; SoT = slice catalog on RailJobState; amends RFC-231 §9
+  - Related: RFC-230, IG-704, IG-714, IG-718, IG-720, IG-722
 
 ---
 
@@ -523,7 +511,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Kind: Implementation Interface Design
   - Status: Draft
   - Created: 2026-04-14
-  - Depends on: RFC-606 (DeepAgents CLI TUI Migration), RFC-501 (Display Verbosity), RFC-500 (CLI/TUI Architecture)
+  - Depends on: RFC-606, RFC-501, RFC-500
   - Authors: Claude Code, Xiaming Chen
 
 - **RFC-610**: [SDK Module Structure Refactoring](RFC-610-sdk-module-structure-refactoring.md)
@@ -583,15 +571,15 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-06-02
-  - Supersedes: Empty-answer auto-resume behavior currently encoded in `core/loop/engine/graph_interrupt.py::build_auto_resume_payload` for `type=="ask_user"` interrupts.
-  - Depends on: RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)
+  - Supersedes: Empty-answer auto-resume behavior in `core/loop/engine/graph_interrupt.py`
+  - Depends on: RFC-220, RFC-222, RFC-600, RFC-601, RFC-403
   - Authors: Soothe Team
 
 - **RFC-623**: [Veritas Auto-Mode Robustness](RFC-623-veritas-auto-mode-robustness.md)
   - Kind: Implementation Interface Design
   - Status: Draft
   - Created: 2026-06-03
-  - Depends on: RFC-622 (CoreAgent Clarification Relay), RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-403 (Unified Event Naming)
+  - Depends on: RFC-622, RFC-220, RFC-403
   - Authors: Soothe Team
 
 - **RFC-624**: [Context Engine — Unified Context Management for Goals, Steps, and Projection](RFC-624-context-engine.md)
@@ -633,7 +621,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-06-26
   - Depends on: RFC-500, RFC-501, RFC-607
   - Extends: RFC-500 § Event Rendering, RFC-501 § 7.3
-  - Implemented by: IG-512, IG-513, IG-514, IG-515
+  - Implemented by: IG-512–IG-515
   - Authors: Xiaming Chen
 
 - **RFC-629**: [Client Library — Core Upgrade and Appkit Architecture (Python + Go + TypeScript)](RFC-629-client-appkit-architecture.md)
@@ -641,7 +629,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-06-30
   - Depends on: RFC-450, RFC-614, RFC-403
-  - Extends: RFC-450 (client-side transport/lifecycle), RFC-610 (SDK module structure)
+  - Extends: RFC-450 (transport/lifecycle), RFC-610 (SDK structure)
   - Implemented by: IG-527 (Go), IG-531 (TypeScript)
   - Authors: Xiaming Chen
 
@@ -650,8 +638,8 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-06-30
   - Depends on: RFC-220, RFC-225, RFC-226, RFC-503
-  - Extends: RFC-225 (intent classification taxonomy), RFC-220 (orchestrator topology)
-  - Supersedes: IG-518 `_is_likely_agentic` heuristic bypass and `simple_bypass` string-prefix detection
+  - Extends: RFC-225 (intent taxonomy), RFC-220 (orchestrator topology)
+  - Supersedes: IG-518 `_is_likely_agentic` heuristic bypass
   - Authors: Xiaming Chen
 
 - **RFC-631**: [Goal-Bound Display Snapshots](RFC-631-goal-display-snapshots.md)
@@ -702,7 +690,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Updated: 2026-07-24
   - Dependencies: RFC-000, RFC-001, RFC-302, RFC-303, RFC-802
   - Related: RFC-803, RFC-229, RFC-307, RFC-413, RFC-624
-  - Note: Reclassified from 6xx per RFC-900. 2026-07-24: process-scoped `SqliteStoreRuntime`, `$SOOTHE_DATA_DIR/databases/` hard cut.
+  - Note: Reclassified from 6xx per RFC-900. Process-scoped `SqliteStoreRuntime`, `$SOOTHE_DATA_DIR/databases/`.
 
 - **RFC-802**: [Persistence Architecture Refactor](RFC-802-persistence-architecture-refactor.md)
   - Kind: Architecture Design
@@ -711,7 +699,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Updated: 2026-07-24
   - Authors: Platonic Coding Workflow
   - Related: RFC-801, RFC-803
-  - Note: Reclassified from 6xx per RFC-900. 2026-07-24: SQLite purpose files under `databases/{purpose}.db`; remove path overrides.
+  - Note: Reclassified from 6xx per RFC-900. SQLite purpose files under `databases/{purpose}.db`.
 
 - **RFC-803**: [StrangeLoop Checkpoint Backend Architecture](RFC-803-strangeloop-checkpoint-backend.md)
   - Kind: Architecture Design
@@ -720,7 +708,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Updated: 2026-07-24
   - Dependencies: RFC-207, RFC-218, RFC-503, RFC-801, RFC-802
   - Authors: Claude Sonnet 4.6
-  - Note: Moved from 2xx (RFC-215) per RFC-900. 2026-07-24: SQLite process-scoped flush via `SqliteStoreRuntime` (parity with Postgres writer).
+  - Note: Moved from 2xx (RFC-215) per RFC-900. SQLite process-scoped flush via `SqliteStoreRuntime`.
 
 ---
 
@@ -757,46 +745,9 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 ## Quick Reference
 
-### Implemented RFCs
-
-| RFC | Title | Date |
-|-----|-------|------|
-| RFC-000 | System Conceptual Design | 2026-03-12 |
-| RFC-001 | Architecture Design for Core Protocol Modules | 2026-03-12 |
-| RFC-101 | Tool Interface & Event Naming | 2026-03-31 |
-| RFC-102 | Secure Filesystem Path Handling and Security Polic | 2026-03-18 |
-| RFC-104 | Dynamic System Context Injection | 2026-03-31 |
-| RFC-201 | StrangeLoop Plan-Execute Loop Architecture | 2026-04-17 |
-| RFC-204 | Autopilot Mode (Layer 3 Extension) | 2026-04-03 |
-| RFC-219 | Goal Completion Module Architecture | 2026-04-28 |
-| RFC-301 | Protocol Registry | 2026-03-31 |
-| RFC-401 | Event Processing & Filtering | 2026-03-31 |
-| RFC-450 | Unified Daemon Communication Protocol for WebSocke | 2026-03-19 |
-| RFC-500 | CLI TUI Architecture Design | 2026-03-12 |
-| RFC-600 | Plugin Extension Specification | 2026-03-23 |
-| RFC-601 | Built-in Plugin Agents | 2026-03-31 |
-| RFC-604 | Plan Phase Robustness (Three-Layer Defense) | 2026-04-11 |
-| RFC-620 | Unified Channel Architecture | 2026-05-29 |
-| RFC-625 | AutopilotMonitor as ContextEngine Monitor Submodul | 2026-06-15 |
-| RFC-627 | Unified LLM Utilities Module | 2026-06-17 |
-| RFC-628 | Cognition Step Card Display | 2026-06-26 |
-| RFC-900 | RFC Deprecation and Reclassification Scheme | 2026-06-19 |
-
-### Archived RFCs
-
-| RFC | Title | Superseded By | Archive Date |
-|-----|-------|---------------|--------------|
-| RFC-200 | Autonomous Goal Management Loop | RFC-222, RFC-625 | 2026-06-19 |
-| RFC-203 | StrangeLoop State & Memory Architecture | RFC-626 | 2026-06-19 |
-| RFC-216 | StrangeLoop Multi-Thread Infinite Lifecycle | RFC-207 | 2026-06-19 |
-| RFC-300 | Context and Memory Architecture Design | RFC-302, RFC-303 | 2026-06-19 |
-| RFC-411 | Event Stream Replay & History Reconstruction | RFC-413 | 2026-06-19 |
-| RFC-505 | Soothe Desktop Client Architecture | RFC-629 | 2026-06-04 |
-| RFC-605 | Explore Subagent and Parallel Spawning | RFC-613 | 2026-06-19 |
-| RFC-613 | Explore Agent — LLM-Orchestrated Iterative Search | — (CoreAgent file tools cover readonly recon) | 2026-08-17 |
-| RFC-700 | Desktop App Product Redesign | RFC-629 | 2026-06-04 |
-
-See [archive/README.md](../archive/specs/README.md) for archival schedule and process.
+> Implemented and archived RFCs are marked inline in the catalog above
+> (`Status: Implemented` / `⚠️ ARCHIVED`). See [archive/README.md](../archive/specs/README.md)
+> for the archival schedule.
 
 ### Reclassified RFCs
 
@@ -814,11 +765,11 @@ See [archive/README.md](../archive/specs/README.md) for archival schedule and pr
 
 See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassification policy and roadmap.
 
-### Recently Drafted RFCs (Top 10)
+### Recently Added
 
 | RFC | Title | Status | Created |
 |-----|-------|--------|---------|
-| RFC-633 | Planner Plan Artifact and Human Review | Implemented (partial) | 2026-08-11 |
+| RFC-903 | Sloop Graph Topology and Node Lifecycle | Proposed | 2026-08-18 |
 | RFC-232 | Flat WavePlan Wire Ingest (Semi-Structured, No Nesting) | Draft | 2026-08-07 |
 | RFC-231 | LoopRail and Rail Exec (Composable Verb Bodies) | Draft | 2026-08-07 |
 | RFC-230 | Job Maturity Assessment for Autopilot Rails | Draft | 2026-08-05 |
@@ -827,71 +778,11 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 | RFC-630 | Start-Phase LLM Intake and Branch Routing | Draft | 2026-06-30 |
 | RFC-629 | Client Library — Core Upgrade and Appkit Architecture | Draft | 2026-06-30 |
 | RFC-902 | Same-File Edit Concurrency and Optimization | Draft | 2026-06-28 |
-| RFC-903 | Sloop Graph Topology and Node Lifecycle | Proposed | 2026-08-18 |
-| RFC-228 | Autopilot Job IPC Commands | Proposed | 2026-06-04 |
-
-### Supersede Relationships
-
-| New RFC | Supersedes |
-|---------|------------|
-| RFC-101 | RFC-0016, RFC-0025 |
-| RFC-220 | RFC-201 (partial - §loop driver) |
-| RFC-401 | RFC-0015, RFC-0019, RFC-0022 |
-| RFC-413 | RFC-411 |
-| RFC-501 | RFC-0020, RFC-0024 |
-| RFC-601 | RFC-0004, RFC-0005, RFC-0021 |
-| RFC-613 | RFC-605 |
-| RFC-618 | RFC-613 |
-| RFC-619 | RFC-601 |
-| RFC-625 | RFC-200 (GoalEngine deleted, features migrated to CE) |
-| RFC-626 | RFC-203 (LoopState eliminated, consolidated into ExecutionState) |
-
----
-
-## Numbering Ranges
-
-| Range | Category | Count |
-|-------|----------|-------|
-| 0xx | Foundation | 2 |
-| 1xx | Core Agent | 6 |
-| 2xx | StrangeLoop & Cognition | 26 |
-| 3xx | Protocols | 8 |
-| 4xx | Daemon & Transport | 8 |
-| 5xx | CLI & TUI | 6 |
-| 6xx | Plugin System & Extensions | 27 |
-| 7xx | Product & Applications | 1 |
-| 8xx | Persistence & Backends | 3 |
-| 9xx | Security & Policy | 4 |
-
----
-
-## Recently Added
-
-- **RFC-232**: Flat WavePlan Wire Ingest (Semi-Structured, No Nesting) (2026-08-07, Draft)
-- **RFC-231**: LoopRail and Rail Exec (Composable Verb Bodies) (2026-08-07, Draft)
-- **RFC-230**: Job Maturity Assessment for Autopilot Rails (2026-08-05, Draft)
-- **RFC-632**: Loop-Scoped Router Profile Override (2026-07-14, Draft)
-- **RFC-631**: Goal-Bound Display Snapshots (2026-07-05, Draft)
-- **RFC-630**: Start-Phase LLM Intake and Branch Routing (2026-06-30, Draft)
-- **RFC-629**: Client Library — Core Upgrade and Appkit Architecture (Python + Go + TypeScript) (2026-06-30, Draft; updated 2026-07-17)
-- **RFC-450**: Unified Daemon Communication Protocol — rewritten with protocol-1 wire contract (2026-06-28, Draft)
-- **RFC-902**: Same-File Edit Concurrency and Optimization (2026-06-28, Draft)
-- **RFC-903**: Sloop Graph Topology and Node Lifecycle (2026-08-18, Proposed)
-- **RFC-628**: Cognition Step Card Display (2026-06-26, Implemented)
-- **RFC-627**: Unified LLM Utilities Module (2026-06-17, Implemented)
-- **RFC-626**: Entity Model and State Management Consolidation — LoopState Elimination (2026-06-16)
-- **RFC-625**: AutopilotMonitor as ContextEngine Monitor Submodule — GoalEngine Deletion (2026-06-15)
-- **RFC-624**: Context Engine — Unified Context Management for Goals, Steps, and Projection (2026-06-12)
-- **RFC-228**: Autopilot Job IPC Commands (2026-06-04)
-- **RFC-413**: Server-Owned Display Card Ledger (2026-06-04)
-- **RFC-505**: Soothe Desktop Client Architecture (2026-06-04, Archived — removed from monorepo)
-- **RFC-700**: Desktop App Product Redesign (2026-06-04, Archived — removed from monorepo)
-- **RFC-623**: Veritas Auto-Mode Robustness (2026-06-03)
-- **RFC-621**: Workspace Host Convention: Path Mapping for Containerized Daemon (2026-06-02)
-- **RFC-622**: CoreAgent Clarification Relay (2026-06-02)
-- **RFC-227**: Plan-Assess Prior-Progress Digest (2026-06-01)
-- **RFC-105**: Progressive Skill Loading (2026-05-29)
-- **RFC-225**: Loop Continuity and Goal Record Enrichment (2026-05-29)
+| RFC-628 | Cognition Step Card Display | Implemented | 2026-06-26 |
+| RFC-627 | Unified LLM Utilities Module | Implemented | 2026-06-17 |
+| RFC-626 | Entity Model and State Management Consolidation | Draft | 2026-06-16 |
+| RFC-625 | AutopilotMonitor as ContextEngine Monitor Submodule | Implemented | 2026-06-15 |
+| RFC-624 | Context Engine — Unified Context Management | Draft | 2026-06-12 |
 
 ---
 

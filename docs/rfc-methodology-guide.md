@@ -1,14 +1,9 @@
 # RFC Methodology Guide
 
-> Synthesized from RFC-900 (lifecycle/reclassification), the RFC template,
-> `rfc-namings.md`, `rfc-index.md`, and IG-744 (gap/drift report).
->
-> This guide is a **reusable playbook**: it distills the methodology scattered
-> across governance RFCs and implementation guides into a single reference.
-> It is normative for new RFC authoring and gap-triage work.
+> Normative playbook for RFC authoring and gap-triage. Synthesizes RFC-900,
+> the RFC template, `rfc-namings.md`, `rfc-index.md`, and IG-744.
 
 **Created**: 2026-08-14
-**Synthesis source**: TEE-01 audit (full RFC/refinement corpus scan)
 
 ---
 
@@ -32,8 +27,8 @@
 
 ## 1. RFC Lifecycle
 
-RFC-900 defines a formal six-state lifecycle (plus Rejected). Every RFC must
-carry a `Status:` header matching one of these states:
+RFC-900 defines a six-state lifecycle (plus Rejected). Every RFC must carry a
+`Status:` header matching one of these states:
 
 ```
 Draft → Proposed → Accepted → Implemented → Deprecated → Archived
@@ -53,13 +48,13 @@ Draft → Proposed → Accepted → Implemented → Deprecated → Archived
 
 **Rules:**
 
-- The bare token `Implemented (partial)` is **not** a sanctioned lifecycle
-  state. Use `Implemented` with partial-implementation prose in the body, or
-  `Draft` if the core contract is unshipped.
+- `Implemented (partial)` is **not** a sanctioned state. Use `Implemented`
+  with partial-implementation prose in the body, or `Draft` if the core
+  contract is unshipped.
 - Time-box compliance (Proposed ≤ 30d, Accepted ≤ 90d) is checked during
   routine status reviews.
-- Status transitions are **non-destructive**: a review recommends; status
-  changes follow the RFC-900 supersession process (§8 below).
+- Status transitions are **non-destructive**: a review recommends; changes
+  follow the RFC-900 supersession process (§8).
 
 ---
 
@@ -67,8 +62,7 @@ Draft → Proposed → Accepted → Implemented → Deprecated → Archived
 
 ### 2.1 Use the Template
 
-Copy `docs/specs/templates/rfc-template.md`. The template provides three
-section variants (see §3). Required header fields:
+Copy `docs/specs/templates/rfc-template.md`. Required header fields:
 
 ```markdown
 **RFC**: RFC-XXXX
@@ -90,7 +84,7 @@ Example: `RFC-630-start-phase-llm-intake-branch-routing.md`
 ### 2.3 Required Sections (all kinds)
 
 - **Overview** — high-level summary
-- **Motivation** — what problem this solves; current problems if refining
+- **Motivation** — what problem this solves
 - **Guiding Principles** — design principles that guided the RFC
 
 ### 2.4 Kind-Specific Sections
@@ -106,14 +100,13 @@ When an RFC is created or its status changes:
 3. Register any new terms in `docs/specs/rfc-namings.md`
 4. If implementation guide exists, cross-link from RFC body
 
-**Failure to update index and history in lockstep is a hard hygiene bug**
-(see §6). A prior corpus scan found a +5 delta between these files.
+**Failure to update index and history in lockstep is a hard hygiene bug** (§6).
 
 ---
 
 ## 3. RFC Kinds and When to Use Each
 
-The template supports three kinds. Choose based on the RFC's purpose:
+The template supports three kinds:
 
 | Kind | When to use | Template sections |
 |------|-------------|-------------------|
@@ -121,20 +114,17 @@ The template supports three kinds. Choose based on the RFC's purpose:
 | **Architecture Design** | Component structure, responsibilities, data flow, constraints | Component Overview, Responsibilities, Data Flow, Architectural Constraints, Abstract Schemas |
 | **Implementation Interface Design** | Concrete types, API contracts, method signatures | Type Definitions, API Contracts, Naming Conventions, Error Handling |
 
-Additional ad-hoc kinds in the corpus (not in template but present):
-- **Process Specification** (RFC-900) — lifecycle, roles, deprecation process
-- **Protocol Specification** — Python `Protocol`/ABC interface definitions
-- **Feature Enhancement** — incremental changes to existing RFCs
-
-**Guidance**: Prefer the three template kinds. Use ad-hoc kinds sparingly and
-document why the template kinds are insufficient.
+Ad-hoc kinds in the corpus (not in template): **Process Specification**
+(RFC-900), **Protocol Specification** (Python `Protocol`/ABC interfaces),
+**Feature Enhancement** (incremental changes). Prefer the three template
+kinds; use ad-hoc kinds sparingly and document why template kinds are
+insufficient.
 
 ---
 
 ## 4. Number Segments
 
-RFC-900 established semantic number segments. New RFCs must be placed in the
-correct segment:
+RFC-900 established semantic number segments:
 
 | Segment | Domain | Current count |
 |---------|--------|----------------|
@@ -148,7 +138,7 @@ correct segment:
 | 8xx | Persistence backends | 3 |
 | 9xx | Governance / process | 4 |
 
-**Consolidation triggers** fire at ≥ 20 RFCs in a segment (see §14).
+Consolidation triggers fire at ≥ 20 RFCs in a segment (§12).
 
 ---
 
@@ -157,15 +147,15 @@ correct segment:
 Per AGENTS.md §7 and `rfc-namings.md`:
 
 1. **Use concrete module names** (CoreAgent, StrangeLoop, GoalEngine) — never
-   "layer N" abstraction.
-2. **Never expose IG-XXX/RFC-XXX in user-visible strings** (logs, CLI output,
+   "layer N".
+2. **Never expose IG-XXX/RFC-XXX in user-visible strings** (logs, CLI,
    errors, config descriptions). RFC identifiers are internal-only.
 3. **Register new terms** in `docs/specs/rfc-namings.md` with definition and
    "Introduced In" RFC number.
 4. **No keyword heuristics** (AGENTS.md §9 / RFC-630): prefer structured
    light-LLM fields or declarative config rules over keyword/regex content
-   judgment. Structural controls (checkpoint gates, status vocabulary) may use
-   deterministic rules.
+   judgment. Structural controls (checkpoint gates, status vocabulary) may
+   use deterministic rules.
 
 ---
 
@@ -176,35 +166,24 @@ Two files must agree on total RFC count:
 - `docs/specs/rfc-index.md` — catalog with status summary table
 - `docs/specs/rfc-history.md` — chronological evolution log
 
-**Hard rule:** Index total − History total must equal **0**.
-Any nonzero delta is a hygiene bug.
+**Hard rule:** Index total − History total must equal **0**. Any nonzero
+delta is a hygiene bug.
 
-### Updating the index
-
-The index `RFC Status Summary` table must be regenerated from a full-corpus
-`Status:` header scan whenever statuses change. A full-corpus scan found this
-table stale by +16 Draft / −20 Implemented because it was not refreshed after
-the 2026-06-19 RFC-900 reclassification.
-
-### Updating the history
-
-Append a one-line entry per RFC creation/status change. The history file's
-`Total RFCs` header must match the index.
+- **Updating the index**: Regenerate the `RFC Status Summary` table from a
+  full-corpus `Status:` header scan whenever statuses change.
+- **Updating the history**: Append a one-line entry per RFC
+  creation/status change. The `Total RFCs` header must match the index.
 
 ---
 
 ## 7. Dependency Tracking
 
-Every RFC header should declare:
+Every RFC header should declare **Dependencies** (prerequisites) and
+**Supersedes** (replaced RFCs, if any).
 
-- **Dependencies**: RFCs this RFC depends on (prerequisites)
-- **Supersedes**: RFCs this RFC replaces (if any)
-
-### Dependency graph integrity check
-
-Cross-reference `Dependencies`/`Supersedes` headers against the actual RFC
-set. Dangling references (pointing to non-existent or archived RFCs) are a
-finding. A routine `grep` across RFC headers verifies this.
+Cross-reference these headers against the actual RFC set. Dangling references
+(pointing to non-existent or archived RFCs) are a finding. A routine `grep`
+across RFC headers verifies this.
 
 ---
 
@@ -219,37 +198,28 @@ RFC-900 defines a four-step deprecation process:
 4. Archive Timeline      → After 90 days in Deprecated status, move to docs/archive/specs/
 ```
 
-### Archived RFC status
-
-Archived RFCs should carry `Status: Archived` in their header.
-
-### Deprecation window compliance
-
-RFC-900 mandates a minimum 90-day Deprecated → Archived window.
+Archived RFCs carry `Status: Archived`. RFC-900 mandates a minimum 90-day
+Deprecated → Archived window.
 
 ---
 
 ## 9. Path-Restructure Drift Management
 
 RFCs written before the 2026-07 `core/` → flat package restructure contain
-file paths that no longer match the codebase. The canonical path mappings are
-maintained in `rfc-index.md` (Path Restructure Notice table).
+stale file paths. Canonical path mappings are maintained in `rfc-index.md`
+(Path Restructure Notice table).
 
-### Management approach
-
-- **Explicitly patched RFCs**: paths corrected inline; noted in the RFC file
-- **Unpatched RFCs**: retain original design-time paths as historical context
+- **Patched RFCs**: paths corrected inline; noted in the RFC file.
+- **Unpatched RFCs**: retain original design-time paths as historical context.
 - **Canonical mapping**: refer to the index's path-mapping table for current
-  locations
+  locations.
 
 ---
 
 ## 10. Spec-vs-Code Gap Inventory Method
 
-Derived from IG-spec-vs-code-gap-inventory. This is the **reusable procedure**
-for cross-referencing RFCs against the codebase.
-
-### Procedure
+Derived from IG-spec-vs-code-gap-inventory. Reusable procedure for
+cross-referencing RFCs against the codebase.
 
 ```
 Step 1: EXTRACT
@@ -272,33 +242,31 @@ Step 3: CLASSIFY
 
 Step 4: DOCUMENT
   Produce inventory with four sections:
-    A. Implemented RFCs (spec ↔ code aligned)
+    A. Implemented (spec ↔ code aligned)
     B. Specified but Not Implemented (SNI) — pure gaps
     C. Implemented, Not Documented (IND) — code without RFC
     D. Status drift — mismatch between Status: line and reality
 ```
 
-### Search scope
+**Search scope:**
 
 - **In scope**: `packages/{soothe, soothe-daemon, soothe-cli}/src/` (source
   only, excluding `tests/`)
 - **Also check**: installed PyPI packages (`soothe`, `soothe_nano`,
   `soothe_sdk`) — components may live in PyPI deps, not the monorepo
-- **Out of scope**: `client/*` submodules (consumed as code, not owned)
+- **Out of scope**: `client/*` submodules (consumed, not owned)
 
-### Key lesson from IG-744
-
-A component declared in an RFC status line may exist in a **different package**
-than claimed. Always verify against both workspace source AND installed PyPI
-packages. Example: `ProgressiveMCPRegistry` was claimed in `soothe.mcp` but
-actually lives in `soothe_nano.mcp.mcp_progressive` (correct per DAG rules).
+> A component declared in an RFC may exist in a **different package** than
+> claimed. Always verify against both workspace source AND installed PyPI
+> packages (e.g., `ProgressiveMCPRegistry` was claimed in `soothe.mcp` but
+> lives in `soothe_nano.mcp.mcp_progressive`).
 
 ---
 
 ## 11. Gap Triage: Criticality × Impact
 
-Derived from IG-gap-criticality-impact-criteria. Every gap row in the
-inventory is scored on two axes, then mapped to a priority.
+Derived from IG-gap-criticality-impact-criteria. Every gap row is scored on
+two axes, then mapped to a priority.
 
 ### Criticality criteria (C1–C6)
 
@@ -313,12 +281,8 @@ Criticality = *how severe is the absence*.
 | **C5** | Non-core / internal-only gap | — | Internal path where system runs without it |
 | **C6** | Documentation / governance gap only | — | Missing RFC for shipped code (IND) or stale Status: line |
 
-**Criticality levels (aggregate):**
-
-- **Critical** — meets C1 **or** C2 **or** C3
-- **High** — meets C4, not C1–C3
-- **Medium** — meets C5 only
-- **Low** — meets C6 only
+**Criticality levels (aggregate):** Critical = C1 **or** C2 **or** C3;
+High = C4 (not C1–C3); Medium = C5 only; Low = C6 only.
 
 ### Impact criteria (I1–I5)
 
@@ -332,11 +296,9 @@ Impact = *how widely the gap is felt*. Highest applicable level wins.
 | **I4** | Workaround availability | No workaround; feature unavailable | Workaround exists but clunky/undocumented | Trivial workaround or cosmetic |
 | **I5** | Spec-debt vs code-debt direction | Code exists, spec missing (IND): high auditability impact | — | Spec exists, code missing (SNI): runtime impact dominates |
 
-**Impact levels (aggregate):**
-
-- **High** — High on I1 **or** I2 **or** I3 **and** I4-High (no workaround)
-- **Medium** — Medium across the board, or High on I4 alone
-- **Low** — Low across the board, or governance-only (I5 code-exists branch)
+**Impact levels (aggregate):** High = High on I1 **or** I2 **or** I3 **and**
+I4-High; Medium = Medium across the board, or High on I4 alone; Low = Low
+across the board, or governance-only (I5 code-exists branch).
 
 ### Priority matrix (Criticality × Impact → P0–P3)
 
@@ -347,8 +309,6 @@ Impact = *how widely the gap is felt*. Highest applicable level wins.
 | **Criticality: Medium** | **P2** | P3 | P3 |
 | **Criticality: Low** | P2² | P3 | P3 |
 
-**Priority bands:**
-
 | Priority | Meaning | Remediation posture |
 |----------|---------|---------------------|
 | **P0** | Critical + High impact | Block release; schedule immediately |
@@ -356,82 +316,69 @@ Impact = *how widely the gap is felt*. Highest applicable level wins.
 | **P2** | Medium+High, High+Medium, governance+High | Backlog with intent; do not let grow |
 | **P3** | Medium/Low remainder | Documentation/governance cleanup; opportunistic |
 
-**Notes:**
-
-1. ¹ A critical-but-low-impact gap is still P2: a non-functional subsystem (C1)
-   with no downstream deps still needs triage before documentation work.
-2. ² Governance gaps with high impact (shipped security-relevant module with
-   no RFC) are P2: auditability risk precedes code work.
+**Notes:** ¹ A critical-but-low-impact gap is still P2 (C1 with no downstream
+deps still needs triage before documentation work). ² Governance gaps with
+high impact (shipped security-relevant module with no RFC) are P2:
+auditability risk precedes code work.
 
 ### Uplift rules
 
-- **Security primitive absent** (C4) uplifts to Critical per criteria doc note.
+- **Security primitive absent** (C4) uplifts to Critical.
 - **≥2 RFCs depend on it** (I2-High) uplifts impact to High.
-- Borderline cases resolved per §5 of the criteria doc.
+- Borderline cases resolved per the criteria doc.
 
-### All criteria are structural/textual
-
-Derived from spec text and the inventory's own code-evidence columns. No
-keyword heuristics on user content (AGENTS §9 / RFC-630).
+All criteria are structural/textual — derived from spec text and the
+inventory's code-evidence columns. No keyword heuristics on user content
+(AGENTS §9 / RFC-630).
 
 ---
 
 ## 12. Series Consolidation Triggers
 
-Series overcrowding is a governance concern.
-
 | Trigger | Threshold | Action |
 |---------|-----------|--------|
 | Segment reaches ≥ 20 RFCs | **Consolidation threshold** | Trigger split/merge review |
-| Segment reaches ≥ 25 RFCs | **At threshold** | Split review is mandatory; must propose consolidation RFC |
+| Segment reaches ≥ 25 RFCs | **At threshold** | Split review mandatory; must propose consolidation RFC |
 
-### Consolidation approach
-
-When triggered, a governance review recommends:
-1. Identify semantic sub-clusters within the segment
-2. Propose splitting into new segments or merging overlapping RFCs
-3. File a consolidation RFC (9xx governance series) with the reclassification
-4. Execute via the RFC-900 deprecation/reclassification process
-
----
+When triggered: identify semantic sub-clusters, propose splitting/merging,
+file a consolidation RFC (9xx governance series), execute via the RFC-900
+deprecation/reclassification process.
 
 ## 13. Checklists
 
-### 13.1 New RFC Authoring Checklist
+### 13.1 New RFC Authoring
 
 - [ ] Copied `docs/specs/templates/rfc-template.md`
 - [ ] Header fields complete (RFC, Title, Status, Kind, Created, Dependencies)
 - [ ] Correct number segment assigned (§4)
 - [ ] Correct kind selected (§3); kind-specific sections filled
 - [ ] No "layer N" terminology; concrete module names used (§5)
-- [ ] No IG-/RFC- identifiers in any user-visible string context (§5)
+- [ ] No IG-/RFC- identifiers in user-visible string context (§5)
 - [ ] New terms registered in `rfc-namings.md` (§5)
 - [ ] Entry added to `rfc-index.md` catalog (§6)
 - [ ] Entry added to `rfc-history.md` (§6)
 - [ ] Totals in index and history match (§6)
 - [ ] Dependencies/Supersedes headers reference existing, non-archived RFCs (§7)
-- [ ] File paths reflect current codebase layout (not pre-restructure paths) (§9)
+- [ ] File paths reflect current codebase layout (§9)
 
-### 13.2 Status Transition Checklist
+### 13.2 Status Transition
 
 - [ ] `Status:` header updated to new lifecycle state (§1)
 - [ ] If Deprecated: supersession notice added (§8)
-- [ ] If Deprecated: all RFCs referencing this RFC updated (§8)
+- [ ] If Deprecated: all referencing RFCs updated (§8)
 - [ ] If Archived: moved to `docs/archive/specs/`; status set to `Archived` (§8)
-- [ ] `rfc-index.md` Status Summary table regenerated from full-corpus scan (§6)
+- [ ] `rfc-index.md` Status Summary table regenerated (§6)
 - [ ] `rfc-history.md` entry appended; totals match index (§6)
 
-### 13.3 Gap Inventory Procedure Checklist
+### 13.3 Gap Inventory Procedure
 
 - [ ] Step 1: Extracted title, status, section headings from every RFC in `docs/specs/` and `docs/archive/specs/`
 - [ ] Step 2: Ran targeted `rg -l "<component>"` against `packages/` source (excluding `tests/`)
 - [ ] Step 2b: Also checked installed PyPI packages (`soothe`, `soothe_nano`, `soothe_sdk`)
 - [ ] Step 3: Classified each as Implemented / SNI / IND / Partial-drift
-- [ ] Step 4: Documented four sections (A: aligned, B: SNI gaps, C: IND gaps, D: status drift)
+- [ ] Step 4: Documented four sections (A: aligned, B: SNI, C: IND, D: status drift)
 - [ ] Cross-referenced status claims against actual code evidence
-- [ ] Flagged false implementation claims (status asserts code at path, code absent)
-- [ ] Flagged status-understates-implementation (code shipped, status says Draft)
-- [ ] Flagged wrong-package-location claims (code exists in different package than RFC states)
+- [ ] Flagged false implementation claims, status-understates-implementation, wrong-package-location claims
 
 ---
 
@@ -443,7 +390,7 @@ When triggered, a governance review recommends:
 | RFC index | `docs/specs/rfc-index.md` | Active catalog + status summary + path mappings |
 | RFC history | `docs/specs/rfc-history.md` | Chronological evolution log |
 | RFC namings | `docs/specs/rfc-namings.md` | Terminology registry |
-| RFC-900 | `docs/specs/RFC-900-deprecation-reclassification-scheme.md` | Lifecycle model, deprecation process, reclassification |
+| RFC-900 | `docs/specs/RFC-900-deprecation-reclassification-scheme.md` | Lifecycle, deprecation, reclassification |
 | Gap inventory | `docs/impl/IG-spec-vs-code-gap-inventory.md` | Spec-vs-code cross-reference |
 | Gap triage matrix | `docs/impl/IG-gap-triage-matrix.md` | Scored priorities (P0–P3) |
 | Criticality criteria | `docs/impl/IG-gap-criticality-impact-criteria.md` | C1–C6 × I1–I5 scoring scheme |

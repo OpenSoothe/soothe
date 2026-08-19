@@ -16,10 +16,10 @@ Soothe's core framework provides the foundational runtime for autonomous agent e
 
 ## Where Core Fits
 
-The foundation package (`soothe`) implements a protocol-orchestrated agent runtime with **no transport or UI dependencies**. It sits between the CLI/daemon transport and the protocol/backend infrastructure:
+The `soothe` package implements a protocol-orchestrated agent runtime with **no transport or UI dependencies**. It sits between the CLI/daemon transport and the protocol/backend infrastructure:
 
 ```
-CLI / Daemon  →  Core Framework (foundation)  →  Protocols / Backends / LangGraph
+CLI / Daemon  →  soothe (core runtime)  →  Protocols / Backends / LangGraph
 ```
 
 The core package is intentionally decoupled from how queries arrive (CLI, WebSocket, autopilot dispatch) and from where state is stored (SQLite, PostgreSQL). This separation lets the same runtime power one-shot CLI commands, long-running daemon sessions, and autonomous multi-goal workflows.
@@ -34,7 +34,7 @@ Soothe organizes execution into three hierarchical tiers. See the [Architecture 
 
 | Tier | Module | Scope | Key File |
 |------|--------|-------|----------|
-| **ContextEngine** | [goal-engine.md](goal-engine.md) | Long-running multi-goal DAGs | `context/` |
+| **ContextEngine** | [context-engine.md](context-engine.md) | Long-running multi-goal DAGs | `context/` |
 | **StrangeLoop** | [strangeloop.md](strangeloop.md) | Single-goal iterative refinement | `sloop/` |
 | **CoreAgent** | [agent-factory.md](agent-factory.md) | Model → Tools → Model turn loop | `coreagent/` |
 
@@ -52,7 +52,7 @@ Each tier delegates downward via **advisory hints** (passed through `config.conf
 
 ### Goal & Context Management
 
-- **[ContextEngine](goal-engine.md)** — Autonomous goal management. Manages goal DAGs with dependencies, priorities, dynamic restructuring, backoff reasoning, and dreaming. The top tier for complex workflows.
+- **[ContextEngine](context-engine.md)** — Autonomous goal management. Manages goal DAGs with dependencies, priorities, dynamic restructuring, backoff reasoning, and dreaming. The top tier for complex workflows.
 
 ### Infrastructure
 

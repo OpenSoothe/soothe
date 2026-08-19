@@ -63,20 +63,15 @@ ContextEngine manages the goal DAG (priorities, dependencies, decomposition). St
 
 ## Module Map
 
-**Packages**: `soothe` (core library), `soothe-daemon` (server), `soothe-cli` (CLI/TUI), `soothe-sdk` (plugin SDK). Community plugins ship from the external `mirasoth/soothe-plugins` repository.
+Soothe is a monorepo of five owned packages with a one-way dependency DAG: `soothe-sdk` (leaf) → `soothe` (host) → `soothe-autopilot` → `soothe-daemon` → `soothe-cli`. Community plugins ship from the external `mirasoth/soothe-plugins` repository.
 
 | Package | Purpose | Key Modules |
 |---------|---------|-------------|
-| **foundation/** | Core runtime | `core/agent` (CoreAgent), `sloop` (StrangeLoop), `context` (ContextEngine), `workspace`, `events`, `persistence`, `identity`, `cron`, `autopilot` |
-| **runner/** | Execution coordinator | SootheRunner, resolver (protocol wiring), mixins |
-| **protocols/** | Protocol definitions | memory, planner, policy, durability, vector_store, loop_planner, loop_working_memory, core_agent, operation_security |
-| **backends/** | Protocol implementations | memory, durability, vector_store, persistence |
-| **middleware/** | Soothe middleware stack | identity, policy, system_prompt, llm_rate_limit, workspace_context, per_turn_model, filesystem, code_interpreter, mcp_activation, tool_timeout |
-| **subagents/** | Built-in subagents | planner, deep_research, academic_research, browser_use, veritas |
-| **foundation/skillify/** | Daemon-shared skill search | SkillifyService indexer + retriever |
-| **skills/** | Agent skills | builtin_skills, registry, budget |
-| **mcp/** | MCP integration | server management, tool discovery |
-| **config/** | Configuration | SootheConfig, model routing |
+| **soothe** | Core runtime & host | `coreagent/` (CoreAgent factory, builder), `sloop/` (StrangeLoop: engine, cognition, stages, orchestrator), `context/` (ContextEngine: engine, projection, ledger, DAG, stores), `runner/` (SootheRunner, resolver, thread manager), `protocols/` (loop_planner, loop_working_memory, runner), `subagents/` (planner, deep_research, academic_research, browser_use, veritas), `identity/`, `workspace/`, `events/`, `persistence/`, `security/`, `prompts/`, `config/` |
+| **soothe-autopilot** | Goal orchestration | `dispatch/`, `monitor/`, `verify/`, `rails/`, `intake/`, `jobs/`, `sla/`, `workers/`, `notify/` |
+| **soothe-daemon** | Process lifecycle & server | `server/` (HTTP/WS), `channels/`, `cron/`, `runtime/`, `bootstrap/`, `health/`, `query/`, `events/`, `display/`, `skillify/`, `persistence/`, `admin_rpc.py` |
+| **soothe-cli** | CLI / TUI | `cli/` (Typer commands), `tui/` (Textual UI), `runtime/`, `config/` |
+| **soothe-sdk** | Shared contracts (leaf) | Wire events, display contracts, plugin protocols |
 
 ---
 

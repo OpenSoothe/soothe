@@ -5,32 +5,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 **Last Updated**: 2026-08-17
 **Total RFCs**: 90 (81 active + 9 archived)
 
-## Summary Statistics
-
-### By Status
-
-| Status | Count | Percentage |
-|--------|-------|------------|
-| Draft | 37 | 41.1% |
-| Implemented (all variants) | 44 | 48.9% |
-| Archived | 9 | 10.0% |
-| Accepted | 1 | 1.1% |
-
-### By Kind
-
-| Kind | Count |
-|------|-------|
-| Architecture Design | 57 |
-| Implementation Interface Design | 14 |
-| Architecture Design + Implementation Interface Design | 2 |
-| Architecture Design / Impl Interface | 1 |
-| Conceptual Design | 1 |
-| Architecture Design + Protocol Specification | 1 |
-| Protocol Specification | 1 |
-| Feature Enhancement | 1 |
-| Product Specification | 1 |
-| Process Specification | 1 |
-| Unknown | 2 |
+> Summary statistics (by status and kind) live in [rfc-index.md](rfc-index.md).
 
 ## Recent Changes
 
@@ -39,70 +14,59 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **RFC-903 - Sloop Graph Topology and Node Lifecycle**
   - Status: Proposed
   - Kind: Architecture Design
-  - Revises: RFC-220 §Loop Graph Topology, §State and Schemas (node contract)
-  - Introduces the 5-method `LoopNode` lifecycle (`pre`/`project`/`prompt`/
-    `process`/`post`) and typed `RouteDecision` sum type; folds `validate_plan`
-    into `commit_plan` and `begin_iteration` into `check_limits`, reducing
-    topology from 14→12 nodes and 11→8 conditional routers. Wire-stable
-    phases and the two-graphs-two-keys invariant preserved.
+  - Revises: RFC-220 §Loop Graph Topology, §State and Schemas
+  - Introduces 5-method `LoopNode` lifecycle (`pre`/`project`/`prompt`/
+    `process`/`post`) and typed `RouteDecision`; folds `validate_plan` into
+    `commit_plan` and `begin_iteration` into `check_limits` (14→12 nodes,
+    11→8 routers). Wire-stable phases preserved.
   - Implementation guide: `docs/impl/IG-sloop-generalized-node-topology.md`
 
 ### 2026-08-14
 
 - **RFC Methodology Guide** published at `docs/rfc-methodology-guide.md`.
-  Synthesizes the methodology scattered across RFC-900, the RFC
-  template, `rfc-namings.md`, `rfc-index.md`, IG-744, the gap-inventory/triage
-  IGs into a single reusable playbook (15 sections + appendix). Covers RFC
-  lifecycle, authoring, kinds, number segments, terminology discipline,
-  index/catalog hygiene, dependency tracking, deprecation/archival,
-  path-restructure drift management, spec-vs-code gap inventory method, gap
-  triage scoring (C1–C6 × I1–I5 → P0–P3), series consolidation triggers, and
-  four reusable checklists. Wired into the RFC update flow via
-  `rfc-standard.md`, `templates/rfc-template.md`, and `rfc-index.md` as a
-  normative reference for all RFC authoring and status transitions.
+  Synthesizes methodology from RFC-900, the RFC template, `rfc-namings.md`,
+  `rfc-index.md`, and IG-744 into a single reusable playbook. Covers lifecycle,
+  authoring, kinds, number segments, terminology, index hygiene, dependency
+  tracking, deprecation/archival, path-restructure drift, gap inventory, gap
+  triage scoring, and series consolidation triggers.
 
 ### 2026-08-08
 
 - **RFC-231 §8–§9** revised: streaming slice catalog (no wave/stage CE
-  barrier); spawn-ready makers as slice deps clear; host worktree merge into
-  `job/<id>`, peer refresh, conflict resolve goals, land on main at job
-  complete; per-maker review/QA replaces batch integrate. Design draft
-  `docs/drafts/2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md`.
-  Implementation guide **IG-732** (Draft).
+  barrier); spawn-ready makers as slice deps; host worktree merge into
+  `job/<id>`; per-maker review/QA replaces batch integrate. IG-732 (Draft).
 - **RFC-232** amended: optional per-slice `depends_on`; catalog SoT;
-  `max_slices` preferred over nested wave rounds; aligns with RFC-231 §9.
-- **RFC-230** §8 / maturity signals: `slices_ready_to_spawn`; deprecate
-  `ready_for_next_wave` as a spawn barrier (RFC-231 §8–§9).
-- **RFC-231 §10** amended: catalog selection cascade adds structured light-LLM
-  auto-pick when submit omits `rail_id` (dynamic merged catalog cards;
-  confidence / abstain / fallback to `.rail-default` / `default_rail` / no rail).
-  Implementation **IG-728**. Design draft
-  `docs/drafts/2026-08-08-llm-rail-auto-pick-design.md`.
+  `max_slices` preferred over nested wave rounds.
+- **RFC-230** §8: `slices_ready_to_spawn`; deprecate `ready_for_next_wave`
+  as spawn barrier.
+- **RFC-231 §10**: catalog selection cascade adds structured light-LLM
+  auto-pick when submit omits `rail_id` (confidence / abstain / fallback).
+  IG-728.
 - **RFC-228** `job_create`: optional `rail_id`; processing steps reference
   RFC-231 §10 resolution before rail bind / `job_start`.
 
 ### 2026-08-07
 
 - **RFC-232** drafted: Flat WavePlan Wire Ingest (semi-structured markdown+JSON
-  wire allowed; canonical plan is flat leaf `wave_slices` / `slices` only;
-  nested waves/slices rejected with no clever-flatten; SoT remains
-  `RailJobState`; amends RFC-231 §9). Cross-refs on RFC-204, RFC-230, RFC-231,
-  IG-720, and index.
-- **RFC-231** drafted: LoopRail and Rail Exec (composable verb bodies). Promotes
-  the LoopRail design draft as normative Autopilot workflow patterns and specifies
-  Rail Exec (L0 CE primitives / L1 catalog recipes / L2 flow) so custom rails can
-  match builtin power via YAML `verbs:` (verbs | NL | hybrid) without `rail_id`
-  forks. Cross-refs updated on RFC-204, RFC-230, draft, and index.
+  allowed; canonical plan is flat leaf `wave_slices` / `slices` only; nested
+  waves/slices rejected with no clever-flatten; SoT remains `RailJobState`;
+  amends RFC-231 §9).
+- **RFC-231** drafted: LoopRail and Rail Exec (composable verb bodies).
+  Normative Autopilot workflow patterns; Rail Exec (L0 CE primitives / L1
+  catalog recipes / L2 flow) so custom rails match builtin power via YAML
+  `verbs:` without `rail_id` forks.
 
 ### 2026-08-05
 
-- **RFC-230** drafted: Job Maturity Assessment for Autopilot Rails (host assessor,
-  `acceptance_met`, production `dag_idle`, rail-exclusive spawn). Implementation:
-  **IG-692**. **RFC-228** `verification_rules` lifecycle updated to point at RFC-230.
+- **RFC-230** drafted: Job Maturity Assessment for Autopilot Rails (host
+  assessor, `acceptance_met`, production `dag_idle`, rail-exclusive spawn).
+  IG-692. RFC-228 `verification_rules` lifecycle points at RFC-230.
 
 ### 2026-07-27
 
-- **RFC-413** Phase 4 complete (IG-655): append-oriented DisplayCardStore ledger, live `soothe.card.*` via `event`/`custom`, TUI always prefers daemon projection for structural cards; inline tool rows remain live-only on step widgets. Design draft `docs/drafts/2026-07-27-tui-card-replay-source-of-truth-design.md`.
+- **RFC-413** Phase 4 complete (IG-655): append-oriented DisplayCardStore
+  ledger, live `soothe.card.*` via `event`/`custom`, TUI prefers daemon
+  projection for structural cards; inline tool rows remain live-only.
 
 ## Chronological Timeline
 
@@ -112,17 +76,15 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 - Wave/stage is not a CE execution boundary; Autopilot grows the DAG via
   spawn-ready + optional WavePlan `depends_on`
-- Host merge makers → `job/<id>`; land on main/master only at job complete
+- Host merge makers → `job/<id>`; land on main only at job complete
 - Per-maker review/QA; batch `spawn_integrate` deprecated for greenfield merge
-- Design draft `2026-08-08-streaming-slice-dag-worktree-lifecycle-design.md`
 
 **RFC-231 §10 / RFC-228**: LLM LoopRail Auto-Pick
 
-- Submit without `rail_id`: structured LLM over merged catalog (`summary` /
-  `applies_when`) → confidence gate → `.rail-default` / config / no rail
+- Submit without `rail_id`: structured LLM over merged catalog → confidence
+  gate → `.rail-default` / config / no rail
 - Prompt: stable system + dynamic candidate cards (external rails first-class)
-- **IG-728** implements; design draft `2026-08-08-llm-rail-auto-pick-design.md`
-- `job_create` documents optional `rail_id` and resolution ordering
+- **IG-728** implements; `job_create` documents optional `rail_id`
 
 ### Major Changes - 2026-08-07
 
@@ -130,7 +92,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 - Completion wire MAY be markdown + flat JSON; SoT remains `RailJobState.wave_slices`
 - Nested waves/slices forbidden (reject, do not flatten)
-- Architecture gate send_backs must include validation/nesting detail
+- Architecture gate send-backs must include validation/nesting detail
 - Amends RFC-231 §9 fan-out contract
 
 **RFC-231**: LoopRail and Rail Exec (Composable Verb Bodies)
@@ -138,34 +100,33 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - Normative LoopRail: event → guard → catalog verb → CE DAG
 - Rail Exec: verb bodies as L0 primitive sequences and/or NL briefs/intent
 - Migration phases M1–M4 (recipe extract → overrides → multi-step → intent expand)
-- LoopRail design draft marked promoted; RFC-230/204 related links updated
 - §9 later amended by RFC-232 (flat WavePlan wire)
 
 ### Major Changes - 2026-08-05
 
 **RFC-230**: Job Maturity Assessment for Autopilot Rails
 
-- Host-side `JobMaturityAssessor` (Autopilot + CE) latches `acceptance_met` from structural probes
-- Production `dag_idle` for rail job completion; verifier must not spawn on rail-bound jobs
-- RFC-228 `verification_rules` lifecycle points at RFC-230; implementation **IG-692**
+- Host-side `JobMaturityAssessor` (Autopilot + CE) latches `acceptance_met`
+- Production `dag_idle` for rail job completion; verifier must not spawn on
+  rail-bound jobs; IG-692
 
 **RFC-204 amendment + IG-693**: Rail-bound consensus send-back exhaustion
 
 - Send-back budget is **per subgoal**, not the job root
-- Rail-bound subgoals: exhaustion → **`failed`** + LoopRail `goal_failed` (not silent suspend)
-- Greenfield recovers via `retry_maker` (replace one maker); Autopilot must not hard-accept via git/pytest for rail jobs
-- LoopRail design draft error-handling row aligned
+- Rail-bound subgoals: exhaustion → **`failed`** + LoopRail `goal_failed`
+  (not silent suspend); greenfield recovers via `retry_maker`
+- Autopilot must not hard-accept via git/pytest for rail jobs
 
 ---
 
 ### Major Changes - 2026-07-24
 
-**SQLite process-scoped Runtime + layout hard cut** (design draft formalized into RFC-801 / RFC-802 / RFC-803)
+**SQLite process-scoped Runtime + layout hard cut** (RFC-801 / RFC-802 / RFC-803)
 
-- Introduce `SqliteStoreRuntime` / `SqliteRuntimeRegistry`: one Runtime per DB file; leased readers; `BEGIN IMMEDIATE` writes; uniform WAL + busy_timeout
+- `SqliteStoreRuntime` / `SqliteRuntimeRegistry`: one Runtime per DB file; leased readers; `BEGIN IMMEDIATE` writes; uniform WAL + busy_timeout
 - All SQLite purpose files under `$SOOTHE_DATA_DIR/databases/{purpose}.db` (`checkpoints`, `context`, `display`, `cron`, `identity`, `metadata`, `persist`, `vectors`, optional `memory`)
 - Hard cut: no migration or legacy path shims
-- RFC-803: SQLite checkpoint flush is process-scoped (parity with Postgres `LoopPersistenceWriter` shape); per-manager private pools forbidden
+- RFC-803: SQLite checkpoint flush is process-scoped (parity with Postgres `LoopPersistenceWriter`)
 
 ---
 
@@ -174,38 +135,34 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 **Unified persistence backend** (AGENTS.md §10)
 
 - `persistence.default_backend` is one mode for the whole process (postgresql XOR sqlite); mixing is forbidden
-- Display cards, cron jobs, and identity follow the same backend (PostgreSQL → `soothe_metadata`)
+- Display cards, cron jobs, and identity follow the same backend
 - Durability overrides that disagree with `default_backend` raise at daemon configure time
 
 **RFC-413 amendment**: Display card ledger follows `persistence.default_backend`
 
-- When `persistence.default_backend: postgresql`, store card mutations and goal display snapshots in PostgreSQL `soothe_metadata` (same tables as SQLite `display.db`)
+- PostgreSQL → `soothe_metadata` (same tables as SQLite `display.db`)
 - SQLite `display.db` remains the default for local/sqlite backends
-- Daemon calls `configure_display_card_store()` after Postgres provisioning at startup
 
 ---
 
 ### Major Changes - 2026-06-30
 
-**RFC-629**: Client Library — Core Upgrade and Appkit Architecture (Go + TypeScript) — absorbs triarch's hand-rolled adaptation layer into the Go and TypeScript client libraries
+**RFC-629**: Client Library — Core Upgrade and Appkit Architecture (Go + TypeScript)
 
-- Generalizes the prior Go-only RFC to a cross-language client architecture: Layer 0 (core `Client` transport/lifecycle upgrades), Layer 1 (`appkit` package: `ConnectionPool`/`QueryGate`/`TurnRunner`/`EventClassifier`/`SSEBroadcaster`/`LoopSessionStore`), Layer 2 (application product code)
-- Layer 0 folds drop detection, `Reconnect`/`ReattachAndProbe`, readiness retry, and concurrent `(type, id)` multiplexing into the core `Client` so every application gets a safe, reconnect-aware client for free
-- Layer 1 extracts the reusable application mechanics (pool, single-flight query gate with cancel-before-context ordering, timeout turn loop, event→deliverable classification keyed on `(namespace, mode, phase)`, SSE fan-out, persistence seam) into a new sibling package per client
-- Product decisions (deliverable phase sets, persistence, chat modes, error copy) stay pluggable via configuration and interfaces; the libraries import no application domain types
-- Defines language-specific adaptations (Go channels/`context.Context` vs TypeScript `EventEmitter`/`AsyncGenerator`/`AbortSignal`) while holding the contract identical across both
-- Extends RFC-450 (client-side transport/lifecycle) and RFC-610 (SDK module structure); implemented by IG-527 (Go) and IG-528 (TypeScript)
+- Cross-language client architecture: Layer 0 (core `Client` transport/lifecycle), Layer 1 (`appkit`: `ConnectionPool`/`QueryGate`/`TurnRunner`/`EventClassifier`/`SSEBroadcaster`/`LoopSessionStore`), Layer 2 (product code)
+- Layer 0 folds drop detection, `Reconnect`/`ReattachAndProbe`, readiness retry, and concurrent `(type, id)` multiplexing into core `Client`
+- Layer 1 extracts reusable mechanics (pool, single-flight query gate, timeout turn loop, event→deliverable classification, SSE fan-out, persistence seam)
+- Language-specific adaptations (Go channels/`context.Context` vs TypeScript `EventEmitter`/`AsyncGenerator`/`AbortSignal`); contract identical across both
+- Extends RFC-450, RFC-610; implemented by IG-527 (Go), IG-528 (TypeScript)
 
-**RFC-630**: Start-Phase LLM Intake and Branch Routing — replaces heuristic intent judgment with LLM intake + branch routing
+**RFC-630**: Start-Phase LLM Intake and Branch Routing
 
-- Replaces the binary `IntentClassifier` LLM + its `_is_likely_agentic` heuristic bypass (len>80 / words>15 / newlines≥2) with a single 4-class intake LLM (`quiz | trivial | simple | complex`)
-- Runs the intake LLM `asyncio.gather`-ed with the pre-graph IO cluster (checkpoint load, ContextEngine load, instruction/memory file reads via `to_thread`, git status) so the LLM round-trip is hidden behind IO that must run anyway
-- Adds `route_by_intent` conditional edge after `init_or_resume` dispatching by intake+continuation: `quiz`→END, fresh `trivial`→synthetic 1-step plan (no plan LLM), fresh `simple`→lightweight `plan_generate`, continuation `trivial/simple`→`plan_assess` discriminator, `complex`→full existing spine
-- Continuation remains a structural overlay from the checkpoint (not an LLM label); clarification remains emergent from the planner (not an intake branch)
-- Deletes the `simple_bypass` `"I will complete this goal directly:"` prefix; the `trivial` branch emits the goal itself as the step action; IG-569 replaces the `## Result` execute contract with the Step Deliverable Gate
-- Preserves the fresh-loop skip (IG-476), continuation discriminator (RFC-226), and clarification relay (RFC-622) unchanged
-- Extends RFC-225 (intent classification taxonomy) and RFC-220 (orchestrator topology); supersedes the IG-518 heuristic-bypass path
-- Feature flag `config.agent.loop.intake.branch_routing.enabled` (default `false`) gates rollout
+- Replaces `IntentClassifier` + `_is_likely_agentic` heuristic bypass with a single 4-class intake LLM (`quiz | trivial | simple | complex`)
+- Intake LLM runs `asyncio.gather`-ed with pre-graph IO cluster (checkpoint load, ContextEngine load, file reads, git status) so the round-trip is hidden
+- `route_by_intent` edge: `quiz`→END, fresh `trivial`→synthetic 1-step plan, fresh `simple`→lightweight `plan_generate`, continuation `trivial/simple`→`plan_assess` discriminator, `complex`→full spine
+- Continuation is structural (checkpoint), not an LLM label; clarification is emergent from the planner
+- Feature flag `config.agent.loop.intake.branch_routing.enabled` (default `false`)
+- Extends RFC-225, RFC-220; supersedes IG-518 heuristic-bypass path
 
 ---
 
@@ -215,9 +172,9 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 - Extracted `cognition_step_activity.py` (classification, activity tree, status lines)
 - Unified `_sync_step_card_surface()` refresh pipeline
-- Footer and branch Running lines show total tool counts (main + subgraph + orphan)
-- Removed obsolete step-card auto-collapse; manual click-to-collapse retained
-- Extends RFC-500 § Event Rendering and RFC-501 § 7.3 (supersedes IG-402-centric descriptions for normative design)
+- Footer/branch Running lines show total tool counts (main + subgraph + orphan)
+- Removed obsolete auto-collapse; manual click-to-collapse retained
+- Extends RFC-500 § Event Rendering, RFC-501 § 7.3
 
 ---
 

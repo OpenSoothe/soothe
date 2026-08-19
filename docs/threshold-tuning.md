@@ -9,22 +9,18 @@ description: >-
 
 # Threshold Tuning Methodology, Rationale, and Rollback
 
-This document is the operator-facing methodology for tuning Soothe runtime
-thresholds. It covers *how* to tune, *why* each threshold family has its
-default, and *how to roll back* a change that misbehaves in production.
+Operator-facing methodology for tuning Soothe runtime thresholds: *how* to
+tune, *why* each default is set, and *how to roll back*.
 
 > **Scope.** Thresholds are the numeric knobs that bound agent behavior:
 > iteration budgets, context-window overflow, SLA tiers, concurrency caps,
-> rate-limit circuit breakers, and notify/escalation timers. This document
-> does **not** cover capability config (which providers/tools are enabled)
-> or environment config (SQLite vs Postgres). See
-> [Common Configuration Patterns](wiki/configuration-guide/common-patterns.md)
-> for that axis.
+> rate-limit circuit breakers, and notify/escalation timers. For capability
+> config (providers/tools) or environment config (SQLite vs Postgres), see
+> [Common Configuration Patterns](wiki/configuration-guide/common-patterns.md).
 
 ## 1. Where Thresholds Live (Source of Truth)
 
-Treat these as the canonical references. Defaults and validation bounds live
-in code; templates show the operator-facing overlay.
+Defaults and validation bounds live in code; templates show the operator-facing overlay.
 
 | Layer | File(s) | Role |
 |-------|---------|------|
@@ -39,40 +35,32 @@ in code; templates show the operator-facing overlay.
 > **Config-sync rule (AGENTS.md §2).** When you edit any
 > `config/*.template.yml`, you MUST also update the matching
 > `config/develop/*.yml` and the packaged copies under
-> `packages/soothe-daemon/src/soothe_daemon/setup/templates/`. A change in
-> one place that drifts in the others is the most common cause of
-> "works on my machine, breaks in prod."
+> `packages/soothe-daemon/src/soothe_daemon/setup/templates/`.
 
 ## 2. Tuning Methodology
 
 ### 2.1 Principles
 
-1. **One axis at a time.** Soothe config has three independent axes
-   (capability, behavior, environment). Threshold tuning touches *behavior*.
-   Do not mix a threshold change with a provider swap or a persistence
-   backend migration — if the agent misbehaves you will not be able to
-   attribute the regression.
+1. **One axis at a time.** Threshold tuning touches the *behavior* axis only.
+   Do not mix with a provider swap or persistence migration — you won't be
+   able to attribute regressions.
 
 2. **Defaults are load-bearing.** Every default encodes a decision (see §3).
-   Changing a default without reading its rationale is the leading cause of
-   silent regressions. Read the `description=` on the `Field` and the
-   rationale in §3 before touching the number.
+   Read the `description=` on the `Field` and the rationale in §3 before
+   touching the number.
 
 3. **Respect the validators.** `ge`/`le` bounds in `models.py` are hard
-   limits. A value outside them raises a config-load error on boot. If you
-   genuinely need to exceed a bound, that is a code change (raise `le`) plus
-   a rationale record — not a config-only edit.
+   limits. Exceeding them requires a code change (raise `le`) plus a
+   rationale record — not a config-only edit.
 
 4. **Measure before and after.** Use the benchmark scripts
    (`scripts/benchmark_alert_pipeline.py`,
-   `scripts/benchmark_plan_generation.py`) and the SLO docs under
-   `benchmarks/` to capture a baseline. A threshold change without a
-   before/after measurement is a guess.
+   `scripts/benchmark_plan_generation.py`) and SLO docs under `benchmarks/`.
 
-5. **No keyword heuristics (RFC-630).** Do not introduce new thresholds that
-   gate on keyword/regex matching of user text. Content-judgment thresholds
-   must use structured light-LLM fields or declarative config rules. If a
-   keyword threshold seems required, stop and confirm with the user first.
+5. **No keyword heuristics (RFC-630).** Content-judgment thresholds must use
+   structured light-LLM fields or declarative config rules, not keyword/regex
+   matching. If a keyword threshold seems required, confirm with the user
+   first.
 
 ### 2.2 Procedure
 
@@ -85,23 +73,23 @@ For each threshold change:
    field(s) in scope.
 4. **Sync** the develop overlay and packaged copies (AGENTS.md §2).
 5. **Verify locally** — `./scripts/verify_finally.sh` must pass (zero lint,
-   all tests, vulture clean). This catches validator-bound regressions.
+   all tests, vulture clean).
 6. **Canary** — roll to one loop / one autopilot worker before fleet-wide.
 7. **Record** the change in the commit message: old value, new value, the
    metric that drove it, and the rollback condition (see §4).
 
 ### 2.3 Anti-patterns
 
-- **Tuning to silence an alert.** If `sla.warning_after_seconds` fires, the
-  fix is usually the upstream latency, not a larger threshold. Raising the
-  threshold hides the symptom and lets the breach escalate to `critical`.
-- **Raising `max_iterations` to "let it finish."** Iteration exhaustion is a
-  *signal* of a planning or tooling defect. Raising the budget burns tokens
-  and delays the terminal. Investigate the terminal reason first.
+- **Tuning to silence an alert.** If `sla.warning_after_seconds` fires, fix
+  upstream latency, not the threshold. Raising it hides the symptom and lets
+  breaches escalate to `critical`.
+- **Raising `max_iterations` to "let it finish."** Iteration exhaustion
+  signals a planning or tooling defect. Raising the budget burns tokens and
+  delays the terminal. Investigate the terminal reason first.
 - **Lowering `context_overflow_threshold_pct` to "compact sooner."** This
-  trades token cost for context loss. Compacting at 70% vs 80% discards
-  ~10% more working memory per run — measure retrieval quality, not just
-  token spend.
+  trades token cost for context loss. Compacting at 70% vs 80% discards ~10%
+  more working memory per run — measure retrieval quality, not just token
+  spend.
 
 ## 3. Threshold Families and Decision Rationale
 
@@ -115,19 +103,15 @@ enforcer, and the rationale that justifies the default.
 | `max_iterations` | `agent.loop.max_iterations` | 99 | 1–500 | `check_limits.py`, `max_iterations_terminal.py`, `strange_loop.py` |
 | `max_plan_steps_per_wave` | `agent.loop.max_plan_steps_per_wave` | 10 | 1–50 | `planner.py` |
 | `max_subagent_tasks_per_wave` | `agent.loop.max_subagent_tasks_per_wave` | 4 | 0–20 | Execute wave |
-| `max_tool_calls_per_step` | `agent.loop.max_tool_calls_per_step` | 100 | — | `check_limits.py` |
+| `max_tool_calls_per_step` | `agent.loop.max_tool_calls_per_step` | 100 | 0–10,000 | `check_limits.py` |
 
-**Rationale.** `max_iterations` is shared between interactive loops and
-Autopilot workers (Autopilot has no separate budget — see the field
-description). The default of 99 (not 100) is deliberate: it leaves headroom
-below the validator ceiling so a single emergency override can raise the
-budget without a code change. The 1–500 bound exists because values above
-500 produce unbounded token spend with diminishing completion probability —
-empirically, loops that exceed ~100 iterations are stuck, not progressing.
-
-`max_plan_steps_per_wave` defaults to 10 to cap planning token cost per
-wave; the 50 ceiling prevents a single reasoning model call from emitting a
-plan larger than the Execute phase can dispatch.
+**Rationale.** `max_iterations` (99, not 100) is shared between interactive
+loops and Autopilot workers. The default leaves headroom below the validator
+ceiling so a single emergency override can raise the budget without a code
+change. Values above 500 produce unbounded token spend with diminishing
+completion probability — loops exceeding ~100 iterations are stuck, not
+progressing. `max_plan_steps_per_wave` (10) caps planning token cost per
+wave; the 50 ceiling prevents a plan larger than Execute can dispatch.
 
 ### 3.2 Context Window Management (RFC-224)
 
@@ -139,21 +123,14 @@ plan larger than the Execute phase can dispatch.
 | `step_context_check_enabled` | `agent.loop.step_context_check_enabled` | false | — | `context_window_manager.py` |
 
 **Rationale.** Overflow triggers in-place compaction at 80% of the context
-limit. The 80% default balances two failure modes: too low (compacts
-prematurely, discards working memory, degrades retrieval quality) and too
-high (risks a hard model context error on the next wave). The compaction
-target of 60% leaves a 20-point buffer for the next Execute wave before
-re-triggering — this is why the target is not 50% (too aggressive) or 70%
-(too little headroom, re-triggers within one wave).
-
-The 0.50–0.95 overflow bound is asymmetric to the 0.30–0.70 target bound on
-purpose: overflow must always be strictly greater than target, otherwise
-compaction would immediately re-trigger. The validators enforce this
-invariant at the model level.
-
-`step_context_check_enabled` defaults false because step threads
-(`loop_id__step_{step_id}`) are short-lived; checking them adds overhead
-with no benefit in the common case.
+limit — balancing premature compaction (discards working memory, degrades
+retrieval) against hard model context errors on the next wave. The 60%
+compaction target leaves a 20-point buffer for the next Execute wave before
+re-triggering. The 0.50–0.95 overflow bound is deliberately asymmetric to
+the 0.30–0.70 target bound: overflow must always exceed target, else
+compaction immediately re-triggers. `step_context_check_enabled` defaults
+false — step threads are short-lived; checking them adds overhead with no
+benefit in the common case.
 
 ### 3.3 SLA Tiers (Autopilot)
 
@@ -163,14 +140,11 @@ with no benefit in the common case.
 | `critical_after_seconds` | `autopilot.sla.critical_after_seconds` | 7200 | `sla/monitor.py` |
 | `breach_after_seconds` | `autopilot.sla.breach_after_seconds` | 14400 | `sla/monitor.py` |
 
-**Rationale.** Tiers are strictly ordered (warning < critical < breach) and
-the `SlaConfig` validator enforces this ordering at load time. The defaults
-follow a 1× / 2× / 4× cadence (1h, 2h, 4h) so each tier doubles the
-allowable latency — this gives operators a geometric, predictable
-escalation curve rather than arbitrary numbers. Do **not** invert the
-ordering or collapse two tiers to the same value; the validator rejects
-this, but even within bounds, collapsing tiers defeats the graduated
-alerting intent.
+**Rationale.** Tiers are strictly ordered (warning < critical < breach),
+enforced by the `SlaConfig` validator at load time. Defaults follow a 1× /
+2× / 4× cadence (1h, 2h, 4h) for a geometric, predictable escalation curve.
+Do **not** invert the ordering or collapse two tiers — the validator rejects
+this, but even within bounds, collapsing tiers defeats graduated alerting.
 
 ### 3.4 Autopilot Budgets
 
@@ -184,19 +158,18 @@ alerting intent.
 | `max_engine_recoveries` | `autopilot.max_engine_recoveries` | 2 | GoalEngine |
 | `checkpoint_interval` | `autopilot.checkpoint_interval` | 10 | Persistence |
 
-**Rationale.** `max_total_goals` mirrors `max_iterations` (99) for the same
-reason — headroom below a round ceiling. `max_goal_depth` of 5 bounds
-recursive goal decomposition: deeper than 5 levels, the goal tree becomes
-unmanageable and the leaf goals lose context from the root. `max_retries`
-and `max_engine_recoveries` are both 2 (not 3) because a third retry on a
-failing goal is almost always a deterministic failure that retries will not
-fix — better to surface it than burn the budget.
+**Rationale.** `max_total_goals` mirrors `max_iterations` (99) for the
+same headroom reason. `max_goal_depth` (5) bounds recursive decomposition —
+deeper trees become unmanageable and leaf goals lose root context.
+`max_retries` and `max_engine_recoveries` are both 2 (not 3) because a
+third retry on a failing goal is almost always a deterministic failure
+that retries won't fix — better to surface it than burn the budget.
 
 ### 3.4a Loop Pool Capacity (RFC-222)
 
 Distinct from the Autopilot budgets above: these cap the StrangeLoop *worker
-pool*, not the goal scheduler. A loop can be reused across parent→child
-lineage, so pool capacity and scheduled parallelism are independent axes.
+pool*, not the goal scheduler. Pool capacity and scheduled parallelism are
+independent axes (a loop can be reused across parent→child lineage).
 
 | Field | Path | Default | Bounds | Enforcer |
 |-------|------|---------|--------|----------|
@@ -207,14 +180,12 @@ lineage, so pool capacity and scheduled parallelism are independent axes.
 **Rationale.** `max_loops` (16) is sized for ~2 Autopilot jobs at
 `max_parallel_goals=3` plus ~3 interactive CLI StrangeLoops, with headroom
 for parent→child reuse without pool starvation. It is deliberately larger
-than `max_parallel_goals` (3) because scheduled goals reuse loops rather
-than each spawning a fresh worker. The 32 ceiling prevents unbounded thread
-growth under a misconfigured fleet. `loop_idle_timeout` (300s) keeps a warm
-loop around for reuse within a 5-minute window — short enough to release
-memory between bursts, long enough to amortize loop spin-up cost across
-rapid successive dispatches. `auto_resume_max_loops` (16) caps concurrent
-startup resume so a crashed daemon with many incomplete loops does not
-thunder the provider on restart.
+than `max_parallel_goals` (3) because scheduled goals reuse loops. The 32
+ceiling prevents unbounded thread growth. `loop_idle_timeout` (300s) keeps a
+warm loop for reuse within a 5-minute window — short enough to release
+memory between bursts, long enough to amortize spin-up cost.
+`auto_resume_max_loops` (16) caps concurrent startup resume so a crashed
+daemon with many incomplete loops doesn't thunder the provider on restart.
 
 ### 3.5 Rate-Limit Circuit Breaker
 
@@ -223,13 +194,12 @@ thunder the provider on restart.
 | `consecutive_rate_limit_threshold` | `agent.loop.thread_switch_policy.consecutive_rate_limit_threshold` | 3 | `check_limits.py` |
 | `enabled` | `agent.loop.llm_rate_limit.enabled` | true | Rate-limit gate |
 
-**Rationale.** The circuit breaker trips after 3 consecutive rate-limit hits
-on a thread and switches threads rather than retrying in place. The value 3
-is the threshold below which transient rate limits (a single burst) are
-absorbed without a thread switch, and above which the failure is likely
-sustained (quota exhausted) so switching is cheaper than retrying. See
-IG-729 (rate-limit loop safety) and the archived IG-499/IG-501 for the
-tuning history that settled on 3.
+**Rationale.** The circuit breaker trips after 3 consecutive rate-limit
+hits on a thread and switches threads rather than retrying in place. Below
+3, transient rate limits (a single burst) are absorbed without a thread
+switch; above 3, the failure is likely sustained (quota exhausted) so
+switching is cheaper than retrying. See IG-729 and archived IG-499/IG-501
+for the tuning history that settled on 3.
 
 ### 3.6 Notify & Escalation
 
@@ -240,12 +210,11 @@ tuning history that settled on 3.
 | `dedup_ttl_seconds` | `autopilot.notify.dedup_ttl_seconds` | 86400 | `notify/router.py` |
 
 **Rationale.** `suspend_after_seconds` (2700s = 45min) is set below the SLA
-warning tier (3600s) so that a stuck goal suspends *before* it breaches SLA
-— the notify subsystem is the early-warning layer, SLA is the enforcement
-layer. The escalation multiplier of 2.0 means a second suspension window is
-twice as long (90min) before re-escalating, giving the upstream cause time
-to resolve. `dedup_ttl_seconds` of 24h prevents alert storms on a flapping
-goal.
+warning tier (3600s) so a stuck goal suspends *before* it breaches SLA —
+notify is the early-warning layer, SLA is enforcement. The 2.0 escalation
+multiplier means a second suspension window is twice as long (90min),
+giving the upstream cause time to resolve. `dedup_ttl_seconds` (24h)
+prevents alert storms on a flapping goal.
 
 ### 3.7 Verify & Rails
 
@@ -257,11 +226,10 @@ goal.
 | `rail_auto_pick_min_confidence` | `autopilot.rail_auto_pick_min_confidence` | 0.6 | Rails |
 | `rail_auto_pick_timeout_s` | `autopilot.rail_auto_pick_timeout_s` | 120 | Rails |
 
-**Rationale.** `rail_auto_pick_min_confidence` of 0.6 is the threshold
-above which a rail is auto-selected without human confirmation. Below 0.6
-the classification is ambiguous and forcing an auto-pick risks dispatching
-the wrong rail; the human is kept in the loop. See IG-728 for the
-confidence-threshold rationale.
+**Rationale.** `rail_auto_pick_min_confidence` (0.6): above this a rail is
+auto-selected without human confirmation; below it the classification is
+ambiguous and forcing an auto-pick risks dispatching the wrong rail. See
+IG-728 for the confidence-threshold rationale.
 
 ### 3.8 Completion & Scenario Heuristics
 
@@ -275,10 +243,10 @@ confidence-threshold rationale.
 
 **Rationale.** These are *structural* thresholds (step counts, evidence
 volume, DAG fan-out) — deterministic rules, not content judgment, so they
-are compliant with RFC-630's "no keyword heuristics" rule. They gate which
-completion path and which scenario fast-path the loop takes.
-`high_step_count_threshold` of 4 separates simple (≤4 steps) from complex
-scenarios; above it the classifier engages the heavier reasoning path.
+comply with RFC-630. They gate which completion path and scenario
+fast-path the loop takes. `high_step_count_threshold` (4) separates simple
+(≤4 steps) from complex scenarios; above it the classifier engages the
+heavier reasoning path.
 
 ### 3.9 Daemon Process Thresholds
 
@@ -292,14 +260,14 @@ scenarios; above it the classifier engages the heavier reasoning path.
 | `stale_running_seconds` | `daemon.loop_status_reconciliation.stale_running_seconds` | 180 | Reconciliation |
 | `log_growth_threshold_mb` | `daemon.log_growth_threshold_mb` | 100 | `memory_profiler.py` |
 
-**Rationale.** `heartbeat_timeout_ms` (10s) is intentionally less than
-`heartbeat_interval_ms` (30s) is *not* the case — the timeout is the
-allowable gap *between* beats, so it is smaller than the interval to detect
-a dead connection within one beat cycle. `max_query_duration_minutes` of
-1440 (24h) bounds a single query's wall-clock; beyond this the query is
-reaped as runaway. `stale_running_seconds` of 180 means a loop stuck in
-`running` without a heartbeat for 3 minutes is reconciled — short enough to
-catch a dead worker, long enough to avoid false positives during GC.
+**Rationale.** `heartbeat_timeout_ms` (10s) is smaller than
+`heartbeat_interval_ms` (30s) by design — the timeout is the allowable gap
+*between* beats, so it must be shorter than the interval to detect a dead
+connection within one cycle. `max_query_duration_minutes` (1440 = 24h)
+bounds a single query's wall-clock; beyond this the query is reaped as
+runaway. `stale_running_seconds` (180) means a loop stuck in `running`
+without a heartbeat for 3 minutes is reconciled — short enough to catch a
+dead worker, long enough to avoid false positives during GC.
 
 ### 3.10 Char-Cap Registry (Output Boundaries)
 
@@ -313,23 +281,20 @@ Defined in `config/constants.py`. Selected entries:
 | `CONTINUATION_ASSESS_REASONING_MAX_CHARS` | 240 | Continuation reasoning bound |
 | `GOAL_PREVIEW_MAX_CHARS` | 120 | Goal preview truncation |
 
-**Rationale.** These are output-shaping caps, not behavior gates. They
-exist to keep prompts within the model's input budget and to produce
-deterministic truncation (so two runs of the same trace yield the same
-prompt). Changing them affects token cost and retrieval quality, not
-control flow.
+**Rationale.** These are output-shaping caps, not behavior gates. They keep
+prompts within the model's input budget and produce deterministic truncation
+(so two runs of the same trace yield the same prompt). Changing them affects
+token cost and retrieval quality, not control flow.
 
 ### 3.11 Nano-Owned Middleware Thresholds (cross-reference)
 
-The following threshold families are **defined in the `soothe-nano` PyPI
-package**, not in this monorepo's `config/models.py`. They appear in
-`config/nano.template.yml` as operator-facing overlays, but their defaults
-and validators live upstream. Tune them per the nano package's own docs;
-this section records *which knobs exist* and *what they bound* so operators
-have a single index. Do not edit the nano template here without
-re-releasing `soothe-nano` — the packaged copy under
+These families are **defined in the `soothe-nano` PyPI package**, not in
+this monorepo's `config/models.py`. They appear in `config/nano.template.yml`
+as operator-facing overlays, but defaults and validators live upstream. The
+packaged copy under
 `packages/soothe-daemon/src/soothe_daemon/setup/templates/nano.yml` is a
-mirror, not the source of truth.
+mirror, not the source of truth — do not edit it here without re-releasing
+`soothe-nano`.
 
 | Family | Key fields (nano.yml path) | Bounds |
 |--------|----------------------------|--------|
@@ -343,8 +308,8 @@ mirror, not the source of truth.
 
 **Tuning note.** The LLM rate limiter is the most common source of
 operator-visible regressions: raising `concurrent_limit` without raising
-`global_concurrent_limit` (or vice versa) produces silent queueing. The two
-are a *pair* — `concurrent_limit` bounds per-thread in-flight calls,
+`global_concurrent_limit` (or vice versa) produces silent queueing. They are
+a *pair* — `concurrent_limit` bounds per-thread in-flight calls,
 `global_concurrent_limit` bounds process-wide. Raise both together, and
 confirm the provider's RPM quota supports the new `rpm_limit` before
 deploying.
@@ -372,38 +337,37 @@ If the change was config-only (no code), rollback is a revert + restart:
    soothe admin config show agent.loop.max_iterations
    ```
 
-Config-only rollbacks are safe and immediate because thresholds are read at
-boot; no migration and no state cleanup is required.
+Config-only rollbacks are safe and immediate — thresholds are read at boot;
+no migration or state cleanup required.
 
 ### 4.2 Rollback After a Validator-Bound Change
 
 If you raised a validator bound (`ge`/`le` in `models.py`) to permit a new
-value, the rollback has two parts:
+value:
 
-1. **Revert the code** (`models.py` bound) and the config (the template
-   value). The code revert must land first, otherwise the config value will
-   fail validation on boot.
-2. **Run `./scripts/verify_finally.sh`** — the validator tests will confirm
-   the bound is restored.
+1. **Revert the code** (`models.py` bound) first, then the config (template
+   value). Code must land first, otherwise the config value fails validation
+   on boot.
+2. **Run `./scripts/verify_finally.sh`** — validator tests confirm the bound
+   is restored.
 
 ### 4.3 Rollback of a Threshold That Produced Bad State
 
-Some thresholds, once raised, leave behind state that the lower threshold
-would not have permitted:
+Some thresholds, once raised, leave behind state the lower threshold would
+not have permitted:
 
 - **`max_goal_depth` raised then lowered** — existing goals deeper than the
-  new bound remain in the store; they are not retroactively rejected. To
-  clean up, cancel the over-depth goals via the admin RPC or let them
-  complete naturally. Do **not** delete goal records directly.
+  new bound remain; they are not retroactively rejected. Cancel via admin
+  RPC or let them complete. Do **not** delete goal records directly.
 - **`max_parallel_goals` raised then lowered** — in-flight parallel goals
   continue to completion; the lower bound applies only to *new* dispatch.
 - **`context_overflow_threshold_pct` lowered then raised** — already-
-  compacted context is not restored. The next run uses the new (higher)
-  threshold fresh.
+  compacted context is not restored. The next run uses the new threshold
+  fresh.
 
-Rule: **threshold rollbacks are forward-effective, not retroactive.** They
-constrain new work; they do not rewrite history. If the bad state must be
-purged, use the admin RPCs, not direct DB writes.
+**Rule: threshold rollbacks are forward-effective, not retroactive.** They
+constrain new work; they do not rewrite history. If bad state must be purged,
+use admin RPCs, not direct DB writes.
 
 ### 4.4 Canary Rollback
 
@@ -412,9 +376,9 @@ If the change was canaried to one loop/worker:
 1. **Drain the canary** — stop dispatching new work to the canary instance.
 2. **Revert config** on the canary only.
 3. **Restart** the canary.
-4. **Compare** the canary's metrics against the fleet baseline before
-   fleet-wide rollout. If the canary regressed, the fleet is unaffected —
-   this is the point of canarying.
+4. **Compare** canary metrics against the fleet baseline before fleet-wide
+   rollout. If the canary regressed, the fleet is unaffected — this is the
+   point of canarying.
 
 ### 4.5 Rollback Decision Criteria
 
@@ -423,13 +387,13 @@ Roll back immediately if any of:
 - SLA breach rate exceeds the pre-change baseline by >20%.
 - A loop that previously terminated now exhausts `max_iterations` (the
   terminal reason is a signal, not a failure to retry).
-- Context-compaction frequency changes by >2× (in either direction — too
-  much compaction loses memory, too little risks hard context errors).
-- Rate-limit circuit-breaker trips per hour exceeds the baseline by >50%.
+- Context-compaction frequency changes by >2× (too much loses memory, too
+  little risks hard context errors).
+- Rate-limit circuit-breaker trips per hour exceeds baseline by >50%.
 
-Do not "wait and see" past one SLA cycle (4h by default). A threshold
-regression compounds: a stuck goal holds a dispatch slot, which reduces
-effective parallelism, which raises latency on *other* goals.
+Do not "wait and see" past one SLA cycle (4h default). Threshold regressions
+compound: a stuck goal holds a dispatch slot, reducing effective parallelism
+and raising latency on *other* goals.
 
 ## 5. Change Record Template
 
@@ -447,8 +411,8 @@ threshold-change:
   synced: config/develop/soothe.yml, packages/soothe-daemon/.../templates/soothe.yml
 ```
 
-This record is the rollback contract: the `rollback-condition` is the
-objective signal to revert, evaluated against the `metric` baseline.
+The `rollback-condition` is the objective signal to revert, evaluated against
+the `metric` baseline.
 
 ## 6. Related Documentation
 
@@ -460,9 +424,8 @@ objective signal to revert, evaluated against the `metric` baseline.
 - [StrangeLoop](wiki/core/strangeloop.md) — iteration budget narrative
 - [Context Engine](wiki/core/context-engine.md) — context window thresholds
 
-Prior tuning history is captured in the IG/RFC corpus; the most relevant
-records for threshold rationale are RFC-224 (context window), RFC-213
-(reasoning quality), RFC-630 (no-keyword-heuristics rule), IG-729
-(rate-limit loop safety), IG-728 (rail auto-pick confidence), and the
-archived IG-499/IG-501 (rate-limit retry tuning) and IG-301/IG-319 (LLM
-call timeout tuning).
+Prior tuning history is in the IG/RFC corpus; most relevant: RFC-224 (context
+window), RFC-213 (reasoning quality), RFC-630 (no-keyword-heuristics),
+IG-729 (rate-limit loop safety), IG-728 (rail auto-pick confidence), and
+archived IG-499/IG-501 (rate-limit retry tuning), IG-301/IG-319 (LLM call
+timeout tuning).

@@ -147,5 +147,5 @@ Beyond the client-facing stream, there's an `InternalEventBus` for daemon/worker
 
 - **[SootheRunner](runner.md)** — yields the canonical event stream
 - **[StrangeLoop](strangeloop.md)** — emits cognition events during execution
-- **[ContextEngine](goal-engine.md)** — emits goal lifecycle events
+- **[ContextEngine](context-engine.md)** — emits goal lifecycle events
 - **[RFC-401](../../specs/RFC-401-event-processing.md)** — event processing spec

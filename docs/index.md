@@ -11,11 +11,10 @@ permalink: /
 
 > **Goal-driven orchestration framework for building 24/7 long-running autonomous agents**
 
-Soothe is an agent-harnessing framework — an *Agentic OS* that pushes humans
-**out of the execution loop**. Built on LangChain / DeepAgents, it adds a
-persistent **agentic loop** and **goal engine** that maintains context across
-sessions, sustains long-running goals, coordinates multiple objectives, and
-autonomously steers complex tasks.
+Soothe is an *Agentic OS* that pushes humans **out of the execution loop**.
+Built on LangChain / DeepAgents, it adds a persistent **agentic loop** and
+**goal engine** that maintains context across sessions, sustains long-running
+goals, coordinates multiple objectives, and autonomously steers complex tasks.
 
 ---
 
