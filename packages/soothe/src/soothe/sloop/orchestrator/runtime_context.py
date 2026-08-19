@@ -81,6 +81,8 @@ class LoopRuntimeContext:
     ce_goal_id: str | None = None
     goal_trace: GoalLoopTrace | None = None
     tail_persistence_task: asyncio.Task[None] | None = None
+    # RFC-904: queued DecompositionProposal objects awaiting RECONCILE.
+    decompose_proposals: list[Any] = field(default_factory=list)
 
     @property
     def core_agent(self) -> CoreAgentProtocol:

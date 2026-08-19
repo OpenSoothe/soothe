@@ -286,6 +286,8 @@ class Executor:
         self._checkpoint = checkpoint
         self._goal_trace = goal_trace
         self._fast_model = fast_model
+        # RFC-904 / IG-751: proposals queued by decompose_task during step THREADS.
+        self.decompose_proposals: list[Any] = []
 
     def _execute_min_answer_chars(self) -> int:
         if self._config is None:
@@ -371,6 +373,13 @@ class Executor:
         if self._config is None:
             return _DEFAULT_MAX_TOOL_CALLS_PER_STEP
         return max(0, int(self._config.agent.loop.max_tool_calls_per_step))
+
+    def _decompose_enabled(self) -> bool:
+        """True when RFC-904 recursive decompose is enabled for this loop."""
+        if self._config is None:
+            return False
+        decompose = getattr(self._config.agent.loop, "decompose", None)
+        return bool(getattr(decompose, "enabled", False))
 
     def _dispatch_idle_seconds(self) -> float:
         """Deadlock detector: max inactivity when no root tool is pending."""
@@ -598,6 +607,7 @@ class Executor:
             prior_goals=prior_goals or None,
             vision_context=vision_context,
             skill_context=loop_state.skill_context if loop_state else None,
+            include_decompose_guidance=self._decompose_enabled(),
         )
 
     async def _fetch_pending_interrupts_from_state(
@@ -1876,6 +1886,7 @@ class Executor:
         # Init tool_call_args_registry directly (semaphore removed, registry preserved)
         init_tool_call_args_registry()
 
+        decompose_tokens = None
         try:
             logger.debug(
                 "execute step: id=%s desc=%s tool_budget=%d",
@@ -1902,6 +1913,16 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
+            if self._decompose_enabled():
+                from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_ENABLED_KEY
+
+                configurable[SOOTHE_DECOMPOSE_ENABLED_KEY] = True
+                from soothe.sloop.decompose.runtime import bind_decompose_runtime
+
+                decompose_tokens = bind_decompose_runtime(
+                    step_id=step.id,
+                    sink=self.decompose_proposals,
+                )
             # RFC-217: Inject goal briefing on thread switch (for single-step execution)
             if self._goal_context_manager:
                 goal_briefing = await self._goal_context_manager.get_execute_briefing()
@@ -2305,6 +2326,11 @@ class Executor:
                 delegate_final="",
                 output="",  # empty output for error case
             )
+        finally:
+            if decompose_tokens is not None:
+                from soothe.sloop.decompose.runtime import reset_decompose_runtime
+
+                reset_decompose_runtime(decompose_tokens)
 
     async def _stream_and_collect(
         self,

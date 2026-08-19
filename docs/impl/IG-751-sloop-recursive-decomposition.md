@@ -1,7 +1,7 @@
 # IG-751: Sloop Recursive Step Decomposition
 
 > Implementation guide for [RFC-904](../specs/RFC-904-sloop-recursive-decomposition.md).
-> Status: **In progress** (P0 started).
+> Status: **In progress** (P0 done; P1 tool + prompts + middleware wired).
 > Design draft (archived): `docs/archive/drafts/2026-08-19-sloop-recursive-decomposition-design.md`
 
 ---

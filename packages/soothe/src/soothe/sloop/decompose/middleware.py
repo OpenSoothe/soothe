@@ -1,0 +1,99 @@
+"""Middleware: inject decompose prompts / tool when enabled (RFC-904)."""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest
+
+from soothe.sloop.decompose.prompts import (
+    WRITE_TODOS_SYSTEM_ADDENDUM,
+    WRITE_TODOS_TOOL_DESCRIPTION,
+)
+from soothe.sloop.decompose.runtime import current_step_id
+from soothe.sloop.decompose.tool import build_decompose_task_tool
+from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_ENABLED_KEY
+
+logger = logging.getLogger(__name__)
+
+_DECOMPOSE_TOOL = build_decompose_task_tool()
+
+
+def _langgraph_configurable() -> dict[str, Any]:
+    try:
+        from langgraph.config import get_config
+
+        lg_cfg = get_config()
+    except Exception:
+        return {}
+    if not isinstance(lg_cfg, dict):
+        return {}
+    conf = lg_cfg.get("configurable")
+    return conf if isinstance(conf, dict) else {}
+
+
+def _override_write_todos_description(tools: list[Any]) -> list[Any]:
+    out: list[Any] = []
+    for tool in tools:
+        name = getattr(tool, "name", None) or getattr(tool, "get", lambda *_: None)("name")
+        if name == "write_todos" and hasattr(tool, "description"):
+            try:
+                cloned = tool.model_copy(update={"description": WRITE_TODOS_TOOL_DESCRIPTION})
+                out.append(cloned)
+                continue
+            except Exception:
+                try:
+                    tool.description = WRITE_TODOS_TOOL_DESCRIPTION
+                except Exception:
+                    pass
+        out.append(tool)
+    return out
+
+
+def _ensure_decompose_tool(tools: list[Any]) -> list[Any]:
+    names = {getattr(t, "name", None) for t in tools}
+    if "decompose_task" in names:
+        return tools
+    return [*tools, _DECOMPOSE_TOOL]
+
+
+class DecomposeTaskMiddleware(AgentMiddleware):
+    """Inject ``decompose_task`` + intra-step write_todos guidance on step THREADS.
+
+    Active when LangGraph configurable ``soothe_decompose_enabled`` is true and
+    a decompose runtime step id is bound. Does not own CE reconcile.
+    """
+
+    def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
+        conf = _langgraph_configurable()
+        if not conf.get(SOOTHE_DECOMPOSE_ENABLED_KEY):
+            return request
+        if not current_step_id():
+            return request
+
+        tools = list(request.tools or [])
+        tools = _override_write_todos_description(tools)
+        tools = _ensure_decompose_tool(tools)
+
+        system = request.system_message
+        addendum = WRITE_TODOS_SYSTEM_ADDENDUM
+        if system is not None and hasattr(system, "content"):
+            content = system.content
+            if isinstance(content, str) and addendum not in content:
+                from langchain_core.messages import SystemMessage
+
+                new_system = SystemMessage(content=f"{content}\n\n{addendum}")
+                return request.override(tools=tools, system_message=new_system)
+            if isinstance(content, list):
+                # content blocks — append text block
+                from langchain_core.messages import SystemMessage
+
+                new_blocks = [
+                    *content,
+                    {"type": "text", "text": f"\n\n{addendum}"},
+                ]
+                new_system = SystemMessage(content=new_blocks)
+                return request.override(tools=tools, system_message=new_system)
+
+        return request.override(tools=tools)

@@ -42,7 +42,9 @@ class AgentBuilder(nano_builder.AgentBuilder):
 
     def _host_middleware_suffix(self) -> tuple:
         # Apply after ToolEnforcement so step/synthesis configurables win.
-        return (GoalStepGuardMiddleware(),)
+        from soothe.sloop.decompose.middleware import DecomposeTaskMiddleware
+
+        return (GoalStepGuardMiddleware(), DecomposeTaskMiddleware())
 
     def build(self, *args: Any, **kwargs: Any):  # type: ignore[override]
         # Install host daemon kill guards before toolkit resolution (nano hook).
