@@ -13,7 +13,7 @@ Requirements:
     - mermaid-cli (mmdc) for SVG output: npm install -g @mermaid-js/mermaid-cli
 
 Output:
-    - docs/diagrams/strange_loop_stem.mmd   (canonical stem — hand-authored, IG-663)
+    - docs/diagrams/strange_loop_stem.mmd   (canonical stem — hand-authored, RFC-904)
     - docs/diagrams/strange_loop_graph.mmd  (full-edge Mermaid dump from LangGraph)
     - docs/diagrams/strange_loop_graph.svg   (SVG of full-edge dump)
 """
@@ -50,8 +50,6 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
     mock_strange_loop = MagicMock()
     mock_strange_loop.config = config
     mock_strange_loop.core_agent = MagicMock()
-    mock_strange_loop.loop_planner = MagicMock()
-    mock_strange_loop.loop_planner._model = MagicMock()
 
     mock_state_manager = MagicMock()
     mock_state_manager.loop_id = "test_loop"

@@ -1,34 +1,33 @@
 # StrangeLoop LangGraph Design
 
 Canonical architecture view: [`strange_loop_stem.mmd`](strange_loop_stem.mmd)
-(preprocess → plan → execute → complete). Full-edge dumps from
-``draw_mermaid()`` are an appendix for implementers — regenerate with
-``python scripts/visualize_strange_loop_graph.py``.
+(preprocess → DISPATCH ⇄ EXECUTE → RECONCILE → ROOT_EVAL → finalize).
+Full-edge dumps from ``draw_mermaid()`` are an appendix for implementers —
+regenerate with ``python scripts/visualize_strange_loop_graph.py``.
 
 Orchestrator modules: [`orchestrator_modules.mmd`](orchestrator_modules.mmd).
+
+Spec: [RFC-904](../specs/RFC-904-sloop-recursive-decomposition.md).
+Legacy plan-spine stations (`gather_evidence` / `evaluate` / `generate_plan` /
+`commit_plan` / `check_limits`) are removed from the live graph (IG-752).
 
 ## Graph entry (preprocess)
 
 Every goal turn runs:
 
-1. ``intake`` — intake LLM → ``IntakeLabel`` + optional ``chitchat_response`` / ``wire_subagent``
-2. ``enter_loop`` — surface label on graph state; inject trivial/simple pseudo-plan or select delegate route; emit chitchat fast-path event
-3. ``route_after_preprocess`` — branch dispatch (conditional edge from ``enter_loop``)
+1. ``intake`` — Pass-1 intake LLM → ``IntakeLabel`` + optional ``chitchat_response`` / ``wire_subagent``
+2. ``enter_loop`` — surface label / continuation flags on graph state; emit chitchat fast-path when applicable
+3. ``route_after_preprocess`` — branch from ``enter_loop``
 
-## ``route_after_preprocess`` priority (RFC-630)
+## ``route_after_preprocess`` priority (RFC-904)
 
 Evaluated in order; first match wins:
 
 | Priority | Condition | Target | Notes |
 |----------|-----------|--------|-------|
-| 1 | ``intent_route == fast_path`` | ``__end__`` | Chitchat fast-path (blocked if ``new_goal_created``) |
-| 2 | ``intent_route == wired_subagent`` | ``delegate`` | Intake-only direct invoke → finalize / review |
-| 3 | ``is_fresh_goal`` + ``trivial``/``simple`` | ``commit_plan`` | Injected pseudo-plan |
-| 4 | default | ``gather_evidence`` | Fresh complex + all mid-loop |
-
-Mid-loop intake tiers (trivial bootstrap / simple lightweight / complex full)
-live inside gather → evaluate → generate — not as a preprocess overlay
-(``soothe.sloop.orchestrator.continuation``).
+| 1 | ``intent_route == fast_path`` | ``__end__`` | Chitchat fast-path (blocked if ``new_goal_created`` → DISPATCH) |
+| 2 | ``intent_route == wired_subagent`` | ``delegate`` | Intake-only specialist → finalize / review / DISPATCH handoff |
+| 3 | default | ``dispatch`` | All task labels; DISPATCH owns the root StepNode |
 
 ```mermaid
 flowchart TD
@@ -36,33 +35,35 @@ flowchart TD
     IOR --> R{{route_after_preprocess}}
     R -->|fast_path| END1[END / chitchat]
     R -->|wired_subagent| IWS[delegate]
-    R -->|fresh_trivial_simple| RD[commit_plan → execute]
-    R -->|fresh_complex_or_mid_loop| BEG[gather_evidence]
-    BEG --> PGA{{route_after_evidence_gather}}
-    PGA -->|evaluate| EV[evaluate]
-    PGA -->|plan_generate_skip_evaluate| PG[generate_plan]
-    PGA -->|keep_plan| RD2[commit_plan]
+    R -->|task| D[dispatch]
+    D -->|ready| EX[execute]
+    D -->|tree green| RE[root_eval]
+    EX --> RP[record_progress]
+    RP --> RC[reconcile]
+    RC -->|more work| D
+    RC -->|quiet| RE
+    RE -->|done| F[finalize]
+    RE -->|gap| D
 ```
 
 ## Stations (canonical IDs)
 
 | Station | Stage | Notes |
 |---------|-------|-------|
-| `intake` | preprocess | |
-| `enter_loop` | preprocess | |
-| `gather_evidence` | plan | |
-| `evaluate` | plan | status assess + gap inventory |
-| `generate_plan` | plan | |
-| `commit_plan` | execute | decision resolve + evidence validate (folded) |
-| `execute` | execute | |
-| `record_progress` | execute | |
-| `check_limits` | execute | iteration gate + begin-iteration setup (folded) |
-| `finalize` | complete | |
-| `await_user` | sidecar | clarification park |
-| `delegate` | sidecar | wired subagent |
+| `intake` | preprocess | Pass-1 social vs task |
+| `enter_loop` | preprocess | Structural continuation / fresh-goal flags |
+| `dispatch` | decompose | Claim CE ready steps; loop budget; Approve grounding |
+| `execute` | execute | CoreAgent thread wave |
+| `record_progress` | execute | Persist wave outcomes |
+| `reconcile` | decompose | Commit `decompose_task` proposals into CE StepDAG |
+| `root_eval` | decompose | Tree-green → finalize, or gap re-dispatch |
+| `finalize` | complete | Goal completion / synthesis |
+| `await_user` | sidecar | Clarification park; resume → execute / DISPATCH / delegate |
+| `delegate` | sidecar | Wired intake subagent (e.g. planner Approve) |
 
-Folded (no longer separate nodes): ``validate_plan`` → ``commit_plan``;
-``begin_iteration`` → ``check_limits``.
+Removed from the live graph (ledger dual-read / clarification resume only):
+``gather_evidence``, ``evaluate``, ``generate_plan``, ``commit_plan``,
+``check_limits``. Legacy clarification origins resume at ``dispatch``.
 
 Registry: `soothe.sloop.orchestrator.stations`. Wire deliverable phases
 `goal_completion` / `execute_step` remain unchanged (soothe-sdk contract).

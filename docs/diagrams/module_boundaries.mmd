@@ -31,7 +31,7 @@ graph TD
       SLICE_COREAG["coreagent/ — CoreAgent runtime<br/>core_agent · factory · builder · lazy — delegates to soothe-nano"]
       SLICE_RUNNER["runner/ — host runner<br/>_runner_strange_loop · _runner_autopilot_worker · _thread_manager · resolver"]
       SLICE_CTX["context/ — Context Engine<br/>engine · ledger · retrieval · projection · semantic · store_{base,sqlite,pgsql,factory}"]
-      SLICE_PROTO["protocols/ — abstract contracts<br/>loop_working_memory · loop_planner · runner · operation_security"]
+      SLICE_PROTO["protocols/ — abstract contracts<br/>loop_working_memory · runner"]
       SLICE_RAILS["rails/ — execution discipline<br/>catalog · builtins · selector · l0_schema · verb_defaults"]
       SLICE_CRON["cron/ — scheduler<br/>service · store{_postgres,_factory} · extraction · models · messages"]
       SLICE_PERSIST["persistence/ — unified stores<br/>unified · sqlite_runtime · postgres_pool · loop_writer · checkpoint_split · db_init"]

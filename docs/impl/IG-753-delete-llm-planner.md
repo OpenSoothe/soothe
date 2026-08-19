@@ -29,6 +29,7 @@ continuation prompt stack and unused ``plan_evaluate_*`` /
 | Remove scratch ``plan_assessment`` / ``plan_gap`` | Done |
 | Drop exported historical station IDs; live ``CLARIFICATION_ORIGINS`` only | Done |
 | Collapse dead ``plan_route`` / ``assess_route`` graph channels | Done |
+| Refresh ``docs/diagrams`` stem / full-edge dump / wiki stem text | Done |
 
 ## 3. Kept
 

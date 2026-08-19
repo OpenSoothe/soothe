@@ -66,7 +66,7 @@ soothe-cli            ← Typer + Textual TUI                             ← OW
 | `coreagent/` | CoreAgent runtime (`core_agent`, `factory`, `builder`, `lazy`) — delegates to `soothe-nano` |
 | `runner/` | Host runner — `_runner_strange_loop`, `_runner_autopilot_worker`, `_thread_manager`, `resolver/` |
 | `context/` | Context Engine — `engine`, `ledger`, `retrieval`, `projection`, `semantic`, `store_{base,sqlite,pgsql,factory}` |
-| `protocols/` | Abstract contracts — `loop_working_memory`, `loop_planner`, `runner`, `operation_security` |
+| `protocols/` | Abstract contracts — `loop_working_memory`, `runner` |
 | `rails/` | Execution discipline — `catalog`, `builtins`, `selector`, `l0_schema`, `verb_defaults` |
 | `cron/` | Scheduler — `service`, `store{_postgres,_factory}`, `extraction`, `models`, `messages` |
 | `persistence/` | Unified stores — `unified`, `sqlite_runtime`, `postgres_pool`, `loop_writer`, `checkpoint_split`, `db_init` |
@@ -121,7 +121,7 @@ User ── Typer/TUI (soothe-cli) ──WebSocket── soothe-client-python �
                                     │ PERFORM (full delegation)         │
                                     ▼                                   │
                   StrangeLoop (sloop/engine/, L2)                      │
-                  plan → assess → execute (iterative)                   │
+                  DISPATCH ⇄ EXECUTE → RECONCILE → ROOT_EVAL                   │
                                     │ EXECUTE (step)                    │
                                     ▼                                   │
                   CoreAgent (coreagent/) ──► soothe-nano (L1 runtime)   │
@@ -138,5 +138,5 @@ User ── Typer/TUI (soothe-cli) ──WebSocket── soothe-client-python �
 
 Three-level execution (concrete names per AGENTS §7):
 **Autopilot/GoalEngine** manages goal DAGs and delegates single-goal execution
-to **StrangeLoop**, which iterates plan→execute and delegates steps to
+to **StrangeLoop**, which iterates DISPATCH⇄EXECUTE and delegates steps to
 **CoreAgent** (→ `soothe-nano`).
