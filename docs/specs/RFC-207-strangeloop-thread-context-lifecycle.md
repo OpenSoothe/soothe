@@ -5,6 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
+**Authors**: Soothe Team
 **Updated**: 2026-06-19
 **Dependencies**: RFC-201, RFC-203
 **Supersedes**: RFC-216 (Multi-Thread Infinite Lifecycle)

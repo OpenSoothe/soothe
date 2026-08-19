@@ -286,6 +286,8 @@ class Executor:
         self._checkpoint = checkpoint
         self._goal_trace = goal_trace
         self._fast_model = fast_model
+        # RFC-904 / IG-751: proposals queued by decompose_task during step THREADS.
+        self.decompose_proposals: list[Any] = []
 
     def _execute_min_answer_chars(self) -> int:
         if self._config is None:
@@ -486,11 +488,27 @@ class Executor:
         state: LoopState,
         decision: AgentDecision,
     ) -> None:
-        """Expand vague dependent-step briefs using predecessor evidence (P2)."""
+        """Expand vague dependent-step briefs using predecessor evidence (P2).
+
+        When Slice B will project predecessor execute Human/AI pairs, skip
+        embedding that evidence into ``full_description`` (avoids duplicating
+        the same findings in EXECUTION TASK and the ledger replay).
+        """
         if not self._step_brief_hydration_enabled():
             return
+        from soothe.sloop.engine.step_predecessor_context import (
+            predecessor_execute_in_ledger,
+        )
+
         for step in steps:
             if not step_needs_brief_hydration(step):
+                continue
+            if predecessor_execute_in_ledger(state.loop_messages, step, decision):
+                logger.info(
+                    "[Execute] skip brief evidence embed for step %s; "
+                    "predecessor ledger projects as Slice B",
+                    step.id,
+                )
                 continue
             evidence = build_prior_step_evidence(step, decision, state)
             if not evidence.strip():
@@ -526,21 +544,10 @@ class Executor:
         predecessor_projected: bool = False,
     ) -> str:
         """Build the execute-step user envelope (task + hints; ledger slices projected separately)."""
-        from soothe.sloop.prompts.builder import _prior_goals_from_checkpoint
-        from soothe.sloop.prompts.user_message import (
-            UserMessageBuilder,
-            _render_prior_goals_tree,
-        )
+        from soothe.sloop.prompts.user_message import UserMessageBuilder
 
         has_predecessor_ledger = bool(step.dependencies) or predecessor_projected
         prior_steps = ""
-        prior_goals = ""
-        exec_cfg = None
-        if self._config is not None:
-            exec_cfg = getattr(
-                getattr(self._config.agent, "loop", None), "execute_prompt_ledger", None
-            )
-
         if (
             loop_state is not None
             and loop_state.current_decision is not None
@@ -553,16 +560,6 @@ class Executor:
                 loop_state,
                 evidence_in_ledger=False,
             )
-        if cross_goal_projected and self._checkpoint is not None:
-            tail_k = 1
-            if exec_cfg is not None:
-                tail_k = max(1, int(getattr(exec_cfg, "cross_goal_completion_tail", 3) or 3))
-            summaries = _prior_goals_from_checkpoint(self._checkpoint, exclude_goal_id=None)
-            if summaries:
-                prior_goals = _render_prior_goals_tree(
-                    summaries[-tail_k:],
-                    completion_in_ledger=True,
-                )
 
         has_prior_completion_in_ledger = bool(
             loop_state is not None and ledger_goal_completion_text(loop_state.loop_messages).strip()
@@ -588,6 +585,9 @@ class Executor:
             if loop_state is not None
             else None
         )
+        from soothe.sloop.plans.grounding import peek_approved_plan_from_state
+
+        approved_md, approved_path = peek_approved_plan_from_state(loop_state)
         return UserMessageBuilder().build_execute_step_message(
             step_goal_text,
             step_id=step.id,
@@ -595,9 +595,10 @@ class Executor:
             expected_output=envelope_body.expected_output,
             instructions=envelope_body.instructions,
             prior_steps=prior_steps or None,
-            prior_goals=prior_goals or None,
             vision_context=vision_context,
             skill_context=loop_state.skill_context if loop_state else None,
+            approved_plan_path=approved_path,
+            approved_plan_markdown=approved_md,
         )
 
     async def _fetch_pending_interrupts_from_state(
@@ -1244,8 +1245,8 @@ class Executor:
     ) -> None:
         """Append RFC-214 Human/AI ledger pairs for each parallel step.
 
-        Execute waves record per-step ledger rows so subsequent ``plan-assess`` /
-        ``plan-generate`` prompts built in ``PromptBuilder`` see prior step evidence.
+        Execute waves record per-step ledger rows so subsequent THREAD /
+        synthesis projections can see prior step evidence.
 
         Args:
             state: Loop state whose ``loop_messages`` list is extended in wave order.
@@ -1876,6 +1877,7 @@ class Executor:
         # Init tool_call_args_registry directly (semaphore removed, registry preserved)
         init_tool_call_args_registry()
 
+        decompose_tokens = None
         try:
             logger.debug(
                 "execute step: id=%s desc=%s tool_budget=%d",
@@ -1902,6 +1904,15 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
+            from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_STEP_ID_KEY
+
+            configurable[SOOTHE_DECOMPOSE_STEP_ID_KEY] = step.id
+            from soothe.sloop.decompose.runtime import bind_decompose_runtime
+
+            decompose_tokens = bind_decompose_runtime(
+                step_id=step.id,
+                sink=self.decompose_proposals,
+            )
             # RFC-217: Inject goal briefing on thread switch (for single-step execution)
             if self._goal_context_manager:
                 goal_briefing = await self._goal_context_manager.get_execute_briefing()
@@ -2305,6 +2316,11 @@ class Executor:
                 delegate_final="",
                 output="",  # empty output for error case
             )
+        finally:
+            if decompose_tokens is not None:
+                from soothe.sloop.decompose.runtime import reset_decompose_runtime
+
+                reset_decompose_runtime(decompose_tokens)
 
     async def _stream_and_collect(
         self,

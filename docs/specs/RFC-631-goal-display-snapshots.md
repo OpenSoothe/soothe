@@ -6,6 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-07-05
 **Authors**: xiaming (with Claude)
+**Updated**: 2026-07-05
 **Depends on**: RFC-225 (Goal Record Enrichment), RFC-413 (Display Card Ledger), RFC-450 (Daemon Protocol), RFC-503 (Loop-First UX)
 **Related**: RFC-628 (Step Card Display), RFC-803 (Checkpoint Backend)
 **Design**: [docs/archive/drafts/2026-07-05-goal-display-snapshot-design.md](../archive/drafts/2026-07-05-goal-display-snapshot-design.md)

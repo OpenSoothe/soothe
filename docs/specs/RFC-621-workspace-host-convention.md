@@ -2,7 +2,7 @@
 
 **RFC**: 621
 **Title**: Workspace Host Convention: Path Mapping for Containerized Daemon
-**Status**: Implemented — WorkspaceMountConfig in config, translate_client_path_to_container/translate_container_path_to_client in workspace/resolution.py, wired through loop_workspace.py
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-06-02
 **Updated**: 2026-06-02

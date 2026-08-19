@@ -5,6 +5,8 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
+**Authors**: Soothe Team
+**Updated**: 2026-04-17
 **Dependencies**: RFC-000, RFC-302
 **Related**: RFC-306 (Durability), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation)
 **Implemented by**: CE's EpisodicSubmodule (RFC-625, RFC-626)

@@ -34,7 +34,7 @@ def _make_strange_loop() -> StrangeLoop:
     config.persistence.soothe_postgres_dsn = None
     config.home = "/tmp/soothe-test"
     config.observability.langfuse.enabled = False
-    return StrangeLoop(core_agent=MagicMock(), loop_planner=MagicMock(), config=config)
+    return StrangeLoop(core_agent=MagicMock(), config=config)
 
 
 async def _drive_intake(
@@ -53,7 +53,7 @@ async def _drive_intake(
 
     intent_classifier = MagicMock()
     intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.classify_scope_intake = AsyncMock(
+    intent_classifier.pass1_task_to_intent = MagicMock(
         return_value=IntentClassification(
             intake_label=IntakeLabel.SIMPLE,
             reasoning="I'll start the research.",

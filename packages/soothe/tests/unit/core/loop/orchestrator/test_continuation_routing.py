@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from soothe.sloop.engine.continuation_context import build_continue_bootstrap_step_briefs
 from soothe.sloop.orchestrator.continuation import (
-    bootstrap_terminal_after_execute,
-)
-from soothe.sloop.stages.plan.assess import (
-    build_continue_loop_bootstrap_plan,
+    has_prior_goal_context,
+    is_fresh_goal,
+    is_structural_continuation,
 )
 
 
@@ -17,22 +18,21 @@ def test_bootstrap_uses_user_goal() -> None:
     assert briefs.description == "create git commit"
 
 
-def test_bootstrap_terminal_after_execute_for_follow_up_goal() -> None:
-    assert bootstrap_terminal_after_execute(raw_user_goal="create git commit") is True
-
-
-def test_bootstrap_terminal_after_execute_respects_multi_phase() -> None:
-    assert (
-        bootstrap_terminal_after_execute(
-            raw_user_goal="create git commit",
-            multi_phase=True,
-        )
-        is False
+def test_is_fresh_goal_false_on_continue_loop_mode() -> None:
+    ctx = SimpleNamespace(
+        recovery_valid_resume=False,
+        continue_loop_mode=True,
+        ce=None,
+        checkpoint=None,
     )
+    assert is_fresh_goal(ctx) is False
+    assert is_structural_continuation(ctx) is False  # no prior context
 
 
-def test_build_bootstrap_plan_terminal_auto_from_intent() -> None:
-    pr = build_continue_loop_bootstrap_plan("create git commit")
-    assert pr.terminal_after_execute is True
-    assert pr.decision is not None
-    assert "create git commit" in pr.decision.steps[0].full_description
+def test_has_prior_goal_context_from_checkpoint_history() -> None:
+    ctx = SimpleNamespace(
+        ce=None,
+        ce_goal_id=None,
+        checkpoint=SimpleNamespace(goal_history=[object(), object()]),
+    )
+    assert has_prior_goal_context(ctx) is True

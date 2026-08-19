@@ -434,26 +434,13 @@ class TestPlanResult:
 class TestGoalProgressCoercion:
     """Invalid LLM prose for goal_progress must not fail structured bind."""
 
-    def test_continuation_assessment_coerces_prose_goal_progress(self) -> None:
-        from soothe.sloop.state.schemas import ContinuationAssessment
-
-        result = ContinuationAssessment(
-            action="plan_generate",
-            reasoning="I need to read the new documents.",
-            goal_progress=(  # type: ignore[arg-type]
-                "Analyzing the provided Word documents on Apache Hamilton "
-                "ecosystem positioning and strategies for building a Pandas "
-                "API framework using Hamilton + Ray Data."
-            ),
-        )
-        assert result.goal_progress == "none"
-
-    def test_status_assessment_coerces_prose_goal_progress(self) -> None:
-        from soothe.sloop.state.schemas import StatusAssessment
-
-        result = StatusAssessment(
+    def test_plan_result_coerces_prose_goal_progress(self) -> None:
+        result = PlanResult(
             status="continue",
-            goal_progress="still working on it",  # type: ignore[arg-type]
+            plan_action="keep",
+            goal_progress=(  # type: ignore[arg-type]
+                "still working through the remaining documents"
+            ),
         )
         assert result.goal_progress == "none"
 

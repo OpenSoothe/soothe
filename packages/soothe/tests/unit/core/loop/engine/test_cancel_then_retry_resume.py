@@ -5,15 +5,16 @@ Covers the 6-point resumable retry solution:
 * ``interrupted`` goal index status is treated as resumable (Point 5a).
 * The idle-resume re-activation branch restores an ``interrupted`` goal to
   ``running`` (Point 5b).
-* The iteration gate grants one grace iteration on a resumed goal at the
-  budget boundary so a cancel-then-retry at the final iteration does not
-  immediately terminalize the goal (Point 4).
+* The iteration budget gate (now ``enforce_loop_budget`` on DISPATCH) grants
+  one grace iteration on a resumed goal at the budget boundary so a
+  cancel-then-retry at the final iteration does not immediately terminalize
+  the goal (Point 4).
 
 The ``TestCancelRetryContinueLifecycle`` class drives the *full* Cancel →
 Retry → Continue lifecycle through real instances (a ``StrangeLoopCheckpoint``
 + the real ``mark_goal_interrupted`` mutation logic + the real
 ``has_resumable_interrupted_goal`` helper + the real idle-resume re-activation
-conditional + the real ``CheckLimitsNode``) so regressions in any link of
+conditional + the real ``enforce_loop_budget``) so regressions in any link of
 the chain surface here.
 """
 
@@ -25,7 +26,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe.sloop.stages.execute.check_limits import node as check_limits_node
+from soothe.sloop.stages.execute.loop_budget import enforce_loop_budget
 from soothe.sloop.state.checkpoint import StrangeLoopCheckpoint, ThreadHealthMetrics
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.sloop.state.schemas import LoopState
@@ -64,17 +65,10 @@ def _runtime_ctx(
     recovery_valid_resume: bool,
     goal_record: GoalIndexEntry | None = None,
 ) -> SimpleNamespace:
-    """Build a minimal runtime context duck-typed for ``check_limits_node``.
-
-    RFC-903 P3: ``begin_iteration`` folded into ``check_limits``, so the
-    non-terminal branch now accesses ``strange_loop`` (for checkpointer),
-    ``anchor_manager``, and ``scratch``.
-    """
+    """Build a minimal runtime context duck-typed for ``enforce_loop_budget``."""
     checkpoint = SimpleNamespace(
         thread_health_metrics=ThreadHealthMetrics(thread_id="t", last_updated=datetime.now(UTC)),
     )
-    from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch
-
     return SimpleNamespace(
         loop_state=LoopState(
             goal="retry",
@@ -87,10 +81,7 @@ def _runtime_ctx(
         goal_record=goal_record,
         emit=AsyncMock(),
         state_manager=SimpleNamespace(save=AsyncMock()),
-        # RFC-903 P3: folded begin_iteration needs these on the non-terminal branch
         strange_loop=SimpleNamespace(config=None, core_agent=None),
-        anchor_manager=SimpleNamespace(capture_iteration_start_anchor=AsyncMock()),
-        scratch=LoopPhaseScratch(),
     )
 
 
@@ -144,18 +135,10 @@ async def test_iteration_gate_grants_grace_iteration_on_resumed_goal() -> None:
         recovery_valid_resume=True,
     )
 
-    result = await check_limits_node(ctx, {})  # type: ignore[arg-type]
+    result = await enforce_loop_budget(ctx)  # type: ignore[arg-type]
 
-    # RFC-903 P3: begin_iteration folded into check_limits. The non-terminal
-    # branch now emits iteration_started and clears stale route keys
-    # (resume_synth etc.) instead of returning {}.
-    assert result == {
-        "plan_route": None,
-        "assess_route": None,
-        "last_outcome": None,
-        "resume_synth": None,
-    }
-    ctx.emit.assert_awaited_once()  # iteration_started
+    assert result is None
+    ctx.emit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -173,10 +156,10 @@ async def test_iteration_gate_terminals_non_resumed_goal_at_boundary() -> None:
         goal_record=_goal(status="running"),
     )
 
-    result = await check_limits_node(ctx, {})  # type: ignore[arg-type]
+    result = await enforce_loop_budget(ctx)  # type: ignore[arg-type]
 
-    assert result == {"last_outcome": "max_iterations"}
-    ctx.emit.assert_awaited_once()
+    assert result == "max_iterations"
+    ctx.emit.assert_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -307,16 +290,9 @@ class TestCancelRetryContinueLifecycle:
             recovery_valid_resume=True,
             goal_record=reactivated,
         )
-        result = await check_limits_node(gate_ctx, {})  # type: ignore[arg-type]
-        # RFC-903 P3: folded begin_iteration emits iteration_started + clears
-        # stale route keys on the non-terminal branch.
-        assert result == {
-            "plan_route": None,
-            "assess_route": None,
-            "last_outcome": None,
-            "resume_synth": None,
-        }
-        gate_ctx.emit.assert_awaited_once()  # iteration_started
+        result = await enforce_loop_budget(gate_ctx)  # type: ignore[arg-type]
+        assert result is None
+        gate_ctx.emit.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_cancel_persists_cursor_not_incremented(self) -> None:
@@ -442,20 +418,14 @@ class TestCancelRetryContinueLifecycle:
         resumed_ctx = _runtime_ctx(
             iteration=5, max_iterations=5, recovery_valid_resume=True, goal_record=reactivated
         )
-        # RFC-903 P3: folded begin_iteration emits + clears route keys.
-        assert await check_limits_node(resumed_ctx, {}) == {  # type: ignore[arg-type]
-            "plan_route": None,
-            "assess_route": None,
-            "last_outcome": None,
-            "resume_synth": None,
-        }
+        assert await enforce_loop_budget(resumed_ctx) is None  # type: ignore[arg-type]
 
         # Second turn: not resumed → boundary check reapplies, hard-exit.
         next_ctx = _runtime_ctx(
             iteration=5, max_iterations=5, recovery_valid_resume=False, goal_record=reactivated
         )
-        assert await check_limits_node(next_ctx, {}) == {"last_outcome": "max_iterations"}  # type: ignore[arg-type]
-        next_ctx.emit.assert_awaited_once()
+        assert await enforce_loop_budget(next_ctx) == "max_iterations"  # type: ignore[arg-type]
+        next_ctx.emit.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_interrupted_is_not_terminal_and_remains_in_flight(self) -> None:

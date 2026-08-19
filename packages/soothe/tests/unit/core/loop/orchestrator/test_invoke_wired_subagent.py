@@ -263,7 +263,6 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
         preferred_subagent="planner",
         scratch=SimpleNamespace(
             plan_result=SimpleNamespace(decision=SimpleNamespace(steps=[SimpleNamespace(id="P1")])),
-            plan_assessment=None,
             plan_artifact_path=str(plan_path),
             plan_artifact_markdown="# Plan\n\nDo the migration.\n",
             planner_subagent_review_comments=None,
@@ -284,12 +283,11 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     out = await node_invoke_wired_subagent(ctx, state)  # type: ignore[arg-type]
     assert out.get("pending_clarification") is None
     assert out.get("planner_implement_handoff") is True
-    assert route_after_wired_subagent(out) == "generate_plan"
+    assert route_after_wired_subagent(out) == "dispatch"
     assert "status: approved" in plan_path.read_text(encoding="utf-8")
     assert ctx.preferred_subagent is None
     assert ctx.scratch.planner_implement_handoff is True
     assert ctx.scratch.plan_result is None
-    assert ctx.scratch.plan_assessment is not None
     assert ctx.loop_state.approved_plan_markdown is not None
     assert "Do the migration" in ctx.loop_state.approved_plan_markdown
     ledger = ctx.loop_state._loop_messages_cache
@@ -298,8 +296,8 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     assert not any("Do the migration" in t for t in ai_texts)
 
 
-def test_route_after_wired_subagent_handoff_to_plan_generate() -> None:
-    assert route_after_wired_subagent({"planner_implement_handoff": True}) == "generate_plan"
+def test_route_after_wired_subagent_handoff_to_dispatch() -> None:
+    assert route_after_wired_subagent({"planner_implement_handoff": True}) == "dispatch"
     assert route_after_wired_subagent({}) == "finalize"
 
 

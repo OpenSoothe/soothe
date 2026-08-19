@@ -25,7 +25,7 @@ def _make_strange_loop() -> StrangeLoop:
     config.persistence.soothe_postgres_dsn = None
     config.home = "/tmp/soothe-test"
     config.observability.langfuse.enabled = False
-    return StrangeLoop(core_agent=MagicMock(), loop_planner=MagicMock(), config=config)
+    return StrangeLoop(core_agent=MagicMock(), config=config)
 
 
 def _running_checkpoint() -> MagicMock:
@@ -138,7 +138,7 @@ async def test_continue_keyword_bypasses_pass1_social_fast_path() -> None:
             await gen.aclose()
 
     assert not any(event_type == "intent_fast_path" for event_type, _ in events)
-    intent_classifier.classify_scope_intake.assert_awaited()
+    intent_classifier.pass1_task_to_intent.assert_called()
 
 
 @pytest.mark.asyncio
@@ -226,4 +226,4 @@ async def test_embedded_continue_the_loop_bypasses_pass1_social_fast_path() -> N
             await gen.aclose()
 
     assert not any(event_type == "intent_fast_path" for event_type, _ in events)
-    intent_classifier.classify_scope_intake.assert_awaited()
+    intent_classifier.pass1_task_to_intent.assert_called()

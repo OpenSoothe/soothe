@@ -14,43 +14,46 @@ Plan-Execute loop for single-goal agentic execution — the middle tier of the e
 
 ## What This Module Is
 
-StrangeLoop (`soothe.sloop`) is the **middle tier** of Soothe's three-level execution architecture. Where ContextEngine decides *which* goals to pursue, StrangeLoop executes a *single* goal through iterative Plan → Execute refinement. It delegates actual tool execution to CoreAgent.
+StrangeLoop (`soothe.sloop`) is the **middle tier** of Soothe's three-level execution architecture. Where ContextEngine owns the StepDAG for a goal, StrangeLoop drives a *single* goal through DISPATCH ⇄ EXECUTE → RECONCILE → ROOT_EVAL. It delegates actual tool execution to CoreAgent.
 
-The name comes from the core insight: the LLM plans, executes, assesses progress, and re-plans in a loop — a "strange loop" of self-referential refinement. The loop is bounded (default max 8 iterations) and converges based on progress assessment.
+The name comes from the core insight: the agent decomposes, executes, reconciles, and re-dispatches in a loop — a "strange loop" of self-referential refinement. The loop is bounded (default max iterations from config) and converges when the StepDAG is green.
 
-**RFC**: [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)
+**RFC**: [RFC-904](../../specs/RFC-904-sloop-recursive-decomposition.md) (topology); [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md) (historical Plan-Execute framing)
 **Source**: `packages/soothe/src/soothe/sloop/engine/strange_loop.py`, `state/schemas.py`, `orchestrator/`
 
 ---
 
 ## The Loop Graph — Not a Hand-Rolled Loop
 
-StrangeLoop is implemented as a **compiled LangGraph** (RFC-220 Loop Graph), not a Python `while` loop. The graph's configurable checkpoint key is `loop_id`, allowing loop state to persist across interruptions and resume from checkpoints.
+StrangeLoop is implemented as a **compiled LangGraph** (RFC-220 Loop Graph,
+topology per RFC-904), not a Python `while` loop. The graph's configurable
+checkpoint key is `loop_id`, allowing loop state to persist across interruptions
+and resume from checkpoints.
 
-The graph orchestrates a multi-phase iteration along a clear **main stem**
-(IG-663), analogous to ReAct’s agent⇄tools loop:
+The graph orchestrates a clear **main stem**:
 
-1. **Preprocess** — `intake` → `enter_loop` (understand goal + branch).
-2. **Assess** — quick status check (RFC-604); decide continue / replan / done.
-3. **Generate plan** — when needed, structured multi-step plan.
-4. **Execute** — `commit_plan` → `validate_plan` → `execute` via CoreAgent.
-5. **Record progress** — then either loop (`check_limits` → …) or **finalize**.
+1. **Preprocess** — `intake` → `enter_loop` (Pass-1 social vs task + branch).
+2. **Dispatch** — claim CE ready steps (root StepNode on first entry).
+3. **Execute** — CoreAgent thread wave; optional `decompose_task` proposals.
+4. **Record → Reconcile** — persist wave outcomes; commit proposals into the StepDAG.
+5. **Root eval** — tree-green → **finalize**, or gap re-dispatch; else loop back to DISPATCH.
 
-Stage modules live under `sloop/stages/{preprocess,plan,execute,complete,sidecars}/`.
-Canonical station IDs and legacy aliases are in `sloop/orchestrator/stations.py`.
+Stage modules live under
+`sloop/stages/{preprocess,decompose,execute,complete,sidecars}/`
+(plus `stages/plan/phase_status.py` for status cards). Canonical station IDs
+and ledger dual-read tags are in `sloop/orchestrator/stations.py`.
 
 Primary diagram: [strange_loop_stem.mmd](../../diagrams/strange_loop_stem.mmd).
 
-Routing is intake-aware (`route_after_preprocess`, RFC-630): fresh `simple` turns go to lightweight
-`generate_plan`, while continuation `trivial` and `simple` turns first go through
-`assess` continuation discrimination so the loop can bootstrap a single execute wave when
-prior context is already sufficient.
+Routing (`route_after_preprocess`): chitchat → END; wired intake specialist →
+`delegate`; all task labels → `dispatch`.
 
 ---
 
 ## PlanResult — The Structured Decision
 
-The Plan phase produces a `PlanResult`, which is the central data structure. It combines planning, progress assessment, and goal-distance estimation in a single structured LLM response.
+DISPATCH (and trivial one-step helpers) produce a `PlanResult` that carries the
+in-flight `AgentDecision` into execute.
 
 Key fields and their design rationale:
 
@@ -58,19 +61,21 @@ Key fields and their design rationale:
 - **`goal_progress`** — descriptive level (`none` | `low` | `medium` | `high` | `complete`), **not** numeric. IG-399 replaced numeric progress with descriptive levels because LLMs are bad at precise numeric estimation but good at categorical assessment.
 - **`plan_action`** — `keep` | `new`. Whether to reuse the in-flight `AgentDecision` or supply a new one. A validator enforces that `new` requires a `decision` when status isn't `done`.
 - **`require_goal_completion`** — optimization flag. When `False`, the last AIMessage can be used directly, skipping an extra goal-completion LLM call.
-- **`terminal_after_execute`** (RFC-226) — when `True`, the plan asserts its single step IS the goal completion. The graph routes directly from `record_progress` to `finalize`, skipping the next `assess`. Set for bootstrap actions where the first step is obviously the answer.
+- **`terminal_after_execute`** (RFC-226) — when `True`, the plan asserts its single step IS the goal completion. The graph routes directly from `record_progress` to `finalize`.
 
 ---
 
-## The Two-Phase Plan (RFC-604 / IG-671)
+## Recursive Decomposition (RFC-904)
 
-Mid-loop planning is a split spine with adaptive cost:
+There is no separate assess/generate plan-spine. Decomposition is owned by the
+CE StepDAG:
 
-1. **Structural keep** — when the in-flight DAG still has remaining steps and the last wave was healthy, reuse the plan with no gap/assess/generate LLM calls.
-2. **Gap + StatusAssessment** (`fast` by default) — otherwise map coverage and decide `continue` / `replan` / `done`.
-3. **PlanGeneration** (`think` by default; `fast` for simple/near-gap) — only when a new plan is needed (`replan`, or `continue` with no remaining steps). Assess `continue` + remaining steps routes `skip_generate`.
+1. **DISPATCH** claims ready steps (or grounds an Approve plan / creates the root).
+2. Threads may call executor-bound **`decompose_task`**; completions land immediately.
+3. **RECONCILE** commits proposals; **ROOT_EVAL** finalizes when the tree is green.
 
-Fresh loops skip gap/assess and go straight to generate (or trivial/simple intake shortcuts).
+Budgets: `agent.loop.decompose.*` (always on for step THREADS).
+THREAD prompt copy: `soothe.sloop.prompts.decompose` (do-or-decompose).
 
 ---
 
@@ -89,7 +94,7 @@ This lets the loop request clarification mid-execution without breaking the Plan
 
 Evidence is tracked as `EvidenceEntry` rows with a `kind` classification: `tool` (from tool execution), `bootstrap` (initial context), or `ledger` (from history). Each entry has a stable `evidence_id` and a compact `summary` for prompt injection.
 
-Evidence persists across iterations within the loop and is included in the `PlanResult.evidence_summary`. This gives the planner accumulated context about what's been learned, preventing re-exploration of already-answered questions.
+Evidence persists across iterations within the loop and is included in the `PlanResult.evidence_summary`. This gives execute / synthesis accumulated context about what's been learned.
 
 ---
 
@@ -116,21 +121,21 @@ Each StrangeLoop run assembles goal-specific context before the first iteration:
 - **Memory recall** — relevant memories retrieved from the memory protocol.
 - **Goal history** — prior iterations' evidence and reasoning.
 
-This context is injected into the Plan phase prompts, giving the LLM awareness of the broader workflow without unbounded context growth.
+This context is injected into execute / synthesis prompts, giving the LLM awareness of the broader workflow without unbounded context growth.
 
 ---
 
 ## Convergence and Iteration Bounds
 
-The loop is bounded by `agent.loop.max_iterations` (default **99**, from `DEFAULT_STRANGE_LOOP_MAX_ITERATIONS`). The same budget applies to Autopilot workers. Convergence is detected by the Plan-Assess phase returning `status="done"`.
+The loop is bounded by `agent.loop.max_iterations` (default **99**, from `DEFAULT_STRANGE_LOOP_MAX_ITERATIONS`). The same budget applies to Autopilot workers. Convergence is detected when **ROOT_EVAL** sees a green StepDAG (or a terminal one-step `PlanResult` routes `record_progress` → `finalize`).
 
-There's no separate convergence threshold — the LLM decides when the goal is achieved based on evidence and progress. The `terminal_after_execute` flag (RFC-226) provides an optimization: when the plan asserts a single step completes the goal, the graph skips the next assessment.
+The `terminal_after_execute` flag (RFC-226) provides an optimization: when a one-step plan asserts it completes the goal, the graph skips RECONCILE / ROOT_EVAL for that turn.
 
 ---
 
 ## Integration Points
 
-- **ContextEngine** — StrangeLoop is instantiated with a `core_agent` and `loop_planner`. ContextEngine activates goals and assigns them to StrangeLoop via `loop_id`. StrangeLoop reports back via `complete_goal`/`fail_goal`.
+- **ContextEngine** — StrangeLoop is instantiated with a `core_agent`. ContextEngine owns the StepDAG; StrangeLoop DISPATCH / RECONCILE / ROOT_EVAL drive it. StrangeLoop reports goal completion via finalize / CE goal APIs.
 - **SootheRunner** — the runner's `StrangeLoopMixin` creates and drives StrangeLoop, passing intent classification, workspace, and routing hints.
 - **CoreAgent** — step execution delegates to `agent.astream()` or `agent.execution_astream()` (the checkpointer-free twin for high-volume streaming).
 
@@ -145,7 +150,7 @@ A non-obvious behavior: StrangeLoop parses slash-skill invocations from the goal
 ```python
 from soothe.sloop.engine.strange_loop import StrangeLoop
 
-loop = StrangeLoop(core_agent=agent, loop_planner=planner, config=config)
+loop = StrangeLoop(core_agent=agent, config=config)
 async for event_type, event_data in loop.run_with_progress(
     goal="Analyze the codebase structure",
     thread_id="thread-123",

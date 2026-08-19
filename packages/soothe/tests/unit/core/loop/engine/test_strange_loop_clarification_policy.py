@@ -144,11 +144,13 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
             "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
+        patch(
+            "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
+            new_callable=AsyncMock,
+        ),
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
-        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
-        # Mock generate_from_assessment to return done status directly
-        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
+        loop = StrangeLoop(mock_core, SootheConfig())
 
         _ = [
             evt
@@ -203,11 +205,13 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
             "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
+        patch(
+            "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
+            new_callable=AsyncMock,
+        ),
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
-        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
-        # Mock generate_from_assessment to return done status directly
-        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
+        loop = StrangeLoop(mock_core, SootheConfig())
 
         _ = [
             evt

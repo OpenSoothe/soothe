@@ -776,39 +776,6 @@ class PlanPromptLedgerConfig(BaseModel):
     )
 
 
-class PlanEvaluatePromptConfig(BaseModel):
-    """Evaluate-station prompt assembly knobs (inventory + assess;)."""
-
-    ledger_max_messages: int = Field(
-        default=24,
-        ge=0,
-        le=500,
-        description="Max execute AI ledger rows for evaluate projection (0 = unlimited)",
-    )
-    execute_ai_max_chars: int = Field(
-        default=2048,
-        ge=0,
-        le=50_000,
-        description=(
-            "Per execute AI row char cap in evaluate inventory/assess projection "
-            "(0 = unlimited). Oversized rows keep head+tail so deliverable tables "
-            "and closing notes survive."
-        ),
-    )
-    keep_head_tail_execute_ai: bool = Field(
-        default=True,
-        description="Preserve first-wave + recent execute AI when tail-truncating",
-    )
-    omit_prior_progress_hint: bool = Field(
-        default=True,
-        description="Omit derived_progress_hint from evaluate PRIOR PROGRESS block",
-    )
-    include_plan_coverage: bool = Field(
-        default=True,
-        description="Inject deterministic PLAN COVERAGE block when a plan exists",
-    )
-
-
 class ExecutePromptLedgerConfig(BaseModel):
     """Caps for execute-step CoreAgent ledger projection."""
 
@@ -1159,32 +1126,60 @@ class ScenarioRulesConfig(BaseModel):
     low_evidence_volume_threshold: int = Field(default=2000, ge=0)
 
 
-class PlanSafetyRulesConfig(BaseModel):
-    """Declarative plan step safety rules."""
-
-    banned_step_patterns: list[str] = Field(
-        default_factory=lambda: [
-            r"^(wrap up|conclude|terminate|stop|halt|cease|end process|close|exit|quit|"
-            r"finish up|complete process|final step|last step|the end)$"
-        ]
-    )
-    simple_evidence_min_chars: int = Field(default=200, ge=0)
-    no_tool_evidence_retry_limit: int = Field(
-        default=2,
-        ge=1,
-        description=(
-            "Consecutive successful verify-only steps with zero tool calls before "
-            "plan_assess stops replanning and routes to goal completion."
-        ),
-    )
-
-
 class StrangeLoopRulesConfig(BaseModel):
     """Declarative StrangeLoop routing and completion rules."""
 
     completion: CompletionRulesConfig = Field(default_factory=CompletionRulesConfig)
     scenario: ScenarioRulesConfig = Field(default_factory=ScenarioRulesConfig)
-    plan_safety: PlanSafetyRulesConfig = Field(default_factory=PlanSafetyRulesConfig)
+
+
+class DecomposeLoopConfig(BaseModel):
+    """Recursive step decomposition budgets (RFC-904 / IG-751).
+
+    Decomposition is always on for StrangeLoop step THREADS; this object only
+    holds budgets and reconcile model role.
+    """
+
+    max_depth: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Max parent_step_id lineage depth per goal.",
+    )
+    max_steps: int = Field(
+        default=50,
+        ge=1,
+        le=500,
+        description="Max total StepNodes per goal (including superseded).",
+    )
+    max_recompose: int = Field(
+        default=2,
+        ge=0,
+        le=20,
+        description="Max B-lazy recompose attempts per lineage replacement chain.",
+    )
+    max_waves: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Max root gap re-dispatch waves (replaces max-iterations for decompose path).",
+    )
+    max_branch_root: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Max children per root-level decompose_task proposal.",
+    )
+    max_branch_inner: int = Field(
+        default=3,
+        ge=1,
+        le=50,
+        description="Max children per non-root decompose_task proposal.",
+    )
+    reconcile_model_role: str = Field(
+        default="fast",
+        description="Router model role for conflict-triggered CE reconcile LLM.",
+    )
 
 
 class StrangeLoopConfig(BaseModel):
@@ -1219,22 +1214,12 @@ class StrangeLoopConfig(BaseModel):
         goal_completion_mode: How planner completion (`require_goal_completion`) combines with
             execution heuristics when the goal is assessed as done.
         plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts.
+        execute_prompt_ledger: Caps for execute-step CoreAgent ledger projection.
         checkpoint: Progressive checkpoint persistence and startup resume (RFC-203).
         concurrency: Parallelism caps and step scheduling strategy.
-        plan_evaluate_assess_model_role: Router role for evaluate assess LLM calls (default ``fast``).
-        plan_evaluate_gap_model_role: Router role for evaluate inventory LLM calls (default ``fast``).
-        plan_generate_model_role: Router role for plan-generate LLM calls (default ``think``).
-        plan_generate_model_role_simple: Role for simple/lightweight generate (default ``fast``).
-        plan_generate_model_role_near_gap: Role for near-gap generate (default ``fast``).
-        plan_structural_keep_enabled: Skip evaluate/generate when in-flight plan is healthy.
-        plan_structural_keep_max_streak: Force full evaluate after N consecutive structural keeps.
-        plan_evaluate_gap_mode: Inventory strategy inside evaluate (``sequential`` | ``parallel``).
-        plan_evaluate_gap_max_concurrency: Max parallel inventory legs.
-        plan_evaluate_gap_min_facets: Parallel only when seeded facets >= this.
-        plan_evaluate_gap_wall_clock_seconds: Soft wall budget for inventory phase.
-        plan_evaluate_gap_leg_timeout_seconds: Soft timeout per parallel inventory leg.
-        plan_evaluate_prompt: Evaluate projection/envelope knobs (inventory + assess).
         goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default ``default``).
+        rules: Declarative completion and scenario thresholds.
+        decompose: Recursive step decomposition budgets (RFC-904); ``enabled`` default true.
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
     parallel_pre_stream) are always enabled by design and not configurable.
@@ -1253,13 +1238,6 @@ class StrangeLoopConfig(BaseModel):
         ),
         ge=1,
         le=500,
-    )
-
-    max_plan_steps_per_wave: int = Field(
-        default=10,
-        description="Maximum plan-generate steps emitted per planning wave (all iterations)",
-        ge=1,
-        le=50,
     )
 
     max_subagent_tasks_per_wave: int = Field(
@@ -1393,7 +1371,7 @@ class StrangeLoopConfig(BaseModel):
     goal_completion_mode: AgenticGoalCompletionMode = Field(
         default="llm_only",
         description=(
-            "When the planner marks the goal done: llm_only trusts StatusAssessment only; "
+            "When the loop marks the goal done: llm_only trusts PlanResult.status only; "
             "heuristic_only uses execution heuristics only; hybrid uses LLM first with heuristic fallback"
         ),
     )
@@ -1486,11 +1464,6 @@ class StrangeLoopConfig(BaseModel):
         description="Plan-phase ledger projection limits; zeros = full ledger passthrough",
     )
 
-    plan_evaluate_prompt: PlanEvaluatePromptConfig = Field(
-        default_factory=PlanEvaluatePromptConfig,
-        description="Evaluate inventory/assess projection and envelope settings.",
-    )
-
     execute_prompt_ledger: ExecutePromptLedgerConfig = Field(
         default_factory=ExecutePromptLedgerConfig,
         description="Execute-step CoreAgent ledger projection ",
@@ -1506,100 +1479,6 @@ class StrangeLoopConfig(BaseModel):
         description="Parallelism caps and step scheduling strategy",
     )
 
-    plan_evaluate_assess_model_role: ModelRole = Field(
-        default="fast",
-        description=(
-            "Router model role for evaluate assess structured LLM calls "
-            "(status assessment and continuation routing;)."
-        ),
-    )
-
-    plan_evaluate_gap_model_role: ModelRole = Field(
-        default="fast",
-        description=(
-            "Router model role for evaluate inventory (gap) structured LLM calls "
-            "(coverage map before assess;)."
-        ),
-    )
-
-    plan_generate_model_role: ModelRole = Field(
-        default="think",
-        description="Router model role for plan-generate structured LLM calls.",
-    )
-
-    plan_generate_model_role_simple: ModelRole = Field(
-        default="fast",
-        description=(
-            "Router model role for simple/lightweight plan-generate and approved-plan "
-            "implement handoff."
-        ),
-    )
-
-    plan_generate_model_role_near_gap: ModelRole = Field(
-        default="fast",
-        description=(
-            "Router model role for plan-generate when gap distance is near/at_goal "
-            "and the last execute wave succeeded."
-        ),
-    )
-
-    plan_structural_keep_enabled: bool = Field(
-        default=True,
-        description=(
-            "When true, mid-loop iterations with a healthy in-flight plan skip "
-            "evaluate/generate and reuse remaining steps."
-        ),
-    )
-
-    plan_structural_keep_max_streak: int = Field(
-        default=3,
-        ge=0,
-        le=50,
-        description=(
-            "Force a full evaluate path after this many consecutive structural "
-            "keeps (0 = no streak cap;)."
-        ),
-    )
-
-    plan_evaluate_gap_mode: Literal["sequential", "parallel"] = Field(
-        default="sequential",
-        description=(
-            "Inventory strategy inside the evaluate station: one PlanGapAnalysis "
-            "call (sequential) or per-facet fan-out (parallel;)."
-        ),
-    )
-
-    plan_evaluate_gap_max_concurrency: int = Field(
-        default=4,
-        ge=1,
-        le=8,
-        description="Max concurrent inventory legs when plan_evaluate_gap_mode=parallel.",
-    )
-
-    plan_evaluate_gap_min_facets: int = Field(
-        default=2,
-        ge=2,
-        le=8,
-        description=(
-            "Use parallel inventory only when seeded facet count is at least this; "
-            "otherwise fall back to sequential."
-        ),
-    )
-
-    plan_evaluate_gap_wall_clock_seconds: float = Field(
-        default=90.0,
-        ge=5.0,
-        le=300.0,
-        description="Soft wall-clock budget for the evaluate inventory phase.",
-    )
-
-    plan_evaluate_gap_leg_timeout_seconds: float = Field(
-        default=45.0,
-        ge=5.0,
-        le=180.0,
-        description="Soft timeout per parallel inventory leg.",
-    )
-
     goal_synthesis_model_role: ModelRole = Field(
         default="default",
         description="Router model role for goal-completion synthesis streaming.",
@@ -1612,7 +1491,12 @@ class StrangeLoopConfig(BaseModel):
 
     rules: StrangeLoopRulesConfig = Field(
         default_factory=StrangeLoopRulesConfig,
-        description="Declarative completion, scenario, and plan-safety thresholds",
+        description="Declarative completion and scenario thresholds",
+    )
+
+    decompose: DecomposeLoopConfig = Field(
+        default_factory=DecomposeLoopConfig,
+        description="Recursive step decomposition budgets (RFC-904; always on).",
     )
 
 
@@ -1669,7 +1553,7 @@ class ClarificationConfig(BaseModel):
             "With a human attached, the interactive TUI relay is used; otherwise "
             "the loop defers. Default is ``planner_subagent_review`` only — the "
             "planner *subagent* Approve/Reject/Comments gate (RFC-633). This is "
-            "not StrangeLoop ``plan_generate`` / ``plan_assess``."
+            "not a legacy StrangeLoop plan-spine origin."
         ),
     )
 
@@ -1753,7 +1637,7 @@ class AgentConfig(NanoAgentConfig):
     goal_completion_mode: AgenticGoalCompletionMode = Field(
         default="llm_only",
         description=(
-            "When planner marks goal done: llm_only trusts StatusAssessment only; "
+            "When loop marks goal done: llm_only trusts PlanResult.status only; "
             "heuristic_only uses execution heuristics only; hybrid uses LLM first with fallback"
         ),
     )

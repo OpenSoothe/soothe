@@ -2,9 +2,10 @@
 
 **RFC**: 229
 **Title**: Cron Service for Autopilot — Natural Language Scheduled Jobs
-**Status**: Implemented (partial) — cron/service.py + cron_cmd.py shipped; TUI /cron and full CLI integration incomplete
+**Status**: Implemented (partial)
 **Kind**: Architecture Design
 **Created**: 2026-06-24
+**Authors**: Soothe Team
 **Updated**: 2026-07-03
 **Dependencies**: RFC-204 (Autopilot Mode), RFC-222 (Autopilot and Goal Engine Architecture), RFC-802 (Persistence Architecture)
 **Related**: RFC-450 (Daemon Communication Protocol)

@@ -12,9 +12,8 @@ Cache Strategy (RFC-104):
 Jinja2 templates under ``instructions/`` (e.g. ``synthesis_report_system.xml``) are
 loaded on demand via ``prompts.loader.load_prompt_fragment``.
 
-StrangeLoop-specific fragments (plan_assess, plan_generate, continuation,
-gap_analysis, execution_policies, structured_plan_parse, intake classifiers)
-live in ``soothe.sloop.prompts.fragments`` (migrated in HCD-02).
+StrangeLoop intake fragments live in ``soothe.sloop.prompts.fragments``
+(plan-phase fragments removed after recursive decomposition cutover).
 """
 
 # Re-export facade — canonical source: soothe_nano.prompts.fragments

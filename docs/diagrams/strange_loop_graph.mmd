@@ -1,5 +1,5 @@
 ---
-title: StrangeLoop LangGraph (RFC-220 / RFC-630)
+title: StrangeLoop LangGraph (RFC-904)
 config:
   flowchart:
     curve: basis
@@ -20,56 +20,43 @@ graph TD;
 	intake(intake)
 	enter_loop(enter_loop)
 	delegate(delegate)
-	gather_evidence(gather_evidence)
-	evaluate(evaluate)
-	generate_plan(generate_plan)
-	commit_plan(commit_plan)
+	dispatch(dispatch)
 	execute(execute)
 	record_progress(record_progress)
-	check_limits(check_limits)
+	reconcile(reconcile)
+	root_eval(root_eval)
 	await_user(await_user)
 	finalize(finalize)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> intake;
 	intake --> enter_loop;
 	enter_loop -.-> delegate;
-	enter_loop -.-> gather_evidence;
-	enter_loop -.-> commit_plan;
+	enter_loop -.-> dispatch;
 	enter_loop -.-> __end__;
-	delegate -.-> generate_plan;
+	delegate -.-> dispatch;
 	delegate -.-> await_user;
 	delegate -.-> finalize;
 	delegate -.-> __end__;
-	gather_evidence -.-> evaluate;
-	gather_evidence -.-> generate_plan;
-	gather_evidence -.-> commit_plan;
-	evaluate -.-> generate_plan;
-	evaluate -.-> commit_plan;
-	evaluate -.-> await_user;
-	evaluate -.-> finalize;
-	generate_plan -.-> generate_plan;
-	generate_plan -.-> commit_plan;
-	generate_plan -.-> await_user;
-	generate_plan -.-> finalize;
-	commit_plan -.-> execute;
-	commit_plan -.-> __end__;
+	dispatch -.-> execute;
+	dispatch -.-> root_eval;
+	dispatch -.-> __end__;
 	execute -.-> record_progress;
-	execute -.-> check_limits;
 	execute -.-> await_user;
 	execute -.-> __end__;
-	record_progress -.-> check_limits;
+	record_progress -.-> reconcile;
 	record_progress -.-> finalize;
 	record_progress -.-> __end__;
-	check_limits -.-> gather_evidence;
-	check_limits -.-> __end__;
+	reconcile -.-> dispatch;
+	reconcile -.-> root_eval;
+	root_eval -.-> dispatch;
+	root_eval -.-> finalize;
 	await_user -.-> delegate;
-	await_user -.-> evaluate;
-	await_user -.-> generate_plan;
+	await_user -.-> dispatch;
 	await_user -.-> execute;
 	await_user -.-> __end__;
 	finalize --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc
-	linkStyle 5,9,22,26,29,31,36 stroke:#b0bec5,stroke-width:1px
-	linkStyle 37 stroke:#0288d1,stroke-width:2px
+	linkStyle 4,8,11,14,17,25 stroke:#b0bec5,stroke-width:1px
+	linkStyle 26 stroke:#0288d1,stroke-width:2px

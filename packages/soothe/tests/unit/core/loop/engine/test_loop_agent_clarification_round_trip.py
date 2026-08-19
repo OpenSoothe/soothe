@@ -13,7 +13,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.config.models import (
     ExecutePromptLedgerConfig,
@@ -23,12 +22,6 @@ from soothe.sloop import StrangeLoop
 from soothe.sloop.clarification import (
     ClarificationAnswer,
     ClarificationRequest,
-)
-from soothe.sloop.state.schemas import (
-    AgentDecision,
-    PlanResult,
-    StatusAssessment,
-    StepAction,
 )
 
 
@@ -51,94 +44,14 @@ class _StubPolicy:
         )
 
 
-class _AskUserPlanner:
-    """Iteration 0 emits an ``ask_user`` step; iteration 1 declares done."""
-
-    def __init__(self) -> None:
-        self._assess_count = 0
-        self._generate_count = 0
-        self._model = MagicMock()
-
-    async def assess_status(
-        self,
-        goal: str,
-        state: Any,
-        context: PlanContext,
-        *,
-        context_engine: Any | None = None,
-        **_kwargs: Any,
-    ) -> StatusAssessment:
-        self._assess_count += 1
-        if self._assess_count == 1:
-            return StatusAssessment(
-                status="continue",
-                goal_progress="none",
-                assessment_reasoning="need user input",
-                require_goal_completion=False,
-            )
-        return StatusAssessment(
-            status="done",
-            goal_progress="complete",
-            assessment_reasoning="answer in hand",
-            require_goal_completion=True,
-        )
-
-    async def generate_from_assessment(
-        self,
-        goal: str,
-        state: Any,
-        context: PlanContext,
-        assessment: Any,
-        *,
-        plan_manager: Any = None,
-        context_engine: Any | None = None,
-        **_kwargs: Any,
-    ) -> PlanResult:
-        self._generate_count += 1
-        if assessment.status == "done":
-            return PlanResult(
-                status="done",
-                plan_action="keep",
-                next_action="goal achieved",
-                goal_progress=assessment.goal_progress,
-            )
-        # First wave: a single ask_user step.
-        return PlanResult(
-            status="continue",
-            plan_action="new",
-            decision=AgentDecision(
-                type="execute_steps",
-                steps=[
-                    StepAction(
-                        id="ASK-01",
-                        description="ask about output format",
-                        kind="ask_user",
-                        questions=["Which output format do you want?"],
-                    )
-                ],
-                execution_mode="parallel",
-                reasoning="need user input before we can proceed",
-            ),
-            next_action="I need to ask the user before proceeding.",
-        )
-
-    async def analyze_plan_gap(
-        self, goal: str, state: Any, context: PlanContext, *, context_engine: Any | None = None
-    ) -> Any:
-        """Read-only gap analysis ; stub returns no gaps."""
-        return None
-
-    async def plan(self, goal: str, state: Any, context: PlanContext) -> PlanResult:
-        # Legacy unified entry; route through the split methods.
-        assessment = await self.assess_status(goal, state, context)
-        return await self.generate_from_assessment(goal, state, context, assessment)
-
-
 class _MockCoreAgent:
     def __init__(self) -> None:
         self.call_count = 0
         self.graph = MagicMock()
         self.graph.checkpointer = None
+
+    async def aget_state(self, config: dict | None = None, **kwargs: Any):
+        return MagicMock(tasks=[], values={}, next=())
 
     @property
     def checkpointer(self) -> None:
@@ -212,10 +125,14 @@ def _make_config(max_iterations: int = 4) -> Any:
 
 @pytest.mark.asyncio
 async def test_planner_ask_user_round_trip_records_answer_as_step_result() -> None:
-    planner = _AskUserPlanner()
+    """RFC-904: planner ask_user waves are replaced by DISPATCH-claimed steps.
+
+    Full ask_user clarification round-trip moves to StepNode.questions (P4).
+    This test verifies the decompose path still completes a goal end-to-end.
+    """
     policy = _StubPolicy(answers=("json",))
     core_agent = _MockCoreAgent()
-    loop_agent = StrangeLoop(core_agent=core_agent, loop_planner=planner, config=_make_config())
+    loop_agent = StrangeLoop(core_agent=core_agent, config=_make_config())
 
     events: list[tuple[str, Any]] = []
     async for evt in loop_agent.run_with_progress(
@@ -226,26 +143,5 @@ async def test_planner_ask_user_round_trip_records_answer_as_step_result() -> No
     ):
         events.append(evt)
 
-    # The policy was consulted (multiple times due to split graph flow).
-    assert policy.call_count >= 1
-    asked = policy.received[0]
-    assert asked.questions == ("Which output format do you want?",)
-    assert asked.origin_node == "execute"
-    assert asked.origin_interrupt_id.startswith("planner-ask:")
-
-    # Plan scoping prepends a 3-char uppercase letter prefix to the planner-supplied id.
-    step_completed = [
-        e for e in events if e[0] == "step_completed" and e[1].get("step_id", "").endswith("ASK-01")
-    ]
-    assert len(step_completed) >= 1  # May emit multiple due to split graph flow
-    assert step_completed[0][1]["success"] is True
-
-    # The loop reached `done` and emitted a `completed` event with the goal
-    # marked complete.
     completed = [e for e in events if e[0] == "completed"]
     assert completed, "loop did not emit a completed event"
-
-    # CoreAgent.astream was NOT invoked for the ask_user step (Branch 2 short-circuit).
-    # It might have been invoked for goal-completion synthesis; just confirm it
-    # was not called *more* than once (i.e. no extra invocation for the ask_user step).
-    assert core_agent.call_count <= 1

@@ -299,10 +299,9 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     if decision is None or plan_result is None:
         # RFC-622 resume path: when ``Command(resume=...)`` re-enters the
         # graph after a clarification interrupt, ``ctx.scratch`` is freshly
-        # initialized for the new ``ainvoke`` call so the prior plan-phase
-        # decision is gone. We can still synthesize the answered step's
-        # result from state alone — the next iteration's plan_assess /
-        # plan_generate will rebuild a decision before any new execution.
+        # initialized for the new ``ainvoke`` call so the prior decision is
+        # gone. We can still synthesize the answered step's result from state
+        # alone — DISPATCH rebuilds a decision before any new execution.
         if planner_ask_answered_step_id is not None:
             outcome_payload: dict[str, Any] = {
                 "kind": "ask_user",
@@ -499,7 +498,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
 
     from soothe.sloop.engine.step_brief_hydrator import StepBriefHydrator
 
-    hydrator_model = getattr(strange_loop.loop_planner, "_model", None)
+    hydrator_model = strange_loop._fast_llm or strange_loop.goal_synthesis_model()
     step_brief_hydrator = (
         StepBriefHydrator(hydrator_model, strange_loop.config) if hydrator_model else None
     )
@@ -612,6 +611,13 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             logger.debug("[execute] CE set_previous_plan/save failed", exc_info=True)
 
     ctx.scratch.step_results = step_results
+
+    # RFC-904: hoist decompose proposals off the ephemeral Executor onto scratch
+    # so RECONCILE can commit after THREAD ends.
+    proposals = getattr(run_executor, "decompose_proposals", None)
+    if isinstance(proposals, list) and proposals:
+        ctx.scratch.decompose_proposals.extend(list(proposals))
+        proposals.clear()
 
     # RFC-224: Check context window and compact if needed
     if checkpointer is not None and strange_loop.config is not None:

@@ -1,7 +1,7 @@
 """StrangeLoop stem station IDs and Loop Graph channel schema.
 
 Canonical LangGraph node names for the flat Loop Graph. Legacy clarification
-origin → canonical resume-station mapping lives in
+origin → resume-station mapping lives in
 ``clarification.origins.CLARIFICATION_ORIGIN_RESUME_NODE``. Ledger dual-read of
 older ``phase`` tags is handled by ``PLANNING_LEDGER_PHASES`` /
 ``INTAKE_LEDGER_PHASES``.
@@ -22,16 +22,14 @@ from typing import Any, Final, Literal, TypedDict
 INTAKE: Final = "intake"
 ENTER_LOOP: Final = "enter_loop"
 
-# --- Plan ---
-GATHER_EVIDENCE: Final = "gather_evidence"
-EVALUATE: Final = "evaluate"
-GENERATE_PLAN: Final = "generate_plan"
-
 # --- Execute ---
-COMMIT_PLAN: Final = "commit_plan"
 EXECUTE: Final = "execute"
 RECORD_PROGRESS: Final = "record_progress"
-CHECK_LIMITS: Final = "check_limits"
+
+# --- Decompose work-queue (RFC-904) ---
+DISPATCH: Final = "dispatch"
+RECONCILE: Final = "reconcile"
+ROOT_EVAL: Final = "root_eval"
 
 # --- Complete ---
 FINALIZE: Final = "finalize"
@@ -45,53 +43,42 @@ PHASE_GOAL_COMPLETION: Final = "goal_completion"
 PHASE_EXECUTE_STEP: Final = "execute_step"
 PHASE_GOAL_INTERRUPTED: Final = "goal_interrupted"
 
-# Checkpoint ledger phases filtered by soothe-sdk card_binder (do not rename).
-_PHASE_LEDGER_INTAKE: Final = "intent_classify"
-_PHASE_LEDGER_ASSESS: Final = "plan_assess"
-_PHASE_LEDGER_GENERATE: Final = "plan_generate"
-_PHASE_LEDGER_GAP: Final = "plan_gap_analysis"
-
+# Ledger dual-read: historical plan-spine / intake ``phase`` tags (not live nodes).
+# Writers after RFC-904 use live station ids / wire phases only.
 PLANNING_LEDGER_PHASES: frozenset[str] = frozenset(
     {
-        EVALUATE,
-        GENERATE_PLAN,
-        INTAKE,
-        _PHASE_LEDGER_ASSESS,
-        _PHASE_LEDGER_GENERATE,
-        _PHASE_LEDGER_GAP,
-        _PHASE_LEDGER_INTAKE,
+        "evaluate",
+        "generate_plan",
+        "intake",
+        "plan_assess",
+        "plan_generate",
+        "plan_gap_analysis",
+        "intent_classify",
         "assess",
         "analyze_gaps",
         "continuation",
     }
 )
 
-INTAKE_LEDGER_PHASES: frozenset[str] = frozenset({INTAKE, _PHASE_LEDGER_INTAKE})
+INTAKE_LEDGER_PHASES: frozenset[str] = frozenset({INTAKE, "intent_classify"})
 
 # --- Graph channel schema / route literals ---
 
 _IterationOutcome = Literal["continue", "completed", "fatal", "max_iterations", "deferred"]
-PlanRoute = Literal["goal_done", "execute"]
 _IntentRoute = Literal["continue_loop", "fast_path", "wired_subagent"]
-_AssessRoute = Literal["continue_generate", "skip_generate"]
-_EvidenceGatherRoute = Literal[
-    "evaluate",
-    "plan_generate_skip_evaluate",
-    "keep_plan",
-]
-
-PLAN_ROUTE_GOAL_DONE: PlanRoute = "goal_done"
-PLAN_ROUTE_EXECUTE: PlanRoute = "execute"
+_DispatchRoute = Literal["execute", "root_eval", "fatal"]
+_ReconcileRoute = Literal["dispatch", "root_eval"]
+_RootEvalRoute = Literal["finalize", "dispatch"]
 
 
 class LoopGraphState(TypedDict, total=False):
     """Channels merged between Loop Graph nodes."""
 
     last_outcome: _IterationOutcome | None
-    plan_route: PlanRoute | None
     intent_route: _IntentRoute | None
-    assess_route: _AssessRoute | None
-    evidence_gather_route: _EvidenceGatherRoute | None
+    dispatch_route: _DispatchRoute | None
+    reconcile_route: _ReconcileRoute | None
+    root_eval_route: _RootEvalRoute | None
     intake_label: str | None  # IntakeLabel at runtime
     is_continuation: bool | None
     is_fresh_goal: bool | None
@@ -109,15 +96,11 @@ class LoopGraphState(TypedDict, total=False):
 
 __all__ = [
     "AWAIT_USER",
-    "CHECK_LIMITS",
-    "COMMIT_PLAN",
     "DELEGATE",
+    "DISPATCH",
     "ENTER_LOOP",
-    "EVALUATE",
     "EXECUTE",
     "FINALIZE",
-    "GATHER_EVIDENCE",
-    "GENERATE_PLAN",
     "INTAKE",
     "INTAKE_LEDGER_PHASES",
     "LoopGraphState",
@@ -125,8 +108,7 @@ __all__ = [
     "PHASE_GOAL_COMPLETION",
     "PHASE_GOAL_INTERRUPTED",
     "PLANNING_LEDGER_PHASES",
-    "PLAN_ROUTE_EXECUTE",
-    "PLAN_ROUTE_GOAL_DONE",
-    "PlanRoute",
+    "RECONCILE",
     "RECORD_PROGRESS",
+    "ROOT_EVAL",
 ]

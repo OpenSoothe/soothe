@@ -1,7 +1,6 @@
-"""LLM prompts for two-pass intake classification (RFC-630).
+"""LLM prompts for Pass 1 intake classification (RFC-630 / RFC-904).
 
 - ``INTAKE_PASS1_SYSTEM_PROMPT``: Social vs task (no prior context).
-- ``INTAKE_PASS2_SYSTEM_PROMPT``: Scope (trivial/simple/complex).
 """
 
 from __future__ import annotations
@@ -17,16 +16,23 @@ def _read_intake_fragment(name: str) -> str:
     return (_INTAKE_FRAGMENTS_DIR / name).read_text(encoding="utf-8")
 
 
-def build_prompt_timestamp_block() -> str:
-    """Build the live ``<PROMPT_TIMESTAMP>`` block for LLM system prompts."""
+def build_prompt_timestamp_block(
+    ctx: dict[str, str] | None = None,
+) -> str:
+    """Build the live ``<PROMPT_TIMESTAMP>`` block for LLM system prompts.
+
+    Pass a pre-fetched ``ctx`` (from :func:`prompt_datetime_context`) to
+    avoid a timestamp race when the caller already captured the context.
+    """
     from soothe.prompts.fragments import PROMPT_TIMESTAMP_FRAGMENT
     from soothe.utils.prompt_clock import prompt_datetime_context
 
-    return PROMPT_TIMESTAMP_FRAGMENT.format(**prompt_datetime_context()).strip()
+    if ctx is None:
+        ctx = prompt_datetime_context()
+    return PROMPT_TIMESTAMP_FRAGMENT.format(**ctx).strip()
 
 
 INTAKE_PASS1_SYSTEM_PROMPT = _read_intake_fragment("pass1_system.xml")
-INTAKE_PASS2_SYSTEM_PROMPT = _read_intake_fragment("pass2_system.xml")
 INTAKE_PASS1_SOCIAL_REPLY_PROMPT = _read_intake_fragment("pass1_social_reply.xml")
 
 INTAKE_PASS1_HUMAN_TASK = "Classify the user message above. JSON only."
@@ -46,7 +52,6 @@ def build_intake_pass1_human_content(
     return "\n\n".join(parts)
 
 
-INTAKE_PASS2_HUMAN_TASK = "Classify CURRENT_GOAL scope. JSON only."
 INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK = "Write the social_response reply. JSON only."
 
 
@@ -58,8 +63,17 @@ def _substitute_prompt_placeholders(template: str, values: dict[str, str]) -> st
     return result
 
 
-def build_intake_pass1_system_prompt(body: str, assistant_name: str) -> str:
-    """Assemble Pass 1 system prompt with identity and live timestamp at the tail."""
+def build_intake_pass1_system_prompt(
+    body: str,
+    assistant_name: str,
+    *,
+    ctx: dict[str, str] | None = None,
+) -> str:
+    """Assemble Pass 1 system prompt with identity and live timestamp at the tail.
+
+    Pass a pre-fetched ``ctx`` (from :func:`prompt_datetime_context`) to
+    avoid a timestamp race when the caller already captured the context.
+    """
     from soothe.prompts.identity import (
         build_assistant_identity_block,
         normalize_assistant_name,
@@ -67,13 +81,17 @@ def build_intake_pass1_system_prompt(body: str, assistant_name: str) -> str:
     from soothe.utils.prompt_clock import prompt_datetime_context
 
     name = normalize_assistant_name(assistant_name)
-    format_ctx = {"assistant_name": name, **prompt_datetime_context()}
+    # Capture the datetime context once to avoid a timestamp race where
+    # the second ticks over between independent calls.
+    if ctx is None:
+        ctx = prompt_datetime_context()
+    format_ctx = {"assistant_name": name, **ctx}
     formatted_body = _substitute_prompt_placeholders(body.strip(), format_ctx)
 
     parts = [
         build_assistant_identity_block(name),
         formatted_body,
-        build_prompt_timestamp_block(),
+        build_prompt_timestamp_block(format_ctx),
     ]
     return "\n\n".join(part for part in parts if part)
 
@@ -84,8 +102,6 @@ __all__ = [
     "INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK",
     "INTAKE_PASS1_SOCIAL_REPLY_PROMPT",
     "INTAKE_PASS1_SYSTEM_PROMPT",
-    "INTAKE_PASS2_HUMAN_TASK",
-    "INTAKE_PASS2_SYSTEM_PROMPT",
     "build_intake_pass1_human_content",
     "build_intake_pass1_system_prompt",
     "build_prompt_timestamp_block",

@@ -29,13 +29,13 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_route_by_intent_continuation_trivial() -> None:
-    """Mid-loop trivial enters gather_evidence (default spine;)."""
+    """Mid-loop trivial enters dispatch (default spine;)."""
     state = {
         "is_continuation": True,
         "is_fresh_goal": False,
         "intake_label": IntakeLabel.TRIVIAL,
     }
-    assert route_by_intent(state) == "gather_evidence"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_route_by_intent_continuation_simple() -> None:
@@ -44,7 +44,7 @@ def test_route_by_intent_continuation_simple() -> None:
         "is_fresh_goal": False,
         "intake_label": IntakeLabel.SIMPLE,
     }
-    assert route_by_intent(state) == "gather_evidence"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_route_by_intent_continuation_complex() -> None:
@@ -53,12 +53,12 @@ def test_route_by_intent_continuation_complex() -> None:
         "is_fresh_goal": False,
         "intake_label": IntakeLabel.COMPLEX,
     }
-    assert route_by_intent(state) == "gather_evidence"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_route_by_intent_continuation_missing_label() -> None:
     state = {"is_continuation": True, "is_fresh_goal": False, "intake_label": None}
-    assert route_by_intent(state) == "gather_evidence"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_route_by_intent_trivial() -> None:
@@ -67,7 +67,7 @@ def test_route_by_intent_trivial() -> None:
         "is_fresh_goal": True,
         "intake_label": IntakeLabel.TRIVIAL,
     }
-    assert route_by_intent(state) == "commit_plan"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_route_by_intent_chitchat_fast_path() -> None:
@@ -95,7 +95,7 @@ def test_route_by_intent_simple() -> None:
         "is_fresh_goal": True,
         "intake_label": IntakeLabel.SIMPLE,
     }
-    assert route_by_intent(state) == "commit_plan"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_route_by_intent_complex() -> None:
@@ -104,13 +104,13 @@ def test_route_by_intent_complex() -> None:
         "is_fresh_goal": True,
         "intake_label": IntakeLabel.COMPLEX,
     }
-    assert route_by_intent(state) == "gather_evidence"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_route_by_intent_missing_label_falls_back_to_complex() -> None:
-    """Fail-safe: a missing label on fresh routes to gather_evidence."""
+    """Fail-safe: a missing label on fresh routes to DISPATCH."""
     state = {"is_continuation": False, "is_fresh_goal": True, "intake_label": None}
-    assert route_by_intent(state) == "gather_evidence"
+    assert route_by_intent(state) == "dispatch"
 
 
 # -- Group 4: trivial pseudo-plan (in-graph execute) ------------------------
@@ -131,7 +131,7 @@ async def test_init_or_resume_chitchat_fast_path_with_continue_loop_mode() -> No
         chitchat_response="I'm Soothe, a cloud-based AI assistant.",
         task_complexity=TaskComplexity.MINIMAL,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(
         intent=intent,
         goal="where are u from",
@@ -177,7 +177,7 @@ async def test_init_or_resume_trivial_injects_pseudo_plan() -> None:
         intake_label=IntakeLabel.TRIVIAL,
         task_complexity=TaskComplexity.MINIMAL,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(
         intent=intent,
         goal="list files in this directory",
@@ -199,23 +199,20 @@ async def test_init_or_resume_trivial_injects_pseudo_plan() -> None:
     assert result["is_fresh_goal"] is True
     assert result["intent_route"] == "continue_loop"
     assert not any(t == "intent_fast_path" for t, _ in emitted)
-    assert scratch.plan_result is not None
-    assert scratch.plan_result.terminal_after_execute is True
-    assert scratch.plan_result.decision is not None
-    assert len(scratch.plan_result.decision.steps) == 1
-    assert scratch.plan_result.decision.steps[0].description == "list files in this directory"
+    # RFC-904: enter_loop no longer injects trivial plans; DISPATCH owns the root step.
+    assert scratch.plan_result is None
 
 
 @pytest.mark.asyncio
 async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
-    """Trivial intake must not bypass plan_assess when loop continuation is active."""
+    """Trivial intake still routes through DISPATCH when loop continuation is active."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.TRIVIAL,
         task_complexity=TaskComplexity.SIMPLE,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(intent=intent, goal="continue")
     prior_goal = SimpleNamespace(
         id="goal-0",
@@ -243,14 +240,14 @@ async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
 
 @pytest.mark.asyncio
 async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuation() -> None:
-    """Simple mid-loop does not inject trivial plan; gather_evidence spine owns planning."""
+    """Simple mid-loop does not inject trivial plan; DISPATCH owns planning."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         task_complexity=TaskComplexity.SIMPLE,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(intent=intent, goal="upgrade client library")
     prior_goal = SimpleNamespace(
         id="goal-0",
@@ -273,20 +270,19 @@ async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuat
 
     assert result["is_continuation"] is True
     assert result["is_fresh_goal"] is False
-    assert scratch.plan_assessment is None
     assert scratch.plan_result is None
 
 
 @pytest.mark.asyncio
 async def test_init_or_resume_simple_injects_trivial_plan() -> None:
-    """Fresh-loop simple label injects the trivial 1-step plan (same as trivial)."""
+    """Fresh-loop simple no longer injects a plan (RFC-904 DISPATCH owns root)."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         task_complexity=TaskComplexity.SIMPLE,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(intent=intent, goal="summarize RFC-220 topology")
     ctx = SimpleNamespace(
         loop_state=loop_state,
@@ -300,23 +296,19 @@ async def test_init_or_resume_simple_injects_trivial_plan() -> None:
 
     assert result["intake_label"] == IntakeLabel.SIMPLE
     assert result["is_fresh_goal"] is True
-    assert scratch.plan_result is not None
-    assert scratch.plan_result.terminal_after_execute is True
-    assert scratch.plan_result.decision is not None
-    assert len(scratch.plan_result.decision.steps) == 1
-    assert scratch.plan_result.decision.steps[0].description == "summarize RFC-220 topology"
+    assert scratch.plan_result is None
 
 
 @pytest.mark.asyncio
 async def test_init_or_resume_complex_does_not_inject_synth_plan() -> None:
-    """The complex label leaves scratch empty — the full spine runs plan_assess/generate."""
+    """The complex label leaves scratch empty — DISPATCH owns the root step."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.COMPLEX,
         task_complexity=TaskComplexity.COMPLEX,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(intent=intent, goal="refactor persistence layer")
     ctx = SimpleNamespace(
         loop_state=loop_state,
@@ -330,7 +322,6 @@ async def test_init_or_resume_complex_does_not_inject_synth_plan() -> None:
 
     assert result["intake_label"] == IntakeLabel.COMPLEX
     assert scratch.plan_result is None
-    assert scratch.plan_assessment is None
 
 
 # -- Group 6: mislabel recovery (trivial plan shape) ----------------------
@@ -360,7 +351,7 @@ def test_routing_guard_blocks_chitchat_on_new_goal() -> None:
         "new_goal_created": True,
     }
     # Routing guard forces complex instead of END
-    assert route_by_intent(state) == "gather_evidence"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_routing_guard_blocks_chitchat_label_on_new_goal() -> None:
@@ -371,7 +362,7 @@ def test_routing_guard_blocks_chitchat_label_on_new_goal() -> None:
         "new_goal_created": True,
     }
     # Routing guard forces complex instead of END
-    assert route_by_intent(state) == "gather_evidence"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_routing_guard_allows_chitchat_on_existing_goal() -> None:
@@ -392,7 +383,7 @@ def test_routing_guard_complex_not_blocked_by_new_goal() -> None:
         "intake_label": IntakeLabel.COMPLEX,
         "new_goal_created": True,
     }
-    assert route_by_intent(state) == "gather_evidence"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_routing_guard_simple_not_blocked_by_new_goal() -> None:
@@ -402,7 +393,7 @@ def test_routing_guard_simple_not_blocked_by_new_goal() -> None:
         "intake_label": IntakeLabel.SIMPLE,
         "new_goal_created": True,
     }
-    assert route_by_intent(state) == "commit_plan"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_routing_guard_trivial_not_blocked_by_new_goal() -> None:
@@ -412,7 +403,7 @@ def test_routing_guard_trivial_not_blocked_by_new_goal() -> None:
         "intake_label": IntakeLabel.TRIVIAL,
         "new_goal_created": True,
     }
-    assert route_by_intent(state) == "commit_plan"
+    assert route_by_intent(state) == "dispatch"
 
 
 def test_routing_guard_missing_new_goal_defaults_false() -> None:

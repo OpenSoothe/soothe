@@ -2,7 +2,7 @@
 
 **RFC**: 413
 **Title**: Server-Owned Display Card Ledger
-**Status**: Implemented — `LoopCardLedger` class in `display/loop_card_ledger.py`, `LoopCardManager` owning per-loop ledger instances in `display/loop_card_manager.py`, `DisplayCardStore` at `display/display_store.py`, structural live path via `soothe.card.*` (IG-655).
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-06-04
 **Updated**: 2026-08-08

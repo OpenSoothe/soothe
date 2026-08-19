@@ -1,14 +1,14 @@
-"""Project StrangeLoop ledger messages for plan-assess / plan-generate (RFC-214).
+"""Project StrangeLoop ledger messages for execute / synthesis / intake (RFC-214).
 
-RFC-214: The complete ledger includes all phases (plan_assess, plan_generate,
-execute_step). Plan-assess, plan-generate, and continuation-assess prompts omit prior
-``plan_assess`` pairs from projected ledger; generate receives assess status
-via the inline ``ASSESSMENT`` task envelope instead. CoreAgent execution sees only execute_step
-messages (plan-phase reasoning not injected into CoreAgent thread).
+RFC-214: The complete ledger includes all phases. CoreAgent execution sees only
+``execute_step`` messages (plan-phase reasoning is not injected into the
+CoreAgent thread). Goal-completion synthesis uses the current-goal execute
+segment (plus optional compacted prior terminal status). Intake classify may
+project the last ``goal_completion`` unit.
 
-When ``PlanPromptLedgerConfig`` limits are all zero/unset behavior, the caller
-receives the same message object references as ``state.loop_messages`` (shallow
-list copy). When any limit is positive, messages are deep-copied and trimmed
+When ``PlanPromptLedgerConfig`` limits are all zero/unset, the caller receives
+the same message object references as ``state.loop_messages`` (shallow list
+copy). When any limit is positive, messages are deep-copied and trimmed
 without mutating persisted ledger state.
 """
 
@@ -37,7 +37,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-PlannerProjectionMode = Literal["new_goal", "mid_goal"]
 ExecuteProjectionMode = Literal["goal_boundary", "mid_goal"]
 
 
@@ -53,19 +52,6 @@ class ProjectedExecuteStepInput:
 
 _LEDGER_OMITTED_MARKER = "[Earlier ledger content omitted for plan prompt size]\n\n"
 _TRUNC_PER_MSG = "\n…[truncated for plan prompt]\n"
-_NEW_GOAL_LEDGER_PHASES = frozenset(
-    {
-        *INTAKE_LEDGER_PHASES,
-        "generate_plan",
-        "plan_generate",
-        PHASE_GOAL_COMPLETION,
-        PHASE_GOAL_INTERRUPTED,
-    }
-)
-_PLANNER_PROJECTED_EXCLUDED_PHASES = frozenset({"assess", "plan_assess"})
-_MID_GOAL_CURRENT_PHASES = frozenset(
-    {*INTAKE_LEDGER_PHASES, "generate_plan", "plan_generate", PHASE_EXECUTE_STEP}
-)
 
 # RFC-214: phases that mark a goal segment boundary. ``goal_completion`` is the
 # success terminal; ``goal_interrupted`` is the non-success terminal marker
@@ -85,46 +71,14 @@ _GOAL_COMPLETION_CONTEXT_BOUNDARY = (
 )
 
 # Boundary for prior terminal units in goal-completion synthesis.
-# Keeps the report focused on the current goal; prior text is status only.
+# The full prior report is kept below; this marker only scopes it as reference
+# so the model writes for the CURRENT request without reprinting prior output.
 _SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY = (
     '<PRIOR_GOAL_CONTEXT role="status_reference">\n'
-    "Prior goal outcome below is background status only.\n"
+    "Prior goal report below is background context for the CURRENT request.\n"
     "Write the report for the CURRENT request using current-goal evidence.\n"
     "Do not reprint or expand the prior report; at most one short status mention.\n"
 )
-_SYNTHESIS_PRIOR_COMPLETION_PREVIEW_CHARS = 400
-
-
-def resolve_planner_projection_mode(state: LoopState) -> PlannerProjectionMode:
-    """Return ``new_goal`` at iter=0 before any execution, else ``mid_goal``."""
-    if state.iteration == 0 and not state.step_results:
-        return "new_goal"
-    return "mid_goal"
-
-
-def filter_loop_messages_for_planner_mode(
-    loop_messages: list[BaseMessage],
-    mode: PlannerProjectionMode,
-) -> list[BaseMessage]:
-    """Phase-filter ledger messages before tail/cap projection."""
-    if mode == "mid_goal":
-        return list(loop_messages)
-    out: list[BaseMessage] = []
-    for msg in loop_messages:
-        phase = getattr(msg, "phase", None)
-        if phase in _NEW_GOAL_LEDGER_PHASES:
-            out.append(msg)
-    return out
-
-
-def filter_ledger_phases(
-    loop_messages: list[BaseMessage],
-    exclude_phases: frozenset[str],
-) -> list[BaseMessage]:
-    """Drop ledger rows whose ``phase`` is in ``exclude_phases``."""
-    if not exclude_phases:
-        return list(loop_messages)
-    return [msg for msg in loop_messages if getattr(msg, "phase", None) not in exclude_phases]
 
 
 def projected_ledger_has_goal_completion(projected: list[BaseMessage]) -> bool:
@@ -323,241 +277,6 @@ def _current_goal_segment_start(loop_messages: list[BaseMessage]) -> int:
     return 0
 
 
-def _project_planner_ledger_mid_goal_isolated(
-    loop_messages: list[BaseMessage],
-    *,
-    ledger_cfg: PlanPromptLedgerConfig | None,
-    soothe_config: Any | None,
-    exclude_phases: frozenset[str],
-) -> list[BaseMessage]:
-    """Mid-goal planner projection: Slice A prior goals + current-goal segment only.
-
-    Slice A includes boundary marker to prevent planner anchoring.
-    """
-    exec_cfg = _execute_prompt_ledger_config(soothe_config)
-    slice_a = project_cross_goal_completion_tail(
-        loop_messages,
-        k=exec_cfg.cross_goal_completion_tail,
-        ledger_cfg=ledger_cfg,
-        include_boundary=True,  # prevent planner anchoring
-    )
-    seg_start = _current_goal_segment_start(loop_messages)
-    current_segment = [
-        _deep_copy_message(m)
-        for m in loop_messages[seg_start:]
-        if getattr(m, "phase", None) in _MID_GOAL_CURRENT_PHASES
-    ]
-    combined = [*slice_a, *current_segment]
-    filtered = filter_ledger_phases(combined, exclude_phases)
-    projected = project_loop_messages_for_plan(filtered, ledger_cfg)
-    logger.debug(
-        "Planner mid_goal projection: slice_a=%d current=%d out=%d seg_start=%d",
-        len(slice_a),
-        len(current_segment),
-        len(projected),
-        seg_start,
-    )
-    return projected
-
-
-def project_planner_ledger(
-    loop_messages: list[BaseMessage],
-    mode: PlannerProjectionMode,
-    ledger_cfg: PlanPromptLedgerConfig | None,
-    *,
-    exclude_phases: frozenset[str] | None = None,
-    soothe_config: Any | None = None,
-) -> list[BaseMessage]:
-    """Project CE ledger for planner prompts with ``new_goal`` / ``mid_goal`` phase filter.
-
-    Args:
-        loop_messages: Full RFC-214 ledger from ``LoopState.loop_messages``.
-        mode: ``new_goal`` excludes ``execute_step`` by default; ``mid_goal`` uses Slice A
-            (prior ``goal_completion`` units) plus the current goal segment only.
-        ledger_cfg: Optional tail/char caps.
-        exclude_phases: Extra phase tags to omit in addition to ``plan_assess``.
-        soothe_config: Optional SootheConfig for execute Slice A ``cross_goal_completion_tail``.
-
-    Returns:
-        Filtered then capped message list for plan LLM prompts.
-    """
-    phases_to_exclude = _PLANNER_PROJECTED_EXCLUDED_PHASES | (exclude_phases or frozenset())
-    if mode == "mid_goal":
-        return _project_planner_ledger_mid_goal_isolated(
-            loop_messages,
-            ledger_cfg=ledger_cfg,
-            soothe_config=soothe_config,
-            exclude_phases=phases_to_exclude,
-        )
-
-    filtered = filter_loop_messages_for_planner_mode(loop_messages, mode)
-    filtered = filter_ledger_phases(filtered, phases_to_exclude)
-    filtered = _compact_goal_completion_units_in_messages(filtered, include_boundary=True)
-    projected = project_loop_messages_for_plan(filtered, ledger_cfg)
-    logger.debug(
-        "Planner ledger projection: mode=%s in=%d filtered=%d out=%d exclude=%s boundary=%s",
-        mode,
-        len(loop_messages),
-        len(filtered),
-        len(projected),
-        sorted(phases_to_exclude),
-        True,
-    )
-    return projected
-
-
-_EXECUTE_AI_STRIP_PREFIXES = (
-    "GOAL:",
-    "INSTRUCTIONS:",
-    "WORKSPACE:",
-    "<INSTRUCTIONS",
-    "<WORKSPACE",
-)
-
-
-def _is_execute_ai_message(msg: BaseMessage) -> bool:
-    return getattr(msg, "phase", None) == PHASE_EXECUTE_STEP and _is_loop_ai_message(msg)
-
-
-def _compact_execute_ai_for_assess(msg: BaseMessage, max_chars: int) -> BaseMessage:
-    """Keep outcome prose; strip planning boilerplate from execute AI rows.
-
-    When ``max_chars`` truncates a row, keep head **and** tail (not tail-only)
-    so assess/gap still see deliverable tables near the start and closing
-    observations near the end.
-    """
-    from soothe_nano.utils.text_preview import preview
-
-    text = extract_text_from_message_content(getattr(msg, "content", ""))
-    lines: list[str] = []
-    skip_block = False
-    for line in text.splitlines():
-        stripped = line.strip()
-        if any(stripped.startswith(prefix) for prefix in _EXECUTE_AI_STRIP_PREFIXES):
-            skip_block = True
-            continue
-        if skip_block:
-            if not stripped:
-                skip_block = False
-            continue
-        lines.append(line)
-    compacted = "\n".join(lines).strip() or text.strip()
-    if max_chars > 0 and len(compacted) > max_chars:
-        half = max(1, max_chars // 2)
-        compacted = preview(
-            compacted,
-            mode="chars",
-            first=half,
-            last=half,
-        )
-    return _set_message_content(_deep_copy_message(msg), compacted)
-
-
-def _apply_head_tail_message_cap(
-    messages: list[BaseMessage],
-    max_msg: int,
-    *,
-    keep_head_tail: bool,
-) -> list[BaseMessage]:
-    """Keep first-wave and recent execute AI rows when tail-truncating."""
-    if max_msg <= 0 or len(messages) <= max_msg:
-        return messages
-    if not keep_head_tail:
-        return messages[-max_msg:]
-    head = max(1, max_msg // 4)
-    tail = max_msg - head
-    if head + tail >= len(messages):
-        return messages
-    return [*messages[:head], *messages[-tail:]]
-
-
-def _collect_assess_execute_ai(
-    loop_messages: list[BaseMessage],
-    mode: PlannerProjectionMode,
-) -> list[BaseMessage]:
-    """Collect current-goal execute AI rows for assess projection."""
-    if mode == "new_goal":
-        has_execute = any(_is_execute_ai_message(m) for m in loop_messages)
-        if not has_execute:
-            return []
-        seg_start = 0
-    else:
-        seg_start = _current_goal_segment_start(loop_messages)
-    return [m for m in loop_messages[seg_start:] if _is_execute_ai_message(m)]
-
-
-def _assess_prompt_ledger_config(soothe_config: Any | None) -> Any | None:
-    from soothe.config.models import PlanEvaluatePromptConfig
-
-    if soothe_config is None:
-        return PlanEvaluatePromptConfig()
-    loop_cfg = getattr(soothe_config, "agent", None)
-    loop_cfg = getattr(loop_cfg, "loop", None) if loop_cfg is not None else None
-    assess_cfg = getattr(loop_cfg, "plan_evaluate_prompt", None) if loop_cfg is not None else None
-    if assess_cfg is None:
-        return PlanEvaluatePromptConfig()
-    return assess_cfg
-
-
-def _assess_effective_ledger_cfg(
-    assess_cfg: Any,
-    shared_cfg: PlanPromptLedgerConfig | None,
-) -> PlanPromptLedgerConfig | None:
-    from soothe.config.models import PlanPromptLedgerConfig
-
-    max_msg = int(getattr(assess_cfg, "ledger_max_messages", 24))
-    max_total = int(shared_cfg.plan_ledger_max_total_chars) if shared_cfg is not None else 0
-    max_per = int(shared_cfg.plan_ledger_max_message_chars) if shared_cfg is not None else 0
-    if max_msg <= 0 and max_total <= 0 and max_per <= 0:
-        return None
-    return PlanPromptLedgerConfig(
-        plan_ledger_max_messages=max_msg,
-        plan_ledger_max_total_chars=max_total,
-        plan_ledger_max_message_chars=max_per,
-    )
-
-
-def project_planner_ledger_for_assess(
-    loop_messages: list[BaseMessage],
-    mode: PlannerProjectionMode,
-    ledger_cfg: PlanPromptLedgerConfig | None,
-    *,
-    soothe_config: Any | None = None,
-) -> list[BaseMessage]:
-    """Assess-only ledger projection: current-goal execute AI rows only."""
-    assess_cfg = _assess_prompt_ledger_config(soothe_config)
-
-    execute_ai = _collect_assess_execute_ai(loop_messages, mode)
-    max_per = int(getattr(assess_cfg, "execute_ai_max_chars", 2048))
-    compacted = [_compact_execute_ai_for_assess(m, max_per) for m in execute_ai]
-    max_msg = int(getattr(assess_cfg, "ledger_max_messages", 24))
-    trimmed = _apply_head_tail_message_cap(
-        compacted,
-        max_msg,
-        keep_head_tail=bool(getattr(assess_cfg, "keep_head_tail_execute_ai", True)),
-    )
-    effective_cfg = _assess_effective_ledger_cfg(assess_cfg, ledger_cfg)
-    projected = project_loop_messages_for_plan(trimmed, effective_cfg)
-    logger.debug(
-        "Assess ledger projection: mode=%s execute_ai=%d out=%d",
-        mode,
-        len(execute_ai),
-        len(projected),
-    )
-    return projected
-
-
-def project_continuation_assess_ledger(
-    loop_messages: list[BaseMessage],
-    ledger_cfg: PlanPromptLedgerConfig | None,
-) -> list[BaseMessage]:
-    """Lean ledger for continuation-assess: last goal_completion unit only (mirrors intake).
-
-    Includes boundary marker to prevent anchoring on prior recommendations.
-    """
-    return project_last_goal_completion_for_intake(loop_messages, ledger_cfg, include_boundary=True)
-
-
 def _is_loop_human_message(msg: BaseMessage) -> bool:
     name = type(msg).__name__
     return name.endswith("HumanMessage")
@@ -566,41 +285,6 @@ def _is_loop_human_message(msg: BaseMessage) -> bool:
 def _is_loop_ai_message(msg: BaseMessage) -> bool:
     name = type(msg).__name__
     return name.endswith("AIMessage")
-
-
-def _compact_goal_completion_units_in_messages(
-    messages: list[BaseMessage],
-    *,
-    include_boundary: bool,
-) -> list[BaseMessage]:
-    """Rewrite terminal (completion/``interrupted``) pairs in a flat ledger slice.
-
-    Adjacent Human+AI pairs for ``goal_completion`` **or** ``goal_interrupted``
-    are compacted via their phase-specific rewriter; other rows pass through.
-    """
-    out: list[BaseMessage] = []
-    i = 0
-    while i < len(messages):
-        msg = messages[i]
-        phase = getattr(msg, "phase", None)
-        if (
-            phase in _GOAL_TERMINAL_PHASES
-            and _is_loop_human_message(msg)
-            and i + 1 < len(messages)
-            and getattr(messages[i + 1], "phase", None) == phase
-            and _is_loop_ai_message(messages[i + 1])
-        ):
-            out.extend(
-                _compact_terminal_unit_for_projection(
-                    [msg, messages[i + 1]],
-                    include_boundary=include_boundary,
-                )
-            )
-            i += 2
-            continue
-        out.append(_deep_copy_message(msg))
-        i += 1
-    return out
 
 
 def _compact_goal_completion_unit_for_projection(
@@ -1184,9 +868,8 @@ def project_loop_messages_for_core_agent(
 ) -> list[BaseMessage]:
     """Return ledger messages for CoreAgent thread (RFC-214).
 
-    Filters to only execute_step phase messages. Plan-phase messages
-    (plan_assess, plan_generate) are NOT injected into CoreAgent thread,
-    keeping CoreAgent's history focused on tool execution.
+    Filters to only execute_step phase messages. Historical plan-spine ledger
+    turns are not injected into the CoreAgent thread.
 
     Args:
         loop_messages: RFC-214 complete ledger from ``LoopState.loop_messages``.
@@ -1215,11 +898,11 @@ def project_loop_messages_for_core_agent(
 
 
 def _compact_terminal_unit_for_synthesis(unit: list[BaseMessage]) -> list[BaseMessage]:
-    """Compact a prior terminal unit for goal-completion synthesis.
+    """Rewrite a prior terminal unit's human envelope for goal-completion synthesis.
 
-    Rewrites the human envelope with a synthesis status-reference boundary and
-    truncates the AI body so the model can mention prior status without
-    reprinting the full prior report.
+    Only the human envelope is replaced with a status-reference boundary; the AI
+    terminal report is kept in full so the prior goal's completion report stays
+    in the projection. Global ``plan_prompt_ledger`` caps still bound total size.
     """
     phase: str | None = None
     for msg in unit:
@@ -1228,23 +911,20 @@ def _compact_terminal_unit_for_synthesis(unit: list[BaseMessage]) -> list[BaseMe
             phase = p
             break
     if phase == "goal_interrupted":
-        compact_human = "Prior goal was interrupted. Brief status follows."
+        compact_human = "Prior goal was interrupted. Full report follows."
     else:
-        compact_human = "Prior goal completed. Brief status follows."
+        compact_human = "Prior goal completed. Full report follows."
     compact_human = _SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY + compact_human
 
     out: list[BaseMessage] = []
     for msg in unit:
         copy_msg = _deep_copy_message(msg)
-        if phase is not None and getattr(copy_msg, "phase", None) == phase:
-            if _is_loop_human_message(copy_msg):
-                copy_msg = _set_message_content(copy_msg, compact_human)
-            elif _is_loop_ai_message(copy_msg):
-                text = extract_text_from_message_content(getattr(copy_msg, "content", ""))
-                preview_limit = _SYNTHESIS_PRIOR_COMPLETION_PREVIEW_CHARS
-                if preview_limit > 0 and len(text) > preview_limit:
-                    text = text[: preview_limit - 1].rstrip() + "…"
-                copy_msg = _set_message_content(copy_msg, text)
+        if (
+            phase is not None
+            and getattr(copy_msg, "phase", None) == phase
+            and _is_loop_human_message(copy_msg)
+        ):
+            copy_msg = _set_message_content(copy_msg, compact_human)
         out.append(copy_msg)
     return out
 

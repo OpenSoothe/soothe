@@ -13,7 +13,7 @@ Requirements:
     - mermaid-cli (mmdc) for SVG output: npm install -g @mermaid-js/mermaid-cli
 
 Output:
-    - docs/diagrams/strange_loop_stem.mmd   (canonical stem — hand-authored, IG-663)
+    - docs/diagrams/strange_loop_stem.mmd   (canonical stem — hand-authored, RFC-904)
     - docs/diagrams/strange_loop_graph.mmd  (full-edge Mermaid dump from LangGraph)
     - docs/diagrams/strange_loop_graph.svg   (SVG of full-edge dump)
 """
@@ -50,8 +50,6 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
     mock_strange_loop = MagicMock()
     mock_strange_loop.config = config
     mock_strange_loop.core_agent = MagicMock()
-    mock_strange_loop.loop_planner = MagicMock()
-    mock_strange_loop.loop_planner._model = MagicMock()
 
     mock_state_manager = MagicMock()
     mock_state_manager.loop_id = "test_loop"
@@ -112,7 +110,7 @@ def get_mermaid_output(graph) -> str:
     return graph.draw_mermaid()
 
 
-# Spine reading order (preprocess → plan → execute → sidecars → complete).
+# Spine reading order (RFC-904 DISPATCH topology).
 # ``draw_mermaid`` emits nodes/edges alphabetically, which gives dagre a poor
 # initial ordering; declaring them in spine order cuts edge crossings.
 _STATION_LAYOUT_ORDER: tuple[str, ...] = (
@@ -120,20 +118,18 @@ _STATION_LAYOUT_ORDER: tuple[str, ...] = (
     stations.INTAKE,
     stations.ENTER_LOOP,
     stations.DELEGATE,
-    stations.GATHER_EVIDENCE,
-    stations.EVALUATE,
-    stations.GENERATE_PLAN,
-    stations.COMMIT_PLAN,
+    stations.DISPATCH,
     stations.EXECUTE,
     stations.RECORD_PROGRESS,
-    stations.CHECK_LIMITS,
+    stations.RECONCILE,
+    stations.ROOT_EVAL,
     stations.AWAIT_USER,
     stations.FINALIZE,
     "__end__",
 )
 
 _MERMAID_HEADER = """---
-title: StrangeLoop LangGraph (RFC-220 / RFC-630)
+title: StrangeLoop LangGraph (RFC-904)
 config:
   flowchart:
     curve: basis

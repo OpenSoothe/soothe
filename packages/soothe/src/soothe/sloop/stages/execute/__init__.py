@@ -1,1 +1,1 @@
-"""Execute stage: commit, validate, execute, record, limits."""
+"""Execute stage: execute THREAD, record progress, loop budget helpers."""

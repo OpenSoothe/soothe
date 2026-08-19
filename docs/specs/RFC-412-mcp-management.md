@@ -2,7 +2,7 @@
 
 **RFC**: 412
 **Title**: MCP Management
-**Status**: Implemented (partial) — baseline MCPRegistry from soothe_nano.mcp wired through ThreadContextManager and daemon server core. ProgressiveMCPRegistry facade lives in `soothe_nano.mcp.mcp_progressive` (coding-layer PyPI package, per AGENTS.md DAG: MCP progressive disclosure belongs in soothe-nano, not the host). ProgressiveMCPRegistry methods: partition, new_for_thread, bound_tools, mark_sent/promoted, search_deferred, merge_mcp_activation. MCPActivationMiddleware and search_mcp_tools stub not yet wired into agent build/middleware stack.
+**Status**: Implemented (partial)
 **Kind**: Implementation Interface Design
 **Created**: 2026-05-29
 **Last Updated**: 2026-07-11

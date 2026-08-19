@@ -2,9 +2,11 @@
 
 **RFC**: 452
 **Title**: Unified Thread Management Architecture
-**Status**: Implemented (partial) — ThreadContextManager coordinates DurabilityProtocol, MCP, LangGraph checkpointer, ThreadLogger, RunArtifactStore. HTTP REST endpoints and bulk operations not yet shipped.
+**Status**: Implemented (partial)
 **Kind**: Architecture Design
 **Created**: 2026-03-22
+**Authors**: Soothe Team
+**Updated**: 2026-03-22
 **Dependencies**: RFC-000, RFC-001, RFC-201, RFC-450, RFC-101
 **Implements**: Thread lifecycle management, multi-threading support, unified transport APIs
 

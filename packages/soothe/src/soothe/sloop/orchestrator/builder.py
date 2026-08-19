@@ -1,4 +1,9 @@
-"""Compile the Strange Loop LangGraph (RFC-220, stem stations, evaluate).
+"""Compile the Strange Loop LangGraph (RFC-904 decompose topology).
+
+Live graph: INTAKE → ENTER_LOOP → DISPATCH ⇄ EXECUTE → RECORD_PROGRESS →
+RECONCILE → ROOT_EVAL → FINALIZE (+ AWAIT_USER / DELEGATE). Legacy plan-spine
+stations are deleted; clarification origins from old checkpoints resume at
+DISPATCH.
 
 The graph checkpoint key uses ``{loop_id}__strange_loop`` via
 ``configurable.thread_id`` (see ``checkpoint``) when a checkpointer is
@@ -13,13 +18,11 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from soothe.sloop.stages.complete.finalize import node_goal_completion
-from soothe.sloop.stages.execute.check_limits import node as check_limits_node
-from soothe.sloop.stages.execute.commit_plan import node as commit_plan_node
+from soothe.sloop.stages.decompose.dispatch import node as dispatch_node
+from soothe.sloop.stages.decompose.reconcile_node import node as reconcile_node
+from soothe.sloop.stages.decompose.root_eval import node as root_eval_node
 from soothe.sloop.stages.execute.execute import node_execute
 from soothe.sloop.stages.execute.record_progress import node_record_iteration
-from soothe.sloop.stages.plan.evaluate import node_plan_evaluate
-from soothe.sloop.stages.plan.gather_evidence import node_bounded_evidence_gather
-from soothe.sloop.stages.plan.generate_plan import node_plan_generate
 from soothe.sloop.stages.preprocess.enter_loop import node_init_or_resume
 from soothe.sloop.stages.preprocess.intake import node_intent_classify
 from soothe.sloop.stages.sidecars.await_user import node_await_clarification
@@ -29,30 +32,26 @@ from .checkpoint import core_agent_checkpointer
 from .node_base import wrap_node
 from .routing import (
     route_after_clarification,
-    route_after_commit,
-    route_after_evaluate,
-    route_after_evidence_gather,
+    route_after_dispatch,
     route_after_execute,
-    route_after_iteration_gate,
-    route_after_plan,
     route_after_preprocess,
+    route_after_reconcile,
     route_after_record_iteration,
+    route_after_root_eval,
     route_after_wired_subagent,
 )
 from .runtime_context import LoopRuntimeContext
 from .stations import (
     AWAIT_USER,
-    CHECK_LIMITS,
-    COMMIT_PLAN,
     DELEGATE,
+    DISPATCH,
     ENTER_LOOP,
-    EVALUATE,
     EXECUTE,
     FINALIZE,
-    GATHER_EVIDENCE,
-    GENERATE_PLAN,
     INTAKE,
+    RECONCILE,
     RECORD_PROGRESS,
+    ROOT_EVAL,
     LoopGraphState,
 )
 
@@ -74,7 +73,7 @@ def _is_real_checkpointer(obj: Any) -> bool:
 
 
 def build_strange_loop_graph(ctx: LoopRuntimeContext):
-    """Build and compile the Loop orchestrator graph (RFC-220 /).
+    """Build and compile the Loop orchestrator graph (RFC-904).
 
     The compiled graph is given the same checkpointer the CoreAgent uses.
     Without a checkpointer LangGraph's ``interrupt(...)`` cannot persist
@@ -93,15 +92,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     async def delegate(state: dict[str, Any]) -> dict[str, Any]:
         return await node_invoke_wired_subagent(ctx, state)
 
-    async def gather_evidence(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_bounded_evidence_gather(ctx, state)
-
-    async def generate_plan(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_plan_generate(ctx, state)
-
-    async def evaluate(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_plan_evaluate(ctx, state)
-
     async def finalize(state: dict[str, Any]) -> dict[str, Any]:
         return await node_goal_completion(ctx, state)
 
@@ -118,14 +108,12 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_node(INTAKE, intake)
     graph.add_node(ENTER_LOOP, enter_loop)
     graph.add_node(DELEGATE, delegate)
-    graph.add_node(CHECK_LIMITS, wrap_node(CHECK_LIMITS, check_limits_node, ctx))
-    graph.add_node(GATHER_EVIDENCE, gather_evidence)
-    graph.add_node(EVALUATE, evaluate)
-    graph.add_node(GENERATE_PLAN, generate_plan)
-    graph.add_node(FINALIZE, finalize)
-    graph.add_node(COMMIT_PLAN, wrap_node(COMMIT_PLAN, commit_plan_node, ctx))
+    graph.add_node(DISPATCH, wrap_node(DISPATCH, dispatch_node, ctx))
     graph.add_node(EXECUTE, execute)
     graph.add_node(RECORD_PROGRESS, record_progress)
+    graph.add_node(RECONCILE, wrap_node(RECONCILE, reconcile_node, ctx))
+    graph.add_node(ROOT_EVAL, wrap_node(ROOT_EVAL, root_eval_node, ctx))
+    graph.add_node(FINALIZE, finalize)
     graph.add_node(AWAIT_USER, await_user)
 
     graph.add_edge(START, INTAKE)
@@ -134,8 +122,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         ENTER_LOOP,
         route_after_preprocess,
         {
-            GATHER_EVIDENCE: GATHER_EVIDENCE,
-            COMMIT_PLAN: COMMIT_PLAN,
+            DISPATCH: DISPATCH,
             DELEGATE: DELEGATE,
             END: END,
         },
@@ -146,49 +133,18 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         {
             FINALIZE: FINALIZE,
             AWAIT_USER: AWAIT_USER,
-            GENERATE_PLAN: GENERATE_PLAN,
+            DISPATCH: DISPATCH,
             END: END,
         },
     )
     graph.add_conditional_edges(
-        CHECK_LIMITS,
-        route_after_iteration_gate,
-        {GATHER_EVIDENCE: GATHER_EVIDENCE, END: END},
-    )
-    graph.add_conditional_edges(
-        GATHER_EVIDENCE,
-        route_after_evidence_gather,
+        DISPATCH,
+        route_after_dispatch,
         {
-            EVALUATE: EVALUATE,
-            GENERATE_PLAN: GENERATE_PLAN,
-            COMMIT_PLAN: COMMIT_PLAN,
+            EXECUTE: EXECUTE,
+            ROOT_EVAL: ROOT_EVAL,
+            END: END,
         },
-    )
-    graph.add_conditional_edges(
-        EVALUATE,
-        route_after_evaluate,
-        {
-            FINALIZE: FINALIZE,
-            COMMIT_PLAN: COMMIT_PLAN,
-            GENERATE_PLAN: GENERATE_PLAN,
-            AWAIT_USER: AWAIT_USER,
-        },
-    )
-    graph.add_conditional_edges(
-        GENERATE_PLAN,
-        route_after_plan,
-        {
-            FINALIZE: FINALIZE,
-            COMMIT_PLAN: COMMIT_PLAN,
-            GENERATE_PLAN: GENERATE_PLAN,
-            AWAIT_USER: AWAIT_USER,
-        },
-    )
-    graph.add_edge(FINALIZE, END)
-    graph.add_conditional_edges(
-        COMMIT_PLAN,
-        route_after_commit,
-        {EXECUTE: EXECUTE, END: END},
     )
     graph.add_conditional_edges(
         EXECUTE,
@@ -196,7 +152,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         {
             RECORD_PROGRESS: RECORD_PROGRESS,
             AWAIT_USER: AWAIT_USER,
-            CHECK_LIMITS: CHECK_LIMITS,
             END: END,
         },
     )
@@ -204,18 +159,34 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         RECORD_PROGRESS,
         route_after_record_iteration,
         {
-            CHECK_LIMITS: CHECK_LIMITS,
+            RECONCILE: RECONCILE,
             FINALIZE: FINALIZE,
             END: END,
         },
     )
     graph.add_conditional_edges(
+        RECONCILE,
+        route_after_reconcile,
+        {
+            DISPATCH: DISPATCH,
+            ROOT_EVAL: ROOT_EVAL,
+        },
+    )
+    graph.add_conditional_edges(
+        ROOT_EVAL,
+        route_after_root_eval,
+        {
+            FINALIZE: FINALIZE,
+            DISPATCH: DISPATCH,
+        },
+    )
+    graph.add_edge(FINALIZE, END)
+    graph.add_conditional_edges(
         AWAIT_USER,
         route_after_clarification,
         {
             EXECUTE: EXECUTE,
-            GENERATE_PLAN: GENERATE_PLAN,
-            EVALUATE: EVALUATE,
+            DISPATCH: DISPATCH,
             DELEGATE: DELEGATE,
             END: END,
         },
@@ -224,8 +195,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     checkpointer = core_agent_checkpointer(ctx.strange_loop)
     if _is_real_checkpointer(checkpointer):
         return graph.compile(checkpointer=checkpointer)
-    # Without a checkpointer LangGraph ``interrupt()`` ends the invoke but is
-    # not durable — Approve / clarification resume cannot ``Command(resume=...)``.
     logger.warning(
         "[orchestrator] Compiling StrangeLoop graph without checkpointer; "
         "clarification interrupts will not resume across turns"

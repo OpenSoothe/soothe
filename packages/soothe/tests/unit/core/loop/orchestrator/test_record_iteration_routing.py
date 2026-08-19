@@ -10,14 +10,14 @@ def test_terminal_bootstrap_routes_to_goal_completion() -> None:
     assert route_after_record_iteration(state) == "finalize"
 
 
-def test_continue_routes_to_iteration_gate_when_not_terminal() -> None:
+def test_continue_routes_to_reconcile_when_not_terminal() -> None:
     state = {"after_record_route": "", "last_outcome": "continue"}
-    assert route_after_record_iteration(state) == "check_limits"
+    assert route_after_record_iteration(state) == "reconcile"
 
 
 def test_missing_after_record_route_falls_through() -> None:
     state = {"last_outcome": "continue"}
-    assert route_after_record_iteration(state) == "check_limits"
+    assert route_after_record_iteration(state) == "reconcile"
 
 
 def test_non_continue_outcome_returns_end() -> None:

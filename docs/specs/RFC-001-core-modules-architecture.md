@@ -3,7 +3,9 @@
 **RFC**: 001
 **Title**: Architecture Design for Core Protocol Modules
 **Status**: Implemented
+**Kind**: Architecture Design
 **Created**: 2026-03-12
+**Authors**: Soothe Team
 **Updated**: 2026-04-17 (RFC consolidation; retrieval module canonical in RFC-302)
 **Related**: RFC-000, RFC-200, RFC-302, RFC-303
 

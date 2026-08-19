@@ -14,7 +14,6 @@ from soothe_sdk.protocols.planner import StepResult as SdkStepResult
 
 from soothe.config import SOOTHE_HOME
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
-from soothe.sloop.cognition.phase import PlanPhase
 from soothe.sloop.intention import build_pass1_task_fallback
 from soothe.sloop.intention.models import (
     IntakePass1Confidence,
@@ -54,7 +53,6 @@ if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
     from soothe.config import SootheConfig
-    from soothe.protocols.loop_planner import LoopPlannerProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -82,41 +80,34 @@ def _hydrate_previous_plan_from_ce(state: LoopState, ce_goal: Any) -> None:
 
 
 class StrangeLoop:
-    """Agentic goal execution using Plan-and-Execute pattern (RFC-220 Loop Graph).
+    """Agentic goal execution via the RFC-904 DISPATCH / THREAD graph.
 
     Orchestration is a compiled LangGraph whose configurable checkpoint key is ``loop_id``.
-    Plan combines assessment and planning; Execute runs steps via CoreAgent (``thread_id``).
+    Execute runs claimed CE steps via CoreAgent (``thread_id``).
 
     Attributes:
         core_agent: CoreAgent for step execution
-        loop_planner: Plan phase (RFC-604: assessment + conditional plan generation per iteration)
         config: Soothe configuration
     """
 
     def __init__(
         self,
         core_agent: CoreAgentProtocol,
-        loop_planner: LoopPlannerProtocol,
         config: SootheConfig,
     ) -> None:
         """Initialize StrangeLoop.
 
         Args:
             core_agent: CoreAgent runtime
-            loop_planner: Plan-phase implementation (planning + assessment)
             config: Soothe configuration
         """
         self.core_agent = core_agent
-        self.loop_planner = loop_planner
         self.config = config
-
-        self.plan_phase = PlanPhase(loop_planner)
 
         # RFC-624 Phase 4: Loop-scoped CE instance (created on first run_with_progress)
         self._ce: Any | None = None
 
-        # Eagerly resolve the fast model for scenario classification; None when
-        # router.fast is unset (SynthesisGenerator falls back to planner model).
+        # Eagerly resolve the fast model for scenario classification / step briefs.
         self._fast_llm: Any | None = None
         if config.router.fast:
             try:
@@ -124,20 +115,19 @@ class StrangeLoop:
             except Exception:
                 pass
 
-        planner_fallback = getattr(loop_planner, "_model", None)
         self._goal_synthesis_llm: Any | None = None
         try:
             self._goal_synthesis_llm = config.create_chat_model(
                 config.agent.loop.goal_synthesis_model_role
             )
         except Exception:
-            self._goal_synthesis_llm = planner_fallback
+            self._goal_synthesis_llm = self._fast_llm
 
     def goal_synthesis_model(self) -> Any:
         """Resolved chat model for goal-completion synthesis."""
         if self._goal_synthesis_llm is not None:
             return self._goal_synthesis_llm
-        return getattr(self.loop_planner, "_model", None)
+        return self._fast_llm
 
     async def run(
         self,
@@ -815,56 +805,13 @@ class StrangeLoop:
                     asyncio.to_thread(ce_instance._semantic.load_memory),
                 ]
 
-            pass2_needed = (
-                preclassified_intent is None
-                and intent_classifier is not None
-                and not clarification_answer
-            )
-
-            async def _classify_scope_after_ce_load() -> Any:
-                from soothe.sloop.utils.token_usage import loop_token_accumulation_scope
-
-                ledger_messages: list[Any] = []
-                try:
-                    ledger_messages = [msg for msg, _phase in ce_instance.get_ledger_entries()]
-                except Exception:
-                    logger.debug(
-                        "Could not read CE ledger for Pass2 prior projection",
-                        exc_info=True,
-                    )
-                with loop_token_accumulation_scope(state):
-                    return await intent_classifier.classify_scope_intake(
-                        execution_goal,
-                        loop_messages=ledger_messages,
-                        thread_id=main_thread_id,
-                        context_engine=ce_instance,
-                        pass1_response_language=normalize_response_language(
-                            getattr(pass1_result, "response_language", None)
-                        )
-                        if pass1_result is not None
-                        else None,
-                        goal_trace=intake_goal_trace,
-                        observability_metadata={"thread_id": main_thread_id},
-                        observability_phase="pre-stream",
-                        observability_component="intake.pass2",
-                    )
-
             if semantic_tasks:
                 semantic_wrapped = [asyncio.create_task(task) for task in semantic_tasks]
                 ce_load_task = asyncio.create_task(ce_instance.load())
                 loaded = await ce_load_task
-                pass2_task = (
-                    asyncio.create_task(_classify_scope_after_ce_load()) if pass2_needed else None
-                )
-                if pass2_task is not None:
-                    await asyncio.gather(*semantic_wrapped, pass2_task, return_exceptions=True)
-                    preclassified_intent = pass2_task.result()
-                else:
-                    await asyncio.gather(*semantic_wrapped, return_exceptions=True)
+                await asyncio.gather(*semantic_wrapped, return_exceptions=True)
             else:
                 loaded = await ce_instance.load()
-                if pass2_needed:
-                    preclassified_intent = await _classify_scope_after_ce_load()
 
             if isinstance(loaded, Exception):
                 logger.warning("[CE] load() failed: %s", loaded, exc_info=True)
@@ -876,8 +823,17 @@ class StrangeLoop:
                     persistence_backend,
                 )
 
-            # Stage 2: apply Pass 2 scope result and surface reasoning to TUI.
-            if pass2_needed and preclassified_intent is not None:
+            # Stage 2: Pass 1 task → IntentClassification (no Pass 2 scope).
+            if (
+                preclassified_intent is None
+                and pass1_result is not None
+                and pass1_result.is_task
+                and intent_classifier is not None
+                and not clarification_answer
+            ):
+                preclassified_intent = intent_classifier.pass1_task_to_intent(
+                    pass1_result, execution_goal
+                )
                 intake_span.end(output=str(preclassified_intent.intake_label))
                 state.intent = preclassified_intent
                 state.response_language = normalize_response_language(
@@ -891,11 +847,11 @@ class StrangeLoop:
                     state.routing_classification = effective_routing
                     routing_classification = effective_routing
 
-                # Pass 1 reasoning is no longer emitted as a TUI card; surface
-                # only the Pass 2 scope reasoning (when displayable).
-                pass2_event = intake_reasoning_event(preclassified_intent.reasoning or "")
-                if pass2_event is not None:
-                    yield pass2_event
+                from soothe.sloop.stages.preprocess.intake import intake_reasoning_event
+
+                task_event = intake_reasoning_event(preclassified_intent.reasoning or "")
+                if task_event is not None:
+                    yield task_event
 
             if force_continue_loop and loaded:
                 for prior in ce_instance.get_all_goals():

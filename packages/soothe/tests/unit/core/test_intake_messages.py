@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,8 +10,6 @@ from soothe.sloop.intention import IntentClassifier
 from soothe.sloop.intention.models import (
     IntakePass1Confidence,
     IntakePass1LLMResult,
-    IntakePass2LLMResult,
-    IntakeScope,
 )
 from soothe.sloop.intention.two_pass_coordinator import TwoPassIntakeResult
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -23,11 +20,8 @@ class TestIntakeClassifierLedger:
     """Intent-classify ledger recording."""
 
     async def test_records_ledger_pair_when_context_engine_provided(self) -> None:
+        """Pass 2 ledger writes are removed (RFC-904); classify still succeeds."""
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
-        pass2 = IntakePass2LLMResult(
-            scope=IntakeScope.SIMPLE,
-            reasoning="I'll read the readme.",
-        )
         mock_result = TwoPassIntakeResult(
             IntakePass1LLMResult(
                 is_task=True,
@@ -35,7 +29,6 @@ class TestIntakeClassifierLedger:
                 social_response=None,
                 reasoning="task",
             ),
-            pass2,
         )
         ce = MagicMock()
         ce.save = AsyncMock()
@@ -43,21 +36,14 @@ class TestIntakeClassifierLedger:
             classifier._two_pass, "classify", new_callable=AsyncMock
         ) as mock_classify:
             mock_classify.return_value = mock_result
-            await classifier.classify_intake(
+            intent = await classifier.classify_intake(
                 "summarize readme",
                 thread_id="thread-1",
                 context_engine=ce,
             )
-        assert ce.ledger.record_message.call_count == 2
-        ce.save.assert_awaited_once()
-        human_call = ce.ledger.record_message.call_args_list[0]
-        human_msg = human_call[0][0]
-        assert human_msg.phase == "intent_classify"
-        assert "summarize readme" in human_msg.content
-        ai_call = ce.ledger.record_message.call_args_list[1]
-        ai_msg = ai_call[0][0]
-        parsed = json.loads(ai_msg.content)
-        assert parsed["scope"] == "simple"
+        assert intent.intake_label.value == "complex"
+        assert ce.ledger.record_message.call_count == 0
+        ce.save.assert_not_awaited()
 
     async def test_skips_ledger_when_no_context_engine(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
@@ -67,10 +53,6 @@ class TestIntakeClassifierLedger:
                 confidence=IntakePass1Confidence.HIGH,
                 social_response=None,
                 reasoning="task",
-            ),
-            IntakePass2LLMResult(
-                scope=IntakeScope.COMPLEX,
-                reasoning="complex",
             ),
         )
         with patch.object(
@@ -102,8 +84,8 @@ class TestIntakePriorGoalProjection:
         assert "Prior goal completed" in projected[0].content
         assert projected[-1].content == "synthesized report"
 
-    def test_intake_pass2_omits_boundary_marker(self) -> None:
-        """Intake Pass 2 projection omits boundary (classifier needs prior scope)."""
+    def test_intake_projection_omits_boundary_marker(self) -> None:
+        """Intake prior-goal projection can omit the planning boundary marker."""
         from soothe.sloop.prompts.plan_ledger_projection import (
             _GOAL_COMPLETION_CONTEXT_BOUNDARY,
             project_last_goal_completion_for_intake,
@@ -115,7 +97,6 @@ class TestIntakePriorGoalProjection:
             LoopHumanMessage(content="finalize", phase="goal_completion"),
             LoopAIMessage(content="synthesized report", phase="goal_completion"),
         ]
-        # Intake Pass 2 uses include_boundary=False for classifier scope signal
         projected = project_last_goal_completion_for_intake(ledger, None, include_boundary=False)
         assert len(projected) == 2
         assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() not in projected[0].content
@@ -210,22 +191,3 @@ class TestIntentClassifyLedgerProjection:
         assert projected[0].content.startswith("GOAL RECAP:\n")
         assert "GOAL:\n" not in projected[0].content.split("TASK:")[0]
         assert projected[1] is ledger[1]
-
-    def test_project_planner_ledger_new_goal_includes_compacted_intent_classify(self) -> None:
-        from soothe.sloop.prompts.plan_ledger_projection import (
-            project_planner_ledger,
-        )
-
-        ledger = [
-            LoopHumanMessage(
-                content="GOAL:\nchild goal\n\nTASK:\nClassify intake.",
-                phase="intent_classify",
-                thread_id="t",
-            ),
-            LoopAIMessage(content='{"scope":"complex"}', phase="intent_classify", thread_id="t"),
-            LoopHumanMessage(content="exec h", phase="execute_step", thread_id="t"),
-            LoopAIMessage(content="exec a", phase="execute_step", thread_id="t"),
-        ]
-        projected = project_planner_ledger(ledger, "new_goal", None)
-        assert len(projected) == 2
-        assert projected[0].content.startswith("GOAL RECAP:\n")

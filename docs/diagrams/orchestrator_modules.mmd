@@ -13,7 +13,7 @@ flowchart TB
   end
 
   subgraph topology [Topology]
-    stations[stations.py<br/>station IDs · LoopGraphState · PLAN_ROUTE_*]
+    stations[stations.py<br/>station IDs · LoopGraphState · PLANNING_LEDGER_PHASES]
     routing[routing.py<br/>route_after_*]
     stations --> routing
     routing --> builder
@@ -31,7 +31,7 @@ flowchart TB
   end
 
   subgraph policy [Entry and intake policy]
-    continuation[continuation.py<br/>fresh/mid-loop · synthetic assess]
+    continuation[continuation.py<br/>fresh / structural continuation]
   end
 
   subgraph ckpt [Checkpoint isolation]

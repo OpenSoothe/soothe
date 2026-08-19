@@ -5,9 +5,10 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-06-15
+**Authors**: Soothe Team
 **Updated**: 2026-08-11
 **Dependencies**: RFC-624 (Context Engine), RFC-222 (Autopilot and Goal Engine Architecture), RFC-200 (Autonomous Goal Management)
-**Related**: RFC-204 (Autopilot Mode — user-facing surface + report-commit judgment §1.3; RFC-625 defines runtime: AutopilotMonitor, ContextEngine integration, proactive DAG monitoring, `GoalNode.report` commit), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-678](../archive/impl/IG-678-autopilot-ce-rails-production-readiness.md), [IG-680](../archive/impl/IG-680-autopilot-dag-health-evidence-deps.md)
+**Related**: RFC-204 (Autopilot Mode — user-facing surface + report-commit judgment §1.3; RFC-625 defines runtime: AutopilotMonitor, ContextEngine integration, proactive DAG monitoring, `GoalNode.report` commit), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-904 (step-level `decompose_task` is separate from goal-level `apply_llm_subgoals`), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-678](../archive/impl/IG-678-autopilot-ce-rails-production-readiness.md), [IG-680](../archive/impl/IG-680-autopilot-dag-health-evidence-deps.md)
 **Supersedes**: RFC-200 (Goal Management) — GoalEngine deleted, features migrated to ContextEngine
 **Implements**: RFC-303 (MemoryProtocol) — CE's EpisodicSubmodule implements MemoryProtocol API for persistent episodic memory
 

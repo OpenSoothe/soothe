@@ -1,4 +1,4 @@
-"""Shared RunnableConfig builders for intake Pass 1 / Pass 2 LLM calls."""
+"""Shared RunnableConfig builders for intake Pass 1 LLM calls."""
 
 from __future__ import annotations
 
@@ -7,11 +7,10 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
-IntakePassPhase = Literal["intake_pass1", "intake_pass2"]
+IntakePassPhase = Literal["intake_pass1"]
 
 _DEFAULT_RUN_NAMES: dict[IntakePassPhase, str] = {
     "intake_pass1": "intake-pass1",
-    "intake_pass2": "intake-pass2",
 }
 
 

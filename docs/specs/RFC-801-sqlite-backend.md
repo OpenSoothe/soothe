@@ -5,6 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design + Implementation Interface Design
 **Created**: 2026-04-04
+**Authors**: Soothe Team
 **Updated**: 2026-07-24
 **Dependencies**: RFC-000, RFC-001, RFC-302, RFC-303, RFC-802
 **Related**: RFC-803, RFC-229, RFC-307, RFC-413, RFC-624

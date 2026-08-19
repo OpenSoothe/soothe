@@ -6,11 +6,12 @@
 **Kind**: Architecture Design
 **Authors**: Xiaming Chen
 **Created**: 2026-06-30
-**Last Updated**: 2026-07-15
+**Last Updated**: 2026-08-19
 **Depends on**: RFC-220, RFC-225, RFC-226, RFC-503
 **Extends**: RFC-225 (intent classification taxonomy), RFC-220 (orchestrator topology)
 **Supersedes**: The `_is_likely_agentic` heuristic bypass and `simple_bypass` string-prefix detection introduced by IG-518
-**Related**: RFC-214 (loop-message surface), RFC-604 (reason-phase robustness), RFC-624 (Context Engine), RFC-628 (SubAgent / orphan wired card display)
+**Partially Superseded By**: RFC-904 (Pass 2 scope classification and complexity-tiered plan routes removed; Pass 1 retained)
+**Related**: RFC-214 (loop-message surface), RFC-604 (reason-phase robustness), RFC-624 (Context Engine), RFC-628 (SubAgent / orphan wired card display), RFC-904
 **Amended by**: IG-599 (wired-subagent direct route after Pass 2), IG-600 (intake-only exposure), IG-601 (intake-only dual registry / direct invoke), IG-602 (orphan wired-subagent card / stream bridge), IG-656 (`planner` intake-only)
 **Design draft (orphan card UX)**: `docs/drafts/2026-07-15-orphan-wired-subagent-card-design.md`
 
@@ -21,6 +22,8 @@
 The start-phase pipeline — from user goal arrival to the first task submitted to CoreAgent — uses a **two-pass intake architecture** that cleanly separates social/task classification from scope classification. Pass 1 decides whether the user goal is a social interaction (greeting, thanks, small talk) or a work request; Pass 2 (if work) classifies scope as trivial, simple, or complex. This separation resolves the semantic blind spot where acknowledgment+pivot phrasing ("Ok, now apply the fix") misroutes to social fast-path.
 
 Both passes run structured LLM calls on the fast model. Pass 1 runs `asyncio.gather`-ed with checkpoint load and git status in stage 1; Pass 2 runs after stage 1 completes (only if Pass 1 returns `is_task=true`). A `route_by_intent` conditional edge after `init_or_resume` dispatches to chitchat, wired-subagent, trivial, simple, complex, and continuation overlays. A P0 hard routing guard blocks social-path when daemon has created a new goal record. The legacy binary intent classifier, its heuristic bypass (`_is_likely_agentic`), and the `simple_bypass` string-prefix detector are removed outright.
+
+> **Supersession note (RFC-904):** When recursive step decomposition cuts over, **Pass 1 is retained** as the sole chitchat vs task gate. **Pass 2** (trivial/simple/complex) and complexity-tiered routing into plan/skip stations are **removed**. Task scope is discovered via do-or-decompose inside StrangeLoop. Wired-subagent and continuation overlays that do not depend on Pass 2 scope labels remain in force unless a follow-on IG retargets them.
 
 ---
 

@@ -4,11 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from soothe.sloop.prompts import PromptBuilder
-from soothe.sloop.state.schemas import LoopState
-
 
 def test_headline_max_chars_caps_inlined_body(tmp_path: Path) -> None:
     from soothe.prompts.project_instructions import (
@@ -86,69 +81,6 @@ def test_load_agent_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
     assert block is not None
     assert "from dot soothe" in block
     assert ".soothe/AGENTS.md" in block
-
-
-def test_envelope_functions_do_not_embed_project_instructions() -> None:
-    """Envelope builders no longer embed project_instructions (moved to system prompt)."""
-    from soothe.sloop.prompts.user_message import UserMessageBuilder
-
-    # Envelope functions don't have project_instructions parameter anymore
-    builder = UserMessageBuilder()
-    execute = builder.build_execute_step_message(
-        "step",
-        instructions="hint text",
-    )
-    plan = builder.build_plan_assess_message(
-        goal="g",
-    )
-    assert "EXECUTION TASK:" in execute
-    assert "GOAL:" in plan
-    assert "TIMESTAMP:" not in execute
-    assert "TIMESTAMP:" not in plan
-
-
-def test_plan_generate_context_without_project_instructions(tmp_path: Path) -> None:
-    """plan-generate omits AGENT_INSTRUCTIONS in system and human messages."""
-    from soothe_sdk.protocols.planner import PlanContext
-
-    (tmp_path / "CLAUDE.md").write_text("Plan must follow CLAUDE rules\n", encoding="utf-8")
-    state = LoopState(goal="plan me", thread_id="t1", max_iterations=5, workspace=str(tmp_path))
-    ctx = PlanContext(workspace=str(tmp_path))
-    builder = PromptBuilder()
-    assess = builder.build_plan_messages("plan me", state, ctx, plan_phase="assess")
-    generate = builder.build_plan_messages("plan me", state, ctx, plan_phase="generate")
-
-    assess_human = assess[-1].content
-    generate_human = generate[-1].content
-    generate_system = generate[0].content
-    assert "<AGENT_INSTRUCTIONS>" not in assess_human
-    assert "<AGENT_INSTRUCTIONS>" not in generate_human
-    assert "<AGENT_INSTRUCTIONS>" not in generate_system
-    assert "Plan must follow CLAUDE rules" not in generate_system
-
-
-@pytest.mark.asyncio
-async def test_executor_envelope_without_project_instructions(tmp_path: Path) -> None:
-    """Executor envelope no longer embeds project_instructions (moved to system prompt)."""
-    from unittest.mock import MagicMock
-
-    from soothe.sloop.engine.executor import Executor
-    from soothe.sloop.state.schemas import StepAction
-
-    (tmp_path / "AGENTS.md").write_text("execute agents guidance\n", encoding="utf-8")
-    state = LoopState(goal="g", thread_id="t1", max_iterations=5, workspace=str(tmp_path))
-    state.iteration = 2
-    executor = Executor(MagicMock())
-    steps = [
-        StepAction(id="01", description="a", expected_output="o"),
-        StepAction(id="02", description="b", expected_output="o"),
-    ]
-
-    envelopes = [executor._compose_execute_step_envelope(step, loop_state=state) for step in steps]
-    assert len(envelopes) == 2
-    # No project_instructions in envelope - it's in system prompt
-    assert "<AGENT_INSTRUCTIONS>" not in envelopes[0]
-    assert "<AGENT_INSTRUCTIONS>" not in envelopes[1]
 
 
 def test_inlines_small_agents_md_fully(tmp_path: Path) -> None:

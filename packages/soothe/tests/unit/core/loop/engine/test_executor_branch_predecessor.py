@@ -178,7 +178,7 @@ async def test_singleton_dependent_step_uses_fresh_thread_and_ledger_projection(
     assert "PRIOR STEPS:" not in envelope
     assert "PRIOR STEP EVIDENCE" not in envelope
     assert "ledger-ai-A with failure details" in str(messages[1].content)
-    assert "do not repeat completed discovery steps" in envelope
+    assert "do not repeat completed discovery work" in envelope
     assert "ledger-human-A" in str(messages[0].content)
 
 
@@ -390,8 +390,8 @@ async def test_multi_dep_projects_predecessor_ledger_without_threadfork_log(
 
 
 @pytest.mark.asyncio
-async def test_hydrate_dependent_steps_sets_full_description_from_evidence() -> None:
-    """P2: vague dependent briefs are expanded before the execute wave runs."""
+async def test_hydrate_dependent_steps_skips_when_predecessor_ledger_projects() -> None:
+    """Slice B will replay predecessor AI; do not also paste evidence into the brief."""
     step_a = StepAction(id="01", description="Run verification")
     step_b = StepAction(
         id="02",
@@ -415,6 +415,48 @@ async def test_hydrate_dependent_steps_sets_full_description_from_evidence() -> 
                 step_id="01",
                 thread_id="t1",
             ),
+        ],
+    )
+    executor = Executor(_make_mock_agent())
+
+    await executor._hydrate_dependent_steps_before_wave([step_b], state, decision)
+
+    assert step_b.full_description is None
+
+
+@pytest.mark.asyncio
+async def test_hydrate_dependent_steps_embeds_evidence_when_no_ledger() -> None:
+    """Fallback: no predecessor execute rows → template still embeds evidence."""
+    step_a = StepAction(id="01", description="Run verification")
+    step_b = StepAction(
+        id="02",
+        description="Fix identified test or lint failures",
+        dependencies=["01"],
+    )
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step_a, step_b],
+        execution_mode="dependency",
+        reasoning="r",
+    )
+    from soothe.sloop.state.schemas import StepExecutionRecord
+
+    state = LoopState(
+        goal="fix repo",
+        thread_id="t1",
+        current_decision=decision,
+        loop_messages=[],
+        step_results=[
+            StepExecutionRecord(
+                step_id="01",
+                success=True,
+                duration_ms=1,
+                thread_id="t1",
+                outcome={
+                    "type": "generic",
+                    "wave_join_preview": "✗ F821 undefined name `Any`",
+                },
+            )
         ],
     )
     executor = Executor(_make_mock_agent())

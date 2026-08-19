@@ -10,6 +10,7 @@ from langchain.agents.middleware.types import (
     AgentMiddleware,
     ContextT,
     ModelRequest,
+    ModelResponse,
     ToolCallRequest,
 )
 from langchain_core.messages import ToolMessage
@@ -84,6 +85,22 @@ class IntakeOnlyTaskGuardMiddleware(AgentMiddleware):
         except (AttributeError, TypeError):
             pass
         return request
+
+    def wrap_model_call(
+        self,
+        request: ModelRequest[ContextT],
+        handler: Callable[[ModelRequest[ContextT]], ModelResponse[Any]],
+    ) -> ModelResponse[Any]:
+        """Clear intake-only preferred routing before the sync model call."""
+        return handler(self.modify_request(request))
+
+    async def awrap_model_call(
+        self,
+        request: ModelRequest[ContextT],
+        handler: Callable[[ModelRequest[ContextT]], Awaitable[ModelResponse[Any]]],
+    ) -> ModelResponse[Any]:
+        """Clear intake-only preferred routing before the async model call."""
+        return await handler(self.modify_request(request))
 
     async def awrap_tool_call(
         self,

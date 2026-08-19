@@ -348,7 +348,6 @@ async def node_goal_completion(
     ctx.scratch.decision = None
     ctx.scratch.step_results = []
     ctx.scratch.plan_result = None
-    ctx.scratch.plan_assessment = None
     logger.debug(
         "[goal_completion] Cleared goal state for next query (iteration=%d)",
         iteration_completed,

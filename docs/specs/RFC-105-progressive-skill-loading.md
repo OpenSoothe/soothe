@@ -2,7 +2,7 @@
 
 **RFC**: 105
 **Title**: Progressive Skill Loading
-**Status**: Implemented (partial) — skillify package shipped in daemon; progressive disclosure middleware and cost model partial
+**Status**: Implemented (partial)
 **Kind**: Implementation Interface Design
 **Created**: 2026-05-29
 **Last Updated**: 2026-07-03

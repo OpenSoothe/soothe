@@ -15,14 +15,10 @@ from soothe.prompts.system_templates import (
 from soothe.sloop.intention.prompts import (
     INTAKE_PASS1_HUMAN_TASK,
     INTAKE_PASS1_SYSTEM_PROMPT,
-    INTAKE_PASS2_HUMAN_TASK,
-    INTAKE_PASS2_SYSTEM_PROMPT,
 )
 from soothe.sloop.prompts.fragments import (
-    EXECUTION_POLICIES_FRAGMENT,
-    PLAN_ASSESS_INSTRUCTIONS_FRAGMENT,
-    PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT,
-    PLAN_GENERATE_INSTRUCTIONS_FRAGMENT,
+    INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT,
+    INTAKE_PASS1_SYSTEM_FRAGMENT,
 )
 from soothe.subagents.veritas.prompts import build_veritas_system_prompt
 
@@ -49,13 +45,9 @@ def test_xml_fragments_omit_internal_terms(path: Path) -> None:
     ("label", "text"),
     [
         ("intake_pass1_system", INTAKE_PASS1_SYSTEM_PROMPT),
-        ("intake_pass2_system", INTAKE_PASS2_SYSTEM_PROMPT),
         ("intake_pass1_human_task", INTAKE_PASS1_HUMAN_TASK),
-        ("intake_pass2_human_task", INTAKE_PASS2_HUMAN_TASK),
-        ("plan_assess", PLAN_ASSESS_INSTRUCTIONS_FRAGMENT),
-        ("plan_generate", PLAN_GENERATE_INSTRUCTIONS_FRAGMENT),
-        ("plan_continuation", PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT),
-        ("execution_policies", EXECUTION_POLICIES_FRAGMENT),
+        ("intake_pass1_system_fragment", INTAKE_PASS1_SYSTEM_FRAGMENT),
+        ("intake_pass1_social_reply", INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT),
         (
             "synthesis_report_system",
             (_FRAGMENTS_DIR / "instructions" / "synthesis_report_system.xml").read_text(

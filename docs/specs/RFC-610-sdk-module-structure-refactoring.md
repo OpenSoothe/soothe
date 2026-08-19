@@ -5,6 +5,8 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
+**Authors**: Soothe Team
+**Updated**: 2026-04-17
 **Dependencies**: RFC-600, RFC-302
 **Related**: RFC-174 (IG-174 CLI Import Violations Fix), RFC-175 (IG-175 WebSocket Migration)
 

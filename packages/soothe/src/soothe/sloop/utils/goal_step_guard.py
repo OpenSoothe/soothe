@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest
+from langchain.agents.middleware.types import (
+    AgentMiddleware,
+    ContextT,
+    ModelRequest,
+    ModelResponse,
+)
 
 from soothe.sloop.utils.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
 
@@ -41,6 +47,22 @@ class GoalStepGuardMiddleware(AgentMiddleware):
             except (AttributeError, TypeError):
                 pass
         return request.override(tools=[])
+
+    def wrap_model_call(
+        self,
+        request: ModelRequest[ContextT],
+        handler: Callable[[ModelRequest[ContextT]], ModelResponse[Any]],
+    ) -> ModelResponse[Any]:
+        """Apply goal-synthesis policy before the sync model call."""
+        return handler(self.modify_request(request))
+
+    async def awrap_model_call(
+        self,
+        request: ModelRequest[ContextT],
+        handler: Callable[[ModelRequest[ContextT]], Awaitable[ModelResponse[Any]]],
+    ) -> ModelResponse[Any]:
+        """Apply goal-synthesis policy before the async model call."""
+        return await handler(self.modify_request(request))
 
 
 __all__ = ["GoalStepGuardMiddleware"]

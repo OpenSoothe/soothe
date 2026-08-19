@@ -2,9 +2,10 @@
 
 **RFC**: 217
 **Title**: Goal Context Management for StrangeLoop
-**Status**: Implemented (GoalContextManager wired into sloop/engine; body marks implementation completed)
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-04-17
+**Authors**: Soothe Team
 **Last Updated**: 2026-08-08
 **Dependencies**: RFC-201 (Agentic Goal Execution), RFC-207 (Thread Lifecycle & Goal Context), RFC-225 (Loop Continuity)
 **Related**: RFC-219 (Goal Completion Module), RFC-218 (Checkpoint Tree Architecture)

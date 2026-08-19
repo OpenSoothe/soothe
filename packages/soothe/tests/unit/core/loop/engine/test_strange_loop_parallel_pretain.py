@@ -27,7 +27,7 @@ def _make_strange_loop() -> StrangeLoop:
     config.persistence.postgres_base_dsn = None
     config.persistence.soothe_postgres_dsn = None
     config.home = "/tmp/soothe-test"
-    return StrangeLoop(core_agent=MagicMock(), loop_planner=MagicMock(), config=config)
+    return StrangeLoop(core_agent=MagicMock(), config=config)
 
 
 @pytest.mark.asyncio
@@ -105,7 +105,7 @@ async def test_semantic_reads_run_concurrently_with_ce_load() -> None:
         patch("soothe.sloop.engine.strange_loop.CheckpointAnchorManager") as am_cls,
         patch("soothe.sloop.engine.strange_loop.LoopRuntimeContext"),
         patch("soothe.sloop.engine.strange_loop.asyncio.Queue"),
-        patch.object(sl, "plan_phase"),
+        patch("soothe.sloop.orchestrator.runner.invoke_strange_loop_graph", new_callable=AsyncMock),
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
             return_value=False,

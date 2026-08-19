@@ -5,9 +5,12 @@
 **Status**: Proposed
 **Kind**: Architecture Design
 **Created**: 2026-08-18
+**Authors**: Soothe Team
+**Updated**: 2026-08-18
 **Dependencies**: RFC-220, RFC-604, RFC-622, RFC-633, RFC-803
 **Revises**: RFC-220 §Loop Graph Topology, §State and Schemas (node contract)
-**Related**: RFC-201, RFC-207, RFC-214, RFC-218, RFC-219
+**Related**: RFC-201, RFC-207, RFC-214, RFC-218, RFC-219, RFC-904
+**Further revised by**: RFC-904 (recursive decomposition further shrinks stations; keeps `LoopNode` / `RouteDecision`)
 
 ---
 
@@ -82,6 +85,10 @@ When RFC-903 is **Accepted**:
 
 RFC-220's header **should** carry `Partially Superseded by: RFC-903 (node
 lifecycle, node folds, typed route contract)` once RFC-903 reaches Accepted.
+
+> **Follow-on (RFC-904):** Recursive step decomposition further shrinks the
+> compiled graph (DISPATCH / RECONCILE / ROOT_EVAL) while retaining this RFC's
+> `LoopNode` lifecycle and typed `RouteDecision`. See RFC-904.
 
 ---
 

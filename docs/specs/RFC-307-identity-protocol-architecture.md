@@ -5,6 +5,8 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-25
+**Authors**: Soothe Team
+**Updated**: 2026-06-25
 **Dependencies**: RFC-000, RFC-001, RFC-305
 **Related**: RFC-620 (Channel Architecture), RFC-621 (Workspace Isolation)
 

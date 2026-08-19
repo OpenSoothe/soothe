@@ -5,6 +5,8 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-08
+**Authors**: Soothe Team
+**Updated**: 2026-04-08
 **Dependencies**: RFC-200, RFC-100, RFC-214 (Volatility-Tiered Prompt Architecture & Unified Message Ledger)
 
 ## Abstract

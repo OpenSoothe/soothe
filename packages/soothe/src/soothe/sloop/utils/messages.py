@@ -8,6 +8,8 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from pydantic import Field
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES as ASSISTANT_OUTPUT_PHASES
 
+from soothe.sloop.orchestrator.stations import PLANNING_LEDGER_PHASES
+
 if TYPE_CHECKING:
     from soothe.sloop.state.schemas import LoopState
 
@@ -65,7 +67,8 @@ def _record_ledger_message(
             Must be provided in production code. Tests without CE must
             use a sqlite :memory: ContextEngine instance.
         msg: Message to record (should be a BaseMessage subclass).
-        phase: Phase tag (e.g., "execute_step", "plan_assess", "goal_completion").
+        phase: Phase tag (e.g., ``execute_step``, ``goal_completion``; legacy
+            plan-spine tags such as ``plan_assess`` may appear in old ledgers).
 
     Raises:
         ValueError: If context_engine is None (production code must provide CE).
@@ -92,10 +95,8 @@ def last_ledger_ai_content(state: LoopState) -> str:
 
     Used by goal completion when ``require_goal_completion=False`` to provide
     the user with the most recent non-planning assistant response from the
-    ledger.
-    RFC-214 records plan-assess and plan-generate turns in the same ledger,
-    but these planning messages must not be surfaced as final user output in
-    ``ledger_direct`` completion mode.
+    ledger. Historical plan-spine ledger turns (and intake/preamble) must not
+    be surfaced as final user output in ``ledger_direct`` completion mode.
 
     Args:
         state: LoopState with populated ``loop_messages``.
@@ -103,20 +104,8 @@ def last_ledger_ai_content(state: LoopState) -> str:
     Returns:
         Content of the last non-planning AI message, or empty string if none found.
     """
-    # Dual-read: client-visible ledger phases + station ids if present.
-    planning_phases = {
-        "evaluate",
-        "assess",
-        "plan_assess",
-        "generate_plan",
-        "plan_generate",
-        "analyze_gaps",
-        "plan_gap_analysis",
-        "intake",
-        "intent_classify",
-        "continuation",
-        "preamble",  # RFC-222 §Goal-Report-Pair: ancestor context, not output
-    }
+    # Dual-read: planning ledger phases + preamble (ancestor context, not output).
+    planning_phases = PLANNING_LEDGER_PHASES | {"preamble"}
     for msg in reversed(state.loop_messages):
         if (
             isinstance(msg, LoopAIMessage)
@@ -150,7 +139,8 @@ class LoopHumanMessage(HumanMessage):
     - Thread tracking (thread_id)
     - Iteration tracking (iteration)
     - Goal context (goal_summary)
-    - Execution phase (phase: plan_assess, plan_generate, execute_step, etc.)
+    - Execution phase (``execute_step``, ``goal_completion``, plus legacy
+      plan-spine tags still present in old ledgers)
     - Wave tracking (wave_id for execute_wave phase)
     - CoreAgent dedup (core_agent_message_id for RFC-214 reference-based dedup)
 
@@ -181,22 +171,22 @@ class LoopHumanMessage(HumanMessage):
     workspace: str | None = None
     phase: (
         Literal[
-            "intake",  # Preprocess intake
-            "intent_classify",  # legacy alias
-            "evaluate",  # Plan evaluate (inventory + assess)
-            "assess",  # legacy stem alias → evaluate
-            "plan_assess",  # legacy ledger
-            "generate_plan",  # Plan generate
-            "plan_generate",  # legacy
-            "analyze_gaps",  # legacy stem alias → evaluate
-            "plan_gap_analysis",  # legacy ledger
-            "execute_wave",  # Parallel execution wave
-            "execute_step",  # Single step execution
-            "goal_completion",  # Goal completion phase (wire-stable)
-            "goal_interrupted",  # Non-success terminal marker (cancel/fatal/max-iter)
-            "chitchat",  # Chitchat intake fast-path (piggybacked response)
+            "intake",
+            "intent_classify",  # legacy intake alias
+            "evaluate",  # legacy plan-spine ledger
+            "assess",  # legacy plan-spine ledger
+            "plan_assess",  # legacy plan-spine ledger
+            "generate_plan",  # legacy plan-spine ledger
+            "plan_generate",  # legacy plan-spine ledger
+            "analyze_gaps",  # legacy plan-spine ledger
+            "plan_gap_analysis",  # legacy plan-spine ledger
+            "execute_wave",
+            "execute_step",
+            "goal_completion",  # wire-stable
+            "goal_interrupted",
+            "chitchat",
             "finalize",  # station id (prefer goal_completion for wire)
-            "preamble",  # RFC-222 §Goal-Report-Pair: ancestor (user,ai) pairs
+            "preamble",  # ancestor (user,ai) pairs
         ]
         | None
     ) = None

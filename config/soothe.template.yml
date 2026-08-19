@@ -122,7 +122,15 @@ agent:
     enabled: true
     # Shared StrangeLoop budget (interactive + Autopilot workers). Do not redefine under autopilot.
     max_iterations: 99
-    max_plan_steps_per_wave: 10
+    # Recursive step decomposition budgets (RFC-904; always on for step THREADS).
+    decompose:
+      max_depth: 5
+      max_steps: 50
+      max_recompose: 2
+      max_waves: 10
+      max_branch_root: 5
+      max_branch_inner: 3
+      reconcile_model_role: fast
     max_tool_calls_per_step: 100
     dispatch_idle_seconds: 300
     dispatch_tool_timeout_seconds: 0
@@ -141,18 +149,6 @@ agent:
     context_overflow_threshold_pct: 0.8
     context_compaction_target_pct: 0.6
     step_context_check_enabled: false
-    plan_evaluate_assess_model_role: fast
-    plan_evaluate_gap_model_role: fast
-    plan_evaluate_gap_mode: sequential
-    plan_evaluate_gap_max_concurrency: 4
-    plan_evaluate_gap_min_facets: 2
-    plan_evaluate_gap_wall_clock_seconds: 90
-    plan_evaluate_gap_leg_timeout_seconds: 45
-    plan_generate_model_role: think
-    plan_generate_model_role_simple: fast
-    plan_generate_model_role_near_gap: fast
-    plan_structural_keep_enabled: true
-    plan_structural_keep_max_streak: 3
     goal_synthesis_model_role: default
     rules:
       completion:
@@ -165,11 +161,6 @@ agent:
         skip_llm_when_all_failed: true
         high_step_count_threshold: 4
         low_evidence_volume_threshold: 2000
-      plan_safety:
-        banned_step_patterns:
-          - "^(wrap up|conclude|terminate|stop|halt|cease|end process|close|exit|quit|finish up|complete process|final step|last step|the end)$"
-        simple_evidence_min_chars: 200
-        no_tool_evidence_retry_limit: 2
     output_streaming:
       mode: adaptive
       streaming_interval_ms: 100
@@ -205,12 +196,6 @@ agent:
       plan_ledger_max_messages: 40
       plan_ledger_max_total_chars: 24000
       plan_ledger_max_message_chars: 3000
-    plan_evaluate_prompt:
-      ledger_max_messages: 24
-      execute_ai_max_chars: 2048
-      keep_head_tail_execute_ai: true
-      omit_prior_progress_hint: true
-      include_plan_coverage: true
     execute_prompt_ledger:
       cross_goal_completion_tail: 3
       predecessor_max_messages: 96

@@ -5,6 +5,7 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-04-28
+**Authors**: Soothe Team
 **Last Updated**: 2026-08-08
 **Dependencies**: RFC-201, RFC-603
 **Related**: IG-199, IG-295, IG-296, IG-355, IG-400, IG-580, IG-567

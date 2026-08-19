@@ -5,6 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-10
+**Authors**: Soothe Team
 **Last Updated**: 2026-08-08
 **Dependencies**: RFC-200, RFC-100, RFC-203, RFC-207
 **Related**: RFC-214 (Loop Message Surface), RFC-219 (Goal Completion)

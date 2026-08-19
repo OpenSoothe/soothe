@@ -5,6 +5,7 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-23
+**Authors**: Soothe Team
 **Updated**: 2026-03-27
 **Dependencies**: RFC-000, RFC-001, RFC-200, RFC-302
 **Related**: RFC-302

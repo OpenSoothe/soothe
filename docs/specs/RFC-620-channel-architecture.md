@@ -2,11 +2,11 @@
 
 **RFC**: 620
 **Title**: Unified Channel Architecture for Extensible Communication Endpoints
-**Status**: Implemented (core migration complete; plugin discovery deferred)
+**Status**: Implemented (partial)
 **Kind**: Architecture Design
 **Created**: 2026-05-29
 **Updated**: 2026-08-11
-**Dependencies**: RFC-450, RFC-0015, RFC-000
+**Dependencies**: RFC-450, RFC-403, RFC-000
 **Author**: Xiaming Chen
 
 ## Abstract

@@ -40,9 +40,8 @@ def test_build_synthesis_message_is_task_only() -> None:
 
 
 def test_projection_excludes_plan_phases_from_ledger() -> None:
-    builder = UserMessageBuilder()
     plan_human = LoopHumanMessage(
-        content=builder.build_plan_assess_message(goal="Analyze latency"),
+        content="## GOAL\nAnalyze latency\n",
         thread_id="t",
         iteration=0,
         phase="plan_assess",
@@ -153,6 +152,39 @@ def test_build_synthesis_messages_injects_execute_ledger_before_task_human() -> 
     assert "Found three papers." not in human
     assert "STEP SUMMARIES" not in human
     assert "StrangeLoop" not in human
+
+
+def test_synthesis_keeps_full_prior_goal_completion_report() -> None:
+    """Prior goal completion report is projected in full (no per-report truncation)."""
+    long_report = "PRIOR REPORT " + ("z" * 2000)
+    prior_human = LoopHumanMessage(
+        content="finalize", thread_id="t", iteration=0, phase="goal_completion"
+    )
+    prior_ai = LoopAIMessage(
+        content=long_report, thread_id="t", iteration=0, phase="goal_completion"
+    )
+    execute_human = LoopHumanMessage(
+        content="Execute: current work", thread_id="t", iteration=1, phase="execute_step"
+    )
+    execute_ai = LoopAIMessage(
+        content="current output", thread_id="t", iteration=1, phase="execute_step"
+    )
+    state = LoopState(
+        goal="Second goal",
+        thread_id="t",
+        loop_messages=[prior_human, prior_ai, execute_human, execute_ai],
+    )
+    classification = ScenarioClassification(
+        scenario="general_summary",
+        sections=["Summary"],
+        contextual_focus=["Outcomes"],
+        evidence_emphasis="Group by theme",
+    )
+    msgs = build_synthesis_messages(state, classification, max_chars=50_000)
+    bodies = "\n".join(str(getattr(m, "content", "")) for m in msgs)
+    assert long_report in bodies
+    assert "…" not in bodies
+    assert "Full report follows." in bodies
 
 
 def test_build_synthesis_messages_system_and_task_only_when_no_ledger() -> None:

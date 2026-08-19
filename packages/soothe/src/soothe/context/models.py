@@ -30,7 +30,18 @@ GoalStatus = Literal[
 TERMINAL_STATES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 BLOCKED_STATES: frozenset[str] = frozenset({"awaiting_clarification", "suspended"})
 
-StepStatus = Literal["pending", "active", "completed", "failed", "skipped"]
+StepStatus = Literal[
+    "pending",
+    "active",
+    "completed",
+    "failed",
+    "skipped",
+    "decomposed",
+    "superseded",
+]
+
+ExecutionHint = Literal["tool", "subagent", "remote", "auto"]
+
 
 MAX_GOAL_DEPTH = 5
 
@@ -79,7 +90,12 @@ class StepExecution(BaseModel):
 
 
 class StepNode(BaseModel):
-    """Single step within a goal's step DAG."""
+    """Single step within a goal's step DAG.
+
+    Lineage / decompose fields (RFC-904): ``parent_step_id``,
+    ``secondary_parent_step_ids``, ``replacement_of``, ``recompose_count``.
+    Scheduler uses ``dependencies`` + ``status`` only.
+    """
 
     id: str
     description: str
@@ -88,6 +104,14 @@ class StepNode(BaseModel):
     plan_iteration: int = 0
     reasoning_trace: str | None = None
     execution: StepExecution | None = None
+    parent_step_id: str | None = None
+    secondary_parent_step_ids: list[str] = Field(default_factory=list)
+    replacement_of: str | None = None
+    full_description: str | None = None
+    expected_output: str | None = None
+    execution_hint: ExecutionHint | None = None
+    recompose_count: int = 0
+    kind: str | None = None
 
 
 class StepDAG(BaseModel):
@@ -117,6 +141,10 @@ class StepDAG(BaseModel):
     def completed_step_ids(self) -> set[str]:
         return {cid for cid, n in self.nodes.items() if n.status == "completed"}
 
+    def decomposed_step_ids(self) -> set[str]:
+        """Parents whose own work was delegated to committed children."""
+        return {cid for cid, n in self.nodes.items() if n.status == "decomposed"}
+
     def failed_step_ids(self) -> set[str]:
         return {cid for cid, n in self.nodes.items() if n.status == "failed"}
 
@@ -145,6 +173,60 @@ class StepDAG(BaseModel):
         node = self.nodes.get(step_id)
         if node is not None:
             node.status = "skipped"
+
+    def mark_decomposed(self, step_id: str) -> None:
+        """Mark a step as decomposed after its proposal was committed (RFC-904)."""
+        node = self.nodes.get(step_id)
+        if node is not None:
+            node.status = "decomposed"
+
+    def mark_superseded(self, step_id: str) -> None:
+        """Mark a step as superseded (B-lazy replace / obsolete planner)."""
+        node = self.nodes.get(step_id)
+        if node is not None:
+            node.status = "superseded"
+
+    def lineage_depth(self, step_id: str) -> int:
+        """Depth along ``parent_step_id`` chain (root = 1). Missing id → 0."""
+        if step_id not in self.nodes:
+            return 0
+        depth = 0
+        seen: set[str] = set()
+        current: str | None = step_id
+        while current is not None and current not in seen:
+            seen.add(current)
+            depth += 1
+            node = self.nodes.get(current)
+            if node is None:
+                break
+            current = node.parent_step_id
+        return depth
+
+    def tree_green(self) -> bool:
+        """True when the StepDAG is coverage-ready for ROOT_EVAL (RFC-904).
+
+        No pending/active steps; no unresolved failed leaves; every
+        non-superseded leaf is completed; decomposed/superseded parents do not
+        block.
+        """
+        if not self.nodes:
+            return False
+        for node in self.nodes.values():
+            if node.status in ("pending", "active"):
+                return False
+            if node.status == "failed":
+                return False
+            if node.status == "skipped":
+                # Skipped is terminal but not a successful leaf for coverage.
+                continue
+        # Every non-superseded, non-decomposed node must be completed (leaves)
+        # or skipped. Decomposed parents are allowed.
+        for node in self.nodes.values():
+            if node.status in ("decomposed", "superseded", "skipped"):
+                continue
+            if node.status != "completed":
+                return False
+        return True
 
     @property
     def chain_depth(self) -> int:

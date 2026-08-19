@@ -261,19 +261,57 @@ def predecessor_messages_for_step(
     )
 
 
+def predecessor_execute_in_ledger(
+    loop_messages: list[Any],
+    step: StepAction,
+    decision: AgentDecision,
+    *,
+    exclude_step_ids: frozenset[str] | None = None,
+) -> bool:
+    """True when at least one predecessor execute_step row will project as Slice B."""
+    return bool(
+        predecessor_messages_for_step(
+            loop_messages,
+            step,
+            decision,
+            max_messages=1,
+            exclude_step_ids=exclude_step_ids,
+        )
+    )
+
+
 def template_hydrate_step_brief(
     step: StepAction,
     predecessor_evidence: str,
+    *,
+    evidence_in_ledger: bool = False,
 ) -> str:
-    """Heuristic brief expansion when LLM hydration is unavailable."""
+    """Heuristic brief expansion when LLM hydration is unavailable.
+
+    When ``evidence_in_ledger`` is True (Slice B will replay predecessor
+    Human/AI pairs), do not paste evidence into the brief — that would
+    duplicate the projected ledger.
+    """
     parts = [
         (step.full_description or step.description or "").strip(),
         "",
-        "Use the prior step evidence below as authoritative input.",
-        "Do NOT repeat discovery or diagnostic actions already completed.",
     ]
-    if predecessor_evidence.strip():
-        parts.extend(["", "Prior step evidence:", predecessor_evidence.strip()])
+    if evidence_in_ledger:
+        parts.extend(
+            [
+                "Prior task outcomes appear in earlier assistant messages; they are authoritative.",
+                "Do NOT repeat discovery or diagnostic actions already completed.",
+            ]
+        )
+    else:
+        parts.extend(
+            [
+                "Use the prior step evidence below as authoritative input.",
+                "Do NOT repeat discovery or diagnostic actions already completed.",
+            ]
+        )
+        if predecessor_evidence.strip():
+            parts.extend(["", "Prior step evidence:", predecessor_evidence.strip()])
     return "\n".join(parts).strip()
 
 
@@ -282,25 +320,31 @@ def build_dependent_execution_hints(
     *,
     has_predecessor_evidence: bool,
     expected_output: str | None,
+    is_dag_root: bool | None = None,
 ) -> ExecuteStepEnvelopeBody:
-    """Build EXPECTED OUTPUT and INSTRUCTIONS bodies for an execute-step envelope."""
+    """Build EXPECTED OUTPUT and slim INSTRUCTIONS for the execute user envelope.
+
+    Finish-vs-split policy and search hygiene live in system + tool schemas
+    (``THREAD_POLICY_SYSTEM_ADDENDUM``); user keeps instance scope only.
+    """
+    from soothe.sloop.prompts.decompose import user_finish_or_split_hint_lines
+
+    root = bool(step.is_dag_root if is_dag_root is None else is_dag_root)
     instruction_lines = [
-        "- Complete only this step's deliverable; do not execute work assigned to other plan steps",
-        "- Execute the step described in EXECUTION TASK above",
-        "- Use the suggested approach when provided",
-        "- Produce output matching the expected output specification",
-        "- Prefer one broad native search (grep/glob) then targeted reads; avoid repeated equivalent scans",
-        "- Reuse prior search results in this step; switch to edit/apply once evidence is sufficient",
+        *user_finish_or_split_hint_lines(is_dag_root=root),
+        "- Complete only this EXECUTION TASK; do not do work meant for other "
+        "tasks that will run in later threads",
+        "- Produce output matching the EXPECTED OUTPUT specification",
     ]
     if has_predecessor_evidence:
         instruction_lines.insert(
             0,
-            "- Prior execute-step ledger turns are authoritative; "
-            "do not repeat completed discovery steps",
+            "- Prior task outcomes in the ledger are authoritative; "
+            "do not repeat completed discovery work",
         )
         instruction_lines.insert(
             1,
-            "- Apply fixes or follow-up actions using concrete details from prior step outcomes",
+            "- Apply fixes or follow-up actions using concrete details from prior outcomes",
         )
     expected_body = f"- {expected_output.strip()}" if (expected_output or "").strip() else None
     return ExecuteStepEnvelopeBody(
@@ -318,6 +362,7 @@ __all__ = [
     "build_prior_step_evidence",
     "build_prior_steps_summaries",
     "build_prior_steps_summary_block",
+    "predecessor_execute_in_ledger",
     "predecessor_messages_for_step",
     "step_needs_brief_hydration",
     "template_hydrate_step_brief",

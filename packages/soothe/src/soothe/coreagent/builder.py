@@ -42,7 +42,9 @@ class AgentBuilder(nano_builder.AgentBuilder):
 
     def _host_middleware_suffix(self) -> tuple:
         # Apply after ToolEnforcement so step/synthesis configurables win.
-        return (GoalStepGuardMiddleware(),)
+        from soothe.sloop.decompose.middleware import DecomposeTaskMiddleware
+
+        return (GoalStepGuardMiddleware(), DecomposeTaskMiddleware())
 
     def build(self, *args: Any, **kwargs: Any):  # type: ignore[override]
         # Install host daemon kill guards before toolkit resolution (nano hook).
@@ -51,15 +53,6 @@ class AgentBuilder(nano_builder.AgentBuilder):
         ensure_daemon_kill_guards_installed()
 
         self._identity_runtime = kwargs.pop("identity_runtime", None)
-        if kwargs.get("planner") is None and "planner" not in kwargs:
-            try:
-                from soothe.runner.resolver import resolve_planner
-
-                model = kwargs.get("model")
-                default_model = model if not isinstance(model, str) else None
-                kwargs["planner"] = resolve_planner(self._config, default_model)
-            except Exception:
-                pass
         try:
             agent = super().build(*args, **kwargs)
         finally:

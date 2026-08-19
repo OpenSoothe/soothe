@@ -19,9 +19,7 @@ from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
-    PlanGapAnalysis,
     PlanResult,
-    StatusAssessment,
 )
 from soothe.sloop.state.sloop_manager import (
     StrangeLoopStateManager,
@@ -39,11 +37,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LoopPhaseScratch:
-    """Mutable planner outputs for one iteration cycle."""
+    """Mutable loop outputs for one iteration cycle."""
 
     plan_result: PlanResult | None = None
-    plan_assessment: StatusAssessment | None = None
-    plan_gap: PlanGapAnalysis | None = None
     decision: AgentDecision | None = None
     iteration_perf_start: float | None = None
     step_results: list[Any] = field(default_factory=list)
@@ -51,8 +47,10 @@ class LoopPhaseScratch:
     plan_artifact_path: str | None = None
     plan_artifact_markdown: str | None = None
     planner_subagent_review_comments: str | None = None
-    # Approve → StrangeLoop plan_generate handoff (one-shot).
+    # Approve → StrangeLoop DISPATCH handoff (one-shot; cleared on first DISPATCH).
     planner_implement_handoff: bool = False
+    # RFC-904: proposals from the just-finished THREAD wave.
+    decompose_proposals: list[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -81,6 +79,8 @@ class LoopRuntimeContext:
     ce_goal_id: str | None = None
     goal_trace: GoalLoopTrace | None = None
     tail_persistence_task: asyncio.Task[None] | None = None
+    # RFC-904: queued DecompositionProposal objects awaiting RECONCILE.
+    decompose_proposals: list[Any] = field(default_factory=list)
 
     @property
     def core_agent(self) -> CoreAgentProtocol:

@@ -66,5 +66,5 @@ def test_compose_execute_envelope_injects_vision_from_goal() -> None:
     assert "VISION CONTEXT:" in envelope
     assert "Dark Mode toggle" in envelope
     assert "GOAL:" not in envelope
-    assert "Complete only this step's deliverable" in envelope
+    assert "Complete only this EXECUTION TASK" in envelope
     assert "EXECUTION TASK is authoritative scope" in envelope

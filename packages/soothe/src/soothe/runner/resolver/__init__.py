@@ -1,10 +1,11 @@
 """Protocol, subagent, and tool resolution logic for create_soothe_agent.
 
 Protocol resolution (memory, planner, policy) lives here.
-Tool/subagent/infrastructure resolution is delegated to ``soothe_nano.resolve``
-; only ``resolve_planner`` (host-specific ``LLMPlanner``) and the checkpointer
-/durability bindings (``_resolver_infra.py``, ``shared_checkpointer_pool.py``)
-are defined locally.
+Tool/subagent/infrastructure resolution is delegated to ``soothe_nano.resolve``.
+Host checkpointer / durability bindings live in ``_resolver_infra.py``.
+
+``resolve_planner`` returns ``None`` after the RFC-904 DISPATCH cutover
+(IG-752/IG-753): StrangeLoop no longer constructs ``LLMPlanner``.
 """
 
 from __future__ import annotations
@@ -14,7 +15,6 @@ from typing import TYPE_CHECKING
 
 from soothe_nano.resolve import (
     SUBAGENT_FACTORIES,
-    _create_loop_phase_model,
     resolve_memory,
     resolve_policy,
     resolve_subagents,
@@ -43,78 +43,14 @@ __all__ = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Protocol resolution (memory, planner, policy)
-#
-# ``resolve_memory``, ``resolve_policy``, ``_create_loop_phase_model``,
-# ``SUBAGENT_FACTORIES``, ``resolve_subagents``, and ``resolve_tools`` are
-# imported from ``soothe_nano.resolve`` — they are byte-identical to the
-# previous local copies.  Only ``resolve_planner`` diverges (host returns an
-# ``LLMPlanner`` instance rather than ``None``), so it stays local.
-# ---------------------------------------------------------------------------
-
-
 def resolve_planner(
     config: SootheConfig,
     model: BaseChatModel | None,
-) -> PlannerProtocol:
-    """Instantiate LLMPlanner as the sole planner implementation.
+) -> PlannerProtocol | None:
+    """Host planner resolution — always ``None`` after plan-spine removal.
 
-    Args:
-        config: Soothe configuration.
-        model: The resolved chat model.
-
-    Returns:
-        LLMPlanner instance.
+    Kept as a stable API for runner / CoreAgent builder callers that still
+    pass ``planner=`` into nano ``AgentBuilder``.
     """
-    planner_role = config.agent.protocols.planner.model or "think"
-    planner_model = model
-    if planner_model is None:
-        try:
-            planner_model = config.create_chat_model(planner_role)
-        except Exception:
-            logger.warning("Failed to create model for planner")
-
-    loop_cfg = config.agent.loop
-    plan_evaluate_assess_model = _create_loop_phase_model(
-        config,
-        loop_cfg.plan_evaluate_assess_model_role,
-        fallback=planner_model,
-        phase="evaluate-assess",
-    )
-    plan_evaluate_gap_model = _create_loop_phase_model(
-        config,
-        loop_cfg.plan_evaluate_gap_model_role,
-        fallback=plan_evaluate_assess_model,
-        phase="evaluate-gap",
-    )
-    plan_generate_model = _create_loop_phase_model(
-        config,
-        loop_cfg.plan_generate_model_role,
-        fallback=planner_model,
-        phase="generate-plan",
-    )
-    plan_generate_model_simple = _create_loop_phase_model(
-        config,
-        loop_cfg.plan_generate_model_role_simple,
-        fallback=plan_generate_model,
-        phase="generate-plan-simple",
-    )
-    plan_generate_model_near_gap = _create_loop_phase_model(
-        config,
-        loop_cfg.plan_generate_model_role_near_gap,
-        fallback=plan_generate_model_simple,
-        phase="generate-plan-near-gap",
-    )
-
-    from soothe.sloop.cognition.planner import LLMPlanner
-
-    return LLMPlanner(
-        model=planner_model,
-        config=config,
-        plan_evaluate_assess_model=plan_evaluate_assess_model,
-        plan_generate_model=plan_generate_model,
-        plan_generate_model_simple=plan_generate_model_simple,
-        plan_generate_model_near_gap=plan_generate_model_near_gap,
-        plan_evaluate_gap_model=plan_evaluate_gap_model,
-    )
+    del config, model
+    return None

@@ -220,6 +220,7 @@ class StepAction(BaseModel):
         subagent: Named subagent when ``execution_hint='subagent'``.
         requires_tool_use: When set, execute deliverable gate requires successful tool use
             (from Pass 2 intake for trivial steps).
+        is_dag_root: True when this step has no CE ``parent_step_id`` (RFC-904 root).
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -238,6 +239,10 @@ class StepAction(BaseModel):
     execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto"
     subagent: str | None = None
     requires_tool_use: bool | None = None
+    is_dag_root: bool = Field(
+        default=False,
+        description="True when CE StepNode has no parent_step_id (root THREAD).",
+    )
 
     @model_validator(mode="after")
     def _validate_ask_user(self) -> StepAction:
@@ -652,15 +657,15 @@ class PlanResult(BaseModel):
     Attributes:
         status: Whether to finish, continue current plan, or replan.
         goal_progress: Descriptive progress level (none | low | medium | high | complete).
-        assessment_reasoning: Phase-1 status justification (reserved; StatusAssessment has no LLM text field).
+        assessment_reasoning: Optional status justification (often empty after RFC-904).
         next_action: Internal orchestration hint (not shown in TUI).
         full_action: Complete concatenated action from both phases (max 500 chars).
         plan_action: Reuse the in-flight AgentDecision or supply a new one.
         decision: New steps to run when plan_action is new; None when keep.
         evidence_summary: Accumulated evidence text (often filled after parsing).
         full_output: Final user-visible answer when status is done.
-        require_goal_completion: Whether extra goal completion LLM call is needed.
-            Propagated from StatusAssessment. When False, last AIMessage can be used directly.
+        require_goal_completion: Whether an extra goal completion LLM call is needed.
+            When False, the last AIMessage can be used directly.
     """
 
     status: Literal["continue", "replan", "done"]
@@ -700,9 +705,9 @@ class PlanResult(BaseModel):
     terminal_after_execute: bool = Field(default=False)
     """RFC-226: when True, the plan asserts its single step IS the goal completion.
 
-    The Loop Graph routes from ``record_iteration`` directly to ``goal_completion``,
-    skipping the iter=1 ``plan_assess`` status check. Set by the continuation-aware
-    plan_assess for bootstrap actions; default False elsewhere.
+    The Loop Graph routes from ``record_progress`` directly toward finalize /
+    goal completion when this flag is set (e.g. trivial one-step plans).
+    Default False elsewhere.
     """
 
     @model_validator(mode="after")
@@ -727,103 +732,6 @@ class PlanResult(BaseModel):
     def is_done(self) -> bool:
         """Check if goal is achieved."""
         return self.status == "done"
-
-
-class StatusAssessment(BaseModel):
-    """StatusAssessment: quick progress/status check (RFC-604).
-
-    Lightweight schema for status assessment, generates ~50-80 tokens.
-    Minimal fields (status, progress) - 60% token reduction.
-    Descriptive progress levels instead of numeric.
-
-    Attributes:
-        status: Whether to finish, continue current plan, or replan.
-        goal_progress: Descriptive progress level (none | low | medium | high | complete).
-        assessment_reasoning: Brief justification for the status decision.
-        require_goal_completion: Whether an extra goal completion LLM call is needed.
-            When False, the last AIMessage from execution can be used as goal completion.
-            Only relevant when status="done".
-    """
-
-    status: Literal["continue", "replan", "done"]
-    goal_progress: GoalProgress = "none"
-    """Descriptive progress level - easier for LLMs to estimate accurately."""
-    assessment_reasoning: str = ""
-    """Brief status justification."""
-    require_goal_completion: bool = Field(default=False)
-    """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
-    terminal_readiness: Literal["not_ready", "ready_with_gaps", "ready"] = "not_ready"
-    """explicit terminal readiness when status may be done."""
-    gap_alignment: bool = True
-    """assess agrees with latest PlanGapAnalysis (structured self-report)."""
-    effects: list[GoalEffect] = Field(
-        default_factory=list,
-        max_length=8,
-        description=(
-            "When status=done: claimed side-effects (produce/mutate/observe/"
-            "communicate/decide). Empty when not done. Opaque refs — not host FS probes."
-        ),
-    )
-
-
-class GoalComponentStatus(BaseModel):
-    """One decomposed facet of the current GOAL and its evidence state."""
-
-    component: str = Field(max_length=120)
-    status: Literal["not_started", "partial", "satisfied", "blocked"]
-    # Keep bounded but tolerant: plan-gap evidence can include multi-clause step outcomes.
-    evidence: str = Field(default="", max_length=2048)
-    gap: str = Field(default="", max_length=2048)
-
-
-class PlanGapAnalysis(BaseModel):
-    """Explicit evidence inventory + distance from GOAL (feeds plan-assess)."""
-
-    components: list[GoalComponentStatus] = Field(min_length=1, max_length=8)
-    evidence_summary: str = Field(max_length=2048)
-    remaining_gaps: list[str] = Field(default_factory=list, max_length=6)
-    distance_from_goal: Literal["far", "moderate", "near", "at_goal"]
-    gap_reasoning: str = Field(max_length=2048)
-
-
-class ContinuationAssessment(BaseModel):
-    """RFC-226: iter=0 routing decision for continuation queries.
-
-    Emitted by ``LLMPlanner.assess_continuation`` on iter=0 of any agentic query
-    where ``continue_loop_mode`` is True and the loop has at least one completed
-    prior goal. Routes the new query to either a terminal bootstrap (one step
-    using prior context) or the full ``plan_generate`` flow.
-
-    Attributes:
-        action: ``bootstrap`` for chat-like continuations answerable from prior
-            context; ``plan_generate`` when new steps or new tools are required.
-        reasoning: One first-person sentence (≤240 chars), e.g. "I'll …" or "I need … because …".
-        goal_progress: Initial progress estimate; mirrors ``PlanResult.goal_progress``.
-    """
-
-    action: Literal["bootstrap", "plan_generate"] = Field(
-        description=(
-            "bootstrap: a single execute step using prior loop context can answer "
-            "the query directly (no new tools needed). plan_generate: the query "
-            "requires multiple steps, new tools, or cross-domain work — escalate "
-            "to the full planner."
-        ),
-    )
-    reasoning: str = Field(
-        default="",
-        max_length=240,
-        description=(
-            "One first-person sentence explaining the routing decision "
-            '(e.g. "I will bootstrap from prior context.").'
-        ),
-    )
-    goal_progress: GoalProgress = Field(
-        default="low",
-        description=(
-            "Initial progress estimate for the new goal. Must be exactly one of: "
-            "none, low, medium, high, complete — never free-form prose."
-        ),
-    )
 
 
 class ToolCallHead(BaseModel):
@@ -853,10 +761,9 @@ class PriorProgressDigest(BaseModel):
     """Compact, truthful snapshot of the most recent execute wave (RFC-227).
 
     Refreshed by the executor at the end of every wave (parallel or sequential).
-    Consumed by ``plan_assess`` and ``plan_generate`` via the
-    ``PRIOR PROGRESS:`` section. Never used as a code-side override
-    for the LLM's structured output — the deterministic ``derived_progress_hint``
-    is shown verbatim so the LLM can disagree.
+    Used for interrupt digests and execute-side progress context. Never used as
+    a code-side override for structured LLM output — the deterministic
+    ``derived_progress_hint`` is shown verbatim so consumers can disagree.
 
     Attributes:
         iteration: Iteration that produced the wave.
@@ -1133,7 +1040,7 @@ class LoopState(BaseModel):
             (``task_tool_aggregate`` provenance), not root-graph assistant stream.
         last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps.
         continue_loop: RFC-225 flag — True when this loop has prior goals (carrier for executor wiring).
-        prior_progress: RFC-227 per-wave digest produced by executor, consumed by plan-assess/plan-generate.
+        prior_progress: RFC-227 per-wave digest produced by the executor.
     """
 
     goal: str
@@ -1145,14 +1052,20 @@ class LoopState(BaseModel):
         default=None,
         description="Skill reference text for execute-step SKILL_CONTEXT when goal expanded from /skill:.",
     )
-    # one-shot approved intake-planner artifact for plan_generate grounding.
+    # one-shot approved intake-planner artifact for DISPATCH root grounding (RFC-904).
     approved_plan_path: str | None = Field(
         default=None,
-        description="Workspace path of the approved plan artifact (cleared after first plan_generate).",
+        description=(
+            "Workspace path of an operator-approved intake plan artifact "
+            "(cleared after DISPATCH grounds the root)."
+        ),
     )
     approved_plan_markdown: str | None = Field(
         default=None,
-        description="Frontmatter-stripped approved plan body for plan_generate (cleared after first use).",
+        description=(
+            "Frontmatter-stripped approved plan body for DISPATCH root grounding "
+            "(cleared after first consume)."
+        ),
     )
     thread_id: str
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
@@ -1253,17 +1166,10 @@ class LoopState(BaseModel):
     last_execute_wave_parallel_multi_step: bool = False
     continue_loop: bool = False  # RFC-225: True when loop has prior goals
 
-    # RFC-227: per-wave digest produced by executor, consumed by plan-assess/plan-generate.
+    # RFC-227: per-wave digest produced by the executor.
     prior_progress: PriorProgressDigest | None = Field(
         default=None,
         description="Most-recent execute wave snapshot for plan-phase grounding.",
-    )
-
-    # consecutive structural keeps before forcing a full gap/assess path.
-    structural_keep_streak: int = Field(
-        default=0,
-        ge=0,
-        description="Count of consecutive structural plan keeps in this goal.",
     )
 
     # RFC-105: Progressive skill loading durability snapshot
@@ -1511,13 +1417,28 @@ class LoopState(BaseModel):
         """Step IDs that satisfy ``StepAction.dependencies`` edges.
 
         Combines ``completed_step_ids`` with every successful ``step_results`` ID so
-        cross-wave dependencies keep resolving after replans.
+        cross-wave dependencies keep resolving after replans. Decomposed parents
+        are included so a delegated step is never re-dispatched into a THREAD.
 
         Returns:
             Union of completed IDs for dependency checks.
         """
         historical = {r.step_id for r in self.step_results if r.success}
-        return set(self.completed_step_ids) | historical
+        return set(self.completed_step_ids) | historical | self.decomposed_step_ids()
+
+    def decomposed_step_ids(self) -> set[str]:
+        """Step IDs delegated to children by reconcile. Empty without CE."""
+        if self._ce is None:
+            return set()
+        try:
+            goal = self._ce.get_goal_sync(self._ce_goal_id)
+        except Exception:
+            logger.warning("decomposed_step_ids: CE query failed", exc_info=True)
+            return set()
+        if goal is None:
+            return set()
+        decomposed = goal.steps.decomposed_step_ids()
+        return set(decomposed) if isinstance(decomposed, set | frozenset | list) else set()
 
     def known_plan_ids(self) -> set[str]:
         """Plan scope ids already used in this loop for replan prefix stripping."""
@@ -1631,7 +1552,6 @@ class LoopState(BaseModel):
 
         # Clear prior progress digest
         self.prior_progress = None
-        self.structural_keep_streak = 0
 
         # Trim but don't fully clear loop_messages - keep recent context
         self.trim_loop_messages()

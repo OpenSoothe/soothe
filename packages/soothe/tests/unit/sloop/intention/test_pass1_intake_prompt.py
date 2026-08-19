@@ -22,8 +22,10 @@ def test_build_prompt_timestamp_block_includes_live_values() -> None:
 
 
 def test_build_intake_pass1_system_prompt_includes_identity_and_timestamp() -> None:
-    prompt = build_intake_pass1_system_prompt(INTAKE_PASS1_SYSTEM_PROMPT, "Soothe")
+    # Capture the datetime context once and pass it to the builder so the
+    # assertions use the same snapshot — no boundary-second race.
     ctx = prompt_datetime_context()
+    prompt = build_intake_pass1_system_prompt(INTAKE_PASS1_SYSTEM_PROMPT, "Soothe", ctx=ctx)
 
     assert prompt.startswith("<ASSISTANT_IDENTITY>")
     assert "<PROMPT_TIMESTAMP>" in prompt

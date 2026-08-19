@@ -20,6 +20,12 @@ def _make_mock_core_with_checkpointer() -> Mock:
     mock_graph = Mock()
     mock_graph.checkpointer = AsyncMock(return_value=None)
     mock_core.graph = mock_graph
+    mock_core.aget_state = AsyncMock(return_value=Mock(tasks=[], values={}, next=()))
+
+    async def _execution_astream(*args, **kwargs):  # noqa: ARG002
+        yield {"messages": [{"content": "done content"}]}
+
+    mock_core.execution_astream = _execution_astream
     return mock_core
 
 
@@ -45,12 +51,17 @@ def _make_mock_ce(*, ledger_entries: list | None = None) -> Mock:
             synthesis (which would call ``llm.astream`` on the AsyncMock planner).
             Pass ``[]`` for tests that need an empty ledger.
     """
+    from soothe.context.models import StepDAG, StepNode
+
     mock_ce = Mock()
     mock_goal = Mock()
     mock_goal.id = "test-goal-id"
-    # Mock goal.steps.nodes for step_results property iteration
-    mock_goal.steps = Mock()
-    mock_goal.steps.nodes = {}
+    # Real StepDAG so DISPATCH / RECONCILE / ROOT_EVAL can claim and green-check.
+    mock_goal.steps = StepDAG(
+        nodes={
+            "ROOT": StepNode(id="ROOT", description="simple goal", status="pending"),
+        }
+    )
     mock_ce.load = AsyncMock(return_value=False)
     mock_ce.create_goal = AsyncMock(return_value=mock_goal)
     mock_ce.activate_goal = AsyncMock()
@@ -58,6 +69,28 @@ def _make_mock_ce(*, ledger_entries: list | None = None) -> Mock:
     mock_ce.complete_goal = AsyncMock()
     mock_ce.finalize_goal = AsyncMock()  # Called by goal_completion node
     mock_ce.get_all_goals = Mock(return_value=[])
+    mock_ce.get_goal = AsyncMock(return_value=mock_goal)
+
+    async def _add_step(goal_id: str, step: StepNode) -> None:
+        mock_goal.steps.add_step(step)
+
+    async def _activate(goal_id: str, step_id: str) -> None:
+        mock_goal.steps.mark_active(step_id)
+
+    async def _complete(goal_id: str, step_id: str, execution: object) -> None:
+        mock_goal.steps.mark_completed(step_id, execution)  # type: ignore[arg-type]
+
+    async def _fail(goal_id: str, step_id: str, execution: object) -> None:
+        mock_goal.steps.mark_failed(step_id, execution)  # type: ignore[arg-type]
+
+    mock_ce.add_step = AsyncMock(side_effect=_add_step)
+    mock_ce.activate_step = AsyncMock(side_effect=_activate)
+    mock_ce.complete_step = AsyncMock(side_effect=_complete)
+    mock_ce.fail_step = AsyncMock(side_effect=_fail)
+    mock_ce.increment_iteration = Mock()
+    mock_ce.defer_save = Mock()
+    mock_ce.set_previous_plan = Mock()
+    mock_ce.record_action = Mock()
     mock_ce.ledger = Mock()
     mock_ce.ledger.record_message = Mock()
     if ledger_entries is None:
@@ -67,6 +100,7 @@ def _make_mock_ce(*, ledger_entries: list | None = None) -> Mock:
             (LoopAIMessage(content="done content", phase="execute_step"), "execute_step")
         ]
     mock_ce.ledger.entries = Mock(return_value=ledger_entries)
+    mock_ce.get_ledger_entries = Mock(return_value=ledger_entries)
 
     mock_step_planner = Mock()
     mock_step_planner.ingest_plan = Mock()
@@ -125,6 +159,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
     mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
     mock_anchor_mgr = Mock()
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
+    mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()
 
@@ -142,9 +177,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
         ) as am_cls,
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
-        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
-        # Mock generate_from_assessment to return done status directly
-        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
+        loop = StrangeLoop(mock_core, SootheConfig())
 
         events = [
             evt
@@ -182,6 +215,7 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
     mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
     mock_anchor_mgr = Mock()
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
+    mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()
 
@@ -204,10 +238,8 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
         ),
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
-        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
+        loop = StrangeLoop(mock_core, SootheConfig())
         loop._fast_llm = None  # Prevent synthesis LLM calls
-        # Mock generate_from_assessment to return done status directly
-        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
         events = [
             evt
@@ -238,6 +270,7 @@ async def test_completed_payload_for_summary_path() -> None:
     mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
     mock_anchor_mgr = Mock()
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
+    mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce(ledger_entries=[])
 
@@ -260,10 +293,8 @@ async def test_completed_payload_for_summary_path() -> None:
         ),
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
-        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
+        loop = StrangeLoop(mock_core, SootheConfig())
         loop._fast_llm = None  # Prevent synthesis LLM calls
-        # Mock generate_from_assessment to return done status directly
-        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
         events = [
             evt
@@ -290,6 +321,7 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
 
     mock_anchor_mgr = Mock()
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
+    mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()
 
@@ -307,9 +339,7 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
         ) as am_cls,
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
-        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
-        # Mock generate_from_assessment to return done status directly
-        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
+        loop = StrangeLoop(mock_core, SootheConfig())
 
         _ = [
             evt

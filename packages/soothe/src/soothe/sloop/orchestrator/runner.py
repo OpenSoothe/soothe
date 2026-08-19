@@ -168,9 +168,6 @@ async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
     from langgraph.types import Command
 
     loop_id = ctx.state_manager.loop_id
-    planner = ctx.strange_loop.plan_phase._loop_planner
-    if hasattr(planner, "_loop_id"):
-        planner._loop_id = loop_id
 
     compiled = build_strange_loop_graph(ctx)
     config = build_loop_graph_invoke_config(ctx)

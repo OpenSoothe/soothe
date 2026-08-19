@@ -1,15 +1,16 @@
 # RFC-304: PlannerProtocol Architecture
 
 **RFC**: 304
-**Title**: PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern
+**Title**: PlannerProtocol: Plan Creation & Revision Interface (SDK Contract, Interface-Only)
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Last Updated**: 2026-08-08
+**Authors**: Soothe Team
+**Last Updated**: 2026-08-19
 **Dependencies**: RFC-000, RFC-302
 **Related**: RFC-201 (StrangeLoop), RFC-213 (Two-Phase Plan Assessment)
 **Note**: Moved from 4xx (RFC-304) per RFC-900 reclassification
-**Implementation**: IG-372 (LLMPlanner two-phase), IG-329 (PlanResult consolidation)
+**Implementation**: The host `LLMPlanner` implementation was removed by IG-752 (Delete Legacy Plan Spine) and IG-753 (Delete LLMPlanner / PlanPhase); this RFC is now interface-only. The `PlannerProtocol` interface survives in `soothe_sdk.protocols.planner` and remains the SDK contract for plan creation/revision. Prior references to IG-372 (LLMPlanner two-phase) and IG-329 (PlanResult consolidation) are stale — no such IGs exist in `docs/impl/`. The protocol interface spec body below is retained as the live SDK contract description.
 
 ---
 

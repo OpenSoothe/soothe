@@ -2,9 +2,10 @@
 
 **RFC**: 626
 **Title**: Entity Model and State Management Consolidation — LoopState Elimination
-**Status**: Draft (not yet implemented)
+**Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-16
+**Authors**: Soothe Team
 **Updated**: 2026-08-11
 **Dependencies**: RFC-624 (Context Engine), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-203 (StrangeLoop State & Memory), RFC-201 (StrangeLoop Plan-Execute Loop)
 **Related**: RFC-228 (Autopilot Job IPC), RFC-222 (Autopilot Architecture), RFC-207 (Thread Lifecycle & Goal Context)

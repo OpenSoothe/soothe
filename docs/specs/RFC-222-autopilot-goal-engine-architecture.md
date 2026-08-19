@@ -5,6 +5,7 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-05-27
+**Authors**: Soothe Team
 **Updated**: 2026-08-16
 **Dependencies**: RFC-000, RFC-201, RFC-204, RFC-221 (Loop Runner Protocol), RFC-625, RFC-626, RFC-214 (Loop Message Surface)
 **Related**: RFC-200 (Goal Lifecycle), RFC-220 (Loop Orchestrator), RFC-403 (Events), RFC-229 (Cron Service for Autopilot), RFC-204 §1.3 (report-commit judgment), RFC-231 (LoopRail), RFC-214 (loop message ledger), design draft `docs/drafts/2026-08-16-autopilot-goal-dag-pair-projection-design.md`, `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`

@@ -6,8 +6,8 @@ Intent classification produces a 4-class intake label (RFC-630) —
 in-flight loop is derived structurally inside ``StrangeLoop`` from the loaded
 checkpoint, not classified here.
 
-Two-pass intake (RFC-630): Pass 1 (social vs task) → Pass 2 (scope).
-Pass 1 returns ``is_task`` boolean; Pass 2 returns ``scope`` for work requests.
+Two-pass intake historically (RFC-630): Pass 1 (social vs task). Pass 2 scope
+pre-classification was removed under RFC-904; DISPATCH owns decomposition.
 
 CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
 ``soothe_sdk.intention.models`` and re-exported here.
@@ -31,8 +31,8 @@ class IntakeLabel(StrEnum):
 
     - ``chitchat``: small talk (greetings, thanks, casual banter); the intake
       LLM piggybacks ``chitchat_response`` and the runner emits it directly.
-    - ``trivial``: trivia, single obvious tool call, or direct answer; pseudo
-      1-step plan via execute (no plan_assess/plan_generate).
+    - ``trivial``: trivia, single obvious tool call, or direct answer; DISPATCH
+      grounds a one-step root (no multi-step decomposition).
     - ``simple``: single focused deliverable CoreAgent can finish in one execute.
     - ``complex``: multi-phase / parallel workstreams / durable phase gates.
     """
@@ -68,7 +68,7 @@ class IntentClassification(BaseModel):
 
     4-class LLM intake classification:
     - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.
-    - ``trivial``: direct execute via pseudo 1-step plan (no plan_assess/generate).
+    - ``trivial``: direct execute via one-step DISPATCH root.
     - ``simple``/``complex``: agentic goals of increasing effort; the runner /
       StrangeLoop derive loop continuation structurally from the checkpoint.
 
@@ -315,58 +315,18 @@ def intent_classification_from_intake_scope(
     )
 
 
-class IntakePass2LLMResult(BaseModel):
-    """Structured output from Pass 2: scope classification (RFC-630).
-
-    Pass 2 classifies work scope as trivial, simple, or complex. Prior-goal
-    projection is included for reference resolution ("apply it"). The model
-    does not see ``chitchat`` as an option — Pass 1 already decided social vs task.
-
-    Args:
-        scope: Work scope: trivial (single action), simple (focused step), complex (multi-step).
-        reasoning: First-person TUI line (I'll / Let me …), ≤25 words.
-    """
-
-    scope: IntakeScope = Field(
-        description="Work scope: trivial (single action, no planning), "
-        "simple (focused step, light planning), complex (multi-step, full plan)"
-    )
-    reasoning: str = Field(
-        description=(
-            "First-person agent line for the TUI cognition card (I'll / Let me …), "
-            "≤25 words; not third-person scope commentary"
-        ),
-    )
-    multi_phase: bool = Field(
-        default=False,
-        description="True when the goal implies multiple ordered execution phases",
-    )
-    requires_tool_use: bool = Field(
-        default=False,
-        description=(
-            "True when answering requires external/live data or tool execution "
-            "(weather, web lookup, file contents). False for pure reasoning/math."
-        ),
-    )
-
-    def to_intake_label(self) -> IntakeLabel:
-        """Convert scope to IntakeLabel for routing."""
-        return IntakeLabel(self.scope)
-
-
-def intent_classification_from_pass2(
-    pass2_result: IntakePass2LLMResult,
-    *,
-    response_language: ResponseLanguage | None = None,
+def intent_classification_from_pass1_task(
+    pass1_result: IntakePass1LLMResult,
 ) -> IntentClassification:
-    """Build ``IntentClassification`` from a Pass 2 scope result."""
-    intake_label = pass2_result.to_intake_label()
+    """Build task IntentClassification from Pass 1 only (RFC-904).
+
+    Scope is discovered via do-or-decompose; no Pass 2 label. Uses ``complex``
+    as a compatibility intake_label for legacy fields that still expect one.
+    """
     return IntentClassification(
-        intake_label=intake_label,
-        reasoning=pass2_result.reasoning,
+        intake_label=IntakeLabel.COMPLEX,
+        reasoning=pass1_result.reasoning,
         chitchat_response=None,
-        multi_phase=pass2_result.multi_phase,
-        requires_tool_use=pass2_result.requires_tool_use,
-        response_language=response_language,
-        task_complexity=derive_task_complexity_from_intake(intake_label),
+        response_language=pass1_result.response_language,
+        task_complexity=derive_task_complexity_from_intake(IntakeLabel.COMPLEX),
     )

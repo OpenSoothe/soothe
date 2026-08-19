@@ -13,14 +13,12 @@ Regenerate: ``python scripts/visualize_strange_loop_graph.py``
 - `intake`
 - `enter_loop`
 - `delegate`
-- `check_limits`
-- `gather_evidence`
-- `evaluate`
-- `generate_plan`
-- `finalize`
-- `commit_plan`
+- `dispatch`
 - `execute`
 - `record_progress`
+- `reconcile`
+- `root_eval`
+- `finalize`
 - `await_user`
 - `__end__`
 
@@ -31,38 +29,27 @@ Solid arrows in Mermaid/SVG are unconditional; dashed are conditional.
 - `__start__` → `intake`
 - `await_user` → `__end__`
 - `await_user` → `delegate`
-- `await_user` → `evaluate`
+- `await_user` → `dispatch`
 - `await_user` → `execute`
-- `await_user` → `generate_plan`
-- `check_limits` → `__end__`
-- `check_limits` → `gather_evidence`
-- `commit_plan` → `__end__`
-- `commit_plan` → `execute`
 - `delegate` → `__end__`
 - `delegate` → `await_user`
+- `delegate` → `dispatch`
 - `delegate` → `finalize`
-- `delegate` → `generate_plan`
+- `dispatch` → `__end__`
+- `dispatch` → `execute`
+- `dispatch` → `root_eval`
 - `enter_loop` → `__end__`
-- `enter_loop` → `commit_plan`
 - `enter_loop` → `delegate`
-- `enter_loop` → `gather_evidence`
-- `evaluate` → `await_user`
-- `evaluate` → `commit_plan`
-- `evaluate` → `finalize`
-- `evaluate` → `generate_plan`
+- `enter_loop` → `dispatch`
 - `execute` → `__end__`
 - `execute` → `await_user`
-- `execute` → `check_limits`
 - `execute` → `record_progress`
-- `gather_evidence` → `commit_plan`
-- `gather_evidence` → `evaluate`
-- `gather_evidence` → `generate_plan`
-- `generate_plan` → `await_user`
-- `generate_plan` → `commit_plan`
-- `generate_plan` → `finalize`
-- `generate_plan` → `generate_plan`
 - `intake` → `enter_loop`
+- `reconcile` → `dispatch`
+- `reconcile` → `root_eval`
 - `record_progress` → `__end__`
-- `record_progress` → `check_limits`
 - `record_progress` → `finalize`
+- `record_progress` → `reconcile`
+- `root_eval` → `dispatch`
+- `root_eval` → `finalize`
 - `finalize` → `__end__`
