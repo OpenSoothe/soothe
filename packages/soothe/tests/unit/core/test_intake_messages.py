@@ -191,22 +191,3 @@ class TestIntentClassifyLedgerProjection:
         assert projected[0].content.startswith("GOAL RECAP:\n")
         assert "GOAL:\n" not in projected[0].content.split("TASK:")[0]
         assert projected[1] is ledger[1]
-
-    def test_project_planner_ledger_new_goal_includes_compacted_intent_classify(self) -> None:
-        from soothe.sloop.prompts.plan_ledger_projection import (
-            project_planner_ledger,
-        )
-
-        ledger = [
-            LoopHumanMessage(
-                content="GOAL:\nchild goal\n\nTASK:\nClassify intake.",
-                phase="intent_classify",
-                thread_id="t",
-            ),
-            LoopAIMessage(content='{"scope":"complex"}', phase="intent_classify", thread_id="t"),
-            LoopHumanMessage(content="exec h", phase="execute_step", thread_id="t"),
-            LoopAIMessage(content="exec a", phase="execute_step", thread_id="t"),
-        ]
-        projected = project_planner_ledger(ledger, "new_goal", None)
-        assert len(projected) == 2
-        assert projected[0].content.startswith("GOAL RECAP:\n")

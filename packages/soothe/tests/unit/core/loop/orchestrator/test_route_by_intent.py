@@ -131,7 +131,7 @@ async def test_init_or_resume_chitchat_fast_path_with_continue_loop_mode() -> No
         chitchat_response="I'm Soothe, a cloud-based AI assistant.",
         task_complexity=TaskComplexity.MINIMAL,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(
         intent=intent,
         goal="where are u from",
@@ -177,7 +177,7 @@ async def test_init_or_resume_trivial_injects_pseudo_plan() -> None:
         intake_label=IntakeLabel.TRIVIAL,
         task_complexity=TaskComplexity.MINIMAL,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(
         intent=intent,
         goal="list files in this directory",
@@ -212,7 +212,7 @@ async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
         intake_label=IntakeLabel.TRIVIAL,
         task_complexity=TaskComplexity.SIMPLE,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(intent=intent, goal="continue")
     prior_goal = SimpleNamespace(
         id="goal-0",
@@ -247,7 +247,7 @@ async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuat
         intake_label=IntakeLabel.SIMPLE,
         task_complexity=TaskComplexity.SIMPLE,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(intent=intent, goal="upgrade client library")
     prior_goal = SimpleNamespace(
         id="goal-0",
@@ -270,7 +270,6 @@ async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuat
 
     assert result["is_continuation"] is True
     assert result["is_fresh_goal"] is False
-    assert scratch.plan_assessment is None
     assert scratch.plan_result is None
 
 
@@ -283,7 +282,7 @@ async def test_init_or_resume_simple_injects_trivial_plan() -> None:
         intake_label=IntakeLabel.SIMPLE,
         task_complexity=TaskComplexity.SIMPLE,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(intent=intent, goal="summarize RFC-220 topology")
     ctx = SimpleNamespace(
         loop_state=loop_state,
@@ -309,7 +308,7 @@ async def test_init_or_resume_complex_does_not_inject_synth_plan() -> None:
         intake_label=IntakeLabel.COMPLEX,
         task_complexity=TaskComplexity.COMPLEX,
     )
-    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    scratch = SimpleNamespace(plan_result=None, decision=None)
     loop_state = SimpleNamespace(intent=intent, goal="refactor persistence layer")
     ctx = SimpleNamespace(
         loop_state=loop_state,
@@ -323,7 +322,6 @@ async def test_init_or_resume_complex_does_not_inject_synth_plan() -> None:
 
     assert result["intake_label"] == IntakeLabel.COMPLEX
     assert scratch.plan_result is None
-    assert scratch.plan_assessment is None
 
 
 # -- Group 6: mislabel recovery (trivial plan shape) ----------------------

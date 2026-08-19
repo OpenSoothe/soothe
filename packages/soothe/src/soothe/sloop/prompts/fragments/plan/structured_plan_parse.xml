@@ -1,7 +1,0 @@
-Extract an execution plan from the planner output below.
-Goal: {goal}
-
-Planner output:
-{planner_output}
-
-Return ordered steps with step_number starting at 1. Use depends_on for step numbers that must complete first.

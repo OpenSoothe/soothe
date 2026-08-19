@@ -86,6 +86,8 @@ class ProjectionEngine:
         Returns:
             Bounded ContextBundle for prompt template rendering.
         """
+        _ = (ledger, semantic)
+
         # Resolve target goal
         goal: GoalNode | None = None
         if goal_id:

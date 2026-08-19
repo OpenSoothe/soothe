@@ -263,7 +263,6 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
         preferred_subagent="planner",
         scratch=SimpleNamespace(
             plan_result=SimpleNamespace(decision=SimpleNamespace(steps=[SimpleNamespace(id="P1")])),
-            plan_assessment=None,
             plan_artifact_path=str(plan_path),
             plan_artifact_markdown="# Plan\n\nDo the migration.\n",
             planner_subagent_review_comments=None,
@@ -289,7 +288,6 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     assert ctx.preferred_subagent is None
     assert ctx.scratch.planner_implement_handoff is True
     assert ctx.scratch.plan_result is None
-    assert ctx.scratch.plan_assessment is None
     assert ctx.loop_state.approved_plan_markdown is not None
     assert "Do the migration" in ctx.loop_state.approved_plan_markdown
     ledger = ctx.loop_state._loop_messages_cache

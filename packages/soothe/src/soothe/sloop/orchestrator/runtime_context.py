@@ -19,9 +19,7 @@ from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
-    PlanGapAnalysis,
     PlanResult,
-    StatusAssessment,
 )
 from soothe.sloop.state.sloop_manager import (
     StrangeLoopStateManager,
@@ -39,11 +37,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LoopPhaseScratch:
-    """Mutable planner outputs for one iteration cycle."""
+    """Mutable loop outputs for one iteration cycle."""
 
     plan_result: PlanResult | None = None
-    plan_assessment: StatusAssessment | None = None
-    plan_gap: PlanGapAnalysis | None = None
     decision: AgentDecision | None = None
     iteration_perf_start: float | None = None
     step_results: list[Any] = field(default_factory=list)

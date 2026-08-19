@@ -535,7 +535,7 @@ class Executor:
         predecessor_projected: bool = False,
     ) -> str:
         """Build the execute-step user envelope (task + hints; ledger slices projected separately)."""
-        from soothe.sloop.prompts.builder import _prior_goals_from_checkpoint
+        from soothe.sloop.prompts.graph_wrapper import _prior_goals_from_checkpoint
         from soothe.sloop.prompts.user_message import (
             UserMessageBuilder,
             _render_prior_goals_tree,
@@ -1259,8 +1259,8 @@ class Executor:
     ) -> None:
         """Append RFC-214 Human/AI ledger pairs for each parallel step.
 
-        Execute waves record per-step ledger rows so subsequent ``plan-assess`` /
-        ``plan-generate`` prompts built in ``PromptBuilder`` see prior step evidence.
+        Execute waves record per-step ledger rows so subsequent THREAD /
+        synthesis projections can see prior step evidence.
 
         Args:
             state: Loop state whose ``loop_messages`` list is extended in wave order.

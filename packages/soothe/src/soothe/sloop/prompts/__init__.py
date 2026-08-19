@@ -1,27 +1,23 @@
-"""StrangeLoop prompt construction (loop planner, envelopes, ledger projection).
+"""StrangeLoop prompt construction (envelopes, ledger projection, synthesis).
 
-Migrated from ``soothe.prompts`` (HCD-02): StrangeLoop-scoped prompts live here;
-systemwide / shared prompts (identity, system templates, context XML, project
-instructions, loader) stay in ``soothe.prompts``.
+StrangeLoop-scoped prompts live here; systemwide / shared prompts (identity,
+system templates, context XML, project instructions, loader) stay in
+``soothe.prompts``.
 """
 
-from .builder import PromptBuilder
-from .graph_wrapper import GraphCallKind, GraphPromptWrapper, ProjectionResult
+from .graph_wrapper import (
+    GraphCallKind,
+    GraphPromptWrapper,
+    ProjectionResult,
+    _format_dag_context,
+    _prior_goals_from_checkpoint,
+)
 from .plan_ledger_projection import (
     current_goal_has_execute_ledger,
-    project_continuation_assess_ledger,
     project_loop_messages_for_core_agent,
     project_loop_messages_for_plan,
     project_loop_messages_for_synthesis,
-    project_planner_ledger,
-    project_planner_ledger_for_assess,
-)
-from .planner_assembly import (
-    PlannerCallKind,
-    PlannerProjectionMode,
-    goal_preview_text,
     projected_ledger_has_goal_completion,
-    resolve_planner_projection_mode,
 )
 from .user_message import (
     EXECUTION_TASK_LABEL,
@@ -38,21 +34,15 @@ __all__ = [
     "GraphPromptWrapper",
     "PRIOR_PROGRESS_MAX_CHARS",
     "PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS",
-    "PlannerCallKind",
-    "PlannerProjectionMode",
     "ProjectionResult",
-    "PromptBuilder",
     "UserMessageBuilder",
+    "_format_dag_context",
+    "_prior_goals_from_checkpoint",
     "current_goal_has_execute_ledger",
     "flatten_user_message_content",
-    "goal_preview_text",
-    "project_continuation_assess_ledger",
     "project_loop_messages_for_core_agent",
     "project_loop_messages_for_plan",
     "project_loop_messages_for_synthesis",
-    "project_planner_ledger",
-    "project_planner_ledger_for_assess",
     "projected_ledger_has_goal_completion",
     "render_prior_steps_tree",
-    "resolve_planner_projection_mode",
 ]

@@ -1,18 +1,13 @@
-"""Goal-entry, continuation, and mid-loop intake policy (RFC-226, RFC-630).
+"""Goal-entry and continuation policy for StrangeLoop preprocess (RFC-904).
 
-Fresh goals use special graph entry (inject / skip-evaluate). Mid-loop goals
-share the ``gather_evidence`` spine; intake tiers only tune station behavior.
+Fresh vs structural-continuation detection for ``enter_loop`` routing.
+Plan-spine mid-loop helpers (lightweight generate, inventory, bypass assess)
+were removed with LLMPlanner.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-from soothe.sloop.intention.models import IntakeLabel
-from soothe.sloop.utils.continue_keyword import is_continue_keyword
-
-if TYPE_CHECKING:
-    from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from typing import Any
 
 FRESH_LOOP_BYPASS_PREFIX = "Fresh-loop bypass:"
 FRESH_LOOP_BYPASS_REASON = f"{FRESH_LOOP_BYPASS_PREFIX} no prior execution to assess."
@@ -20,16 +15,9 @@ FRESH_LOOP_BYPASS_REASON = f"{FRESH_LOOP_BYPASS_PREFIX} no prior execution to as
 __all__ = [
     "FRESH_LOOP_BYPASS_PREFIX",
     "FRESH_LOOP_BYPASS_REASON",
-    "bootstrap_terminal_after_execute",
-    "fresh_loop_bypass_assessment",
     "has_prior_goal_context",
     "is_fresh_goal",
-    "is_fresh_loop_skip_evaluate",
     "is_structural_continuation",
-    "mid_loop_allow_inventory",
-    "mid_loop_skip_continuation_assess",
-    "mid_loop_use_lightweight_generate",
-    "synthetic_continue_assessment",
 ]
 
 
@@ -64,86 +52,5 @@ def is_fresh_goal(ctx: Any) -> bool:
     if getattr(ctx, "continue_loop_mode", False):
         return False
     if has_prior_goal_context(ctx):
-        return False
-    return True
-
-
-def is_fresh_loop_skip_evaluate(ctx: LoopRuntimeContext) -> bool:
-    """True when fresh complex may skip evaluate.
-
-    Requires a live CE (tests without CE fall through to evaluate).
-    """
-    if not is_fresh_goal(ctx):
-        return False
-    state = ctx.loop_state
-    if state.iteration != 0 or state.step_results:
-        return False
-    if ctx.ce is None:
-        return False
-    return True
-
-
-def synthetic_continue_assessment(*, reasoning: str = ""):
-    """Shared StatusAssessment placeholder for skip-assess / skip-evaluate routes."""
-    from soothe.sloop.state.schemas import StatusAssessment
-
-    return StatusAssessment(
-        status="continue",
-        goal_progress="none",
-        assessment_reasoning=reasoning,
-        require_goal_completion=False,
-    )
-
-
-def fresh_loop_bypass_assessment():
-    """Synthetic assessment when fresh complex skips evaluate."""
-    return synthetic_continue_assessment(reasoning=FRESH_LOOP_BYPASS_REASON)
-
-
-def bootstrap_terminal_after_execute(
-    *,
-    raw_user_goal: str,
-    multi_phase: bool | None = None,
-) -> bool:
-    """Whether a bootstrap plan should skip iter=1 replan after execute.
-
-    Chat-like and ``continue`` keyword goals remain terminal. Pass 2 ``multi_phase``
-    allows replan after the first execute wave.
-    """
-    if is_continue_keyword(raw_user_goal):
-        return True
-    if multi_phase:
-        return False
-    return True
-
-
-def mid_loop_skip_continuation_assess(intake_label: IntakeLabel | None) -> bool:
-    """True when new mid-loop goals must skip ``assess_continuation`` LLM.
-
-    Simple and complex never bootstrap; escalate to plan_generate instead.
-    Trivial keeps the discriminator (bootstrap vs generate).
-    """
-    return intake_label in (IntakeLabel.SIMPLE, IntakeLabel.COMPLEX)
-
-
-def mid_loop_use_lightweight_generate(intake_label: IntakeLabel | None) -> bool:
-    """True when plan_generate should use the lightweight planner call."""
-    return intake_label == IntakeLabel.SIMPLE
-
-
-def mid_loop_allow_inventory(
-    *,
-    intake_label: IntakeLabel | None,
-    projection_mode: str,
-    has_step_results: bool,
-    has_execute_ledger: bool,
-) -> bool:
-    """True when evaluate should run gap inventory before status assess.
-
-    Structural skips only: trivial intake, or new_goal with no execute evidence.
-    """
-    if intake_label == IntakeLabel.TRIVIAL:
-        return False
-    if projection_mode == "new_goal" and not has_step_results and not has_execute_ledger:
         return False
     return True

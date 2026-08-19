@@ -40,9 +40,8 @@ def test_build_synthesis_message_is_task_only() -> None:
 
 
 def test_projection_excludes_plan_phases_from_ledger() -> None:
-    builder = UserMessageBuilder()
     plan_human = LoopHumanMessage(
-        content=builder.build_plan_assess_message(goal="Analyze latency"),
+        content="## GOAL\nAnalyze latency\n",
         thread_id="t",
         iteration=0,
         phase="plan_assess",

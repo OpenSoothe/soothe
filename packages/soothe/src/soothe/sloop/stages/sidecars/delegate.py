@@ -426,7 +426,7 @@ async def _handle_planner_subagent_review_answer(
             ctx, goal_text=goal_text, report=note, wire=wire, step_id=step_id
         )
         # StrangeLoop DISPATCH owns the decision; drop the intake trivial plan.
-        # No synthetic plan_assessment — Approve no longer enters plan_generate.
+        # Approve grounds into DISPATCH; do not synthesize a plan-assess artifact.
         ctx.scratch.plan_result = None
         ctx.scratch.planner_subagent_review_comments = None
         ctx.scratch.planner_implement_handoff = True
