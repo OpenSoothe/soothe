@@ -17,7 +17,8 @@ do-or-decompose driven by CE StepDAG ownership:
 3. CE reconciles proposals; completions land immediately.
 4. B-lazy failure via `replacement_of` nodes; ROOT_EVAL at tree-green.
 
-Feature flag: `agent.loop.decompose.enabled` (default **true** after P3).
+Decomposition is **always on** for StrangeLoop step THREADS. Budgets:
+`agent.loop.decompose.*` (no `enabled` gate).
 
 **Package:** `soothe` (context, sloop, config). Autopilot goal DAG unchanged.
 
@@ -98,7 +99,7 @@ proposal validation.
 
 ## 4. P1 — Tool & prompts (done)
 
-- Bind `decompose_task` in executor when `decompose.enabled` and step THREAD.
+- Bind `decompose_task` in executor on every step THREAD.
 - Proposal sink on `LoopRuntimeContext` / `executor.decompose_proposals`.
 - THREAD prompt: DECOMPOSITION vs TODOS; override TodoListMiddleware copy.
 - Do **not** implement nano middleware for decompose.
@@ -120,7 +121,7 @@ Tests: `packages/soothe/tests/unit/core/loop/decompose/test_reconcile.py`.
 - Live graph: `INTAKE → ENTER_LOOP → DISPATCH ⇄ EXECUTE → RECORD_PROGRESS →
   RECONCILE → ROOT_EVAL → FINALIZE` (+ `AWAIT_USER` / `DELEGATE`).
 - Pass 2 classifier removed; Pass 1 tasks map to compatibility `complex`.
-- `decompose.enabled` default **true**.
+- Decomposition always on (no `enabled` flag); budgets under `agent.loop.decompose.*`.
 - Legacy plan stations remain as importable modules for isolated unit tests;
   they are not on the compiled graph.
 

@@ -1,4 +1,4 @@
-"""Middleware: inject decompose prompts / tool when enabled (RFC-904)."""
+"""Middleware: inject decompose prompts / tool on step THREADS (RFC-904)."""
 
 from __future__ import annotations
 
@@ -19,10 +19,7 @@ from soothe.sloop.decompose.prompts import (
 )
 from soothe.sloop.decompose.runtime import current_step_id
 from soothe.sloop.decompose.tool import build_decompose_task_tool
-from soothe.sloop.utils.config_keys import (
-    SOOTHE_DECOMPOSE_ENABLED_KEY,
-    SOOTHE_DECOMPOSE_STEP_ID_KEY,
-)
+from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_STEP_ID_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +71,9 @@ def _strip_decompose_tool(tools: list[Any]) -> list[Any]:
 class DecomposeTaskMiddleware(AgentMiddleware):
     """Inject ``decompose_task`` + intra-step write_todos guidance on step THREADS.
 
-    Active when LangGraph configurable ``soothe_decompose_enabled`` is true and
-    a decompose runtime step id is bound. Does not own CE reconcile.
+    Active when a StrangeLoop step id is bound (contextvar or LangGraph
+    configurable ``soothe_decompose_step_id``). Hidden on non-step threads
+    (synthesis, intake specialists, etc.).
 
     ``tools`` registers ``decompose_task`` with the agent tool node so the call
     is executable; visibility to the model stays gated per THREAD.
@@ -86,7 +84,7 @@ class DecomposeTaskMiddleware(AgentMiddleware):
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         conf = _langgraph_configurable()
         step_id = current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY)
-        if not conf.get(SOOTHE_DECOMPOSE_ENABLED_KEY) or not step_id:
+        if not step_id:
             tools = list(request.tools or [])
             stripped = _strip_decompose_tool(tools)
             return request.override(tools=stripped) if len(stripped) != len(tools) else request
@@ -106,7 +104,6 @@ class DecomposeTaskMiddleware(AgentMiddleware):
                 new_system = SystemMessage(content=f"{content}\n\n{addendum}")
                 return request.override(tools=tools, system_message=new_system)
             if isinstance(content, list):
-                # content blocks — append text block
                 from langchain_core.messages import SystemMessage
 
                 new_blocks = [

@@ -1136,13 +1136,10 @@ class StrangeLoopRulesConfig(BaseModel):
 class DecomposeLoopConfig(BaseModel):
     """Recursive step decomposition budgets (RFC-904 / IG-751).
 
-    The ``enabled`` flag gates recursive decomposition budgets and behavior.
+    Decomposition is always on for StrangeLoop step THREADS; this object only
+    holds budgets and reconcile model role.
     """
 
-    enabled: bool = Field(
-        default=True,
-        description="Enable recursive step decomposition (RFC-904). Default on after cutover.",
-    )
     max_depth: int = Field(
         default=5,
         ge=1,
@@ -1499,7 +1496,7 @@ class StrangeLoopConfig(BaseModel):
 
     decompose: DecomposeLoopConfig = Field(
         default_factory=DecomposeLoopConfig,
-        description="Recursive step decomposition (RFC-904); enabled default false.",
+        description="Recursive step decomposition budgets (RFC-904; always on).",
     )
 
 

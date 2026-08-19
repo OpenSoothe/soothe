@@ -92,7 +92,8 @@ When RFC-904 is **Accepted** / feature flag cut over:
 | RFC-903 | Remains; topology shrinks further on the same `LoopNode` / `RouteDecision` contract |
 | CE `apply_directives("decompose")` | Remains out of scope (goal DAG); must not be implemented as this RFC's step tool |
 
-Feature flag: `agent.loop.decompose.enabled` (default **true** after IG-751 P3 cutover).
+Feature flag: removed — recursive decomposition is always on for StrangeLoop
+step THREADS. Budgets live under `agent.loop.decompose.*` (no `enabled` gate).
 
 ---
 
@@ -295,10 +296,9 @@ decompose_task(
 | Terminal | Yes | No |
 | Creates StepNodes | Yes (post-commit) | Never |
 
-When `agent.loop.decompose.enabled`, THREAD **MUST** override
-`TodoListMiddleware` prompts so `write_todos` is **intra-step only**. Stock
-LangChain “break down objectives into steps” wording **MUST NOT** remain on
-StrangeLoop step threads (collides with `decompose_task`).
+THREAD **MUST** override `TodoListMiddleware` prompts so `write_todos` is
+**intra-step only**. Stock LangChain “break down objectives into steps” wording
+**MUST NOT** remain on StrangeLoop step threads (collides with `decompose_task`).
 
 Non-StrangeLoop CoreAgent sessions **MAY** keep stock `write_todos` prompts.
 

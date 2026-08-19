@@ -55,13 +55,7 @@ def test_execute_envelope_includes_decompose_guidance() -> None:
     msg = UserMessageBuilder().build_execute_step_message(
         "Do the thing",
         step_id="S1",
-        include_decompose_guidance=True,
     )
     assert "DECOMPOSITION vs TODOS" in msg
     assert "decompose_task" in msg
     assert DECOMPOSITION_VS_TODOS_BLOCK.strip().split("\n")[0] in msg or "write_todos" in msg
-
-
-def test_execute_envelope_omits_guidance_by_default() -> None:
-    msg = UserMessageBuilder().build_execute_step_message("Do the thing", step_id="S1")
-    assert "DECOMPOSITION vs TODOS" not in msg

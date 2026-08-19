@@ -374,13 +374,6 @@ class Executor:
             return _DEFAULT_MAX_TOOL_CALLS_PER_STEP
         return max(0, int(self._config.agent.loop.max_tool_calls_per_step))
 
-    def _decompose_enabled(self) -> bool:
-        """True when RFC-904 recursive decompose is enabled for this loop."""
-        if self._config is None:
-            return False
-        decompose = getattr(self._config.agent.loop, "decompose", None)
-        return bool(getattr(decompose, "enabled", False))
-
     def _dispatch_idle_seconds(self) -> float:
         """Deadlock detector: max inactivity when no root tool is pending."""
         if self._config is None:
@@ -610,7 +603,6 @@ class Executor:
             prior_goals=prior_goals or None,
             vision_context=vision_context,
             skill_context=loop_state.skill_context if loop_state else None,
-            include_decompose_guidance=self._decompose_enabled(),
             approved_plan_path=approved_path,
             approved_plan_markdown=approved_md,
         )
@@ -1918,20 +1910,15 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
-            if self._decompose_enabled():
-                from soothe.sloop.utils.config_keys import (
-                    SOOTHE_DECOMPOSE_ENABLED_KEY,
-                    SOOTHE_DECOMPOSE_STEP_ID_KEY,
-                )
+            from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_STEP_ID_KEY
 
-                configurable[SOOTHE_DECOMPOSE_ENABLED_KEY] = True
-                configurable[SOOTHE_DECOMPOSE_STEP_ID_KEY] = step.id
-                from soothe.sloop.decompose.runtime import bind_decompose_runtime
+            configurable[SOOTHE_DECOMPOSE_STEP_ID_KEY] = step.id
+            from soothe.sloop.decompose.runtime import bind_decompose_runtime
 
-                decompose_tokens = bind_decompose_runtime(
-                    step_id=step.id,
-                    sink=self.decompose_proposals,
-                )
+            decompose_tokens = bind_decompose_runtime(
+                step_id=step.id,
+                sink=self.decompose_proposals,
+            )
             # RFC-217: Inject goal briefing on thread switch (for single-step execution)
             if self._goal_context_manager:
                 goal_briefing = await self._goal_context_manager.get_execute_briefing()

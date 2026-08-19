@@ -74,7 +74,7 @@ CE StepDAG:
 2. Threads may call executor-bound **`decompose_task`**; completions land immediately.
 3. **RECONCILE** commits proposals; **ROOT_EVAL** finalizes when the tree is green.
 
-Feature flag / budgets: `agent.loop.decompose.*`.
+Budgets: `agent.loop.decompose.*` (always on for step THREADS).
 
 ---
 

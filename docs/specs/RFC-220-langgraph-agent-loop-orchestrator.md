@@ -24,7 +24,7 @@ The Loop Graph orchestrates assess → optional bounded evidence gathering → p
 This RFC also mandates **evidence-bound plan steps**: every planned step references validated evidence identifiers before Execute proceeds.
 It also defines graph-entry **intent classification** so conversational fast paths and normal loop execution share one topology.
 
-> **Supersession note (RFC-904):** When `agent.loop.decompose.enabled` cuts over, the assess → evidence → plan-generate → commit → execute → record → check_limits spine is replaced by DISPATCH / THREAD / RECONCILE / ROOT_EVAL. Identity rules (two graphs, two keys), CoreAgent isolation, and checkpoint keying in this RFC remain normative. See RFC-904.
+> **Supersession note (RFC-904):** The assess → evidence → plan-generate → commit → execute → record → check_limits spine is replaced by DISPATCH / THREAD / RECONCILE / ROOT_EVAL. Identity rules (two graphs, two keys), CoreAgent isolation, and checkpoint keying in this RFC remain normative. See RFC-904.
 
 > **Implementation Note (2026-08-11):** The LangGraph `StateGraph` orchestrator is fully implemented at `packages/soothe/src/soothe/sloop/orchestrator/builder.py` (`graph = StateGraph(LoopGraphState)`). No imperative `while`-loop driver remains — all `while` keyword occurrences in `sloop/` are iterators, network retries, and stream normalization. No backward-compatible execution path, feature flag, or dual orchestrator exists.
 

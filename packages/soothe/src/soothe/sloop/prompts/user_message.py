@@ -188,7 +188,6 @@ class UserMessageBuilder:
         workspace_state: str | None = None,
         skill_context: str | None = None,
         mcp_resource_blocks: list[str] | None = None,
-        include_decompose_guidance: bool = False,
         approved_plan_path: str | None = None,
         approved_plan_markdown: str | None = None,
     ) -> str:
@@ -207,8 +206,6 @@ class UserMessageBuilder:
             workspace_state: Optional lightweight workspace diff summary.
             skill_context: Skill reference only (SKILL.md).
             mcp_resource_blocks: Optional pre-resolved MCP resource blocks.
-            include_decompose_guidance: When True, append DECOMPOSITION vs TODOS
-                (RFC-904 / ``agent.loop.decompose.enabled``).
             approved_plan_path: Optional path of an operator-approved intake plan.
             approved_plan_markdown: Optional approved plan body (frontmatter stripped).
 
@@ -267,10 +264,9 @@ class UserMessageBuilder:
         if workspace_state:
             sections.append(("WORKSPACE STATE", workspace_state))
 
-        if include_decompose_guidance:
-            from soothe.sloop.decompose.prompts import DECOMPOSITION_VS_TODOS_BLOCK
+        from soothe.sloop.decompose.prompts import DECOMPOSITION_VS_TODOS_BLOCK
 
-            sections.append(("DECOMPOSITION vs TODOS", DECOMPOSITION_VS_TODOS_BLOCK.strip()))
+        sections.append(("DECOMPOSITION vs TODOS", DECOMPOSITION_VS_TODOS_BLOCK.strip()))
 
         return _render_sections(sections)
 

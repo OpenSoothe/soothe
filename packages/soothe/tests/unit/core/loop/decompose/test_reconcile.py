@@ -17,7 +17,7 @@ from soothe.sloop.decompose.reconcile import (
 
 
 def _cfg(**overrides: object) -> DecomposeLoopConfig:
-    return DecomposeLoopConfig(enabled=True, **overrides)  # type: ignore[arg-type]
+    return DecomposeLoopConfig(**overrides)  # type: ignore[arg-type]
 
 
 def test_normalize_subtask_key() -> None:

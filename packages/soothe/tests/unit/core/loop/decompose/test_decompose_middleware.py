@@ -12,10 +12,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from soothe.sloop.decompose.middleware import DecomposeTaskMiddleware
 from soothe.sloop.decompose.runtime import bind_decompose_runtime, reset_decompose_runtime
-from soothe.sloop.utils.config_keys import (
-    SOOTHE_DECOMPOSE_ENABLED_KEY,
-    SOOTHE_DECOMPOSE_STEP_ID_KEY,
-)
+from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_STEP_ID_KEY
 
 _CONFIGURABLE = "soothe.sloop.decompose.middleware._langgraph_configurable"
 
@@ -50,8 +47,7 @@ def test_awrap_model_call_injects_decompose_tool() -> None:
     sink: list = []
     tokens = bind_decompose_runtime(step_id="AAA-01", sink=sink)
     try:
-        conf = {SOOTHE_DECOMPOSE_ENABLED_KEY: True}
-        with patch(_CONFIGURABLE, return_value=conf):
+        with patch(_CONFIGURABLE, return_value={}):
             forwarded = _run_through_hook(DecomposeTaskMiddleware(), _request())
     finally:
         reset_decompose_runtime(tokens)
@@ -61,38 +57,22 @@ def test_awrap_model_call_injects_decompose_tool() -> None:
 
 
 def test_injection_uses_configurable_step_id_without_contextvar() -> None:
-    conf = {
-        SOOTHE_DECOMPOSE_ENABLED_KEY: True,
-        SOOTHE_DECOMPOSE_STEP_ID_KEY: "BBB-02",
-    }
+    conf = {SOOTHE_DECOMPOSE_STEP_ID_KEY: "BBB-02"}
     with patch(_CONFIGURABLE, return_value=conf):
         forwarded = _run_through_hook(DecomposeTaskMiddleware(), _request())
 
     assert "decompose_task" in _tool_names(forwarded)
 
 
-def test_no_injection_when_decompose_disabled() -> None:
-    sink: list = []
-    tokens = bind_decompose_runtime(step_id="AAA-01", sink=sink)
-    try:
-        with patch(_CONFIGURABLE, return_value={}):
-            forwarded = _run_through_hook(DecomposeTaskMiddleware(), _request())
-    finally:
-        reset_decompose_runtime(tokens)
-
-    assert "decompose_task" not in _tool_names(forwarded)
-
-
 def test_no_injection_without_step_binding() -> None:
-    conf = {SOOTHE_DECOMPOSE_ENABLED_KEY: True}
-    with patch(_CONFIGURABLE, return_value=conf):
+    with patch(_CONFIGURABLE, return_value={}):
         forwarded = _run_through_hook(DecomposeTaskMiddleware(), _request())
 
     assert "decompose_task" not in _tool_names(forwarded)
 
 
 def test_registered_tool_is_hidden_on_ungated_threads() -> None:
-    """Registered middleware tools reach every request; gate must hide them."""
+    """Registered middleware tools reach every request; step gate must hide them."""
     base = _request()
     request = base.override(tools=[*(base.tools or []), *DecomposeTaskMiddleware.tools])
 

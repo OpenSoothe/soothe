@@ -41,7 +41,6 @@ def test_execute_step_message_includes_approved_plan_section() -> None:
     msg = UserMessageBuilder().build_execute_step_message(
         "Implement the approved plan",
         step_id="AAA-01",
-        include_decompose_guidance=True,
         approved_plan_path="/ws/.soothe/plans/demo.md",
         approved_plan_markdown="# Solution\n\nUse OAuth.\n",
     )
