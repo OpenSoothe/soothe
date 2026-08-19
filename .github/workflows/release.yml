@@ -239,23 +239,6 @@ jobs:
     - name: Wait for soothe-sdk on PyPI
       run: |
         # soothe-sdk is published from this monorepo (deploy-sdk job).
-        VERSION=$(cat VERSION)
-        for i in {1..30}; do
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://pypi.org/pypi/soothe-sdk/${VERSION}/json" 2>/dev/null || echo "000")
-          if [ "$HTTP_STATUS" = "200" ]; then
-            echo "✓ soothe-sdk ${VERSION} is available on PyPI"
-            exit 0
-          fi
-          echo "Waiting for soothe-sdk ${VERSION} on PyPI... attempt $i/30 (HTTP ${HTTP_STATUS})"
-          sleep 10
-        done
-        echo "❌ Timeout: soothe-sdk ${VERSION} not found on PyPI after 5 minutes"
-        exit 1
-
-    - name: Wait for soothe-sdk on PyPI
-      run: |
-        # soothe-sdk is published from this monorepo (deploy-sdk job).
         # Wait for PyPI propagation before resolving soothe's dependencies.
         VERSION=$(cat packages/soothe-sdk/VERSION)
         for i in {1..30}; do
