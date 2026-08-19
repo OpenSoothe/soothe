@@ -5,6 +5,8 @@
 **Status**: Proposed
 **Kind**: Architecture Design
 **Created**: 2026-08-18
+**Authors**: Soothe Team
+**Updated**: 2026-08-18
 **Dependencies**: RFC-220, RFC-604, RFC-622, RFC-633, RFC-803
 **Revises**: RFC-220 §Loop Graph Topology, §State and Schemas (node contract)
 **Related**: RFC-201, RFC-207, RFC-214, RFC-218, RFC-219, RFC-904

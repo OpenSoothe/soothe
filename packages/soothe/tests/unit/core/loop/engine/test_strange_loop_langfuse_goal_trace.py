@@ -30,7 +30,7 @@ def _make_strange_loop(*, langfuse_enabled: bool = True) -> StrangeLoop:
     config.home = "/tmp/soothe-test"
     config.observability.langfuse.enabled = langfuse_enabled
     config.observability.langfuse.trace_name = "soothe-dev"
-    return StrangeLoop(core_agent=MagicMock(), loop_planner=MagicMock(), config=config)
+    return StrangeLoop(core_agent=MagicMock(), config=config)
 
 
 async def _drive_run_with_progress(

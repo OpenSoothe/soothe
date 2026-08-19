@@ -2,7 +2,7 @@
 
 **RFC**: 226
 **Title**: Continuation-Aware plan_assess and Post-Execute Fast Exit
-**Status**: Implemented — assess_continuation in cognition/planner.py, continuation_routing and continuation_context modules shipped.
+**Status**: Implemented
 **Kind**: Architecture Design
 **Authors**: xiaming
 **Created**: 2026-05-29

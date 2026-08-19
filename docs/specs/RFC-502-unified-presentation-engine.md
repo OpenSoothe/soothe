@@ -2,10 +2,11 @@
 
 **RFC**: 502
 **Title**: Unified Presentation Engine
-**Status**: Implemented (partial) — PresentationEngine is CLI-side only, in `soothe_cli.runtime.presentation.engine`; reason dedup, tool-result summarization, and P0/P1 policy rules implemented. No daemon-side presentation engine exists or is planned; the daemon emits raw events and the CLI owns all presentation decisions. Full integration into daemon EventProcessor pipeline pending.
+**Status**: Implemented (partial)
 **Kind**: Implementation Interface Design
 **Created**: 2026-04-02
 **Authors**: Soothe Team
+**Updated**: 2026-04-02
 **Depends on**: RFC-401 (Event Processing), RFC-501 (Display & Verbosity), RFC-500 (CLI/TUI Architecture)
 
 ---

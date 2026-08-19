@@ -7,7 +7,6 @@ This document defines the terminology and naming conventions used in this projec
 > Note: Also covers start-phase intake & branch routing terms (RFC-630),
 > LoopRail streaming slice / worktree terms (RFC-231 §9, RFC-232), and
 > recursive step decomposition terms (RFC-904).
-
 ## Core Terminology
 
 ### Core Module Architecture

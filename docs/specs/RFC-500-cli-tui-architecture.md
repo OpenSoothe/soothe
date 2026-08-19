@@ -5,6 +5,7 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-12
+**Authors**: Soothe Team
 **Updated**: 2026-07-02
 **Related**: RFC-000, RFC-001, RFC-302, RFC-303, RFC-628 (step card display)
 

@@ -16,8 +16,6 @@ def test_strange_loop_resolves_goal_synthesis_model_role() -> None:
             }
         }
     )
-    planner = MagicMock()
-    planner._model = MagicMock(name="planner-fallback")
     synthesis_model = MagicMock(name="synthesis")
 
     with patch.object(
@@ -25,7 +23,7 @@ def test_strange_loop_resolves_goal_synthesis_model_role() -> None:
         "create_chat_model",
         side_effect=lambda *args: synthesis_model if args[-1] == "fast" else MagicMock(),
     ):
-        loop = StrangeLoop(core_agent=MagicMock(), loop_planner=planner, config=cfg)
+        loop = StrangeLoop(core_agent=MagicMock(), config=cfg)
 
     assert loop._goal_synthesis_llm is synthesis_model
     assert loop.goal_synthesis_model() is synthesis_model

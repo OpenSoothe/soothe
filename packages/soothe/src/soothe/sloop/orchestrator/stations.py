@@ -22,16 +22,16 @@ from typing import Any, Final, Literal, TypedDict
 INTAKE: Final = "intake"
 ENTER_LOOP: Final = "enter_loop"
 
-# --- Plan (legacy spine; kept for clarification resume / unit tests) ---
+# --- Plan (historical station / ledger tags; not live graph nodes) ---
 GATHER_EVIDENCE: Final = "gather_evidence"
 EVALUATE: Final = "evaluate"
 GENERATE_PLAN: Final = "generate_plan"
 
-# --- Execute (legacy spine) ---
-COMMIT_PLAN: Final = "commit_plan"
+# --- Execute ---
+COMMIT_PLAN: Final = "commit_plan"  # historical ledger / docs only
 EXECUTE: Final = "execute"
 RECORD_PROGRESS: Final = "record_progress"
-CHECK_LIMITS: Final = "check_limits"
+CHECK_LIMITS: Final = "check_limits"  # historical; budget enforced in DISPATCH
 
 # --- Decompose work-queue (RFC-904) ---
 DISPATCH: Final = "dispatch"

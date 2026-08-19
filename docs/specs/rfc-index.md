@@ -40,8 +40,8 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | Draft | 40 |
 | Proposed | 2 |
 | Accepted | 1 |
-| Implemented | 31 |
-| Implemented (partial) | 8 |
+| Implemented | 29 |
+| Implemented (partial) | 10 |
 | Implemented (Partially Superseded) | 1 |
 | Archived | 9 |
 
@@ -55,16 +55,15 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 67 |
+| Architecture Design | 68 |
 | Implementation Interface Design | 15 |
 | Architecture Design + Implementation Interface Design | 2 |
 | Conceptual Design | 1 |
-| Not stated | 1 |
 | Protocol Specification | 1 |
 | Architecture Design + Protocol Specification | 1 |
+| Architecture Design / Impl Interface | 1 |
 | Feature Enhancement | 1 |
 | Process Specification | 1 |
-| Architecture Design / Impl Interface | 1 |
 | Product Specification | 1 |
 
 ---
@@ -79,7 +78,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-03-12
   - Updated: 2026-05-26
 - **RFC-001**: [Architecture Design for Core Protocol Modules](RFC-001-core-modules-architecture.md)
-  - Kind: Not stated
+  - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-03-12
   - Updated: 2026-04-17 (RFC consolidation; retrieval module canonical in RFC-302)
@@ -506,14 +505,14 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-04-28
 - **RFC-618**: [Plan Subagent — Structured Planning with Explore Delegation](RFC-618-plan-subagent-delegation.md)
   - Kind: Architecture Design
-  - Status: Draft (partially superseded for intake planner — see RFC-633)
+  - Status: Draft
   - Created: 2026-05-11
   - Depends on: RFC-000, RFC-001, RFC-100, RFC-600, RFC-601, RFC-613
   - Authors: Soothe Team
   - Updated: 2026-07-28
 - **RFC-619**: [Deep Research Subagent](RFC-619-deep-research-subagent.md)
   - Kind: Architecture Design
-  - Status: Accepted (revised)
+  - Status: Accepted
   - Created: 2026-05-21
   - Depends on: RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming), RFC-616 (Scenario-Driven Synthesis)
   - Supersedes: Deep Research subagent identity (prior RFC-619 revision), Research section identity in RFC-601 §4
@@ -521,7 +520,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Updated: 2026-07-07
 - **RFC-620**: [Unified Channel Architecture](RFC-620-channel-architecture.md)
   - Kind: Architecture Design
-  - Status: Implemented (core migration complete; plugin discovery deferred)
+  - Status: Implemented (partial)
   - Created: 2026-05-29
   - Depends on: RFC-450, RFC-0015, RFC-000
   - Authors: Xiaming Chen
@@ -550,7 +549,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Updated: 2026-06-03
 - **RFC-624**: [Context Engine](RFC-624-context-engine.md)
   - Kind: Architecture Design
-  - Status: Implemented (Phases 1, 3a–3d, 4 Stage 1 done; Phase 4 Stage 2 in progress)
+  - Status: Implemented (partial)
   - Created: 2026-06-12
   - Depends on: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (StrangeLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-803 (Persistence Backend)
   - Updated: 2026-08-19 (RFC-904 StepDAG reconcile / status extensions)
@@ -563,7 +562,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Updated: 2026-08-11
 - **RFC-626**: [Entity Model and State Management Consolidation](RFC-626-entity-model-state-consolidation.md)
   - Kind: Architecture Design
-  - Status: Draft (not yet implemented)
+  - Status: Draft
   - Created: 2026-06-16
   - Depends on: RFC-624 (Context Engine), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-203 (StrangeLoop State & Memory), RFC-201 (StrangeLoop Plan-Execute Loop)
   - Updated: 2026-08-11
@@ -575,7 +574,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Updated: 2026-06-17
 - **RFC-628**: [Cognition Step Card & SubAgent Card Display](RFC-628-step-card-display-refactor.md)
   - Kind: Implementation Interface Design
-  - Status: Implemented (Parts I–III)
+  - Status: Implemented
   - Created: 2026-06-26
   - Depends on: RFC-500 (CLI/TUI Architecture), RFC-501 (Display Verbosity), RFC-607 (Progressive Display Refinements), RFC-630 (intake-only wire stream contract for Part III)
   - Authors: Xiaming Chen

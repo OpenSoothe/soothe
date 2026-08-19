@@ -1,4 +1,4 @@
-"""Routing short-circuits + await_clarification edges (RFC-622)."""
+"""Routing short-circuits + await_clarification edges (RFC-622, RFC-904)."""
 
 from __future__ import annotations
 
@@ -9,9 +9,7 @@ from langgraph.graph import END
 from soothe.sloop.orchestrator.builder import build_strange_loop_graph
 from soothe.sloop.orchestrator.routing import (
     route_after_clarification,
-    route_after_evaluate,
     route_after_execute,
-    route_after_plan,
 )
 
 
@@ -22,40 +20,14 @@ def test_await_clarification_node_present_in_graph() -> None:
     assert "await_user" in names
     assert "dispatch" in names
     assert "reconcile" in names
+    assert "generate_plan" not in names
+    assert "evaluate" not in names
     assert "analyze_gaps" not in names
     assert "assess" not in names
 
 
 def test_route_after_execute_short_circuits_on_pending_clarification() -> None:
     assert route_after_execute({"pending_clarification": {"questions": ["q"]}}) == "await_user"
-
-
-def test_route_after_plan_short_circuits_on_pending_clarification() -> None:
-    assert route_after_plan({"pending_clarification": {"questions": ["q"]}}) == "await_user"
-
-
-def test_route_after_plan_loops_on_continue_generate() -> None:
-    assert route_after_plan({"assess_route": "continue_generate"}) == "generate_plan"
-
-
-def test_route_after_plan_fatal_exits_before_continue_generate() -> None:
-    assert (
-        route_after_plan({"last_outcome": "fatal", "assess_route": "continue_generate"})
-        == "commit_plan"
-    )
-
-
-def test_route_after_plan_prefers_goal_done_over_replan() -> None:
-    from soothe.sloop.orchestrator.stations import PLAN_ROUTE_GOAL_DONE
-
-    assert (
-        route_after_plan({"plan_route": PLAN_ROUTE_GOAL_DONE, "assess_route": "continue_generate"})
-        == "finalize"
-    )
-
-
-def test_route_after_evaluate_short_circuits_on_pending_clarification() -> None:
-    assert route_after_evaluate({"pending_clarification": {"questions": ["q"]}}) == "await_user"
 
 
 def test_route_after_execute_preserved_when_no_pending() -> None:
@@ -69,12 +41,14 @@ def test_route_after_clarification_returns_to_origin_node() -> None:
         ORIGIN_PLAN_EVALUATE,
         ORIGIN_PLAN_GENERATE,
         ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        resume_node_for_clarification_origin,
     )
 
     assert (
         route_after_clarification({"last_clarification_origin": ORIGIN_EXECUTE}) == ORIGIN_EXECUTE
     )
     # Legacy plan origins resume at DISPATCH under the RFC-904 topology.
+    assert resume_node_for_clarification_origin(ORIGIN_PLAN_GENERATE) == "dispatch"
     assert (
         route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_GENERATE}) == "dispatch"
     )

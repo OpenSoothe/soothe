@@ -5,6 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design + Protocol Specification
 **Created**: 2026-03-19
+**Authors**: Soothe Team
 **Updated**: 2026-06-28
 **Dependencies**: RFC-000, RFC-001, RFC-500, RFC-614, RFC-403, RFC-900
 **Related**: RFC-620 (Channel Architecture), RFC-228 (Autopilot Job IPC), RFC-503 (Loop-First UX), RFC-504 (Loop Management CLI Commands), RFC-454 (Slash Command Architecture)

@@ -112,7 +112,7 @@ def get_mermaid_output(graph) -> str:
     return graph.draw_mermaid()
 
 
-# Spine reading order (preprocess → plan → execute → sidecars → complete).
+# Spine reading order (RFC-904 DISPATCH topology).
 # ``draw_mermaid`` emits nodes/edges alphabetically, which gives dagre a poor
 # initial ordering; declaring them in spine order cuts edge crossings.
 _STATION_LAYOUT_ORDER: tuple[str, ...] = (
@@ -120,20 +120,18 @@ _STATION_LAYOUT_ORDER: tuple[str, ...] = (
     stations.INTAKE,
     stations.ENTER_LOOP,
     stations.DELEGATE,
-    stations.GATHER_EVIDENCE,
-    stations.EVALUATE,
-    stations.GENERATE_PLAN,
-    stations.COMMIT_PLAN,
+    stations.DISPATCH,
     stations.EXECUTE,
     stations.RECORD_PROGRESS,
-    stations.CHECK_LIMITS,
+    stations.RECONCILE,
+    stations.ROOT_EVAL,
     stations.AWAIT_USER,
     stations.FINALIZE,
     "__end__",
 )
 
 _MERMAID_HEADER = """---
-title: StrangeLoop LangGraph (RFC-220 / RFC-630)
+title: StrangeLoop LangGraph (RFC-904)
 config:
   flowchart:
     curve: basis

@@ -6,9 +6,6 @@ from soothe.sloop.engine.continuation_context import build_continue_bootstrap_st
 from soothe.sloop.orchestrator.continuation import (
     bootstrap_terminal_after_execute,
 )
-from soothe.sloop.stages.plan.assess import (
-    build_continue_loop_bootstrap_plan,
-)
 
 
 def test_bootstrap_uses_user_goal() -> None:
@@ -29,10 +26,3 @@ def test_bootstrap_terminal_after_execute_respects_multi_phase() -> None:
         )
         is False
     )
-
-
-def test_build_bootstrap_plan_terminal_auto_from_intent() -> None:
-    pr = build_continue_loop_bootstrap_plan("create git commit")
-    assert pr.terminal_after_execute is True
-    assert pr.decision is not None
-    assert "create git commit" in pr.decision.steps[0].full_description

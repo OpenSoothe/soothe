@@ -5,6 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
+**Authors**: Soothe Team
 **Last Updated**: 2026-08-08
 **Dependencies**: RFC-000, RFC-001
 **Related**: RFC-100 (CoreAgent), RFC-102 (Security Filesystem Policy)

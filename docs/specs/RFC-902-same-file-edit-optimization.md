@@ -5,6 +5,8 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-28
+**Authors**: Soothe Team
+**Updated**: 2026-06-28
 **Dependencies**: RFC-101 (tool interface), RFC-102 (security filesystem policy), RFC-222 (autopilot goal engine)
 
 ---

@@ -151,15 +151,7 @@ class SootheRunner(
         checkpointer_ms = (time.perf_counter() - checkpointer_start) * 1000
         logger.debug("Checkpointer resolved in %.1fms", checkpointer_ms)
 
-        default_model_instance = None
-        try:
-            default_model_instance = self._config.create_chat_model("default")
-        except Exception:
-            logger.debug("Default chat model unavailable for planner resolution", exc_info=True)
-
-        self._planner: PlannerProtocol | None = resolve_planner(
-            self._config, default_model_instance
-        )
+        self._planner: PlannerProtocol | None = resolve_planner(self._config, None)
         self._policy: PolicyProtocol | None = resolve_policy(self._config)
         self._memory: MemoryProtocol | None = None
 

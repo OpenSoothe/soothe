@@ -177,9 +177,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
         ) as am_cls,
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
-        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
-        # Mock generate_from_assessment to return done status directly
-        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
+        loop = StrangeLoop(mock_core, SootheConfig())
 
         events = [
             evt
@@ -240,10 +238,8 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
         ),
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
-        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
+        loop = StrangeLoop(mock_core, SootheConfig())
         loop._fast_llm = None  # Prevent synthesis LLM calls
-        # Mock generate_from_assessment to return done status directly
-        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
         events = [
             evt
@@ -297,10 +293,8 @@ async def test_completed_payload_for_summary_path() -> None:
         ),
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
-        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
+        loop = StrangeLoop(mock_core, SootheConfig())
         loop._fast_llm = None  # Prevent synthesis LLM calls
-        # Mock generate_from_assessment to return done status directly
-        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
         events = [
             evt
@@ -345,9 +339,7 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
         ) as am_cls,
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
-        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
-        # Mock generate_from_assessment to return done status directly
-        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
+        loop = StrangeLoop(mock_core, SootheConfig())
 
         _ = [
             evt

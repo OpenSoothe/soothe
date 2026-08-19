@@ -22,6 +22,7 @@ def _ctx_with_ce(ce: ContextEngine, goal_id: str, *, goal: str = "do work") -> L
         goal=goal,
         goal_user_submission=goal,
         iteration=0,
+        max_iterations=8,
         current_decision=None,
         plan_id=None,
         step_results=[],
@@ -31,13 +32,16 @@ def _ctx_with_ce(ce: ContextEngine, goal_id: str, *, goal: str = "do work") -> L
             agent=SimpleNamespace(loop=SimpleNamespace(decompose=DecomposeLoopConfig()))
         )
     )
+    checkpoint = SimpleNamespace(
+        thread_health_metrics=SimpleNamespace(consecutive_rate_limit_errors=0),
+    )
     return LoopRuntimeContext(
         strange_loop=strange_loop,  # type: ignore[arg-type]
         state_manager=MagicMock(),
         anchor_manager=MagicMock(),
         goal_context_manager=None,
         plan_manager=MagicMock(),
-        checkpoint=MagicMock(),
+        checkpoint=checkpoint,  # type: ignore[arg-type]
         goal_record=None,
         continue_loop_mode=False,
         recovery_valid_resume=False,

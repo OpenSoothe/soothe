@@ -1,11 +1,7 @@
 """Host-specific Langfuse display-name helpers for StrangeLoop runtime.
 
-Run-name suffixes align with stem stations where they name a graph station
-or the primary LLM under that station. Kebab-case matches existing Langfuse
-tags (``strange-loop-graph``, ``execute-step``).
-
-Evaluate subgraph: parent ``evaluate`` with children
-``evaluate-gap`` / ``evaluate-gap-leg-{i}`` / ``evaluate-assess``.
+Run-name suffixes align with stem stations. Kebab-case matches existing
+Langfuse tags (``strange-loop-graph``, ``execute-step``).
 """
 
 _HOST_LOOP_GRAPH_RUN_NAME = "strange-loop-graph"
@@ -15,11 +11,6 @@ _HOST_INTAKE_PHASE_RUN_NAMES = {
     "strange_loop_graph": "intake-classify",
 }
 _HOST_EXECUTE_STEP_RUN_NAME = "execute-step"
-_HOST_EVALUATE_RUN_NAME = "evaluate"
-_HOST_EVALUATE_GAP_RUN_NAME = "evaluate-gap"
-_HOST_EVALUATE_ASSESS_RUN_NAME = "evaluate-assess"
-_HOST_EVALUATE_ASSESS_CONTINUATION_RUN_NAME = "evaluate-assess-continuation"
-_HOST_GENERATE_PLAN_RUN_NAME = "generate-plan"
 _HOST_FINALIZE_RUN_NAME = "finalize"
 
 
@@ -51,54 +42,14 @@ def execute_step_langfuse_run_display_name(trace_name: str | None) -> str:
     return _with_trace_prefix(trace_name, _HOST_EXECUTE_STEP_RUN_NAME)
 
 
-def evaluate_langfuse_run_display_name(trace_name: str | None) -> str:
-    """Return parent evaluate-station span name."""
-    return _with_trace_prefix(trace_name, _HOST_EVALUATE_RUN_NAME)
-
-
-def evaluate_gap_langfuse_run_display_name(trace_name: str | None) -> str:
-    """Return sequential inventory (gap) child run name under evaluate."""
-    return _with_trace_prefix(trace_name, _HOST_EVALUATE_GAP_RUN_NAME)
-
-
-def evaluate_gap_leg_langfuse_run_display_name(
-    trace_name: str | None,
-    *,
-    leg_index: int,
-) -> str:
-    """Return parallel inventory leg child run name under evaluate."""
-    return _with_trace_prefix(trace_name, f"evaluate-gap-leg-{leg_index}")
-
-
-def evaluate_assess_langfuse_run_display_name(trace_name: str | None) -> str:
-    """Return assess child run name under evaluate."""
-    return _with_trace_prefix(trace_name, _HOST_EVALUATE_ASSESS_RUN_NAME)
-
-
-def evaluate_assess_continuation_langfuse_run_display_name(trace_name: str | None) -> str:
-    """Return continuation-assess child run name under evaluate."""
-    return _with_trace_prefix(trace_name, _HOST_EVALUATE_ASSESS_CONTINUATION_RUN_NAME)
-
-
-def generate_plan_langfuse_run_display_name(trace_name: str | None) -> str:
-    """Return parent generate-plan station span name."""
-    return _with_trace_prefix(trace_name, _HOST_GENERATE_PLAN_RUN_NAME)
-
-
 def finalize_langfuse_run_display_name(trace_name: str | None) -> str:
     """Return finalize / goal-completion synthesis run display name."""
     return _with_trace_prefix(trace_name, _HOST_FINALIZE_RUN_NAME)
 
 
 __all__ = [
-    "evaluate_assess_continuation_langfuse_run_display_name",
-    "evaluate_assess_langfuse_run_display_name",
-    "evaluate_gap_langfuse_run_display_name",
-    "evaluate_gap_leg_langfuse_run_display_name",
-    "evaluate_langfuse_run_display_name",
     "execute_step_langfuse_run_display_name",
     "finalize_langfuse_run_display_name",
-    "generate_plan_langfuse_run_display_name",
     "intake_langfuse_run_display_name",
     "intake_phase_langfuse_run_display_name",
     "loop_graph_langfuse_run_display_name",

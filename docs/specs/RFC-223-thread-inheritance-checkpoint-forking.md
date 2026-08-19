@@ -2,9 +2,10 @@
 
 **RFC**: 223
 **Title**: Thread Inheritance with LangGraph Checkpoint Forking
-**Status**: Implemented (partial) — fork_thread_id wiring in executor.py for thread fork inheritance; CheckpointFork class not yet extracted as standalone.
+**Status**: Implemented (partial)
 **Kind**: Architecture Design
 **Created**: 2026-05-27
+**Authors**: Soothe Team
 **Last Updated**: 2026-08-08
 **Revised**: 2026-05-28 — sole-child optimization; in-house `copy_thread_via_public_api` (no LangGraph saver implements `acopy_thread` natively).
 **Dependencies**: RFC-201, RFC-214, RFC-207, RFC-218

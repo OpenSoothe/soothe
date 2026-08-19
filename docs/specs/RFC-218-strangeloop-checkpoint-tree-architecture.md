@@ -7,6 +7,7 @@
 **Created**: 2026-04-22
 **Dependencies**: RFC-207 (Thread Lifecycle & Goal Context), RFC-803 (StrangeLoop Checkpoint Backend)
 **Author**: Soothe contributors
+**Updated**: 2026-04-22
 
 ---
 

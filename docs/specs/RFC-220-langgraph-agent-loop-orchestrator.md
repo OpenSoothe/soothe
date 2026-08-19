@@ -5,6 +5,8 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-05-05
+**Authors**: Soothe Team
+**Updated**: 2026-05-05
 **Implemented**: 2026-08-11
 **Dependencies**: RFC-000, RFC-001, RFC-100, RFC-604, RFC-803, RFC-218, RFC-219
 **Supersedes**: RFC-201 §loop driver (imperative Plan → Execute driver)

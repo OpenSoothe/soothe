@@ -6,8 +6,9 @@
 **Kind**: Architecture Design
 **Created**: 2026-07-28
 **Authors**: Soothe Team
-**Depends on**: RFC-618, RFC-622, RFC-630, RFC-656 (IG-656 intake-only planner)
-**Related**: RFC-621 (workspace host convention), RFC-628 (step/orphan cards)
+**Updated**: 2026-07-28
+**Depends on**: RFC-618, RFC-622, RFC-630
+**Related**: RFC-621 (workspace host convention), RFC-628 (step/orphan cards), IG-656 (intake-only planner)
 
 ## Abstract
 

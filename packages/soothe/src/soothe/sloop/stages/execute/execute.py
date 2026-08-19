@@ -499,7 +499,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
 
     from soothe.sloop.engine.step_brief_hydrator import StepBriefHydrator
 
-    hydrator_model = getattr(strange_loop.loop_planner, "_model", None)
+    hydrator_model = strange_loop._fast_llm or strange_loop.goal_synthesis_model()
     step_brief_hydrator = (
         StepBriefHydrator(hydrator_model, strange_loop.config) if hydrator_model else None
     )

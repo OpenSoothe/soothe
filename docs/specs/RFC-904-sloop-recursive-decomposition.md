@@ -5,6 +5,8 @@
 **Status**: Proposed
 **Kind**: Architecture Design
 **Created**: 2026-08-19
+**Authors**: Soothe Team
+**Updated**: 2026-08-19
 **Dependencies**: RFC-220, RFC-624, RFC-630, RFC-903, RFC-622, RFC-219, RFC-803
 **Revises**: RFC-220 §Loop Graph Topology (plan/eval/execute stations); RFC-201 §Plan-Execute structure (upfront plan waves); RFC-213 (per-iteration assess+generate pair); RFC-624 §StepDAG / Step Anchor Registry; RFC-630 §Pass 2 scope classification and complexity-tiered planning routes
 **Related**: RFC-207, RFC-214, RFC-625 (goal-level decompose remains separate), RFC-206

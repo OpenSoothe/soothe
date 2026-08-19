@@ -2,9 +2,10 @@
 
 **RFC**: 624
 **Title**: Context Engine — Unified Context Management for Goals, Steps, and Projection
-**Status**: Implemented (Phases 1, 3a–3d, 4 Stage 1 done; Phase 4 Stage 2 in progress)
+**Status**: Implemented (partial)
 **Kind**: Architecture Design
 **Created**: 2026-06-12
+**Authors**: Soothe Team
 **Updated**: 2026-08-19 (RFC-904 StepDAG reconcile / status extensions)
 **Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (StrangeLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-803 (Persistence Backend)
 **Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture), RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification — `commit_goal_report`), RFC-626 (Entity Model and State Management Consolidation), RFC-904 (recursive step decomposition), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-680](../archive/impl/IG-680-autopilot-dag-health-evidence-deps.md)

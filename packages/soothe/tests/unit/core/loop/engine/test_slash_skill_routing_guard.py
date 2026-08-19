@@ -34,7 +34,7 @@ def _make_strange_loop() -> StrangeLoop:
     config.persistence.soothe_postgres_dsn = None
     config.home = "/tmp/soothe-test"
     config.observability.langfuse.enabled = False
-    return StrangeLoop(core_agent=MagicMock(), loop_planner=MagicMock(), config=config)
+    return StrangeLoop(core_agent=MagicMock(), config=config)
 
 
 async def _drive_intake(

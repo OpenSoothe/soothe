@@ -6,6 +6,7 @@
 **Partially Superseded By**: RFC-220 (§loop driver), RFC-222 (GoalEngine daemon-ownership), RFC-225 (loop-centric model), RFC-904 (recursive step decomposition — upfront plan waves)
 **Kind**: Architecture Design
 **Created**: 2026-04-17
+**Authors**: Soothe Team
 **Last Updated**: 2026-08-19
 **Dependencies**: RFC-000, RFC-001, RFC-100
 **Related**: RFC-203 (State), RFC-207 (Thread), RFC-213 (Reasoning), RFC-219 (Goal Completion), RFC-220 (LangGraph Orchestrator), RFC-904

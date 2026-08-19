@@ -5,6 +5,7 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-04-03
+**Authors**: Soothe Team
 **Updated**: 2026-08-08
 **Dependencies**: RFC-200, RFC-201, RFC-203, RFC-222, RFC-450, RFC-500
 **Related**: RFC-229 (Cron Service for Autopilot),

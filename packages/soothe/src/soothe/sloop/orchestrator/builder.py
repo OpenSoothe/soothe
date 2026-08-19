@@ -1,8 +1,9 @@
 """Compile the Strange Loop LangGraph (RFC-904 decompose topology).
 
-Legacy plan/eval stations remain importable for unit tests and clarification
-resume of old checkpoints, but the live graph is DISPATCH ⇄ THREAD → RECONCILE
-→ ROOT_EVAL.
+Live graph: INTAKE → ENTER_LOOP → DISPATCH ⇄ EXECUTE → RECORD_PROGRESS →
+RECONCILE → ROOT_EVAL → FINALIZE (+ AWAIT_USER / DELEGATE). Legacy plan-spine
+stations are deleted; clarification origins from old checkpoints resume at
+DISPATCH.
 
 The graph checkpoint key uses ``{loop_id}__strange_loop`` via
 ``configurable.thread_id`` (see ``checkpoint``) when a checkpointer is

@@ -2,9 +2,10 @@
 
 **RFC**: 627
 **Title**: Unified LLM Utilities Module — Consolidated LLM Calling and Adaptation
-**Status**: Implemented — LLMFactory and utils/llm modules live in soothe_nano.utils.llm (per package DAG: coding-layer belongs in soothe-nano). soothe re-exports via config.settings.llm_factory.
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-06-17
+**Authors**: Soothe Team
 **Updated**: 2026-06-17
 **Dependencies**: RFC-000 (System Conceptual Design), RFC-104 (Model Knowledge Cutoff)
 **Related**: RFC-412 (Plugin Extension System), RFC-203 (StrangeLoop State & Memory)

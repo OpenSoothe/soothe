@@ -5,6 +5,8 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
+**Authors**: Soothe Team
+**Updated**: 2026-04-17
 **Dependencies**: RFC-000, RFC-001
 **Related**: RFC-303 (Memory), RFC-306 (Durability)
 **Note**: Moved from 4xx (RFC-302) per RFC-900 reclassification

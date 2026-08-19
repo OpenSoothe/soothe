@@ -14,7 +14,6 @@ from soothe_sdk.protocols.planner import StepResult as SdkStepResult
 
 from soothe.config import SOOTHE_HOME
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
-from soothe.sloop.cognition.phase import PlanPhase
 from soothe.sloop.intention import build_pass1_task_fallback
 from soothe.sloop.intention.models import (
     IntakePass1Confidence,
@@ -54,7 +53,6 @@ if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
     from soothe.config import SootheConfig
-    from soothe.protocols.loop_planner import LoopPlannerProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -82,41 +80,34 @@ def _hydrate_previous_plan_from_ce(state: LoopState, ce_goal: Any) -> None:
 
 
 class StrangeLoop:
-    """Agentic goal execution using Plan-and-Execute pattern (RFC-220 Loop Graph).
+    """Agentic goal execution via the RFC-904 DISPATCH / THREAD graph.
 
     Orchestration is a compiled LangGraph whose configurable checkpoint key is ``loop_id``.
-    Plan combines assessment and planning; Execute runs steps via CoreAgent (``thread_id``).
+    Execute runs claimed CE steps via CoreAgent (``thread_id``).
 
     Attributes:
         core_agent: CoreAgent for step execution
-        loop_planner: Plan phase (RFC-604: assessment + conditional plan generation per iteration)
         config: Soothe configuration
     """
 
     def __init__(
         self,
         core_agent: CoreAgentProtocol,
-        loop_planner: LoopPlannerProtocol,
         config: SootheConfig,
     ) -> None:
         """Initialize StrangeLoop.
 
         Args:
             core_agent: CoreAgent runtime
-            loop_planner: Plan-phase implementation (planning + assessment)
             config: Soothe configuration
         """
         self.core_agent = core_agent
-        self.loop_planner = loop_planner
         self.config = config
-
-        self.plan_phase = PlanPhase(loop_planner)
 
         # RFC-624 Phase 4: Loop-scoped CE instance (created on first run_with_progress)
         self._ce: Any | None = None
 
-        # Eagerly resolve the fast model for scenario classification; None when
-        # router.fast is unset (SynthesisGenerator falls back to planner model).
+        # Eagerly resolve the fast model for scenario classification / step briefs.
         self._fast_llm: Any | None = None
         if config.router.fast:
             try:
@@ -124,20 +115,19 @@ class StrangeLoop:
             except Exception:
                 pass
 
-        planner_fallback = getattr(loop_planner, "_model", None)
         self._goal_synthesis_llm: Any | None = None
         try:
             self._goal_synthesis_llm = config.create_chat_model(
                 config.agent.loop.goal_synthesis_model_role
             )
         except Exception:
-            self._goal_synthesis_llm = planner_fallback
+            self._goal_synthesis_llm = self._fast_llm
 
     def goal_synthesis_model(self) -> Any:
         """Resolved chat model for goal-completion synthesis."""
         if self._goal_synthesis_llm is not None:
             return self._goal_synthesis_llm
-        return getattr(self.loop_planner, "_model", None)
+        return self._fast_llm
 
     async def run(
         self,

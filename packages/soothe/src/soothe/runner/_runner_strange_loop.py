@@ -502,19 +502,12 @@ class StrangeLoopMixin:
             ).to_dict()
         )
 
-        if self._planner is None:
-            logger.error(
-                "[Runner] StrangeLoop requires a planner that implements LoopPlannerProtocol.plan"
-            )
-            return
-
         await self._materialize_core_agent()  # type: ignore[attr-defined]
 
         from soothe.sloop.engine.strange_loop import StrangeLoop
 
         loop_agent = StrangeLoop(
             core_agent=self._agent,
-            loop_planner=self._planner,
             config=self._config,
         )
 

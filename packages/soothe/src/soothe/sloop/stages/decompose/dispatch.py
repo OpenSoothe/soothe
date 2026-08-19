@@ -143,6 +143,16 @@ class DispatchNode(LoopNode):
         state: dict[str, Any],
         messages: list,
     ) -> NodeResult:
+        from soothe.sloop.stages.execute.loop_budget import enforce_loop_budget
+
+        terminal = await enforce_loop_budget(ctx)
+        if terminal is not None:
+            return NodeResult(payload={"dispatch_route": "fatal", "budget_terminal": terminal})
+
+        # Grace budget applies once; subsequent DISPATCH waves re-check hard.
+        if getattr(ctx, "recovery_valid_resume", False):
+            ctx.recovery_valid_resume = False
+
         cfg = _decompose_cfg(ctx)
         max_waves = int(getattr(cfg, "max_waves", 10) or 10) if cfg else 10
         wave = int(getattr(ctx.loop_state, "iteration", 0) or 0)
@@ -284,6 +294,14 @@ class DispatchNode(LoopNode):
         result: NodeResult,
     ) -> RouteDecision:
         payload = result.payload if isinstance(result.payload, dict) else {}
+        if payload.get("budget_terminal"):
+            return RouteDecision(
+                kind="terminal",
+                state_patch={
+                    "dispatch_route": "fatal",
+                    "last_outcome": str(payload["budget_terminal"]),
+                },
+            )
         route = str(payload.get("dispatch_route") or "execute")
         patch: dict[str, Any] = {"dispatch_route": route}
         # One-shot Approve handoff ends on first DISPATCH (cleared even if no body).

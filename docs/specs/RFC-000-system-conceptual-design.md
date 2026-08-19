@@ -5,6 +5,7 @@
 **Status**: Implemented
 **Kind**: Conceptual Design
 **Created**: 2026-03-12
+**Authors**: Soothe Team
 **Updated**: 2026-05-26
 **Dependencies**: -
 

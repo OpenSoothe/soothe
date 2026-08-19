@@ -108,7 +108,7 @@ def test_route_by_intent_complex() -> None:
 
 
 def test_route_by_intent_missing_label_falls_back_to_complex() -> None:
-    """Fail-safe: a missing label on fresh routes to gather_evidence."""
+    """Fail-safe: a missing label on fresh routes to DISPATCH."""
     state = {"is_continuation": False, "is_fresh_goal": True, "intake_label": None}
     assert route_by_intent(state) == "dispatch"
 
@@ -240,7 +240,7 @@ async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
 
 @pytest.mark.asyncio
 async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuation() -> None:
-    """Simple mid-loop does not inject trivial plan; gather_evidence spine owns planning."""
+    """Simple mid-loop does not inject trivial plan; DISPATCH owns planning."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(

@@ -76,19 +76,12 @@ class PromptBuilder:
 
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
 
-        # Resolve assess-prompt config for plan_coverage and omit_prior_progress_hint.
+        # Resolve assess-prompt config for omit_prior_progress_hint.
         assess_prompt_cfg = (
             self.config.agent.loop.plan_evaluate_prompt if self.config is not None else None
         )
+        # Plan coverage rendering lived in plan_step_safety (removed with LLMPlanner).
         plan_coverage = None
-        if kind in ("assess", "gap"):
-            from soothe.sloop.cognition.plan_step_safety import render_plan_coverage
-
-            include_coverage = (
-                assess_prompt_cfg.include_plan_coverage if assess_prompt_cfg is not None else True
-            )
-            if include_coverage:
-                plan_coverage = render_plan_coverage(state) or None
 
         omit_prior_progress_hint = (
             assess_prompt_cfg.omit_prior_progress_hint if assess_prompt_cfg is not None else True

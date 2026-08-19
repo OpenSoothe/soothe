@@ -2,9 +2,11 @@
 
 **RFC**: 614
 **Title**: Unified Daemon → Client Streaming Messaging Framework
-**Status**: Implemented — OutputStreamingConfig in config/models.py, stream_delivery (batch/adaptive/streaming), phase-based messages streaming, execute-phase suppression all shipped.
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-04-27
+**Authors**: Soothe Team
+**Updated**: 2026-04-27
 **Dependencies**: RFC-000, RFC-001, RFC-450, RFC-401, RFC-403
 **Extends**: RFC-450 (Daemon Communication), RFC-401 (Event Processing)
 

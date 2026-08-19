@@ -2,9 +2,11 @@
 
 **RFC**: 221
 **Title**: LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution
-**Status**: Implemented — LoopRunnerProtocol in soothe/protocols/runner.py, RayLoopRunner in soothe_daemon/runner/ray_runner.py, PoolLoopRunner (subprocess) in soothe_daemon/runner/pool_runner.py, ThreadLoopRunner in soothe_daemon/runner/thread_runner.py, LoopRunnerFactory in soothe_daemon/runner/factory.py.
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-05-09
+**Authors**: Soothe Team
+**Updated**: 2026-05-09
 **Dependencies**: RFC-001, RFC-220, RFC-450, RFC-452
 
 ---

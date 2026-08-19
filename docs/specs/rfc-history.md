@@ -9,6 +9,31 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ## Recent Changes
 
+### 2026-08-19 (consistency refinement)
+
+- **specs-refine** — comprehensive consistency pass across all 83 active RFCs:
+  - **Status field normalization (25 RFCs)**: Removed verbose implementation
+    notes from `**Status**:` fields, normalizing to lifecycle values defined in
+    `templates/rfc-standard.md` (Draft, Proposed, Accepted, Implemented,
+    Implemented (partial), Implemented (Partially Superseded)). Affected:
+    RFC-100, RFC-105, RFC-217, RFC-221, RFC-223, RFC-225, RFC-226, RFC-227,
+    RFC-228, RFC-229, RFC-412, RFC-413, RFC-452, RFC-502, RFC-614, RFC-618,
+    RFC-619, RFC-620, RFC-621, RFC-624, RFC-626, RFC-627, RFC-628, RFC-632,
+    RFC-901.
+  - **Missing `Authors` field (41 RFCs)**: Added `**Authors**: Soothe Team`
+    to all RFCs lacking the field.
+  - **Missing `Updated` field (27 RFCs)**: Added `**Updated**: <created_date>`
+    using the creation date as fallback.
+  - **Missing `Kind` field (RFC-001)**: Added `**Kind**: Architecture Design`.
+  - **Broken dependencies fixed**:
+    - RFC-618: Moved archived RFC-613 from `Depends on` to `Related`.
+    - RFC-633: Moved IG-656 from `Depends on` to `Related`.
+  - **Index summary tables updated**: Status and Kind counts corrected in
+    `rfc-index.md` to reflect normalized values.
+  - No circular dependencies found. Cross-references to archived RFCs
+    (RFC-200, RFC-203, RFC-216, RFC-300, RFC-411, RFC-505, RFC-605, RFC-613,
+    RFC-700) are expected historical references, not errors.
+
 ### 2026-08-19
 
 - **RFC-904 - Sloop Recursive Step Decomposition**

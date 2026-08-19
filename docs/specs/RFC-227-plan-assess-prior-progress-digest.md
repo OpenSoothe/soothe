@@ -2,7 +2,7 @@
 
 **RFC**: 227
 **Title**: Plan-Assess Prior-Progress Digest
-**Status**: Implemented — PriorProgressDigest model in state/schemas.py, _render_prior_progress and digest consumption in plan assess/generate shipped.
+**Status**: Implemented
 **Kind**: Architecture Design
 **Authors**: xiaming
 **Created**: 2026-06-01
