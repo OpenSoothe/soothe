@@ -27,6 +27,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.21] - 2026-08-19
+
+### Fixed
+- **sloop**: harden the clarification relay. Hard-defer parks via the
+  Context Engine (`awaiting_clarification`) and make them resumable;
+  orphaned interrupt-resume now fails closed instead of spinning. The
+  wire `ClarificationDeferredEvent` carries a `defer_kind` taxonomy, and
+  empty `ask_user` / empty questions are captured as failures so they no
+  longer trigger auto-resume spin. Autopilot skips `send_back` when a
+  goal is parked `awaiting_clarification`. The TUI gains a clarification
+  mode badge and composer-mode updates.
+- **docs**: tighten the README intro and vision section; relocate
+  project assets to `docs/assets`.
+
 ### Changed
 - **repo**: Migrate `soothe-sdk` from an independent PyPI repository
   (`mirasoth/soothe-sdk`) into the monorepo as `packages/soothe-sdk`.
@@ -36,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and publish the SDK from this repo instead of waiting for an external
   PyPI release. Module boundary checks now enforce that `soothe-sdk`
   (leaf) must not import host packages.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.20...v0.10.21
 
 ## [v0.10.20] - 2026-08-18
 
