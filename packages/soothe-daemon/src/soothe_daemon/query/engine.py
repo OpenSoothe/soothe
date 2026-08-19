@@ -1145,7 +1145,7 @@ class QueryEngine:
         turn_cancelled = False
 
         async def _run_stream() -> None:
-            nonlocal turn_stream_end_emitted, turn_cancelled
+            nonlocal turn_cancelled
 
             if effective_loop_id:
                 d._active_stream_loop_ids.add(effective_loop_id)  # Bug 4.3: set-based tracking

@@ -14,12 +14,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_KIND_TO_URL_KEY = {
-    "job.completed": "job_completed",
-    "job.failed": "job_failed",
-    "job.suspended_timeout": "job_suspended_timeout",
-}
-
 
 class WebhookNotifySink:
     """POST NotifyIntent JSON to configured URLs."""
@@ -66,7 +60,7 @@ class WebhookNotifySink:
         intent: NotifyIntent,
         targets: list[NotifyTarget],
     ) -> DeliveryResult:
-        event_key = _KIND_TO_URL_KEY.get(intent.kind, intent.kind.replace(".", "_"))
+        event_key = intent.kind.replace(".", "_")
         urls: list[str] = []
         primary = self._resolve_url(event_key)
         if primary:

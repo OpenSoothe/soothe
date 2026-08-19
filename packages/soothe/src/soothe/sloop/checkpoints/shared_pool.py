@@ -299,8 +299,6 @@ class SharedPostgreSQLPool:
     @classmethod
     async def release_idle_shared(cls) -> None:
         """Release idle connections on the daemon singleton (if open)."""
-        global _shared_pool
-
         if _shared_pool is not None:
             await _shared_pool.release_idle_connections()
 
@@ -321,8 +319,6 @@ class SharedPostgreSQLPool:
         Called by PostgreSQLPersistenceBackend when recoverable
         connection errors occur (e.g., AdminShutdown during DB restart).
         """
-        global _shared_pool
-
         async with _pool_lock:
             if _shared_pool is not None:
                 await _shared_pool.reset_pool()

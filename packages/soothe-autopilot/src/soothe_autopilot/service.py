@@ -149,6 +149,7 @@ class AutopilotService:
         if self._monitor is not None:
             self._monitor.bind_service_cancel(self.cancel_goal)
             self._monitor.bind_suspend_notify_scan(self.scan_notify_suspend_timeouts)
+            self._monitor.bind_sla_scan(self.scan_sla_overdue)
             self._monitor.bind_dag_persist(self._persist_goals)
             self._monitor.bind_resource_reconcile(self.reconcile_goal_resources)
 
@@ -179,8 +180,10 @@ class AutopilotService:
         self._jobs_root: Path | None = None
         self._rail_interpreter: Any = None
         self._notification_router: Any = None
+        self._sla_monitor: Any = None
         self._init_rail_interpreter()
         self._init_notification_router()
+        self._init_sla_monitor()
 
         if subscribe_to_bus:
             self._setup_subscriptions()
@@ -200,6 +203,22 @@ class AutopilotService:
         except Exception:
             logger.warning("NotificationRouter unavailable", exc_info=True)
             self._notification_router = None
+
+    def _init_sla_monitor(self) -> None:
+        """Construct SLA monitor bound to the notification router."""
+        if self._notification_router is None:
+            self._sla_monitor = None
+            return
+        try:
+            from soothe_autopilot.sla import SlaMonitor
+
+            self._sla_monitor = SlaMonitor(
+                sla_config=self._config.notify.sla,
+                router=self._notification_router,
+            )
+        except Exception:
+            logger.warning("SLA monitor unavailable", exc_info=True)
+            self._sla_monitor = None
 
     def set_notify_dispatch(self, dispatch_fn: Any) -> None:
         """Inject daemon NotifyDispatcher.dispatch (avoids host→daemon import)."""
@@ -258,6 +277,16 @@ class AutopilotService:
             await router.scan_suspended_timeouts(roots, progress_by_job=progress_by_job)
         except Exception:
             logger.debug("Notify suspend scan failed", exc_info=True)
+
+    async def scan_sla_overdue(self) -> None:
+        """Scan active goals for overdue gap items and dispatch SLA alerts."""
+        if self._sla_monitor is None:
+            return
+        try:
+            goals = list(self._ce._dag.goals.values())
+            await self._sla_monitor.scan(goals)
+        except Exception:
+            logger.debug("SLA overdue scan failed", exc_info=True)
 
     def _init_rail_interpreter(self) -> None:
         """Construct LoopRail interpreter with job-scoped JSONL traces (IG-708)."""

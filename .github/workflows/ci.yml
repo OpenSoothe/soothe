@@ -46,6 +46,9 @@ jobs:
     - name: Run tests (daemon package)
       run: make test-unit
 
+    - name: Alert pipeline latency SLO gate
+      run: make bench-alert-slo
+
     # - name: Run integration tests
     #   run: make test-integration
     #   env:

@@ -22,6 +22,7 @@ DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml --env-file de
 .PHONY: reset-the-world
 .PHONY: format format-check lint lint-src lint-fix autofix vulture vulture-whitelist
 .PHONY: test test-unit test-integration test-coverage build clean
+.PHONY: bench-alert-slo
 .PHONY: cli-publish soothe-publish autopilot-publish daemon-publish sdk-publish publish
 .PHONY: cli-publish-test soothe-publish-test autopilot-publish-test daemon-publish-test sdk-publish-test publish-test
 
@@ -83,6 +84,7 @@ help:
 	@echo "  make test-unit        - Run unit tests"
 	@echo "  make test-integration - Run integration tests"
 	@echo "  make test-coverage    - Run tests with coverage"
+	@echo "  make bench-alert-slo  - Run alert pipeline latency benchmarks & SLO gates"
 	@echo "  make build            - Build all packages"
 	@echo "  make clean            - Clean all artifacts"
 	@echo ""
@@ -315,6 +317,19 @@ test-integration: sync
 test-coverage: sync
 	@cd packages/soothe && uv run pytest tests/ --cov=soothe --cov-report=term-missing && cd ..
 	@cd packages/soothe-daemon && uv run pytest tests/ --cov=soothe_daemon --cov-report=term-missing && cd ..
+
+# ============================================================================
+# Benchmarks & SLO Gates
+# ============================================================================
+
+# Alert pipeline latency benchmark + SLO enforcement.
+# Runs scripts/benchmark_alert_pipeline.py in --slo-only mode: exits non-zero
+# if any latency SLO threshold is breached. The companion pytest SLO checks
+# in packages/soothe-autopilot/tests/unit/core/autopilot/test_alert_pipeline_slo.py
+# run as part of `make test-unit`.
+bench-alert-slo: sync
+	@echo "Running alert pipeline latency benchmark & SLO gates..."
+	uv run python scripts/benchmark_alert_pipeline.py --slo-only --iterations 200
 
 # ============================================================================
 # Build & Clean

@@ -19,18 +19,11 @@ Environment Variables:
 from __future__ import annotations
 
 import os
-from functools import lru_cache
 
 
 def _is_fast_mode() -> bool:
     """Check if fast test mode is enabled via environment variable."""
     return os.getenv("SOOTHE_TEST_FAST", "").strip() in ("1", "true", "yes")
-
-
-@lru_cache(maxsize=1)
-def _get_timeout_overrides() -> dict[str, float]:
-    """Get all timeout overrides from environment variables."""
-    return {}
 
 
 def get_timeout(name: str, default: float, fast_default: float | None = None) -> float:

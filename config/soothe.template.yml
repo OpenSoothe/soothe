@@ -58,10 +58,8 @@ agent:
       suspend_after_seconds: 2700
       suspend_escalation_multiplier: 2.0
       dedup_ttl_seconds: 86400
-      events:
-        job_completed: true
-        job_failed: true
-        job_suspended_timeout: true
+      # All job lifecycle events enabled by default. Suppress specific kinds
+      # via notify.events.disabled (set of kind strings, e.g. ['sla.overdue']).
       targets: []
       sinks:
         email:
@@ -84,6 +82,7 @@ agent:
             job_completed: null
             job_failed: null
             job_suspended_timeout: null
+            sla_overdue: null
           timeout_seconds: 15.0
         feishu:
           enabled: false
@@ -91,6 +90,12 @@ agent:
           app_id: "${FEISHU_APP_ID}"
           app_secret: "${FEISHU_APP_SECRET}"
           targets: []
+      sla:
+        enabled: false
+        warning_after_seconds: 3600
+        critical_after_seconds: 7200
+        breach_after_seconds: 14400
+        track_root_goals_only: true
     max_loops: 16
     loop_idle_timeout: 300
     poll_interval: 5

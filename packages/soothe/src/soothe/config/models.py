@@ -107,11 +107,23 @@ class NotifyTargetConfig(BaseModel):
 
 
 class NotifyEventsConfig(BaseModel):
-    """Which job-root lifecycle intents to emit."""
+    """Which job-root lifecycle intents to emit.
 
-    job_completed: bool = True
-    job_failed: bool = True
-    job_suspended_timeout: bool = True
+    All events are enabled by default. To suppress a specific event,
+    add its kind string (e.g. ``"sla.overdue"``) to the ``disabled``
+    denylist. This replaces the previous four-boolean flag pattern,
+    which was fully redundant — every flag defaulted to ``True``.
+    """
+
+    disabled: set[str] = Field(
+        default_factory=set,
+        description="Notify kinds to suppress (e.g. {'sla.overdue'}). "
+        "All kinds are enabled by default.",
+    )
+
+    def is_enabled(self, kind: str) -> bool:
+        """True when ``kind`` is not in the disabled denylist."""
+        return kind not in self.disabled
 
 
 class EmailNotifySinkConfig(BaseModel):
@@ -181,6 +193,47 @@ class NotifySinksConfig(BaseModel):
     feishu: FeishuNotifySinkConfig = Field(default_factory=FeishuNotifySinkConfig)
 
 
+class SlaConfig(BaseModel):
+    """SLA monitoring thresholds for overdue gap items.
+
+    When enabled, the AutopilotService watchdog tick scans active goals
+    for unresolved gap items (from ``last_gap_analysis``) that have
+    persisted past these thresholds. Each threshold crossing emits an
+    ``sla.overdue`` notify intent at the corresponding severity tier.
+
+    Set a threshold to ``0`` to disable that tier.
+    """
+
+    enabled: bool = False
+    warning_seconds: int = Field(
+        default=3600,
+        ge=0,
+        description="Seconds before first warning alert for unresolved gaps (default 1h).",
+    )
+    critical_seconds: int = Field(
+        default=7200,
+        ge=0,
+        description="Seconds before critical (error) alert (default 2h). Must be >= warning_seconds.",
+    )
+    breach_seconds: int = Field(
+        default=14400,
+        ge=0,
+        description="Seconds before final breach alert (default 4h). Must be >= critical_seconds.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_tier_order(self) -> SlaConfig:
+        """Ensure critical >= warning and breach >= critical (when both > 0)."""
+        w, c, b = self.warning_seconds, self.critical_seconds, self.breach_seconds
+        if c > 0 and w > 0 and c < w:
+            msg = f"critical_seconds ({c}) must be >= warning_seconds ({w})"
+            raise ValueError(msg)
+        if b > 0 and c > 0 and b < c:
+            msg = f"breach_seconds ({b}) must be >= critical_seconds ({c})"
+            raise ValueError(msg)
+        return self
+
+
 class AutopilotNotifyConfig(BaseModel):
     """Job lifecycle notify push (IG-713).
 
@@ -214,6 +267,10 @@ class AutopilotNotifyConfig(BaseModel):
         description="Global default targets; sinks may add their own",
     )
     sinks: NotifySinksConfig = Field(default_factory=NotifySinksConfig)
+    sla: SlaConfig = Field(
+        default_factory=SlaConfig,
+        description="SLA monitoring thresholds for overdue gap items.",
+    )
 
 
 class AutopilotConfig(BaseModel):

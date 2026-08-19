@@ -12,7 +12,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-NotifyKind = Literal["job.completed", "job.failed", "job.suspended_timeout"]
+NotifyKind = Literal[
+    "job.completed",
+    "job.failed",
+    "job.suspended_timeout",
+    "sla.overdue",
+]
 
 
 class Severity(StrEnum):
@@ -48,13 +53,6 @@ _SEVERITY_RANK: dict[Severity, int] = {
     Severity.INFO: 0,
     Severity.WARNING: 1,
     Severity.ERROR: 2,
-}
-
-
-KIND_TO_EVENT_FLAG: dict[str, str] = {
-    "job.completed": "job_completed",
-    "job.failed": "job_failed",
-    "job.suspended_timeout": "job_suspended_timeout",
 }
 
 

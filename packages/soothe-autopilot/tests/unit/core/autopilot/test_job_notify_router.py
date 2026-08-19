@@ -123,6 +123,30 @@ async def test_router_disabled_noop() -> None:
     assert not seen
 
 
+@pytest.mark.asyncio
+async def test_event_denylist_suppresses_specific_kind() -> None:
+    """Disabling a kind via events.disabled suppresses only that kind."""
+    seen: list[NotifyIntent] = []
+
+    async def _dispatch(intent: NotifyIntent) -> None:
+        seen.append(intent)
+
+    # Suppress job.completed but allow job.failed
+    cfg = _notify_cfg(
+        events=NotifyEventsConfig(disabled={"job.completed"}),
+    )
+    router = NotificationRouter(cfg, dispatch_fn=_dispatch)
+
+    completed_root = GoalNode(id="jobroot05a", description="done", status="completed")
+    assert await router.on_job_root_status(completed_root) is None
+
+    failed_root = GoalNode(id="jobroot05b", description="boom", status="failed", error="x")
+    intent = await router.on_job_root_status(failed_root)
+    assert intent is not None
+    assert intent.kind == "job.failed"
+    assert len(seen) == 1
+
+
 # ── Drift-aware severity escalation ─────────────────────────────────────
 
 

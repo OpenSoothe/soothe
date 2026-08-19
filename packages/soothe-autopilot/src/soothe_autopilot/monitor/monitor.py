@@ -82,6 +82,7 @@ class AutopilotMonitor:
         self._placement_tasks: set[asyncio.Task[None]] = set()
         self._dag_persist: Callable[[], Awaitable[None]] | None = None
         self._suspend_notify_scan: Any = None
+        self._sla_scan: Any = None
         self._resource_reconcile: Any = None
         self._verify_task: asyncio.Task[None] | None = None
         # RFC-222 §Goal-Report-Pair: backoff reasoner uses the projector to
@@ -512,12 +513,17 @@ class AutopilotMonitor:
             logger.info("DAG health report: %s", report.reasoning)
 
     async def _run_watchdog_tick(self) -> None:
-        """Suspend-notify scan + resource reconcile (always, even when LLM skipped)."""
+        """Suspend-notify scan + SLA scan + resource reconcile (always, even when LLM skipped)."""
         try:
             if self._suspend_notify_scan is not None:
                 await self._suspend_notify_scan()
         except Exception:
             logger.debug("Suspend notify scan failed", exc_info=True)
+        try:
+            if self._sla_scan is not None:
+                await self._sla_scan()
+        except Exception:
+            logger.debug("SLA overdue scan failed", exc_info=True)
         try:
             if self._resource_reconcile is not None:
                 count = await self._resource_reconcile()
@@ -550,6 +556,10 @@ class AutopilotMonitor:
     def bind_suspend_notify_scan(self, scan_fn: Any) -> None:
         """Wire AutopilotService.scan_notify_suspend_timeouts into the verify loop."""
         self._suspend_notify_scan = scan_fn
+
+    def bind_sla_scan(self, scan_fn: Any) -> None:
+        """Wire AutopilotService.scan_sla_overdue into the verify loop."""
+        self._sla_scan = scan_fn
 
     def bind_resource_reconcile(self, reconcile_fn: Any) -> None:
         """Wire AutopilotService.reconcile_goal_resources into the verify loop.

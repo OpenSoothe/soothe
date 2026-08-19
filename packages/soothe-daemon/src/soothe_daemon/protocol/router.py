@@ -2625,32 +2625,6 @@ class MessageRouter:
     # ---------------------------------------------------------------------------
     # RFC-228: Autopilot Job IPC Handlers
     # ---------------------------------------------------------------------------
-    async def _require_autopilot_service(
-        self, client_id: Any, request_id: str | None
-    ) -> Any | None:
-        """Return the daemon's AutopilotService or send error response.
-
-        Args:
-            client_id: Client connection identifier.
-            request_id: Optional request_id for error response.
-
-        Returns:
-            AutopilotService instance if available, None otherwise (error sent).
-        """
-        d = self._daemon
-        service = getattr(d, "_autopilot_service", None)
-        if service is None:
-            await d._send_client_message(
-                client_id,
-                build_error_response(
-                    ErrorCode.AUTOPILOT_NOT_READY,
-                    "Autopilot service not initialized or unavailable",
-                    request_id=request_id,
-                ),
-            )
-            return None
-        return service
-
     async def _handle_job_create(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle job_create RPC request (RFC-228).
 

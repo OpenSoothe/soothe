@@ -11,8 +11,9 @@
 # 3. Code formatting check (ruff format, parallel per package)
 # 4. Linting (ruff check, parallel per package)
 # 5. Dead-code analysis (vulture, min 90% confidence)
-# 6. AsyncAPI drift + wiki CHANGELOG sync (root CHANGELOG.md)
-# 7. Unit tests (all packages, parallel execution)
+# 6. Alert pipeline latency SLO gate (benchmark_alert_pipeline.py --slo-only)
+# 7. Wiki CHANGELOG sync (root CHANGELOG.md → docs/wiki/changelog.md)
+# 8. Unit tests (all packages, parallel execution)
 #
 # Exit codes:
 #   0 - All checks passed
@@ -991,6 +992,43 @@ check_vulture() {
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ALERT PIPELINE LATENCY SLO GATE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+check_alert_pipeline_slo() {
+  print_section "bench-slo"
+
+  cd "$WORKSPACE_ROOT"
+
+  if [ ! -f "scripts/benchmark_alert_pipeline.py" ]; then
+    print_warn "benchmark_alert_pipeline.py not found, skipping"
+    record_check_outcome "bench-slo" "alert pipeline SLO" "skip"
+    return 0
+  fi
+
+  if ! ensure_deps_installed; then
+    print_fail "dependency state could not be restored"
+    return 1
+  fi
+
+  local output
+  local exit_code
+  output=$("$VENV_PYTHON" scripts/benchmark_alert_pipeline.py --slo-only --iterations 200 2>&1) && exit_code=0 || exit_code=$?
+  if [ $exit_code -eq 0 ]; then
+    print_ok "alert pipeline latency SLOs"
+    record_check_outcome "bench-slo" "alert pipeline SLO" "pass"
+  else
+    print_fail "alert pipeline latency SLO breach"
+    record_failure_log "Alert Pipeline SLO" "$output"
+    record_check_outcome "bench-slo" "alert pipeline SLO" "fail"
+    print_note "run: make bench-alert-slo"
+    return 1
+  fi
+
+  return 0
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # UNIT TESTS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1430,6 +1468,12 @@ else
 
   VERIFY_RESULTS_DIR=""
   rm -rf "$tmpdir"
+fi
+
+# Alert pipeline SLO gate runs after static checks, before unit tests.
+# Skipped in --quick mode (latency measurement needs the full environment).
+if ! $SKIP_TESTS; then
+  check_alert_pipeline_slo || true
 fi
 
 run_tests || true

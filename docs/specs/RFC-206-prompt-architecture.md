@@ -219,10 +219,19 @@ Fragments use Jinja2-style templating:
 User gives ambiguous request (e.g., "translate to chinese")
     ↓
 Check PRIOR_CONVERSATION in USER_TASK?
-    ├─ YES → Use most recent message as content to process
-    └─ NO  → Return status="continue" with clarification step
-              (e.g., "What content would you like me to translate?")
+    ├─ YES, parseable → Parse <USER>/<ASSISTANT> tagged block;
+    │                   use parsed block content as the content to process
+    ├─ YES, unparseable → PRIOR_CONVERSATION present but tags not recognized
+    │                      (<USER>/<ASSISTANT> absent); fall through to NO
+    └─ NO               → Return status="continue" with clarification step
+                          (e.g., "What content would you like me to translate?")
 ```
+
+> **Parsing note:** The YES branch is conditional on the prior-conversation
+> projection using `<USER>` and `<ASSISTANT>` XML tags. If the block is
+> present but uses different tag names, the parser returns `None` and the
+> request is treated as ambiguous (NO path). The tree is therefore ternary
+> at this node, not binary.
 
 ### Why This Works
 

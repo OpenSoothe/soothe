@@ -13,7 +13,7 @@ from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from langchain_core.messages import HumanMessage
 from soothe_sdk.core.events import (
@@ -39,9 +39,6 @@ from soothe_sdk.display.transcript_types import MessageData
 
 from soothe_daemon.display.loop_card_ledger import LoopCardLedger
 from soothe_daemon.display.loop_history_probe import filter_derivable_log_events
-
-if TYPE_CHECKING:
-    from soothe_sdk.display.transcript_types import MessageData
 
 logger = logging.getLogger(__name__)
 

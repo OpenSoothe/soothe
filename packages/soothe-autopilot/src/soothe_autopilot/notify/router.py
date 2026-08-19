@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_autopilot.notify.dedup import NotifyDedupStore
 from soothe_autopilot.notify.models import (
-    KIND_TO_EVENT_FLAG,
     NotifyIntent,
     NotifyKind,
     Severity,
 )
 from soothe_autopilot.notify.progress import format_progress_plain
+from soothe_autopilot.sla.models import SlaBreach, SlaTier
 
 if TYPE_CHECKING:
     from soothe.config.models import AutopilotNotifyConfig
@@ -168,11 +168,7 @@ class NotificationRouter:
         self._dispatch_fn = dispatch_fn
 
     def _event_enabled(self, kind: NotifyKind) -> bool:
-        flag = KIND_TO_EVENT_FLAG.get(kind)
-        if flag is None:
-            return False
-        events = self._config.events
-        return bool(getattr(events, flag, False))
+        return self._config.events.is_enabled(kind)
 
     async def emit_job_intent(
         self,
@@ -299,3 +295,96 @@ class NotificationRouter:
             if intent is not None:
                 emitted.append(intent)
         return emitted
+
+    async def emit_sla_overdue(
+        self,
+        breach: SlaBreach,
+        *,
+        goal: GoalNode | None = None,
+    ) -> NotifyIntent | None:
+        """Build, dedup, and dispatch an ``sla.overdue`` escalation intent.
+
+        Args:
+            breach: The SLA breach detected by the monitor.
+            goal: Optional GoalNode for body enrichment. When None, only
+                breach fields are used.
+
+        Returns:
+            The intent when dispatched (or would-dispatch without sink), else None.
+        """
+        if not self._config.enabled:
+            return None
+        if not self._event_enabled("sla.overdue"):
+            return None
+
+        severity = Severity.WARNING if breach.tier == SlaTier.WARNING else Severity.ERROR
+
+        tier_label = breach.tier.value.upper()
+        short = breach.goal_id[:8]
+        title = f"[Soothe] SLA {tier_label}: goal {short} overdue ({int(breach.elapsed_seconds // 60)}m)"
+
+        lines = [
+            f"Goal: {breach.goal_id}",
+            f"SLA tier: {tier_label}",
+            f"Elapsed: {int(breach.elapsed_seconds // 60)} minutes ({int(breach.elapsed_seconds)}s)",
+            f"Threshold: {int(breach.threshold_seconds // 60)} minutes ({int(breach.threshold_seconds)}s)",
+        ]
+        if goal is not None:
+            lines.append(f"Status: {goal.status}")
+            desc = (goal.description or "").strip()
+            if desc:
+                lines.append(f"Description: {desc[:500]}")
+            if goal.workspace:
+                lines.append(f"Workspace: {goal.workspace}")
+        if breach.distance_from_goal:
+            lines.append(f"Distance from goal: {breach.distance_from_goal}")
+        if breach.unresolved_components:
+            lines.append(f"Unresolved components: {breach.unresolved_components}")
+        if breach.gap_summary:
+            lines.append(f"Gaps: {breach.gap_summary}")
+        lines.append("")
+        lines.append(f"Inspect: soothe autopilot job {breach.goal_id}")
+        body = "\n".join(lines)
+
+        # Dedup key: one alert per goal+tier per TTL window.
+        gen = f"{breach.goal_id}:{breach.tier.value}"
+        intent = NotifyIntent(
+            kind="sla.overdue",
+            job_id=breach.goal_id,
+            title=title,
+            body=body,
+            severity=severity,
+            status=goal.status if goal is not None else None,
+            description=breach.description or None,
+            workspace=breach.workspace,
+            metadata={
+                "sla_tier": breach.tier.value,
+                "elapsed_seconds": breach.elapsed_seconds,
+                "threshold_seconds": breach.threshold_seconds,
+                "unresolved_components": breach.unresolved_components,
+                "distance_from_goal": breach.distance_from_goal,
+            },
+            generation=gen,
+        )
+        key = intent.dedup_key()
+        if await self._dedup.already_sent(key):
+            logger.debug("SLA notify dedup skip %s", key)
+            return None
+
+        await self._dedup.mark_sent(key)
+        if self._dispatch_fn is None:
+            logger.info(
+                "SLA notify intent (no dispatcher) tier=%s goal_id=%s",
+                breach.tier.value,
+                breach.goal_id,
+            )
+            return intent
+        try:
+            await self._dispatch_fn(intent)
+        except Exception:
+            logger.exception(
+                "SLA notify dispatch failed tier=%s goal_id=%s",
+                breach.tier.value,
+                breach.goal_id,
+            )
+        return intent

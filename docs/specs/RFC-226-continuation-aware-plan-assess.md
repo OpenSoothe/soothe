@@ -108,7 +108,13 @@ Promote `plan_assess` to be the LLM-driven discriminator on iter=0 of continuati
 
 ```
 plan_assess(state, iter=0):
-  if continue_loop_mode AND len(checkpoint.goal_history) >= 2:
+  if continue_loop_mode AND has_prior_goal_context(ctx):
+      # has_prior_goal_context is true when EITHER:
+      #   - len(checkpoint.goal_history) >= 2, OR
+      #   - the Context Engine DAG holds any prior goal with completed
+      #     steps, action history, or terminal status (fallback path).
+      # The goal_history length is sufficient but not necessary; the CE
+      # DAG fallback covers single-prior-goal continuations.
       assessment = await continuation_assess(
           current_goal = state.goal,
           prior_goals  = _prior_goal_summaries(checkpoint),

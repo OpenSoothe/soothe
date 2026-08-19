@@ -33,6 +33,13 @@ Loop `2281` goal_1 (`continue` bootstrap, `require_goal_completion=False`) produ
 | 5 | `_ledger_direct_eligible(...)` | ledger_direct |
 | 6 | default | synthesize |
 
+> **Scope note on Order 3:** `_dag_requires_synthesis` inspects DAG/step
+> structure only (plan_wave_count, failed_steps, chain_depth, subagent cap,
+> parallel multi-step, low success rate, DAG dependencies). It does **not**
+> detect suspend-window drift — a job suspended far past its timeout window
+> is escalated by the alert/notify router (`job.suspended_timeout` →
+> `error`), not by this tree. See §4 for the suspend-drift scope statement.
+
 ### 3. Remove legacy content heuristics
 
 Deleted from `completion.py`:
@@ -57,6 +64,20 @@ Default **50**. Loop 2281 (171 tools) would synthesize.
 - `failed_steps == 0`
 - `total_steps <= simple_ledger_direct_max_steps` (default tightened to **1**)
 - no DAG dependencies
+- **no acceptance drift**: `maturity.blockers` empty AND `acceptance_met is
+  not False`. A completed goal with maturity blockers or unmet acceptance is
+  flagged as drifting by the alert/notify router (`job.completed` → severity
+  `warning`) and must not bypass synthesis. This aligns the `ledger_direct`
+  gate with the alert system's acceptance-drift detector.
+
+> **Suspend-window drift is out of scope for this tree.** A job suspended
+> past its timeout window (`suspended_for_seconds > multiplier × threshold`)
+> is escalated to `error` severity by the alert/notify router, but the
+> completion-strategy tree does not inspect suspend duration. Suspend-window
+> drift is handled solely by the alert/notify path; on resumption the tree
+> evaluates structural conditions only. If a suspended-drift signal is needed
+> in the completion decision, add it to `_dag_requires_synthesis` (Order 3)
+> as a separate condition.
 
 `terminal_after_execute` (RFC-226) remains a routing flag only — does not force `ledger_direct`.
 
