@@ -10,10 +10,10 @@ import time
 from typing import Any
 
 from soothe.context.planning_models import CompletionStrategy
-from soothe.sloop.engine.goal_completion_output import (
+from soothe.sloop.engine.completion.goal_completion_output import (
     reconcile_synthesis_with_step_ledger,
 )
-from soothe.sloop.engine.synthesis import (
+from soothe.sloop.engine.completion.synthesis import (
     SynthesisGenerator,
     generate_user_fallback_summary,
 )

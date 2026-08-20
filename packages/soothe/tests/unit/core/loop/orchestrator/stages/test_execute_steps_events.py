@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.sloop.engine.executor import StepWaveQueued, StepWaveStart
+from soothe.sloop.engine.execute.executor import StepWaveQueued, StepWaveStart
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.stages.execute.execute import node_execute
 from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord

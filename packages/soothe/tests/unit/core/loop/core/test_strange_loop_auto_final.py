@@ -193,7 +193,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
 @pytest.mark.asyncio
 async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected() -> None:
     """Ledger-direct goal completion should bypass synthesis when planner recommends it."""
-    from soothe.sloop.engine.synthesis import SynthesisGenerator
+    from soothe.sloop.engine.completion.synthesis import SynthesisGenerator
 
     calls = 0
 
@@ -256,7 +256,7 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
 @pytest.mark.asyncio
 async def test_completed_payload_for_summary_path() -> None:
     """Summary path is used when ledger is empty and synthesis produces no text."""
-    from soothe.sloop.engine.synthesis import SynthesisGenerator
+    from soothe.sloop.engine.completion.synthesis import SynthesisGenerator
 
     async def empty_gen(*args, **kwargs):  # noqa: ARG002
         if False:

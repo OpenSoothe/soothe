@@ -16,7 +16,7 @@ from soothe.sloop.clarification import (
     answer_to_state,
     request_from_state,
 )
-from soothe.sloop.engine.executor import StepWaveStart
+from soothe.sloop.engine.execute.executor import StepWaveStart
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.stages.execute.execute import (
     PLANNER_ASK_INTERRUPT_PREFIX,

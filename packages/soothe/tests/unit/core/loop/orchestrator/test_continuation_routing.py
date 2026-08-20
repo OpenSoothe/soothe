@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from soothe.sloop.engine.continuation_context import build_continue_bootstrap_step_briefs
+from soothe.sloop.engine.completion.continuation_context import build_continue_bootstrap_step_briefs
 from soothe.sloop.orchestrator.continuation import (
     has_prior_goal_context,
     is_fresh_goal,

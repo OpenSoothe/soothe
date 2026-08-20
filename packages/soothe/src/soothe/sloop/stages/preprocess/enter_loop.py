@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
+from soothe.sloop.engine.execute.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.continuation import (
     is_fresh_goal,

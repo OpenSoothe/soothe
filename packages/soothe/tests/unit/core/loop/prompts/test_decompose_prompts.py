@@ -8,7 +8,7 @@ from soothe.prompts import (
     user_finish_or_split_hint_lines,
 )
 from soothe.prompts.user_message import UserMessageBuilder
-from soothe.sloop.engine.step_predecessor_context import build_dependent_execution_hints
+from soothe.sloop.engine.execute.step_predecessor_context import build_dependent_execution_hints
 from soothe.sloop.state.schemas import StepAction
 
 

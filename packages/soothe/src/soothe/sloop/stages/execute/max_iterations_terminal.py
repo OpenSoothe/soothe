@@ -28,7 +28,7 @@ async def emit_max_iterations_terminal(ctx: LoopRuntimeContext) -> None:
     # RFC-214: mark the goal's partial work before terminal status is set, so
     # the next goal's planning projection can bound this segment and resume
     # from the last completed step instead of redoing finished work.
-    from soothe.sloop.engine.goal_interrupt_record import (
+    from soothe.sloop.engine.completion.goal_interrupt_record import (
         append_goal_interrupted_ledger_pair,
     )
 

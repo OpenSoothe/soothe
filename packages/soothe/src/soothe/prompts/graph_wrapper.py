@@ -29,7 +29,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.config.models import PlanPromptLedgerConfig
-    from soothe.sloop.engine.scenario_classifier import ScenarioClassification
+    from soothe.sloop.engine.completion.scenario_classifier import ScenarioClassification
     from soothe.sloop.state.schemas import LoopState
 
 GraphCallKind = Literal["synthesis", "step_completion"]
@@ -264,7 +264,9 @@ class GraphPromptWrapper:
         response_language: object | None = None,
     ) -> str:
         """Delegate to synthesis_projection.render_synthesis_system_prompt."""
-        from soothe.sloop.engine.synthesis_projection import render_synthesis_system_prompt
+        from soothe.sloop.engine.completion.synthesis_projection import (
+            render_synthesis_system_prompt,
+        )
 
         return render_synthesis_system_prompt(
             classification,

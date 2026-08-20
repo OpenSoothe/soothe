@@ -47,7 +47,7 @@ def test_format_image_facts_for_brief() -> None:
 def test_compose_execute_envelope_injects_vision_from_goal() -> None:
     from unittest.mock import MagicMock
 
-    from soothe.sloop.engine.executor import Executor
+    from soothe.sloop.engine.execute.executor import Executor
     from soothe.sloop.state.schemas import LoopState, StepAction
 
     goal = _enriched(

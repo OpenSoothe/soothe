@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 from soothe_nano.llm.invoke_policy import EnhancedTimeoutError
 
 from soothe.coreagent import SootheNanoAgent as CoreAgent
-from soothe.sloop.engine.executor import Executor
+from soothe.sloop.engine.execute.executor import Executor
 from soothe.sloop.stages.execute.execute import _is_rate_limit_error
 
 
@@ -84,7 +84,7 @@ def test_executor_timeout_not_misclassified_as_rate_limit() -> None:
 
 def test_executor_dispatch_timeout_classified_as_timeout() -> None:
     """DispatchTimeoutError maps to timeout for planner evidence."""
-    from soothe.sloop.engine.graph_interrupt import DispatchTimeoutError
+    from soothe.sloop.engine.execute.graph_interrupt import DispatchTimeoutError
 
     exc = DispatchTimeoutError(300.0, step_id="LIS-04", reason="idle")
     core_agent = MagicMock(spec=CoreAgent)

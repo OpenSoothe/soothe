@@ -16,9 +16,9 @@ from soothe.sloop.clarification import (
     answer_from_state,
     request_to_state,
 )
-from soothe.sloop.engine.context_window_manager import ContextWindowManager
-from soothe.sloop.engine.executor import Executor, StepWaveQueued, StepWaveStart
-from soothe.sloop.engine.step_wave_types import StepCompletionReport
+from soothe.sloop.engine.execute.context_window_manager import ContextWindowManager
+from soothe.sloop.engine.execute.executor import Executor, StepWaveQueued, StepWaveStart
+from soothe.sloop.engine.execute.step_wave_types import StepCompletionReport
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.state.schemas import LoopState, StepAction, StepExecutionRecord
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -495,7 +495,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     if isinstance(strange_loop.core_agent, LazyCoreAgent):
         await strange_loop.core_agent.amaterialize()
 
-    from soothe.sloop.engine.step_brief_hydrator import StepBriefHydrator
+    from soothe.sloop.engine.execute.step_brief_hydrator import StepBriefHydrator
 
     hydrator_model = strange_loop._fast_llm or strange_loop.goal_synthesis_model()
     step_brief_hydrator = (
@@ -555,7 +555,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         # planning projection can bound this goal's partial segment and surface
         # what was done. Must precede checkpoint save/emit so the digest reads
         # the still-current loop state.
-        from soothe.sloop.engine.goal_interrupt_record import (
+        from soothe.sloop.engine.completion.goal_interrupt_record import (
             append_goal_interrupted_ledger_pair,
         )
 

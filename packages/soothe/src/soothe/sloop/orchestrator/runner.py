@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 def _langfuse_goal_output_text(ctx: LoopRuntimeContext) -> str:
     """Best-effort final user-visible text for Langfuse trace output."""
-    from soothe.sloop.engine.continuation_context import ledger_goal_completion_text
+    from soothe.sloop.engine.completion.continuation_context import ledger_goal_completion_text
     from soothe.sloop.intention.models import IntakeLabel
 
     completion = ledger_goal_completion_text(ctx.loop_state.loop_messages)

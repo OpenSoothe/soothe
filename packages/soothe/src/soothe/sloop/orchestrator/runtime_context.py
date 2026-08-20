@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from soothe.sloop.engine.anchor_manager import CheckpointAnchorManager
+from soothe.sloop.checkpoints.anchor_manager import CheckpointAnchorManager
 from soothe.sloop.state.checkpoint import StrangeLoopCheckpoint
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.sloop.state.schemas import (

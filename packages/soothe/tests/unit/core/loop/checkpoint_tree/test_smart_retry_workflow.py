@@ -26,13 +26,13 @@ except ModuleNotFoundError:  # pragma: no cover
         allow_module_level=True,
     )
 
+from soothe.sloop.checkpoints.anchor_manager import CheckpointAnchorManager
 from soothe.sloop.checkpoints.directory_manager import (
     PersistenceDirectoryManager,
 )
 from soothe.sloop.checkpoints.manager import (
     StrangeLoopCheckpointPersistenceManager,
 )
-from soothe.sloop.engine.anchor_manager import CheckpointAnchorManager
 
 
 @contextmanager

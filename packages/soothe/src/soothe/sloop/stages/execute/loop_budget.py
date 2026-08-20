@@ -36,7 +36,7 @@ async def emit_rate_limit_terminal(ctx: LoopRuntimeContext) -> None:
     """Emit failure completion after consecutive rate limit errors."""
     from datetime import UTC, datetime
 
-    from soothe.sloop.engine.goal_interrupt_record import (
+    from soothe.sloop.engine.completion.goal_interrupt_record import (
         append_goal_interrupted_ledger_pair,
     )
     from soothe.sloop.state.schemas import PlanResult

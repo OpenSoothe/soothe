@@ -13,7 +13,7 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.graph import END
 
-from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
+from soothe.sloop.engine.execute.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,

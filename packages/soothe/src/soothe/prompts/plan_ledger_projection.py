@@ -727,7 +727,7 @@ def project_prior_wave_execute_ledger(
     Used when a replan wave step has no in-plan dependencies but prior waves already
     recorded execute evidence for this goal.
     """
-    from soothe.sloop.engine.predecessor_branch_context import (
+    from soothe.sloop.engine.execute.predecessor_branch_context import (
         DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
         predecessor_execute_messages_for_branch,
     )
@@ -870,10 +870,10 @@ def project_predecessor_execute_ledger_for_step(
     Returns:
         Deep-copied predecessor execute_step messages in ledger order.
     """
-    from soothe.sloop.engine.predecessor_branch_context import (
+    from soothe.sloop.engine.execute.predecessor_branch_context import (
         DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
     )
-    from soothe.sloop.engine.step_predecessor_context import (
+    from soothe.sloop.engine.execute.step_predecessor_context import (
         predecessor_messages_for_step,
     )
 

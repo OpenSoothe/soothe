@@ -64,13 +64,38 @@ it lives with the orchestrator now. Importers updated:
   `step_predecessor_context.py`) → single definition in
   `predecessor_branch_context.py`.
 
+### 5. Executor satellite consolidation
+
+`engine/` was a flat 22-module grab-bag mixing two concerns; it is now two
+docstring-only sub-packages plus one relocation:
+
+- `engine/execute/` (15 modules): `executor`, `act_wave_finalize`,
+  `context_window_manager`, `metadata_generator`, `step_brief_hydrator`,
+  `step_completion_report`, `step_deliverable`,
+  `step_predecessor_context`, `predecessor_branch_context`,
+  `step_wave_types`, `thread_selection`, `tool_call_args`,
+  `tool_call_enrichment`, `tool_call_id`, `graph_interrupt`.
+- `engine/completion/` (6 modules): `synthesis`, `synthesis_projection`,
+  `scenario_classifier`, `goal_completion_output`, `continuation_context`,
+  `goal_interrupt_record`.
+- `engine/anchor_manager.py` → `checkpoints/anchor_manager.py` (joins the
+  package it depends on; used by `sloop/strange_loop.py` and
+  `orchestrator/runtime_context.py`).
+
+Direction rationale: `soothe.prompts` and `soothe.sloop.plans` (non-graph
+library modules) import this machinery directly, so it must stay a library
+below `stages/` — moving it under `stages/execute/` would make non-graph
+code import graph stations and invert the layering. The stages tree stays
+thin node wrappers; `engine` stays machinery. Internal cross-subpackage
+imports are acyclic (`execute` → `completion` only).
+
+Test layout mirrors source: `tests/unit/core/loop/engine/` files bucketed
+into `execute/`, `completion/`; `test_anchor_manager.py` →
+`checkpoint_tree/`; StrangeLoop-level tests → `core/`; the misfiled
+`test_context_adapters.py` (tests `soothe.context`) → `tests/unit/context/`.
+
 ## Intentionally not done
 
-- **Executor satellite consolidation**: `executor.py` plus its ~14
-  satellites are split between `engine/` and `stages/execute/` (~50 import
-  sites). Deferred pending direction choice: (a) move machinery under
-  `stages/execute/`, or (b) sub-package `engine/execute/` +
-  `engine/completion/`.
 - **`_build_loop_state_view` merge** (`stages/execute/execute.py` vs
   `stages/sidecars/delegate.py`): the two builders intentionally differ
   (plan-summary source, recent step outputs); merging would be a

@@ -33,7 +33,7 @@ from soothe.sloop.clarification.protocol import (
     answer_from_state,
     request_to_state,
 )
-from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
+from soothe.sloop.engine.execute.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.orchestrator.phase_status import emit_plan_phase_status
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.plans.artifact import (
