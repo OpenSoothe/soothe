@@ -119,7 +119,7 @@ class GoalLoopTrace:
             run_name: Langfuse observation display name.
             extra_metadata: Optional extra RunnableConfig metadata.
             nest_under_intake_span: When True and an intake parent span is open,
-                nest the run under that span (Pass 1 / Pass 2 / graph intake).
+                nest the run under that span (social gate / graph intake).
         """
         from soothe_nano.llm.observability import create_llm_call_metadata
 

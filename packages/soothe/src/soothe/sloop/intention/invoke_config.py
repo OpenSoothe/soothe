@@ -1,4 +1,4 @@
-"""Shared RunnableConfig builders for intake Pass 1 LLM calls."""
+"""Shared RunnableConfig builders for intake classification LLM calls."""
 
 from __future__ import annotations
 
@@ -7,23 +7,23 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
-IntakePassPhase = Literal["intake_pass1"]
+IntakePhase = Literal["intake_classify"]
 
-_DEFAULT_RUN_NAMES: dict[IntakePassPhase, str] = {
-    "intake_pass1": "intake-pass1",
+_DEFAULT_RUN_NAMES: dict[IntakePhase, str] = {
+    "intake_classify": "intake-classify",
 }
 
 
 def build_intake_invoke_config(
     *,
-    phase: IntakePassPhase,
+    phase: IntakePhase,
     purpose: str,
     component: str,
     soothe_config: SootheConfig | None = None,
     observability_metadata: dict[str, str] | None = None,
     goal_trace: Any | None = None,
 ) -> dict[str, Any]:
-    """Build RunnableConfig with Langfuse tracing for an intake pass call."""
+    """Build RunnableConfig with Langfuse tracing for an intake classification call."""
     from soothe_nano.llm import build_traced_invoke_config
 
     if goal_trace is not None:
@@ -56,4 +56,4 @@ def build_intake_invoke_config(
     )
 
 
-__all__ = ["IntakePassPhase", "build_intake_invoke_config"]
+__all__ = ["IntakePhase", "build_intake_invoke_config"]

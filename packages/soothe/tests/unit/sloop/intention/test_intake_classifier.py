@@ -1,4 +1,4 @@
-"""Unit tests for Pass 1 classifier: social vs task."""
+"""Unit tests for the intake classifier: social vs task."""
 
 from __future__ import annotations
 
@@ -7,27 +7,27 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.sloop.intention.models import IntakePass1Confidence, IntakePass1LLMResult
-from soothe.sloop.intention.pass1_classifier import (
-    PASS1_FALLBACK_REASONING,
-    IntakePass1Classifier,
-    _log_pass1_result,
+from soothe.sloop.intention.intake_classifier import (
+    INTAKE_FALLBACK_REASONING,
+    IntakeClassifier,
+    _log_intake_result,
 )
-from soothe.sloop.intention.pass1_social_response import pass1_json_schema
+from soothe.sloop.intention.models import IntakeConfidence, IntakeLLMResult
+from soothe.sloop.intention.social_reply import intake_json_schema
 
 # -- Helpers ---------------------------------------------------------------
 
 
-def create_pass1_classifier_with_result(
+def create_intake_classifier_with_result(
     *,
     is_task: bool,
-    confidence: IntakePass1Confidence,
+    confidence: IntakeConfidence,
     social_response: str | None = None,
     reasoning: str = "test",
-) -> IntakePass1Classifier:
+) -> IntakeClassifier:
     """Create classifier with mock model returning specified result."""
     mock_model = MagicMock()
-    result = IntakePass1LLMResult(
+    result = IntakeLLMResult(
         is_task=is_task,
         confidence=confidence,
         social_response=social_response,
@@ -35,15 +35,15 @@ def create_pass1_classifier_with_result(
     )
     mock_model.with_structured_output = MagicMock(return_value=mock_model)
     mock_model.ainvoke = AsyncMock(return_value=result.model_dump())
-    return IntakePass1Classifier(model=mock_model)
+    return IntakeClassifier(model=mock_model)
 
 
-def create_pass1_classifier_with_raw_result(raw_result: dict) -> IntakePass1Classifier:
+def create_intake_classifier_with_raw_result(raw_result: dict) -> IntakeClassifier:
     """Create classifier with mock model returning raw dict."""
     mock_model = MagicMock()
     mock_model.with_structured_output = MagicMock(return_value=mock_model)
     mock_model.ainvoke = AsyncMock(return_value=raw_result)
-    return IntakePass1Classifier(model=mock_model)
+    return IntakeClassifier(model=mock_model)
 
 
 # -- Pivot pattern tests ---------------------------------------------------
@@ -66,9 +66,9 @@ def create_pass1_classifier_with_raw_result(raw_result: dict) -> IntakePass1Clas
 )
 async def test_pivot_patterns_are_task(query: str, expected_is_task: bool) -> None:
     """Pivot phrases after acknowledgment should classify as task."""
-    classifier = create_pass1_classifier_with_result(
+    classifier = create_intake_classifier_with_result(
         is_task=expected_is_task,
-        confidence=IntakePass1Confidence.HIGH,
+        confidence=IntakeConfidence.HIGH,
         reasoning="pivot phrase detected",
     )
     result = await classifier.classify(query)
@@ -86,9 +86,9 @@ async def test_pivot_patterns_are_task(query: str, expected_is_task: bool) -> No
 )
 async def test_technical_entity_references_are_task(query: str) -> None:
     """Technical entity names should classify as task."""
-    classifier = create_pass1_classifier_with_result(
+    classifier = create_intake_classifier_with_result(
         is_task=True,
-        confidence=IntakePass1Confidence.HIGH,
+        confidence=IntakeConfidence.HIGH,
         reasoning="technical reference",
     )
     result = await classifier.classify(query)
@@ -110,9 +110,9 @@ async def test_technical_entity_references_are_task(query: str) -> None:
 )
 async def test_social_queries_have_response(query: str, expected_response: str) -> None:
     """Social queries should include social_response."""
-    classifier = create_pass1_classifier_with_result(
+    classifier = create_intake_classifier_with_result(
         is_task=False,
-        confidence=IntakePass1Confidence.HIGH,
+        confidence=IntakeConfidence.HIGH,
         social_response=expected_response,
         reasoning="social greeting",
     )
@@ -132,9 +132,9 @@ async def test_social_queries_have_response(query: str, expected_response: str) 
 )
 async def test_standalone_acknowledgments_are_social(query: str) -> None:
     """Standalone acknowledgments without pivot should be social."""
-    classifier = create_pass1_classifier_with_result(
+    classifier = create_intake_classifier_with_result(
         is_task=False,
-        confidence=IntakePass1Confidence.HIGH,
+        confidence=IntakeConfidence.HIGH,
         social_response="Got it. What would you like to work on?",
         reasoning="standalone acknowledgment",
     )
@@ -147,19 +147,19 @@ async def test_standalone_acknowledgments_are_social(query: str) -> None:
 
 async def test_no_model_returns_task() -> None:
     """No model should fail-safe to task."""
-    classifier = IntakePass1Classifier(model=None)
+    classifier = IntakeClassifier(model=None)
     result = await classifier.classify("any query")
     assert result.is_task is True
-    assert result.confidence == IntakePass1Confidence.LOW
+    assert result.confidence == IntakeConfidence.LOW
 
 
 async def test_fallback_reasoning_is_user_facing_prose() -> None:
     """Fail-safe reasoning reaches the TUI, so it must not name the exception."""
     mock_model = MagicMock()
     mock_model.ainvoke = AsyncMock(side_effect=RuntimeError("boom"))
-    classifier = IntakePass1Classifier(model=mock_model)
+    classifier = IntakeClassifier(model=mock_model)
     result = await classifier.classify("any query")
-    assert result.reasoning == PASS1_FALLBACK_REASONING
+    assert result.reasoning == INTAKE_FALLBACK_REASONING
     assert "Error" not in result.reasoning
     assert "RuntimeError" not in result.reasoning
 
@@ -168,11 +168,11 @@ async def test_fallback_is_flagged_but_llm_result_is_not() -> None:
     """The ``fallback`` flag distinguishes fail-safe verdicts from real ones."""
     mock_model = MagicMock()
     mock_model.ainvoke = AsyncMock(side_effect=RuntimeError("boom"))
-    assert (await IntakePass1Classifier(model=mock_model).classify("q")).fallback is True
+    assert (await IntakeClassifier(model=mock_model).classify("q")).fallback is True
 
-    classifier = create_pass1_classifier_with_result(
+    classifier = create_intake_classifier_with_result(
         is_task=True,
-        confidence=IntakePass1Confidence.HIGH,
+        confidence=IntakeConfidence.HIGH,
         reasoning="This is a request to fix the bug.",
     )
     assert (await classifier.classify("fix the bug")).fallback is False
@@ -180,20 +180,20 @@ async def test_fallback_is_flagged_but_llm_result_is_not() -> None:
 
 def test_fallback_flag_is_not_exposed_to_the_model() -> None:
     """``fallback`` is internal state; the LLM must never be asked to produce it."""
-    schema = pass1_json_schema()
+    schema = intake_json_schema()
     assert "fallback" not in schema.get("properties", {})
     assert "fallback" not in schema.get("required", [])
-    assert "fallback" not in IntakePass1LLMResult.model_json_schema().get("properties", {})
+    assert "fallback" not in IntakeLLMResult.model_json_schema().get("properties", {})
 
 
 async def test_llm_error_fails_safe_to_task() -> None:
     """LLM error should fail-safe to task."""
     mock_model = MagicMock()
     mock_model.ainvoke = AsyncMock(side_effect=Exception("LLM error"))
-    classifier = IntakePass1Classifier(model=mock_model)
+    classifier = IntakeClassifier(model=mock_model)
     result = await classifier.classify("any query")
     assert result.is_task is True
-    assert result.confidence == IntakePass1Confidence.LOW
+    assert result.confidence == IntakeConfidence.LOW
 
 
 async def test_structured_output_error_fails_safe_to_task() -> None:
@@ -203,9 +203,9 @@ async def test_structured_output_error_fails_safe_to_task() -> None:
     from soothe_nano.llm.structured import StructuredOutputError
 
     mock_model = MagicMock()
-    classifier = IntakePass1Classifier(model=mock_model)
+    classifier = IntakeClassifier(model=mock_model)
     with patch(
-        "soothe.sloop.intention.pass1_classifier.invoke_structured_chat",
+        "soothe.sloop.intention.intake_classifier.invoke_structured_chat",
         new=AsyncMock(
             side_effect=StructuredOutputError(
                 "structured model invoke failed: Unterminated string starting at: line 1 column 50"
@@ -218,31 +218,30 @@ async def test_structured_output_error_fails_safe_to_task() -> None:
 
 
 async def test_low_confidence_is_still_valid() -> None:
-    """Low confidence result is still valid (no retry in Pass 1)."""
-    classifier = create_pass1_classifier_with_result(
+    """Low confidence result is still valid (no retry in intake classification)."""
+    classifier = create_intake_classifier_with_result(
         is_task=True,
-        confidence=IntakePass1Confidence.LOW,
+        confidence=IntakeConfidence.LOW,
         reasoning="ambiguous pivot",
     )
     result = await classifier.classify("alright, so...")
     assert result.is_task is True
-    assert result.confidence == IntakePass1Confidence.LOW
+    assert result.confidence == IntakeConfidence.LOW
 
 
 # -- Field validation tests ------------------------------------------------
 
 
 async def test_missing_social_response_generates_dedicated_reply() -> None:
-    """Pass1 calls dedicated social-reply LLM when social_response stays empty."""
+    """Intake calls dedicated social-reply LLM when social_response stays empty."""
     mock_model = MagicMock()
-    classifier = IntakePass1Classifier(model=mock_model)
+    classifier = IntakeClassifier(model=mock_model)
     with patch(
-        "soothe.sloop.intention.pass1_classifier.invoke_structured_chat",
+        "soothe.sloop.intention.intake_classifier.invoke_structured_chat",
         new=AsyncMock(
             return_value={
                 "is_task": False,
                 "confidence": "high",
-                "social_kind": "greeting",
                 "reasoning": "greeting",
             }
         ),
@@ -260,14 +259,13 @@ async def test_missing_social_response_generates_dedicated_reply() -> None:
 
 async def test_empty_social_response_uses_dedicated_reply() -> None:
     mock_model = MagicMock()
-    classifier = IntakePass1Classifier(model=mock_model)
+    classifier = IntakeClassifier(model=mock_model)
     with patch(
-        "soothe.sloop.intention.pass1_classifier.invoke_structured_chat",
+        "soothe.sloop.intention.intake_classifier.invoke_structured_chat",
         new=AsyncMock(
             return_value={
                 "is_task": False,
                 "confidence": "high",
-                "social_kind": "identity",
                 "reasoning": "Identity question.",
             }
         ),
@@ -284,14 +282,13 @@ async def test_empty_social_response_uses_dedicated_reply() -> None:
 
 async def test_generate_social_response_after_empty_first_call() -> None:
     mock_model = MagicMock()
-    classifier = IntakePass1Classifier(model=mock_model)
+    classifier = IntakeClassifier(model=mock_model)
     with patch(
-        "soothe.sloop.intention.pass1_classifier.invoke_structured_chat",
+        "soothe.sloop.intention.intake_classifier.invoke_structured_chat",
         new=AsyncMock(
             return_value={
                 "is_task": False,
                 "confidence": "high",
-                "social_kind": "identity",
                 "social_response": "",
                 "reasoning": "Social question, not a work request.",
             }
@@ -310,20 +307,20 @@ async def test_generate_social_response_after_empty_first_call() -> None:
 
 async def test_invalid_confidence_defaults_to_medium() -> None:
     """Invalid confidence value defaults to medium."""
-    classifier = create_pass1_classifier_with_raw_result(
+    classifier = create_intake_classifier_with_raw_result(
         {"is_task": True, "confidence": "invalid", "social_response": None, "reasoning": "test"}
     )
     result = await classifier.classify("test")
     # Invalid confidence triggers fallback to complex in current impl
-    assert result.confidence in (IntakePass1Confidence.MEDIUM, IntakePass1Confidence.LOW)
+    assert result.confidence in (IntakeConfidence.MEDIUM, IntakeConfidence.LOW)
 
 
-def test_log_pass1_result_emits_reasoning_at_info(caplog: pytest.LogCaptureFixture) -> None:
-    caplog.set_level(logging.INFO, logger="soothe.sloop.intention.pass1_classifier")
-    _log_pass1_result(
-        IntakePass1LLMResult(
+def test_log_intake_result_emits_reasoning_at_info(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="soothe.sloop.intention.intake_classifier")
+    _log_intake_result(
+        IntakeLLMResult(
             is_task=True,
-            confidence=IntakePass1Confidence.HIGH,
+            confidence=IntakeConfidence.HIGH,
             social_response=None,
             reasoning="Work request with code reference.",
         )

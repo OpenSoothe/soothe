@@ -24,19 +24,19 @@ def enforce_topic_word_limit(text: str, *, max_words: int = _TOPIC_MAX_WORDS) ->
 
 def derive_resume_topic(
     *,
-    pass1_reasoning: str | None,
+    intake_reasoning: str | None,
     goal_text: str | None,
 ) -> str | None:
-    """Build resume-picker topic from Pass 1 reasoning or original user goal.
+    """Build resume-picker topic from intake reasoning or original user goal.
 
     Args:
-        pass1_reasoning: ``reasoning`` field from the first goal's Pass 1 intake result.
-        goal_text: Verbatim user submission when Pass 1 reasoning is empty.
+        intake_reasoning: ``reasoning`` field from the first goal's intake result.
+        goal_text: Verbatim user submission when intake reasoning is empty.
 
     Returns:
         Abbreviated topic label (<=10 words), or ``None`` when both sources are empty.
     """
-    source = (pass1_reasoning or "").strip() or (goal_text or "").strip()
+    source = (intake_reasoning or "").strip() or (goal_text or "").strip()
     if not source:
         return None
     normalized = " ".join(source.strip().strip("\"'`").split())
@@ -48,7 +48,7 @@ async def persist_resume_topic_if_needed(
     *,
     config: SootheConfig,
     loop_id: str,
-    pass1_reasoning: str | None = None,
+    intake_reasoning: str | None = None,
     goal_text: str | None = None,
 ) -> None:
     """Derive and store the first-goal resume topic once."""
@@ -56,7 +56,7 @@ async def persist_resume_topic_if_needed(
         StrangeLoopCheckpointPersistenceManager,
     )
 
-    topic = derive_resume_topic(pass1_reasoning=pass1_reasoning, goal_text=goal_text)
+    topic = derive_resume_topic(intake_reasoning=intake_reasoning, goal_text=goal_text)
     if not topic:
         logger.debug("Resume topic skipped for loop %s (empty sources)", loop_id)
         return
@@ -75,14 +75,14 @@ def schedule_resume_topic_persistence(
     *,
     config: SootheConfig,
     loop_id: str,
-    pass1_reasoning: str | None,
+    intake_reasoning: str | None,
     goal_text: str | None,
     is_first_loop_goal: bool,
 ) -> None:
     """Fire-and-forget resume topic persistence at first-goal intake."""
     if not is_first_loop_goal:
         return
-    if not (pass1_reasoning or "").strip() and not (goal_text or "").strip():
+    if not (intake_reasoning or "").strip() and not (goal_text or "").strip():
         return
 
     async def _run() -> None:
@@ -90,7 +90,7 @@ def schedule_resume_topic_persistence(
             await persist_resume_topic_if_needed(
                 config=config,
                 loop_id=loop_id,
-                pass1_reasoning=pass1_reasoning,
+                intake_reasoning=intake_reasoning,
                 goal_text=goal_text,
             )
         except Exception:

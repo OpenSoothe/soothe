@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from soothe.sloop.intention import IntentClassifier
+from soothe.sloop.intention.coordinator import IntakeResult
 from soothe.sloop.intention.models import (
-    IntakePass1Confidence,
-    IntakePass1LLMResult,
+    IntakeConfidence,
+    IntakeLLMResult,
 )
-from soothe.sloop.intention.two_pass_coordinator import TwoPassIntakeResult
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
@@ -20,12 +20,12 @@ class TestIntakeClassifierLedger:
     """Intent-classify ledger recording."""
 
     async def test_records_ledger_pair_when_context_engine_provided(self) -> None:
-        """Pass 2 ledger writes are removed (RFC-904); classify still succeeds."""
+        """Intake ledger writes are removed (RFC-904); classify still succeeds."""
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
-        mock_result = TwoPassIntakeResult(
-            IntakePass1LLMResult(
+        mock_result = IntakeResult(
+            IntakeLLMResult(
                 is_task=True,
-                confidence=IntakePass1Confidence.HIGH,
+                confidence=IntakeConfidence.HIGH,
                 social_response=None,
                 reasoning="task",
             ),
@@ -33,7 +33,7 @@ class TestIntakeClassifierLedger:
         ce = MagicMock()
         ce.save = AsyncMock()
         with patch.object(
-            classifier._two_pass, "classify", new_callable=AsyncMock
+            classifier._coordinator, "classify", new_callable=AsyncMock
         ) as mock_classify:
             mock_classify.return_value = mock_result
             intent = await classifier.classify_intake(
@@ -47,16 +47,16 @@ class TestIntakeClassifierLedger:
 
     async def test_skips_ledger_when_no_context_engine(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
-        mock_result = TwoPassIntakeResult(
-            IntakePass1LLMResult(
+        mock_result = IntakeResult(
+            IntakeLLMResult(
                 is_task=True,
-                confidence=IntakePass1Confidence.HIGH,
+                confidence=IntakeConfidence.HIGH,
                 social_response=None,
                 reasoning="task",
             ),
         )
         with patch.object(
-            classifier._two_pass, "classify", new_callable=AsyncMock
+            classifier._coordinator, "classify", new_callable=AsyncMock
         ) as mock_classify:
             mock_classify.return_value = mock_result
             await classifier.classify_intake("refactor", context_engine=None)

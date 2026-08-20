@@ -219,7 +219,7 @@ class StepAction(BaseModel):
         execution_hint: Planner routing hint (``subagent`` → delegate via ``task``).
         subagent: Named subagent when ``execution_hint='subagent'``.
         requires_tool_use: When set, execute deliverable gate requires successful tool use
-            (from Pass 2 intake for trivial steps).
+            (for trivial steps).
         is_dag_root: True when this step has no CE ``parent_step_id`` (RFC-904 root).
     """
 
@@ -1200,7 +1200,7 @@ class LoopState(BaseModel):
     intent: Any | None = None  # Intent classification for response length intelligence
     response_language: Any | None = Field(
         default=None,
-        description="Pass 1 detected language for user-facing prose (en|zh|ja|ko|other).",
+        description="Detected language for user-facing prose (en|zh|ja|ko|other).",
     )
     routing_classification: Any | None = Field(
         default=None,

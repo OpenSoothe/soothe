@@ -81,9 +81,9 @@ def test_intake_invoke_config_nests_passes_under_span() -> None:
 
     nested = _goal_trace().with_intake_parent_span("span-intake-1")
     out = nested.intake_invoke_config(
-        purpose="classify_pass1",
-        component="classifier.intake.pass1",
-        phase="intake_pass1",
+        purpose="classify_social_gate",
+        component="classifier.intake.classify",
+        phase="intake_classify",
     )
 
     handlers = [h for h in out["callbacks"] if isinstance(h, SootheLangfuseCallbackHandler)]
@@ -92,7 +92,7 @@ def test_intake_invoke_config_nests_passes_under_span() -> None:
         "trace_id": "trace-goal-1",
         "parent_span_id": "span-intake-1",
     }
-    assert out["run_name"] == "soothe-dev:intake-pass1"
+    assert out["run_name"] == "soothe-dev:intake-classify"
     assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
 
 
@@ -103,13 +103,13 @@ def test_intake_invoke_config_without_span_stays_trace_pinned() -> None:
     assert base.with_intake_parent_span(None) is base
 
     out = base.intake_invoke_config(
-        purpose="classify_pass1",
-        component="classifier.intake.pass1",
-        phase="intake_pass1",
+        purpose="classify_social_gate",
+        component="classifier.intake.classify",
+        phase="intake_classify",
     )
     handler = out["callbacks"][0]
     assert handler.trace_context == {"trace_id": "trace-goal-1"}
-    assert out["run_name"] == "soothe-dev:intake-pass1"
+    assert out["run_name"] == "soothe-dev:intake-classify"
 
 
 def test_pinned_llm_invoke_config_uses_explicit_run_name() -> None:

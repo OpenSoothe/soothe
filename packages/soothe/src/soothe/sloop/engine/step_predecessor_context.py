@@ -321,13 +321,14 @@ def build_dependent_execution_hints(
     has_predecessor_evidence: bool,
     expected_output: str | None,
     is_dag_root: bool | None = None,
+    task_complexity: str | None = None,
 ) -> ExecuteStepEnvelopeBody:
     """Build EXPECTED OUTPUT and slim INSTRUCTIONS for the execute user envelope.
 
     Finish-vs-split policy and search hygiene live in system + tool schemas
     (``THREAD_POLICY_SYSTEM_ADDENDUM``); user keeps instance scope only.
     """
-    from soothe.prompts import user_finish_or_split_hint_lines
+    from soothe.prompts import complex_decompose_first_hint_lines, user_finish_or_split_hint_lines
 
     root = bool(step.is_dag_root if is_dag_root is None else is_dag_root)
     instruction_lines = [
@@ -336,6 +337,11 @@ def build_dependent_execution_hints(
         "tasks that will run in later threads",
         "- Produce output matching the EXPECTED OUTPUT specification",
     ]
+    if root and task_complexity == "complex":
+        instruction_lines = [
+            *complex_decompose_first_hint_lines(),
+            *instruction_lines,
+        ]
     if has_predecessor_evidence:
         instruction_lines.insert(
             0,

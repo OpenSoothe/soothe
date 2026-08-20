@@ -30,7 +30,7 @@ def build_trivial_plan(
     Args:
         goal: The user's goal text (verbatim submission).
         wire_subagent: Allowlisted specialist for the wired-subagent route.
-        requires_tool_use: Pass 2 signal for the execute deliverable gate.
+        requires_tool_use: Execute deliverable-gate signal for the trivial step.
 
     Returns:
         A ``PlanResult`` with a single execute step whose action is the goal

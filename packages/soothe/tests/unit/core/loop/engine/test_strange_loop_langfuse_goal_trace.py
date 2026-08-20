@@ -116,24 +116,17 @@ async def _drive_run_with_progress(
 
 
 @pytest.mark.asyncio
-async def test_run_with_progress_pins_goal_trace_before_pass1_and_pass2() -> None:
-    """Pass 1/2 and graph ctx must share one GoalLoopTrace when Langfuse is enabled."""
+async def test_run_with_progress_pins_goal_trace_before_intake() -> None:
+    """Social gate and graph ctx must share one GoalLoopTrace when Langfuse is enabled."""
     sl = _make_strange_loop()
 
-    pass1_result = MagicMock()
-    pass1_result.is_task = True
-    pass1_result.confidence = "high"
-    pass1_result.reasoning = "Work request."
-
-    preclassified = IntentClassification(
-        intake_label=IntakeLabel.SIMPLE,
-        reasoning="Scope is simple.",
-        task_complexity=TaskComplexity.SIMPLE,
-    )
+    social_gate_result = MagicMock()
+    social_gate_result.is_task = True
+    social_gate_result.confidence = "high"
+    social_gate_result.reasoning = "Work request."
 
     intent_classifier = MagicMock()
-    intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.pass1_task_to_intent = MagicMock(return_value=preclassified)
+    intent_classifier.classify_social_gate = AsyncMock(return_value=social_gate_result)
 
     goal_trace = GoalLoopTrace(
         soothe_config=sl.config,
@@ -220,10 +213,8 @@ async def test_run_with_progress_pins_goal_trace_before_pass1_and_pass2() -> Non
 
     begin_goal_loop.assert_called_once_with(session_id="L1", loop_id="L1")
 
-    pass1_kwargs = intent_classifier.classify_pass1.await_args.kwargs
-    assert pass1_kwargs["goal_trace"] is goal_trace
-
-    intent_classifier.pass1_task_to_intent.assert_called()
+    social_gate_kwargs = intent_classifier.classify_social_gate.await_args.kwargs
+    assert social_gate_kwargs["goal_trace"] is goal_trace
 
     ctx_kwargs = runtime_ctx_cls.call_args.kwargs
     assert ctx_kwargs["goal_trace"] is goal_trace
@@ -231,24 +222,17 @@ async def test_run_with_progress_pins_goal_trace_before_pass1_and_pass2() -> Non
 
 @pytest.mark.asyncio
 async def test_pre_graph_passes_nest_under_intake_span() -> None:
-    """Pass 1/2 receive the span-scoped trace; the span closes once scope is known."""
+    """The social gate receives the span-scoped trace; the span closes when the task is confirmed."""
     sl = _make_strange_loop()
 
-    pass1_result = MagicMock()
-    pass1_result.is_task = True
-    pass1_result.confidence = "high"
-    pass1_result.reasoning = "Work request."
-    pass1_result.response_language = None
+    social_gate_result = MagicMock()
+    social_gate_result.is_task = True
+    social_gate_result.confidence = "high"
+    social_gate_result.reasoning = "Work request."
+    social_gate_result.response_language = None
 
     intent_classifier = MagicMock()
-    intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.pass1_task_to_intent = MagicMock(
-        return_value=IntentClassification(
-            intake_label=IntakeLabel.SIMPLE,
-            reasoning="Scope is simple.",
-            task_complexity=TaskComplexity.SIMPLE,
-        )
-    )
+    intent_classifier.classify_social_gate = AsyncMock(return_value=social_gate_result)
 
     goal_trace = GoalLoopTrace(
         soothe_config=sl.config,
@@ -269,10 +253,9 @@ async def test_pre_graph_passes_nest_under_intake_span() -> None:
     ):
         pass
 
-    for call in (intent_classifier.classify_pass1,):
+    for call in (intent_classifier.classify_social_gate,):
         assert call.await_args.kwargs["goal_trace"].intake_parent_span_id == "span-intake-1"
-    intent_classifier.pass1_task_to_intent.assert_called()
-    intake_span.end.assert_any_call(output=str(IntakeLabel.SIMPLE))
+    intake_span.end.assert_any_call(output="task")
 
 
 @pytest.mark.asyncio
@@ -280,11 +263,11 @@ async def test_social_fast_path_closes_intake_span_and_flushes() -> None:
     """No graph runs on a social turn, so intake must close and export itself."""
     sl = _make_strange_loop()
 
-    pass1_result = MagicMock()
-    pass1_result.is_task = False
-    pass1_result.confidence = "high"
-    pass1_result.reasoning = "Greeting."
-    pass1_result.response_language = None
+    social_gate_result = MagicMock()
+    social_gate_result.is_task = False
+    social_gate_result.confidence = "high"
+    social_gate_result.reasoning = "Greeting."
+    social_gate_result.response_language = None
 
     social_intent = IntentClassification(
         intake_label=IntakeLabel.CHITCHAT,
@@ -294,8 +277,8 @@ async def test_social_fast_path_closes_intake_span_and_flushes() -> None:
     )
 
     intent_classifier = MagicMock()
-    intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.pass1_to_intent = MagicMock(return_value=social_intent)
+    intent_classifier.classify_social_gate = AsyncMock(return_value=social_gate_result)
+    intent_classifier.social_to_intent = MagicMock(return_value=social_intent)
 
     goal_trace = GoalLoopTrace(
         soothe_config=sl.config,
@@ -331,20 +314,13 @@ async def test_social_fast_path_closes_intake_span_and_flushes() -> None:
 async def test_run_with_progress_skips_begin_goal_loop_when_langfuse_disabled() -> None:
     sl = _make_strange_loop(langfuse_enabled=False)
 
-    pass1_result = MagicMock()
-    pass1_result.is_task = True
-    pass1_result.confidence = "high"
-    pass1_result.reasoning = "Work request."
+    social_gate_result = MagicMock()
+    social_gate_result.is_task = True
+    social_gate_result.confidence = "high"
+    social_gate_result.reasoning = "Work request."
 
     intent_classifier = MagicMock()
-    intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.pass1_task_to_intent = MagicMock(
-        return_value=IntentClassification(
-            intake_label=IntakeLabel.SIMPLE,
-            reasoning="simple",
-            task_complexity=TaskComplexity.SIMPLE,
-        )
-    )
+    intent_classifier.classify_social_gate = AsyncMock(return_value=social_gate_result)
 
     ce_instance = MagicMock()
     ce_instance.load = AsyncMock(return_value=False)
@@ -421,5 +397,5 @@ async def test_run_with_progress_skips_begin_goal_loop_when_langfuse_disabled() 
             await gen.aclose()
 
     begin_goal_loop.assert_not_called()
-    assert intent_classifier.classify_pass1.await_args.kwargs["goal_trace"] is None
+    assert intent_classifier.classify_social_gate.await_args.kwargs["goal_trace"] is None
     assert runtime_ctx_cls.call_args.kwargs["goal_trace"] is None

@@ -575,10 +575,16 @@ class Executor:
                 has_prior_goal_completion=True,
             )
         else:
+            task_complexity = None
+            intent = getattr(loop_state, "intent", None) if loop_state is not None else None
+            if intent is not None:
+                raw = getattr(intent, "task_complexity", None)
+                task_complexity = getattr(raw, "value", raw) if raw is not None else None
             envelope_body = build_dependent_execution_hints(
                 step,
                 has_predecessor_evidence=has_predecessor_ledger,
                 expected_output=step.expected_output,
+                task_complexity=task_complexity,
             )
         vision_context = (
             extract_vision_summary(resolve_user_request(loop_state))

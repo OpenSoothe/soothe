@@ -14,10 +14,10 @@ from soothe_sdk.protocols.planner import StepResult as SdkStepResult
 
 from soothe.config import SOOTHE_HOME
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
-from soothe.sloop.intention import build_pass1_task_fallback
+from soothe.sloop.intention import build_intake_task_fallback
 from soothe.sloop.intention.models import (
-    IntakePass1Confidence,
-    IntakePass1LLMResult,
+    IntakeConfidence,
+    IntakeLLMResult,
     ResponseLanguage,
     build_loop_routing_classification,
     normalize_response_language,
@@ -199,11 +199,11 @@ class StrangeLoop:
             clarification_policy: Optional ``ClarificationPolicy`` (RFC-622) used by
                 the loop graph's ``await_clarification`` node. When ``None``, clarification
                 requests are deferred via the legacy no-policy path.
-            resume_interrupted: When True, skip Pass 1 social fast-path and recover
+            resume_interrupted: When True, skip the social gate fast-path and recover
                 the in-flight ``status=running`` goal without continue-keyword cancel.
             goal_trace: Optional pre-allocated ``GoalLoopTrace``; when omitted and Langfuse
-                is enabled, one is opened before pre-graph intake (Pass 1) so Pass 1,
-                Pass 2, and ``strange-loop-graph`` share one pinned trace.
+                is enabled, one is opened before pre-graph intake so the social gate,
+                intake classification, and ``strange-loop-graph`` share one pinned trace.
             preamble: Optional flattened list of ``BaseMessage`` (ancestor
                 ``(user, ai)`` pairs) projected by the daemon's
                 ``ContextProjector`` (RFC-222 §Goal-Report-Pair Projection).
@@ -314,8 +314,8 @@ class StrangeLoop:
 
             preclassified_intent = intent
             checkpoint: Any = None
-            pass1_reasoning_text = ""
-            pass1_result: IntakePass1LLMResult | None = None
+            social_gate_reasoning_text = ""
+            social_gate_result: IntakeLLMResult | None = None
 
             active_goal_trace = goal_trace
             if (
@@ -329,10 +329,10 @@ class StrangeLoop:
                     loop_id=state_manager.loop_id,
                 )
 
-            # Parent span so Pass 1 / Pass 2 generations nest under one intake
-            # station instead of landing at the trace root. Turns that classify
-            # inside the graph (or not at all) leave it inert; the graph entry
-            # station opens its own span.
+            # Parent span so the social-gate and intake generations nest under
+            # one intake station instead of landing at the trace root. Turns that
+            # classify inside the graph (or not at all) leave it inert; the graph
+            # entry station opens its own span.
             intake_runs_pre_graph = (
                 preclassified_intent is None
                 and intent_classifier is not None
@@ -350,8 +350,8 @@ class StrangeLoop:
                 else None
             )
 
-            # Stage 1: Pass 1 ∥ checkpoint.load (social fast-path before graph).
-            pass1_token_sink = None
+            # Stage 1: social gate ∥ checkpoint.load (fast path before graph).
+            social_gate_token_sink = None
             if (
                 preclassified_intent is None
                 and intent_classifier is not None
@@ -360,7 +360,6 @@ class StrangeLoop:
             ):
                 from soothe.sloop.stages.preprocess.intake import (
                     INTENT_CLASSIFY_STATUS_LABEL,
-                    intake_reasoning_event,
                 )
 
                 yield ("plan_phase_status", {"label": INTENT_CLASSIFY_STATUS_LABEL})
@@ -371,13 +370,13 @@ class StrangeLoop:
                     merge_direct_llm_tokens_into_state,
                 )
 
-                pass1_token_sink = DirectLLMTokenTarget()
+                social_gate_token_sink = DirectLLMTokenTarget()
 
                 try:
                     checkpoint_raw = await state_manager.load()
                 except Exception as exc:
                     logger.warning(
-                        "Checkpoint load failed before Pass1 (%s)",
+                        "Checkpoint load failed before social gate (%s)",
                         type(exc).__name__,
                         exc_info=exc,
                     )
@@ -394,8 +393,8 @@ class StrangeLoop:
                         )
 
                 try:
-                    with loop_token_accumulation_scope(pass1_token_sink):
-                        pass1_raw = await intent_classifier.classify_pass1(
+                    with loop_token_accumulation_scope(social_gate_token_sink):
+                        social_gate_raw = await intent_classifier.classify_social_gate(
                             execution_goal,
                             prior_response_language=prior_language,
                             observability_metadata={"thread_id": main_thread_id},
@@ -403,46 +402,46 @@ class StrangeLoop:
                         )
                 except Exception as exc:
                     logger.warning(
-                        "Pass1 pre-graph classification failed (%s); continuing as task",
+                        "Social gate classification failed (%s); continuing as task",
                         type(exc).__name__,
                     )
-                    pass1_result = build_pass1_task_fallback(
+                    social_gate_result = build_intake_task_fallback(
                         response_language=prior_language,
                     )
                     logger.info(
-                        "Pass1 reasoning (is_task=True confidence=%s): %s",
-                        pass1_result.confidence,
-                        pass1_result.reasoning,
+                        "Social gate reasoning (is_task=True confidence=%s): %s",
+                        social_gate_result.confidence,
+                        social_gate_result.reasoning,
                     )
                 else:
-                    pass1_result = pass1_raw
+                    social_gate_result = social_gate_raw
 
-                if not pass1_result.is_task:
+                if not social_gate_result.is_task:
                     from soothe.sloop.utils.structural_continuation import (
-                        should_bypass_pass1_social_fast_path,
+                        should_bypass_social_gate_fast_path,
                     )
 
-                    if should_bypass_pass1_social_fast_path(checkpoint, execution_goal):
+                    if should_bypass_social_gate_fast_path(checkpoint, execution_goal):
                         logger.info(
-                            "[StrangeLoop] Structural loop-control bypasses Pass1 social fast-path"
+                            "[StrangeLoop] Structural loop-control bypasses social gate fast-path"
                         )
                         prior_lang = normalize_response_language(
-                            getattr(pass1_result, "response_language", None)
+                            getattr(social_gate_result, "response_language", None)
                         )
-                        pass1_result = IntakePass1LLMResult(
+                        social_gate_result = IntakeLLMResult(
                             is_task=True,
-                            confidence=IntakePass1Confidence.HIGH,
+                            confidence=IntakeConfidence.HIGH,
                             social_response=None,
                             response_language=prior_lang or ResponseLanguage.OTHER,
                             reasoning="Loop-control phrase; resume via checkpoint",
                         )
                     else:
-                        social_intent = intent_classifier.pass1_to_intent(
-                            pass1_result, execution_goal
+                        social_intent = intent_classifier.social_to_intent(
+                            social_gate_result, execution_goal
                         )
                         logger.info(
-                            "[StrangeLoop] Pre-graph social fast-path (Pass1 confidence=%s)",
-                            pass1_result.confidence,
+                            "[StrangeLoop] Pre-graph social fast-path (confidence=%s)",
+                            social_gate_result.confidence,
                         )
                         # The graph never runs on this turn, so nothing downstream
                         # would close the span or export the batched observations.
@@ -643,8 +642,8 @@ class StrangeLoop:
             # RFC-225: continue_loop when prior goal(s) exist beside the active one.
             continue_loop_mode = len(checkpoint.goal_history) >= 2
 
-            # Client-forced / pre-graph intent skips Pass 1+2; sync routing now
-            # (Pass 2 path normally rebuilds routing after classify_scope_intake).
+            # Client-forced / pre-graph intent skips intake classification; sync
+            # routing now (the graph entry node otherwise rebuilds routing).
             if preclassified_intent is not None:
                 synced_routing = build_loop_routing_classification(
                     preclassified_intent,
@@ -683,12 +682,12 @@ class StrangeLoop:
                 loop_messages=[],  # RFC-624 Phase 4 Stage 2: CE ledger spans all goals
             )
 
-            if pass1_token_sink is not None:
+            if social_gate_token_sink is not None:
                 from soothe.sloop.utils.token_usage import (
                     merge_direct_llm_tokens_into_state,
                 )
 
-                merge_direct_llm_tokens_into_state(state, pass1_token_sink)
+                merge_direct_llm_tokens_into_state(state, social_gate_token_sink)
 
             # RFC-225: propagate continue_loop_mode onto LoopState for executor wiring
             state.continue_loop = continue_loop_mode
@@ -722,15 +721,17 @@ class StrangeLoop:
             from soothe.sloop.utils.goal_text import resolve_user_request
 
             if not clarification_answer:
-                # Pass 1 task reasoning is suppressed — the resume topic falls
+                # Social gate reasoning is suppressed — the resume topic falls
                 # back to the user's own words for all task results.
                 resume_reasoning = (
-                    None if pass1_result is None or pass1_result.fallback else pass1_reasoning_text
+                    None
+                    if social_gate_result is None or social_gate_result.fallback
+                    else social_gate_reasoning_text
                 )
                 schedule_resume_topic_persistence(
                     config=self.config,
                     loop_id=state_manager.loop_id,
-                    pass1_reasoning=resume_reasoning or None,
+                    intake_reasoning=resume_reasoning or None,
                     goal_text=resolve_user_request(state),
                     is_first_loop_goal=checkpoint.total_goals_completed == 0,
                 )
@@ -823,35 +824,18 @@ class StrangeLoop:
                     persistence_backend,
                 )
 
-            # Stage 2: Pass 1 task → IntentClassification (no Pass 2 scope).
+            # Stage 2: the social gate confirmed a task. The full classification
+            # (task_complexity + task_short_description + context-aware reasoning)
+            # runs in the graph entry node with ledger projection, so leave
+            # ``state.intent`` unset here and just close the pre-graph span.
             if (
                 preclassified_intent is None
-                and pass1_result is not None
-                and pass1_result.is_task
+                and social_gate_result is not None
+                and social_gate_result.is_task
                 and intent_classifier is not None
                 and not clarification_answer
             ):
-                preclassified_intent = intent_classifier.pass1_task_to_intent(
-                    pass1_result, execution_goal
-                )
-                intake_span.end(output=str(preclassified_intent.intake_label))
-                state.intent = preclassified_intent
-                state.response_language = normalize_response_language(
-                    preclassified_intent.response_language
-                )
-                effective_routing = build_loop_routing_classification(
-                    preclassified_intent,
-                    preferred_subagent,
-                )
-                if effective_routing is not None:
-                    state.routing_classification = effective_routing
-                    routing_classification = effective_routing
-
-                from soothe.sloop.stages.preprocess.intake import intake_reasoning_event
-
-                task_event = intake_reasoning_event(preclassified_intent.reasoning or "")
-                if task_event is not None:
-                    yield task_event
+                intake_span.end(output="task")
 
             if force_continue_loop and loaded:
                 for prior in ce_instance.get_all_goals():
@@ -911,7 +895,7 @@ class StrangeLoop:
                     else:
                         original = apply_clarification_resume_goal_text(state, ce_goal)
                         _hydrate_previous_plan_from_ce(state, ce_goal)
-                        # Pass2 may have classified the bare keyword ("retry") as
+                        # Intake may have classified the bare keyword ("retry") as
                         # simple/trivial — upgrade so plan continues remaining work.
                         if is_interrupt_resume_keyword(user_submission_line):
                             from soothe.sloop.intention.models import IntakeLabel

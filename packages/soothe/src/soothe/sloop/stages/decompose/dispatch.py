@@ -35,9 +35,12 @@ def _decompose_cfg(ctx: LoopRuntimeContext) -> Any:
 def _step_action_from_node(node: StepNode) -> StepAction:
     hint = node.execution_hint if node.execution_hint is not None else "auto"
     kind = node.kind if node.kind in ("action", "ask_user") else "action"
+    title = (node.description or "").strip() or node.id
+    full = (node.full_description or node.description or "").strip() or node.id
     return StepAction(
         id=node.id,
-        description=(node.full_description or node.description or "").strip() or node.id,
+        description=title,
+        full_description=full,
         expected_output=node.expected_output or "Step completed successfully",
         dependencies=list(node.dependencies) or None,
         execution_hint=hint,
@@ -69,11 +72,13 @@ async def _ensure_root_step(ctx: LoopRuntimeContext) -> str | None:
             root_id = next(iter(goal.steps.nodes))
     else:
         goal_text = resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or "Execute task"
+        intent = getattr(ctx.loop_state, "intent", None)
+        short_title = (getattr(intent, "task_short_description", None) or "").strip()
         plan_id = allocate_plan_id()
         root_id = f"{plan_id}-01"
         root = StepNode(
             id=root_id,
-            description=goal_text,
+            description=short_title or goal_text,
             full_description=goal_text,
             status="pending",
             parent_step_id=None,
@@ -170,8 +175,15 @@ class DispatchNode(LoopNode):
             goal_text = (
                 resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or "Execute task"
             )
+            intent = getattr(ctx.loop_state, "intent", None)
+            short_title = (getattr(intent, "task_short_description", None) or "").strip()
             plan_id = allocate_plan_id()
-            step = StepAction(id=f"{plan_id}-01", description=goal_text, is_dag_root=True)
+            step = StepAction(
+                id=f"{plan_id}-01",
+                description=short_title or goal_text,
+                full_description=goal_text,
+                is_dag_root=True,
+            )
             decision = AgentDecision(
                 type="execute_steps",
                 execution_mode="parallel",

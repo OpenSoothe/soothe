@@ -1,7 +1,7 @@
 # IG-755: Unified traced LLM invocation
 
 **Created**: 2026-08-20
-**Status**: Verification
+**Status**: Complete
 **Packages**: `soothe`, `soothe-autopilot`, `soothe-daemon`
 **Related**: `soothe-nano` 1.2.5 traced LLM interfaces (structured-output
 callbacks via public `ainvoke`)
@@ -36,4 +36,4 @@ continue to inherit their already-traced graph `RunnableConfig`.
 - [x] Migrate host direct plain and structured calls
 - [x] Migrate daemon direct plain and structured calls
 - [x] Migrate Autopilot direct plain and structured calls and propagate config
-- [ ] Add tracing-focused unit coverage and run final verification
+- [x] Add tracing-focused unit coverage and run final verification

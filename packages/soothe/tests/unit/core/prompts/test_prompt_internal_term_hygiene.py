@@ -12,13 +12,9 @@ from soothe.prompts import (
     EXECUTE_WORKSPACE_RULES_FRAGMENT,
     RESPONSE_LANGUAGE_HINT_FALLBACK,
 )
-from soothe.prompts.fragments import (
-    INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT,
-    INTAKE_PASS1_SYSTEM_FRAGMENT,
-)
 from soothe.sloop.intention.prompts import (
-    INTAKE_PASS1_HUMAN_TASK,
-    INTAKE_PASS1_SYSTEM_PROMPT,
+    INTAKE_CLASSIFY_HUMAN_TASK,
+    INTAKE_CLASSIFY_SYSTEM_PROMPT,
 )
 from soothe.subagents.veritas.prompts import build_veritas_system_prompt
 
@@ -44,10 +40,8 @@ def test_xml_fragments_omit_internal_terms(path: Path) -> None:
 @pytest.mark.parametrize(
     ("label", "text"),
     [
-        ("intake_pass1_system", INTAKE_PASS1_SYSTEM_PROMPT),
-        ("intake_pass1_human_task", INTAKE_PASS1_HUMAN_TASK),
-        ("intake_pass1_system_fragment", INTAKE_PASS1_SYSTEM_FRAGMENT),
-        ("intake_pass1_social_reply", INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT),
+        ("intake_classify_system", INTAKE_CLASSIFY_SYSTEM_PROMPT),
+        ("intake_classify_human_task", INTAKE_CLASSIFY_HUMAN_TASK),
         (
             "synthesis_report_system",
             (_FRAGMENTS_DIR / "instructions" / "synthesis_report_system.xml").read_text(

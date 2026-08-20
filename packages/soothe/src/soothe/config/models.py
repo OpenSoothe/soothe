@@ -301,7 +301,7 @@ class AutopilotConfig(BaseModel):
             (``spawn_goal`` / ``cancel_goal``). Empty = deny (LoopRail owns fan-out).
         intake_scope: Forced StrangeLoop intake scope for dispatched goals
             (``trivial``|``simple``|``complex``). Default ``None`` lets the
-            loop run Pass 1+2 intake classification.
+            loop run intake classification.
         verify_periodic_enabled: Master switch for periodic DAG health verification.
             When ``False`` (default), the monitor's background health tick is
             skipped entirely — no structural heuristics, no LLM. Event-driven
@@ -472,13 +472,13 @@ class AutopilotConfig(BaseModel):
     )
 
     # Forced StrangeLoop intake scope for dispatched goals (RFC-630 / loop_input).
-    # null (default) = Pass 1+2 classify; trivial|simple|complex skip intake LLM.
+    # null (default) = intake classification; trivial|simple|complex skip the intake LLM.
     intake_scope: Literal["trivial", "simple", "complex"] | None = Field(
         default=None,
         description=(
             "Forced StrangeLoop intake scope for autopilot-dispatched goals "
             "(trivial|simple|complex). Null (default) lets the loop classify "
-            "intake. Set simple/trivial/complex to skip Pass 1+2."
+            "intake. Set simple/trivial/complex to skip the intake LLM."
         ),
     )
 

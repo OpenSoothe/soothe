@@ -1,8 +1,7 @@
 """Loop Graph entry node: LLM intake classification (RFC-220, RFC-630).
 
-When intake was not pre-classified in the pre-graph gather, this node runs
-the two-pass coordinator. Pre-classified intents (Pass 1 social early-exit
-handled in StrangeLoop; Pass 2 after CE load) skip LLM calls here.
+When intake was not pre-classified in the pre-graph gather (social gate), this
+node runs the full intake classification with ledger projection.
 """
 
 from __future__ import annotations
@@ -68,28 +67,25 @@ def intake_reasoning_event(reasoning: str) -> tuple[str, dict[str, Any]] | None:
 def intent_pass_reasoning_events(
     intent: IntentClassification,
 ) -> list[tuple[str, dict[str, Any]]]:
-    """Build zero or one intake cognition card (Pass 2 scope reasoning only).
+    """Build zero or one intake cognition card (task reasoning only).
 
-    Skips chitchat. Pass 1 social-vs-task reasoning is not surfaced to the TUI.
+    Skips chitchat. Social-gate reasoning is not surfaced to the TUI.
     """
     if intent.intake_label == IntakeLabel.CHITCHAT:
         return []
-    pass2_event = intake_reasoning_event((intent.reasoning or "").strip())
-    if pass2_event is None:
+    reasoning_event = intake_reasoning_event((intent.reasoning or "").strip())
+    if reasoning_event is None:
         return []
-    return [pass2_event]
+    return [reasoning_event]
 
 
 def _ledger_messages_for_intake(ctx: LoopRuntimeContext) -> list[BaseMessage]:
-    """Best-effort ledger tail for intake projection."""
-    ce = ctx.ce
-    if ce is None:
-        return []
+    """Best-effort phase-tagged ledger messages for intake projection."""
     try:
-        return [msg for msg, _phase in ce.get_ledger_entries()]
+        return list(ctx.loop_state.loop_messages)
     except Exception:
         logger.debug(
-            "Could not read ledger entries for intake projection (loop=%s)",
+            "Could not read ledger messages for intake projection (loop=%s)",
             ctx.state_manager.loop_id,
             exc_info=True,
         )
@@ -106,7 +102,7 @@ def _should_skip_intent_classify(ctx: LoopRuntimeContext) -> bool:
 
 
 async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Classify user intake using two-pass architecture (RFC-630)."""
+    """Classify user intake with ledger projection (RFC-630)."""
     if _should_skip_intent_classify(ctx):
         logger.info("[Intent] Skipping graph entry classification (clarification resume)")
         return {}
@@ -166,7 +162,7 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     await emit_plan_phase_status(ctx, label=INTENT_CLASSIFY_STATUS_LABEL)
 
     logger.info(
-        "[Intent] Two-pass: loop_id=%s intake=%s query=%s",
+        "[Intent] Intake: loop_id=%s intake=%s query=%s",
         ctx.state_manager.loop_id,
         intent.intake_label,
         query[:50],

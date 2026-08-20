@@ -1,6 +1,6 @@
-"""LLM prompts for Pass 1 intake classification (RFC-630 / RFC-904).
+"""LLM prompts for intake classification (RFC-630 / RFC-904).
 
-- ``INTAKE_PASS1_SYSTEM_PROMPT``: Social vs task (no prior context).
+- ``INTAKE_CLASSIFY_SYSTEM_PROMPT``: social vs task + task complexity + short description.
 """
 
 from __future__ import annotations
@@ -32,27 +32,27 @@ def build_prompt_timestamp_block(
     return PROMPT_TIMESTAMP_FRAGMENT.format(**ctx).strip()
 
 
-INTAKE_PASS1_SYSTEM_PROMPT = _read_intake_fragment("pass1_system.xml")
-INTAKE_PASS1_SOCIAL_REPLY_PROMPT = _read_intake_fragment("pass1_social_reply.xml")
+INTAKE_CLASSIFY_SYSTEM_PROMPT = _read_intake_fragment("intake_classify_system.xml")
+INTAKE_SOCIAL_REPLY_PROMPT = _read_intake_fragment("social_reply.xml")
 
-INTAKE_PASS1_HUMAN_TASK = "Classify the user message above. JSON only."
-INTAKE_PASS1_PRIOR_LANGUAGE_PREFIX = "PRIOR_RESPONSE_LANGUAGE: {language}"
+INTAKE_CLASSIFY_HUMAN_TASK = "Classify the user message above. JSON only."
+INTAKE_PRIOR_LANGUAGE_PREFIX = "PRIOR_RESPONSE_LANGUAGE: {language}"
 
 
-def build_intake_pass1_human_content(
+def build_intake_human_content(
     query: str,
     *,
     prior_response_language: str | None = None,
 ) -> str:
-    """Assemble Pass 1 human message with optional prior-language structural hint."""
+    """Assemble the intake human message with optional prior-language structural hint."""
     parts = [query.strip()]
     if prior_response_language:
-        parts.append(INTAKE_PASS1_PRIOR_LANGUAGE_PREFIX.format(language=prior_response_language))
-    parts.append(INTAKE_PASS1_HUMAN_TASK)
+        parts.append(INTAKE_PRIOR_LANGUAGE_PREFIX.format(language=prior_response_language))
+    parts.append(INTAKE_CLASSIFY_HUMAN_TASK)
     return "\n\n".join(parts)
 
 
-INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK = "Write the social_response reply. JSON only."
+INTAKE_SOCIAL_REPLY_HUMAN_TASK = "Write the social_response reply. JSON only."
 
 
 def _substitute_prompt_placeholders(template: str, values: dict[str, str]) -> str:
@@ -63,13 +63,13 @@ def _substitute_prompt_placeholders(template: str, values: dict[str, str]) -> st
     return result
 
 
-def build_intake_pass1_system_prompt(
+def build_intake_system_prompt(
     body: str,
     assistant_name: str,
     *,
     ctx: dict[str, str] | None = None,
 ) -> str:
-    """Assemble Pass 1 system prompt with identity and live timestamp at the tail.
+    """Assemble the intake system prompt with identity and live timestamp at the tail.
 
     Pass a pre-fetched ``ctx`` (from :func:`prompt_datetime_context`) to
     avoid a timestamp race when the caller already captured the context.
@@ -97,12 +97,12 @@ def build_intake_pass1_system_prompt(
 
 
 __all__ = [
-    "INTAKE_PASS1_HUMAN_TASK",
-    "INTAKE_PASS1_PRIOR_LANGUAGE_PREFIX",
-    "INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK",
-    "INTAKE_PASS1_SOCIAL_REPLY_PROMPT",
-    "INTAKE_PASS1_SYSTEM_PROMPT",
-    "build_intake_pass1_human_content",
-    "build_intake_pass1_system_prompt",
+    "INTAKE_CLASSIFY_HUMAN_TASK",
+    "INTAKE_CLASSIFY_SYSTEM_PROMPT",
+    "INTAKE_PRIOR_LANGUAGE_PREFIX",
+    "INTAKE_SOCIAL_REPLY_HUMAN_TASK",
+    "INTAKE_SOCIAL_REPLY_PROMPT",
+    "build_intake_human_content",
+    "build_intake_system_prompt",
     "build_prompt_timestamp_block",
 ]

@@ -77,7 +77,7 @@ class LoopRunRequest:
     client_workspace_id: str | None = None
     workspace_mapping: dict[str, Any] | None = None
     preferred_subagent: str | None = None
-    # Client-forced Pass 2 scope (``trivial``|``simple``|``complex``); skips Pass 1+2 LLM.
+    # Client-forced intake scope (``trivial``|``simple``|``complex``); skips the intake LLM.
     intake_scope: str | None = None
     model: str | None = None
     model_params: dict[str, Any] = field(default_factory=dict)
@@ -100,7 +100,7 @@ class LoopRunRequest:
     # if there are several).
     clarification_answers: list[str] | None = None
     # daemon auto-resume of an interrupted ``status=running`` goal.
-    # Skips Pass 1 social fast-path, preserves ``recovery_valid_resume``, and
+    # Skips the social gate fast-path, preserves ``recovery_valid_resume``, and
     # must not cancel the in-flight goal (unlike bare continue/resume keywords).
     resume_interrupted: bool = False
     # RFC-222 revised: set by daemon's AutopilotService for autopilot-dispatched

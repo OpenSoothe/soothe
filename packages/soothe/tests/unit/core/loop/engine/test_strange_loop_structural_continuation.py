@@ -1,4 +1,4 @@
-"""Tests for Pass1 structural continuation bypass in StrangeLoop."""
+"""Tests for social-gate structural continuation bypass in StrangeLoop."""
 
 from __future__ import annotations
 
@@ -6,10 +6,8 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from soothe_sdk.intention.models import TaskComplexity
 
 from soothe.sloop.engine.strange_loop import StrangeLoop
-from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 
 
@@ -50,24 +48,17 @@ def _running_checkpoint() -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_continue_keyword_bypasses_pass1_social_fast_path() -> None:
+async def test_continue_keyword_bypasses_social_gate_fast_path() -> None:
     """Bare continue must resume via checkpoint, not chitchat finalize."""
     sl = _make_strange_loop()
 
-    pass1_result = MagicMock()
-    pass1_result.is_task = False
-    pass1_result.confidence = "high"
-    pass1_result.reasoning = "Social cue."
+    social_gate_result = MagicMock()
+    social_gate_result.is_task = False
+    social_gate_result.confidence = "high"
+    social_gate_result.reasoning = "Social cue."
 
     intent_classifier = MagicMock()
-    intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.classify_scope_intake = AsyncMock(
-        return_value=MagicMock(
-            intake_label=IntakeLabel.SIMPLE,
-            reasoning="Resume loop.",
-            task_complexity=TaskComplexity.SIMPLE,
-        )
-    )
+    intent_classifier.classify_social_gate = AsyncMock(return_value=social_gate_result)
 
     mock_sm = MagicMock()
     mock_sm.loop_id = "L1"
@@ -138,28 +129,20 @@ async def test_continue_keyword_bypasses_pass1_social_fast_path() -> None:
             await gen.aclose()
 
     assert not any(event_type == "intent_fast_path" for event_type, _ in events)
-    intent_classifier.pass1_task_to_intent.assert_called()
 
 
 @pytest.mark.asyncio
-async def test_embedded_continue_the_loop_bypasses_pass1_social_fast_path() -> None:
+async def test_embedded_continue_the_loop_bypasses_social_gate_fast_path() -> None:
     """Trailing loop-resume phrase must resume via checkpoint, not chitchat."""
     sl = _make_strange_loop()
 
-    pass1_result = MagicMock()
-    pass1_result.is_task = False
-    pass1_result.confidence = "high"
-    pass1_result.reasoning = "Social cue."
+    social_gate_result = MagicMock()
+    social_gate_result.is_task = False
+    social_gate_result.confidence = "high"
+    social_gate_result.reasoning = "Social cue."
 
     intent_classifier = MagicMock()
-    intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.classify_scope_intake = AsyncMock(
-        return_value=MagicMock(
-            intake_label=IntakeLabel.SIMPLE,
-            reasoning="Resume loop.",
-            task_complexity=TaskComplexity.SIMPLE,
-        )
-    )
+    intent_classifier.classify_social_gate = AsyncMock(return_value=social_gate_result)
 
     mock_sm = MagicMock()
     mock_sm.loop_id = "L1"
@@ -226,4 +209,3 @@ async def test_embedded_continue_the_loop_bypasses_pass1_social_fast_path() -> N
             await gen.aclose()
 
     assert not any(event_type == "intent_fast_path" for event_type, _ in events)
-    intent_classifier.pass1_task_to_intent.assert_called()

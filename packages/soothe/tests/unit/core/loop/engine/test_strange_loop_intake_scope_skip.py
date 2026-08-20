@@ -1,4 +1,4 @@
-"""Client ``intake_scope`` skips Pass 1 and Pass 2 LLM intake."""
+"""Client ``intake_scope`` skips intake classification."""
 
 from __future__ import annotations
 
@@ -32,18 +32,18 @@ def _make_strange_loop() -> StrangeLoop:
 
 
 @pytest.mark.asyncio
-async def test_run_with_progress_skips_pass1_and_pass2_when_intent_preclassified() -> None:
-    """Forced intent (from intake_scope) must not call Pass 1 or Pass 2 classifiers."""
+async def test_run_with_progress_skips_intake_when_intent_preclassified() -> None:
+    """Forced intent (from intake_scope) must not call the intake classifiers."""
     sl = _make_strange_loop()
     forced = intent_classification_from_intake_scope(parse_intake_scope("simple"))
     assert forced is not None
     assert forced.intake_label == IntakeLabel.SIMPLE
 
     intent_classifier = MagicMock()
-    intent_classifier.classify_pass1 = AsyncMock(
+    intent_classifier.classify_social_gate = AsyncMock(
         return_value=MagicMock(is_task=True, reasoning="should not run")
     )
-    intent_classifier.classify_scope_intake = AsyncMock(
+    intent_classifier.classify_intake = AsyncMock(
         return_value=IntentClassification(
             intake_label=IntakeLabel.COMPLEX,
             task_complexity=TaskComplexity.COMPLEX,
@@ -125,6 +125,6 @@ async def test_run_with_progress_skips_pass1_and_pass2_when_intent_preclassified
         finally:
             await gen.aclose()
 
-    intent_classifier.classify_pass1.assert_not_awaited()
-    intent_classifier.classify_scope_intake.assert_not_awaited()
+    intent_classifier.classify_social_gate.assert_not_awaited()
+    intent_classifier.classify_intake.assert_not_awaited()
     assert ("plan_phase_status", {"label": "Interpreting goal"}) not in events

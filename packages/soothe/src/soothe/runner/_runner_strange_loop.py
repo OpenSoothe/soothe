@@ -458,12 +458,12 @@ class StrangeLoopMixin:
             preferred_subagent: Optional subagent hint for routing
             intake_scope: Optional client-forced scope (``trivial``|``simple``|
                 ``complex``). When set (and not a clarification resume), skips
-                Pass 1 and Pass 2 LLM intake.
+                intake classification.
             clarification_mode: RFC-622 mode for this goal (``"auto"`` /
                 ``"manual"``). ``None`` falls back to
                 ``config.agent.clarification.default_mode``.
             resume_interrupted: When True, recover an interrupted running goal
-                without Pass 1 social routing or continue-keyword cancel.
+                without social-gate routing or continue-keyword cancel.
 
         Yields:
             StreamChunk events during execution
@@ -479,8 +479,9 @@ class StrangeLoopMixin:
         # ask_user) uses ``interrupt()``; without a checkpointer that pause is
         # not resumable and Approve / ``Command(resume=...)`` is a no-op.
 
-        # RFC-630 Pass 1 runs pre-graph in StrangeLoop (parallel with checkpoint).
-        # Pass 2 runs after CE load; social queries END before the graph.
+        # The social gate runs pre-graph in StrangeLoop (parallel with checkpoint);
+        # full intake classification runs after CE load. Social queries END before
+        # the graph.
         #
         # When the caller flags this turn as a clarification answer (RFC-622), the graph
         # skips classification so a bare word like "soothe" does not short-circuit resume.
@@ -546,7 +547,7 @@ class StrangeLoopMixin:
             if scope is not None:
                 preclassified_intent = intent_classification_from_intake_scope(scope)
                 logger.info(
-                    "[StrangeLoop] Client intake_scope=%s — skipping Pass 1 and Pass 2 LLM",
+                    "[StrangeLoop] Client intake_scope=%s — skipping intake classification",
                     scope.value,
                 )
 

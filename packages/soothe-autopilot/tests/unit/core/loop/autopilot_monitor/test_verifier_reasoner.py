@@ -1,9 +1,9 @@
-"""Tests for DagVerificationReasoner logging and metadata-only invoke config."""
+"""Tests for DagVerificationReasoner logging and traced invoke config."""
 
 from __future__ import annotations
 
 import logging
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -42,29 +42,29 @@ def reasoner(mock_config: MagicMock) -> DagVerificationReasoner:
 
 
 @pytest.mark.asyncio
-async def test_invoke_llm_uses_metadata_only_invoke_config(
+async def test_invoke_llm_uses_traced_invoke_config(
     reasoner: DagVerificationReasoner,
 ) -> None:
-    """DAG verification LLM calls must not register observability callbacks."""
+    """DAG verification LLM calls go through nano's traced entry point."""
     captured: dict[str, object] = {}
 
-    async def capture_invoke(_messages: object, config: dict | None = None) -> MagicMock:
-        captured["config"] = config
+    async def capture_traced(model: object, messages: object, **kwargs: object) -> MagicMock:
+        captured["model"] = model
+        captured["messages"] = messages
+        captured.update(kwargs)
         response = MagicMock()
         response.content = "{}"
         return response
 
-    reasoner._model.ainvoke = capture_invoke  # type: ignore[method-assign]
+    with patch("soothe_nano.llm.ainvoke_traced", capture_traced):
+        await reasoner._invoke_llm("prompt", "system", operation="health")
 
-    await reasoner._invoke_llm("prompt", "system", operation="health")
-
-    config = captured.get("config")
-    assert isinstance(config, dict)
-    assert not config.get("callbacks")
-    metadata = config.get("metadata")
-    assert isinstance(metadata, dict)
-    assert metadata.get("soothe_call_purpose") == "dag_verification"
-    assert metadata.get("operation") == "health"
+    assert captured["model"] is reasoner._model
+    assert captured["soothe_config"] is reasoner._soothe_config
+    assert captured["purpose"] == "dag_verification"
+    assert captured["component"] == "autopilot.monitor.verifier_reasoner"
+    assert captured["phase"] == "background"
+    assert captured["extra_metadata"] == {"operation": "health"}
 
 
 @pytest.mark.asyncio

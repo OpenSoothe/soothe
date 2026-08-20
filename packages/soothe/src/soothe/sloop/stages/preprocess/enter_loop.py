@@ -1,4 +1,4 @@
-"""Loop Graph ``init_or_resume`` node (RFC-904 / RFC-630 pass1).
+"""Loop Graph ``init_or_resume`` node (RFC-904 / RFC-630).
 
 Hydrates intent/routing from intake classified in the graph entry node.
 Surfaces ``intake_label``, ``is_fresh_goal``, and ``is_continuation`` for routing.

@@ -6,8 +6,8 @@ Intent classification produces a 4-class intake label (RFC-630) —
 in-flight loop is derived structurally inside ``StrangeLoop`` from the loaded
 checkpoint, not classified here.
 
-Two-pass intake historically (RFC-630): Pass 1 (social vs task). Pass 2 scope
-pre-classification was removed under RFC-904; DISPATCH owns decomposition.
+Intake classification (social vs task) runs via the intake classifier; scope
+pre-classification was removed under RFC-904 and DISPATCH owns decomposition.
 
 CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
 ``soothe_sdk.intention.models`` and re-exported here.
@@ -78,7 +78,8 @@ class IntentClassification(BaseModel):
         intake_label: 4-class intake label for branch routing (RFC-630).
         reasoning: Brief reasoning for classification.
         chitchat_response: Direct reply for ``chitchat`` intake only.
-        task_complexity: Routing complexity level (derived from ``intake_label``).
+        task_short_description: Short step-card title for agentic goals.
+        task_complexity: Routing complexity level.
     """
 
     intake_label: IntakeLabel = Field(
@@ -92,27 +93,16 @@ class IntentClassification(BaseModel):
         default=None,
         description="Direct friendly reply when intake_label is chitchat",
     )
-    social_kind: IntakePass1SocialKind | None = Field(
+    task_short_description: str | None = Field(
         default=None,
-        description="Pass 1 social sub-kind when intake_label is chitchat",
-    )
-    multi_phase: bool = Field(
-        default=False,
-        description="Pass 2: goal implies multiple ordered execution phases",
-    )
-    requires_tool_use: bool = Field(
-        default=False,
-        description=(
-            "Pass 2: true when answering requires external/live data or tool execution "
-            "(weather, web lookup, file contents); false for pure reasoning/math."
-        ),
+        description="Short step-card title for agentic goals (from intake classification)",
     )
     response_language: ResponseLanguage | None = Field(
         default=None,
-        description="Pass 1: preferred language for user-facing prose this turn",
+        description="Preferred language for user-facing prose this turn",
     )
     task_complexity: TaskComplexity = Field(
-        description="Routing complexity derived from intake_label"
+        description="Routing complexity level for execute-phase tuning"
     )
 
 
@@ -151,12 +141,12 @@ def build_loop_routing_classification(
 
 
 # -----------------------------------------------------------------------------
-# Two-pass intake schemas (RFC-630)
+# Intake classification schemas (RFC-630)
 # -----------------------------------------------------------------------------
 
 
 class ResponseLanguage(StrEnum):
-    """Primary language for user-facing agent prose (Pass 1 detection)."""
+    """Primary language for user-facing agent prose (intake detection)."""
 
     EN = "en"
     ZH = "zh"
@@ -165,31 +155,21 @@ class ResponseLanguage(StrEnum):
     OTHER = "other"
 
 
-class IntakePass1Confidence(StrEnum):
-    """Confidence level for Pass 1 social vs task classification."""
+class IntakeConfidence(StrEnum):
+    """Confidence level for intake social vs task classification."""
 
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
 
 
-class IntakePass1SocialKind(StrEnum):
-    """Social sub-kind from Pass 1 (RFC-630 heuristic migration)."""
+class IntakeLLMResult(BaseModel):
+    """Structured output from intake classification: social vs task.
 
-    GREETING = "greeting"
-    THANKS = "thanks"
-    IDENTITY = "identity"
-    DATETIME = "datetime"
-    BANTER = "banter"
-    OTHER = "other"
-
-
-class IntakePass1LLMResult(BaseModel):
-    """Structured output from Pass 1: social vs task (RFC-630).
-
-    Pass 1 cleanly separates social interactions from work requests. No prior
-    context is provided — the decision depends only on GOAL text. ``social_response``
-    is included for fast-path END when ``is_task=False``.
+    Intake cleanly separates social interactions from work requests. When
+    ``is_task=True`` it also emits ``task_complexity`` and a short step-card
+    title (``task_short_description``). ``social_response`` is included for the
+    fast-path END when ``is_task=False``.
 
     Args:
         is_task: True if work request, False if social interaction.
@@ -203,7 +183,7 @@ class IntakePass1LLMResult(BaseModel):
     is_task: bool = Field(
         description="True if the GOAL is a work request; False if social (greeting, thanks, etc.)"
     )
-    confidence: IntakePass1Confidence = Field(
+    confidence: IntakeConfidence = Field(
         description="Confidence in the classification: high, medium, or low"
     )
     social_response: str | None = Field(
@@ -214,11 +194,18 @@ class IntakePass1LLMResult(BaseModel):
             "never Claude, ChatGPT, Gemini, or other vendor models."
         ),
     )
-    social_kind: IntakePass1SocialKind = Field(
-        default=IntakePass1SocialKind.OTHER,
+    task_complexity: TaskComplexity | None = Field(
+        default=None,
         description=(
-            "When is_task=False: greeting, thanks, identity, datetime, banter, or other. "
-            "When is_task=True: other."
+            "When is_task=True: task complexity minimal, simple, medium, or complex. "
+            "When is_task=False: null."
+        ),
+    )
+    task_short_description: str | None = Field(
+        default=None,
+        description=(
+            "When is_task=True: short step-card title (under ~8 words) summarizing the task. "
+            "When is_task=False: null."
         ),
     )
     response_language: ResponseLanguage = Field(
@@ -257,13 +244,10 @@ def normalize_response_language(value: object | None) -> ResponseLanguage | None
 
 
 class IntakeScope(StrEnum):
-    """3-class scope for Pass 2 classification (trivial, simple, complex).
+    """3-class forced scope (trivial, simple, complex).
 
-    Pass 2 only runs when Pass 1 returns ``is_task=True``. The ``chitchat`` label
-    is not an option — Pass 1 already decided social vs task.
-
-    The same values are accepted on ``loop_input.intake_scope`` to skip Pass 1
-    and Pass 2 LLM intake and force branch routing.
+    The same values are accepted on ``loop_input.intake_scope`` to skip LLM
+    intake classification and force branch routing.
     """
 
     TRIVIAL = "trivial"
@@ -304,8 +288,8 @@ def intent_classification_from_intake_scope(
 ) -> IntentClassification:
     """Build a forced ``IntentClassification`` from a client ``intake_scope``.
 
-    Implies ``is_task=True`` (skips Pass 1 social vs task) and the given scope
-    (skips Pass 2). Continuation remains a structural checkpoint overlay.
+    Implies ``is_task=True`` (skips the social-vs-task classification) and the
+    given scope. Continuation remains a structural checkpoint overlay.
     """
     intake_label = IntakeLabel(scope)
     return IntentClassification(
@@ -315,18 +299,22 @@ def intent_classification_from_intake_scope(
     )
 
 
-def intent_classification_from_pass1_task(
-    pass1_result: IntakePass1LLMResult,
+def intent_classification_from_intake(
+    intake_result: IntakeLLMResult,
 ) -> IntentClassification:
-    """Build task IntentClassification from Pass 1 only (RFC-904).
+    """Build task IntentClassification from the intake result.
 
-    Scope is discovered via do-or-decompose; no Pass 2 label. Uses ``complex``
-    as a compatibility intake_label for legacy fields that still expect one.
+    ``task_complexity`` and ``task_short_description`` come directly from the
+    intake LLM result; scope routing still uses the ``complex`` compatibility
+    ``intake_label`` since scope pre-classification is removed.
     """
     return IntentClassification(
         intake_label=IntakeLabel.COMPLEX,
-        reasoning=pass1_result.reasoning,
+        reasoning=intake_result.reasoning,
         chitchat_response=None,
-        response_language=pass1_result.response_language,
-        task_complexity=derive_task_complexity_from_intake(IntakeLabel.COMPLEX),
+        task_short_description=(intake_result.task_short_description or "").strip() or None,
+        response_language=intake_result.response_language,
+        task_complexity=(
+            intake_result.task_complexity or derive_task_complexity_from_intake(IntakeLabel.COMPLEX)
+        ),
     )

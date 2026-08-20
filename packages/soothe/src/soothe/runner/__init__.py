@@ -613,7 +613,7 @@ class SootheRunner(
                 resolved path is always a non-empty absolute directory string for this call.
             preferred_subagent: Optional subagent hint merged into StrangeLoop.
             intake_scope: Optional client-forced intake scope
-                (``trivial``|``simple``|``complex``); skips Pass 1+2 LLM when set.
+                (``trivial``|``simple``|``complex``); skips the intake LLM when set.
             client_loop_id: Daemon client loop scope for logging and stream correlation.
             autopilot_job: When set, signals an autopilot-dispatched job (RFC-222 revised).
                 Worker hydrates StrangeLoop from ``autopilot_job.merged_context`` and runs

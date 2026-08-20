@@ -21,6 +21,7 @@ from soothe_daemon.protocol.intent_hints import (
     OCR,
     TEXT_COMPLETION,
 )
+
 logger = logging.getLogger(__name__)
 
 _LOG_PREVIEW_CHARS = 800

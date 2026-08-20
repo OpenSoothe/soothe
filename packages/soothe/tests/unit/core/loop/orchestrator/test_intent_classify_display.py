@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from soothe.sloop.intention.intake_classifier import INTAKE_FALLBACK_REASONING
 from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
     TaskComplexity,
 )
-from soothe.sloop.intention.pass1_classifier import PASS1_FALLBACK_REASONING
 from soothe.sloop.stages.preprocess.intake import (
     INTENT_CLASSIFY_STATUS_LABEL,
     intake_reasoning_event,
@@ -16,7 +16,7 @@ from soothe.sloop.stages.preprocess.intake import (
 )
 
 
-def test_intent_pass_reasoning_events_emits_pass2_only() -> None:
+def test_intent_pass_reasoning_events_emits_task_reasoning() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         reasoning="I'll read the readme first.",
@@ -54,10 +54,10 @@ def test_intake_reasoning_event_skips_empty_text() -> None:
 
 def test_intake_reasoning_event_displays_fail_safe_prose() -> None:
     """Fail-safe verdicts are non-blocking, so their prose reaches the TUI card."""
-    assert is_displayable_intake_reasoning(PASS1_FALLBACK_REASONING)
-    event = intake_reasoning_event(PASS1_FALLBACK_REASONING)
+    assert is_displayable_intake_reasoning(INTAKE_FALLBACK_REASONING)
+    event = intake_reasoning_event(INTAKE_FALLBACK_REASONING)
     assert event is not None
-    assert event[1]["reasoning"] == PASS1_FALLBACK_REASONING
+    assert event[1]["reasoning"] == INTAKE_FALLBACK_REASONING
 
 
 def test_intent_classify_status_label_is_stable() -> None:

@@ -502,11 +502,9 @@ async def _invoke_intake_only_direct(
         )
         return {"last_outcome": "fatal"}
 
-    intent = ctx.loop_state.intent
     plan = build_trivial_plan(
         goal_text,
         wire_subagent=wire,
-        requires_tool_use=bool(getattr(intent, "requires_tool_use", True)),
     )
     ctx.scratch.plan_result = plan
     step = plan.decision.steps[0]
@@ -624,7 +622,7 @@ async def node_invoke_wired_subagent(
     """Resolve wire and direct-invoke the intake-only specialist."""
     goal_text = resolve_user_request(ctx.loop_state) or ctx.loop_state.goal
 
-    # Clarification resume re-enters this node without Pass2 wire resolution —
+    # Clarification resume re-enters this node without wire resolution —
     # honor planner review answers before requiring a live wire_subagent.
     if (
         state.get("pending_clarification_answer")

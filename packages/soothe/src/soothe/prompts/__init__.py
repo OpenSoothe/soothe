@@ -54,6 +54,7 @@ from soothe_nano.prompts.system_templates import (
 
 from .fragments import (
     APPROVED_PLAN_EXECUTE_HINT,
+    COMPLEX_DECOMPOSE_FIRST_HINT,
     DECOMPOSE_TASK_TOOL_DESCRIPTION,
     THREAD_POLICY_SYSTEM_ADDENDUM,
     THREAD_USER_HINT_CHILD_FRAGMENT,
@@ -69,9 +70,15 @@ def user_finish_or_split_hint_lines(*, is_dag_root: bool) -> list[str]:
     return [THREAD_USER_HINT_CHILD_FRAGMENT]
 
 
+def complex_decompose_first_hint_lines() -> list[str]:
+    """Directive for the root thread of a complex task: decompose before working."""
+    return [COMPLEX_DECOMPOSE_FIRST_HINT]
+
+
 __all__ = [
     "APPROVED_PLAN_EXECUTE_HINT",
     "ASSISTANT_IDENTITY_FRAGMENT",
+    "COMPLEX_DECOMPOSE_FIRST_HINT",
     "DECOMPOSE_TASK_TOOL_DESCRIPTION",
     "DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT",
     "EXECUTE_WORKSPACE_RULES_FRAGMENT",
@@ -99,6 +106,7 @@ __all__ = [
     "build_soothe_thread_section",
     "build_soothe_workspace_section",
     "build_timestamp_xml_footer",
+    "complex_decompose_first_hint_lines",
     "current_timestamp_iso",
     "default_agent_system_prompt_body",
     "format_complex_agent_system_prompt_core",

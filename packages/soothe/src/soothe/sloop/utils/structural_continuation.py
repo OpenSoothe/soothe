@@ -1,9 +1,9 @@
 """Structural loop-continuation controls (RFC-225, RFC-630).
 
 Continuation is derived from checkpoint state and explicit control phrases,
-not from Pass 1 social classification. These helpers run before the pre-graph
-social fast-path so bare ``continue`` and loop-resume phrases resume work
-instead of closing the active goal via chitchat finalize.
+not from social classification. These helpers run before the pre-graph social
+gate so bare ``continue`` and loop-resume phrases resume work instead of
+closing the active goal via chitchat finalize.
 """
 
 from __future__ import annotations
@@ -77,11 +77,11 @@ def has_resumable_interrupted_goal(checkpoint: Any | None) -> bool:
     return status in ("running", "cancelled", "interrupted")
 
 
-def should_bypass_pass1_social_fast_path(
+def should_bypass_social_gate_fast_path(
     checkpoint: Any | None,
     user_text: str | None,
 ) -> bool:
-    """Return True when Pass 1 social fast-path must not short-circuit intake.
+    """Return True when the social gate fast-path must not short-circuit intake.
 
     Only explicit loop-control phrases bypass social routing. Other social
     messages on a running loop still use the chitchat path, but chitchat
@@ -113,5 +113,5 @@ __all__ = [
     "has_resumable_interrupted_goal",
     "is_loop_continuation_phrase",
     "is_loop_control_signal",
-    "should_bypass_pass1_social_fast_path",
+    "should_bypass_social_gate_fast_path",
 ]

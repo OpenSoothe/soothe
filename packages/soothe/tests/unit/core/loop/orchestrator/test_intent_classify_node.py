@@ -15,7 +15,7 @@ from soothe.sloop.stages.preprocess.intake import node_intent_classify
 
 @pytest.mark.asyncio
 async def test_intent_classify_emits_interpreting_status_and_sets_state() -> None:
-    """Two-pass classify_intake populates loop state when not pre-classified."""
+    """Intake classification populates loop state when not pre-classified."""
     emitted: list[tuple[str, object]] = []
 
     async def _emit(event_type: str, event_data: object) -> None:

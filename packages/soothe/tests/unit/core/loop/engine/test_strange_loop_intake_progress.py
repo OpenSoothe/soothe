@@ -1,4 +1,4 @@
-"""Pre-graph intake progress events surfaced before graph pump."""
+"""Pre-graph social-gate progress events surfaced before graph pump."""
 
 from __future__ import annotations
 
@@ -7,11 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from soothe.sloop.engine.strange_loop import StrangeLoop
-from soothe.sloop.intention.models import (
-    IntakeLabel,
-    IntentClassification,
-    TaskComplexity,
-)
 
 
 def _make_strange_loop() -> StrangeLoop:
@@ -30,24 +25,17 @@ def _make_strange_loop() -> StrangeLoop:
 
 
 @pytest.mark.asyncio
-async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() -> None:
-    """Pass 1 then Pass 2 pre-classification emit TUI cognition cards before the graph."""
+async def test_run_with_progress_yields_intake_status_pre_graph() -> None:
+    """The social gate emits a TUI cognition status before the graph runs."""
     sl = _make_strange_loop()
 
-    pass1_result = MagicMock()
-    pass1_result.is_task = True
-    pass1_result.confidence = "high"
-    pass1_result.reasoning = "This is a request to summarize the readme."
-
-    preclassified = IntentClassification(
-        intake_label=IntakeLabel.SIMPLE,
-        reasoning="I'll read the readme first.",
-        task_complexity=TaskComplexity.SIMPLE,
-    )
+    social_gate_result = MagicMock()
+    social_gate_result.is_task = True
+    social_gate_result.confidence = "high"
+    social_gate_result.reasoning = "This is a request to summarize the readme."
 
     intent_classifier = MagicMock()
-    intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.pass1_task_to_intent = MagicMock(return_value=preclassified)
+    intent_classifier.classify_social_gate = AsyncMock(return_value=social_gate_result)
 
     ce_instance = MagicMock()
     ce_instance.load = AsyncMock(return_value=False)
@@ -129,11 +117,3 @@ async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() 
             await gen.aclose()
 
     assert ("plan_phase_status", {"label": "Interpreting goal"}) in events
-    reasoning_events = [
-        payload
-        for event_type, payload in events
-        if event_type == "intent_classified_reasoning" and isinstance(payload, dict)
-    ]
-    assert [e["reasoning"] for e in reasoning_events] == [
-        "I'll read the readme first.",
-    ]

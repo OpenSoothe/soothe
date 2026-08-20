@@ -375,7 +375,7 @@ class GoalNode(BaseModel):
     role: str | None = None  # scout | planner | maker | checker | qa | root | …
 
     # Forced StrangeLoop intake scope for Autopilot dispatch (IG-735).
-    # null (default) → AutopilotConfig.intake_scope, else loop Pass 1+2.
+    # null (default) → AutopilotConfig.intake_scope, else loop intake classification.
     intake_scope: Literal["trivial", "simple", "complex"] | None = None
 
     # Cron job tracking (RFC-229)

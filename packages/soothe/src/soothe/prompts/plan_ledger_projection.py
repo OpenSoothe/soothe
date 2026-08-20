@@ -391,7 +391,7 @@ def project_last_goal_completion_for_intake(
         loop_messages: Full RFC-214 ledger loaded from CE persistence.
         ledger_cfg: Optional caps (same knobs as plan prompts).
         include_boundary: When True (default), prepend boundary marker.
-            Set False for intake Pass 2 where classifier needs prior scope signal.
+            Set False where the classifier needs the prior scope signal.
 
     Returns:
         Bounded ledger slice injected before the classify human message.

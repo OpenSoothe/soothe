@@ -46,20 +46,13 @@ async def _drive_intake(
     """Run ``run_with_progress`` through intake and return the ``LoopRuntimeContext`` mock."""
     sl = _make_strange_loop()
 
-    pass1_result = MagicMock()
-    pass1_result.is_task = True
-    pass1_result.confidence = "high"
-    pass1_result.reasoning = "This is a request to use the skill."
+    social_gate_result = MagicMock()
+    social_gate_result.is_task = True
+    social_gate_result.confidence = "high"
+    social_gate_result.reasoning = "This is a request to use the skill."
 
     intent_classifier = MagicMock()
-    intent_classifier.classify_pass1 = AsyncMock(return_value=pass1_result)
-    intent_classifier.pass1_task_to_intent = MagicMock(
-        return_value=IntentClassification(
-            intake_label=IntakeLabel.SIMPLE,
-            reasoning="I'll start the research.",
-            task_complexity=TaskComplexity.SIMPLE,
-        )
-    )
+    intent_classifier.classify_social_gate = AsyncMock(return_value=social_gate_result)
 
     ce_instance = MagicMock()
     ce_instance.load = AsyncMock(return_value=False)
@@ -167,7 +160,6 @@ async def test_enter_loop_skips_wired_branch_without_slash_hint() -> None:
     """With no explicit hint, intake routes to the normal plan/execute path."""
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )
     ctx = SimpleNamespace(
@@ -192,7 +184,7 @@ async def test_enter_loop_skips_wired_branch_without_slash_hint() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stray_pass2_wire_subagent_field_is_ignored() -> None:
+async def test_stray_wire_subagent_field_is_ignored() -> None:
     """A model that still emits ``wire_subagent`` cannot influence routing."""
     intent = IntentClassification.model_validate(
         {

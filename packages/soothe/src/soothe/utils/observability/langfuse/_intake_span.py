@@ -1,12 +1,12 @@
 """Langfuse parent span for the intake stage.
 
-Intake LLM calls (Pass 1 / Pass 2 and the graph-entry classifier) each build their
+Intake LLM calls (the social gate and the graph-entry classifier) each build their
 own RunnableConfig, so without a parent they land at the trace root instead of
 under a station observation. Unlike ``evaluate``, the span id is threaded
 explicitly through ``GoalLoopTrace`` rather than through OTEL ambient context:
-pre-graph Pass 1 and Pass 2 are separated by checkpoint and Context Engine work
-and by generator suspension points, where a current-span context manager would
-leak into unrelated tasks.
+the pre-graph social gate and the graph-entry classifier are separated by
+checkpoint and Context Engine work and by generator suspension points, where a
+current-span context manager would leak into unrelated tasks.
 """
 
 from __future__ import annotations
