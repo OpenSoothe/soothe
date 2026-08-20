@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, cast
 
 from rich.cells import cell_len
@@ -16,7 +17,7 @@ from textual.css.query import NoMatches
 from textual.fuzzy import Matcher
 from textual.message import Message
 from textual.screen import ModalScreen
-from textual.widgets import Checkbox, Input, Static
+from textual.widgets import Input, Static
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -29,6 +30,7 @@ from soothe_cli.tui.config import (
     get_glyphs,
     is_ascii_mode,
 )
+from soothe_cli.tui.sessions import loop_matches_workspace, normalize_workspace_path
 from soothe_cli.tui.widgets._links import open_style_link
 
 logger = logging.getLogger(__name__)
@@ -75,24 +77,13 @@ _COLUMN_LABELS = {
     "updated_at": "Updated",
     "topic": "Topic",
 }
-_COLUMN_TOGGLE_LABELS = {
-    "loop_id": "Loop ID",
-    "messages": "# Messages",
-    "updated_at": "Updated At",
-    "topic": "Topic",
-}
-_RIGHT_ALIGNED_COLUMNS: set[str] = {"updated_at", "loop_id"}
-_SWITCH_ID_PREFIX = "loop-column-"
-_SORT_SWITCH_ID = "loop-sort-toggle"
-_RELATIVE_TIME_SWITCH_ID = "loop-relative-time"
 _CELL_PADDING_RIGHT = 1
 
 _FormatFns = tuple[
-    Callable[[str | None], str],  # format_path
     Callable[[str | None], str],  # format_relative_timestamp
     Callable[[str | None], str],  # format_timestamp
 ]
-"""Cached `(format_path, format_relative_timestamp, format_timestamp)`.
+"""Cached `(format_relative_timestamp, format_timestamp)`.
 
 Resolved once on first use via `_get_format_fns()` to avoid the overhead of
 a per-call deferred import inside the hot `_format_column_value` loop.
@@ -103,7 +94,7 @@ _format_fns_cache: _FormatFns | None = None
 
 
 def _get_format_fns() -> _FormatFns:
-    """Return cached `(format_path, format_relative_timestamp, format_timestamp)`."""
+    """Return cached `(format_relative_timestamp, format_timestamp)`."""
     global _format_fns_cache  # noqa: PLW0603
     if _format_fns_cache is not None:
         return _format_fns_cache
@@ -112,11 +103,7 @@ def _get_format_fns() -> _FormatFns:
         format_timestamp,
     )
 
-    # Loops don't have cwd field, so format_path is identity
-    def format_path_identity(path: str | None) -> str:
-        return path or ""
-
-    _format_fns_cache = (format_path_identity, format_relative_timestamp, format_timestamp)
+    _format_fns_cache = (format_relative_timestamp, format_timestamp)
     return _format_fns_cache
 
 
@@ -247,7 +234,7 @@ def _format_column_value(loop: dict[str, Any], key: str, *, relative_time: bool 
     Returns:
         Formatted display text for the column cell.
     """
-    format_path, format_relative_ts, format_ts = _get_format_fns()
+    format_relative_ts, format_ts = _get_format_fns()
     fmt = format_relative_ts if relative_time else format_ts
 
     value: str
@@ -431,6 +418,13 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             show=False,
             priority=True,
         ),
+        Binding(
+            "w",
+            "toggle_workspace_filter",
+            "Toggle workspace filter",
+            show=False,
+            priority=True,
+        ),
         Binding("escape", "cancel", "Cancel", show=False, priority=True),
     ]
 
@@ -472,31 +466,6 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         width: 1fr;
         min-width: 40;
         height: 1fr;
-    }
-
-    LoopSelectorScreen .loop-controls {
-        width: 28;
-        min-width: 24;
-        height: 1fr;
-        margin-left: 1;
-        padding-left: 1;
-        border-left: solid $primary-lighten-2;
-    }
-
-    LoopSelectorScreen .loop-controls-title {
-        text-style: bold;
-        color: $primary;
-        margin-bottom: 1;
-    }
-
-    LoopSelectorScreen .loop-controls-help {
-        color: $text-muted;
-        margin-bottom: 1;
-    }
-
-    LoopSelectorScreen .loop-column-toggle {
-        width: 1fr;
-        height: auto;
     }
 
     LoopSelectorScreen .loop-list-header {
@@ -559,13 +528,6 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         content-align: right middle;
     }
 
-    LoopSelectorScreen .loop-cell-agent_name {
-        width: auto;
-        overflow-x: hidden;
-        text-wrap: nowrap;
-        text-overflow: ellipsis;
-    }
-
     LoopSelectorScreen .loop-cell-messages {
         width: auto;
         content-align: right middle;
@@ -607,6 +569,8 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         loop_limit: int | None = None,
         initial_loops: list[dict[str, Any]] | None = None,
         daemon_session: Any | None = None,
+        workspace: str | None = None,
+        filter_current_workspace: bool = True,
     ) -> None:
         """Initialize the `LoopSelectorScreen`.
 
@@ -615,20 +579,25 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             loop_limit: Maximum number of rows to fetch when querying DB.
             initial_loops: Optional preloaded rows to render immediately.
             daemon_session: TuiDaemonSession instance for WebSocket RPC loop listing.
+            workspace: Current TUI workspace path used to scope the list.
+            filter_current_workspace: When True (default), show only loops
+                recorded for ``workspace``.
         """
         super().__init__()
         self._current_loop = current_loop
         self._loop_limit = loop_limit
-        self._loops: list[dict[str, Any]] = list(initial_loops) if initial_loops is not None else []
+        self._workspace = normalize_workspace_path(workspace)
+        self._filter_current_workspace = bool(filter_current_workspace and self._workspace)
+        raw_loops = list(initial_loops) if initial_loops is not None else []
+        self._all_loops: list[dict[str, Any]] = raw_loops
+        self._loops: list[dict[str, Any]] = self._scope_loops(raw_loops)
         self._filtered_loops: list[dict[str, Any]] = list(self._loops)
         self._has_initial_loops = initial_loops is not None
         self._selected_index = 0
         self._option_widgets: list[LoopOption] = []
         self._filter_text = ""
-        self._confirming_delete = False
         self._render_lock = asyncio.Lock()
         self._filter_input: Input | None = None
-        self._filter_controls: list[Input | Checkbox] | None = None
         self._cell_text: dict[tuple[str, str], str] = {}
         self._daemon_session = daemon_session
 
@@ -647,24 +616,19 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         self._sync_selected_index()
         self._column_widths = self._compute_column_widths()
 
-    @staticmethod
-    def _switch_id(column_key: str) -> str:
-        """Return the DOM id for a column toggle switch."""
-        return f"{_SWITCH_ID_PREFIX}{column_key}"
-
-    @staticmethod
-    def _switch_column_key(switch_id: str | None) -> str | None:
-        """Extract the column key from a switch id.
+    def _scope_loops(self, loops: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return loops visible under the current workspace filter.
 
         Args:
-            switch_id: Widget id for a switch in the control panel.
+            loops: Unscoped loop rows.
 
         Returns:
-            The corresponding column key, or `None` for unrelated ids.
+            Rows for the current workspace when filtering is on, otherwise
+            the input list.
         """
-        if not switch_id or not switch_id.startswith(_SWITCH_ID_PREFIX):
-            return None
-        return switch_id.removeprefix(_SWITCH_ID_PREFIX)
+        if not self._filter_current_workspace or not self._workspace:
+            return list(loops)
+        return [loop for loop in loops if loop_matches_workspace(loop, self._workspace)]
 
     def _sync_selected_index(self) -> None:
         """Select the current loop when it exists in the loaded rows."""
@@ -675,14 +639,30 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                 break
 
     def _build_title(self) -> str:
-        """Build the title with the current loop ID.
+        """Build the title with workspace scope and current loop ID.
 
         Returns:
-            Plain string with the current loop ID.
+            Plain string describing the selector scope.
         """
-        if not self._current_loop:
-            return "Select Loop"
-        return f"Select Loop (current: {self._current_loop})"
+        if self._filter_current_workspace and self._workspace:
+            scope = f"workspace: {Path(self._workspace).name}"
+        elif self._workspace:
+            scope = "all workspaces"
+        else:
+            scope = None
+        if self._current_loop and scope:
+            return f"Select Loop ({scope}, current: {self._current_loop})"
+        if self._current_loop:
+            return f"Select Loop (current: {self._current_loop})"
+        if scope:
+            return f"Select Loop ({scope})"
+        return "Select Loop"
+
+    def _empty_list_message(self) -> str:
+        """Return the empty-state copy for the current filter."""
+        if self._filter_current_workspace and self._workspace:
+            return "No loops in this workspace. Press W to show all."
+        return "No loops found"
 
     def _build_help_text(self) -> str:
         """Build the footer help text for the selector.
@@ -696,8 +676,13 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             f" {glyphs.bullet} Enter select"
             f" {glyphs.bullet} S toggle sort"
             f" {glyphs.bullet} R toggle relative timestamps"
-            f" {glyphs.bullet} Esc cancel"
         )
+        if self._workspace:
+            if self._filter_current_workspace:
+                lines += f" {glyphs.bullet} W show all workspaces"
+            else:
+                lines += f" {glyphs.bullet} W filter this workspace"
+        lines += f" {glyphs.bullet} Esc cancel"
         limit = self._effective_loop_limit()
         if len(self._loops) >= limit:
             lines += f"\nShowing last {limit} loops. Set DA_CLI_RECENT_LOOPS to override."
@@ -711,18 +696,13 @@ class LoopSelectorScreen(ModalScreen[str | None]):
 
         return get_loop_limit()
 
-    def _format_sort_toggle_label(self) -> str:
-        """Return the control-panel sort label for the toggle switch."""
-        label = "Updated At" if self._sort_by_updated else "Created At"
-        return f"Sort by {label}"
-
     def _get_filter_input(self) -> Input:
         """Return the cached search input widget."""
         if self._filter_input is None:
             self._filter_input = self.query_one("#loop-filter", Input)
         return self._filter_input
 
-    def _filter_focus_order(self) -> list[Input | Checkbox]:
+    def _filter_focus_order(self) -> list[Input]:
         """Return focusable controls for the selector."""
         return [self._get_filter_input()]
 
@@ -765,7 +745,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                             yield from self._option_widgets
                         else:
                             yield Static(
-                                Content.styled("No loops found", "dim"),
+                                Content.styled(self._empty_list_message(), "dim"),
                                 classes="loop-empty",
                             )
                     else:
@@ -852,59 +832,6 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Place the search cursor at the end without an active selection."""
         filter_input = self._get_filter_input()
         filter_input.selection = type(filter_input.selection).cursor(len(filter_input.value))
-
-    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
-        """Route sort, relative-time, and column-visibility checkbox changes.
-
-        Args:
-            event: The checkbox change event.
-        """
-        if event.checkbox.id == _SORT_SWITCH_ID:
-            if self._sort_by_updated == event.value:
-                return
-            self._sort_by_updated = event.value
-            self._apply_sort()
-            self._sync_selected_index()
-            self._update_help_widgets()
-            self._schedule_list_rebuild()
-
-            self._persist_sort_order("updated_at" if event.value else "created_at")
-            return
-
-        if event.checkbox.id == _RELATIVE_TIME_SWITCH_ID:
-            if self._relative_time == event.value:
-                return
-            self._relative_time = event.value
-
-            from soothe_cli.tui.model_config import save_loop_relative_time
-
-            self.run_worker(
-                asyncio.to_thread(save_loop_relative_time, event.value),
-                group="loop-selector-save",
-            )
-            self._schedule_list_rebuild()
-            return
-
-        column_key = self._switch_column_key(event.checkbox.id)
-        if column_key is None or column_key not in self._columns:
-            return
-        if self._columns[column_key] == event.value:
-            return
-
-        self._columns[column_key] = event.value
-        self._apply_sort()
-        self._sync_selected_index()
-        self._update_help_widgets()
-
-        snapshot = dict(self._columns)
-
-        from soothe_cli.tui.model_config import save_loop_columns
-
-        self.run_worker(
-            asyncio.to_thread(save_loop_columns, snapshot),
-            group="loop-selector-save",
-        )
-        self._schedule_list_rebuild()
 
     def _update_filtered_list(self) -> None:
         """Update filtered loops based on search text using fuzzy matching."""
@@ -1158,14 +1085,17 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             if self._daemon_session is not None:
                 from soothe_cli.tui.sessions import list_loops_via_daemon_rpc
 
-                self._loops = await list_loops_via_daemon_rpc(
+                self._all_loops = await list_loops_via_daemon_rpc(
                     daemon_session=self._daemon_session,
                     limit=limit,
                     sort_by=sort_by,
+                    workspace=self._workspace if self._filter_current_workspace else None,
                 )
+                self._loops = list(self._all_loops)
             else:
                 # No daemon session available - cannot load loops
                 logger.warning("No daemon session available for loop listing")
+                self._all_loops = []
                 self._loops = []
                 await self._show_mount_error("Daemon session required for loop listing")
                 return
@@ -1266,7 +1196,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                     self._option_widgets = []
                     await scroll.mount(
                         Static(
-                            Content.styled("No loops found", "dim"),
+                            Content.styled(self._empty_list_message(), "dim"),
                             classes="loop-empty",
                         )
                     )
@@ -1341,10 +1271,8 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             logger.debug("Help widget #loop-help not found during update")
 
         with contextlib.suppress(NoMatches):
-            sort_checkbox = self.query_one(f"#{_SORT_SWITCH_ID}", Checkbox)
-            sort_checkbox.label = self._format_sort_toggle_label()
-            if sort_checkbox.value != self._sort_by_updated:
-                sort_checkbox.value = self._sort_by_updated
+            title_widget = self.query_one("#loop-title", Static)
+            title_widget.update(self._build_title())
 
     def _schedule_header_rebuild(self) -> None:
         """Queue a header rebuild to reflect column/sort changes."""
@@ -1460,25 +1388,25 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             self.dismiss(loop_id)
 
     def action_focus_next_filter(self) -> None:
-        """Move focus through the filter and column-toggle controls."""
+        """Move focus through the selector's filter controls."""
         controls = self._filter_focus_order()
         focused = self.focused
         if focused not in controls:
             controls[0].focus()
             return
 
-        index = controls.index(cast("Input | Checkbox", focused))
+        index = controls.index(cast("Input", focused))
         controls[(index + 1) % len(controls)].focus()
 
     def action_focus_previous_filter(self) -> None:
-        """Move focus backward through the filter and column-toggle controls."""
+        """Move focus backward through the selector's filter controls."""
         controls = self._filter_focus_order()
         focused = self.focused
         if focused not in controls:
             controls[-1].focus()
             return
 
-        index = controls.index(cast("Input | Checkbox", focused))
+        index = controls.index(cast("Input", focused))
         controls[(index - 1) % len(controls)].focus()
 
     def action_toggle_sort(self) -> None:
@@ -1490,6 +1418,22 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         self._schedule_list_rebuild()
 
         self._persist_sort_order("updated_at" if self._sort_by_updated else "created_at")
+
+    def action_toggle_workspace_filter(self) -> None:
+        """Toggle between current-workspace rows and the full loop list."""
+        if not self._workspace:
+            return
+        self._filter_current_workspace = not self._filter_current_workspace
+        if self._daemon_session is not None:
+            if self.is_attached:
+                self._update_help_widgets()
+                self.run_worker(self._load_loops, exclusive=True, group="loop-selector-load")
+            return
+        self._loops = self._scope_loops(self._all_loops)
+        self._update_filtered_list()
+        if self.is_attached:
+            self._update_help_widgets()
+            self._schedule_list_rebuild()
 
     def action_toggle_relative_time(self) -> None:
         """Toggle timestamp display between relative and absolute."""

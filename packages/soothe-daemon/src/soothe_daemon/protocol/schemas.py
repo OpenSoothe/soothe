@@ -143,6 +143,10 @@ class LoopListParams(ParamsBase):
 
     status: str | None = None
     limit: int | None = None
+    filter: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional filters: status, exclude_empty, workspace.",
+    )
 
 
 class LoopTreeParams(ParamsBase):

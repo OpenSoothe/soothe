@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from typing_extensions import TypedDict
@@ -52,6 +53,9 @@ class LoopInfo(TypedDict, total=False):
 
     live: bool
     """True when an active runner stream is currently attached to the loop."""
+
+    client_workspace: str
+    """Host workspace path recorded when the loop was created."""
 
 
 def _parse_iso_to_local(iso_timestamp: str) -> datetime | None:
@@ -140,6 +144,43 @@ def _fallback_duration_ms(created: str | None, updated: str | None) -> int | Non
     return delta_ms if delta_ms > 0 else None
 
 
+def normalize_workspace_path(path: str | None) -> str | None:
+    """Resolve a workspace path for equality checks.
+
+    Args:
+        path: Raw workspace path, possibly relative or unexpanded.
+
+    Returns:
+        Absolute resolved path, or ``None`` when ``path`` is empty.
+    """
+    if not path or not str(path).strip():
+        return None
+    try:
+        return str(Path(path).expanduser().resolve())
+    except OSError:
+        return str(Path(path).expanduser())
+
+
+def loop_matches_workspace(loop: dict[str, Any], workspace: str) -> bool:
+    """Return True when a loop row belongs to ``workspace``.
+
+    Args:
+        loop: Loop metadata dict from ``loop_list``.
+        workspace: Current TUI workspace path.
+
+    Returns:
+        True when the loop's recorded workspace matches after path resolution.
+    """
+    raw = loop.get("client_workspace")
+    if not isinstance(raw, str) or not raw.strip():
+        return False
+    left = normalize_workspace_path(raw)
+    right = normalize_workspace_path(workspace)
+    if left is None or right is None:
+        return raw.rstrip("/") == workspace.rstrip("/")
+    return left == right
+
+
 def generate_loop_id() -> str:
     """Generate a new loop ID as a full UUID7 string.
 
@@ -155,6 +196,7 @@ async def list_loops_via_daemon_rpc(
     daemon_session: Any,
     limit: int = 20,
     sort_by: str = "updated",
+    workspace: str | None = None,
 ) -> list[LoopInfo]:
     """List StrangeLoop instances via daemon WebSocket RPC (RFC-504).
 
@@ -165,6 +207,7 @@ async def list_loops_via_daemon_rpc(
         daemon_session: TuiDaemonSession instance for WebSocket RPC.
         limit: Maximum number of loops to return.
         sort_by: Sort field — `"updated"` or `"created"`.
+        workspace: When set, request only loops recorded for this workspace.
 
     Returns:
         List of `LoopInfo` dicts with `loop_id`, `status`, context counts,
@@ -185,8 +228,11 @@ async def list_loops_via_daemon_rpc(
     if not callable(list_method):
         raise RuntimeError("Daemon session does not support loop_list RPC")
 
+    kwargs: dict[str, Any] = {"limit": limit}
+    if workspace:
+        kwargs["workspace"] = workspace
     try:
-        resp = await list_method(limit=limit)
+        resp = await list_method(**kwargs)
     except Exception:
         logger.warning("loop_list RPC failed", exc_info=True)
         return []
@@ -245,6 +291,9 @@ async def list_loops_via_daemon_rpc(
         live = loop_data.get("live")
         if isinstance(live, bool):
             loop_info["live"] = live
+        workspace_raw = loop_data.get("client_workspace")
+        if isinstance(workspace_raw, str) and workspace_raw.strip():
+            loop_info["client_workspace"] = workspace_raw.strip()
         loops.append(loop_info)
 
     return loops

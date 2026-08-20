@@ -61,6 +61,26 @@ class TuiDaemonSession(DaemonSession):
 
         return "adaptive"
 
+    async def list_loops(
+        self,
+        *,
+        limit: int = 20,
+        workspace: str | None = None,
+    ) -> dict[str, Any]:
+        """Return ``loop_list`` via the RPC sidecar.
+
+        Args:
+            limit: Maximum number of loops to return.
+            workspace: When set, pass ``filter.workspace`` so the daemon
+                returns only loops recorded for this host path.
+        """
+        params: dict[str, Any] = {"limit": limit}
+        if workspace:
+            params["filter"] = {"workspace": workspace}
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            return await self._rpc_client.request("loop_list", params, timeout=15.0)
+
 
 __all__ = [
     "TUI_EXIT_HANDSHAKE_TIMEOUT_S",

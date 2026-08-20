@@ -350,19 +350,6 @@ def save_loop_relative_time(relative_time: bool) -> bool:
     return True
 
 
-def save_loop_columns(columns: dict[str, bool]) -> bool:
-    """Save loop column visibility preferences (stub: no-op success).
-
-    Args:
-        columns: Column visibility dict.
-
-    Returns:
-        True (success stub).
-    """
-    # Stub - implement with SootheConfig persistence later
-    return True
-
-
 def suppress_warning(_warning_type: str) -> bool:
     """Persist suppressed notification preference (stub: no-op success)."""
     return True

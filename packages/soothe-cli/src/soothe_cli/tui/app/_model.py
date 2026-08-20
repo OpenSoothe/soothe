@@ -438,6 +438,7 @@ class _ModelMixin:
             current_loop=current,
             loop_limit=loop_limit,
             daemon_session=self._daemon_session,
+            workspace=getattr(self, "_cwd", None),
         )
         self.push_screen(screen, handle_result)
 
