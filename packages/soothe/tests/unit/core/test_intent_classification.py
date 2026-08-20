@@ -87,12 +87,14 @@ class TestIntakePrompts:
         assert "response_language" in INTAKE_CLASSIFY_SYSTEM_PROMPT
         assert "PRIOR_RESPONSE_LANGUAGE" in INTAKE_CLASSIFY_SYSTEM_PROMPT
 
-    def test_intake_prompt_requires_friendly_reasoning(self) -> None:
+    def test_intake_prompt_requires_first_person_reasoning(self) -> None:
         prompt = INTAKE_CLASSIFY_SYSTEM_PROMPT
-        assert "This is a request" in prompt
-        assert "Here is a goal" in prompt
+        assert "I will" in prompt
+        assert "Now I will" in prompt
+        assert "Now let me" in prompt
+        assert "This is a request" not in prompt
+        assert "Here is a goal" not in prompt
         assert "classification notes" not in prompt
-        assert "friendly TUI line" in prompt
         assert "≤25 words" in prompt
         assert "≤15 words" not in prompt
 

@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 # Shown on the TUI cognition card when intake classification fails, so it must
 # read as plain friendly prose — never an exception name or other internal detail.
-INTAKE_FALLBACK_REASONING = "This looks like a work request — I'll plan next steps."
+INTAKE_FALLBACK_REASONING = "I'll plan the next steps for this request."
 
 
 def build_intake_task_fallback(
