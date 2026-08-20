@@ -5,14 +5,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe_nano.utils.text_preview import log_preview
 from soothe_sdk.protocols.planner import PlanContext
 from soothe_sdk.protocols.planner import StepResult as SdkStepResult
 
-from soothe.config import SOOTHE_HOME
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.sloop.intention import build_intake_task_fallback
 from soothe.sloop.intention.models import (
@@ -305,13 +303,6 @@ class StrangeLoop:
         runtime_ctx: LoopRuntimeContext | None = None
         intake_span = IntakeLangfuseSpan()
         try:
-            # RFC-217: Goal context config for CE-backed goal context injection
-            from soothe.config.models import GoalContextConfig
-
-            goal_context_config = getattr(
-                self.config.agent.loop, "goal_context", GoalContextConfig()
-            )
-
             preclassified_intent = intent
             checkpoint: Any = None
             social_gate_reasoning_text = ""
@@ -755,11 +746,6 @@ class StrangeLoop:
                 resolve_context_engine_persistence,
             )
 
-            from .context_adapters import (
-                ContextEngineGoalContextAdapter,
-            )
-
-            soothe_home = Path(self.config.home) if hasattr(self.config, "home") else SOOTHE_HOME
             persistence_backend = self.config.persistence.default_backend
 
             persistence = resolve_context_engine_persistence(
@@ -770,47 +756,15 @@ class StrangeLoop:
             # RFC-624 Phase 4: Loop-scoped CE lifecycle. Create once per
             # loop_id, persist across goals. On subsequent calls, reuse the
             # existing instance, load prior DAG, and add a new goal.
-            ce_config = self.config.agent.loop.context_engine
-            projection_config = ce_config.to_projection_config()
-
             if self._ce is None:
-                self._ce = _ContextEngine(
-                    persistence=persistence,
-                    projection_config=projection_config,
-                    soothe_home=soothe_home,
-                    workspace=Path(workspace) if workspace else None,
-                )
-            else:
-                # Update workspace if it changed between goals
-                if workspace:
-                    self._ce._semantic.workspace = Path(workspace)
+                self._ce = _ContextEngine(persistence=persistence)
 
             exec_ledger_cfg = self.config.agent.loop.execute_prompt_ledger
             self._ce.execute_ai_ledger_max_tokens = exec_ledger_cfg.execute_ai_ledger_max_tokens
 
             ce_instance = self._ce
 
-            # RFC-630 Phase C: parallelize the pre-graph IO. ``ce.load()`` (prior
-            # DAG hydration) and the three semantic file reads are independent —
-            # gather them so the LLM round-trip and disk reads overlap rather than
-            # running sequentially on the event loop. The sync file reads are
-            # wrapped in ``to_thread`` so they no longer block the event loop.
-            semantic_tasks: list = []
-            if workspace:
-                ce_instance._semantic.workspace = Path(workspace)
-                semantic_tasks = [
-                    asyncio.to_thread(ce_instance._semantic.load_project_instructions),
-                    asyncio.to_thread(ce_instance._semantic.load_agent_instructions),
-                    asyncio.to_thread(ce_instance._semantic.load_memory),
-                ]
-
-            if semantic_tasks:
-                semantic_wrapped = [asyncio.create_task(task) for task in semantic_tasks]
-                ce_load_task = asyncio.create_task(ce_instance.load())
-                loaded = await ce_load_task
-                await asyncio.gather(*semantic_wrapped, return_exceptions=True)
-            else:
-                loaded = await ce_instance.load()
+            loaded = await ce_instance.load()
 
             if isinstance(loaded, Exception):
                 logger.warning("[CE] load() failed: %s", loaded, exc_info=True)
@@ -946,13 +900,6 @@ class StrangeLoop:
                 goal_id=ce_goal.id,
             )
 
-            # Replace GoalContextManager with CE-backed adapter
-            goal_context_manager = ContextEngineGoalContextAdapter(
-                context_engine=ce_instance,
-                state_manager=state_manager,
-                config=goal_context_config,
-            )
-
             logger.info(
                 "ContextEngine active (goal_id=%s, backend=%s)",
                 ce_goal.id,
@@ -965,10 +912,12 @@ class StrangeLoop:
             # every access (RFC-214), so the pairs surface to the planner /
             # executor with no extra wiring. ``None``/empty → existing path.
             if preamble:
+                from soothe.sloop.orchestrator.stations import PHASE_PREAMBLE
+
                 seeded = 0
                 for msg in preamble:
                     try:
-                        await ce_instance.record_message(msg, phase="preamble")
+                        await ce_instance.record_message(msg, phase=PHASE_PREAMBLE)
                         seeded += 1
                     except Exception:
                         logger.warning(
@@ -988,7 +937,6 @@ class StrangeLoop:
                 strange_loop=self,
                 state_manager=state_manager,
                 anchor_manager=anchor_manager,
-                goal_context_manager=goal_context_manager,
                 plan_manager=plan_manager,
                 checkpoint=checkpoint,
                 goal_record=goal_record,

@@ -231,7 +231,6 @@ class Executor:
         checkpointer: Any | None = None,
         max_parallel_steps: int = 16,
         config: SootheConfig | None = None,
-        goal_context_manager: Any | None = None,
         loop_id: str | None = None,
         clarification_detector: ClarificationDetector | None = None,
         clarification_capture: ClarificationCapture | None = None,
@@ -252,7 +251,6 @@ class Executor:
                 batches until all ready steps finish (e.g. 4 ready steps and ``2`` → two batches of 2).
                 ``0`` means unlimited (RFC-201 / concurrency).
             config: Optional Soothe config for Act wave caps.
-            goal_context_manager: Optional GoalContextManager for goal briefing injection (RFC-217).
             loop_id: Optional loop identifier for Langfuse trace correlation.
             clarification_detector: When set with ``clarification_capture`` and
                 ``clarification_loop_state_view``, enables RFC-622 clarification
@@ -275,7 +273,6 @@ class Executor:
         self._checkpointer = checkpointer
         self._max_parallel_steps = max_parallel_steps
         self._config = config
-        self._goal_context_manager = goal_context_manager
         self._loop_id = loop_id
         self._clarification_detector = clarification_detector
         self._clarification_capture = clarification_capture
@@ -1919,16 +1916,6 @@ class Executor:
                 step_id=step.id,
                 sink=self.decompose_proposals,
             )
-            # RFC-217: Inject goal briefing on thread switch (for single-step execution)
-            if self._goal_context_manager:
-                goal_briefing = await self._goal_context_manager.get_execute_briefing()
-                if goal_briefing:
-                    configurable["soothe_goal_briefing"] = goal_briefing
-                    logger.info(
-                        "Execute briefing injected for step %s (%d chars)",
-                        step.id,
-                        len(goal_briefing),
-                    )
             # Pass current_decision for middleware to inject agent loop output contract
             # when available on ``loop_state``; parallel branches
             # may still omit it here because middleware reads configurable elsewhere.
@@ -1938,22 +1925,23 @@ class Executor:
 
             checkpoint_message_ids = await self._checkpoint_message_ids_for_thread(fork_thread_id)
 
-            # Build graph input: Slice A (cross-goal) + Slice B (intra-goal deps) + envelope.
+            # Build graph input: preamble + Slice A (cross-goal) + Slice B (intra-goal deps) + envelope.
             graph_input_messages: list[BaseMessage] = []
             cross_goal_projected = False
             if loop_state is not None and loop_state.current_decision is not None:
-                from soothe.prompts.plan_ledger_projection import (
-                    project_execute_step_graph_input,
-                )
+                from soothe.sloop.context_projection import LoopContextProjector, ProjectionSpec
 
-                projected = project_execute_step_graph_input(
+                projector = LoopContextProjector(self._config)
+                projected = projector.project(
                     await loop_state.get_loop_messages(),
-                    state=loop_state,
-                    step=step,
-                    decision=loop_state.current_decision,
-                    checkpoint=self._checkpoint,
-                    soothe_config=self._config,
-                    checkpoint_message_ids=checkpoint_message_ids,
+                    ProjectionSpec(
+                        phase="execute",
+                        state=loop_state,
+                        step=step,
+                        decision=loop_state.current_decision,
+                        checkpoint=self._checkpoint,
+                        checkpoint_message_ids=checkpoint_message_ids,
+                    ),
                 )
                 graph_input_messages.extend(projected.messages)
                 cross_goal_projected = projected.cross_goal_projected

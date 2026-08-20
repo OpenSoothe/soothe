@@ -60,7 +60,6 @@ class LoopRuntimeContext:
     strange_loop: StrangeLoop
     state_manager: StrangeLoopStateManager
     anchor_manager: CheckpointAnchorManager
-    goal_context_manager: Any  # GoalContextManager or CE adapter (duck-typed)
     plan_manager: Any  # StepPlanManagerAdapter (duck-typed)
     checkpoint: StrangeLoopCheckpoint
     goal_record: GoalIndexEntry | None

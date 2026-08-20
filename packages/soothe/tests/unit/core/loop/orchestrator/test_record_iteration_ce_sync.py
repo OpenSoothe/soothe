@@ -41,7 +41,6 @@ async def test_record_iteration_increments_ce_iteration_count() -> None:
         strange_loop=Mock(),
         state_manager=Mock(record_iteration=AsyncMock()),
         anchor_manager=Mock(capture_iteration_end_anchor=AsyncMock()),
-        goal_context_manager=Mock(),
         plan_manager=Mock(record_step_outcomes=Mock()),
         checkpoint=Mock(),
         goal_record=Mock(goal_id="g1"),

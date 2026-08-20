@@ -115,7 +115,6 @@ class PhasesMixin:
         context_engine: Any | None = None,
     ) -> None:
         """Persist chitchat Human+AI pair to the loop ContextEngine ledger."""
-        from soothe.config import SOOTHE_HOME
         from soothe.context.engine import ContextEngine
         from soothe.context.store_factory import (
             resolve_context_engine_persistence,
@@ -158,14 +157,8 @@ class PhasesMixin:
             return
 
         try:
-            ce_config = self._config.agent.loop.context_engine
             persistence = resolve_context_engine_persistence(self._config, loop_id)
-            soothe_home = Path(self._config.home) if hasattr(self._config, "home") else SOOTHE_HOME
-            ce = ContextEngine(
-                persistence=persistence,
-                projection_config=ce_config.to_projection_config(),
-                soothe_home=soothe_home,
-            )
+            ce = ContextEngine(persistence=persistence)
             await ce.load()
             human = LoopHumanMessage(content=query, thread_id=main_thread_id, phase="chitchat")
             ai = LoopAIMessage(content=answer, thread_id=main_thread_id, phase="chitchat")

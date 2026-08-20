@@ -26,8 +26,6 @@ from soothe.context.models import (
     StepExecution,
     StepNode,
 )
-from soothe.context.projection import ContextBundle, ProjectionConfig, ProjectionEngine
-from soothe.context.semantic import SemanticLoader
 from soothe.utils.text_preview import goal_description_for_log
 
 if TYPE_CHECKING:
@@ -80,14 +78,35 @@ _MESSAGE_TYPES: dict[str, type[BaseMessage]] = {
     "SystemMessage": SystemMessage,
     "ToolMessage": ToolMessage,
     "AIMessageChunk": AIMessageChunk,
-    "LoopAIMessage": AIMessage,
-    "LoopHumanMessage": HumanMessage,
 }
+
+# Loop subtypes are imported lazily in ``_reconstruct_message`` to avoid a
+# module-level import cycle (``sloop.utils.messages`` imports from ``sloop``).
+_LOOP_MESSAGE_TYPE_NAMES: frozenset[str] = frozenset(
+    {"LoopHumanMessage", "LoopAIMessage", "LoopAIMessageChunk"}
+)
+
+
+def _loop_message_type(type_name: str) -> type[BaseMessage] | None:
+    """Resolve a Loop* message type lazily (avoids a sloop import cycle)."""
+    from soothe.sloop.utils.messages import (
+        LoopAIMessage,
+        LoopAIMessageChunk,
+        LoopHumanMessage,
+    )
+
+    return {
+        "LoopHumanMessage": LoopHumanMessage,
+        "LoopAIMessage": LoopAIMessage,
+        "LoopAIMessageChunk": LoopAIMessageChunk,
+    }.get(type_name)
 
 
 def _reconstruct_message(type_name: str, data: dict[str, Any]) -> BaseMessage | None:
     """Reconstruct a BaseMessage from a serialized dict."""
     cls = _MESSAGE_TYPES.get(type_name)
+    if cls is None and type_name in _LOOP_MESSAGE_TYPE_NAMES:
+        cls = _loop_message_type(type_name)
     if cls is None:
         logger.warning("Unknown message type %s, skipping", type_name)
         return None
@@ -120,26 +139,20 @@ def _normalize_ledger_entry(
 
 
 class ContextEngine:
-    """Unified context management for goals, steps, ledger, and projection.
+    """Unified context management for goals, steps, and the message ledger.
 
-    Composes GoalStepDAG, LedgerManager, SemanticLoader, ProjectionEngine,
-    and a pluggable persistence backend into a single interface.
+    Composes GoalStepDAG, LedgerManager, and a pluggable persistence backend
+    into a single interface.
 
     Args:
         persistence: Persistence backend. Defaults to an in-memory SQLite
             instance suitable for tests; production code should supply an
             explicit backend (SQLite or pgsql).
-        projection_config: Limits for bounded projection.
-        soothe_home: Base directory for SemanticLoader and context persistence backends.
-        workspace: Working directory for SemanticLoader file lookup.
     """
 
     def __init__(
         self,
         persistence: Any | None = None,
-        projection_config: ProjectionConfig | None = None,
-        soothe_home: Path | None = None,
-        workspace: Path | None = None,
     ) -> None:
         if persistence is None:
             from soothe.context.store_sqlite import (
@@ -152,8 +165,6 @@ class ContextEngine:
         # Preserve full ledger history for downstream LLM calls unless a caller
         # explicitly sets a positive cap on LedgerManager.
         self._ledger = LedgerManager(max_entries=0)
-        self._semantic = SemanticLoader(soothe_home=soothe_home, workspace=workspace)
-        self._projection = ProjectionEngine(projection_config)
         self._persistence = persistence
         self._persist_fail_count = 0
         self._save_dirty = False
@@ -209,12 +220,6 @@ class ContextEngine:
         goal = self._dag.get_goal(goal_id)
         return goal.steps if goal else None
 
-    def get_ledger_entries(
-        self, phases: list[str] | None = None
-    ) -> list[tuple[BaseMessage, str | None]]:
-        """Return (message, phase) tuples, optionally filtered by phase."""
-        return self._ledger.entries(phases)
-
     def get_all_goals(self) -> list[GoalNode]:
         """Return all goals in the DAG."""
         return list(self._dag.goals.values())
@@ -222,6 +227,12 @@ class ContextEngine:
     def get_goal_sync(self, goal_id: str) -> GoalNode | None:
         """Synchronous goal lookup (in-memory, no I/O)."""
         return self._dag.get_goal(goal_id)
+
+    def get_ledger_entries(
+        self, phases: list[str] | None = None
+    ) -> list[tuple[BaseMessage, str | None]]:
+        """Return (message, phase) tuples, optionally filtered by phase."""
+        return self._ledger.entries(phases)
 
     @property
     def ledger(self) -> LedgerManager:
@@ -1173,15 +1184,6 @@ class ContextEngine:
         goal.total_duration_ms += execution.duration_ms
         goal.total_tokens_used += execution.tokens_used
         goal.updated_at = datetime.now(UTC)
-        self._ledger.record_step_result(
-            step_id=step_id,
-            description=goal.steps.nodes[step_id].description
-            if step_id in goal.steps.nodes
-            else step_id,
-            output=None,
-            error=None,
-            success=True,
-        )
 
     async def fail_step(
         self,
@@ -1196,15 +1198,6 @@ class ContextEngine:
         goal.total_duration_ms += execution.duration_ms
         goal.total_tokens_used += execution.tokens_used
         goal.updated_at = datetime.now(UTC)
-        self._ledger.record_step_result(
-            step_id=step_id,
-            description=goal.steps.nodes[step_id].description
-            if step_id in goal.steps.nodes
-            else step_id,
-            output=None,
-            error=execution.error,
-            success=False,
-        )
 
     async def skip_step(self, goal_id: str, step_id: str) -> None:
         """Skip a pending step."""
@@ -1222,17 +1215,6 @@ class ContextEngine:
 
     async def get_ledger(self, phases: list[str] | None = None) -> list[BaseMessage]:
         return self._ledger.get_messages(phases)
-
-    # ── Projection ───────────────────────────────────────────────
-
-    async def project(self, goal_id: str | None = None) -> ContextBundle:
-        """Build a bounded ContextBundle for prompt template rendering."""
-        return await self._projection.project(
-            dag=self._dag,
-            ledger=self._ledger,
-            semantic=self._semantic,
-            goal_id=goal_id,
-        )
 
     # ── Persistence ──────────────────────────────────────────────
 

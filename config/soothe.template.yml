@@ -185,17 +185,12 @@ agent:
       plan_limit: 10
       execute_limit: 10
       enabled: true
-    context_engine:
-      projection_max_goals: 5
-      projection_max_steps_per_goal: 10
-      projection_max_ledger_chars: 4000
-      projection_max_ledger_messages: 20
-      projection_max_lineage_chars: 2000
-      projection_max_project_instructions_chars: 8000
     plan_prompt_ledger:
       plan_ledger_max_messages: 40
       plan_ledger_max_total_chars: 24000
       plan_ledger_max_message_chars: 3000
+      preamble_max_turns: 12
+      prior_goal_tail: 3
     execute_prompt_ledger:
       cross_goal_completion_tail: 3
       predecessor_max_messages: 96

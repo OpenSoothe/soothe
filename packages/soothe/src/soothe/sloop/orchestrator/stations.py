@@ -42,6 +42,7 @@ DELEGATE: Final = "delegate"
 PHASE_GOAL_COMPLETION: Final = "goal_completion"
 PHASE_EXECUTE_STEP: Final = "execute_step"
 PHASE_GOAL_INTERRUPTED: Final = "goal_interrupted"
+PHASE_PREAMBLE: Final = "preamble"
 
 # Ledger dual-read: historical plan-spine / intake ``phase`` tags (not live nodes).
 # Writers after RFC-904 use live station ids / wire phases only.
@@ -107,6 +108,7 @@ __all__ = [
     "PHASE_EXECUTE_STEP",
     "PHASE_GOAL_COMPLETION",
     "PHASE_GOAL_INTERRUPTED",
+    "PHASE_PREAMBLE",
     "PLANNING_LEDGER_PHASES",
     "RECONCILE",
     "RECORD_PROGRESS",

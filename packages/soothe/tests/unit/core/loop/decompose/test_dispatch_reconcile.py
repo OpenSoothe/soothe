@@ -39,7 +39,6 @@ def _ctx_with_ce(ce: ContextEngine, goal_id: str, *, goal: str = "do work") -> L
         strange_loop=strange_loop,  # type: ignore[arg-type]
         state_manager=MagicMock(),
         anchor_manager=MagicMock(),
-        goal_context_manager=None,
         plan_manager=MagicMock(),
         checkpoint=checkpoint,  # type: ignore[arg-type]
         goal_record=None,

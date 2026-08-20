@@ -117,7 +117,8 @@ class TestIntakePriorGoalProjection:
             LoopAIMessage(content='{"status":"continue"}', phase="plan_assess", iteration=0),
         ]
         projected = project_last_goal_completion_for_intake(ledger, None)
-        assert len(projected) == 2
+        # Two prior completion units (old + new), each compacted to a human/ai pair.
+        assert len(projected) == 4
         assert projected[-1].content == "latest report"
 
     def test_returns_empty_when_no_goal_completion_unit(self) -> None:

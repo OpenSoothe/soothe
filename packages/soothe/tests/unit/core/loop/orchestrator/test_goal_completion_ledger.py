@@ -43,7 +43,6 @@ def _ctx(
         strange_loop=strange_loop,
         state_manager=state_manager,
         anchor_manager=Mock(),
-        goal_context_manager=Mock(),
         plan_manager=plan_manager,
         checkpoint=Mock(),
         goal_record=Mock(goal_id="g1"),

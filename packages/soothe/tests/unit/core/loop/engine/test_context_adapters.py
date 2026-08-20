@@ -6,10 +6,7 @@ import pytest
 
 from soothe.context import StepPlanManagerAdapter
 from soothe.context.engine import ContextEngine
-from soothe.context.models import GoalNode, StepExecution, StepNode
-from soothe.sloop.engine.context_adapters import (
-    ContextEngineGoalContextAdapter,
-)
+from soothe.context.models import GoalNode, StepNode
 from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
@@ -258,7 +255,6 @@ class TestPlanAdapterFormatCompletionDagReport:
 
     @pytest.mark.asyncio
     async def test_report_shows_lineage_for_subgoal(self) -> None:
-        from soothe.context.models import GoalNode
 
         ce = ContextEngine()
         parent = await ce.create_goal("Parent goal")
@@ -315,55 +311,6 @@ class TestPlanAdapterGoalIdProperty:
 
         adapter.goal_id = "abc123"
         assert adapter.goal_id == "abc123"
-
-
-# ── ContextEngineGoalContextAdapter ──────────────────────────────────
-
-
-class TestGoalContextAdapter:
-    @pytest.mark.asyncio
-    async def test_get_execute_briefing_prefers_cached_checkpoint(self) -> None:
-        ce = ContextEngine()
-        g = GoalNode(description="Completed goal", status="completed")
-        g.steps.add_step(StepNode(id="S1", description="Step 1"))
-        g.steps.mark_completed("S1", StepExecution())
-        ce._dag.add_goal(g)
-
-        class MockCheckpoint:
-            thread_switch_pending = True
-            current_thread_id = "thread-1"
-            goal_history = []
-
-        class MockStateManager:
-            def __init__(self) -> None:
-                self.load_called = False
-
-            def get_checkpoint(self):
-                return MockCheckpoint()
-
-            async def load(self):
-                self.load_called = True
-                return None
-
-            async def save(self, checkpoint):
-                pass
-
-        manager = MockStateManager()
-        adapter = ContextEngineGoalContextAdapter(ce, state_manager=manager)
-        result = await adapter.get_execute_briefing()
-
-        assert result is not None
-        assert manager.load_called is False
-
-    @pytest.mark.asyncio
-    async def test_get_execute_briefing_returns_none_no_state_manager(self) -> None:
-        ce = ContextEngine()
-        adapter = ContextEngineGoalContextAdapter(
-            context_engine=ce,
-            state_manager=None,
-        )
-        result = await adapter.get_execute_briefing()
-        assert result is None
 
 
 # ── Integration: DagPlanningContext duck typing ───────────────────────

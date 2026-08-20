@@ -183,24 +183,6 @@ class TestContextEngineStepLifecycle:
             await engine.add_step("missing", StepNode(id="S1", description="X"))
 
 
-class TestContextEngineProjection:
-    @pytest.mark.asyncio
-    async def test_project_returns_bundle(self) -> None:
-        engine = ContextEngine()
-        goal = await engine.create_goal("Test", priority=90)
-        goal.status = "active"
-        await engine.add_step(goal.id, StepNode(id="S1", description="Do it"))
-        bundle = await engine.project()
-        assert bundle.active_goal is not None
-        assert bundle.active_goal.id == goal.id
-
-    @pytest.mark.asyncio
-    async def test_project_empty_engine(self) -> None:
-        engine = ContextEngine()
-        bundle = await engine.project()
-        assert bundle.active_goal is None
-
-
 class TestContextEngineLedger:
     @pytest.mark.asyncio
     async def test_record_and_get_messages(self) -> None:

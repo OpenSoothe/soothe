@@ -27,7 +27,6 @@ async def test_save_chitchat_to_ledger_records_human_ai_pair(tmp_path: Path) -> 
     main_thread_id = loop_id
 
     config = MagicMock()
-    config.agent.loop.context_engine.to_projection_config.return_value = {}
     config.home = str(tmp_path)
 
     runner = _ChitchatRunner(config=config, loop_id=loop_id)

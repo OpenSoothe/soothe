@@ -380,8 +380,9 @@ def project_last_goal_completion_for_intake(
     ledger_cfg: PlanPromptLedgerConfig | None,
     *,
     include_boundary: bool = True,
+    k: int = 3,
 ) -> list[BaseMessage]:
-    """Project the last ``goal_completion`` ledger unit into intake classify input.
+    """Project up to ``k`` prior ``goal_completion`` ledger units into intake classify input.
 
     Uses the same ``goal_completion`` resolution as execute Slice A. The synthesis
     human envelope is rewritten to a short label so the classifier focuses on the
@@ -392,6 +393,7 @@ def project_last_goal_completion_for_intake(
         ledger_cfg: Optional caps (same knobs as plan prompts).
         include_boundary: When True (default), prepend boundary marker.
             Set False where the classifier needs the prior scope signal.
+        k: Maximum number of prior completion units to project.
 
     Returns:
         Bounded ledger slice injected before the classify human message.
@@ -399,22 +401,24 @@ def project_last_goal_completion_for_intake(
     if not loop_messages:
         return []
 
-    found = resolve_goal_completion_unit(loop_messages, len(loop_messages))
-    if found is not None:
-        unit, _ = found
-        projected = project_loop_messages_for_plan(
-            _compact_goal_completion_unit_for_projection(unit, include_boundary=include_boundary),
-            ledger_cfg,
-        )
-        logger.debug(
-            "Intake goal-completion projection: in=%d out=%d boundary=%s",
-            len(unit),
-            len(projected),
-            include_boundary,
-        )
-        return projected
+    units = collect_goal_completion_units(loop_messages, k=k)
+    if not units:
+        return []
 
-    return []
+    flat: list[BaseMessage] = []
+    for unit in units:
+        flat.extend(
+            _compact_goal_completion_unit_for_projection(unit, include_boundary=include_boundary)
+        )
+    projected = project_loop_messages_for_plan(flat, ledger_cfg)
+    logger.debug(
+        "Intake goal-completion projection: k=%d units=%d out=%d boundary=%s",
+        k,
+        len(units),
+        len(projected),
+        include_boundary,
+    )
+    return projected
 
 
 def current_goal_has_execute_ledger(state: LoopState) -> bool:
@@ -544,6 +548,33 @@ def resolve_goal_terminal_unit(
     start, end = idxs
     unit = [_deep_copy_message(loop_messages[i]) for i in range(start, end + 1)]
     return unit, start
+
+
+def collect_goal_completion_units(
+    loop_messages: list[BaseMessage],
+    *,
+    k: int,
+) -> list[list[BaseMessage]]:
+    """Collect up to ``k`` prior-goal ``goal_completion`` units, oldest first.
+
+    Completion-only (contrast with :func:`collect_cross_goal_completion_units`,
+    which also includes ``goal_interrupted`` units): used by intake classify,
+    which must not see interrupted goals' digests.
+    """
+    if k <= 0 or not loop_messages:
+        return []
+
+    units_rev: list[list[BaseMessage]] = []
+    cursor = _execute_plan_tail_index(loop_messages)
+    while len(units_rev) < k and cursor > 0:
+        found = resolve_goal_completion_unit(loop_messages, cursor)
+        if found is None:
+            break
+        unit, start = found
+        units_rev.append(unit)
+        cursor = _goal_segment_start(loop_messages, start)
+    units_rev.reverse()
+    return units_rev
 
 
 def collect_cross_goal_completion_units(
@@ -934,27 +965,31 @@ def _project_prior_goal_for_synthesis(
     *,
     before_index: int,
     ledger_cfg: PlanPromptLedgerConfig | None,
+    k: int,
 ) -> list[BaseMessage]:
-    """Project one compacted prior terminal unit for synthesis."""
-    found = resolve_goal_terminal_unit(loop_messages, before_index)
-    if found is None:
+    """Project up to ``k`` compacted prior terminal units for synthesis."""
+    units = collect_cross_goal_completion_units(loop_messages, k=k)
+    if not units:
         return []
-    unit, _start = found
-    compacted = _compact_terminal_unit_for_synthesis(unit)
-    return project_loop_messages_for_plan(compacted, ledger_cfg)
+    flat: list[BaseMessage] = []
+    for unit in units:
+        flat.extend(_compact_terminal_unit_for_synthesis(unit))
+    return project_loop_messages_for_plan(flat, ledger_cfg)
 
 
 def project_loop_messages_for_synthesis(
     loop_messages: list[BaseMessage],
     ledger_cfg: PlanPromptLedgerConfig | None = None,
+    *,
+    prior_goal_tail: int = 3,
 ) -> list[BaseMessage]:
     """Return ledger messages for goal-synthesis prompts (RFC-214).
 
     Unlike plan-assess / plan-generate, synthesis injects only ``execute_step``
     human/AI turns from the **current goal segment** — plan-phase reasoning and
-    prior-goal execute rows are excluded. When a prior terminal exists on the
-    same loop, one compacted prior completion/interrupted unit is prepended as
-    brief status reference (not full prior execute evidence).
+    prior-goal execute rows are excluded. When prior terminals exist on the
+    same loop, up to ``prior_goal_tail`` compacted prior completion/interrupted
+    units are prepended as brief status reference (not full prior execute evidence).
 
     Optional ``plan_prompt_ledger`` caps apply to the filtered slice (same
     trimming as plan prompts).
@@ -962,6 +997,7 @@ def project_loop_messages_for_synthesis(
     Args:
         loop_messages: RFC-214 complete ledger from ``LoopState.loop_messages``.
         ledger_cfg: Optional size caps; ``None`` treated as all limits disabled.
+        prior_goal_tail: Max prior-goal terminal units to prepend.
 
     Returns:
         Current-goal execute_step messages (plus optional compact prior status),
@@ -977,6 +1013,7 @@ def project_loop_messages_for_synthesis(
             loop_messages,
             before_index=seg_start,
             ledger_cfg=ledger_cfg,
+            k=prior_goal_tail,
         )
 
     combined = prior_msgs + execute_only

@@ -774,6 +774,24 @@ class PlanPromptLedgerConfig(BaseModel):
             "(0 = unlimited; default 3000)"
         ),
     )
+    preamble_max_turns: int = Field(
+        default=12,
+        ge=0,
+        le=50,
+        description=(
+            "Max ancestor (user/ai) preamble turns projected into intake, execute, "
+            "and synthesis prompts (0 = disable preamble projection)"
+        ),
+    )
+    prior_goal_tail: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description=(
+            "Max prior-goal terminal units projected into intake and synthesis "
+            "prompts (0 = disable prior-goal context)"
+        ),
+    )
 
 
 class ExecutePromptLedgerConfig(BaseModel):
@@ -1067,38 +1085,7 @@ class ContextEngineConfig(BaseModel):
     When ``sqlite``, CE uses SqliteContextPersistence (default). If
     ``postgresql`` is configured but ``psycopg`` is unavailable, CE
     falls back to SQLite automatically.
-
-    Args:
-        projection_max_goals: Max goals in projection output.
-        projection_max_lineage_chars: Max chars for lineage context in projection.
     """
-
-    projection_max_goals: int = Field(
-        default=5,
-        ge=1,
-        le=50,
-        description="Max goals in CE projection output",
-    )
-    projection_max_lineage_chars: int = Field(
-        default=2000,
-        ge=0,
-        le=100_000,
-        description="Max chars for lineage context in CE projection (0 = unlimited)",
-    )
-
-    def to_projection_config(self) -> ProjectionConfig:
-        """Build a ``ProjectionConfig`` from these settings."""
-        return ProjectionConfig(
-            max_goals=self.projection_max_goals,
-            max_lineage_chars=self.projection_max_lineage_chars,
-        )
-
-
-class ProjectionConfig(BaseModel):
-    """Limits for bounded CE projection (local nano stub)."""
-
-    max_goals: int = 5
-    max_lineage_chars: int = 2000
 
 
 class CompletionRulesConfig(BaseModel):

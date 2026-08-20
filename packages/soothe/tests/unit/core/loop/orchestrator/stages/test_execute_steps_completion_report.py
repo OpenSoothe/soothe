@@ -60,7 +60,6 @@ async def test_execute_emits_step_completion_report_before_completed() -> None:
         strange_loop=strange_loop,
         state_manager=MagicMock(loop_id="loop-1"),
         anchor_manager=MagicMock(),
-        goal_context_manager=MagicMock(),
         plan_manager=MagicMock(),
         checkpoint=MagicMock(),
         goal_record=None,

@@ -16,7 +16,6 @@ def _make_strange_loop(*, backend: str) -> StrangeLoop:
     config.agent.loop.working_memory.enabled = False
     config.agent.loop.goal_context = MagicMock()
     config.agent.loop.context_engine = MagicMock()
-    config.agent.loop.context_engine.to_projection_config.return_value = MagicMock()
     config.persistence.default_backend = backend
     config.persistence.postgres_base_dsn = "postgresql://postgres:postgres@127.0.0.1:6432"
     config.persistence.postgres_databases = {"checkpoints": "soothe_checkpoints"}

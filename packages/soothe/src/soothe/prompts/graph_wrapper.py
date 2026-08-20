@@ -26,17 +26,9 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from soothe.prompts.plan_ledger_projection import (
-    project_loop_messages_for_synthesis,
-    projected_ledger_has_goal_completion,
-)
-
 if TYPE_CHECKING:
-    from soothe_sdk.protocols.planner import PlanContext
-
     from soothe.config import SootheConfig
     from soothe.config.models import PlanPromptLedgerConfig
-    from soothe.context.projection import ContextBundle
     from soothe.sloop.engine.scenario_classifier import ScenarioClassification
     from soothe.sloop.state.schemas import LoopState
 
@@ -139,13 +131,18 @@ class GraphPromptWrapper:
             cfg = self.config.agent.loop.plan_prompt_ledger
 
         if kind == "synthesis":
-            projected = list(
-                project_loop_messages_for_synthesis(state.loop_messages, cfg),
+            from soothe.sloop.context_projection import LoopContextProjector, ProjectionSpec
+
+            projector = LoopContextProjector(self.config)
+            projected = projector.project(
+                state.loop_messages,
+                ProjectionSpec(phase="synthesis"),
+                plan_cfg=cfg,
             )
             return ProjectionResult(
-                messages=projected,
+                messages=list(projected.messages),
                 mode=None,
-                completion_in_ledger=projected_ledger_has_goal_completion(projected),
+                completion_in_ledger=projected.completion_in_ledger,
             )
 
         # step_completion uses no projection.
@@ -246,38 +243,6 @@ class GraphPromptWrapper:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-
-    def _build_synthesis_system_fragment(
-        self,
-        context: PlanContext | None,
-        state: LoopState | None,
-        context_bundle: ContextBundle | None,
-    ) -> str:
-        """Render the synthesis system-prompt fragment (delegates to synthesis_projection)."""
-        _ = context, context_bundle
-        from soothe.sloop.engine.scenario_classifier import ScenarioClassification
-        from soothe.sloop.engine.synthesis_projection import render_synthesis_system_prompt
-
-        # When called without a ScenarioClassification, produce a minimal
-        # synthesis template. Full classification is handled by
-        # build_synthesis_messages via _render_synthesis_system_prompt.
-        user_goal = ""
-        if state is not None:
-            user_goal = (state.goal or "").strip()
-        workspace = getattr(state, "workspace", None) if state is not None else None
-        language = getattr(state, "response_language", None) if state is not None else None
-        dummy = ScenarioClassification(
-            scenario="general",
-            sections=[],
-            contextual_focus=[],
-            evidence_emphasis="",
-        )
-        return render_synthesis_system_prompt(
-            dummy,
-            user_goal=user_goal,
-            workspace=workspace,
-            response_language=language,
-        )
 
     def _build_step_completion_system_fragment(self, state: LoopState | None) -> str:
         """Return the step-completion system-prompt template (with {max_words} placeholder)."""

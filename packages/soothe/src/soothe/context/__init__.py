@@ -27,14 +27,9 @@ from soothe.context.models import (
 from soothe.context.planning_goal_planner import GoalPlanningSubengine
 from soothe.context.planning_scheduling import GoalScheduler, PlanningFacade
 from soothe.context.planning_step_planner import StepPlanManagerAdapter, StepPlanningSubengine
-from soothe.context.projection import ContextBundle, ProjectionConfig, ProjectionEngine
-from soothe.context.semantic import SemanticLoader
 
 __all__ = [
     "ContextEngine",
-    "ContextBundle",
-    "ProjectionConfig",
-    "ProjectionEngine",
     "DecompositionProposal",
     "ProposedSubtask",
     "StepOutcome",
@@ -51,7 +46,6 @@ __all__ = [
     "TERMINAL_STATES",
     "BLOCKED_STATES",
     "LedgerManager",
-    "SemanticLoader",
     "GoalPlanningSubengine",
     "GoalScheduler",
     "PlanningFacade",

@@ -253,7 +253,6 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     strange_loop = ctx.strange_loop
     state = ctx.loop_state
     state_manager = ctx.state_manager
-    goal_context_manager = ctx.goal_context_manager
     goal_record = ctx.goal_record
     checkpoint = ctx.checkpoint
     decision = ctx.scratch.decision
@@ -508,7 +507,6 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         checkpointer=checkpointer,
         max_parallel_steps=strange_loop.config.agent.loop.concurrency.max_parallel_steps,
         config=strange_loop.config,
-        goal_context_manager=goal_context_manager,
         loop_id=ctx.state_manager.loop_id,
         clarification_detector=clarification_detector,
         clarification_capture=clarification_capture,

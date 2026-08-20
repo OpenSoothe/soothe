@@ -127,17 +127,18 @@ class IntentClassifier:
         return intent
 
     def _project_ledger_for_intake(self, loop_messages: Any | None) -> list[Any] | None:
-        """Project prior-goal completion units from the ledger for intake classification."""
-        from soothe.prompts.plan_ledger_projection import project_last_goal_completion_for_intake
-
+        """Project preamble + prior-goal completion units for intake classification."""
         if not loop_messages:
             return None
-        ledger_cfg = None
-        if self._soothe_config is not None:
-            loop_cfg = getattr(getattr(self._soothe_config, "agent", None), "loop", None)
-            ledger_cfg = getattr(loop_cfg, "plan_prompt_ledger", None) if loop_cfg else None
         try:
-            return project_last_goal_completion_for_intake(loop_messages, ledger_cfg)
+            from soothe.sloop.context_projection import LoopContextProjector, ProjectionSpec
+
+            projector = LoopContextProjector(self._soothe_config)
+            projected = projector.project(
+                loop_messages,
+                ProjectionSpec(phase="intake"),
+            )
+            return projected.messages or None
         except Exception:
             logger.debug(
                 "Intake ledger projection failed; classifying without history", exc_info=True
