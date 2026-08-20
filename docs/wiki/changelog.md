@@ -27,6 +27,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.23] - 2026-08-20
+
+### Fixed
+- **langfuse**: flatten inherited callback managers in
+  `merge_langfuse_runnable_config` so LangGraph node-level handlers
+  (including `inheritable_handlers`) cannot leak into nano
+  structured-output invokes via `ensure_config` / `merge_configs`.
+  `GoalLoopTrace` pins `callbacks: []` on its base config for the same
+  reason. Step-completion-report and step-deliverable now get distinct
+  Langfuse run display names.
+- **ci**: `deploy-core` had two "Wait for soothe-sdk on PyPI" steps; the
+  first read the root `VERSION` (0.x) but the SDK publishes from
+  `packages/soothe-sdk/VERSION` (1.x), so the wait always timed out and
+  blocked the core publish. The broken duplicate is removed; the step
+  reading `packages/soothe-sdk/VERSION` is kept.
+
 ### Changed
 - **llm**: require `soothe-nano>=1.2.5` and route direct host,
   Autopilot, and daemon chat-model calls through nano's unified traced
@@ -35,6 +51,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rate-limit, timeout, and retry policy. Nano 1.2.5 routes structured
   output through public `ainvoke` so Pass 1 / intent generations appear
   in Langfuse instead of an empty parent span.
+- **sloop**: unify the intake classifier and drop the two-pass
+  coordinator (IG-755). `pass1_*` is renamed to `intake_*` across
+  prompts, models, and tests; `TwoPassIntakeCoordinator` and the Pass 2
+  scope classification are removed — tasks enter do-or-decompose
+  directly. `IntakeClassifier` exposes the social gate (pre-graph) and
+  full classification (post-CE); `IntentClassifier` wraps both. Prompt
+  fragments move to `intake_classify_system.xml` / `social_reply.xml`.
+- **sloop**: graph-entry intent classifier now reuses the LangGraph
+  node's `RunnableConfig` instead of opening its own pinned intake span,
+  so model generation stays a child of the graph intake observation
+  (IG-746). The explicit intake parent span remains only for the
+  pre-graph social gate, where generator suspension points rule out
+  ambient context. `complex_decompose_first_hint` is renamed to
+  `decompose_first_hint` and extended to medium-complexity root tasks.
+- **sloop**: reuse the pre-graph intake verdict as the loop intent
+  (IG-756). The social-gate `IntakeLLMResult` is converted into
+  `IntentClassification` after a task is confirmed, so
+  `node_intent_classify` skips the duplicate structured LLM call.
+  `classify_intake` stays for interrupt-resume / missing-result paths.
+  The `strange_loop_graph` alias to `intake-classify` is dropped and
+  unused `classify_intake` kwargs / CE ledger writes are removed.
+- **sloop**: rename `cognition` to `plans` module and derive
+  `intake_label` from the intake LLM `task_complexity` field instead of
+  stubbing `COMPLEX`. DISPATCH `plan_decision` now carries the real
+  intake label (trivial/simple/complex). Intake reasoning is switched
+  from third-person classification prose to first-person cognition
+  prose so the TUI cognition card reads as the agent's own intent.
+- **sloop**: unify loop-context projection into a single
+  `LoopContextProjector` in `soothe.sloop.context_projection` (IG-750).
+  The CE ledger remains the source of truth; this module is the sole
+  projection layer composing the history slice (preamble + prior-goal
+  tail + current step history) for every StrangeLoop LLM call.
+  `soothe.context.projection` / `soothe.context.semantic`, the parallel
+  `ContextEngineGoalContextAdapter`, and dead projection fields are
+  removed; `PlanPromptLedgerConfig.preamble_max_turns` /
+  `prior_goal_tail` knobs are added and synced across config templates.
+- **prompts**: consolidate host prompts into `soothe.prompts`
+  (IG-754). `sloop.prompts` moves under the host prompt package; nano
+  wrappers (identity, context_xml, project_instructions,
+  system_templates) collapse into re-exports in
+  `soothe.prompts.__init__`. Decompose fragment XMLs are added and all
+  importers/tests updated.
+- **cli**: scope the `/resume` loop picker to the current workspace by
+  default (press W to toggle all-workspaces). `list_loops` forwards an
+  optional `filter.workspace`; the daemon `LoopListParams` accepts a
+  filter dict. The dead column-toggle control panel and
+  `save_loop_columns` stub are dropped.
+- **cli**: plan panel rows now render the full scoped step id (e.g.
+  `KFA-07:`) as the visible prefix instead of a numeric-only token, so
+  operators can correlate rows with logs and external state. The
+  dependency hint keeps the compact numeric-only form for inline brevity.
+- **sdk**: propagate `task_complexity` through `IntentClassifiedEvent`
+  and `StrangeLoopPlanDecisionEvent` so clients display the
+  execute-phase complexity (minimal/trivial/simple/medium/complex)
+  rather than only the routing `intake_label`. The TUI adapter falls
+  back to `intake_label` when `task_complexity` is absent.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.22...v0.10.23
 
 ## [v0.10.22] - 2026-08-19
 

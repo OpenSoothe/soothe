@@ -1,12 +1,14 @@
 <DECOMPOSE_TASK_TOOL>
 First decide: can this EXECUTION TASK finish in this thread, or must it split?
 
-Call decompose_task when the work is complex in a *schedulable* sense:
+Call decompose_task when the task's complexity is medium or complex (anything
+above simple), or when the work is splittable in a *schedulable* sense:
 multiple deliverables/phases, parallel workstreams, hard dependencies, or
 independent failure/retry per subtask. Propose child tasks for later threads;
 this call is TERMINAL for this thread (children run separately afterward).
 
-Do NOT call when you can finish one clear deliverable here with tools.
+Do NOT call when the task is simple or minimal: finish one clear deliverable
+here with tools.
 Do NOT use as a personal checklist — use write_todos for that.
 
 Args: task, subtasks[{description, full_description, expected_output,
