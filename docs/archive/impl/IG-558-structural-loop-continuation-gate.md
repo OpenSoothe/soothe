@@ -4,6 +4,8 @@
 **Status**: Implemented
 **Related**: [RFC-225](../specs/RFC-225-loop-continuity-and-goal-record-enrichment.md) §5.5, [RFC-630](../specs/RFC-630-start-phase-llm-intake-and-branch-routing.md)
 
+Live code uses `should_bypass_social_gate_fast_path` and requires this loop's `goal_history`. The `should_bypass_pass1_social_fast_path` name below is historical.
+
 ---
 
 ## Problem

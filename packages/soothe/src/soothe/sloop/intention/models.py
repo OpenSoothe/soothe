@@ -196,7 +196,8 @@ class IntakeLLMResult(BaseModel):
         is_task: True if work request, False if social interaction.
         confidence: High/medium/low confidence in the classification.
         social_response: Direct reply when is_task=False (required for chitchat path).
-        reasoning: First-person TUI line (≤25 words), e.g. "I'll apply the fix.".
+        reasoning: First-person TUI line (work ≤50 words/300 chars, social
+            ≤25 words), e.g. "I'll apply the fix.".
         fallback: True when the result came from a fail-safe, not the LLM. Set
             internally only; never part of the wire schema sent to the model.
     """
@@ -237,8 +238,9 @@ class IntakeLLMResult(BaseModel):
     )
     reasoning: str = Field(
         description=(
-            "First-person TUI cognition line (I will… / Now I will… / Now let me…), "
-            "≤25 words; not classification jargon"
+            "First-person TUI cognition line (I will… / Now I will… / Now let me…): "
+            "work (is_task=true) ≤50 words or 300 characters; social ≤25 words; "
+            "not classification jargon"
         ),
     )
     # Internal only: omitted from wire schema and model_dump so the LLM never sees it.

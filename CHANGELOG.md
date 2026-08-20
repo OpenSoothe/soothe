@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Accept common typos of TUI plain-text commands (`exit`/`quit`/`clear`) as exact single-word aliases.
 
 ### Fixed
+- Keep intake social replies for `continue`/`retry` when this loop has no checkpoint work to resume.
 - Finalize TUI goal-completion reports reliably so the prefix stops blinking and Markdown renders after every synthesis.
 
 ## [v0.10.23] - 2026-08-20

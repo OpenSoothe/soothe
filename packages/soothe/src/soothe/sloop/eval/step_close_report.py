@@ -16,6 +16,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _fail_closed_report() -> StepCloseReport:
+    """Require Eval when the structured close assessment is unavailable."""
+    return StepCloseReport(goal_portion_complete=False, early_exit=True)
+
+
 async def assess_step_close(
     *,
     fast_model: Any,
@@ -28,7 +33,7 @@ async def assess_step_close(
 ) -> StepCloseReport:
     """Return structured evidence of completion versus deferred work."""
     if fast_model is None:
-        return StepCloseReport()
+        return _fail_closed_report()
     system = (
         "Assess how an action thread closed relative to the original user goal. "
         "Do not infer from keywords alone. Use the goal, assigned step, final output, "
@@ -57,8 +62,8 @@ async def assess_step_close(
         )
         return StepCloseReport.model_validate(data)
     except Exception:
-        logger.warning("Step close assessment failed; defaulting to no early exit", exc_info=True)
-        return StepCloseReport()
+        logger.warning("Step close assessment failed; requiring coverage Eval", exc_info=True)
+        return _fail_closed_report()
 
 
 __all__ = ["assess_step_close"]

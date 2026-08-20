@@ -1,9 +1,8 @@
 """Structural loop-continuation controls (RFC-225, RFC-630).
 
-Continuation is derived from checkpoint state and explicit control phrases,
-not from social classification. These helpers run before the pre-graph social
-gate so bare ``continue`` and loop-resume phrases resume work instead of
-closing the active goal via chitchat finalize.
+Continuation is derived from *this loop's* checkpoint plus an explicit control
+phrase, not from social classification alone. A control phrase without goal
+records on this loop keeps the intake social result.
 """
 
 from __future__ import annotations
@@ -77,17 +76,32 @@ def has_resumable_interrupted_goal(checkpoint: Any | None) -> bool:
     return status in ("running", "cancelled", "interrupted")
 
 
+def has_intra_loop_checkpoint_to_continue(checkpoint: Any | None) -> bool:
+    """Return True when *this* loop's checkpoint holds work to resume or continue.
+
+    Resume recovery is loop-scoped: an empty or missing ``goal_history`` (for
+    example after a social-only first turn) is not a continuation target.
+    Any prior goal record on this loop — incomplete or completed — is.
+    """
+    if checkpoint is None:
+        return False
+    history = getattr(checkpoint, "goal_history", None) or []
+    return len(history) > 0
+
+
 def should_bypass_social_gate_fast_path(
     checkpoint: Any | None,
     user_text: str | None,
 ) -> bool:
     """Return True when the social gate fast-path must not short-circuit intake.
 
-    Only explicit loop-control phrases bypass social routing. Other social
-    messages on a running loop still use the chitchat path, but chitchat
-    finalize is blocked separately via :func:`chitchat_may_finalize_checkpoint`.
+    Loop-control phrases bypass social routing only when this loop's checkpoint
+    has intra-loop work to continue. Otherwise keep the intake classify result
+    (typically social). Other social messages on a running loop still use the
+    chitchat path; chitchat finalize is blocked separately via
+    :func:`chitchat_may_finalize_checkpoint`.
     """
-    return is_loop_control_signal(user_text)
+    return is_loop_control_signal(user_text) and has_intra_loop_checkpoint_to_continue(checkpoint)
 
 
 def chitchat_may_finalize_checkpoint(checkpoint: Any | None) -> bool:
@@ -110,6 +124,7 @@ def chitchat_may_finalize_checkpoint(checkpoint: Any | None) -> bool:
 __all__ = [
     "chitchat_may_finalize_checkpoint",
     "has_active_running_goal",
+    "has_intra_loop_checkpoint_to_continue",
     "has_resumable_interrupted_goal",
     "is_loop_continuation_phrase",
     "is_loop_control_signal",

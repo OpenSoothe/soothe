@@ -183,7 +183,7 @@ def test_eval_reconcile_filters_out_of_scope_subtasks() -> None:
     )
     assert [node.description for node in nodes] == ["required"]
     assert parents == ["EVAL"]
-    assert rejected[0].reason == "filtered_eval_subtasks"
+    assert rejected[0].reason == "out_of_scope"
 
 
 def test_eval_reconcile_rejects_identical_continuation() -> None:

@@ -308,7 +308,7 @@ Intake-only specialists do **not** enter CoreAgent execute, so they never emit a
 **Capabilities**:
 - Stage 1: `asyncio.gather(pass1, checkpoint.load, git_status)`.
 - If `is_task=true`: Stage 2: `asyncio.gather(pass2, ce.load, to_thread(file_reads))`.
-- If `is_task=false` and structural loop-control bypass applies (RFC-225 §5.5): coerce to task; proceed to Stage 2 and checkpoint recovery.
+- If `is_task=false` and `should_bypass_social_gate_fast_path` (RFC-225 §5.5): coerce to task; proceed to Stage 2 and checkpoint recovery.
 - If `is_task=false` otherwise: END immediately with `social_response` (no goal finalize on running checkpoints).
 
 ---
@@ -327,7 +327,7 @@ asyncio.gather(
 ```
 
 If `pass1.is_task == false`:
-- If `should_bypass_pass1_social_fast_path(checkpoint, goal)` (RFC-225 §5.5): treat as task; proceed to Stage 2 and checkpoint recovery.
+- If `should_bypass_social_gate_fast_path(checkpoint, goal)` (RFC-225 §5.5): treat as task; proceed to Stage 2 and checkpoint recovery.
 - Else: emit `social_response` to user; END (chitchat fast-path). Chitchat MUST NOT finalize goals on `checkpoint.status == "running"` (RFC-225 §5.5).
 
 If `pass1.is_task == true`:
@@ -449,7 +449,7 @@ completion remains free-form via `ledger_direct` / synthesis.
 3. **Routing guard is hard constraint.** `new_goal_created` blocks social-path regardless of Pass 1 result — structural override.
 4. **Fail-safe toward task.** Pass 1 `confidence=low` → treat as task; Pass 2 uncertain → `complex`.
 5. **No retry on Pass 1.** Fail-safe immediately to Pass 2; Pass 2 routes appropriately regardless.
-6. **Continuation is structural.** Pass 1/2 never decide continuation; derived from checkpoint (RFC-226 overlay). Loop-control phrases bypass Pass 1 social routing before END (RFC-225 §5.5).
+6. **Continuation is structural.** Pass 1/2 never decide continuation; derived from **this loop's** checkpoint (RFC-226 overlay). Loop-control phrases bypass Pass 1 social routing before END only when that checkpoint has intra-loop work to continue (RFC-225 §5.5); otherwise keep the Pass 1 social result.
 7. **Clarification is emergent.** No pre-classified clarification branch; planner routes when it cannot plan.
 8. **Chitchat is non-terminal on running loops.** Social fast-path MUST NOT finalize an active goal; only idle checkpoints may be closed via chitchat finalize (RFC-225 §5.5).
 

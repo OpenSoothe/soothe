@@ -14,6 +14,7 @@ from soothe.sloop.orchestrator.node_base import (
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.stations import ROOT_EVAL
 from soothe.sloop.state.schemas import allocate_plan_id
+from soothe.sloop.utils.config_keys import positive_config_int
 from soothe.sloop.utils.goal_text import resolve_user_request
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,10 @@ class RootEvalNode(LoopNode):
                     return NodeResult(payload={"root_eval_route": "finalize"})
 
                 eval_cfg = getattr(ctx.strange_loop.config.agent.loop, "eval", None)
-                max_rounds = int(getattr(eval_cfg, "max_eval_rounds", 10) or 10)
+                max_rounds = positive_config_int(
+                    getattr(eval_cfg, "max_eval_rounds", 10),
+                    10,
+                )
                 eval_round = sum(1 for node in goal.steps.nodes.values() if node.kind == "eval")
                 if eval_round >= max_rounds:
                     logger.warning("[root_eval] max Eval rounds reached")

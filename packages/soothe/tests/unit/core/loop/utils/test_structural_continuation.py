@@ -8,6 +8,7 @@ from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.sloop.utils.structural_continuation import (
     chitchat_may_finalize_checkpoint,
     has_active_running_goal,
+    has_intra_loop_checkpoint_to_continue,
     has_resumable_interrupted_goal,
     is_loop_continuation_phrase,
     is_loop_control_signal,
@@ -28,13 +29,19 @@ def _goal(*, status: str = "running") -> GoalIndexEntry:
     )
 
 
-def _checkpoint(*, status: str, goal_status: str = "running", current_goal_index: int = 0):
+def _checkpoint(
+    *,
+    status: str,
+    goal_status: str = "running",
+    current_goal_index: int = 0,
+    empty_history: bool = False,
+):
     from types import SimpleNamespace
 
     return SimpleNamespace(
         status=status,
         current_goal_index=current_goal_index,
-        goal_history=[_goal(status=goal_status)],
+        goal_history=[] if empty_history else [_goal(status=goal_status)],
     )
 
 
@@ -68,6 +75,26 @@ def test_should_bypass_social_gate_for_control_phrase_on_idle_checkpoint() -> No
     checkpoint = _checkpoint(status="idle", goal_status="completed", current_goal_index=-1)
     assert should_bypass_social_gate_fast_path(checkpoint, "continue this loop")
     assert should_bypass_social_gate_fast_path(checkpoint, "retry")
+
+
+def test_should_not_bypass_social_gate_without_intra_loop_checkpoint() -> None:
+    empty = _checkpoint(status="running", current_goal_index=-1, empty_history=True)
+    assert not has_intra_loop_checkpoint_to_continue(empty)
+    assert not has_intra_loop_checkpoint_to_continue(None)
+    assert not should_bypass_social_gate_fast_path(empty, "continue")
+    assert not should_bypass_social_gate_fast_path(None, "retry")
+
+
+def test_has_intra_loop_checkpoint_to_continue() -> None:
+    assert has_intra_loop_checkpoint_to_continue(
+        _checkpoint(status="running", goal_status="running")
+    )
+    assert has_intra_loop_checkpoint_to_continue(
+        _checkpoint(status="idle", goal_status="completed", current_goal_index=-1)
+    )
+    assert has_intra_loop_checkpoint_to_continue(
+        _checkpoint(status="idle", goal_status="interrupted")
+    )
 
 
 def test_should_not_bypass_social_gate_for_social_on_running_checkpoint() -> None:

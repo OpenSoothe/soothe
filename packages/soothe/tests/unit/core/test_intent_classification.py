@@ -134,6 +134,8 @@ class TestIntakePrompts:
         assert "Here is a goal" not in prompt
         assert "classification notes" not in prompt
         assert "≤25 words" in prompt
+        assert "≤50 words" in prompt
+        assert "300 characters" in prompt
         assert "≤15 words" not in prompt
 
     def test_intake_human_task_is_compact(self) -> None:

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from langchain.agents.middleware.types import ModelRequest
+import pytest
+from langchain.agents.middleware.types import ModelRequest, ToolCallRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
@@ -24,6 +25,10 @@ def _request() -> ModelRequest:
         tools=[
             SimpleNamespace(name="read_file"),
             SimpleNamespace(name="grep"),
+            SimpleNamespace(name="glob"),
+            SimpleNamespace(name="ls"),
+            SimpleNamespace(name="list_files"),
+            SimpleNamespace(name="file_info"),
             SimpleNamespace(name="write_file"),
             SimpleNamespace(name="execute"),
             SimpleNamespace(name="task"),
@@ -48,7 +53,15 @@ def test_eval_filters_mutating_tools_and_injects_policy() -> None:
         forwarded = _forward(_request())
 
     names = [getattr(tool, "name", None) for tool in forwarded.tools or []]
-    assert names == ["read_file", "grep", "decompose_task"]
+    assert names == [
+        "read_file",
+        "grep",
+        "glob",
+        "ls",
+        "list_files",
+        "file_info",
+        "decompose_task",
+    ]
     assert "user-goal coverage audit" in forwarded.system_message.content
 
 
@@ -57,3 +70,27 @@ def test_non_eval_request_is_unchanged() -> None:
     with patch(_CONFIGURABLE, return_value={}):
         forwarded = _forward(request)
     assert forwarded.tools == request.tools
+
+
+@pytest.mark.asyncio
+async def test_eval_tool_call_guard_blocks_unknown_tool() -> None:
+    request = ToolCallRequest(
+        tool_call={"id": "call-1", "name": "write_file", "args": {}},
+        tool=None,
+        state={"messages": []},
+        runtime=MagicMock(),
+    )
+    handler_called = False
+
+    async def handler(_request: ToolCallRequest) -> str:
+        nonlocal handler_called
+        handler_called = True
+        return "mutated"
+
+    configurable = {SOOTHE_EVAL_STEP_ID_KEY: "EVAL-1"}
+    with patch(_CONFIGURABLE, return_value=configurable):
+        result = await EvalStepMiddleware().awrap_tool_call(request, handler)
+
+    assert handler_called is False
+    assert result.status == "error"
+    assert result.name == "write_file"

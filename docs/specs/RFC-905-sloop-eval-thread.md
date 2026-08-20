@@ -246,10 +246,10 @@ New fragment (impl): `soothe.prompts` / `fragments/eval/eval_policy_system.xml`.
 
 ### Tool allow / deny
 
-**Allow:**
+**Allow (builtin, not config):**
 
-- Filesystem / search **read** (impl **MUST** match nano/deepagents names:
-  e.g. `read_file`, `grep`, `glob`, directory list).
+- Filesystem / search **read**: `read_file`, `grep`, `glob`, `ls`,
+  `list_files`, `file_info`.
 - `decompose_task` (RFC-904 executor binding; parent = this eval step id).
 
 **Deny:**
@@ -322,8 +322,8 @@ agent:
       max_eval_rounds: 10   # default: same as decompose.max_waves
 ```
 
-Readonly allowlist and `StepCloseReport` model role (fast / verifier) live
-under the same block or reuse existing fast-model roles. No `enabled` flag
+Readonly inspect tools are a **builtin** Eval allowlist (not YAML).
+`StepCloseReport` uses the existing fast-model role. No `enabled` flag
 that silently skips Eval when it is required.
 
 ---
@@ -360,7 +360,8 @@ Follow-on IG (not this RFC). Package: `soothe` (`sloop`, `context`,
 
 ## Open Items (impl-time)
 
-1. Exact nano/deepagents tool names for the readonly allowlist.
+1. Builtin Eval inspect names: `read_file`, `grep`, `glob`, `ls`,
+   `list_files`, `file_info` (plus `decompose_task`).
 2. `StepCloseReport` always-on vs `requires_eval_probe`.
 3. Whether `kind=eval` nodes participate in `tree_green()` or only in
    action-tree green (lean: exclude pending eval from worker-green;

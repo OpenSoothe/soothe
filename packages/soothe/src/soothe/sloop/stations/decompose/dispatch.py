@@ -20,6 +20,7 @@ from soothe.sloop.state.schemas import (
     StepAction,
     allocate_plan_id,
 )
+from soothe.sloop.utils.config_keys import positive_config_int
 from soothe.sloop.utils.goal_text import resolve_user_request
 
 logger = logging.getLogger(__name__)
@@ -163,17 +164,17 @@ class DispatchNode(LoopNode):
             ctx.recovery_valid_resume = False
 
         cfg = _decompose_cfg(ctx)
-        max_waves = int(getattr(cfg, "max_waves", 10) or 10) if cfg else 10
-        wave = int(getattr(ctx.loop_state, "iteration", 0) or 0)
-        if wave >= max_waves:
-            logger.warning("[dispatch] max_waves=%d reached; routing to root_eval", max_waves)
-            return NodeResult(payload={"dispatch_route": "root_eval", "max_waves": True})
+        max_waves = positive_config_int(getattr(cfg, "max_waves", 10) if cfg else 10, 10)
+        wave = positive_config_int(getattr(ctx.loop_state, "iteration", 0), 0, minimum=0)
+        waves_exhausted = wave >= max_waves
 
         await _ensure_root_step(ctx)
 
         ce = ctx.ce
         goal_id = ctx.ce_goal_id
         if ce is None or not goal_id:
+            if waves_exhausted:
+                return NodeResult(payload={"dispatch_route": "root_eval", "max_waves": True})
             # No CE: single-step fallback from goal text (tests / degraded).
             goal_text = (
                 resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or "Execute task"
@@ -214,6 +215,17 @@ class DispatchNode(LoopNode):
             return NodeResult(payload={"dispatch_route": "fatal"})
 
         ready = sorted(goal.steps.ready_steps())
+        if waves_exhausted:
+            ready = [
+                sid for sid in ready if getattr(goal.steps.nodes.get(sid), "kind", None) == "eval"
+            ]
+            if not ready:
+                logger.warning(
+                    "[dispatch] max_waves=%d reached; routing to root_eval",
+                    max_waves,
+                )
+                return NodeResult(payload={"dispatch_route": "root_eval", "max_waves": True})
+
         if not ready:
             if goal.steps.tree_green():
                 return NodeResult(payload={"dispatch_route": "root_eval"})

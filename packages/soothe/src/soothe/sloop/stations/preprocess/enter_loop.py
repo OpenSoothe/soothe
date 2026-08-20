@@ -21,7 +21,7 @@ from soothe.sloop.orchestrator.continuation import (
     is_structural_continuation,
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.utils.continue_keyword import is_continue_keyword
+from soothe.sloop.utils.structural_continuation import should_bypass_social_gate_fast_path
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,10 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
 
     if (
         intake_label == IntakeLabel.CHITCHAT
-        and not is_continue_keyword(ctx.loop_state.goal)
+        and not should_bypass_social_gate_fast_path(
+            getattr(ctx, "checkpoint", None),
+            getattr(ctx.loop_state, "goal", None),
+        )
         and (getattr(intent, "chitchat_response", None) or "").strip()
     ):
         logger.info("[Intent] Fast path in graph: chitchat")

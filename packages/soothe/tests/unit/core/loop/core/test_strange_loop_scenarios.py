@@ -9,6 +9,8 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from soothe.config.models import (
+    DecomposeLoopConfig,
+    EvalLoopConfig,
     ExecutePromptLedgerConfig,
     PlanPromptLedgerConfig,
 )
@@ -96,6 +98,9 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
     # the numeric comparisons in plan_ledger_projection.
     al.execute_prompt_ledger = ExecutePromptLedgerConfig()
     al.plan_prompt_ledger = PlanPromptLedgerConfig()
+    # Typed budgets — MagicMock ``int()`` is 1 and would starve dispatch/eval.
+    al.decompose = DecomposeLoopConfig()
+    al.eval = EvalLoopConfig()
     # Thread switch policy: set on loop config directly, not on limits
     # _get_rate_limit_threshold looks at loop_cfg.thread_switch_policy
     al.thread_switch_policy = None

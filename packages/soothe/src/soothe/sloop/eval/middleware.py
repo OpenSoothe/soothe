@@ -10,14 +10,17 @@ from langchain.agents.middleware.types import (
     ContextT,
     ModelRequest,
     ModelResponse,
+    ToolCallRequest,
 )
+from langchain_core.messages import ToolMessage
 
 from soothe.prompts import EVAL_POLICY_SYSTEM_ADDENDUM
 from soothe.sloop.decompose.tool import build_decompose_task_tool
 from soothe.sloop.utils.config_keys import SOOTHE_EVAL_STEP_ID_KEY
 
 _DECOMPOSE_TOOL = build_decompose_task_tool()
-_READONLY_TOOL_NAMES = frozenset({"read_file", "ls", "glob", "grep", "web_search", "web_fetch"})
+# Builtin Eval inspect surface; not operator-configurable.
+EVAL_READONLY_TOOL_NAMES = frozenset({"read_file", "grep", "glob", "ls", "list_files", "file_info"})
 
 
 def _langgraph_configurable() -> dict[str, Any]:
@@ -69,10 +72,13 @@ class EvalStepMiddleware(AgentMiddleware):
     tools = [_DECOMPOSE_TOOL]
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
-        if not _langgraph_configurable().get(SOOTHE_EVAL_STEP_ID_KEY):
+        configurable = _langgraph_configurable()
+        if not configurable.get(SOOTHE_EVAL_STEP_ID_KEY):
             return request
         tools = [
-            tool for tool in list(request.tools or []) if _tool_name(tool) in _READONLY_TOOL_NAMES
+            tool
+            for tool in list(request.tools or [])
+            if _tool_name(tool) in EVAL_READONLY_TOOL_NAMES
         ]
         if "decompose_task" not in {_tool_name(tool) for tool in tools}:
             tools.append(_DECOMPOSE_TOOL)
@@ -93,5 +99,27 @@ class EvalStepMiddleware(AgentMiddleware):
     ) -> ModelResponse[Any]:
         return await handler(self.modify_request(request))
 
+    async def awrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], Awaitable[Any]],
+    ) -> Any:
+        """Fail closed if a mutating or unknown tool bypasses model filtering."""
+        configurable = _langgraph_configurable()
+        if not configurable.get(SOOTHE_EVAL_STEP_ID_KEY):
+            return await handler(request)
+        tool_call = getattr(request, "tool_call", None)
+        tool_name = tool_call.get("name") if isinstance(tool_call, dict) else ""
+        allowed = EVAL_READONLY_TOOL_NAMES | {"decompose_task"}
+        if tool_name in allowed:
+            return await handler(request)
+        tool_call_id = tool_call.get("id", "") if isinstance(tool_call, dict) else ""
+        return ToolMessage(
+            content=f"Tool '{tool_name}' is unavailable in this readonly Eval thread.",
+            tool_call_id=str(tool_call_id or ""),
+            name=str(tool_name or ""),
+            status="error",
+        )
 
-__all__ = ["EvalStepMiddleware"]
+
+__all__ = ["EVAL_READONLY_TOOL_NAMES", "EvalStepMiddleware"]

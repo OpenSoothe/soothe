@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.config.models import DecomposeLoopConfig
+from soothe.config.models import DecomposeLoopConfig, EvalLoopConfig
 from soothe.context.decomposition import DecompositionProposal, ProposedSubtask
 from soothe.context.engine import ContextEngine
 from soothe.context.models import StepNode
@@ -29,7 +29,12 @@ def _ctx_with_ce(ce: ContextEngine, goal_id: str, *, goal: str = "do work") -> L
     )
     strange_loop = SimpleNamespace(
         config=SimpleNamespace(
-            agent=SimpleNamespace(loop=SimpleNamespace(decompose=DecomposeLoopConfig()))
+            agent=SimpleNamespace(
+                loop=SimpleNamespace(
+                    decompose=DecomposeLoopConfig(),
+                    eval=EvalLoopConfig(),
+                )
+            )
         )
     )
     checkpoint = SimpleNamespace(
@@ -242,3 +247,39 @@ async def test_root_eval_finalizes_after_completed_eval() -> None:
     ctx = _ctx_with_ce(ce, goal.id)
     result = await RootEvalNode()(ctx, {})
     assert result["root_eval_route"] == "finalize"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_claims_pending_eval_after_max_waves() -> None:
+    ce = ContextEngine()
+    goal = await ce.create_goal("do work", loop_id="L1")
+    await ce.add_steps(
+        goal.id,
+        [
+            StepNode(id="ROOT", description="root", status="decomposed"),
+            StepNode(
+                id="CHILD",
+                description="child",
+                status="completed",
+                parent_step_id="ROOT",
+            ),
+            StepNode(
+                id="EVAL",
+                description="eval",
+                status="pending",
+                kind="eval",
+                parent_step_id="ROOT",
+                plan_iteration=1,
+            ),
+        ],
+    )
+    ctx = _ctx_with_ce(ce, goal.id)
+    ctx.loop_state.iteration = 1
+    ctx.strange_loop.config.agent.loop.decompose = DecomposeLoopConfig(max_waves=1)
+    result = await DispatchNode()(ctx, {})
+    assert result["dispatch_route"] == "execute"
+    assert ctx.scratch.decision is not None
+    assert [step.id for step in ctx.scratch.decision.steps] == ["EVAL"]
+    refreshed = await ce.get_goal(goal.id)
+    assert refreshed is not None
+    assert refreshed.steps.nodes["EVAL"].status == "active"

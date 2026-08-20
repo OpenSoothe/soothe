@@ -126,12 +126,13 @@ def plan_commit_from_proposals(
             continue
         subtasks = list(prop.subtasks)
         if parent.kind == "eval":
+            if any(not sub.in_scope for sub in subtasks):
+                rejections.append(ReconcileRejection(parent_id, "out_of_scope"))
+            if any(sub.in_scope and not sub.necessary_for_user_goal for sub in subtasks):
+                rejections.append(ReconcileRejection(parent_id, "not_necessary"))
             scoped = [sub for sub in subtasks if sub.in_scope and sub.necessary_for_user_goal]
             if not scoped:
-                rejections.append(ReconcileRejection(parent_id, "out_of_scope_or_not_necessary"))
                 continue
-            if len(scoped) != len(subtasks):
-                rejections.append(ReconcileRejection(parent_id, "filtered_eval_subtasks"))
             subtasks = scoped
             proposed_fingerprint = tuple(
                 sorted(normalize_subtask_key(sub.description) for sub in subtasks)

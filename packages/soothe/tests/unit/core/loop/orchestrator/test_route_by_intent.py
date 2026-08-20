@@ -164,6 +164,74 @@ async def test_init_or_resume_chitchat_fast_path_with_continue_loop_mode() -> No
 
 
 @pytest.mark.asyncio
+async def test_init_or_resume_chitchat_continue_without_goal_history_is_social() -> None:
+    """Bare continue with empty this-loop checkpoint stays in-graph chitchat."""
+    from soothe.sloop.intention import IntentClassification
+
+    emitted: list[tuple[str, object]] = []
+
+    async def _emit(event_type: str, event_data: object) -> None:
+        emitted.append((event_type, event_data))
+
+    intent = IntentClassification(
+        intake_label=IntakeLabel.CHITCHAT,
+        chitchat_response="Sure, I'm ready when you are.",
+        task_complexity=TaskComplexity.MINIMAL,
+    )
+    loop_state = SimpleNamespace(
+        intent=intent,
+        goal="continue",
+        thread_id="loop-main",
+    )
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        scratch=SimpleNamespace(plan_result=None, decision=None),
+        ce=None,
+        ce_goal_id=None,
+        checkpoint=SimpleNamespace(goal_history=[]),
+        continue_loop_mode=False,
+        recovery_valid_resume=False,
+        emit=_emit,
+    )
+
+    result = await node_init_or_resume(ctx, {})
+
+    assert result["intent_route"] == "fast_path"
+    assert any(t == "intent_fast_path" for t, _ in emitted)
+
+
+@pytest.mark.asyncio
+async def test_init_or_resume_chitchat_continue_with_goal_history_skips_fast_path() -> None:
+    """Bare continue with this-loop goal history does not take in-graph chitchat."""
+    from soothe.sloop.intention import IntentClassification
+
+    intent = IntentClassification(
+        intake_label=IntakeLabel.CHITCHAT,
+        chitchat_response="Sure, I'm ready when you are.",
+        task_complexity=TaskComplexity.MINIMAL,
+    )
+    loop_state = SimpleNamespace(
+        intent=intent,
+        goal="continue",
+        thread_id="loop-main",
+    )
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        scratch=SimpleNamespace(plan_result=None, decision=None),
+        ce=None,
+        ce_goal_id=None,
+        checkpoint=SimpleNamespace(goal_history=[SimpleNamespace()]),
+        continue_loop_mode=False,
+        recovery_valid_resume=False,
+        emit=_noop_emit,
+    )
+
+    result = await node_init_or_resume(ctx, {})
+
+    assert result["intent_route"] == "continue_loop"
+
+
+@pytest.mark.asyncio
 async def test_init_or_resume_trivial_injects_pseudo_plan() -> None:
     """The trivial label injects a 1-step plan and continues through execute."""
     from soothe.sloop.intention import IntentClassification

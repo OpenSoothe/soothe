@@ -142,17 +142,20 @@ On goal completion, transient `LoopState` fields (`current_decision.plan_result`
 
 ### 5.5 Structural Loop-Control Gate (IG-558)
 
-Loop continuation MUST NOT be decided by Pass 1 social classification. The pre-graph intake path loads the checkpoint in parallel with Pass 1; when either condition holds, Pass 1 social fast-path is bypassed and intake proceeds as a task:
+Loop continuation MUST NOT be decided by Pass 1 social classification. The pre-graph intake path loads **this loop's** checkpoint in parallel with Pass 1. Pass 1 social fast-path is bypassed only when **both** hold:
 
 ```
 bypass_pass1_social :=
-    is_loop_control_signal(user_text)   # continue | resume | proceed keywords and phrases
+    is_loop_control_signal(user_text)                 # continue | resume | proceed | retry
+    AND has_intra_loop_checkpoint_to_continue(cp)     # this loop's goal_history / resumable goal
 ```
 
 `is_loop_control_signal` covers:
 
-- Single-word keywords: `continue`, `resume`, `proceed` (existing `is_continue_keyword()`).
+- Single-word keywords: `continue`, `resume`, `proceed`, `retry`.
 - Explicit loop-resume phrases: `continue this loop`, `continue current loop`, `resume the loop`, etc.
+
+`has_intra_loop_checkpoint_to_continue` is true when this loop's StrangeLoop checkpoint has a non-empty `goal_history` (resumable incomplete goals or prior completed goals). An empty `goal_history` (including a stale `status=running` with `current_goal_index=-1` after a social-only first turn) is **not** a continuation target: keep the Pass 1 social result and do not coerce to a task.
 
 When bypass fires, StrangeLoop recovers from the loaded checkpoint (§5.2) and enters the agentic graph — the same path used for any other follow-up query on an existing loop.
 

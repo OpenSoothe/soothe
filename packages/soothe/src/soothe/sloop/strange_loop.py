@@ -38,6 +38,7 @@ from soothe.sloop.utils.reflection import _default_agent_decision
 from soothe.sloop.utils.structural_continuation import (
     has_resumable_interrupted_goal,
     is_loop_control_signal,
+    should_bypass_social_gate_fast_path,
 )
 from soothe.utils.observability.langfuse import (
     IntakeLangfuseSpan,
@@ -428,10 +429,6 @@ class StrangeLoop:
                     social_gate_result = social_gate_raw
 
                 if not social_gate_result.is_task:
-                    from soothe.sloop.utils.structural_continuation import (
-                        should_bypass_social_gate_fast_path,
-                    )
-
                     if should_bypass_social_gate_fast_path(checkpoint, execution_goal):
                         logger.info(
                             "[StrangeLoop] Structural loop-control bypasses social gate fast-path"
@@ -447,6 +444,11 @@ class StrangeLoop:
                             reasoning="Loop-control phrase; resume via checkpoint",
                         )
                     else:
+                        if is_loop_control_signal(execution_goal):
+                            logger.info(
+                                "[StrangeLoop] No intra-loop checkpoint to resume; "
+                                "keeping intake social result"
+                            )
                         social_intent = intent_classifier.social_to_intent(
                             social_gate_result, execution_goal
                         )
