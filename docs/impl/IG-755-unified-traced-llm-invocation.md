@@ -3,13 +3,14 @@
 **Created**: 2026-08-20
 **Status**: Verification
 **Packages**: `soothe`, `soothe-autopilot`, `soothe-daemon`
-**Related**: `soothe-nano` 1.2.4 traced LLM interfaces
+**Related**: `soothe-nano` 1.2.5 traced LLM interfaces (structured-output
+callbacks via public `ainvoke`)
 
 ---
 
 ## Goal
 
-Require `soothe-nano>=1.2.4` and route every direct chat-model invocation
+Require `soothe-nano>=1.2.5` and route every direct chat-model invocation
 through nano's traced interfaces so enabled Langfuse observability captures
 plain and structured calls consistently. LangGraph graph/agent invocations
 continue to inherit their already-traced graph `RunnableConfig`.
@@ -31,7 +32,7 @@ continue to inherit their already-traced graph `RunnableConfig`.
 
 ## Work items
 
-- [x] Raise `soothe-nano` floors to 1.2.4 and regenerate `uv.lock`
+- [x] Raise `soothe-nano` floors to 1.2.5 and regenerate `uv.lock`
 - [x] Migrate host direct plain and structured calls
 - [x] Migrate daemon direct plain and structured calls
 - [x] Migrate Autopilot direct plain and structured calls and propagate config
