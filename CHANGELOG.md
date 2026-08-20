@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.25] - 2026-08-21
+
+### Fixed
+- Trivial intake tasks now skip the coverage Eval phase and finalize directly from the CoreAgent execute result; the goal-completion ledger uses the synthesis prompt for all complexities (drop the trivial-only submission shortcut).
+- Bound prior goal-completion report projection with new constants (`GOAL_COMPLETION_REPORT_MAX_CHARS` / `_MESSAGES` / `_PER_MESSAGE_CHARS`) and head+tail truncation (40% head + 60% tail) so conclusions/recommendations survive instead of front-only clipping.
+
+### Changed
+- Rename `trivial_plan.py` to `wired_subagent_plan.py` (wired-subagent delegate path plan builder); update imports and tests.
+- Change `prior_goal_tail` and `cross_goal_completion_tail` defaults from `3` to `0` (unlimited — project all prior-goal terminal units); widen the upper bound to `1000`.
+- Only upgrade `CHITCHAT`/`None` intake labels to `COMPLEX` on interrupt-resume keywords; `simple` already routes to DISPATCH under the unified workflow and `trivial` skips Eval via the root_eval short-circuit.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.24...v0.10.25
+
 ## [v0.10.24] - 2026-08-20
 
 ### Added
