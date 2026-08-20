@@ -33,6 +33,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+# Host may send an execute-phase complexity (``minimal``/``simple``/``medium``/
+# ``complex``) or a routing label (``trivial``/``simple``/``complex``).
+_INTAKE_LABELS = frozenset({"minimal", "trivial", "simple", "medium", "complex"})
+
 _MAX_GOAL_HEADER = 100
 _MAX_GOAL_STEP_DESC = 80
 _MAX_STEP_SUMMARY_TAIL = 80
@@ -234,7 +239,7 @@ class CognitionGoalTreeMessage(Vertical):
         )
 
     def intake_label(self) -> str:
-        """Intake complexity (``trivial``/``simple``/``complex``), or empty."""
+        """Intake complexity, or empty when the host sent no usable value."""
         return self._intake_label
 
     def _goal_header_content(self) -> Content:
@@ -550,7 +555,7 @@ class CognitionGoalTreeMessage(Vertical):
         self._goal_text = str(snap.get("goal", self._goal_text))
         self._max_iterations = int(snap.get("max_iterations", self._max_iterations))
         raw_intake = str(snap.get("intake_label", "") or "").strip().lower()
-        if raw_intake in ("trivial", "simple", "complex"):
+        if raw_intake in _INTAKE_LABELS:
             self._intake_label = raw_intake
         self._footer_plain = str(snap.get("footer_text", ""))
         self._footer_visible = bool(snap.get("footer_visible", False))
@@ -581,9 +586,9 @@ class CognitionGoalTreeMessage(Vertical):
             self._steps[sid] = st
 
     def set_intake_label(self, label: str) -> None:
-        """Show intake complexity (trivial/simple/complex) in the goal header."""
+        """Show intake complexity in the goal header."""
         normalized = (label or "").strip().lower()
-        if normalized not in ("trivial", "simple", "complex"):
+        if normalized not in _INTAKE_LABELS:
             return
         self._intake_label = normalized
         self._sync_goal_tree_widgets()

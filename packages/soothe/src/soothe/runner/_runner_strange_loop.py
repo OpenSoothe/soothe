@@ -595,16 +595,22 @@ class StrangeLoopMixin:
                     payload = event_data if isinstance(event_data, dict) else {}
                     intake_raw = payload.get("intake_label", "")
                     intake_label = str(getattr(intake_raw, "value", intake_raw) or "").strip()
+                    complexity_raw = payload.get("task_complexity", "")
+                    task_complexity = str(
+                        getattr(complexity_raw, "value", complexity_raw) or ""
+                    ).strip()
                     logger.info(
-                        "[Intent] Classified in graph as %s (intake=%s)",
+                        "[Intent] Classified in graph as %s (intake=%s complexity=%s)",
                         payload.get("intent_type") or "unknown",
                         intake_label or "unknown",
+                        task_complexity or "unknown",
                     )
                     if intake_label:
                         yield custom_event(
                             IntentClassifiedEvent(
                                 intent_type=str(payload.get("intent_type") or "agentic"),
                                 intake_label=intake_label,
+                                task_complexity=task_complexity,
                             ).to_dict()
                         )
 
@@ -665,6 +671,7 @@ class StrangeLoopMixin:
                             steps=list(event_data.get("steps") or []),
                             execution_mode=str(event_data.get("execution_mode", "")),
                             intake_label=str(event_data.get("intake_label", "") or ""),
+                            task_complexity=str(event_data.get("task_complexity", "") or ""),
                             total_steps=int(event_data.get("total_steps", 0)),
                             done_steps=int(event_data.get("done_steps", 0)),
                         ).to_dict()

@@ -320,6 +320,8 @@ class StrangeLoopPlanDecisionEvent(LifecycleEvent):
     steps: list[dict[str, Any]] = []  # noqa: RUF012
     execution_mode: str = ""
     intake_label: str = ""
+    # Routing collapses ``medium`` into ``complex``; clients display this instead.
+    task_complexity: str = ""
     total_steps: int = 0  # Cumulative total steps across all iterations
     done_steps: int = 0  # Cumulative completed steps across all iterations
 
@@ -489,6 +491,8 @@ class IntentClassifiedEvent(ProtocolEvent):
     intent_type: str = "agentic"
     reasoning: str | None = None
     intake_label: str = ""
+    # Routing collapses ``medium`` into ``complex``; clients display this instead.
+    task_complexity: str = ""
 
 
 class GoalCreatedEvent(ProtocolEvent):
