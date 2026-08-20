@@ -33,7 +33,6 @@ from soothe.sloop.clarification.protocol import (
     answer_from_state,
     request_to_state,
 )
-from soothe.sloop.cognition.trivial_plan import build_trivial_plan
 from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.plans.artifact import (
@@ -42,6 +41,7 @@ from soothe.sloop.plans.artifact import (
     update_plan_artifact_status,
     write_plan_artifact,
 )
+from soothe.sloop.plans.trivial_plan import build_trivial_plan
 from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 from soothe.sloop.utils.goal_text import resolve_user_request
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage

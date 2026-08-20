@@ -6,8 +6,9 @@ Intent classification produces a 4-class intake label (RFC-630) —
 in-flight loop is derived structurally inside ``StrangeLoop`` from the loaded
 checkpoint, not classified here.
 
-Intake classification (social vs task) runs via the intake classifier; scope
-pre-classification was removed under RFC-904 and DISPATCH owns decomposition.
+The intake LLM emits ``task_complexity`` for agentic goals; ``intake_label``
+is derived from that field for the TUI and graph routing. DISPATCH owns
+decomposition.
 
 CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
 ``soothe_sdk.intention.models`` and re-exported here.
@@ -44,14 +45,13 @@ class IntakeLabel(StrEnum):
 
 
 def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplexity:
-    """Map intake label to execute-phase task complexity.
+    """Map a routing label to execute-phase task complexity.
 
-    ``task_complexity`` is derived from ``intake_label`` so the intake LLM
-    only classifies graph routing; downstream execute tuning reuses the same
-    signal without a redundant LLM field.
+    Used for client-forced ``intake_scope`` and fail-safes where the intake LLM
+    did not emit ``task_complexity``.
 
     Args:
-        intake_label: 4-class intake label from the classifier.
+        intake_label: 4-class intake label.
 
     Returns:
         Task complexity for ``RoutingClassification`` and system prompt tiers.
@@ -85,7 +85,7 @@ def derive_intake_label_from_task_complexity(
 
 
 class IntentClassification(BaseModel):
-    """Primary intent classification model (RFC-225,, RFC-630).
+    """Primary intent classification model (RFC-225, RFC-630).
 
     4-class LLM intake classification:
     - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.

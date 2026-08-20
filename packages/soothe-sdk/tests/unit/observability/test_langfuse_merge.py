@@ -150,8 +150,8 @@ def test_merge_omits_loop_id_when_none(monkeypatch) -> None:
     assert "loop_id" not in out.get("metadata", {})
 
 
-def test_merge_skips_handler_append_when_inherit_carries_same_handler(monkeypatch) -> None:
-    """Nested CoreAgent streams must not stack duplicate Langfuse handlers (goal synthesis)."""
+def test_merge_reuses_inherited_handler_without_duplicating(monkeypatch) -> None:
+    """Inherited Langfuse handler is copied as a list, not stacked twice."""
     pytest.importorskip("langfuse")
     from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,

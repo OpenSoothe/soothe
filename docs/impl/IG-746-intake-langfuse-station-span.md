@@ -34,7 +34,7 @@ graph-entry classifier reuses the active graph callback hierarchy.
 | `_intake_span.open_intake_langfuse_span` | Opens a non-current `intake` span on the goal-loop trace; returns an inert handle when tracing is off or the client fails |
 | `IntakeLangfuseSpan.end` | Idempotent close with optional output |
 | `GoalLoopTrace.with_intake_parent_span` | Frozen-dataclass view carrying `intake_parent_span_id` |
-| `GoalLoopTrace.intake_invoke_config` | Pins pre-graph intake to `{trace_id, parent_span_id}` or inherits the active graph handler for graph-entry classification |
+| `GoalLoopTrace.intake_invoke_config` | Pins pre-graph intake to `{trace_id, parent_span_id}`; graph-entry classification flattens inherited graph handlers onto an explicit list so nano structured-output never sees LangGraph's `AsyncCallbackManager` |
 | `intake_phase_langfuse_run_display_name` | Child run names `intake-pass1`, `intake-pass2`, `intake-classify` (default stays `intake`) |
 | `SootheLangfuse.flush` | Exports buffered observations for turns that end before the graph |
 

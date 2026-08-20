@@ -69,6 +69,28 @@ async def test_dispatch_creates_root_and_claims() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dispatch_plan_decision_carries_intake_label() -> None:
+    from soothe_sdk.intention.models import TaskComplexity
+
+    from soothe.sloop.intention.models import IntakeLabel, IntentClassification
+
+    ce = ContextEngine()
+    goal = await ce.create_goal("review arch", loop_id="L1")
+    ctx = _ctx_with_ce(ce, goal.id, goal="review arch")
+    ctx.loop_state.intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        task_complexity=TaskComplexity.SIMPLE,
+        reasoning="I will review.",
+    )
+    await DispatchNode()(ctx, {})
+    plan_calls = [
+        call for call in ctx.emit.await_args_list if call.args and call.args[0] == "plan_decision"
+    ]
+    assert plan_calls
+    assert plan_calls[0].args[1]["intake_label"] == "simple"
+
+
+@pytest.mark.asyncio
 async def test_dispatch_grounds_root_with_approved_plan() -> None:
     ce = ContextEngine()
     goal = await ce.create_goal("migrate auth", loop_id="L1")

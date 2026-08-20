@@ -18,6 +18,7 @@ from .models import (
     IntentClassification,
     ResponseLanguage,
     derive_task_complexity_from_intake,
+    intent_classification_from_intake,
 )
 
 if TYPE_CHECKING:
@@ -151,8 +152,6 @@ class IntentClassifier:
         query: str,
     ) -> IntentClassification:
         """Convert an intake task result to IntentClassification."""
-        from soothe.sloop.intention.models import intent_classification_from_intake
-
         return self._patch_missing_fields(
             intent_classification_from_intake(intake_result),
             query,

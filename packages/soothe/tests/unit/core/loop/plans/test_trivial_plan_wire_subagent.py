@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.sloop.cognition.trivial_plan import build_trivial_plan
+from soothe.sloop.plans.trivial_plan import build_trivial_plan
 from soothe.sloop.state.schemas import resolve_wire_subagent
 
 

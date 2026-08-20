@@ -28,6 +28,15 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+def _plan_intake_label(ctx: LoopRuntimeContext) -> str:
+    """TUI plan-panel complexity (trivial/simple/complex), or empty."""
+    raw = getattr(getattr(ctx.loop_state, "intent", None), "intake_label", None)
+    value = str(getattr(raw, "value", raw) or "").strip().lower()
+    if value in ("trivial", "simple", "complex"):
+        return value
+    return ""
+
+
 def _decompose_cfg(ctx: LoopRuntimeContext) -> Any:
     return getattr(ctx.strange_loop.config.agent.loop, "decompose", None)
 
@@ -292,7 +301,7 @@ class DispatchNode(LoopNode):
                             for s in claimed
                         ],
                         "execution_mode": "parallel",
-                        "intake_label": "task",
+                        "intake_label": _plan_intake_label(ctx),
                         "total_steps": len(decision.steps),
                         "done_steps": len(ctx.loop_state.step_results),
                     },

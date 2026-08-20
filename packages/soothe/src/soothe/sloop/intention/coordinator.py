@@ -1,7 +1,7 @@
 """Intake coordinator: orchestrates social-vs-task and full classification.
 
-Scope pre-classification is removed; tasks enter do-or-decompose without
-trivial/simple/complex pre-routing.
+Tasks keep the intake LLM's ``task_complexity``; ``intake_label`` is derived
+from it for the TUI and routing. DISPATCH owns decomposition.
 """
 
 from __future__ import annotations
