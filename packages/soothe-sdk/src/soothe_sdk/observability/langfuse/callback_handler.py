@@ -170,7 +170,7 @@ if LANGFUSE_AVAILABLE:
         def _get_parent_observation(self, parent_run_id: UUID | None) -> Any:
             obs = super()._get_parent_observation(parent_run_id)
             trace_context = self.trace_context
-            if parent_run_id is not None or not trace_context:
+            if not trace_context:
                 return obs
             if _is_langfuse_root_client(obs):
                 return _LangfuseTracePinnedParent(obs, trace_context)

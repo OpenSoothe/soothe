@@ -122,6 +122,7 @@ class IntakeCoordinator:
         prior_response_language: ResponseLanguage | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
+        parent_runnable_config: dict[str, Any] | None = None,
     ) -> IntakeResult:
         """Run full intake classification (with ledger context when provided)."""
         intake_result = await self._intake_classifier.classify(
@@ -130,6 +131,7 @@ class IntakeCoordinator:
             prior_response_language=prior_response_language,
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
+            parent_runnable_config=parent_runnable_config,
         )
         intake_result = _apply_low_confidence_fail_safe(intake_result)
 

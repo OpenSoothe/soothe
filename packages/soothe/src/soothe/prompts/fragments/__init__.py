@@ -55,12 +55,12 @@ DECOMPOSE_TASK_TOOL_DESCRIPTION = _read_xml_body("decompose/decompose_task_tool.
 APPROVED_PLAN_EXECUTE_HINT = _read_xml_body("decompose/approved_plan_execute_hint.xml")
 THREAD_USER_HINT_ROOT_FRAGMENT = _read_xml_body("decompose/user_hint_root.xml")
 THREAD_USER_HINT_CHILD_FRAGMENT = _read_xml_body("decompose/user_hint_child.xml")
-COMPLEX_DECOMPOSE_FIRST_HINT = _read_xml_body("decompose/complex_decompose_first_hint.xml")
+DECOMPOSE_FIRST_HINT = _read_xml_body("decompose/decompose_first_hint.xml")
 
 
 __all__ = [
     "APPROVED_PLAN_EXECUTE_HINT",
-    "COMPLEX_DECOMPOSE_FIRST_HINT",
+    "DECOMPOSE_FIRST_HINT",
     "DECOMPOSE_TASK_TOOL_DESCRIPTION",
     "PROMPT_TIMESTAMP_FRAGMENT",
     "SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT",

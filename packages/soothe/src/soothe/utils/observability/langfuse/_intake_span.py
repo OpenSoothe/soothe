@@ -1,12 +1,13 @@
 """Langfuse parent span for the intake stage.
 
-Intake LLM calls (the social gate and the graph-entry classifier) each build their
-own RunnableConfig, so without a parent they land at the trace root instead of
-under a station observation. Unlike ``evaluate``, the span id is threaded
-explicitly through ``GoalLoopTrace`` rather than through OTEL ambient context:
-the pre-graph social gate and the graph-entry classifier are separated by
-checkpoint and Context Engine work and by generator suspension points, where a
-current-span context manager would leak into unrelated tasks.
+The pre-graph social gate builds its own RunnableConfig, so without a parent it
+lands at the trace root instead of under a station observation. Unlike
+``evaluate``, the span id is threaded explicitly through ``GoalLoopTrace``
+rather than through OTEL ambient context because generator suspension points
+could leak a current-span context manager into unrelated tasks.
+
+The graph-entry classifier instead inherits the LangGraph node's RunnableConfig
+so its model generation remains a child of the graph ``intake`` node.
 """
 
 from __future__ import annotations

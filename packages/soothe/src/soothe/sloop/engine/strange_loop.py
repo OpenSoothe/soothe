@@ -329,10 +329,8 @@ class StrangeLoop:
                     loop_id=state_manager.loop_id,
                 )
 
-            # Parent span so the social-gate and intake generations nest under
-            # one intake station instead of landing at the trace root. Turns that
-            # classify inside the graph (or not at all) leave it inert; the graph
-            # entry station opens its own span.
+            # Parent span for the pre-graph social-gate generation. Full intake
+            # classification inherits the graph node's RunnableConfig instead.
             intake_runs_pre_graph = (
                 preclassified_intent is None
                 and intent_classifier is not None

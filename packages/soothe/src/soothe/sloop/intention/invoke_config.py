@@ -22,6 +22,7 @@ def build_intake_invoke_config(
     soothe_config: SootheConfig | None = None,
     observability_metadata: dict[str, str] | None = None,
     goal_trace: Any | None = None,
+    inherit_callbacks_from: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build RunnableConfig with Langfuse tracing for an intake classification call."""
     from soothe_nano.llm import build_traced_invoke_config
@@ -32,6 +33,7 @@ def build_intake_invoke_config(
             component=f"classifier.{component}",
             phase=phase,
             extra_metadata=observability_metadata,
+            inherit_callbacks_from=inherit_callbacks_from,
         )
 
     from soothe.utils.observability.langfuse import intake_phase_langfuse_run_display_name

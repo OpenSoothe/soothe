@@ -109,6 +109,7 @@ class GoalLoopTrace:
         run_name: str,
         extra_metadata: dict[str, Any] | None = None,
         nest_under_intake_span: bool = False,
+        inherit_callbacks_from: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """RunnableConfig for a direct LLM call pinned to this goal-loop trace.
 
@@ -119,7 +120,9 @@ class GoalLoopTrace:
             run_name: Langfuse observation display name.
             extra_metadata: Optional extra RunnableConfig metadata.
             nest_under_intake_span: When True and an intake parent span is open,
-                nest the run under that span (social gate / graph intake).
+                nest the pre-graph social-gate run under that span.
+            inherit_callbacks_from: Optional parent RunnableConfig whose Langfuse
+                handler should be reused to preserve LangGraph run ancestry.
         """
         from soothe_nano.llm.observability import create_llm_call_metadata
 
@@ -131,7 +134,11 @@ class GoalLoopTrace:
             "configurable": dict(self._configurable()),
             "metadata": {**self.base_metadata(), **metadata},
         }
-        nested_handler = self._intake_parent_handler() if nest_under_intake_span else None
+        nested_handler = (
+            self._intake_parent_handler()
+            if nest_under_intake_span and inherit_callbacks_from is None
+            else None
+        )
         if nested_handler is not None:
             base["callbacks"] = [nested_handler]
         return merge_langfuse_runnable_config(
@@ -141,7 +148,8 @@ class GoalLoopTrace:
             run_name=run_name,
             loop_id=self.loop_id,
             pinned_trace_id=self.trace_id,
-            inherit_callbacks_from=base if nested_handler is not None else None,
+            inherit_callbacks_from=inherit_callbacks_from
+            or (base if nested_handler is not None else None),
         )
 
     def intake_invoke_config(
@@ -151,6 +159,7 @@ class GoalLoopTrace:
         component: str,
         phase: str = "pre-stream",
         extra_metadata: dict[str, Any] | None = None,
+        inherit_callbacks_from: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """RunnableConfig for preprocess ``intake`` LLM under this trace."""
         trace_name = (self.soothe_config.observability.langfuse.trace_name or "").strip()
@@ -164,6 +173,7 @@ class GoalLoopTrace:
             run_name=run_name,
             extra_metadata=extra_metadata,
             nest_under_intake_span=True,
+            inherit_callbacks_from=inherit_callbacks_from,
         )
 
     def _intake_parent_handler(self) -> Any | None:

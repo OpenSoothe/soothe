@@ -91,6 +91,7 @@ class IntentClassifier:
         goal_trace: Any | None = None,
         observability_phase: str = "strange_loop_graph",
         observability_component: str = "strange_loop.intent_classification",
+        parent_runnable_config: dict[str, Any] | None = None,
     ) -> IntentClassification:
         """Classify query via full intake classification (with ledger context).
 
@@ -114,6 +115,7 @@ class IntentClassifier:
                 "observability_component": observability_component,
             },
             goal_trace=goal_trace,
+            parent_runnable_config=parent_runnable_config,
         )
         intent = self._intake_to_intent(intake_result, query)
 

@@ -328,7 +328,7 @@ def build_dependent_execution_hints(
     Finish-vs-split policy and search hygiene live in system + tool schemas
     (``THREAD_POLICY_SYSTEM_ADDENDUM``); user keeps instance scope only.
     """
-    from soothe.prompts import complex_decompose_first_hint_lines, user_finish_or_split_hint_lines
+    from soothe.prompts import decompose_first_hint_lines, user_finish_or_split_hint_lines
 
     root = bool(step.is_dag_root if is_dag_root is None else is_dag_root)
     instruction_lines = [
@@ -337,9 +337,9 @@ def build_dependent_execution_hints(
         "tasks that will run in later threads",
         "- Produce output matching the EXPECTED OUTPUT specification",
     ]
-    if root and task_complexity == "complex":
+    if root and task_complexity in ("medium", "complex"):
         instruction_lines = [
-            *complex_decompose_first_hint_lines(),
+            *decompose_first_hint_lines(),
             *instruction_lines,
         ]
     if has_predecessor_evidence:

@@ -54,6 +54,29 @@ def test_soothe_handler_wraps_root_client_when_trace_context_set() -> None:
     assert isinstance(wrapped, _LangfuseTracePinnedParent)
 
 
+def test_soothe_handler_wraps_root_client_when_parent_run_is_unknown() -> None:
+    pytest.importorskip("langfuse")
+    from uuid import uuid4
+
+    from langfuse._client.client import Langfuse
+
+    from soothe_sdk.observability.langfuse.callback_handler import (
+        SootheLangfuseCallbackHandler,
+        _LangfuseTracePinnedParent,
+    )
+
+    handler = SootheLangfuseCallbackHandler(
+        trace_context={
+            "trace_id": "trace-goal-1",
+            "parent_span_id": "span-intake-1",
+        }
+    )
+    handler.client = MagicMock(spec=Langfuse)
+
+    wrapped = handler._get_parent_observation(uuid4())
+    assert isinstance(wrapped, _LangfuseTracePinnedParent)
+
+
 def test_soothe_handler_does_not_wrap_when_parent_run_exists() -> None:
     pytest.importorskip("langfuse")
     from uuid import uuid4

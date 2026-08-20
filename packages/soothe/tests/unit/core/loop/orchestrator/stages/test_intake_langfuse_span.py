@@ -112,6 +112,27 @@ def test_intake_invoke_config_without_span_stays_trace_pinned() -> None:
     assert out["run_name"] == "soothe-dev:intake-classify"
 
 
+def test_intake_invoke_config_inherits_graph_handler() -> None:
+    pytest.importorskip("langfuse")
+    from soothe_sdk.observability.langfuse.callback_handler import (
+        SootheLangfuseCallbackHandler,
+    )
+
+    graph_handler = SootheLangfuseCallbackHandler(trace_context={"trace_id": "trace-goal-1"})
+    nested = _goal_trace().with_intake_parent_span("span-intake-1")
+    out = nested.intake_invoke_config(
+        purpose="classify_intake",
+        component="classifier.intake.classify",
+        phase="intake_classify",
+        inherit_callbacks_from={"callbacks": [graph_handler]},
+    )
+
+    # The active LangChain context carries this handler into the child call.
+    # Omitting an explicit duplicate preserves its graph-node parent_run_id.
+    assert "callbacks" not in out
+    assert out["run_name"] == "soothe-dev:intake-classify"
+
+
 def test_pinned_llm_invoke_config_uses_explicit_run_name() -> None:
     """Execute auxiliaries must not inherit the ``intake`` run-name fallback."""
     pytest.importorskip("langfuse")
@@ -128,8 +149,8 @@ def test_pinned_llm_invoke_config_uses_explicit_run_name() -> None:
 
 
 @pytest.mark.asyncio
-async def test_graph_intake_node_nests_classifier_under_span() -> None:
-    """Graph-entry classification runs under the ``intake`` span, which then closes."""
+async def test_graph_intake_node_inherits_graph_runnable_config() -> None:
+    """Graph-entry classification reuses the graph callback hierarchy."""
     classifier = MagicMock()
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
@@ -160,14 +181,12 @@ async def test_graph_intake_node_nests_classifier_under_span() -> None:
         emit=AsyncMock(),
     )
 
-    handle = MagicMock()
-    handle.parent_span_id = "span-intake-1"
-    with patch(
-        "soothe.sloop.stages.preprocess.intake.open_intake_langfuse_span",
-        return_value=handle,
-    ):
-        await node_intent_classify(ctx, {})
+    parent_config = {
+        "callbacks": [MagicMock(name="graph-langfuse-handler")],
+        "metadata": {"langfuse_trace_id": "trace-goal-1"},
+    }
+    await node_intent_classify(ctx, {}, parent_config)
 
-    passed_trace = classifier.classify_intake.await_args.kwargs["goal_trace"]
-    assert passed_trace.intake_parent_span_id == "span-intake-1"
-    handle.end.assert_called_once_with(output=str(IntakeLabel.SIMPLE))
+    kwargs = classifier.classify_intake.await_args.kwargs
+    assert kwargs["goal_trace"] is ctx.goal_trace
+    assert kwargs["parent_runnable_config"] == parent_config

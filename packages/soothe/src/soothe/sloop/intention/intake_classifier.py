@@ -129,6 +129,7 @@ class IntakeClassifier:
         ledger_messages: list[BaseMessage] | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
+        parent_runnable_config: dict[str, Any] | None = None,
     ) -> IntakeLLMResult:
         """Classify query as social or task (with ledger context when provided).
 
@@ -158,6 +159,7 @@ class IntakeClassifier:
                 ledger_messages=ledger_messages,
                 observability_metadata=observability_metadata,
                 goal_trace=goal_trace,
+                parent_runnable_config=parent_runnable_config,
             )
             if not result.is_task and not (result.social_response or "").strip():
                 logger.warning(
@@ -168,6 +170,7 @@ class IntakeClassifier:
                         query,
                         observability_metadata=observability_metadata,
                         goal_trace=goal_trace,
+                        parent_runnable_config=parent_runnable_config,
                     )
                 except Exception:
                     logger.warning(
@@ -196,6 +199,7 @@ class IntakeClassifier:
         ledger_messages: list[BaseMessage] | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
+        parent_runnable_config: dict[str, Any] | None = None,
     ) -> IntakeLLMResult:
         """Single LLM call for intake classification."""
         prior_wire = prior_response_language.value if prior_response_language else None
@@ -222,6 +226,7 @@ class IntakeClassifier:
             soothe_config=self._soothe_config,
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
+            inherit_callbacks_from=parent_runnable_config,
         )
 
         schema = intake_json_schema()
@@ -264,6 +269,7 @@ class IntakeClassifier:
         *,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
+        parent_runnable_config: dict[str, Any] | None = None,
     ) -> str:
         """Dedicated reply-only LLM call when classification omits social_response."""
         system_prompt = build_intake_system_prompt(
@@ -281,6 +287,7 @@ class IntakeClassifier:
             soothe_config=self._soothe_config,
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
+            inherit_callbacks_from=parent_runnable_config,
         )
         schema = SocialReplyResult.model_json_schema()
         schema["required"] = ["social_response"]

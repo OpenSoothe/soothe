@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
 from soothe.sloop.stages.complete.finalize import node_goal_completion
@@ -83,8 +84,8 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     goal and the prior interrupt would dangle (RFC-622).
     """
 
-    async def intake(state: dict[str, Any]) -> dict[str, Any]:
-        return await node_intent_classify(ctx, state)
+    async def intake(state: dict[str, Any], config: RunnableConfig) -> dict[str, Any]:
+        return await node_intent_classify(ctx, state, config)
 
     async def enter_loop(state: dict[str, Any]) -> dict[str, Any]:
         return await node_init_or_resume(ctx, state)
