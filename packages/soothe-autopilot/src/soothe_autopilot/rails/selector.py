@@ -207,13 +207,15 @@ def catalog_hash_for_candidates(candidates: Sequence[RailDefinition]) -> str:
 class RailAutoPicker:
     """Structured LLM picker over dynamic catalog candidates."""
 
-    def __init__(self, model: Any) -> None:
+    def __init__(self, model: Any, *, soothe_config: Any | None = None) -> None:
         """Bind a chat model used for structured auto-pick calls.
 
         Args:
             model: LangChain chat model (or test double).
+            soothe_config: Process config for Langfuse tracing and call policy.
         """
         self._model = model
+        self._soothe_config = soothe_config
 
     async def pick(
         self,
@@ -224,21 +226,27 @@ class RailAutoPicker:
     ) -> RailAutoPickResponse:
         """Invoke structured pick for ``description`` against ``candidates``."""
         from langchain_core.messages import HumanMessage, SystemMessage
-        from soothe_nano.llm.structured import invoke_structured_chat_typed
+        from soothe_nano.llm import ainvoke_structured_traced
 
         user_prompt = format_rail_pick_user_prompt(
             description,
             candidates,
             max_field_chars=max_field_chars,
         )
-        return await invoke_structured_chat_typed(
+        data = await ainvoke_structured_traced(
             self._model,
             [
                 SystemMessage(content=RAIL_AUTO_PICK_SYSTEM_PROMPT),
                 HumanMessage(content=user_prompt),
             ],
-            RailAutoPickResponse,
+            json_schema=RailAutoPickResponse.model_json_schema(),
+            schema_name="RailAutoPickResponse",
+            soothe_config=self._soothe_config,
+            purpose="rail_auto_pick",
+            component="autopilot.rails.selector",
+            phase="job-intake",
         )
+        return RailAutoPickResponse.model_validate(data)
 
 
 async def resolve_rail_for_job(

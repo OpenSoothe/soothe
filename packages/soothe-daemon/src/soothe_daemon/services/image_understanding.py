@@ -147,20 +147,17 @@ async def enrich_user_text_with_vision(
 
     msg = HumanMessage(content=blocks)
 
-    invoke_config = _build_vision_invoke_config(config, session_id=session_id)
+    from soothe_nano.llm import ainvoke_traced
 
-    from soothe_nano.llm.invoke_policy import (
-        await_with_llm_call_policy,
-        llm_rate_limit_config_from,
-    )
-
-    async def _invoke() -> Any:
-        return await model.ainvoke([msg], config=invoke_config)
-
-    response = await await_with_llm_call_policy(
-        _invoke,
-        config=llm_rate_limit_config_from(config),
-        thread_id=session_id,
+    response = await ainvoke_traced(
+        model,
+        [msg],
+        soothe_config=config,
+        purpose="vision_preflight",
+        component="daemon.vision",
+        phase="pre-stream",
+        session_id=session_id,
+        run_name="soothe:vision-preflight",
     )
     summary = str(response.content).strip()
     if not summary:
@@ -171,19 +168,3 @@ async def enrich_user_text_with_vision(
     if user_part:
         return f"{user_part}\n\n{vision_block}\n"
     return f"{vision_block}\n"
-
-
-def _build_vision_invoke_config(config: Any, *, session_id: str | None = None) -> dict[str, Any]:
-    """Build Langfuse-traced RunnableConfig for vision preflight."""
-    try:
-        from soothe_sdk.observability.langfuse import SootheLangfuse
-
-        return SootheLangfuse(config).traced_llm(
-            purpose="vision_preflight",
-            component="daemon.vision",
-            phase="pre-stream",
-            session_id=session_id,
-            run_name="soothe:vision-preflight",
-        )
-    except Exception:
-        return {}

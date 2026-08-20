@@ -227,11 +227,7 @@ async def assess_step_deliverable_llm(
 ) -> StepDeliverableAssessment:
     """Layer 3: fast structured LLM verdict for ambiguous passes."""
     from langchain_core.messages import HumanMessage, SystemMessage
-    from soothe_nano.llm.invoke_policy import (
-        await_with_llm_call_policy,
-        llm_rate_limit_config_from,
-    )
-    from soothe_nano.llm.structured import invoke_structured_chat
+    from soothe_nano.llm import ainvoke_structured_traced
 
     system = (
         "You judge whether an agent execute step satisfied the user's goal.\n"
@@ -248,45 +244,22 @@ async def assess_step_deliverable_llm(
     messages = [SystemMessage(content=system), HumanMessage(content=human)]
     schema = StepDeliverableAssessment.model_json_schema()
 
-    if goal_trace is not None:
-        from soothe.utils.observability.langfuse import execute_step_langfuse_run_display_name
+    from soothe.utils.observability.langfuse import execute_step_langfuse_run_display_name
 
-        cfg = getattr(goal_trace, "soothe_config", None) or soothe_config
-        tn = (cfg.observability.langfuse.trace_name or "").strip() if cfg is not None else ""
-        config = goal_trace.pinned_llm_invoke_config(
-            purpose="assess_step_deliverable",
-            component="executor.step_deliverable",
-            phase="execute_step",
-            run_name=execute_step_langfuse_run_display_name(tn or None),
-        )
-    elif soothe_config is not None:
-        from soothe_sdk.observability.langfuse import SootheLangfuse
-
-        from soothe.utils.observability.langfuse import execute_step_langfuse_run_display_name
-
-        tn = (soothe_config.observability.langfuse.trace_name or "").strip()
-        config = SootheLangfuse(soothe_config).traced_llm(
-            purpose="assess_step_deliverable",
-            component="executor.step_deliverable",
-            phase="execute_step",
-            run_name=execute_step_langfuse_run_display_name(tn or None),
-        )
-    else:
-        config = {}
-
-    async def _invoke() -> dict[str, Any]:
-        return await invoke_structured_chat(
-            fast_model,
-            messages,
-            json_schema=schema,
-            schema_name="StepDeliverableAssessment",
-            strict=True,
-            config=config,
-        )
-
-    result_dict = await await_with_llm_call_policy(
-        _invoke,
-        config=llm_rate_limit_config_from(soothe_config),
+    cfg = getattr(goal_trace, "soothe_config", None) or soothe_config
+    tn = (cfg.observability.langfuse.trace_name or "").strip() if cfg is not None else ""
+    result_dict = await ainvoke_structured_traced(
+        fast_model,
+        messages,
+        json_schema=schema,
+        schema_name="StepDeliverableAssessment",
+        strict=True,
+        soothe_config=soothe_config,
+        purpose="assess_step_deliverable",
+        component="executor.step_deliverable",
+        phase="execute_step",
+        run_name=execute_step_langfuse_run_display_name(tn or None),
+        goal_trace=goal_trace,
     )
     if result_dict is None:
         raise ValueError("step deliverable assess returned None")

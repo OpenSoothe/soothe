@@ -1,9 +1,9 @@
-"""Tests that autopilot background reasoners use metadata-only LLM invoke config."""
+"""Tests that Autopilot background reasoners use traced LLM invocation."""
 
 from __future__ import annotations
 
 import logging
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from soothe.context.models import GoalNode
@@ -49,19 +49,12 @@ def mock_config() -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_backoff_reasoner_uses_metadata_only_invoke_config(
+async def test_backoff_reasoner_uses_traced_invoke_interface(
     mock_config: MagicMock,
 ) -> None:
-    """Backoff reasoning must not register observability callbacks."""
+    """Backoff reasoning forwards process config to nano tracing."""
     reasoner = GoalBackoffReasoner(mock_config)
-    captured: dict[str, object] = {}
-
-    async def capture_invoke(_messages: object, config: dict | None = None) -> MagicMock:
-        captured["config"] = config
-        return MagicMock(content=_BACKOFF_JSON)
-
-    reasoner._model = AsyncMock()
-    reasoner._model.ainvoke = capture_invoke  # type: ignore[method-assign]
+    traced = AsyncMock(return_value=MagicMock(content=_BACKOFF_JSON))
 
     goals = {
         "failed-1": _goal("failed-1", depends_on=["parent-1"]),
@@ -73,14 +66,13 @@ async def test_backoff_reasoner_uses_metadata_only_invoke_config(
         source="layer2_execute",
     )
 
-    await reasoner.reason_backoff("failed-1", goals, evidence, projector=_fake_projector())
+    with patch("soothe_nano.llm.ainvoke_traced", traced):
+        await reasoner.reason_backoff("failed-1", goals, evidence, projector=_fake_projector())
 
-    config = captured.get("config")
-    assert isinstance(config, dict)
-    assert not config.get("callbacks")
-    metadata = config.get("metadata")
-    assert isinstance(metadata, dict)
-    assert metadata.get("soothe_call_purpose") == "backoff_reasoning"
+    kwargs = traced.await_args.kwargs
+    assert kwargs["soothe_config"] is mock_config
+    assert kwargs["purpose"] == "backoff_reasoning"
+    assert kwargs["component"] == "autopilot.backoff_reasoner"
 
 
 @pytest.mark.asyncio
@@ -90,12 +82,7 @@ async def test_backoff_reasoner_logs_decision(
 ) -> None:
     """Backoff reasoning logs structured decision summary."""
     reasoner = GoalBackoffReasoner(mock_config)
-
-    async def mock_ainvoke(_messages: object, config: dict | None = None) -> MagicMock:
-        return MagicMock(content=_BACKOFF_JSON)
-
-    reasoner._model = AsyncMock()
-    reasoner._model.ainvoke = mock_ainvoke  # type: ignore[method-assign]
+    traced = AsyncMock(return_value=MagicMock(content=_BACKOFF_JSON))
 
     goals = {
         "failed-1": _goal("failed-1", depends_on=["parent-1"]),
@@ -107,7 +94,10 @@ async def test_backoff_reasoner_logs_decision(
         source="layer2_execute",
     )
 
-    with caplog.at_level(logging.INFO):
+    with (
+        patch("soothe_nano.llm.ainvoke_traced", traced),
+        caplog.at_level(logging.INFO),
+    ):
         await reasoner.reason_backoff("failed-1", goals, evidence, projector=_fake_projector())
 
     assert any("Backoff reasoning" in record.message for record in caplog.records)

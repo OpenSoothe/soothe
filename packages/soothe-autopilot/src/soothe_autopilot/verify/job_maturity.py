@@ -374,8 +374,14 @@ def _fail_closed_snapshot(*, reason: str) -> JobMaturitySnapshot:
 class JobMaturityAssessor:
     """Assess job root maturity via structured LLM against the acceptance contract."""
 
-    def __init__(self, *, model: BaseChatModel | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        model: BaseChatModel | None = None,
+        soothe_config: Any | None = None,
+    ) -> None:
         self._model = model
+        self._soothe_config = soothe_config
 
     async def assess(
         self,
@@ -423,34 +429,20 @@ class JobMaturityAssessor:
         )
         try:
             from langchain_core.messages import HumanMessage
-            from soothe_nano.llm.invoke_policy import (
-                await_with_llm_call_policy,
-                llm_rate_limit_config_from,
-            )
-            from soothe_nano.llm.observability import create_llm_call_metadata
-            from soothe_nano.llm.structured import invoke_structured_chat_typed
+            from soothe_nano.llm import ainvoke_structured_traced
             from soothe_nano.utils.text_preview import preview_first
 
-            invoke_config = {
-                "metadata": create_llm_call_metadata(
-                    purpose="job_maturity",
-                    component="autopilot.job_maturity",
-                    phase="post-verify",
-                )
-            }
-
-            async def _invoke() -> MaturityAssessmentVerdict:
-                return await invoke_structured_chat_typed(
-                    self._model,
-                    [HumanMessage(content=prompt)],
-                    MaturityAssessmentVerdict,
-                    config=invoke_config,
-                )
-
-            verdict = await await_with_llm_call_policy(
-                _invoke,
-                config=llm_rate_limit_config_from(None),
+            data = await ainvoke_structured_traced(
+                self._model,
+                [HumanMessage(content=prompt)],
+                json_schema=MaturityAssessmentVerdict.model_json_schema(),
+                schema_name="MaturityAssessmentVerdict",
+                soothe_config=self._soothe_config,
+                purpose="job_maturity",
+                component="autopilot.job_maturity",
+                phase="post-verify",
             )
+            verdict = MaturityAssessmentVerdict.model_validate(data)
             snapshot = _snapshot_from_verdict(verdict)
             logger.info(
                 "Job maturity LLM: acceptance_met=%s level=%s reasoning=%s",

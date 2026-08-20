@@ -405,30 +405,17 @@ async def classify_synthesis_scenario(
     # Call LLM with structured output
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
-        from soothe_nano.llm.invoke_policy import (
-            await_with_llm_call_policy,
-            llm_rate_limit_config_from,
-        )
-        from soothe_sdk.observability.langfuse import SootheLangfuse
+        from soothe_nano.llm import ainvoke_traced
 
-        invoke_config = SootheLangfuse(soothe_config).traced_llm(
+        response = await ainvoke_traced(
+            llm_client,
+            [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)],
+            soothe_config=soothe_config,
             purpose="scenario_classify",
             component="synthesis.scenario_classifier",
             phase="post-loop",
             session_id=getattr(state, "thread_id", None),
             run_name="soothe:scenario-classify",
-        )
-
-        async def _invoke() -> Any:
-            return await llm_client.ainvoke(
-                [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)],
-                config=invoke_config,
-            )
-
-        response = await await_with_llm_call_policy(
-            _invoke,
-            config=llm_rate_limit_config_from(soothe_config),
-            thread_id=getattr(state, "thread_id", None),
         )
 
         # Parse JSON response into ScenarioClassification

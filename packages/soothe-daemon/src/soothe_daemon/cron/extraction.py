@@ -210,39 +210,45 @@ class CronExtractionService:
         Raises:
             Exception: If LLM call fails.
         """
-        from soothe_nano.llm.invoke_policy import (
-            await_with_llm_call_policy,
-            llm_rate_limit_config_from,
-        )
+        from langchain_core.messages import HumanMessage
+        from soothe_nano.llm import ainvoke_structured_traced, ainvoke_traced
 
         model = self._get_model()
-        llm_config = llm_rate_limit_config_from(self._config).model_copy(
-            update={
-                "call_timeout_seconds": self._timeout,
-                "call_timeout_max_seconds": max(self._timeout, 60),
-            }
-        )
+        rate_limit_overrides = {
+            "call_timeout_seconds": self._timeout,
+            "call_timeout_max_seconds": max(self._timeout, 60),
+        }
+        messages = [HumanMessage(content=prompt)]
 
         try:
-
-            async def _structured() -> ExtractionResult:
-                structured_model = model.with_structured_output(ExtractionSchema)
-                result = await structured_model.ainvoke(prompt)
-                return self._schema_to_result(result, prompt)
-
-            return await await_with_llm_call_policy(_structured, config=llm_config)
+            data = await ainvoke_structured_traced(
+                model,
+                messages,
+                json_schema=ExtractionSchema.model_json_schema(),
+                schema_name="ExtractionSchema",
+                soothe_config=self._config,
+                purpose="cron_schedule_extraction",
+                component="daemon.cron.extraction",
+                phase="direct-invoke",
+                rate_limit_overrides=rate_limit_overrides,
+            )
+            return self._schema_to_result(ExtractionSchema.model_validate(data), prompt)
 
         except TimeoutError:
             raise
         except Exception as e:
             logger.debug("Structured output failed, falling back to JSON parsing: %s", e)
-
-            async def _plain() -> ExtractionResult:
-                response = await model.ainvoke(prompt)
-                content = response.content if hasattr(response, "content") else str(response)
-                return self._parse_json_response(content, prompt)
-
-            return await await_with_llm_call_policy(_plain, config=llm_config)
+            response = await ainvoke_traced(
+                model,
+                messages,
+                soothe_config=self._config,
+                purpose="cron_schedule_extraction_fallback",
+                component="daemon.cron.extraction",
+                phase="direct-invoke",
+                rate_limit_overrides=rate_limit_overrides,
+            )
+            content = response.content if hasattr(response, "content") else str(response)
+            return self._parse_json_response(content, prompt)
 
     def _schema_to_result(
         self,

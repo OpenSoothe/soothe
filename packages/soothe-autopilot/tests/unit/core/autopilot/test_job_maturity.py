@@ -92,9 +92,9 @@ class TestJobMaturityAssessor:
         )
         model = MagicMock()
         with patch(
-            "soothe_nano.llm.structured.invoke_structured_chat_typed",
+            "soothe_nano.llm.ainvoke_structured_traced",
             new_callable=AsyncMock,
-            return_value=verdict,
+            return_value=verdict.model_dump(),
         ):
             snap = await JobMaturityAssessor(model=model).assess(
                 tmp_path,
@@ -123,9 +123,9 @@ class TestJobMaturityAssessor:
         )
         model = MagicMock()
         with patch(
-            "soothe_nano.llm.structured.invoke_structured_chat_typed",
+            "soothe_nano.llm.ainvoke_structured_traced",
             new_callable=AsyncMock,
-            return_value=verdict,
+            return_value=verdict.model_dump(),
         ):
             snap = await JobMaturityAssessor(model=model).assess(
                 tmp_path,
@@ -142,7 +142,7 @@ class TestJobMaturityAssessor:
         model = MagicMock()
         with (
             patch(
-                "soothe_nano.llm.structured.invoke_structured_chat_typed",
+                "soothe_nano.llm.ainvoke_structured_traced",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("boom"),
             ),

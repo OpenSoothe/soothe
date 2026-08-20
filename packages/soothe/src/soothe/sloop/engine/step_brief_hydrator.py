@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
-from soothe_nano.llm.structured import invoke_structured_chat_typed
+from soothe_nano.llm import ainvoke_structured_traced
 
 from soothe.sloop.engine.step_predecessor_context import template_hydrate_step_brief
 
@@ -65,11 +65,17 @@ class StepBriefHydrator:
             "needed for this step; do not restate the entire user request as the step task\n"
         )
         try:
-            result = await invoke_structured_chat_typed(
+            data = await ainvoke_structured_traced(
                 self._model,
                 [{"role": "user", "content": prompt}],
-                StepBriefHydration,
+                json_schema=StepBriefHydration.model_json_schema(),
+                schema_name="StepBriefHydration",
+                soothe_config=self._config,
+                purpose="hydrate_step_brief",
+                component="sloop.step_brief_hydrator",
+                phase="execute_step",
             )
+            result = StepBriefHydration.model_validate(data)
             hydrated = (result.full_description or "").strip()
             if hydrated and len(hydrated.split()) >= 8:
                 return hydrated

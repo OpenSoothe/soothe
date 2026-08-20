@@ -8,11 +8,11 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage
-from soothe_nano.llm.invoke_policy import (
-    await_with_llm_call_policy,
-    llm_rate_limit_config_from,
+from soothe_nano.llm import (
+    StructuredOutputError,
+    ainvoke_structured_traced,
+    ainvoke_traced,
 )
-from soothe_nano.llm.structured import StructuredOutputError, invoke_structured_chat
 from soothe_nano.utils.text_preview import log_preview
 
 from soothe_daemon.protocol.intent_hints import (
@@ -21,36 +21,12 @@ from soothe_daemon.protocol.intent_hints import (
     OCR,
     TEXT_COMPLETION,
 )
-from soothe_daemon.services.image_understanding import _build_vision_invoke_config
-
 logger = logging.getLogger(__name__)
 
 _LOG_PREVIEW_CHARS = 800
 
 _DEFAULT_VISION_INSTRUCTION = "Describe the attached image(s) and answer any implied questions."
 _DEFAULT_OCR_INSTRUCTION = "Extract all visible text from the attached image(s)."
-
-
-def _build_intent_hint_invoke_config(
-    config: Any,
-    *,
-    purpose: str,
-    component: str,
-    session_id: str | None = None,
-) -> dict[str, Any]:
-    """Langfuse-traced RunnableConfig for direct daemon LLM calls."""
-    try:
-        from soothe_sdk.observability.langfuse import SootheLangfuse
-
-        return SootheLangfuse(config).traced_llm(
-            purpose=purpose,
-            component=component,
-            phase="direct-invoke",
-            session_id=session_id,
-            run_name=f"soothe:{purpose}",
-        )
-    except Exception:
-        return {}
 
 
 def _build_multimodal_message(
@@ -81,7 +57,6 @@ async def _invoke_chat_turn(
     response_schema_name: str | None = None,
     response_schema_strict: bool | None = None,
     empty_fallback: str,
-    invoke_config_override: dict[str, Any] | None = None,
 ) -> str:
     m = model.strip() if isinstance(model, str) and model.strip() else None
     if m:
@@ -91,12 +66,6 @@ async def _invoke_chat_turn(
         chat = config.create_chat_model(role)
         model_label = role
 
-    invoke_cfg = invoke_config_override or _build_intent_hint_invoke_config(
-        config,
-        purpose=purpose,
-        component=f"daemon.{purpose}",
-        session_id=session_id,
-    )
     structured = response_schema is not None
     strict = True if response_schema_strict is None else bool(response_schema_strict)
 
@@ -108,18 +77,21 @@ async def _invoke_chat_turn(
         structured,
     )
 
-    llm_policy = llm_rate_limit_config_from(config)
-
     async def _call() -> str:
         if structured:
             try:
-                data = await invoke_structured_chat(
+                data = await ainvoke_structured_traced(
                     chat,
                     messages,
                     json_schema=response_schema,
                     schema_name=response_schema_name,
                     strict=strict,
-                    config=invoke_cfg,
+                    soothe_config=config,
+                    purpose=purpose,
+                    component=f"daemon.{purpose}",
+                    phase="direct-invoke",
+                    session_id=session_id,
+                    run_name=f"soothe:{purpose}",
                 )
                 return json.dumps(data, ensure_ascii=False)
             except StructuredOutputError:
@@ -127,16 +99,21 @@ async def _invoke_chat_turn(
             except Exception as exc:
                 msg = f"structured {purpose} failed: {exc}"
                 raise StructuredOutputError(msg) from exc
-        response = await chat.ainvoke(messages, config=invoke_cfg)
+        response = await ainvoke_traced(
+            chat,
+            messages,
+            soothe_config=config,
+            purpose=purpose,
+            component=f"daemon.{purpose}",
+            phase="direct-invoke",
+            session_id=session_id,
+            run_name=f"soothe:{purpose}",
+        )
         out = str(response.content).strip()
         return out if out else empty_fallback
 
     try:
-        out = await await_with_llm_call_policy(
-            _call,
-            config=llm_policy,
-            thread_id=session_id,
-        )
+        out = await _call()
     except StructuredOutputError:
         raise
 
@@ -212,7 +189,6 @@ async def run_image_to_text_turn(
         att_meta,
     )
 
-    vision_cfg = _build_vision_invoke_config(config, session_id=session_id)
     return await _invoke_chat_turn(
         config,
         purpose=IMAGE_TO_TEXT,
@@ -223,7 +199,6 @@ async def run_image_to_text_turn(
         response_schema_name=response_schema_name,
         response_schema_strict=response_schema_strict,
         empty_fallback="(Image model returned empty content.)",
-        invoke_config_override=vision_cfg,
     )
 
 

@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **llm**: require `soothe-nano>=1.2.4` and route direct host,
+  Autopilot, and daemon chat-model calls through nano's unified traced
+  invocation interfaces. Plain and structured calls now consistently attach
+  Langfuse callbacks when observability is enabled while retaining shared
+  rate-limit, timeout, and retry policy.
+
 ## [v0.10.22] - 2026-08-19
 
 ### Fixed

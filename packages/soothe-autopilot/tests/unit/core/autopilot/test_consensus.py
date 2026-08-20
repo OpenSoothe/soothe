@@ -51,11 +51,11 @@ class TestEvaluateGoalCompletion:
     async def test_accept_with_structured_verdict(self) -> None:
         mock_model = MagicMock()
         with patch(
-            "soothe_nano.llm.structured.invoke_structured_chat_typed",
+            "soothe_nano.llm.ainvoke_structured_traced",
             new_callable=AsyncMock,
             return_value=ConsensusVerdict(
                 decision="accept", reasoning="Response is comprehensive."
-            ),
+            ).model_dump(),
         ):
             result = await evaluate_goal_completion(
                 goal_description="Write a report",
@@ -68,11 +68,11 @@ class TestEvaluateGoalCompletion:
     async def test_send_back_with_structured_verdict(self) -> None:
         mock_model = MagicMock()
         with patch(
-            "soothe_nano.llm.structured.invoke_structured_chat_typed",
+            "soothe_nano.llm.ainvoke_structured_traced",
             new_callable=AsyncMock,
             return_value=ConsensusVerdict(
                 decision="send_back", reasoning="Missing key analysis section."
-            ),
+            ).model_dump(),
         ):
             result = await evaluate_goal_completion(
                 goal_description="Write a report",
@@ -85,9 +85,11 @@ class TestEvaluateGoalCompletion:
     async def test_fail_with_structured_verdict(self) -> None:
         mock_model = MagicMock()
         with patch(
-            "soothe_nano.llm.structured.invoke_structured_chat_typed",
+            "soothe_nano.llm.ainvoke_structured_traced",
             new_callable=AsyncMock,
-            return_value=ConsensusVerdict(decision="fail", reasoning="Needs external credentials."),
+            return_value=ConsensusVerdict(
+                decision="fail", reasoning="Needs external credentials."
+            ).model_dump(),
         ):
             result = await evaluate_goal_completion(
                 goal_description="Deploy to prod",
@@ -109,7 +111,7 @@ class TestEvaluateGoalCompletion:
         mock_model = MagicMock()
         with (
             patch(
-                "soothe_nano.llm.structured.invoke_structured_chat_typed",
+                "soothe_nano.llm.ainvoke_structured_traced",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("boom"),
             ),

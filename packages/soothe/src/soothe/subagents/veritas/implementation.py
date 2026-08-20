@@ -3,18 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from soothe_nano.llm.invoke_policy import (
-    await_with_llm_call_policy,
-    llm_rate_limit_config_from,
-)
-from soothe_nano.llm.structured import (
-    StructuredOutputError,
-    invoke_structured_chat,
-)
+from soothe_nano.llm import StructuredOutputError, ainvoke_structured_traced
 
 from soothe.sloop.clarification.protocol import ClarificationRequest
 from soothe.subagents.veritas.prompts import (
@@ -105,27 +98,26 @@ async def answer(
     )
     logger.debug("[veritas] user prompt preview: %s", _truncate(user_prompt, _PROMPT_PREVIEW_CHARS))
 
-    invoke_config = _build_traced_invoke_config(
-        soothe_config=soothe_config, thread_id=thread_id, loop_id=loop_id
-    )
-
     try:
-
-        async def _invoke() -> dict[str, Any]:
-            return await invoke_structured_chat(
-                model,
-                messages,
-                json_schema=json_schema,
-                schema_name="VeritasAnswer",
-                strict=True,
-                config=invoke_config,
-                normalize=lambda data: coerce_veritas_response(data, n),
-            )
-
-        data = await await_with_llm_call_policy(
-            _invoke,
-            config=llm_rate_limit_config_from(soothe_config),
-            thread_id=thread_id,
+        trace_name = (
+            (soothe_config.observability.langfuse.trace_name or "").strip()
+            if soothe_config is not None
+            else ""
+        )
+        data = await ainvoke_structured_traced(
+            model,
+            messages,
+            json_schema=json_schema,
+            schema_name="VeritasAnswer",
+            strict=True,
+            soothe_config=soothe_config,
+            purpose="clarification_answer",
+            component="subagent.veritas",
+            phase="pre-stream",
+            session_id=thread_id,
+            loop_id=loop_id,
+            run_name=f"{trace_name}:veritas" if trace_name else "veritas",
+            normalize=lambda value: coerce_veritas_response(value, n),
         )
     except StructuredOutputError as exc:
         logger.warning("[veritas] structured output failed: %s", exc)
@@ -171,38 +163,6 @@ def _truncate(text: str, limit: int) -> str:
     if len(s) <= limit:
         return s
     return s[: limit - 1] + "…"
-
-
-def _build_traced_invoke_config(
-    *,
-    soothe_config: SootheConfig | None,
-    thread_id: str | None,
-    loop_id: str | None,
-) -> dict[str, Any] | None:
-    """Wrap the veritas LLM call in a Langfuse-traced RunnableConfig.
-
-    Returns ``None`` when no config is provided (e.g. unit tests) or when
-    Langfuse construction fails — the helper accepts ``None`` and the call
-    still goes through.
-    """
-    if soothe_config is None:
-        return None
-    try:
-        from soothe_sdk.observability.langfuse import SootheLangfuse
-
-        trace_name = (soothe_config.observability.langfuse.trace_name or "").strip()
-        run_name = f"{trace_name}:veritas" if trace_name else "veritas"
-        return SootheLangfuse(soothe_config).traced_llm(
-            purpose="clarification_answer",
-            component="subagent.veritas",
-            phase="pre-stream",
-            session_id=thread_id,
-            loop_id=loop_id,
-            run_name=run_name,
-        )
-    except Exception:
-        logger.debug("[veritas] failed to build Langfuse traced config", exc_info=True)
-        return None
 
 
 __all__ = ["answer"]

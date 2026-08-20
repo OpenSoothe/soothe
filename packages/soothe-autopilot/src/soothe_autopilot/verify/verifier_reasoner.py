@@ -417,27 +417,16 @@ class DagVerificationReasoner:
             HumanMessage(content=prompt),
         ]
 
-        from soothe_nano.llm.invoke_policy import (
-            await_with_llm_call_policy,
-            llm_rate_limit_config_from,
-        )
-        from soothe_nano.llm.observability import create_llm_call_metadata
+        from soothe_nano.llm import ainvoke_traced
 
-        invoke_config = {
-            "metadata": create_llm_call_metadata(
-                purpose="dag_verification",
-                component="autopilot.monitor.verifier_reasoner",
-                phase="background",
-                operation=operation,
-            )
-        }
-
-        async def _invoke() -> Any:
-            return await self._model.ainvoke(messages, config=invoke_config)
-
-        response = await await_with_llm_call_policy(
-            _invoke,
-            config=llm_rate_limit_config_from(self._soothe_config),
+        response = await ainvoke_traced(
+            self._model,
+            messages,
+            soothe_config=self._soothe_config,
+            purpose="dag_verification",
+            component="autopilot.monitor.verifier_reasoner",
+            phase="background",
+            extra_metadata={"operation": operation},
         )
 
         return response.content

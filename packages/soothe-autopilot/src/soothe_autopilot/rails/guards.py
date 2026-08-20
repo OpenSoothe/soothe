@@ -507,6 +507,7 @@ class LLMGuardEvaluator:
     """Evaluate NL rail conditions with a structured chat-model call (RFC-630)."""
 
     model: Any
+    soothe_config: Any | None = None
     min_confidence: float = 0.55
     role_hint: str = "fast"
     # When True, resolve clear structural cases without an LLM round-trip.
@@ -516,9 +517,9 @@ class LLMGuardEvaluator:
 
     async def evaluate(self, ctx: GuardContext) -> GuardResult:
         from pydantic import BaseModel, Field
-        from soothe_nano.llm.structured import (
+        from soothe_nano.llm import (
             StructuredOutputError,
-            invoke_structured_chat_typed,
+            ainvoke_structured_traced,
         )
 
         from soothe_autopilot.prompts import build_guard_messages
@@ -563,11 +564,17 @@ class LLMGuardEvaluator:
         )
         try:
             self.llm_calls += 1
-            result = await invoke_structured_chat_typed(
+            data = await ainvoke_structured_traced(
                 self.model,
                 messages,
-                _GuardMatch,
+                json_schema=_GuardMatch.model_json_schema(),
+                schema_name="GuardMatch",
+                soothe_config=self.soothe_config,
+                purpose="rail_guard_evaluate",
+                component="autopilot.rails.guards",
+                phase="rail-transition",
             )
+            result = _GuardMatch.model_validate(data)
         except StructuredOutputError as exc:
             return GuardResult(
                 matched=False,

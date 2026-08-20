@@ -43,10 +43,10 @@ async def test_hydrator_uses_llm_when_available(monkeypatch: pytest.MonkeyPatch)
                 "Edit foo.py to resolve the lint error reported in step 01. "
                 "Do not re-run verify_finally.sh until the edit is complete."
             )
-        )
+        ).model_dump()
 
     monkeypatch.setattr(
-        "soothe.sloop.engine.step_brief_hydrator.invoke_structured_chat_typed",
+        "soothe.sloop.engine.step_brief_hydrator.ainvoke_structured_traced",
         _fake_invoke,
     )
 

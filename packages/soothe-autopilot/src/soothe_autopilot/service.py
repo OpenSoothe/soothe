@@ -302,7 +302,10 @@ class AutopilotService:
 
             guards = None
             if self._consensus_model is not None:
-                guards = LLMGuardEvaluator(model=self._consensus_model)
+                guards = LLMGuardEvaluator(
+                    model=self._consensus_model,
+                    soothe_config=self._soothe_config,
+                )
             data_dir = Path(SOOTHE_DATA_DIR)
             trace_root = data_dir / "jobs"
             legacy_root = data_dir / "loops"
@@ -628,7 +631,10 @@ class AutopilotService:
             cfg = self._config
             picker = None
             if cfg.rail_auto_pick and self._auto_pick_model is not None:
-                picker = RailAutoPicker(self._auto_pick_model)
+                picker = RailAutoPicker(
+                    self._auto_pick_model,
+                    soothe_config=self._soothe_config,
+                )
             rail_pick = await resolve_rail_for_job(
                 rail_id,
                 description=description,
@@ -2279,6 +2285,7 @@ class AutopilotService:
                     response_text,
                     model=self._consensus_model,
                     dag_context=dag_context,
+                    soothe_config=self._soothe_config,
                 )
                 decision, reasoning = result.decision, result.reasoning
                 dag_ops = tuple(result.dag_ops or ())
@@ -2397,7 +2404,10 @@ class AutopilotService:
             qa_text = "\n".join(str(f) for f in goal.findings[-5:])[:2000]
 
         try:
-            snapshot = await JobMaturityAssessor(model=self._consensus_model).assess(
+            snapshot = await JobMaturityAssessor(
+                model=self._consensus_model,
+                soothe_config=self._soothe_config,
+            ).assess(
                 workspace,
                 verification_rules=root.verification_rules,
                 goal_md=load_job_goal_md(

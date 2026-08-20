@@ -43,7 +43,7 @@ def _patch_returns(
     async def _fake(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return payload
 
-    monkeypatch.setattr(veritas_impl, "invoke_structured_chat", _fake)
+    monkeypatch.setattr(veritas_impl, "ainvoke_structured_traced", _fake)
 
 
 def _patch_raises(
@@ -53,7 +53,7 @@ def _patch_raises(
     async def _fake(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         raise exc
 
-    monkeypatch.setattr(veritas_impl, "invoke_structured_chat", _fake)
+    monkeypatch.setattr(veritas_impl, "ainvoke_structured_traced", _fake)
 
 
 @pytest.mark.asyncio
@@ -131,54 +131,46 @@ def test_fakelist_model_import_for_sanity() -> None:
 async def test_traced_invoke_config_forwarded_when_config_provided(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """soothe_config + thread/loop ids → invoke_structured_chat receives a config."""
+    """Soothe config and correlation ids reach nano's traced interface."""
     captured: dict[str, Any] = {}
 
     async def _fake(*_args: Any, **kwargs: Any) -> dict[str, Any]:
-        captured["config"] = kwargs.get("config")
+        captured.update(kwargs)
         return {"answers": ["go"], "confidence": 0.8, "defer": False, "rationale": "ok"}
 
-    monkeypatch.setattr(veritas_impl, "invoke_structured_chat", _fake)
-
-    sentinel = {"metadata": {"purpose": "clarification_answer"}, "callbacks": ["lf"]}
-
-    class _StubTracer:
-        def traced_llm(self, **_kwargs: Any) -> dict[str, Any]:
-            return sentinel
-
-    monkeypatch.setattr(
-        "soothe_sdk.observability.langfuse.SootheLangfuse",
-        lambda _cfg: _StubTracer(),
-        raising=True,
-    )
+    monkeypatch.setattr(veritas_impl, "ainvoke_structured_traced", _fake)
 
     class _StubCfg:
         class observability:  # noqa: N801
             class langfuse:  # noqa: N801
                 trace_name = "soothe-dev"
 
+    cfg = _StubCfg()
     await answer(
         _request(),
         model=object(),
-        soothe_config=_StubCfg(),  # type: ignore[arg-type]
+        soothe_config=cfg,  # type: ignore[arg-type]
         thread_id="tid",
         loop_id="lid",
     )
-    assert captured["config"] is sentinel
+    assert captured["soothe_config"] is cfg
+    assert captured["session_id"] == "tid"
+    assert captured["loop_id"] == "lid"
+    assert captured["purpose"] == "clarification_answer"
 
 
 @pytest.mark.asyncio
 async def test_traced_invoke_config_none_when_config_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No soothe_config → invoke_structured_chat receives config=None."""
+    """No process config remains supported for isolated callers."""
     captured: dict[str, Any] = {}
 
     async def _fake(*_args: Any, **kwargs: Any) -> dict[str, Any]:
-        captured["config"] = kwargs.get("config")
+        captured.update(kwargs)
         return {"answers": ["go"], "confidence": 0.8, "defer": False, "rationale": "ok"}
 
-    monkeypatch.setattr(veritas_impl, "invoke_structured_chat", _fake)
+    monkeypatch.setattr(veritas_impl, "ainvoke_structured_traced", _fake)
 
     await answer(_request(), model=object())
-    assert captured["config"] is None
+    assert captured["soothe_config"] is None

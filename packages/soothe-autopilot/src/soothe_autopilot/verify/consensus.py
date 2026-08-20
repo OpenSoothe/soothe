@@ -15,7 +15,7 @@ opens the workspace (IG-710).
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 from pydantic import BaseModel, Field
 from soothe_nano.utils.text_preview import preview_first
@@ -70,6 +70,7 @@ async def evaluate_goal_completion(
     model: BaseChatModel | None = None,
     *,
     dag_context: str = "",
+    soothe_config: Any | None = None,
 ) -> ConsensusResult:
     """RFC-204 §1.3 / IG-726: Holistic evaluation via structured LLM.
 
@@ -78,6 +79,7 @@ async def evaluate_goal_completion(
         response_text: CE GoalReport projection text.
         model: LLM for evaluation (required).
         dag_context: Optional compact CE DAG slice for bounded ops.
+        soothe_config: Process config for Langfuse tracing and call policy.
 
     Returns:
         ConsensusResult with decision, reasoning, and optional dag_ops.
@@ -96,33 +98,19 @@ async def evaluate_goal_completion(
     )
     try:
         from langchain_core.messages import HumanMessage
-        from soothe_nano.llm.invoke_policy import (
-            await_with_llm_call_policy,
-            llm_rate_limit_config_from,
+        from soothe_nano.llm import ainvoke_structured_traced
+
+        data = await ainvoke_structured_traced(
+            model,
+            [HumanMessage(content=prompt)],
+            json_schema=ConsensusVerdict.model_json_schema(),
+            schema_name="ConsensusVerdict",
+            soothe_config=soothe_config,
+            purpose="consensus_vote",
+            component="cognition.consensus",
+            phase="post-loop",
         )
-        from soothe_nano.llm.observability import create_llm_call_metadata
-        from soothe_nano.llm.structured import invoke_structured_chat_typed
-
-        invoke_config = {
-            "metadata": create_llm_call_metadata(
-                purpose="consensus_vote",
-                component="cognition.consensus",
-                phase="post-loop",
-            )
-        }
-
-        async def _invoke() -> ConsensusVerdict:
-            return await invoke_structured_chat_typed(
-                model,
-                [HumanMessage(content=prompt)],
-                ConsensusVerdict,
-                config=invoke_config,
-            )
-
-        verdict = await await_with_llm_call_policy(
-            _invoke,
-            config=llm_rate_limit_config_from(None),
-        )
+        verdict = ConsensusVerdict.model_validate(data)
         decision: ConsensusDecision = verdict.decision
         reasoning = (verdict.reasoning or "").strip() or f"Judgment decided {decision}"
         ops = tuple(verdict.dag_ops or ())

@@ -48,10 +48,7 @@ async def summarize_step_completion_report(
     Returns:
         First-person summary text, or None when input is empty or the call fails.
     """
-    from soothe_nano.llm.invoke_policy import (
-        await_with_llm_call_policy,
-        llm_rate_limit_config_from,
-    )
+    from soothe_nano.llm import ainvoke_traced
 
     from soothe.prompts.graph_wrapper import GraphPromptWrapper
 
@@ -75,34 +72,22 @@ async def summarize_step_completion_report(
         max_words=word_limit,
     )
 
-    if goal_trace is not None:
-        from soothe.utils.observability.langfuse import execute_step_langfuse_run_display_name
+    from soothe.utils.observability.langfuse import execute_step_langfuse_run_display_name
 
-        cfg = getattr(goal_trace, "soothe_config", None) or soothe_config
-        tn = (cfg.observability.langfuse.trace_name or "").strip() if cfg is not None else ""
-        config = goal_trace.pinned_llm_invoke_config(
+    cfg = getattr(goal_trace, "soothe_config", None) or soothe_config
+    tn = (cfg.observability.langfuse.trace_name or "").strip() if cfg is not None else ""
+
+    try:
+        response = await ainvoke_traced(
+            fast_model,
+            messages,
+            soothe_config=soothe_config,
             purpose="step_completion_report",
             component="executor.step_completion_report",
             phase="execute_step",
             run_name=execute_step_langfuse_run_display_name(tn or None),
+            goal_trace=goal_trace,
         )
-    elif soothe_config is not None:
-        from soothe_sdk.observability.langfuse import SootheLangfuse
-
-        from soothe.utils.observability.langfuse import execute_step_langfuse_run_display_name
-
-        tn = (soothe_config.observability.langfuse.trace_name or "").strip()
-        config = SootheLangfuse(soothe_config).traced_llm(
-            purpose="step_completion_report",
-            component="executor.step_completion_report",
-            phase="execute_step",
-            run_name=execute_step_langfuse_run_display_name(tn or None),
-        )
-    else:
-        config = {}
-
-    async def _invoke() -> str:
-        response = await fast_model.ainvoke(messages, config=config)
         content = getattr(response, "content", response)
         if isinstance(content, list):
             parts: list[str] = []
@@ -114,13 +99,7 @@ async def summarize_step_completion_report(
                 elif isinstance(block, str):
                     parts.append(block)
             content = " ".join(parts)
-        return str(content or "").strip()
-
-    try:
-        raw = await await_with_llm_call_policy(
-            _invoke,
-            config=llm_rate_limit_config_from(soothe_config),
-        )
+        raw = str(content or "").strip()
     except Exception:
         logger.warning("Step completion report LLM call failed", exc_info=True)
         return None
