@@ -67,7 +67,9 @@ def test_resolve_command_head_maps_aliases() -> None:
 def test_bare_quit_words_are_exact_single_tokens() -> None:
     from soothe_cli.tui.command_registry import ALWAYS_IMMEDIATE, BARE_QUIT_WORDS
 
-    assert BARE_QUIT_WORDS == frozenset({"exit", "quit"})
+    assert {"exit", "quit"} <= BARE_QUIT_WORDS
+    assert "exist" not in BARE_QUIT_WORDS
+    assert "quite" not in BARE_QUIT_WORDS
     assert "/quit" in ALWAYS_IMMEDIATE
     assert "/q" in ALWAYS_IMMEDIATE
     assert "/exit" in ALWAYS_IMMEDIATE

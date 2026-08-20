@@ -110,7 +110,7 @@ def test_soothe_app_exit_delegates_to_mixin() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("word", ["exit", "quit", "Exit", " QUIT "])
+@pytest.mark.parametrize("word", ["exit", "quit", "Exit", " QUIT ", "eixt", "quti", "exitt"])
 async def test_bare_quit_word_exits_immediately(word: str) -> None:
     """Single-word exit/quit in normal mode must quit without sending to the agent."""
     app = _SubmitQuitStub()
@@ -123,7 +123,7 @@ async def test_bare_quit_word_exits_immediately(word: str) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("text", ["exit please", "please quit", "q"])
+@pytest.mark.parametrize("text", ["exit please", "please quit", "q", "exist", "quite"])
 async def test_non_exact_quit_text_is_not_bare_quit(text: str) -> None:
     """Only exact single-word exit/quit should trigger bare quit."""
     app = _SubmitQuitStub()

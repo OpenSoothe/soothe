@@ -299,10 +299,32 @@ def _build_bypass_set(tier: BypassTier) -> frozenset[str]:
 ALWAYS_IMMEDIATE: frozenset[str] = _build_bypass_set(BypassTier.ALWAYS)
 """Commands that execute regardless of any busy state."""
 
-BARE_QUIT_WORDS: frozenset[str] = frozenset({"exit", "quit"})
+BARE_QUIT_WORDS: frozenset[str] = frozenset(
+    {
+        "exit",
+        "quit",
+        # Adjacent transpositions / doubled letters. Real English words
+        # (exist, quite, quiet) are intentionally omitted.
+        "eixt",
+        "exti",
+        "exitt",
+        "exiit",
+        "exot",
+        "quti",
+        "qiut",
+        "quitt",
+        "qiot",
+    }
+)
 """Single-word normal-mode input that exits the TUI (no leading slash)."""
 
-BARE_COMMAND_ALIASES: dict[str, str] = {"clear": "/clear"}
+BARE_COMMAND_ALIASES: dict[str, str] = {
+    "clear": "/clear",
+    "claer": "/clear",
+    "clera": "/clear",
+    "cleer": "/clear",
+    "clerar": "/clear",
+}
 """Single-word normal-mode input rewritten to its slash-command equivalent.
 
 Keys are bare words typed in normal mode (no leading ``/``); values are the

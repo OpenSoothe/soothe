@@ -31,7 +31,7 @@ class _SubmitAliasStub(_ExecutionMixin):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("word", ["clear", "Clear", " CLEAR "])
+@pytest.mark.parametrize("word", ["clear", "Clear", " CLEAR ", "claer", "clera", "cleer"])
 async def test_bare_clear_is_routed_as_slash_clear(word: str) -> None:
     """Plain-text ``clear`` in normal mode must be rewritten to ``/clear``."""
     app = _SubmitAliasStub()
@@ -78,4 +78,6 @@ async def test_slash_clear_in_command_mode_is_unaffected() -> None:
 def test_bare_command_aliases_registry_maps_clear() -> None:
     from soothe_cli.tui.command_registry import BARE_COMMAND_ALIASES
 
-    assert BARE_COMMAND_ALIASES == {"clear": "/clear"}
+    assert BARE_COMMAND_ALIASES["clear"] == "/clear"
+    assert BARE_COMMAND_ALIASES["claer"] == "/clear"
+    assert BARE_COMMAND_ALIASES["clera"] == "/clear"

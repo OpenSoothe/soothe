@@ -1,7 +1,7 @@
 # IG-754: StrangeLoop Eval Thread
 
 > Implementation guide for [RFC-905](../specs/RFC-905-sloop-eval-thread.md).
-> Status: **In progress**.
+> Status: **Implemented** (2026-08-20).
 
 ## Scope
 
