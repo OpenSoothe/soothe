@@ -282,9 +282,20 @@ class TestSootheConfig:
             assert cfg.agent.protocols.planner.routing == routing
 
     def test_loop_plan_model_roles_default(self) -> None:
+        from soothe.config.constants import (
+            GOAL_COMPLETION_REPORT_MAX_CHARS,
+            GOAL_COMPLETION_REPORT_MAX_PER_MESSAGE_CHARS,
+        )
+
         cfg = SootheConfig()
-        assert cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_total_chars == 24000
-        assert cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_message_chars == 3000
+        assert (
+            cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_total_chars
+            == GOAL_COMPLETION_REPORT_MAX_CHARS
+        )
+        assert (
+            cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_message_chars
+            == GOAL_COMPLETION_REPORT_MAX_PER_MESSAGE_CHARS
+        )
         assert cfg.agent.loop.goal_synthesis_model_role == "default"
 
     def test_loop_plan_model_roles_yaml(self) -> None:

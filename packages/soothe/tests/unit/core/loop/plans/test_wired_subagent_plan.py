@@ -1,8 +1,8 @@
-"""Tests for terminal 1-step plans used by trivial and wired-subagent routes."""
+"""Tests for terminal 1-step plans used by the wired-subagent route."""
 
 from __future__ import annotations
 
-from soothe.sloop.plans.trivial_plan import build_trivial_plan
+from soothe.sloop.plans.wired_subagent_plan import build_wired_subagent_plan
 from soothe.sloop.state.schemas import resolve_wire_subagent
 
 
@@ -12,8 +12,8 @@ def test_resolve_wire_subagent_accepts_slash_hint() -> None:
     assert resolve_wire_subagent(wire_subagent="unknown") is None
 
 
-def test_build_trivial_plan_wires_browser_use() -> None:
-    plan = build_trivial_plan(
+def test_build_wired_subagent_plan_wires_browser_use() -> None:
+    plan = build_wired_subagent_plan(
         "get weather at beijing",
         wire_subagent="browser_use",
     )
@@ -22,13 +22,13 @@ def test_build_trivial_plan_wires_browser_use() -> None:
     assert step.subagent == "browser_use"
 
 
-def test_build_trivial_plan_propagates_requires_tool_use() -> None:
-    plan = build_trivial_plan("shanghai weather now", requires_tool_use=True)
+def test_build_wired_subagent_plan_propagates_requires_tool_use() -> None:
+    plan = build_wired_subagent_plan("shanghai weather now", requires_tool_use=True)
     assert plan.decision.steps[0].requires_tool_use is True
 
 
-def test_build_trivial_plan_leaves_delegate_none_for_generic_goal() -> None:
-    plan = build_trivial_plan("list files in this directory")
+def test_build_wired_subagent_plan_leaves_delegate_none_for_generic_goal() -> None:
+    plan = build_wired_subagent_plan("list files in this directory")
     step = plan.decision.steps[0]
     assert step.execution_hint == "auto"
     assert step.subagent is None

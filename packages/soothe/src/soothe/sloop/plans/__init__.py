@@ -15,11 +15,11 @@ from soothe.sloop.plans.grounding import (
     peek_approved_plan_from_state,
     root_already_grounded,
 )
-from soothe.sloop.plans.trivial_plan import build_trivial_plan
+from soothe.sloop.plans.wired_subagent_plan import build_wired_subagent_plan
 
 __all__ = [
     "approved_plan_section_body",
-    "build_trivial_plan",
+    "build_wired_subagent_plan",
     "compose_root_full_description",
     "consume_approved_plan_from_state",
     "parse_planner_subagent_review_answers",

@@ -89,9 +89,11 @@ class IntentClassification(BaseModel):
 
     4-class LLM intake classification:
     - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.
-    - ``trivial``: direct execute via one-step DISPATCH root.
-    - ``simple``/``complex``: agentic goals of increasing effort; the runner /
-      StrangeLoop derive loop continuation structurally from the checkpoint.
+    - ``trivial``: direct execute via DISPATCH root; skips the coverage Eval phase
+      and finalizes from the CoreAgent result.
+    - ``simple``/``complex``: agentic goals of increasing effort; run the full
+      coverage Eval gate; the runner / StrangeLoop derive loop continuation
+      structurally from the checkpoint.
 
     ``intake_label`` drives ``route_by_intent``.
 

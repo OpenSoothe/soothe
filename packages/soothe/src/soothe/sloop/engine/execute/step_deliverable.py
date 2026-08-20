@@ -20,11 +20,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-TRIVIAL_DIRECT_EXPECTED_OUTPUT = (
-    "Direct answer to the user's request. Use tool results when the goal needs "
-    "live or external data; otherwise answer from reasoning."
-)
-
 
 class StepDeliverableFailureMode(StrEnum):
     """Why an execute pass did not satisfy the step deliverable gate."""
@@ -335,7 +330,6 @@ __all__ = [
     "StepDeliverableFailureMode",
     "StepDeliverableSpec",
     "StepDeliverableVerdict",
-    "TRIVIAL_DIRECT_EXPECTED_OUTPUT",
     "assess_step_deliverable_llm",
     "evaluate_step_deliverable",
     "evaluate_step_deliverable_structural",

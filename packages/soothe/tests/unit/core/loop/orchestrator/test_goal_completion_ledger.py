@@ -354,8 +354,8 @@ async def test_empty_ledger_direct_falls_back_to_synthesis() -> None:
 
 
 @pytest.mark.asyncio
-async def test_trivial_intake_ledger_direct_uses_user_submission_as_human() -> None:
-    """Trivial goals record the original user line as goal_completion human ledger."""
+async def test_trivial_intake_ledger_direct_uses_synthesis_prompt_as_human() -> None:
+    """Trivial goals use the same synthesis ledger prompt as all complexities."""
     from types import SimpleNamespace
 
     from soothe.sloop.intention.models import IntakeLabel
@@ -418,7 +418,10 @@ async def test_trivial_intake_ledger_direct_uses_user_submission_as_human() -> N
         for m in lm
         if getattr(m, "phase", None) == "goal_completion" and isinstance(m, LoopAIMessage)
     )
-    assert gc_human.content == "what time is it"
+    # Trivial no longer substitutes the raw user submission; it uses the same
+    # synthesis ledger prompt as all task complexities (the only finalization
+    # difference is that trivial skips the Eval phase at ROOT_EVAL).
+    assert "Produce the final user-facing response" in gc_human.content
     assert gc_ai.content == "It is 3 PM."
 
 

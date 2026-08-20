@@ -42,7 +42,7 @@ from soothe.sloop.plans.artifact import (
     update_plan_artifact_status,
     write_plan_artifact,
 )
-from soothe.sloop.plans.trivial_plan import build_trivial_plan
+from soothe.sloop.plans.wired_subagent_plan import build_wired_subagent_plan
 from soothe.sloop.utils.goal_text import resolve_user_request
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
@@ -398,12 +398,12 @@ async def _handle_planner_subagent_review_answer(
     path = getattr(ctx.scratch, "plan_artifact_path", None)
     report = (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip()
 
-    # Clarification-resume turns rebuild LoopPhaseScratch; reinject a trivial
+    # Clarification-resume rebuilds LoopPhaseScratch; reinject a wired-subagent
     # plan so Reject → goal_completion can ledger_direct without a fatal.
     # Approve clears plan_result and hands off to StrangeLoop DISPATCH
     # (RFC-904); the approved markdown grounds the root THREAD.
     if ctx.scratch.plan_result is None:
-        ctx.scratch.plan_result = build_trivial_plan(
+        ctx.scratch.plan_result = build_wired_subagent_plan(
             goal_text,
             wire_subagent=wire,
             requires_tool_use=False,
@@ -425,7 +425,7 @@ async def _handle_planner_subagent_review_answer(
         _record_wired_execute_ledger(
             ctx, goal_text=goal_text, report=note, wire=wire, step_id=step_id
         )
-        # StrangeLoop DISPATCH owns the decision; drop the intake trivial plan.
+        # StrangeLoop DISPATCH owns the decision; drop the intake-only plan.
         # Approve grounds into DISPATCH; do not synthesize a plan-assess artifact.
         ctx.scratch.plan_result = None
         ctx.scratch.planner_subagent_review_comments = None
@@ -502,7 +502,7 @@ async def _invoke_intake_only_direct(
         )
         return {"last_outcome": "fatal"}
 
-    plan = build_trivial_plan(
+    plan = build_wired_subagent_plan(
         goal_text,
         wire_subagent=wire,
     )

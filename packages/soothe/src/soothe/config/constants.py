@@ -73,3 +73,13 @@ _PASS2_REASONING_MAX_CHARS: int = 200
 # ── Planner assembly ────────────────────────────────────────────────────────
 
 GOAL_PREVIEW_MAX_CHARS: int = 120
+
+# ── Goal completion report projection ───────────────────────────────────────
+# Bounds the prior-goal completion report (synthesis output) when projected
+# forward into intake classify, plan, execute, and synthesis prompts. 100k
+# accommodates the full ~60k reports seen in practice with headroom. When a
+# report exceeds the char cap, it is truncated head+tail (40% beginning +
+# 60% tail) rather than front-only, so conclusions/recommendations survive.
+GOAL_COMPLETION_REPORT_MAX_CHARS: int = 100_000
+GOAL_COMPLETION_REPORT_MAX_MESSAGES: int = 500
+GOAL_COMPLETION_REPORT_MAX_PER_MESSAGE_CHARS: int = 100_000

@@ -76,6 +76,9 @@ from soothe_nano.config.models import (
 from soothe.config.constants import (
     DEFAULT_MAX_ITERATIONS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
+    GOAL_COMPLETION_REPORT_MAX_CHARS,
+    GOAL_COMPLETION_REPORT_MAX_MESSAGES,
+    GOAL_COMPLETION_REPORT_MAX_PER_MESSAGE_CHARS,
 )
 from soothe.sloop.clarification.origins import DEFAULT_FORCE_MANUAL_ORIGINS
 
@@ -751,27 +754,23 @@ class PlanPromptLedgerConfig(BaseModel):
     """
 
     plan_ledger_max_messages: int = Field(
-        default=40,
+        default=GOAL_COMPLETION_REPORT_MAX_MESSAGES,
         ge=0,
         le=500,
         description="Max ledger messages tail for plan prompts (0 = unlimited)",
     )
     plan_ledger_max_total_chars: int = Field(
-        default=24000,
+        default=GOAL_COMPLETION_REPORT_MAX_CHARS,
         ge=0,
         le=2_000_000,
-        description=(
-            "Max total extracted characters for plan ledger projection "
-            "(0 = unlimited; default 24000)"
-        ),
+        description=("Max total extracted characters for plan ledger projection (0 = unlimited)"),
     )
     plan_ledger_max_message_chars: int = Field(
-        default=3000,
+        default=GOAL_COMPLETION_REPORT_MAX_PER_MESSAGE_CHARS,
         ge=0,
         le=500_000,
         description=(
-            "Max extracted characters per ledger message in plan projection "
-            "(0 = unlimited; default 3000)"
+            "Max extracted characters per ledger message in plan projection (0 = unlimited)"
         ),
     )
     preamble_max_turns: int = Field(
@@ -784,12 +783,12 @@ class PlanPromptLedgerConfig(BaseModel):
         ),
     )
     prior_goal_tail: int = Field(
-        default=3,
+        default=0,
         ge=0,
-        le=10,
+        le=1000,
         description=(
             "Max prior-goal terminal units projected into intake and synthesis "
-            "prompts (0 = disable prior-goal context)"
+            "prompts (0 = unlimited, project all prior-goal terminal units)"
         ),
     )
 
@@ -798,10 +797,13 @@ class ExecutePromptLedgerConfig(BaseModel):
     """Caps for execute-step CoreAgent ledger projection."""
 
     cross_goal_completion_tail: int = Field(
-        default=3,
+        default=0,
         ge=0,
-        le=10,
-        description="Prior-goal completion units at goal boundary (0 = disable Slice A)",
+        le=1000,
+        description=(
+            "Prior-goal completion units at goal boundary "
+            "(0 = unlimited, project all; negative = disable Slice A)"
+        ),
     )
     predecessor_max_messages: int = Field(
         default=96,

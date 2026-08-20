@@ -43,19 +43,12 @@ _GOAL_COMPLETION_LEDGER_HUMAN_BASE = (
 
 
 def _goal_completion_ledger_human_content(state: LoopState) -> str:
-    """Human ledger line for goal completion: user submission for trivial, else synthesis prompt."""
+    """Human ledger line for goal completion (synthesis prompt; all complexities)."""
     from soothe.sloop.intention.models import (
-        IntakeLabel,
         ResponseLanguage,
         normalize_response_language,
     )
 
-    intent = getattr(state, "intent", None)
-    intake_label = getattr(intent, "intake_label", None) if intent is not None else None
-    if intake_label == IntakeLabel.TRIVIAL:
-        submission = (getattr(state, "goal_user_submission", None) or state.goal or "").strip()
-        if submission:
-            return submission
     language = normalize_response_language(getattr(state, "response_language", None))
     if language is None or language == ResponseLanguage.OTHER:
         return (

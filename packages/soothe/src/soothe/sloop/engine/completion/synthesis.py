@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.observability.langfuse import merge_langfuse_runnable_config
 
+from soothe.config.constants import GOAL_COMPLETION_REPORT_MAX_CHARS
 from soothe.sloop.engine.completion.scenario_classifier import (
     ScenarioClassification,
     classify_synthesis_scenario,
@@ -46,7 +47,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SYNTHESIS_EVIDENCE_MAX = 120_000
+_DEFAULT_SYNTHESIS_EVIDENCE_MAX = GOAL_COMPLETION_REPORT_MAX_CHARS
 
 _SYNTH_GC_MARKER = "__synth_gc__"
 

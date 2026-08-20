@@ -10,8 +10,8 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from soothe.sloop.engine.execute.executor import Executor
-from soothe.sloop.engine.execute.step_deliverable import TRIVIAL_DIRECT_EXPECTED_OUTPUT
 from soothe.sloop.engine.execute.step_wave_types import _StreamCollectChunk
+from soothe.sloop.plans.wired_subagent_plan import _WIRED_SUBAGENT_EXPECTED_OUTPUT
 from soothe.sloop.state.schemas import StepAction
 
 
@@ -63,7 +63,7 @@ class TestExecutorActionRetry:
         step = StepAction(
             id="step-1",
             description="weather shanghai get for me",
-            expected_output=TRIVIAL_DIRECT_EXPECTED_OUTPUT,
+            expected_output=_WIRED_SUBAGENT_EXPECTED_OUTPUT,
             requires_tool_use=True,
         )
 
@@ -106,7 +106,7 @@ class TestExecutorActionRetry:
         step = StepAction(
             id="step-1",
             description="weather shanghai",
-            expected_output=TRIVIAL_DIRECT_EXPECTED_OUTPUT,
+            expected_output=_WIRED_SUBAGENT_EXPECTED_OUTPUT,
             requires_tool_use=True,
         )
 
@@ -146,7 +146,7 @@ class TestExecutorActionRetry:
         step = StepAction(
             id="step-1",
             description="what is 2+2",
-            expected_output=TRIVIAL_DIRECT_EXPECTED_OUTPUT,
+            expected_output=_WIRED_SUBAGENT_EXPECTED_OUTPUT,
             requires_tool_use=False,
         )
 
@@ -199,7 +199,7 @@ class TestExecutorActionRetry:
         step = StepAction(
             id="step-1",
             description="weather shanghai",
-            expected_output=TRIVIAL_DIRECT_EXPECTED_OUTPUT,
+            expected_output=_WIRED_SUBAGENT_EXPECTED_OUTPUT,
             requires_tool_use=True,
         )
 

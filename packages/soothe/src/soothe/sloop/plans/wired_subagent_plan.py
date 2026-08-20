@@ -1,16 +1,14 @@
-"""Terminal 1-step plan builder (RFC-630 §11).
+"""Single-step plan builder for the wired-subagent delegate path.
 
-Used by:
-- ``trivial`` intake branch (``init_or_resume``) — direct execute, no planning
-- intake-only wired path (plan bookkeeping only; specialist runs via streamed direct invoke)
-
-Execute (or post-direct-invoke) routes to ``goal_completion`` via
-``terminal_after_execute`` without a second assess wave.
+Used by the wired-subagent (intake-only specialist) branch for plan
+bookkeeping: produces a 1-step ``PlanResult`` carrying the wire-subagent
+hint so the direct-invoke specialist can record an execute-step ledger pair
+and route to ``goal_completion`` via ``terminal_after_execute`` without a
+second assess wave.
 """
 
 from __future__ import annotations
 
-from soothe.sloop.engine.execute.step_deliverable import TRIVIAL_DIRECT_EXPECTED_OUTPUT
 from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
@@ -18,19 +16,25 @@ from soothe.sloop.state.schemas import (
     resolve_wire_subagent,
 )
 
+# Soft expected-output contract for the wired specialist's direct answer.
+_WIRED_SUBAGENT_EXPECTED_OUTPUT = (
+    "Direct answer to the user's request. Use tool results when the goal needs "
+    "live or external data; otherwise answer from reasoning."
+)
 
-def build_trivial_plan(
+
+def build_wired_subagent_plan(
     goal: str,
     *,
     wire_subagent: str | None = None,
     requires_tool_use: bool = False,
 ) -> PlanResult:
-    """Build a minimal 1-step terminal plan.
+    """Build a minimal 1-step terminal plan for a wired subagent.
 
     Args:
         goal: The user's goal text (verbatim submission).
         wire_subagent: Allowlisted specialist for the wired-subagent route.
-        requires_tool_use: Execute deliverable-gate signal for the trivial step.
+        requires_tool_use: Execute deliverable-gate signal for the step.
 
     Returns:
         A ``PlanResult`` with a single execute step whose action is the goal
@@ -39,7 +43,7 @@ def build_trivial_plan(
     resolved_wire = resolve_wire_subagent(wire_subagent=wire_subagent)
     step = StepAction(
         description=goal,
-        expected_output=TRIVIAL_DIRECT_EXPECTED_OUTPUT,
+        expected_output=_WIRED_SUBAGENT_EXPECTED_OUTPUT,
         requires_tool_use=requires_tool_use,
         is_dag_root=True,
     )
@@ -68,4 +72,4 @@ def build_trivial_plan(
     )
 
 
-__all__ = ["build_trivial_plan"]
+__all__ = ["build_wired_subagent_plan"]

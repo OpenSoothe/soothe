@@ -1,7 +1,7 @@
-"""Tests for RFC-630 ``route_by_intent`` branch dispatch and the trivial branch.
+"""Tests for RFC-630 ``route_by_intent`` branch dispatch and trivial intake routing.
 
 Covers test groups 2 (routing truth table), 4 (branch node sequence),
-and 6 (trivial-branch synth plan + mislabel recovery).
+and 6 (wired-subagent plan shape + mislabel recovery).
 
 Routing guard tests for new_goal_created constraint blocking chitchat.
 """
@@ -16,7 +16,7 @@ from soothe_sdk.intention.models import TaskComplexity
 
 from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.routing import route_by_intent
-from soothe.sloop.plans.trivial_plan import build_trivial_plan
+from soothe.sloop.plans.wired_subagent_plan import build_wired_subagent_plan
 from soothe.sloop.stations.preprocess.enter_loop import node_init_or_resume
 
 
@@ -113,7 +113,7 @@ def test_route_by_intent_missing_label_falls_back_to_complex() -> None:
     assert route_by_intent(state) == "dispatch"
 
 
-# -- Group 4: trivial pseudo-plan (in-graph execute) ------------------------
+# -- Group 4: trivial intake routing (DISPATCH) -----------------------------
 
 
 @pytest.mark.asyncio
@@ -232,8 +232,8 @@ async def test_init_or_resume_chitchat_continue_with_goal_history_skips_fast_pat
 
 
 @pytest.mark.asyncio
-async def test_init_or_resume_trivial_injects_pseudo_plan() -> None:
-    """The trivial label injects a 1-step plan and continues through execute."""
+async def test_init_or_resume_trivial_routes_to_dispatch() -> None:
+    """Trivial label routes to DISPATCH without plan injection."""
     from soothe.sloop.intention import IntentClassification
 
     emitted: list[tuple[str, object]] = []
@@ -308,7 +308,7 @@ async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
 
 @pytest.mark.asyncio
 async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuation() -> None:
-    """Simple mid-loop does not inject trivial plan; DISPATCH owns planning."""
+    """Simple mid-loop routes through DISPATCH; no plan injection."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
@@ -342,8 +342,8 @@ async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuat
 
 
 @pytest.mark.asyncio
-async def test_init_or_resume_simple_injects_trivial_plan() -> None:
-    """Fresh-loop simple no longer injects a plan (RFC-904 DISPATCH owns root)."""
+async def test_init_or_resume_simple_no_plan_injection() -> None:
+    """Fresh-loop simple routes through DISPATCH; no plan injection."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
@@ -392,12 +392,12 @@ async def test_init_or_resume_complex_does_not_inject_synth_plan() -> None:
     assert scratch.plan_result is None
 
 
-# -- Group 6: mislabel recovery (trivial plan shape) ----------------------
+# -- Group 6: mislabel recovery (wired-subagent plan) -------------------
 
 
-def test_trivial_plan_has_no_synthetic_reasoning_prefix() -> None:
-    """RFC-630 §11: the trivial plan emits the goal as the step, no verbose prefix."""
-    plan = build_trivial_plan("list files in this directory")
+def test_wired_subagent_plan_has_no_synthetic_reasoning_prefix() -> None:
+    """The wired-subagent plan emits the goal as the step, no verbose prefix."""
+    plan = build_wired_subagent_plan("list files in this directory")
     assert plan.next_action == "list files in this directory"
     assert plan.decision is not None
     assert plan.decision.reasoning == ""

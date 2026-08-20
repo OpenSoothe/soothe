@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 from soothe.sloop.engine.execute.step_deliverable import (
-    TRIVIAL_DIRECT_EXPECTED_OUTPUT,
     StepDeliverableSpec,
     evaluate_step_deliverable_structural,
     resolve_step_deliverable_spec,
     step_has_deliverable_gate,
 )
+from soothe.sloop.plans.wired_subagent_plan import _WIRED_SUBAGENT_EXPECTED_OUTPUT
 from soothe.sloop.state.schemas import StepAction
 
 
-def test_trivial_expected_output_is_soft_direct_answer() -> None:
-    assert "Direct answer" in TRIVIAL_DIRECT_EXPECTED_OUTPUT
-    assert "## Result" not in TRIVIAL_DIRECT_EXPECTED_OUTPUT
+def test_wired_expected_output_is_soft_direct_answer() -> None:
+    assert "Direct answer" in _WIRED_SUBAGENT_EXPECTED_OUTPUT
+    assert "## Result" not in _WIRED_SUBAGENT_EXPECTED_OUTPUT
 
 
 def test_structural_incomplete_when_tools_required_but_missing() -> None:

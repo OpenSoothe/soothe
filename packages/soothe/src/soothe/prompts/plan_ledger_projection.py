@@ -136,6 +136,47 @@ def _cap_single_message_content(msg: BaseMessage, max_chars: int) -> BaseMessage
     return _set_message_content(msg, clipped)
 
 
+def _goal_report_truncation_marker(dropped: int) -> str:
+    """Marker inserted between head and tail of a truncated goal-completion report."""
+    return f"\n…[{dropped} chars truncated]…\n"
+
+
+def _truncate_head_tail(text: str, *, cap: int, marker: str) -> str:
+    """Truncate to ``cap`` chars keeping 40% head + 60% tail with a truncation marker.
+
+    The tail is favored (recommendations, file paths, deferred items live near the
+    end of a goal-completion report) so the most actionable content survives.
+    """
+    if cap <= 0 or len(text) <= cap:
+        return text
+    budget = cap - len(marker)
+    if budget <= 0:
+        return marker
+    head = int(budget * 0.4)
+    tail = budget - head
+    return f"{text[:head]}{marker}{text[-tail:]}"
+
+
+def _is_goal_completion_ai(msg: BaseMessage) -> bool:
+    """True when ``msg`` is a goal-completion AI turn (the synthesis report body)."""
+    if getattr(msg, "phase", None) != "goal_completion":
+        return False
+    return type(msg).__name__.endswith("AIMessage")
+
+
+def _cap_goal_completion_message(msg: BaseMessage, max_chars: int) -> BaseMessage:
+    """Head+tail truncate a goal-completion report (40% head + 60% tail)."""
+    if max_chars <= 0:
+        return msg
+    text = extract_text_from_message_content(getattr(msg, "content", ""))
+    if len(text) <= max_chars:
+        return msg
+    dropped = len(text) - max_chars
+    marker = _goal_report_truncation_marker(dropped)
+    clipped = _truncate_head_tail(text, cap=max_chars, marker=marker)
+    return _set_message_content(msg, clipped)
+
+
 def _trim_total_chars_front(
     messages: list[BaseMessage], max_chars: int
 ) -> tuple[list[BaseMessage], bool]:
@@ -166,8 +207,17 @@ def _trim_total_chars_front(
         m0 = out[0]
         text = extract_text_from_message_content(getattr(m0, "content", ""))
         if len(text) > max_chars:
-            marker = "\n…[truncated for plan prompt]\n"
-            clipped = text[: max(0, max_chars - len(marker))] + marker
+            if _is_goal_completion_ai(m0):
+                # Head+tail: keep 40% beginning + 60% tail of the report.
+                dropped = len(text) - max_chars
+                clipped = _truncate_head_tail(
+                    text,
+                    cap=max_chars,
+                    marker=_goal_report_truncation_marker(dropped),
+                )
+            else:
+                marker = "\n…[truncated for plan prompt]\n"
+                clipped = text[: max(0, max_chars - len(marker))] + marker
             out[0] = _set_message_content(m0, clipped)
             shrunk = True
 
@@ -239,7 +289,12 @@ def project_loop_messages_for_plan(
         )
 
     if max_per > 0:
-        copies = [_cap_single_message_content(m, max_per) for m in copies]
+        copies = [
+            _cap_goal_completion_message(m, max_per)
+            if _is_goal_completion_ai(m)
+            else _cap_single_message_content(m, max_per)
+            for m in copies
+        ]
 
     if max_total > 0:
         copies, shrunk_total = _trim_total_chars_front(copies, max_total)
@@ -560,13 +615,16 @@ def collect_goal_completion_units(
     Completion-only (contrast with :func:`collect_cross_goal_completion_units`,
     which also includes ``goal_interrupted`` units): used by intake classify,
     which must not see interrupted goals' digests.
+
+    ``k <= 0`` means unlimited (project all prior-goal completion units).
     """
-    if k <= 0 or not loop_messages:
+    if not loop_messages:
         return []
+    k_eff = k if k > 0 else len(loop_messages)
 
     units_rev: list[list[BaseMessage]] = []
     cursor = _execute_plan_tail_index(loop_messages)
-    while len(units_rev) < k and cursor > 0:
+    while len(units_rev) < k_eff and cursor > 0:
         found = resolve_goal_completion_unit(loop_messages, cursor)
         if found is None:
             break
@@ -586,13 +644,16 @@ def collect_cross_goal_completion_units(
 
     Now includes ``goal_interrupted`` units so interrupted goals' partial-work
     digests are projected beside completions.
+
+    ``k <= 0`` means unlimited (project all prior-goal terminal units).
     """
-    if k <= 0 or not loop_messages:
+    if not loop_messages:
         return []
+    k_eff = k if k > 0 else len(loop_messages)
 
     units_rev: list[list[BaseMessage]] = []
     cursor = _execute_plan_tail_index(loop_messages)
-    while len(units_rev) < k and cursor > 0:
+    while len(units_rev) < k_eff and cursor > 0:
         found = resolve_goal_terminal_unit(loop_messages, cursor)
         if found is None:
             break
@@ -614,14 +675,17 @@ def execute_step_ids_subsumed_by_cross_goal_completion(
     interrupted digest), the ``execute_step`` rows from that same goal segment
     must not appear again in Slice B (including ``ledger_direct`` goals where
     the completion body copies execute text).
+
+    ``k <= 0`` means unlimited (subsume across all prior-goal terminal units).
     """
-    if k <= 0 or not loop_messages:
+    if not loop_messages:
         return frozenset()
+    k_eff = k if k > 0 else len(loop_messages)
 
     subsumed: set[str] = set()
     cursor = _execute_plan_tail_index(loop_messages)
     collected = 0
-    while collected < k and cursor > 0:
+    while collected < k_eff and cursor > 0:
         found = resolve_goal_terminal_unit(loop_messages, cursor)
         if found is None:
             break
@@ -769,7 +833,7 @@ def project_execute_step_graph_input(
     cross_goal_projected = False
     excluded_step_ids: frozenset[str] = frozenset()
 
-    if mode == "goal_boundary" and exec_cfg.cross_goal_completion_tail > 0:
+    if mode == "goal_boundary" and exec_cfg.cross_goal_completion_tail >= 0:
         if getattr(state, "continue_loop", False):
             tail_k = exec_cfg.cross_goal_completion_tail
             slice_a = project_cross_goal_completion_tail(
@@ -981,7 +1045,7 @@ def project_loop_messages_for_synthesis(
     loop_messages: list[BaseMessage],
     ledger_cfg: PlanPromptLedgerConfig | None = None,
     *,
-    prior_goal_tail: int = 3,
+    prior_goal_tail: int = 0,
 ) -> list[BaseMessage]:
     """Return ledger messages for goal-synthesis prompts (RFC-214).
 

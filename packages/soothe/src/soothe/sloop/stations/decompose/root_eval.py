@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.node_base import (
     LoopNode,
     NodeResult,
@@ -74,6 +75,15 @@ class RootEvalNode(LoopNode):
                     if latest.status == "completed":
                         logger.info("[root_eval] latest Eval completed; finalize")
                         return NodeResult(payload={"root_eval_route": "finalize"})
+
+                # Trivial tasks trust the CoreAgent execute result and skip the
+                # coverage Eval + root_eval insertion; go directly to finalize.
+                # This is the only finalization difference between task complexities.
+                intent = getattr(ctx.loop_state, "intent", None)
+                intake_label = getattr(intent, "intake_label", None) if intent is not None else None
+                if intake_label == IntakeLabel.TRIVIAL:
+                    logger.info("[root_eval] trivial task; skip Eval; finalize")
+                    return NodeResult(payload={"root_eval_route": "finalize"})
 
                 if not goal.steps.eval_required():
                     logger.info("[root_eval] Eval skip predicate matched; finalize")

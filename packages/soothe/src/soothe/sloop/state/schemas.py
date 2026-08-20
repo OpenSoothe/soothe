@@ -219,7 +219,7 @@ class StepAction(BaseModel):
         execution_hint: Planner routing hint (``subagent`` → delegate via ``task``).
         subagent: Named subagent when ``execution_hint='subagent'``.
         requires_tool_use: When set, execute deliverable gate requires successful tool use
-            (for trivial steps).
+            (for direct-answer steps).
         is_dag_root: True when this step has no CE ``parent_step_id`` (RFC-904 root).
     """
 
@@ -706,7 +706,7 @@ class PlanResult(BaseModel):
     """RFC-226: when True, the plan asserts its single step IS the goal completion.
 
     The Loop Graph routes from ``record_progress`` directly toward finalize /
-    goal completion when this flag is set (e.g. trivial one-step plans).
+    goal completion when this flag is set (e.g. wired-subagent one-step plans).
     Default False elsewhere.
     """
 

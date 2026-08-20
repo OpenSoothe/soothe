@@ -156,9 +156,10 @@ class LoopContextProjector:
         return int(getattr(cfg, "preamble_max_turns", 12) or 12)
 
     def _prior_goal_tail(self, cfg: Any | None) -> int:
+        # 0 = unlimited (project all prior-goal terminal units); pass through.
         if cfg is None:
-            return 3
-        return int(getattr(cfg, "prior_goal_tail", 3) or 3)
+            return 0
+        return int(getattr(cfg, "prior_goal_tail", 0) or 0)
 
 
 __all__ = [

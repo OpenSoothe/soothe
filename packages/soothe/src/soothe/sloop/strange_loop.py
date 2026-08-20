@@ -885,8 +885,12 @@ class StrangeLoop:
                     else:
                         original = apply_clarification_resume_goal_text(state, ce_goal)
                         _hydrate_previous_plan_from_ce(state, ce_goal)
-                        # Intake may have classified the bare keyword ("retry") as
-                        # simple/trivial — upgrade so plan continues remaining work.
+                        # A bare resume keyword ("retry") must not take the chitchat
+                        # fast-path to END — that would skip the resumed goal's
+                        # remaining work. Only CHITCHAT/None need upgrading; under
+                        # the unified workflow simple already routes to DISPATCH
+                        # and runs the full Eval gate identically to complex, and
+                        # trivial skips Eval entirely (root_eval short-circuit).
                         if is_interrupt_resume_keyword(user_submission_line):
                             from soothe.sloop.intention.models import IntakeLabel
 
@@ -894,14 +898,8 @@ class StrangeLoop:
                             label = (
                                 getattr(intent_obj, "intake_label", None) if intent_obj else None
                             )
-                            if label in (
-                                IntakeLabel.SIMPLE,
-                                IntakeLabel.TRIVIAL,
-                                IntakeLabel.CHITCHAT,
-                                None,
-                            ):
-                                if intent_obj is not None:
-                                    intent_obj.intake_label = IntakeLabel.COMPLEX
+                            if label in (IntakeLabel.CHITCHAT, None) and intent_obj is not None:
+                                intent_obj.intake_label = IntakeLabel.COMPLEX
                         logger.info(
                             "[Goal] interrupt resume reused CE goal %s: %s",
                             ce_goal.id,
