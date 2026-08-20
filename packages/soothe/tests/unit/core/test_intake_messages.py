@@ -17,10 +17,9 @@ from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 @pytest.mark.asyncio
 class TestIntakeClassifierLedger:
-    """Intent-classify ledger recording."""
+    """Intent-classify does not write a CE ledger pair."""
 
-    async def test_records_ledger_pair_when_context_engine_provided(self) -> None:
-        """Intake ledger writes are removed (RFC-904); classify still succeeds."""
+    async def test_classify_intake_does_not_write_context_engine(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         mock_result = IntakeResult(
             IntakeLLMResult(
@@ -30,36 +29,12 @@ class TestIntakeClassifierLedger:
                 reasoning="task",
             ),
         )
-        ce = MagicMock()
-        ce.save = AsyncMock()
         with patch.object(
             classifier._coordinator, "classify", new_callable=AsyncMock
         ) as mock_classify:
             mock_classify.return_value = mock_result
-            intent = await classifier.classify_intake(
-                "summarize readme",
-                thread_id="thread-1",
-                context_engine=ce,
-            )
+            intent = await classifier.classify_intake("summarize readme")
         assert intent.intake_label.value == "complex"
-        assert ce.ledger.record_message.call_count == 0
-        ce.save.assert_not_awaited()
-
-    async def test_skips_ledger_when_no_context_engine(self) -> None:
-        classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
-        mock_result = IntakeResult(
-            IntakeLLMResult(
-                is_task=True,
-                confidence=IntakeConfidence.HIGH,
-                social_response=None,
-                reasoning="task",
-            ),
-        )
-        with patch.object(
-            classifier._coordinator, "classify", new_callable=AsyncMock
-        ) as mock_classify:
-            mock_classify.return_value = mock_result
-            await classifier.classify_intake("refactor", context_engine=None)
 
 
 class TestIntakePriorGoalProjection:

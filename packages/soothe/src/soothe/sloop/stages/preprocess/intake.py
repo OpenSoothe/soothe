@@ -1,7 +1,8 @@
 """Loop Graph entry node: LLM intake classification (RFC-220, RFC-630).
 
-When intake was not pre-classified in the pre-graph gather (social gate), this
-node runs the full intake classification with ledger projection.
+The pre-graph social gate already classifies tasks (complexity + short title).
+This node runs a classify LLM call only when that verdict is missing (gate
+skipped, or no intent on loop state).
 """
 
 from __future__ import annotations
@@ -69,7 +70,7 @@ def intent_pass_reasoning_events(
 ) -> list[tuple[str, dict[str, Any]]]:
     """Build zero or one intake cognition card (task reasoning only).
 
-    Skips chitchat. Social-gate reasoning is not surfaced to the TUI.
+    Skips chitchat.
     """
     if intent.intake_label == IntakeLabel.CHITCHAT:
         return []
@@ -132,7 +133,6 @@ async def node_intent_classify(
     await emit_plan_phase_status(ctx, label=INTENT_CLASSIFY_STATUS_LABEL)
 
     query = ctx.loop_state.goal_user_submission or ctx.loop_state.goal
-    thread_id = ctx.loop_state.thread_id
     loop_messages = _ledger_messages_for_intake(ctx)
 
     prior_language = normalize_response_language(getattr(ctx.loop_state, "response_language", None))
@@ -140,12 +140,8 @@ async def node_intent_classify(
     intent = await classifier.classify_intake(
         query,
         loop_messages=loop_messages,
-        thread_id=thread_id,
-        context_engine=ctx.ce,
         prior_response_language=prior_language,
         goal_trace=ctx.goal_trace,
-        observability_phase="strange_loop_graph",
-        observability_component="strange_loop.intent_classification",
         parent_runnable_config=dict(runnable_config) if runnable_config is not None else None,
     )
 

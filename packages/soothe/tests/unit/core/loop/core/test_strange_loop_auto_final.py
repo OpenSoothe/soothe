@@ -13,8 +13,8 @@ from soothe.sloop.state.schemas import PlanResult
 def _make_mock_core_with_checkpointer() -> Mock:
     """Create mock CoreAgent with graph.checkpointer as AsyncMock returning None.
 
-    Without this, CheckLimitsNode's anchor_manager.capture_iteration_start_anchor
-    tries to await checkpointer.aget_tuple(config), causing TypeError on regular Mock.
+    Without this, iteration-end anchor capture and context-window estimation
+    try to await checkpointer.aget_tuple(config), causing TypeError on regular Mock.
     """
     mock_core = Mock()
     mock_graph = Mock()
@@ -158,7 +158,6 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
 
     mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
     mock_anchor_mgr = Mock()
-    mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
     mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()
@@ -214,7 +213,6 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
 
     mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
     mock_anchor_mgr = Mock()
-    mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
     mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()
@@ -269,7 +267,6 @@ async def test_completed_payload_for_summary_path() -> None:
 
     mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
     mock_anchor_mgr = Mock()
-    mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
     mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce(ledger_entries=[])
@@ -320,7 +317,6 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
     mock_ckpt.thread_ids = ["legacy-thread"]
 
     mock_anchor_mgr = Mock()
-    mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
     mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()

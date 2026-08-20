@@ -16,8 +16,10 @@ from soothe.sloop.intention import build_intake_task_fallback
 from soothe.sloop.intention.models import (
     IntakeConfidence,
     IntakeLLMResult,
+    IntentClassification,
     ResponseLanguage,
     build_loop_routing_classification,
+    intent_classification_from_intake,
     normalize_response_language,
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
@@ -45,14 +47,33 @@ from soothe.utils.observability.langfuse import (
 
 from .anchor_manager import CheckpointAnchorManager
 
+logger = logging.getLogger(__name__)
+
+
+def _task_intent_from_pre_graph_intake(
+    classifier: Any,
+    result: Any,
+    query: str,
+) -> IntentClassification | None:
+    """Promote a pre-graph task verdict to loop intent without a second LLM call."""
+    if classifier is None or result is None or not getattr(result, "is_task", False):
+        return None
+    convert = getattr(classifier, "intake_to_intent", None)
+    if callable(convert):
+        converted = convert(result, query)
+        if isinstance(converted, IntentClassification):
+            return converted
+    if isinstance(result, IntakeLLMResult):
+        return intent_classification_from_intake(result)
+    return None
+
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
     from soothe.config import SootheConfig
-
-logger = logging.getLogger(__name__)
 
 
 def _hydrate_previous_plan_from_ce(state: LoopState, ce_goal: Any) -> None:
@@ -307,6 +328,7 @@ class StrangeLoop:
             checkpoint: Any = None
             social_gate_reasoning_text = ""
             social_gate_result: IntakeLLMResult | None = None
+            gate_task_intent: IntentClassification | None = None
 
             active_goal_trace = goal_trace
             if (
@@ -448,6 +470,20 @@ class StrangeLoop:
                             },
                         )
                         return
+
+                if social_gate_result.is_task:
+                    from soothe.sloop.stages.preprocess.intake import (
+                        intent_pass_reasoning_events,
+                    )
+
+                    gate_task_intent = _task_intent_from_pre_graph_intake(
+                        intent_classifier,
+                        social_gate_result,
+                        execution_goal,
+                    )
+                    if gate_task_intent is not None:
+                        for event_type, payload in intent_pass_reasoning_events(gate_task_intent):
+                            yield (event_type, payload)
             else:
                 checkpoint = await state_manager.load()
 
@@ -631,8 +667,10 @@ class StrangeLoop:
             # RFC-225: continue_loop when prior goal(s) exist beside the active one.
             continue_loop_mode = len(checkpoint.goal_history) >= 2
 
-            # Client-forced / pre-graph intent skips intake classification; sync
-            # routing now (the graph entry node otherwise rebuilds routing).
+            # Client-forced intent or the pre-graph task verdict skips in-graph
+            # intake classification; sync routing now.
+            if preclassified_intent is None and gate_task_intent is not None:
+                preclassified_intent = gate_task_intent
             if preclassified_intent is not None:
                 synced_routing = build_loop_routing_classification(
                     preclassified_intent,
@@ -776,13 +814,11 @@ class StrangeLoop:
                     persistence_backend,
                 )
 
-            # Stage 2: the social gate confirmed a task. The full classification
-            # (task_complexity + task_short_description + context-aware reasoning)
-            # runs in the graph entry node with ledger projection, so leave
-            # ``state.intent`` unset here and just close the pre-graph span.
+            # Pre-graph intake already produced the task verdict (complexity,
+            # short description, reasoning). Close the station span; the graph
+            # entry node skips a second LLM call when ``state.intent`` is set.
             if (
-                preclassified_intent is None
-                and social_gate_result is not None
+                social_gate_result is not None
                 and social_gate_result.is_task
                 and intent_classifier is not None
                 and not clarification_answer

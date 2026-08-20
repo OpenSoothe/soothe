@@ -1895,8 +1895,6 @@ class Executor:
             if loop_state is not None and loop_state.current_decision is not None:
                 fork_thread_id = _select_thread_for_step(
                     step=step,
-                    decision=loop_state.current_decision,
-                    state=loop_state,
                     main_thread_id=thread_id,
                 )
                 loop_state.step_thread_ids[step.id] = fork_thread_id

@@ -1,4 +1,4 @@
-"""Thread selection logic for execute steps (RFC-223,).
+"""Thread selection logic for execute steps (RFC-223).
 
 Functions for selecting thread IDs during parallel step execution and
 subagent routing detection.
@@ -10,7 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction
+    from soothe.sloop.state.schemas import StepAction
 
 
 logger = logging.getLogger(__name__)
@@ -56,31 +56,15 @@ def resolve_user_requested_wire_subagent(
     return None
 
 
-def _select_thread_for_step(
-    step: StepAction,
-    decision: AgentDecision,
-    state: LoopState,
-    main_thread_id: str,
-) -> str:
+def _select_thread_for_step(step: StepAction, main_thread_id: str) -> str:
     """Select an isolated thread_id for a step.
 
     Thread isolation via ``__step_<id>`` namespace for parallel safety.
     Predecessor context arrives via ledger projection, not checkpoint fork.
 
-    Strategy:
-    | Direct deps | Action                                              |
-    |-------------|-----------------------------------------------------|
-    | 0           | new __step_<id> thread                              |
-    | ≥1          | new __step_<id> thread + predecessor ledger projection |
-
     Returns:
         Thread_id for the step's CoreAgent execution.
     """
-    direct_deps = step.dependencies or []
-
-    if not direct_deps:
-        return f"{main_thread_id}__step_{step.id}"
-
     return f"{main_thread_id}__step_{step.id}"
 
 

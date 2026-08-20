@@ -34,7 +34,9 @@ class IntentClassifier:
 
     Two entry points:
     - ``classify_social_gate``: context-free social-vs-task gate (pre-graph).
-    - ``classify_intake``: full classification with ledger projection (post-CE).
+      Task verdicts (complexity + short title) are reused as loop intent.
+    - ``classify_intake``: fallback classification when the pre-graph gate
+      did not run (interrupt resume, missing gate result).
 
     Args:
         model: Fast LLM for classification (e.g., gpt-4o-mini).
@@ -85,22 +87,16 @@ class IntentClassifier:
         query: str,
         *,
         loop_messages: Any | None = None,
-        thread_id: str | None = None,
-        context_engine: Any | None = None,
         prior_response_language: ResponseLanguage | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
-        observability_phase: str = "strange_loop_graph",
-        observability_component: str = "strange_loop.intent_classification",
         parent_runnable_config: dict[str, Any] | None = None,
     ) -> IntentClassification:
-        """Classify query via full intake classification (with ledger context).
+        """Classify query when the pre-graph gate did not already set intent.
 
-        Projects prior-goal completion units from the ledger into the prompt so
-        the classifier can reason about context and emit ``task_complexity`` /
-        ``task_short_description``.
+        Projects prior-goal completion units from the ledger into the prompt when
+        ``loop_messages`` is provided.
         """
-        del thread_id, context_engine
         if not self._fast_model:
             return self._fallback(query)
 
@@ -110,11 +106,7 @@ class IntentClassifier:
             query,
             ledger_messages=ledger_messages,
             prior_response_language=prior_response_language,
-            observability_metadata={
-                **(observability_metadata or {}),
-                "observability_phase": observability_phase,
-                "observability_component": observability_component,
-            },
+            observability_metadata=observability_metadata,
             goal_trace=goal_trace,
             parent_runnable_config=parent_runnable_config,
         )

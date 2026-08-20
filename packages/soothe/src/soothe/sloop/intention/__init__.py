@@ -2,7 +2,8 @@
 
 Intake classification (social vs task + task complexity + short description)
 via ``IntakeClassifier``; the facade ``IntentClassifier`` exposes the social
-gate (pre-graph) and full classification (post-CE).
+gate (pre-graph; task verdict reused as loop intent) and fallback
+classification when the gate did not run.
 """
 
 from __future__ import annotations

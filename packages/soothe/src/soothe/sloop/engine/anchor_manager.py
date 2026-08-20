@@ -1,7 +1,7 @@
 """Checkpoint anchor manager for iteration synchronization.
 
-Captures checkpoint anchors at iteration boundaries (start/end) to enable
-precise rewinding and checkpoint tree management.
+Captures iteration-end checkpoint anchors to enable precise rewinding and
+checkpoint tree management.
 
 RFC-218: StrangeLoop Checkpoint Tree Architecture
 Backend-agnostic persistence with config-driven backend selection
@@ -58,61 +58,6 @@ class CheckpointAnchorManager:
             )
             return cls(loop_id, config, persistence_manager=manager)
         return cls(loop_id, config)
-
-    async def capture_iteration_start_anchor(
-        self,
-        iteration: int,
-        thread_id: str,
-        checkpointer: BaseCheckpointSaver | None,
-    ) -> None:
-        """Capture iteration start anchor before Plan phase.
-
-        Args:
-            iteration: Current iteration number.
-            thread_id: Current thread ID.
-            checkpointer: LangGraph checkpointer instance, or ``None`` to skip.
-        """
-        if checkpointer is None:
-            logger.debug(
-                "No checkpointer available, skipping iter_start anchor for thread=%s iter=%d",
-                thread_id,
-                iteration,
-            )
-            return
-
-        # Get current CoreAgent checkpoint
-        config = {"configurable": {"thread_id": thread_id}}
-        checkpoint_tuple = await checkpointer.aget_tuple(config)
-
-        if not checkpoint_tuple:
-            log = logger.debug if iteration == 0 else logger.warning
-            log(
-                "No checkpoint found for thread=%s iteration=%d, skipping anchor capture",
-                thread_id,
-                iteration,
-            )
-            return
-
-        checkpoint_id = checkpoint_tuple.config["configurable"]["checkpoint_id"]
-        checkpoint_ns = checkpoint_tuple.config["configurable"].get("checkpoint_ns", "")
-
-        # Save anchor to persistence
-        await self.persistence_manager.save_checkpoint_anchor(
-            loop_id=self.loop_id,
-            iteration=iteration,
-            thread_id=thread_id,
-            checkpoint_id=checkpoint_id,
-            anchor_type="iteration_start",
-            checkpoint_ns=checkpoint_ns,
-        )
-
-        logger.debug(
-            "Captured iter_start anchor: loop=%s iter=%d thread=%s checkpoint=%s",
-            self.loop_id,
-            iteration,
-            thread_id,
-            checkpoint_id,
-        )
 
     async def capture_iteration_end_anchor(
         self,

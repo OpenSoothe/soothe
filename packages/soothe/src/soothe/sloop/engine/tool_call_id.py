@@ -249,50 +249,7 @@ def _rewrite_tool_message_tool_call_id(
     return msg.model_copy(update={"tool_call_id": unified})
 
 
-def _extract_tool_name_from_ai_chunk(msg: BaseMessage, tool_call_id: str) -> str:
-    """Extract tool name for a specific tool_call_id from AI message/chunk.
-
-    Args:
-        msg: AIMessage or AIMessageChunk containing tool call info.
-        tool_call_id: The tool_call_id to extract info for.
-
-    Returns:
-        Tool name string, or empty string if not found.
-    """
-    tool_name: str = ""
-
-    if isinstance(msg, AIMessageChunk):
-        # Check tool_call_chunks first (streaming)
-        for tc in getattr(msg, "tool_call_chunks", None) or []:
-            if not isinstance(tc, dict):
-                continue
-            tid = tc.get("id")
-            if isinstance(tid, str) and tid.strip() == tool_call_id:
-                tool_name = str(tc.get("name", "") or "").strip()
-                break
-        # Fallback to tool_calls if not found in chunks
-        if not tool_name:
-            for tc in getattr(msg, "tool_calls", None) or []:
-                if not isinstance(tc, dict):
-                    continue
-                tid = tc.get("id")
-                if isinstance(tid, str) and tid.strip() == tool_call_id:
-                    tool_name = str(tc.get("name", "") or "").strip()
-                    break
-    elif isinstance(msg, AIMessage):
-        for tc in getattr(msg, "tool_calls", None) or []:
-            if not isinstance(tc, dict):
-                continue
-            tid = tc.get("id")
-            if isinstance(tid, str) and tid.strip() == tool_call_id:
-                tool_name = str(tc.get("name", "") or "").strip()
-                break
-
-    return tool_name
-
-
 __all__ = [
-    "_extract_tool_name_from_ai_chunk",
     "_make_step_tool_call_id",
     "_make_task_inner_tool_call_id",
     "_rewrite_tool_call_ids_to_unified",

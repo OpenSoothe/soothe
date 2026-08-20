@@ -10,6 +10,8 @@ from soothe.utils.observability.langfuse import (
     GoalLoopTrace,
     SootheLangfuse,
     intake_langfuse_run_display_name,
+    intake_phase_langfuse_run_display_name,
+    loop_graph_langfuse_run_display_name,
     step_completion_report_langfuse_run_display_name,
     step_deliverable_langfuse_run_display_name,
 )
@@ -241,3 +243,12 @@ def test_step_deliverable_run_display_name() -> None:
         "soothe-dev:step-deliverable"
     )
     assert step_deliverable_langfuse_run_display_name(None) == "step-deliverable"
+
+
+def test_intake_and_graph_langfuse_names_are_not_aliased() -> None:
+    """Graph root stays strange-loop-graph; only the classify LLM uses intake-classify."""
+    assert loop_graph_langfuse_run_display_name("soothe-dev") == "soothe-dev:strange-loop-graph"
+    assert intake_phase_langfuse_run_display_name("soothe-dev", "intake_classify") == (
+        "soothe-dev:intake-classify"
+    )
+    assert intake_phase_langfuse_run_display_name("soothe-dev", "strange_loop_graph") is None

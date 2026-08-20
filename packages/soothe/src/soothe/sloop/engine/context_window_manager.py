@@ -392,14 +392,13 @@ class ContextWindowManager:
 
             result = await self.compact_checkpoint_inplace(thread_id, state)
 
-            # Check if compaction insufficient (still above threshold)
+            # Compaction insufficient (still above threshold): retry once with
+            # the same policy so the freshly written summary is re-summarized.
             if result is not None and self.should_compact(result.tokens_after):
                 logger.warning(
-                    "[ContextWindow] Compaction insufficient (%d > threshold); "
-                    "retrying with aggressive compaction",
+                    "[ContextWindow] Compaction insufficient (%d > threshold); retrying once",
                     result.tokens_after,
                 )
-                # Retry with only keeping 2 messages
                 result = await self.compact_checkpoint_inplace(thread_id, state)
 
             return result

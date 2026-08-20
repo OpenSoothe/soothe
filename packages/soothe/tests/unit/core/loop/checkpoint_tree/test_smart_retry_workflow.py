@@ -86,27 +86,8 @@ async def test_complete_smart_retry_workflow(tmp_path):
             status="running",
         )
 
-        # Mock checkpointer for anchor capture
-        mock_checkpointer = AsyncMock()
-        mock_checkpointer.aget_tuple = AsyncMock(
-            return_value=MagicMock(
-                config={
-                    "configurable": {
-                        "thread_id": "thread_001",
-                        "checkpoint_id": "checkpoint_iter0_start",
-                        "checkpoint_ns": "",
-                    }
-                }
-            )
-        )
-
         # 1. Capture iteration 0 (success)
         anchor_manager = CheckpointAnchorManager(loop_id)
-        await anchor_manager.capture_iteration_start_anchor(
-            iteration=0,
-            thread_id="thread_001",
-            checkpointer=mock_checkpointer,
-        )
 
         mock_checkpointer_end = AsyncMock()
         mock_checkpointer_end.aget_tuple = AsyncMock(
@@ -194,7 +175,7 @@ async def test_complete_smart_retry_workflow(tmp_path):
 
         # 7. Verify checkpoint anchors
         anchors = await persistence_manager.get_checkpoint_anchors_for_range(loop_id, 0, 10)
-        assert len(anchors) >= 2  # iteration_0_start, iteration_0_end
+        assert len(anchors) >= 1  # iteration_0_end
 
         # 8. Verify main line (successful iterations)
         successful_anchors = [a for a in anchors if a.get("iteration_status") == "success"]

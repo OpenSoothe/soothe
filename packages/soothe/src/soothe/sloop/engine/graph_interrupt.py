@@ -176,11 +176,6 @@ def _classify_stream_chunk(chunk: Any) -> StreamChunkClass:
     return StreamChunkClass(kind="chunk")
 
 
-def _detect_tool_boundary(chunk: Any) -> str:
-    """Classify a stream chunk kind string (compat helper for tests/callers)."""
-    return _classify_stream_chunk(chunk).kind
-
-
 class GraphStreamChunkReader:
     """Persistent async-iterator reader for CoreAgent graph streams.
 
@@ -376,51 +371,6 @@ class GraphStreamChunkReader:
         await self._cancel_pending()
 
 
-async def await_next_graph_stream_chunk(
-    chunk_iter: AsyncIterator[Any],
-    *,
-    idle_timeout: float | None = None,
-    tool_timeout: float | None = None,
-    step_id: str | None = None,
-    heartbeat_interval: float | None = None,
-    max_heartbeats: int | None = None,
-) -> Any:
-    """Wait for the next graph chunk with cooperative cancellation and watchdog.
-
-    Prefer :class:`GraphStreamChunkReader` when consuming multiple chunks from
-    the same iterator — this helper creates a one-shot reader and must not be
-    called repeatedly across heartbeat sentinels on the same ``chunk_iter``.
-
-    Args:
-        chunk_iter: Async iterator yielding graph stream chunks.
-        idle_timeout: Deadlock detector — max seconds without a real chunk when
-            no root tool is pending. ``0`` disables.
-        tool_timeout: Optional per-wave wall-clock cap while root tools are
-            pending. ``0`` disables (rely on middleware).
-        step_id: Optional step identifier for diagnostic logging.
-        heartbeat_interval: Interval for heartbeat sentinel emission.
-        max_heartbeats: Max idle heartbeats before ``sentinel_cap`` (ignored
-            while root tools are pending).
-
-    Raises:
-        asyncio.CancelledError: When the parent task is cancelled.
-        StopAsyncIteration: When the iterator is exhausted.
-        DispatchTimeoutError: When an idle/tool/sentinel watchdog fires.
-    """
-    reader = GraphStreamChunkReader(
-        chunk_iter,
-        idle_timeout=idle_timeout,
-        tool_timeout=tool_timeout,
-        step_id=step_id,
-        heartbeat_interval=heartbeat_interval,
-        max_heartbeats=max_heartbeats,
-    )
-    try:
-        return await reader.read_next()
-    finally:
-        await reader.cancel()
-
-
 def is_ask_user_interrupt(value: Any) -> bool:
     """Return True if ``value`` is a structured ``ask_user`` interrupt payload."""
     return isinstance(value, Mapping) and value.get("type") == "ask_user"
@@ -452,9 +402,7 @@ __all__ = [
     "_STREAM_HEARTBEAT_INTERVAL_S",
     "_STREAM_HEARTBEAT_SENTINEL",
     "_classify_stream_chunk",
-    "_detect_tool_boundary",
     "GraphStreamChunkReader",
-    "await_next_graph_stream_chunk",
     "build_auto_resume_payload",
     "DispatchTimeoutError",
     "is_ask_user_interrupt",

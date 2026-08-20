@@ -20,7 +20,7 @@ class MockCoreAgent:
 
     def __init__(self) -> None:
         self.call_count = 0
-        # Mock graph attribute for iteration_start anchor capture
+        # Mock graph attribute for iteration anchor capture
         self.graph = MagicMock()
         self.graph.checkpointer = None
 

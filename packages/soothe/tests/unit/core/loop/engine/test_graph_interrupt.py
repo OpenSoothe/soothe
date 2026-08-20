@@ -23,7 +23,6 @@ from soothe.sloop.engine.graph_interrupt import (
     DispatchTimeoutError,
     GraphStreamChunkReader,
     _classify_stream_chunk,
-    _detect_tool_boundary,
 )
 
 # ---------------------------------------------------------------------------
@@ -31,14 +30,14 @@ from soothe.sloop.engine.graph_interrupt import (
 # ---------------------------------------------------------------------------
 
 
-class TestDetectToolBoundary:
+class TestClassifyStreamChunk:
     """Unit tests for the chunk classifier."""
 
     def test_sentinel(self) -> None:
-        assert _detect_tool_boundary(_STREAM_HEARTBEAT_SENTINEL) == "sentinel"
+        assert _classify_stream_chunk(_STREAM_HEARTBEAT_SENTINEL).kind == "sentinel"
 
     def test_plain_string(self) -> None:
-        assert _detect_tool_boundary("hello") == "chunk"
+        assert _classify_stream_chunk("hello").kind == "chunk"
 
     def test_ai_message_with_tool_calls(self) -> None:
         msg = AIMessage(
@@ -46,13 +45,13 @@ class TestDetectToolBoundary:
             tool_calls=[{"name": "run_command", "args": {"command": "ls"}, "id": "c1"}],
         )
         chunk = ((), "messages", [msg, {}])
-        assert _detect_tool_boundary(chunk) == "tool_dispatch"
+        assert _classify_stream_chunk(chunk).kind == "tool_dispatch"
         assert _classify_stream_chunk(chunk).tool_call_ids == ("c1",)
 
     def test_ai_message_without_tool_calls(self) -> None:
         msg = AIMessage(content="thinking about the problem")
         chunk = ((), "messages", [msg, {}])
-        assert _detect_tool_boundary(chunk) == "chunk"
+        assert _classify_stream_chunk(chunk).kind == "chunk"
 
     def test_ai_message_chunk_with_tool_call_chunks(self) -> None:
         msg = AIMessageChunk(
@@ -62,37 +61,37 @@ class TestDetectToolBoundary:
             ],
         )
         chunk = ((), "messages", [msg, {}])
-        assert _detect_tool_boundary(chunk) == "tool_dispatch"
+        assert _classify_stream_chunk(chunk).kind == "tool_dispatch"
 
     def test_ai_message_chunk_without_tool_call_chunks(self) -> None:
         msg = AIMessageChunk(content="partial text")
         chunk = ((), "messages", [msg, {}])
-        assert _detect_tool_boundary(chunk) == "chunk"
+        assert _classify_stream_chunk(chunk).kind == "chunk"
 
     def test_tool_message(self) -> None:
         msg = ToolMessage(content="output", tool_call_id="c1")
         chunk = ((), "messages", [msg, {}])
-        assert _detect_tool_boundary(chunk) == "tool_result"
+        assert _classify_stream_chunk(chunk).kind == "tool_result"
         assert _classify_stream_chunk(chunk).result_tool_call_id == "c1"
 
     def test_custom_event_chunk(self) -> None:
         chunk = ((), "custom", {"type": "step_heartbeat", "step_id": "X"})
-        assert _detect_tool_boundary(chunk) == "chunk"
+        assert _classify_stream_chunk(chunk).kind == "chunk"
 
     def test_malformed_tuple(self) -> None:
-        assert _detect_tool_boundary(((), "messages")) == "chunk"
+        assert _classify_stream_chunk(((), "messages")).kind == "chunk"
 
     def test_malformed_messages_data_not_list(self) -> None:
         chunk = ((), "messages", "not_a_list")
-        assert _detect_tool_boundary(chunk) == "chunk"
+        assert _classify_stream_chunk(chunk).kind == "chunk"
 
     def test_malformed_messages_empty_list(self) -> None:
         chunk = ((), "messages", [])
-        assert _detect_tool_boundary(chunk) == "chunk"
+        assert _classify_stream_chunk(chunk).kind == "chunk"
 
     def test_malformed_messages_first_elem_not_message(self) -> None:
         chunk = ((), "messages", ["string_not_message", {}])
-        assert _detect_tool_boundary(chunk) == "chunk"
+        assert _classify_stream_chunk(chunk).kind == "chunk"
 
     def test_execute_namespace_is_root_dispatch(self) -> None:
         msg = AIMessage(
@@ -100,13 +99,12 @@ class TestDetectToolBoundary:
             tool_calls=[{"name": "grep", "args": {}, "id": "c1"}],
         )
         chunk = (("execute:run-1",), "messages", [msg, {}])
-        assert _detect_tool_boundary(chunk) == "tool_dispatch"
+        assert _classify_stream_chunk(chunk).kind == "tool_dispatch"
 
     def test_nested_tools_namespace_is_progress_only(self) -> None:
         """Nested subgraph ToolMessage must not classify as root tool_result."""
         msg = ToolMessage(content="nested", tool_call_id="nested-1")
         chunk = (("tools:subagent",), "messages", [msg, {}])
-        assert _detect_tool_boundary(chunk) == "chunk"
         assert _classify_stream_chunk(chunk).kind == "chunk"
 
     def test_nested_tools_dispatch_is_progress_only(self) -> None:
@@ -115,12 +113,12 @@ class TestDetectToolBoundary:
             tool_calls=[{"name": "read_file", "args": {}, "id": "n1"}],
         )
         chunk = (("execute:run-1", "tools:xyz"), "messages", [msg, {}])
-        assert _detect_tool_boundary(chunk) == "chunk"
+        assert _classify_stream_chunk(chunk).kind == "chunk"
 
     def test_parallel_branch_namespace_is_root(self) -> None:
         msg = ToolMessage(content="ok", tool_call_id="c1")
         chunk = (("execute:run-1", "0"), "messages", [msg, {}])
-        assert _detect_tool_boundary(chunk) == "tool_result"
+        assert _classify_stream_chunk(chunk).kind == "tool_result"
 
 
 # ---------------------------------------------------------------------------
