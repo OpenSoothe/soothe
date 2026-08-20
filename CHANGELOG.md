@@ -7,12 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.24] - 2026-08-20
+
 ### Added
 - Accept common typos of TUI plain-text commands (`exit`/`quit`/`clear`) as exact single-word aliases.
 
 ### Fixed
 - Keep intake social replies for `continue`/`retry` when this loop has no checkpoint work to resume.
 - Finalize TUI goal-completion reports reliably so the prefix stops blinking and Markdown renders after every synthesis.
+- Require an intra-loop checkpoint before allowing a continuation bypass; harden the Eval thread against stale continuations.
+
+### Changed
+- Require `soothe-sdk>=1.0.9`; ship the Langfuse callback-manager flattening fix and `TraceBody` import-path compatibility shim from the SDK.
+- Bump `soothe-client-python` to v1.0.17 (SDK floor alignment).
+- Split the StrangeLoop engine into `execute` and `completion` sub-packages and rename the `stages` layout to `stations`.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.23...v0.10.24
 
 ## [v0.10.23] - 2026-08-20
 
