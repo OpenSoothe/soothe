@@ -13,7 +13,9 @@ from soothe.sloop.intention.models import (
     IntakeLLMResult,
     IntakeScope,
     ResponseLanguage,
+    derive_intake_label_from_task_complexity,
     derive_task_complexity_from_intake,
+    intent_classification_from_intake,
     intent_classification_from_intake_scope,
     parse_intake_scope,
 )
@@ -55,6 +57,42 @@ class TestDeriveTaskComplexityFromIntake:
 
     def test_complex_maps_to_complex(self) -> None:
         assert derive_task_complexity_from_intake(IntakeLabel.COMPLEX) == TaskComplexity.COMPLEX
+
+
+class TestDeriveIntakeLabelFromTaskComplexity:
+    """``intake_label`` follows the intake LLM complexity, not a complex stub."""
+
+    def test_minimal_maps_to_trivial(self) -> None:
+        assert (
+            derive_intake_label_from_task_complexity(TaskComplexity.MINIMAL) == IntakeLabel.TRIVIAL
+        )
+
+    def test_simple_maps_to_simple(self) -> None:
+        assert derive_intake_label_from_task_complexity(TaskComplexity.SIMPLE) == IntakeLabel.SIMPLE
+
+    def test_medium_and_complex_map_to_complex(self) -> None:
+        assert (
+            derive_intake_label_from_task_complexity(TaskComplexity.MEDIUM) == IntakeLabel.COMPLEX
+        )
+        assert (
+            derive_intake_label_from_task_complexity(TaskComplexity.COMPLEX) == IntakeLabel.COMPLEX
+        )
+
+    def test_missing_defaults_to_complex(self) -> None:
+        assert derive_intake_label_from_task_complexity(None) == IntakeLabel.COMPLEX
+
+    def test_intent_classification_from_intake_simple(self) -> None:
+        intake = IntakeLLMResult(
+            is_task=True,
+            confidence=IntakeConfidence.HIGH,
+            task_complexity=TaskComplexity.SIMPLE,
+            task_short_description="Review Veritas arch",
+            reasoning="I will review the Veritas architecture and suggest three optimizations.",
+        )
+        intent = intent_classification_from_intake(intake)
+        assert intent.intake_label == IntakeLabel.SIMPLE
+        assert intent.task_complexity == TaskComplexity.SIMPLE
+        assert intent.task_short_description == "Review Veritas arch"
 
 
 class TestClientIntakeScope:
@@ -117,16 +155,18 @@ class TestIntakeClassifier:
         is_task: bool,
         reasoning: str | None = None,
         social_response: str | None = None,
+        task_complexity: TaskComplexity | None = None,
     ) -> IntakeResult:
         intake_result = IntakeLLMResult(
             is_task=is_task,
             confidence=IntakeConfidence.HIGH,
             social_response=social_response,
+            task_complexity=task_complexity,
             reasoning="test" if reasoning is None else reasoning,
         )
         return IntakeResult(intake_result)
 
-    async def test_task_intake_uses_complex_compatibility_label(self) -> None:
+    async def test_task_intake_missing_complexity_defaults_to_complex(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         mock_result = self._mock_intake_result(is_task=True)
         with patch.object(
@@ -135,6 +175,20 @@ class TestIntakeClassifier:
             mock_classify.return_value = mock_result
             result = await classifier.classify_intake("summarize readme")
         assert result.intake_label == IntakeLabel.COMPLEX
+
+    async def test_task_intake_maps_simple_complexity_to_simple_label(self) -> None:
+        classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
+        mock_result = self._mock_intake_result(
+            is_task=True,
+            task_complexity=TaskComplexity.SIMPLE,
+        )
+        with patch.object(
+            classifier._coordinator, "classify", new_callable=AsyncMock
+        ) as mock_classify:
+            mock_classify.return_value = mock_result
+            result = await classifier.classify_intake("review veritas arch")
+        assert result.intake_label == IntakeLabel.SIMPLE
+        assert result.task_complexity == TaskComplexity.SIMPLE
 
     async def test_weather_query_uses_llm_intake(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")

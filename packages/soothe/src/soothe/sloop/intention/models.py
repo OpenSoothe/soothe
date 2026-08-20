@@ -63,6 +63,27 @@ def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplex
     return TaskComplexity.COMPLEX
 
 
+def derive_intake_label_from_task_complexity(
+    task_complexity: TaskComplexity | None,
+) -> IntakeLabel:
+    """Map intake LLM ``task_complexity`` to the 4-class routing label.
+
+    The TUI plan panel and ``route_after_preprocess`` read ``intake_label``.
+    ``medium`` has no dedicated label and routes as ``complex``.
+
+    Args:
+        task_complexity: Execute-phase complexity from intake, or ``None``.
+
+    Returns:
+        ``trivial``, ``simple``, or ``complex`` (never ``chitchat``).
+    """
+    if task_complexity == TaskComplexity.MINIMAL:
+        return IntakeLabel.TRIVIAL
+    if task_complexity == TaskComplexity.SIMPLE:
+        return IntakeLabel.SIMPLE
+    return IntakeLabel.COMPLEX
+
+
 class IntentClassification(BaseModel):
     """Primary intent classification model (RFC-225,, RFC-630).
 
@@ -304,17 +325,16 @@ def intent_classification_from_intake(
 ) -> IntentClassification:
     """Build task IntentClassification from the intake result.
 
-    ``task_complexity`` and ``task_short_description`` come directly from the
-    intake LLM result; scope routing still uses the ``complex`` compatibility
-    ``intake_label`` since scope pre-classification is removed.
+    ``task_complexity`` and ``task_short_description`` come from the intake
+    LLM; ``intake_label`` is derived from that complexity so the TUI and
+    graph routing see the same verdict.
     """
+    task_complexity = intake_result.task_complexity or TaskComplexity.COMPLEX
     return IntentClassification(
-        intake_label=IntakeLabel.COMPLEX,
+        intake_label=derive_intake_label_from_task_complexity(task_complexity),
         reasoning=intake_result.reasoning,
         chitchat_response=None,
         task_short_description=(intake_result.task_short_description or "").strip() or None,
         response_language=intake_result.response_language,
-        task_complexity=(
-            intake_result.task_complexity or derive_task_complexity_from_intake(IntakeLabel.COMPLEX)
-        ),
+        task_complexity=task_complexity,
     )

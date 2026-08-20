@@ -72,7 +72,9 @@ async def summarize_step_completion_report(
         max_words=word_limit,
     )
 
-    from soothe.utils.observability.langfuse import execute_step_langfuse_run_display_name
+    from soothe.utils.observability.langfuse import (
+        step_completion_report_langfuse_run_display_name,
+    )
 
     cfg = getattr(goal_trace, "soothe_config", None) or soothe_config
     tn = (cfg.observability.langfuse.trace_name or "").strip() if cfg is not None else ""
@@ -85,7 +87,7 @@ async def summarize_step_completion_report(
             purpose="step_completion_report",
             component="executor.step_completion_report",
             phase="execute_step",
-            run_name=execute_step_langfuse_run_display_name(tn or None),
+            run_name=step_completion_report_langfuse_run_display_name(tn or None),
             goal_trace=goal_trace,
         )
         content = getattr(response, "content", response)

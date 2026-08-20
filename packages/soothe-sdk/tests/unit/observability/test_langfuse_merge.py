@@ -172,9 +172,37 @@ def test_merge_skips_handler_append_when_inherit_carries_same_handler(monkeypatc
         run_name="soothe-test:goal-synthesis",
         inherit_callbacks_from=parent,
     )
-    assert "callbacks" not in out
+    assert out["callbacks"] == [handler]
     assert out["run_name"] == "soothe-test:goal-synthesis"
     assert out["metadata"]["langfuse_session_id"] == "sess-1"
+
+
+def test_merge_flattens_inherited_callback_manager(monkeypatch) -> None:
+    """Graph-node RunnableConfig uses AsyncCallbackManager, not a handler list."""
+    pytest.importorskip("langfuse")
+    from soothe_sdk.observability.langfuse.callback_handler import (
+        SootheLangfuseCallbackHandler,
+    )
+
+    cfg = _make_soothe_config(enabled=True, trace_name="soothe-test")
+    handler = SootheLangfuseCallbackHandler()
+    other = MagicMock()
+    monkeypatch.setattr(
+        "soothe_sdk.observability.langfuse._merge.cached_langfuse_callback_handler",
+        lambda _c: handler,
+    )
+    manager = SimpleNamespace(handlers=[other, handler], inheritable_handlers=[handler])
+    parent = {"callbacks": manager}
+    base = {"configurable": {"thread_id": "intake-thread"}}
+    out = merge_langfuse_runnable_config(
+        base,
+        cfg,
+        session_id="sess-1",
+        run_name="soothe-test:intake-classify",
+        inherit_callbacks_from=parent,
+    )
+    assert isinstance(out["callbacks"], list)
+    assert out["callbacks"] == [other, handler]
 
 
 def test_merge_reuses_inherited_handler_not_cached(monkeypatch) -> None:

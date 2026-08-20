@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langgraph.graph import END
+from soothe_sdk.intention.models import TaskComplexity
 
 from soothe.sloop.intention import (
     IntakeConfidence,
@@ -22,6 +23,7 @@ def create_mock_coordinator(
     confidence: str = "high",
     social_response: str | None = None,
     intake_reasoning: str = "test",
+    task_complexity: TaskComplexity | None = None,
 ) -> IntakeCoordinator:
     mock_model = MagicMock()
     coordinator = IntakeCoordinator(mock_model)
@@ -29,6 +31,7 @@ def create_mock_coordinator(
         is_task=is_task,
         confidence=IntakeConfidence(confidence),
         social_response=social_response,
+        task_complexity=task_complexity,
         reasoning=intake_reasoning,
     )
     coordinator._intake_classifier.classify = AsyncMock(return_value=intake_result)
@@ -42,6 +45,19 @@ async def test_task_intake_skips_scope_preclassification() -> None:
     assert result.is_task is True
     assert result.intake_label == IntakeLabel.COMPLEX
     assert result.intent_classification is not None
+
+
+@pytest.mark.asyncio
+async def test_task_intake_propagates_simple_label() -> None:
+    coordinator = create_mock_coordinator(
+        is_task=True,
+        confidence="high",
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    result = await coordinator.classify("review veritas arch")
+    assert result.intake_label == IntakeLabel.SIMPLE
+    assert result.intent_classification is not None
+    assert result.intent_classification.intake_label == IntakeLabel.SIMPLE
 
 
 @pytest.mark.asyncio

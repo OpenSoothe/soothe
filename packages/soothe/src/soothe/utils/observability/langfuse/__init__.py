@@ -25,6 +25,8 @@ from soothe.utils.observability.langfuse._names import (
     intake_langfuse_run_display_name,
     intake_phase_langfuse_run_display_name,
     loop_graph_langfuse_run_display_name,
+    step_completion_report_langfuse_run_display_name,
+    step_deliverable_langfuse_run_display_name,
 )
 
 
@@ -67,4 +69,6 @@ __all__ = [
     "open_intake_langfuse_span",
     "patch_langfuse_trace_goal_io",
     "resolve_langfuse_config_str",
+    "step_completion_report_langfuse_run_display_name",
+    "step_deliverable_langfuse_run_display_name",
 ]

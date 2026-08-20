@@ -127,9 +127,9 @@ def test_intake_invoke_config_inherits_graph_handler() -> None:
         inherit_callbacks_from={"callbacks": [graph_handler]},
     )
 
-    # The active LangChain context carries this handler into the child call.
-    # Omitting an explicit duplicate preserves its graph-node parent_run_id.
-    assert "callbacks" not in out
+    # Flatten inherited handlers onto a list so nano structured-output never
+    # sees LangGraph's AsyncCallbackManager via ensure_config / merge_configs.
+    assert out["callbacks"] == [graph_handler]
     assert out["run_name"] == "soothe-dev:intake-classify"
 
 

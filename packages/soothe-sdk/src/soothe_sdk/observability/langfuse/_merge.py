@@ -26,6 +26,12 @@ def iter_callback_handlers(callbacks: Any) -> list[Any]:
     if isinstance(nested, (list, tuple)):
         for h in nested:
             out.extend(iter_callback_handlers(h))
+        inheritable = getattr(callbacks, "inheritable_handlers", None)
+        if isinstance(inheritable, (list, tuple)):
+            for h in inheritable:
+                for item in iter_callback_handlers(h):
+                    if item not in out:
+                        out.append(item)
         return out
     out.append(callbacks)
     return out
@@ -95,13 +101,19 @@ def merge_langfuse_runnable_config(
     if "configurable" in base:
         out["configurable"] = dict(base["configurable"])
 
-    existing_handler = langfuse_handler_from_runnable_config(out)
-    skip_handler_append = existing_handler is handler or (
-        inherit_handler is not None and handler is inherit_handler and existing_handler is None
-    )
-    if handler is not None and not skip_handler_append:
-        prev = list(out.get("callbacks") or [])
-        out["callbacks"] = prev + [handler]
+    # Always emit a handler *list*. LangGraph node configs carry an
+    # ``AsyncCallbackManager``; leaving ``callbacks`` unset lets
+    # ``ensure_config`` / ``merge_configs`` leak that manager into child
+    # LLM invokes, and nano structured-output then does ``list(callbacks)``.
+    handlers = iter_callback_handlers(out.get("callbacks"))
+    if inherit_callbacks_from is not None:
+        for h in iter_callback_handlers(inherit_callbacks_from.get("callbacks")):
+            if h not in handlers:
+                handlers.append(h)
+    if handler is not None and handler not in handlers:
+        handlers.append(handler)
+    if handlers:
+        out["callbacks"] = handlers
 
     meta = dict(out.get("metadata") or {})
     if session_id:

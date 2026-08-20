@@ -71,10 +71,13 @@ class IntakeResult:
 
     @property
     def intake_label(self) -> IntakeLabel | None:
-        """Final intake label (chitchat or task→complex compatibility)."""
+        """Final intake label (chitchat, or derived from task complexity)."""
         if not self._is_task:
             return IntakeLabel.CHITCHAT
-        return IntakeLabel.COMPLEX
+        intent = self._intent_classification
+        if intent is None:
+            return IntakeLabel.COMPLEX
+        return intent.intake_label
 
     @property
     def intent_classification(self) -> IntentClassification | None:

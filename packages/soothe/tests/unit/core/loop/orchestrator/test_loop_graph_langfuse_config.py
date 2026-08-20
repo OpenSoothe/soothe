@@ -10,6 +10,8 @@ from soothe.utils.observability.langfuse import (
     GoalLoopTrace,
     SootheLangfuse,
     intake_langfuse_run_display_name,
+    step_completion_report_langfuse_run_display_name,
+    step_deliverable_langfuse_run_display_name,
 )
 
 
@@ -223,3 +225,19 @@ def test_goal_trace_execute_invoke_config_pins_trace_id() -> None:
     assert out["metadata"]["soothe_component"] == "execute_step"
     assert "execute-step" in out["metadata"]["langfuse_tags"]
     assert out["configurable"]["thread_id"] == "fork-step-1"
+
+
+def test_step_completion_report_run_display_name() -> None:
+    """Sidecar cognition summary is named distinctly from the main execute-step run."""
+    assert step_completion_report_langfuse_run_display_name("soothe-dev") == (
+        "soothe-dev:step-completion-report"
+    )
+    assert step_completion_report_langfuse_run_display_name(None) == "step-completion-report"
+
+
+def test_step_deliverable_run_display_name() -> None:
+    """Sidecar deliverable verdict is named distinctly from the main execute-step run."""
+    assert step_deliverable_langfuse_run_display_name("soothe-dev") == (
+        "soothe-dev:step-deliverable"
+    )
+    assert step_deliverable_langfuse_run_display_name(None) == "step-deliverable"

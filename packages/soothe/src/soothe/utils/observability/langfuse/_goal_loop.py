@@ -133,6 +133,9 @@ class GoalLoopTrace:
         base: dict[str, Any] = {
             "configurable": dict(self._configurable()),
             "metadata": {**self.base_metadata(), **metadata},
+            # Explicit list so ``ensure_config`` cannot leak the graph node's
+            # ``AsyncCallbackManager`` into nano structured-output invokes.
+            "callbacks": [],
         }
         nested_handler = (
             self._intake_parent_handler()
