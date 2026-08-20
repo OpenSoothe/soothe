@@ -977,7 +977,7 @@ class _MessagesMixin:
         """Shift+Tab: navigate loop selector when active, otherwise cycle mode.
 
         - In the LoopSelectorScreen, defer to its filter navigation.
-        - On the main screen, cycle composer mode Auto → Manual → Plan.
+        - On the main screen, cycle composer mode Auto → Manual → Plan → Ask.
         """
         from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 

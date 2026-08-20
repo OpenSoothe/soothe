@@ -281,12 +281,22 @@ This document defines the terminology and naming conventions used in this projec
 | `DecompositionProposal` | Structured output of `decompose_task`: proposed child steps with descriptions, dependencies, and execution hints. CE reconciles (deterministic by default; LLM only on conflict). | RFC-904 |
 | Reconcile | CE process of merging `DecompositionProposal`s into the StepDAG: deterministic by default, LLM only on dependency conflict. Proposals wait on the reconcile barrier; completions/failures land immediately. | RFC-904 |
 | Root step | The top-level step of a goal's StepDAG, created after intake pass1 classifies a task (vs chitchat). | RFC-904 |
-| `GapResult` | Structured result from ROOT_EVAL coverage assessment when gaps are recoverable; carried in projection when re-dispatching a new root. | RFC-904 |
-| `ROOT_EVAL` | Assess-only evaluation invoked when the StepDAG is tree-green (all leaves complete). Determines coverage; recoverable gaps re-dispatch a new root with `GapResult`. | RFC-904 |
-| B-lazy replacement | Interior node failure strategy: happy-path interior nodes are not re-invoked; failed interior nodes get replacement nodes lazily. Coverage eval runs only at tree-green. | RFC-904 |
-| Tree-green | State where all leaf steps in the StepDAG are complete; triggers `ROOT_EVAL` coverage assessment. | RFC-904 |
+| `GapResult` | Historical RFC-904 P4 shape for ROOT_EVAL recoverable gaps + new-root projection. **Withdrawn** as the continuation mechanism; see RFC-905 Eval thread. | RFC-904, RFC-905 |
+| `ROOT_EVAL` | Graph station: action-tree-green **gate** that inserts `kind=eval` or routes FINALIZE (RFC-905). No longer assess-only / MUST NOT `decompose_task`. | RFC-904, RFC-905 |
+| B-lazy replacement | Interior node failure strategy: happy-path interior nodes are not re-invoked; failed interior nodes get replacement nodes lazily. Coverage eval is RFC-905 when the action tree is green. | RFC-904, RFC-905 |
+| Tree-green | DAG helper: no pending/active/failed; non-superseded leaves completed; decomposed parents do not block. Action-tree green (RFC-905) is the Eval insert predicate. | RFC-904, RFC-905 |
 | Do-or-decompose | Guiding principle: scope is discovered in execution, not by pass2 pre-classification. A step either completes or calls `decompose_task`. | RFC-904 |
 | Pass1 | Intake classification (chitchat vs task) retained from RFC-630. Pass2 (trivial/simple/complex scope pre-classification) is removed by RFC-904. | RFC-630, RFC-904 |
+
+### StrangeLoop Eval Thread (RFC-905)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| Eval thread | Fresh CoreAgent thread for a `kind=eval` StepNode: readonly inspect tools plus `decompose_task`; coverage audit of the user goal, not worker execution or FINALIZE synthesis. | RFC-905 |
+| `kind=eval` | Engine-injected StepNode kind (not LLM-scheduled). Continuation children hang off this node; eval becomes `decomposed` when in-scope proposals commit. | RFC-905 |
+| Action-tree green | No pending/active action or ask_user leaves; unresolved failed blocks Eval. Distinct from `tree_green()` once eval nodes exist. | RFC-905 |
+| `StepCloseReport` | Fast-model structured close of an action step: `goal_portion_complete`, `early_exit`, `deferred_items`, `recommendations`. Triggers Eval when `early_exit` or nonempty `deferred_items`. Not keyword matching on worker prose. | RFC-905 |
+| Early-exit | Structured claim that the worker stopped with leftover or recommended work while marking the step complete. Untrusted until Eval. | RFC-905 |
 
 ### Code Naming
 

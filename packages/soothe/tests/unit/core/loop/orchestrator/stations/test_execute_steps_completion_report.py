@@ -10,8 +10,8 @@ import pytest
 from soothe.sloop.engine.execute.executor import StepWaveStart
 from soothe.sloop.engine.execute.step_wave_types import StepCompletionReport
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.stages.execute.execute import node_execute
 from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord
+from soothe.sloop.stations.execute.execute import node_execute
 
 
 async def _fake_execute_stream(*_args: Any, **_kwargs: Any):
@@ -70,7 +70,7 @@ async def test_execute_emits_step_completion_report_before_completed() -> None:
         scratch=scratch,
     )
 
-    import soothe.sloop.stages.execute.execute as mod
+    import soothe.sloop.stations.execute.execute as mod
 
     mock_executor = MagicMock()
     mock_executor.execute = _fake_execute_stream

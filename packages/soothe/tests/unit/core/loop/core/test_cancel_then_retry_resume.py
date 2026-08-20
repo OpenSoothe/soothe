@@ -26,11 +26,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe.sloop.stages.execute.loop_budget import enforce_loop_budget
 from soothe.sloop.state.checkpoint import StrangeLoopCheckpoint, ThreadHealthMetrics
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.sloop.state.schemas import LoopState
 from soothe.sloop.state.sloop_manager import StrangeLoopStateManager
+from soothe.sloop.stations.execute.loop_budget import enforce_loop_budget
 from soothe.sloop.utils.structural_continuation import (
     has_resumable_interrupted_goal,
     is_loop_control_signal,

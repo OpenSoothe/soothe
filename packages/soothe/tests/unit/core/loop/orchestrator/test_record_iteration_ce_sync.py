@@ -16,7 +16,7 @@ from soothe.sloop.state.schemas import AgentDecision, LoopState, PlanResult, Ste
 @pytest.mark.asyncio
 async def test_record_iteration_increments_ce_iteration_count() -> None:
     from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch, LoopRuntimeContext
-    from soothe.sloop.stages.execute.record_progress import node_record_iteration
+    from soothe.sloop.stations.execute.record_progress import node_record_iteration
 
     ce = ContextEngine(
         persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
@@ -65,7 +65,7 @@ async def test_record_iteration_increments_ce_iteration_count() -> None:
 
 @pytest.mark.asyncio
 async def test_tail_persistence_surfaces_ce_save_failure(caplog: pytest.LogCaptureFixture) -> None:
-    from soothe.sloop.stages.complete.finalize import (
+    from soothe.sloop.stations.completion.finalize import (
         _goal_completion_tail_persistence,
     )
 

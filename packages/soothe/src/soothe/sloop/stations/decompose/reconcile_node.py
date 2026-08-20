@@ -91,6 +91,33 @@ class ReconcileNode(LoopNode):
                 result.decomposed_parent_ids,
                 [f"{r.parent_step_id}:{r.reason}" for r in result.rejected],
             )
+            if not result.committed_step_ids:
+                from soothe.context.models import StepExecution
+
+                goal = await _maybe_await(ctx.ce.get_goal(ctx.ce_goal_id))
+                if goal is not None:
+                    rejected_parents = {item.parent_step_id for item in result.rejected}
+                    for parent_id in rejected_parents:
+                        parent = goal.steps.nodes.get(parent_id)
+                        if parent is not None and parent.kind == "eval":
+                            reasons = [
+                                item.reason
+                                for item in result.rejected
+                                if item.parent_step_id == parent_id
+                            ]
+                            execution = StepExecution(
+                                outcome={
+                                    "kind": "eval",
+                                    "coverage": "failed"
+                                    if "identical_eval_continuation" in reasons
+                                    else "complete",
+                                    "rejected_proposals": reasons,
+                                }
+                            )
+                            if "identical_eval_continuation" in reasons:
+                                goal.steps.mark_failed(parent_id, execution)
+                            else:
+                                goal.steps.mark_completed(parent_id, execution)
             try:
                 ctx.ce.defer_save()
             except Exception:

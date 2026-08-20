@@ -14,7 +14,7 @@ from soothe_sdk.ux.loop_stream import (
 from soothe_cli.tui.textual_adapter import (
     TextualUIAdapter,
     _finalize_goal_completion_stream,
-    _finalize_goal_completion_streams_on_turn_end,
+    _finalize_goal_completion_streams,
 )
 
 
@@ -118,7 +118,7 @@ async def test_stream_end_turn_scope_finalizes_inflight_streams() -> None:
     ns_key = ()
     goal_completion_stream_by_namespace = {ns_key: stream_msg}
 
-    await _finalize_goal_completion_streams_on_turn_end(
+    await _finalize_goal_completion_streams(
         adapter,
         goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
         assistant_message_by_namespace={},

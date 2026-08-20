@@ -18,16 +18,16 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
-from soothe.sloop.stages.complete.finalize import node_goal_completion
-from soothe.sloop.stages.decompose.dispatch import node as dispatch_node
-from soothe.sloop.stages.decompose.reconcile_node import node as reconcile_node
-from soothe.sloop.stages.decompose.root_eval import node as root_eval_node
-from soothe.sloop.stages.execute.execute import node_execute
-from soothe.sloop.stages.execute.record_progress import node_record_iteration
-from soothe.sloop.stages.preprocess.enter_loop import node_init_or_resume
-from soothe.sloop.stages.preprocess.intake import node_intent_classify
-from soothe.sloop.stages.sidecars.await_user import node_await_clarification
-from soothe.sloop.stages.sidecars.delegate import node_invoke_wired_subagent
+from soothe.sloop.stations.completion.finalize import node_goal_completion
+from soothe.sloop.stations.decompose.dispatch import node as dispatch_node
+from soothe.sloop.stations.decompose.reconcile_node import node as reconcile_node
+from soothe.sloop.stations.decompose.root_eval import node as root_eval_node
+from soothe.sloop.stations.execute.execute import node_execute
+from soothe.sloop.stations.execute.record_progress import node_record_iteration
+from soothe.sloop.stations.preprocess.enter_loop import node_init_or_resume
+from soothe.sloop.stations.preprocess.intake import node_intent_classify
+from soothe.sloop.stations.sidecars.await_user import node_await_clarification
+from soothe.sloop.stations.sidecars.delegate import node_invoke_wired_subagent
 
 from .checkpoint import core_agent_checkpointer
 from .node_base import wrap_node
@@ -179,6 +179,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         {
             FINALIZE: FINALIZE,
             DISPATCH: DISPATCH,
+            END: END,
         },
     )
     graph.add_edge(FINALIZE, END)

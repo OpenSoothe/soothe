@@ -5,11 +5,11 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Updated**: 2026-08-19
+**Updated**: 2026-08-20
 **Authors**: Claude Code
 **Dependencies**: RFC-200, RFC-203
-**Related**: RFC-207 (Thread), RFC-214 (plan-context human), RFC-603, RFC-604, IG-376, RFC-904
-**Partially Superseded By**: RFC-904 (per-iteration assess+generate pair → ROOT_EVAL + `decompose_task`)
+**Related**: RFC-207 (Thread), RFC-214 (plan-context human), RFC-603, RFC-604, IG-376, RFC-904, RFC-905
+**Partially Superseded By**: RFC-904 (per-iteration assess+generate pair → `decompose_task`); RFC-905 (coverage Eval thread; GapResult / assess-only ROOT_EVAL withdrawn)
 **Implementation**: IG-372 (two-phase plan), IG-329 (PlanResult consolidation), IG-376 (reasoning quality)
 
 ---
@@ -18,7 +18,7 @@
 
 This RFC defines StrangeLoop reasoning quality enhancements through two-phase Plan architecture. Current runtime behavior removes progressive-planning requirements and instead grounds `plan-generate` with a bounded pre-generate evidence probe before generation. `PlanGeneration` now emits flattened decision fields rather than a nested `decision` object.
 
-> **Supersession note (RFC-904):** When recursive decomposition cuts over, the per-iteration assess + plan-generate pair is obsolete. Coverage assessment survives as **ROOT_EVAL** (assess-only). Plan generation folds into executor-bound **`decompose_task`**. Structured gap schemas (`PlanGapAnalysis`, `StatusAssessment`) remain the ROOT_EVAL shapes.
+> **Supersession note (RFC-904 / RFC-905):** When recursive decomposition cuts over, the per-iteration assess + plan-generate pair is obsolete. Plan generation folds into executor-bound **`decompose_task`**. Coverage assessment is the RFC-905 **Eval thread** (fresh readonly CoreAgent + `decompose_task`), not assess-only ROOT_EVAL / `PlanGapAnalysis` / `StatusAssessment`.
 
 ---
 

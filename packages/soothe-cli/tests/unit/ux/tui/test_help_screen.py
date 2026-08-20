@@ -34,7 +34,7 @@ def test_build_keyboard_shortcut_rows_cover_core_bindings() -> None:
         rows["Ctrl+T"]
         == "Toggle plan panel (hidden by default; --plan-panel auto-shows while active)"
     )
-    assert rows["Shift+Tab"] == "Cycle composer mode (Auto → Manual → Plan)"
+    assert rows["Shift+Tab"] == "Cycle composer mode (Auto → Manual → Plan → Ask)"
     assert "Ctrl+Tab" not in rows
 
 

@@ -2,7 +2,13 @@
 
 import pytest
 
-from soothe.context.models import StepDAG, StepExecution, StepNode
+from soothe.context.models import (
+    DeferredItem,
+    StepCloseReport,
+    StepDAG,
+    StepExecution,
+    StepNode,
+)
 
 
 class TestStepDAGAddStep:
@@ -216,3 +222,61 @@ class TestStepDAGDecomposeStatuses:
         assert dag.lineage_depth("A") == 2
         assert dag.lineage_depth("B") == 3
         assert dag.lineage_depth("missing") == 0
+
+    def test_single_completed_action_skips_eval(self) -> None:
+        dag = StepDAG(nodes={"R": StepNode(id="R", description="root", status="completed")})
+        assert dag.action_tree_green() is True
+        assert dag.eval_required() is False
+
+    def test_decomposed_action_requires_eval(self) -> None:
+        dag = StepDAG(
+            nodes={
+                "R": StepNode(id="R", description="root", status="decomposed"),
+                "C": StepNode(
+                    id="C",
+                    description="child",
+                    status="completed",
+                    parent_step_id="R",
+                ),
+            }
+        )
+        assert dag.eval_required() is True
+
+    def test_structured_early_exit_requires_eval(self) -> None:
+        dag = StepDAG(
+            nodes={
+                "R": StepNode(
+                    id="R",
+                    description="root",
+                    status="completed",
+                    close_report=StepCloseReport(
+                        early_exit=True,
+                        deferred_items=[
+                            DeferredItem(description="finish verification", claimed_in_scope=True)
+                        ],
+                    ),
+                )
+            }
+        )
+        assert dag.eval_required() is True
+
+    def test_completed_latest_eval_suppresses_another_round(self) -> None:
+        dag = StepDAG(
+            nodes={
+                "R": StepNode(id="R", description="root", status="decomposed"),
+                "C": StepNode(
+                    id="C",
+                    description="child",
+                    status="completed",
+                    parent_step_id="R",
+                ),
+                "E": StepNode(
+                    id="E",
+                    description="eval",
+                    status="completed",
+                    kind="eval",
+                    plan_iteration=1,
+                ),
+            }
+        )
+        assert dag.eval_required() is False

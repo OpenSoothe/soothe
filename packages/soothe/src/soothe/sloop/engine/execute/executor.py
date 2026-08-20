@@ -400,7 +400,9 @@ class Executor:
             return await reader(config=graph_config, execution_scope=execution_scope)
         if execution_scope:
             execution_reader = getattr(self.core_agent, "execution_aget_state", None)
-            if callable(execution_reader):
+            if callable(execution_reader) and hasattr(
+                type(self.core_agent), "execution_aget_state"
+            ):
                 return await execution_reader(config=graph_config)
         return await self.core_agent.aget_state(config=graph_config)
 
@@ -541,6 +543,8 @@ class Executor:
         predecessor_projected: bool = False,
     ) -> str:
         """Build the execute-step user envelope (task + hints; ledger slices projected separately)."""
+        if step.kind == "eval":
+            return step.full_description or step.description
         from soothe.prompts.user_message import UserMessageBuilder
 
         has_predecessor_ledger = bool(step.dependencies) or predecessor_projected
@@ -1905,9 +1909,14 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
-            from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_STEP_ID_KEY
+            from soothe.sloop.utils.config_keys import (
+                SOOTHE_DECOMPOSE_STEP_ID_KEY,
+                SOOTHE_EVAL_STEP_ID_KEY,
+            )
 
             configurable[SOOTHE_DECOMPOSE_STEP_ID_KEY] = step.id
+            if step.kind == "eval":
+                configurable[SOOTHE_EVAL_STEP_ID_KEY] = step.id
             from soothe.sloop.decompose.runtime import bind_decompose_runtime
 
             decompose_tokens = bind_decompose_runtime(
@@ -1926,7 +1935,11 @@ class Executor:
             # Build graph input: preamble + Slice A (cross-goal) + Slice B (intra-goal deps) + envelope.
             graph_input_messages: list[BaseMessage] = []
             cross_goal_projected = False
-            if loop_state is not None and loop_state.current_decision is not None:
+            if (
+                step.kind != "eval"
+                and loop_state is not None
+                and loop_state.current_decision is not None
+            ):
                 from soothe.sloop.context_projection import LoopContextProjector, ProjectionSpec
 
                 projector = LoopContextProjector(self._config)
@@ -2165,6 +2178,19 @@ class Executor:
             # Add CoreAgent input/output evidence
             primary_outcome["step_input"] = envelope  # HumanMessage content sent to Layer 1
             primary_outcome["output_summary"] = create_output_summary(output)  # Truncated findings
+            if step.kind == "action":
+                from soothe.sloop.eval.step_close_report import assess_step_close
+
+                close_report = await assess_step_close(
+                    fast_model=self._fast_model,
+                    user_goal=resolve_user_request(loop_state) if loop_state is not None else "",
+                    step_description=step.full_description or step.description,
+                    final_output=output,
+                    outcome_summary=primary_outcome,
+                    soothe_config=self._config,
+                    goal_trace=self._goal_trace,
+                )
+                primary_outcome["step_close_report"] = close_report.model_dump()
 
             # Step success: fail only when every tool call errored; otherwise a step
             # may recover from individual tool failures and still finish.

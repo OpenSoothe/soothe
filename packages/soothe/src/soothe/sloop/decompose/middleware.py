@@ -19,7 +19,10 @@ from soothe.prompts import (
 )
 from soothe.sloop.decompose.runtime import current_step_id
 from soothe.sloop.decompose.tool import build_decompose_task_tool
-from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_STEP_ID_KEY
+from soothe.sloop.utils.config_keys import (
+    SOOTHE_DECOMPOSE_STEP_ID_KEY,
+    SOOTHE_EVAL_STEP_ID_KEY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +86,9 @@ class DecomposeTaskMiddleware(AgentMiddleware):
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         conf = _langgraph_configurable()
+        if conf.get(SOOTHE_EVAL_STEP_ID_KEY):
+            # EvalStepMiddleware owns the narrower tool/prompt policy.
+            return request
         step_id = current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY)
         if not step_id:
             tools = list(request.tools or [])

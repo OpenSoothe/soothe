@@ -125,7 +125,8 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         Keys to merge into the internal queue payload: ``preferred_subagent``,
         ``intake_scope``, ``model``, ``model_params``, ``router_profile``,
         ``intent_hint`` (normalized to lowercase when set), ``clarification_mode``
-        (RFC-622, normalized to ``"auto"``/``"manual"`` or ``None``).
+        (RFC-622, normalized to ``"auto"``/``"manual"`` or ``None``),
+        ``interaction_mode`` (normalized to ``"agent"``/``"ask"`` or ``None``).
     """
     preferred_subagent = msg.get("preferred_subagent")
     preferred_norm = (
@@ -138,6 +139,12 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         clarification_mode_norm: str | None = candidate if candidate in ("auto", "manual") else None
     else:
         clarification_mode_norm = None
+    raw_interaction_mode = msg.get("interaction_mode")
+    if isinstance(raw_interaction_mode, str):
+        candidate = raw_interaction_mode.strip().lower()
+        interaction_mode_norm: str | None = candidate if candidate in ("agent", "ask") else None
+    else:
+        interaction_mode_norm = None
     raw_model = msg.get("model")
     model = raw_model.strip() if isinstance(raw_model, str) and raw_model.strip() else None
     raw_params = msg.get("model_params")
@@ -183,6 +190,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         "response_schema_name": response_schema_name,
         "response_schema_strict": response_schema_strict,
         "clarification_mode": clarification_mode_norm,
+        "interaction_mode": interaction_mode_norm,
         "clarification_answer": bool(msg.get("clarification_answer", False)),
         "clarification_answers": clarification_answers,
         "resume_interrupted": bool(msg.get("resume_interrupted", False)),
@@ -1217,7 +1225,9 @@ class MessageRouter:
         # this, the synthetic loop input always carries None and the runner
         # falls back to ``config.agent.clarification.default_mode`` (typically
         # "manual"), so veritas never engages for /skill:* invocations.
-        clarification_mode = _queue_options_from_daemon_message(msg)["clarification_mode"]
+        q_opts = _queue_options_from_daemon_message(msg)
+        clarification_mode = q_opts["clarification_mode"]
+        interaction_mode = q_opts["interaction_mode"]
         await d._loop_input_dispatcher.enqueue(
             active_loop,
             {
@@ -1225,6 +1235,7 @@ class MessageRouter:
                 "text": plain_user_line,
                 "preferred_subagent": None,
                 "clarification_mode": clarification_mode,
+                "interaction_mode": interaction_mode,
                 "client_id": client_id,
             },
         )

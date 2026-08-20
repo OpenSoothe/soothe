@@ -2,12 +2,25 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-08-19
-**Total RFCs**: 92 (83 active + 9 archived)
+**Last Updated**: 2026-08-20
+**Total RFCs**: 93 (84 active + 9 archived)
 
 > Summary statistics (by status and kind) live in [rfc-index.md](rfc-index.md).
 
 ## Recent Changes
+
+### 2026-08-20
+
+- **RFC-905 - StrangeLoop Eval Thread**
+  - Status: Draft
+  - Kind: Architecture Design
+  - Coverage as engine-injected `kind=eval` StepNode: fresh readonly
+    CoreAgent thread plus `decompose_task`; structured `StepCloseReport`
+    early-exit (no keyword heuristics)
+  - Supersedes RFC-904 §ROOT_EVAL assess-only / MUST NOT `decompose_task`
+    and GapResult new-root continuation
+  - Companion header updates: RFC-904, RFC-213; `rfc-index.md`,
+    `rfc-namings.md`
 
 ### 2026-08-19 (consistency refinement)
 
@@ -853,6 +866,7 @@ RFCs are organized into numbered series by category:
 - RFC-902: Same-File Edit Concurrency and Optimization
 - RFC-903: Sloop Graph Topology and Node Lifecycle
 - RFC-904: Sloop Recursive Step Decomposition
+- RFC-905: StrangeLoop Eval Thread
 
 ---
 

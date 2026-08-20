@@ -41,17 +41,26 @@ def test_cycle_manual_to_plan() -> None:
     assert app._status_bar.last_mode == "plan"
 
 
-def test_cycle_plan_back_to_auto() -> None:
-    """Third press returns Plan to Auto."""
+def test_cycle_plan_to_ask() -> None:
+    """Third press returns Plan to Ask."""
     app = _AppHarness(initial="plan")
+    app.cycle_composer_mode()
+    assert app._composer_mode == "ask"
+    assert app._status_bar.last_mode == "ask"
+
+
+def test_cycle_ask_back_to_auto() -> None:
+    """Fourth press returns Ask to Auto."""
+    app = _AppHarness(initial="ask")
     app.cycle_composer_mode()
     assert app._composer_mode == "auto"
     assert app._status_bar.last_mode == "auto"
 
 
 def test_cycle_full_round_trip() -> None:
-    """Three presses from Auto land back on Auto."""
+    """Four presses from Auto land back on Auto."""
     app = _AppHarness(initial="auto")
+    app.cycle_composer_mode()
     app.cycle_composer_mode()
     app.cycle_composer_mode()
     app.cycle_composer_mode()

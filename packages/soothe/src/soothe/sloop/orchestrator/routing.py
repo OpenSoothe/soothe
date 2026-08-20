@@ -84,7 +84,9 @@ def route_after_reconcile(state: dict[str, Any]) -> str:
 
 
 def route_after_root_eval(state: dict[str, Any]) -> str:
-    """ROOT_EVAL → FINALIZE | DISPATCH (gap re-dispatch)."""
+    """ROOT_EVAL → FINALIZE | DISPATCH | END."""
+    if state.get("root_eval_route") == "fatal" or state.get("last_outcome") == "fatal":
+        return END
     if state.get("root_eval_route") == "dispatch":
         return DISPATCH
     return FINALIZE

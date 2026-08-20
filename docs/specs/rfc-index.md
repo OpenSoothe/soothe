@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-08-19
-**Total RFCs**: 92 (83 active, 9 archived)
+**Last Updated**: 2026-08-20
+**Total RFCs**: 93 (84 active, 9 archived)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -37,7 +37,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Status | Count |
 |--------|-------|
-| Draft | 38 |
+| Draft | 39 |
 | Proposed | 2 |
 | Accepted | 1 |
 | Implemented | 31 |
@@ -55,7 +55,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 68 |
+| Architecture Design | 69 |
 | Implementation Interface Design | 15 |
 | Architecture Design + Implementation Interface Design | 2 |
 | Conceptual Design | 1 |
@@ -178,9 +178,9 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-04-17
   - Depends on: RFC-200, RFC-203
-  - Partially Superseded By: RFC-904 (per-iteration assess+generate pair → ROOT_EVAL + `decompose_task`)
+  - Partially Superseded By: RFC-904 (per-iteration assess+generate pair → `decompose_task`); RFC-905 (coverage Eval thread, not assess-only ROOT_EVAL / GapResult)
   - Authors: Claude Code
-  - Updated: 2026-08-19
+  - Updated: 2026-08-20
 - **RFC-214**: [Volatility-Tiered Prompt Architecture & Unified Message Ledger](RFC-214-strangeloop-loop-message-surface.md)
   - Kind: Architecture Design
   - Status: Draft
@@ -673,5 +673,12 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Kind: Architecture Design
   - Status: Proposed (deletion portion landed via IG-752/IG-753; recursive topology not yet implemented)
   - Created: 2026-08-19
-  - Updated: 2026-08-19 (partial implementation note — IG-752/IG-753)
+  - Updated: 2026-08-20 (RFC-905 supersedes ROOT_EVAL assess-only / GapResult)
   - Depends on: RFC-220, RFC-624, RFC-630, RFC-903, RFC-622, RFC-219, RFC-803
+  - Partially Superseded By: RFC-905 (§ROOT_EVAL assess-only / GapResult new-root)
+- **RFC-905**: [StrangeLoop Eval Thread](RFC-905-sloop-eval-thread.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-08-20
+  - Updated: 2026-08-20
+  - Depends on: RFC-904, RFC-219, RFC-630, RFC-901, RFC-214

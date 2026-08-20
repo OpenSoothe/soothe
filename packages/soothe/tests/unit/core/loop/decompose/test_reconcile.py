@@ -153,6 +153,66 @@ def test_max_steps_reject() -> None:
     assert rejected[0].reason == "max_steps_exceeded"
 
 
+def test_eval_reconcile_filters_out_of_scope_subtasks() -> None:
+    dag = StepDAG(
+        nodes={
+            "EVAL": StepNode(
+                id="EVAL",
+                description="coverage",
+                status="active",
+                kind="eval",
+            )
+        }
+    )
+    proposal = DecompositionProposal(
+        parent_step_id="EVAL",
+        subtasks=[
+            ProposedSubtask(description="required", in_scope=True, necessary_for_user_goal=True),
+            ProposedSubtask(
+                description="drive-by",
+                in_scope=False,
+                necessary_for_user_goal=False,
+            ),
+        ],
+    )
+    nodes, parents, rejected, _ = plan_commit_from_proposals(
+        dag,
+        [proposal],
+        config=_cfg(),
+        plan_id="EVL",
+    )
+    assert [node.description for node in nodes] == ["required"]
+    assert parents == ["EVAL"]
+    assert rejected[0].reason == "filtered_eval_subtasks"
+
+
+def test_eval_reconcile_rejects_identical_continuation() -> None:
+    dag = StepDAG(
+        nodes={
+            "E1": StepNode(id="E1", description="first eval", status="decomposed", kind="eval"),
+            "C1": StepNode(
+                id="C1",
+                description="same remaining work",
+                status="completed",
+                parent_step_id="E1",
+            ),
+            "E2": StepNode(id="E2", description="second eval", status="active", kind="eval"),
+        }
+    )
+    proposal = DecompositionProposal(
+        parent_step_id="E2",
+        subtasks=[ProposedSubtask(description="same remaining work")],
+    )
+    nodes, parents, rejected, _ = plan_commit_from_proposals(
+        dag,
+        [proposal],
+        config=_cfg(),
+    )
+    assert nodes == []
+    assert parents == []
+    assert rejected[-1].reason == "identical_eval_continuation"
+
+
 @pytest.mark.asyncio
 async def test_reconcile_commits_via_ce() -> None:
     ce = ContextEngine()

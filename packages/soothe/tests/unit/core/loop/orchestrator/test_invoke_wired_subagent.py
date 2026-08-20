@@ -21,11 +21,11 @@ from soothe.sloop.intention.models import (
     build_loop_routing_classification,
 )
 from soothe.sloop.orchestrator.routing import route_after_wired_subagent, route_by_intent
-from soothe.sloop.stages.preprocess.enter_loop import node_init_or_resume
-from soothe.sloop.stages.sidecars.delegate import (
+from soothe.sloop.state.schemas import resolve_wire_subagent
+from soothe.sloop.stations.preprocess.enter_loop import node_init_or_resume
+from soothe.sloop.stations.sidecars.delegate import (
     node_invoke_wired_subagent,
 )
-from soothe.sloop.state.schemas import resolve_wire_subagent
 
 
 async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
@@ -227,7 +227,7 @@ async def test_invoke_wired_planner_direct_ainvoke(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
-    from soothe.sloop.stages.sidecars.delegate import _planner_subagent_review_pending_payload
+    from soothe.sloop.stations.sidecars.delegate import _planner_subagent_review_pending_payload
 
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
@@ -306,7 +306,7 @@ async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
     """Reject after clarification resume must not require a live specialist route."""
     from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
     from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
-    from soothe.sloop.stages.sidecars.delegate import _planner_subagent_review_pending_payload
+    from soothe.sloop.stations.sidecars.delegate import _planner_subagent_review_pending_payload
 
     plan_path = tmp_path / ".soothe" / "plans" / "y.md"
     plan_path.parent.mkdir(parents=True)
@@ -374,7 +374,7 @@ async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
 
 def test_extract_subagent_report_prefers_answer_field() -> None:
     """deep_research / academic_research put the report in state ``answer``."""
-    from soothe.sloop.stages.sidecars.delegate import (
+    from soothe.sloop.stations.sidecars.delegate import (
         _extract_subagent_report,
     )
 

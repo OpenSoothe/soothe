@@ -14,7 +14,7 @@ from soothe.sloop.intention.models import (
     build_loop_routing_classification,
 )
 from soothe.sloop.orchestrator.routing import route_by_intent
-from soothe.sloop.stages.preprocess.enter_loop import node_init_or_resume
+from soothe.sloop.stations.preprocess.enter_loop import node_init_or_resume
 from soothe.sloop.strange_loop import StrangeLoop
 
 

@@ -37,7 +37,7 @@ def _decompose_cfg(ctx: LoopRuntimeContext) -> Any:
 
 def _step_action_from_node(node: StepNode) -> StepAction:
     hint = node.execution_hint if node.execution_hint is not None else "auto"
-    kind = node.kind if node.kind in ("action", "ask_user") else "action"
+    kind = node.kind if node.kind in ("action", "ask_user", "eval") else "action"
     title = (node.description or "").strip() or node.id
     full = (node.full_description or node.description or "").strip() or node.id
     return StepAction(
@@ -152,7 +152,7 @@ class DispatchNode(LoopNode):
         state: dict[str, Any],
         messages: list,
     ) -> NodeResult:
-        from soothe.sloop.stages.execute.loop_budget import enforce_loop_budget
+        from soothe.sloop.stations.execute.loop_budget import enforce_loop_budget
 
         terminal = await enforce_loop_budget(ctx)
         if terminal is not None:

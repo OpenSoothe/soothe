@@ -1149,7 +1149,7 @@ class DecomposeLoopConfig(BaseModel):
         default=10,
         ge=1,
         le=100,
-        description="Max root gap re-dispatch waves (replaces max-iterations for decompose path).",
+        description="Max recursive action-dispatch waves for the decompose path.",
     )
     max_branch_root: int = Field(
         default=5,
@@ -1166,6 +1166,17 @@ class DecomposeLoopConfig(BaseModel):
     reconcile_model_role: str = Field(
         default="fast",
         description="Router model role for conflict-triggered CE reconcile LLM.",
+    )
+
+
+class EvalLoopConfig(BaseModel):
+    """Coverage Eval thread limits (RFC-905)."""
+
+    max_eval_rounds: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Maximum Eval coverage rounds per goal.",
     )
 
 
@@ -1206,7 +1217,8 @@ class StrangeLoopConfig(BaseModel):
         concurrency: Parallelism caps and step scheduling strategy.
         goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default ``default``).
         rules: Declarative completion and scenario thresholds.
-        decompose: Recursive step decomposition budgets (RFC-904); ``enabled`` default true.
+        decompose: Recursive step decomposition budgets (RFC-904); always on.
+        eval: Coverage Eval thread limits (RFC-905); always on when required.
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
     parallel_pre_stream) are always enabled by design and not configurable.
@@ -1484,6 +1496,10 @@ class StrangeLoopConfig(BaseModel):
     decompose: DecomposeLoopConfig = Field(
         default_factory=DecomposeLoopConfig,
         description="Recursive step decomposition budgets (RFC-904; always on).",
+    )
+    eval: EvalLoopConfig = Field(
+        default_factory=EvalLoopConfig,
+        description="Coverage Eval thread limits (RFC-905; required predicates only).",
     )
 
 

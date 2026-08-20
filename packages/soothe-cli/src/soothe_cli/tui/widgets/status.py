@@ -71,11 +71,12 @@ class ModelLabel(Widget):
 
 
 class ClarificationModeBadge(Static):
-    """Visual block showing the active composer mode (Auto / Manual / Plan).
+    """Visual block showing the active composer mode (Auto / Manual / Plan / Ask).
 
-    Default is ``Manual`` (bold orange pill) so operators see that
-    clarifications will be relayed. ``Auto`` renders as muted/dim text.
-    ``Plan`` uses a teal pill for sticky planner routing.
+    Rendered Claude Code-style as ``⏵⏵ <label> (shift+Tab to cycle)``. Default is
+    ``Manual`` (bold orange pill) so operators see that clarifications will be
+    relayed. ``Auto`` renders as muted/dim text, ``Plan`` as a teal pill, and
+    ``Ask`` as a blue pill for read-only.
     """
 
     DEFAULT_CSS = """
@@ -98,14 +99,28 @@ class ClarificationModeBadge(Static):
         color: black;
         text-style: bold;
     }
+
+    ClarificationModeBadge.ask {
+        background: #3498db;
+        color: black;
+        text-style: bold;
+    }
     """
+
+    _MODE_LABELS: dict[str, str] = {
+        "auto": "auto clarification",
+        "manual": "manual clarification",
+        "plan": "plan mode",
+        "ask": "ask mode",
+    }
+    _CYCLE_HINT = "(shift+Tab to cycle)"
 
     mode: reactive[str] = reactive(COMPOSER_MODE_MANUAL, init=False)
 
     def __init__(self, *args: Any, mode: str = COMPOSER_MODE_MANUAL, **kwargs: Any) -> None:
         """Initialize with the badge text already rendered so it shows on first paint."""
         initial = normalize_composer_mode(mode)
-        super().__init__(initial.capitalize(), *args, **kwargs)
+        super().__init__(self._render_label(initial), *args, **kwargs)
         self.add_class(initial)
         # Defer reactive assignment until mount so watchers run normally afterwards.
         self._initial_mode = initial
@@ -119,11 +134,16 @@ class ClarificationModeBadge(Static):
         """Update CSS class and rendered text when the mode changes."""
         self._refresh(new_value)
 
+    @classmethod
+    def _render_label(cls, mode: str) -> str:
+        label = cls._MODE_LABELS.get(mode, cls._MODE_LABELS[COMPOSER_MODE_MANUAL])
+        return f"\u23f5\u23f5 {label} {cls._CYCLE_HINT}"
+
     def _refresh(self, mode: str) -> None:
         normalized = normalize_composer_mode(mode)
-        self.remove_class("auto", "manual", "plan")
+        self.remove_class("auto", "manual", "plan", "ask")
         self.add_class(normalized)
-        self.update(normalized.capitalize())
+        self.update(self._render_label(normalized))
 
 
 class StatusBar(Horizontal):
@@ -487,5 +507,5 @@ class StatusBar(Horizontal):
         badge.mode = normalize_composer_mode(mode)
 
     def set_clarification_mode(self, mode: str) -> None:
-        """Set the active composer mode (``auto``, ``manual``, or ``plan``)."""
+        """Set the active composer mode (``auto``, ``manual``, ``plan``, or ``ask``)."""
         self.clarification_mode = normalize_composer_mode(mode)

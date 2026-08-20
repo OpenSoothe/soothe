@@ -18,11 +18,11 @@ from soothe.sloop.clarification import (
 )
 from soothe.sloop.engine.execute.executor import StepWaveStart
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.stages.execute.execute import (
+from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord
+from soothe.sloop.stations.execute.execute import (
     PLANNER_ASK_INTERRUPT_PREFIX,
     node_execute,
 )
-from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord
 
 
 def _make_ce() -> ContextEngine:
@@ -113,7 +113,7 @@ async def test_branch2_short_circuits_when_planner_emits_ask_user(
 
     executor_called = MagicMock()
 
-    import soothe.sloop.stages.execute.execute as mod
+    import soothe.sloop.stations.execute.execute as mod
 
     monkeypatch.setattr(mod, "Executor", executor_called)
 
@@ -161,7 +161,7 @@ async def test_branch2_noop_when_no_clarification_policy(
     mock_executor = MagicMock()
     mock_executor.execute = _empty_stream
 
-    import soothe.sloop.stages.execute.execute as mod
+    import soothe.sloop.stations.execute.execute as mod
 
     monkeypatch.setattr(mod, "Executor", MagicMock(return_value=mock_executor))
 
@@ -237,7 +237,7 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
         mock_ex.execute = _empty_stream
         return mock_ex
 
-    import soothe.sloop.stages.execute.execute as mod
+    import soothe.sloop.stations.execute.execute as mod
 
     monkeypatch.setattr(mod, "Executor", _factory)
 
@@ -359,7 +359,7 @@ async def test_branch1_ce_bound_does_not_re_emit_planner_ask(
     mock_executor = MagicMock()
     mock_executor.execute = _empty_stream
 
-    import soothe.sloop.stages.execute.execute as mod
+    import soothe.sloop.stations.execute.execute as mod
 
     monkeypatch.setattr(mod, "Executor", MagicMock(return_value=mock_executor))
 
@@ -424,7 +424,7 @@ async def test_branch2_picks_first_ask_user_in_mixed_wave(
 
     executor_called = MagicMock()
 
-    import soothe.sloop.stages.execute.execute as mod
+    import soothe.sloop.stations.execute.execute as mod
 
     monkeypatch.setattr(mod, "Executor", executor_called)
 
@@ -487,7 +487,7 @@ async def test_real_coreagent_resume_payload_passes_through(
         mock_ex.execute = _yield_wave
         return mock_ex
 
-    import soothe.sloop.stages.execute.execute as mod
+    import soothe.sloop.stations.execute.execute as mod
 
     monkeypatch.setattr(mod, "Executor", _factory)
 

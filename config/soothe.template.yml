@@ -131,6 +131,9 @@ agent:
       max_branch_root: 5
       max_branch_inner: 3
       reconcile_model_role: fast
+    # Fresh readonly coverage-audit thread (RFC-905); runs only when required.
+    eval:
+      max_eval_rounds: 10
     max_tool_calls_per_step: 100
     dispatch_idle_seconds: 300
     dispatch_tool_timeout_seconds: 0

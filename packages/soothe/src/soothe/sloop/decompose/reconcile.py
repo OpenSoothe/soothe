@@ -124,11 +124,37 @@ def plan_commit_from_proposals(
         if depth >= config.max_depth:
             rejections.append(ReconcileRejection(parent_id, "max_depth_exceeded"))
             continue
+        subtasks = list(prop.subtasks)
+        if parent.kind == "eval":
+            scoped = [sub for sub in subtasks if sub.in_scope and sub.necessary_for_user_goal]
+            if not scoped:
+                rejections.append(ReconcileRejection(parent_id, "out_of_scope_or_not_necessary"))
+                continue
+            if len(scoped) != len(subtasks):
+                rejections.append(ReconcileRejection(parent_id, "filtered_eval_subtasks"))
+            subtasks = scoped
+            proposed_fingerprint = tuple(
+                sorted(normalize_subtask_key(sub.description) for sub in subtasks)
+            )
+            prior_eval_fingerprints = {
+                tuple(
+                    sorted(
+                        normalize_subtask_key(child.description)
+                        for child in dag.nodes.values()
+                        if child.parent_step_id == prior.id and child.kind != "eval"
+                    )
+                )
+                for prior in dag.nodes.values()
+                if prior.kind == "eval" and prior.id != parent_id
+            }
+            if proposed_fingerprint in prior_eval_fingerprints:
+                rejections.append(ReconcileRejection(parent_id, "identical_eval_continuation"))
+                continue
         cap = _branch_cap(parent_id, dag, config)
-        if len(prop.subtasks) > cap:
+        if len(subtasks) > cap:
             rejections.append(ReconcileRejection(parent_id, "branch_cap_exceeded"))
             continue
-        accepted.append((parent_id, list(prop.subtasks)))
+        accepted.append((parent_id, subtasks))
 
     if not accepted:
         return [], [], rejections, scoped_plan_id

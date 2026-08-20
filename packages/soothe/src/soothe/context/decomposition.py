@@ -23,6 +23,14 @@ class ProposedSubtask(BaseModel):
     expected_output: str = ""
     execution_hint: ExecutionHint | None = "auto"
     depends_on_local: list[int] | None = None
+    in_scope: bool = Field(
+        default=True,
+        description="Eval assertion that this child is within the original user goal.",
+    )
+    necessary_for_user_goal: bool = Field(
+        default=True,
+        description="Eval assertion that this child is necessary to complete the user goal.",
+    )
 
     @field_validator("description")
     @classmethod

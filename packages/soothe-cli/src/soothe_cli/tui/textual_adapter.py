@@ -2500,7 +2500,7 @@ async def _finalize_goal_completion_stream(
     )
 
 
-async def _finalize_goal_completion_streams_on_turn_end(
+async def _finalize_goal_completion_streams(
     adapter: TextualUIAdapter,
     *,
     goal_completion_stream_by_namespace: dict[tuple[Any, ...], AssistantMessage],
@@ -2508,7 +2508,7 @@ async def _finalize_goal_completion_streams_on_turn_end(
     goal_loop_start_monotonic: float | None,
     turn_start_monotonic: float | None,
 ) -> None:
-    """Finalize partial goal_completion cards on ``soothe.stream.end`` scope=turn."""
+    """Finalize all in-flight goal-completion cards."""
     if not goal_completion_stream_by_namespace:
         return
     await asyncio.gather(
@@ -2974,6 +2974,7 @@ async def execute_task_textual(
     skip_daemon_send_turn: bool = False,
     clarification_mode: str | None = None,
     sticky_preferred_subagent: str | None = None,
+    interaction_mode: str | None = None,
     is_shutting_down: Callable[[], bool] | None = None,
 ) -> SessionStats:
     """Execute a task with output directed to Textual UI.
@@ -3174,6 +3175,7 @@ async def execute_task_textual(
                 ),
                 attachments=image_attachments,
                 clarification_mode=clarification_mode,
+                interaction_mode=interaction_mode,
                 clarification_answer=sending_clarification_answer,
                 clarification_answers=pending_clarification_answers,
             )
@@ -4052,8 +4054,11 @@ async def execute_task_textual(
                                 scope = str(data.get("scope", ""))
                                 # Cancel flags come from DaemonSession when STREAM_END is
                                 # observed on the wire; do not re-parse reasons here.
-                                if scope == "turn":
-                                    await _finalize_goal_completion_streams_on_turn_end(
+                                if (
+                                    scope == "turn"
+                                    or str(data.get("phase", "")) == "goal_completion"
+                                ):
+                                    await _finalize_goal_completion_streams(
                                         adapter,
                                         goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
                                         assistant_message_by_namespace=assistant_message_by_namespace,
@@ -4069,7 +4074,7 @@ async def execute_task_textual(
                                     # usually closes before ``scope=turn`` arrives. Close
                                     # any synthesis card now rather than leaving it
                                     # streaming plain text with a running dot.
-                                    await _finalize_goal_completion_streams_on_turn_end(
+                                    await _finalize_goal_completion_streams(
                                         adapter,
                                         goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
                                         assistant_message_by_namespace=assistant_message_by_namespace,
@@ -4613,7 +4618,7 @@ async def execute_task_textual(
         # Last resort: the daemon may end the stream without a terminal frame
         # (cancel, worker crash, dropped frame). Never leave a synthesis card
         # stuck in streaming state with unrendered markdown.
-        await _finalize_goal_completion_streams_on_turn_end(
+        await _finalize_goal_completion_streams(
             adapter,
             goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
             assistant_message_by_namespace=assistant_message_by_namespace,
@@ -4732,7 +4737,7 @@ async def execute_task_textual(
 
     except (asyncio.CancelledError, KeyboardInterrupt):
         app_exiting = bool(is_shutting_down()) if is_shutting_down is not None else False
-        await _finalize_goal_completion_streams_on_turn_end(
+        await _finalize_goal_completion_streams(
             adapter,
             goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
             assistant_message_by_namespace=assistant_message_by_namespace,

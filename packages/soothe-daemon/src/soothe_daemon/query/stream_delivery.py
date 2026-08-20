@@ -324,11 +324,9 @@ class StreamDeliveryCoalescer:
         self._gc_streamed_chars: int = 0
         # Last monotonic time we emitted a chunked-streaming block (for interval flush)
         self._gc_last_block_monotonic: float = 0.0
-        # Last emitted goal_completion block text (for terminal re-stamp without empty marker)
-        self._gc_last_emitted_content: str = ""
-        # Last passthrough goal_completion frame (namespace, msg wire, meta). Kept so a
-        # synthesis that never leaves the streaming phase still gets a terminal frame.
-        self._gc_passthrough_tail: tuple[tuple[str, ...], dict[str, Any], Any] | None = None
+        # Last emitted non-terminal goal_completion frame. Kept so a synthesis
+        # whose buffer is empty at completion still gets a terminal frame.
+        self._gc_terminal_tail: tuple[tuple[str, ...], dict[str, Any], Any] | None = None
 
     @property
     def turn_complete_pending(self) -> bool:
@@ -746,9 +744,9 @@ class StreamDeliveryCoalescer:
         if self._mode == "streaming":
             if _chunk_position_last(msg):
                 wire_data = _stamp_stream_terminal_wire_data(wire_data)
-                self._gc_passthrough_tail = None
+                self._reset_goal_completion_state()
             else:
-                self._note_goal_completion_passthrough(namespace, msg_wire, meta)
+                self._note_goal_completion_tail(namespace, msg_wire, meta)
             return [(namespace, "messages", wire_data)]
 
         chunk_chars = len("".join(extract_text_from_ai_message(msg_wire)))
@@ -764,47 +762,55 @@ class StreamDeliveryCoalescer:
                 self._gc_streamed_chars += chunk_chars
                 if _chunk_position_last(msg):
                     wire_data = _stamp_stream_terminal_wire_data(wire_data)
-                    self._gc_passthrough_tail = None
+                    self._reset_goal_completion_state()
                 else:
-                    self._note_goal_completion_passthrough(namespace, msg_wire, meta)
+                    self._note_goal_completion_tail(namespace, msg_wire, meta)
                 return [(namespace, "messages", wire_data)]
             # Threshold crossed → enter chunked-streaming phase. Buffer this
             # chunk and let the threshold check below decide whether to flush
             # immediately as the first block.
             self._gc_phase = "chunked_streaming"
             self._gc_last_block_monotonic = time.monotonic()
-            self._gc_passthrough_tail = None
+            self._gc_terminal_tail = None
 
         # Phase 2: chunked-streaming. Accumulate and flush blocks on demand.
         self._accumulate_goal_completion(namespace, msg_wire, meta)
         return self._maybe_flush_goal_completion_block(time.monotonic())
 
-    def _note_goal_completion_passthrough(
+    def _note_goal_completion_tail(
         self,
         namespace: tuple[str, ...],
         msg_wire: dict[str, Any],
         metadata: Any,
     ) -> None:
-        """Remember the last un-terminated passthrough frame for terminal re-stamp."""
-        self._gc_passthrough_tail = (namespace, dict(msg_wire), metadata)
+        """Remember the last non-terminal frame for terminal re-stamp."""
+        self._gc_terminal_tail = (namespace, dict(msg_wire), metadata)
 
-    def _flush_passthrough_goal_completion_terminal(
+    def _emit_goal_completion_tail_terminal(
         self,
     ) -> list[tuple[tuple[str, ...], str, Any]]:
-        """Re-stamp the last passthrough frame as terminal when no block flush ran.
+        """Re-stamp the last emitted frame as terminal when the buffer is empty.
 
         Short syntheses never cross ``adaptive_threshold_chars`` (and mode
         ``streaming`` never buffers at all), so the buffer is empty at turn end and
-        upstream does not mark ``chunk_position=last``. Without this the client has
-        no signal that the synthesis card is complete.
+        upstream does not mark ``chunk_position=last``. A block flush can likewise
+        empty the buffer before completion.
         """
-        tail = self._gc_passthrough_tail
-        self._gc_passthrough_tail = None
+        tail = self._gc_terminal_tail
+        self._reset_goal_completion_state()
         if tail is None:
             return []
         namespace, msg_wire, metadata = tail
         wire = _stamp_stream_terminal_wire_data((msg_wire, metadata))
         return [(namespace, "messages", wire)]
+
+    def _reset_goal_completion_state(self) -> None:
+        """Clear per-stream goal-completion delivery state."""
+        self._gc = None
+        self._gc_streamed_chars = 0
+        self._gc_phase = "batch" if self._mode == "batch" else "streaming"
+        self._gc_last_block_monotonic = 0.0
+        self._gc_terminal_tail = None
 
     def _maybe_flush_goal_completion_block(
         self, now: float
@@ -856,7 +862,6 @@ class StreamDeliveryCoalescer:
         msg.setdefault("type", "AIMessageChunk")
         msg["content"] = text
         msg["phase"] = "goal_completion"
-        self._gc_last_emitted_content = text
         if final:
             msg["chunk_position"] = "last"
             msg[GOAL_COMPLETION_STREAM_TERMINAL_FIELD] = True
@@ -866,10 +871,9 @@ class StreamDeliveryCoalescer:
 
         wire = prepare_stream_data_for_wire((msg, template_meta))
         if final:
-            # Final flush clears the buffer entirely.
-            self._gc = None
-            self._gc_streamed_chars = 0
-            self._gc_phase = "batch" if self._mode == "batch" else "streaming"
+            self._reset_goal_completion_state()
+        else:
+            self._note_goal_completion_tail(namespace, msg, template_meta)
         return [(namespace, "messages", wire)]
 
     def _flush_all_text_buffers(self, *, final: bool) -> list[tuple[tuple[str, ...], str, Any]]:
@@ -936,27 +940,10 @@ class StreamDeliveryCoalescer:
         to a file-summary message regardless of phase.
         """
         if self._gc is None or not self._gc.parts:
-            if (
-                final
-                and self._gc is not None
-                and self._gc_block_flush_count > 0
-                and self._gc_last_emitted_content
-            ):
-                terminal = self._emit_goal_completion_content_terminal(
-                    self._gc_last_emitted_content
-                )
-                self._gc = None
-                self._gc_streamed_chars = 0
-                self._gc_phase = "batch" if self._mode == "batch" else "streaming"
-                self._gc_last_block_monotonic = 0.0
-                self._gc_last_emitted_content = ""
-                return terminal
-            self._gc = None
-            self._gc_streamed_chars = 0
-            self._gc_phase = "batch" if self._mode == "batch" else "streaming"
-            self._gc_last_block_monotonic = 0.0
-            self._gc_last_emitted_content = ""
-            return self._flush_passthrough_goal_completion_terminal() if final else []
+            if final:
+                return self._emit_goal_completion_tail_terminal()
+            self._reset_goal_completion_state()
+            return []
 
         text = self._joined_gc_text()
 
@@ -964,25 +951,6 @@ class StreamDeliveryCoalescer:
             return self._emit_file_output_message(text)
 
         return self._emit_goal_completion_block(time.monotonic(), final=final)
-
-    def _emit_goal_completion_content_terminal(
-        self,
-        text: str,
-    ) -> list[tuple[tuple[str, ...], str, Any]]:
-        """Re-emit last goal_completion content with terminal flags (no empty marker)."""
-        if self._gc is None:
-            return []
-        namespace = self._gc.namespace
-        template_msg = dict(self._gc.template_msg or {})
-        template_meta = dict(self._gc.template_meta or {})
-        msg = dict(template_msg)
-        msg.setdefault("type", "AIMessageChunk")
-        msg["content"] = text
-        msg["phase"] = "goal_completion"
-        msg["chunk_position"] = "last"
-        msg[GOAL_COMPLETION_STREAM_TERMINAL_FIELD] = True
-        wire = prepare_stream_data_for_wire((msg, template_meta))
-        return [(namespace, "messages", wire)]
 
     def _emit_file_output_message(self, text: str) -> list[tuple[tuple[str, ...], str, Any]]:
         """Write large goal_completion to file and emit summary message."""
@@ -1003,11 +971,7 @@ class StreamDeliveryCoalescer:
         meta: dict[str, Any] = {}
 
         namespace = self._gc.namespace if self._gc else ()
-        self._gc = None
-        # Reset adaptive streaming counter and phase when buffer cleared
-        self._gc_streamed_chars = 0
-        self._gc_phase = "batch" if self._mode == "batch" else "streaming"
-        self._gc_last_block_monotonic = 0.0
+        self._reset_goal_completion_state()
         wire = prepare_stream_data_for_wire((msg, meta))
         return [(namespace, "messages", wire)]
 

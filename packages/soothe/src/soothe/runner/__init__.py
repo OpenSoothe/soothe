@@ -185,6 +185,11 @@ class SootheRunner(
         else:
             self._core_agent = _build_core_agent()
 
+        # Read-only "ask" graph, compiled lazily on the first ask turn (IG-758).
+        # Shares ``self._checkpointer`` with the default agent so thread state
+        # carries across mode switches within a conversation.
+        self._ask_core_agent: CoreAgentProtocol | None = None
+
         durability_start = time.perf_counter()
         self._durability = resolve_durability(self._config)
         durability_ms = (time.perf_counter() - durability_start) * 1000
@@ -218,14 +223,45 @@ class SootheRunner(
         """Layer-1 agent handle (lazy or materialized)."""
         return self._core_agent
 
-    async def _materialize_core_agent(self) -> CoreAgentProtocol:
-        """Ensure CoreAgent graph is compiled and checkpointer is attached."""
+    async def _materialize_core_agent(
+        self, interaction_mode: str | None = None
+    ) -> CoreAgentProtocol:
+        """Ensure the CoreAgent graph for ``interaction_mode`` is compiled.
+
+        ``"ask"`` selects the read-only graph; anything else (including
+        ``None``) selects the default graph. The checkpointer is attached
+        before an ask graph is compiled so both graphs share one checkpointer.
+        """
         from soothe.coreagent.lazy import LazyCoreAgent
 
+        if interaction_mode == "ask":
+            return await self._materialize_ask_core_agent()
         if isinstance(self._core_agent, LazyCoreAgent):
             return await self._core_agent.amaterialize()
         await self._ensure_checkpointer_initialized()
         return self._core_agent
+
+    async def _materialize_ask_core_agent(self) -> CoreAgentProtocol:
+        """Compile (once) and return the read-only ``interaction_mode="ask"`` agent."""
+        if self._ask_core_agent is None:
+            # The checkpointer may be created lazily from a pool; ensure it
+            # exists before compiling so the ask graph shares it with the
+            # default agent (thread continuity across mode switches).
+            await self._ensure_checkpointer_initialized()
+            import time
+
+            from soothe.coreagent import create_soothe_agent
+
+            agent_start = time.perf_counter()
+            self._ask_core_agent = create_soothe_agent(
+                self._config,
+                checkpointer=self._checkpointer,
+                identity_runtime=self._identity_runtime,
+                interaction_mode="ask",
+            )
+            agent_ms = (time.perf_counter() - agent_start) * 1000
+            logger.info("CoreAgent (ask) created in %.1fms", agent_ms)
+        return self._ask_core_agent
 
     def _materialized_core_agent(self) -> CoreAgentProtocol:
         """Return a compiled CoreAgent, materializing lazily when needed."""
@@ -588,6 +624,7 @@ class SootheRunner(
         client_loop_id: str | None = None,
         autopilot_job: Any = None,  # GoalDispatchEnvelope | None — see RFC-222 revised
         clarification_mode: str | None = None,  # RFC-622 per-request override
+        interaction_mode: str | None = None,  # per-request "agent"|"ask" graph selection
         clarification_answer: bool = False,  # RFC-622: resume hint
         clarification_answers: list[str] | None = None,  # RFC-622: per-question answers
         resume_interrupted: bool = False,  # daemon crash recovery
@@ -623,6 +660,10 @@ class SootheRunner(
             clarification_mode: RFC-622 per-request mode (``"auto"`` / ``"manual"``).
                 ``None`` falls back to ``config.agent.clarification.default_mode``.
                 Ignored when ``autopilot_job`` is set (autopilot forces ``"auto"``).
+            interaction_mode: per-request CoreAgent interaction mode
+                (``"agent"`` / ``"ask"``). ``"ask"`` selects the read-only graph
+                (tools restricted to read-only FS ops, writes denied). ``None``
+                uses the default ``"agent"`` graph.
             clarification_answer: When True, hints that ``user_input`` is the
                 answer to a pending clarification. The runner verifies via the
                 loop's persisted state and resumes the graph via
@@ -684,6 +725,7 @@ class SootheRunner(
                 preferred_subagent=preferred_subagent,
                 intake_scope=intake_scope,
                 clarification_mode=clarification_mode,
+                interaction_mode=interaction_mode,
                 clarification_answer=clarification_answer,
                 clarification_answers=clarification_answers,
                 resume_interrupted=resume_interrupted,

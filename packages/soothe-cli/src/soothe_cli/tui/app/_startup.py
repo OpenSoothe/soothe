@@ -381,11 +381,12 @@ class _StartupMixin:
         try:
             from soothe_cli.tui.composer_mode import resolve_composer_wire_fields
 
-            wire_clar, _ = resolve_composer_wire_fields(getattr(self, "_composer_mode", "auto"))
+            wire = resolve_composer_wire_fields(getattr(self, "_composer_mode", "auto"))
             resp = await self._daemon_session.invoke_skill(
                 skill_name,
                 args,
-                clarification_mode=wire_clar,
+                clarification_mode=wire.clarification_mode,
+                interaction_mode=wire.interaction_mode,
             )
         except RuntimeError as exc:
             await self._mount_message(UserMessage(command))

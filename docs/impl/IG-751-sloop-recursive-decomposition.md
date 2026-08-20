@@ -15,7 +15,7 @@ do-or-decompose driven by CE StepDAG ownership:
 2. Goal = root `StepNode`; threads complete or call executor-bound
    `decompose_task`.
 3. CE reconciles proposals; completions land immediately.
-4. B-lazy failure via `replacement_of` nodes; ROOT_EVAL at tree-green.
+4. B-lazy failure via `replacement_of` nodes; coverage Eval is [RFC-905](../specs/RFC-905-sloop-eval-thread.md) (not GapResult new-root).
 
 Decomposition is **always on** for StrangeLoop step THREADS. Budgets:
 `agent.loop.decompose.*` (no `enabled` gate).
@@ -32,7 +32,7 @@ Decomposition is **always on** for StrangeLoop step THREADS. Budgets:
 | **P1** | Executor-bound `decompose_task`; THREAD envelope + `write_todos` override; proposal queue | Tool enqueues proposal; no CE commit from tool |
 | **P2** | Deterministic RECONCILE behind flag | Proposals → children claimable |
 | **P3** | Graph cutover (DISPATCH/RECONCILE/ROOT_EVAL); pass2 bypass | Flag on path works for one-shot + simple decompose |
-| **P4** | Conflict LLM reconcile; B-lazy; ROOT_EVAL gaps | Failure + gap paths green |
+| **P4** | Conflict LLM reconcile; B-lazy. ROOT_EVAL GapResult **withdrawn** (RFC-905 Eval thread is a follow-on IG) | Failure paths green; Eval not in this IG |
 | **P5** | Delete pass2 + dead plan-generate; docs sync | Verify green; flag default still off or on per release decision |
 
 ---
@@ -128,7 +128,9 @@ Tests: `packages/soothe/tests/unit/core/loop/decompose/test_reconcile.py`.
 
 ## 4d. P4 outline (next)
 
-- Conflict LLM reconcile; B-lazy; ROOT_EVAL GapResult re-dispatch.
+- Conflict LLM reconcile; B-lazy. ROOT_EVAL GapResult re-dispatch is **withdrawn**
+  ([RFC-905](../specs/RFC-905-sloop-eval-thread.md)); do not implement GapResult
+  new-root in this IG.
 
 ---
 

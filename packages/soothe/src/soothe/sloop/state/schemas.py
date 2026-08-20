@@ -59,7 +59,7 @@ class EvidenceEntry(BaseModel):
     kind: Literal["tool", "bootstrap", "ledger"] = "bootstrap"
 
 
-StepKind = Literal["action", "ask_user"]
+StepKind = Literal["action", "ask_user", "eval"]
 """Step kind. ``action`` runs through CoreAgent; ``ask_user`` short-circuits
 into the clarification relay (RFC-622)."""
 
@@ -212,8 +212,8 @@ class StepAction(BaseModel):
             identifiers, and context needed to execute independently.
         expected_output: Expected result for evidence accumulation.
         dependencies: Step IDs this depends on (for DAG execution).
-        kind: ``action`` (normal CoreAgent execution) or ``ask_user``
-            (clarification relay short-circuit).
+        kind: ``action`` (normal CoreAgent execution), ``ask_user``
+            (clarification relay short-circuit), or engine-injected ``eval``.
         questions: When ``kind == "ask_user"``, the questions to surface to
             the user (TUI manual mode) or veritas (auto mode).
         execution_hint: Planner routing hint (``subagent`` → delegate via ``task``).

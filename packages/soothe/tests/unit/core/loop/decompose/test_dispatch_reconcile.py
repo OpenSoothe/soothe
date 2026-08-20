@@ -12,9 +12,9 @@ from soothe.context.decomposition import DecompositionProposal, ProposedSubtask
 from soothe.context.engine import ContextEngine
 from soothe.context.models import StepNode
 from soothe.sloop.orchestrator.runtime_context import LoopPhaseScratch, LoopRuntimeContext
-from soothe.sloop.stages.decompose.dispatch import DispatchNode
-from soothe.sloop.stages.decompose.reconcile_node import ReconcileNode
-from soothe.sloop.stages.decompose.root_eval import RootEvalNode
+from soothe.sloop.stations.decompose.dispatch import DispatchNode
+from soothe.sloop.stations.decompose.reconcile_node import ReconcileNode
+from soothe.sloop.stations.decompose.root_eval import RootEvalNode
 
 
 def _ctx_with_ce(ce: ContextEngine, goal_id: str, *, goal: str = "do work") -> LoopRuntimeContext:
@@ -186,4 +186,59 @@ async def test_root_eval_finalize_when_tree_green() -> None:
     ctx = _ctx_with_ce(ce, goal.id)
     node = RootEvalNode()
     result = await node(ctx, {})
+    assert result["root_eval_route"] == "finalize"
+
+
+@pytest.mark.asyncio
+async def test_root_eval_inserts_eval_step_after_decomposition() -> None:
+    ce = ContextEngine()
+    goal = await ce.create_goal("do work", loop_id="L1")
+    await ce.add_steps(
+        goal.id,
+        [
+            StepNode(id="ROOT", description="root", status="decomposed"),
+            StepNode(
+                id="CHILD",
+                description="child",
+                status="completed",
+                parent_step_id="ROOT",
+            ),
+        ],
+    )
+    ctx = _ctx_with_ce(ce, goal.id)
+    result = await RootEvalNode()(ctx, {})
+    assert result["root_eval_route"] == "dispatch"
+    refreshed = await ce.get_goal(goal.id)
+    assert refreshed is not None
+    eval_nodes = [step for step in refreshed.steps.nodes.values() if step.kind == "eval"]
+    assert len(eval_nodes) == 1
+    assert eval_nodes[0].status == "pending"
+    assert "ORIGINAL USER GOAL" in (eval_nodes[0].full_description or "")
+
+
+@pytest.mark.asyncio
+async def test_root_eval_finalizes_after_completed_eval() -> None:
+    ce = ContextEngine()
+    goal = await ce.create_goal("do work", loop_id="L1")
+    await ce.add_steps(
+        goal.id,
+        [
+            StepNode(id="ROOT", description="root", status="decomposed"),
+            StepNode(
+                id="CHILD",
+                description="child",
+                status="completed",
+                parent_step_id="ROOT",
+            ),
+            StepNode(
+                id="EVAL",
+                description="eval",
+                status="completed",
+                kind="eval",
+                plan_iteration=1,
+            ),
+        ],
+    )
+    ctx = _ctx_with_ce(ce, goal.id)
+    result = await RootEvalNode()(ctx, {})
     assert result["root_eval_route"] == "finalize"

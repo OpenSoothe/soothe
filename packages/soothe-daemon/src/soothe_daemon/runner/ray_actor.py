@@ -50,6 +50,7 @@ class LoopRunnerActor:
                     client_loop_id=request.loop_id,
                     autopilot_job=request.autopilot_job,  # RFC-222 revised
                     clarification_mode=request.clarification_mode,
+                    interaction_mode=request.interaction_mode,
                     clarification_answer=request.clarification_answer,
                     clarification_answers=request.clarification_answers,
                     resume_interrupted=request.resume_interrupted,

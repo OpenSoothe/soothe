@@ -11,7 +11,7 @@ import logging
 from typing import Literal
 
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.stages.execute.max_iterations_terminal import emit_max_iterations_terminal
+from soothe.sloop.stations.execute.max_iterations_terminal import emit_max_iterations_terminal
 
 logger = logging.getLogger(__name__)
 

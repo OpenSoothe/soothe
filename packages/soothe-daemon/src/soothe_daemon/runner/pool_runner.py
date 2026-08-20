@@ -531,6 +531,7 @@ def _pool_worker_body(
                             client_loop_id=req.loop_id,
                             autopilot_job=req.autopilot_job,  # RFC-222 revised
                             clarification_mode=req.clarification_mode,
+                            interaction_mode=req.interaction_mode,
                             clarification_answer=req.clarification_answer,
                             clarification_answers=req.clarification_answers,
                             resume_interrupted=req.resume_interrupted,

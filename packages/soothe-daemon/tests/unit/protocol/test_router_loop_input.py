@@ -51,6 +51,7 @@ def test_queue_options_from_daemon_message_defaults() -> None:
         "response_schema_name": None,
         "response_schema_strict": None,
         "clarification_mode": None,
+        "interaction_mode": None,
         "clarification_answer": False,
         "clarification_answers": None,
         "resume_interrupted": False,
@@ -84,6 +85,25 @@ def test_queue_options_from_daemon_message_intake_scope_passthrough() -> None:
 def test_queue_options_clarification_mode_normalized(value: object, expected: str | None) -> None:
     msg = {} if value is None else {"clarification_mode": value}
     assert _queue_options_from_daemon_message(msg)["clarification_mode"] == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("agent", "agent"),
+        ("AGENT", "agent"),
+        ("  Ask  ", "ask"),
+        ("ask", "ask"),
+        ("", None),
+        ("   ", None),
+        ("turbo", None),
+        (None, None),
+        (42, None),
+    ],
+)
+def test_queue_options_interaction_mode_normalized(value: object, expected: str | None) -> None:
+    msg = {} if value is None else {"interaction_mode": value}
+    assert _queue_options_from_daemon_message(msg)["interaction_mode"] == expected
 
 
 def test_queue_options_from_daemon_message_response_schema() -> None:

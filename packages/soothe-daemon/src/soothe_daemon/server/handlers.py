@@ -228,6 +228,7 @@ class DaemonHandlersMixin:
                     response_schema_name=qo.get("response_schema_name"),
                     response_schema_strict=qo.get("response_schema_strict"),
                     clarification_mode=qo.get("clarification_mode"),
+                    interaction_mode=qo.get("interaction_mode"),
                     clarification_answer=bool(qo.get("clarification_answer", False)),
                     clarification_answers=qo.get("clarification_answers"),
                     resume_interrupted=bool(qo.get("resume_interrupted", False)),

@@ -50,7 +50,7 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
 
     if ctx.ce is not None:
         try:
-            from soothe.context.models import StepExecution
+            from soothe.context.models import StepCloseReport, StepExecution
 
             for r in step_results:
                 if r.step_id in decompose_parent_ids:
@@ -70,6 +70,14 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
                     hit_subagent_cap=r.hit_subagent_cap,
                     hit_tool_budget=r.hit_tool_budget,
                 )
+                if ctx.ce_goal_id and isinstance(r.outcome, dict):
+                    close_data = r.outcome.get("step_close_report")
+                    if close_data is not None:
+                        goal = await ctx.ce.get_goal(ctx.ce_goal_id)
+                        if goal is not None and r.step_id in goal.steps.nodes:
+                            goal.steps.nodes[
+                                r.step_id
+                            ].close_report = StepCloseReport.model_validate(close_data)
                 if r.success:
                     await ctx.ce.complete_step(ctx.ce_goal_id, r.step_id, execution)
                 else:

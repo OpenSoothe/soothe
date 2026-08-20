@@ -18,8 +18,8 @@ StrangeLoop (`soothe.sloop`) is the **middle tier** of Soothe's three-level exec
 
 The name comes from the core insight: the agent decomposes, executes, reconciles, and re-dispatches in a loop — a "strange loop" of self-referential refinement. The loop is bounded (default max iterations from config) and converges when the StepDAG is green.
 
-**RFC**: [RFC-904](../../specs/RFC-904-sloop-recursive-decomposition.md) (topology); [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md) (historical Plan-Execute framing)
-**Source**: `packages/soothe/src/soothe/sloop/engine/strange_loop.py`, `state/schemas.py`, `orchestrator/`
+**RFC**: [RFC-904](../../specs/RFC-904-sloop-recursive-decomposition.md) (topology); [RFC-905](../../specs/RFC-905-sloop-eval-thread.md) (Eval thread); [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md) (historical Plan-Execute framing)
+**Source**: `packages/soothe/src/soothe/sloop/strange_loop.py`, `state/schemas.py`, `orchestrator/`
 
 ---
 
@@ -36,11 +36,12 @@ The graph orchestrates a clear **main stem**:
 2. **Dispatch** — claim CE ready steps (root StepNode on first entry).
 3. **Execute** — CoreAgent thread wave; optional `decompose_task` proposals.
 4. **Record → Reconcile** — persist wave outcomes; commit proposals into the StepDAG.
-5. **Root eval** — tree-green → **finalize**, or gap re-dispatch; else loop back to DISPATCH.
+5. **Root eval** — action-tree green → insert **Eval** step when required ([RFC-905](../../specs/RFC-905-sloop-eval-thread.md)), else **finalize**.
 
-Stage modules live under
-`sloop/stages/{preprocess,decompose,execute,complete,sidecars}/`
-(plus `stages/plan/phase_status.py` for status cards). Canonical station IDs
+Station nodes live under
+`sloop/stations/{preprocess,decompose,execute,completion,sidecars}/`
+(status-card emission is `orchestrator/phase_status.py`). Station machinery
+lives in `sloop/engine/{execute,completion}/`. Canonical station IDs
 and ledger dual-read tags are in `sloop/orchestrator/stations.py`.
 
 Primary diagram: [strange_loop_stem.mmd](../../diagrams/strange_loop_stem.mmd).
@@ -72,19 +73,22 @@ CE StepDAG:
 
 1. **DISPATCH** claims ready steps (or grounds an Approve plan / creates the root).
 2. Threads may call executor-bound **`decompose_task`**; completions land immediately.
-3. **RECONCILE** commits proposals; **ROOT_EVAL** finalizes when the tree is green.
+3. **RECONCILE** commits proposals; **ROOT_EVAL** inserts an Eval step when required ([RFC-905](../../specs/RFC-905-sloop-eval-thread.md)) or finalizes.
 
 Budgets: `agent.loop.decompose.*` (always on for step THREADS).
 THREAD prompt copy: `soothe.prompts` / `fragments/decompose/` (do-or-decompose).
+Eval (spec): fresh readonly CoreAgent thread + `decompose_task`; skip when a single action leaf has no decompose and no structured early-exit.
 
 ---
 
-## Step Kinds — Action vs. Ask-User
+## Step Kinds — Action, Ask-User, Eval
 
-Steps have a `kind` field: `action` or `ask_user` (RFC-622, IG-462).
+Steps have a `kind` field: `action` or `ask_user` (RFC-622, IG-462), plus
+**`eval`** (RFC-905, engine-injected; not yet implemented).
 
 - **`action`** steps run through CoreAgent — normal tool execution.
 - **`ask_user`** steps do **not** invoke CoreAgent. Instead, they route `questions` through the configured `ClarificationPolicy` and record a synthesized successful step result containing the answers.
+- **`eval`** steps (RFC-905) run a fresh readonly CoreAgent thread plus `decompose_task` to audit user-goal coverage. The engine inserts them; workers must not create them.
 
 This lets the loop request clarification mid-execution without breaking the Plan-Execute cycle. The `ask_user` validator enforces that questions are non-empty.
 
@@ -127,7 +131,7 @@ This context is injected into execute / synthesis prompts, giving the LLM awaren
 
 ## Convergence and Iteration Bounds
 
-The loop is bounded by `agent.loop.max_iterations` (default **99**, from `DEFAULT_STRANGE_LOOP_MAX_ITERATIONS`). The same budget applies to Autopilot workers. Convergence is detected when **ROOT_EVAL** sees a green StepDAG (or a terminal one-step `PlanResult` routes `record_progress` → `finalize`).
+The loop is bounded by `agent.loop.max_iterations` (default **99**, from `DEFAULT_STRANGE_LOOP_MAX_ITERATIONS`). The same budget applies to Autopilot workers. Convergence is detected when **ROOT_EVAL** skips Eval or the last Eval step completes with no children (RFC-905), or a terminal one-step `PlanResult` routes `record_progress` → `finalize`.
 
 The `terminal_after_execute` flag (RFC-226) provides an optimization: when a one-step plan asserts it completes the goal, the graph skips RECONCILE / ROOT_EVAL for that turn.
 

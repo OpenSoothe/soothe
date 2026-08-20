@@ -17,7 +17,7 @@ from soothe_sdk.intention.models import TaskComplexity
 from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.orchestrator.routing import route_by_intent
 from soothe.sloop.plans.trivial_plan import build_trivial_plan
-from soothe.sloop.stages.preprocess.enter_loop import node_init_or_resume
+from soothe.sloop.stations.preprocess.enter_loop import node_init_or_resume
 
 
 async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]

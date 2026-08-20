@@ -8,7 +8,7 @@ from soothe.sloop.intention.models import (
     IntentClassification,
     TaskComplexity,
 )
-from soothe.sloop.stages.preprocess.intake import (
+from soothe.sloop.stations.preprocess.intake import (
     INTENT_CLASSIFY_STATUS_LABEL,
     intake_reasoning_event,
     intent_pass_reasoning_events,

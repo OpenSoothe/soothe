@@ -94,10 +94,28 @@ into `execute/`, `completion/`; `test_anchor_manager.py` →
 `checkpoint_tree/`; StrangeLoop-level tests → `core/`; the misfiled
 `test_context_adapters.py` (tests `soothe.context`) → `tests/unit/context/`.
 
+### 6. Station naming alignment
+
+Aligns the node-layer vocabulary with RFC-904 and the machinery pairs
+(decided against merging stations into `engine`: `engine` must stay free
+of `orchestrator` imports so `soothe.prompts` / `sloop.plans` can keep
+importing it as a pure library):
+
+- `stages/` → `stations/` — "stages" was pre-904 plan/execute/judge
+  vocabulary; the canonical station IDs already live in
+  `orchestrator/stations.py`.
+- `stages/complete/` → `stations/completion/` — pairs with
+  `engine/completion/` (previously `complete` vs `completion` mismatch).
+- Test dir `tests/unit/core/loop/orchestrator/stages/` → `stations/`.
+- Updated: `orchestrator/builder.py`, `sloop/strange_loop.py` (lazy
+  import), 7 goal-completion test files (imports + patch strings), all
+  station `__init__` docstrings, `engine/__init__.py` docstring, and the
+  living wiki `docs/wiki/core/strangeloop.md` path references.
+
 ## Intentionally not done
 
-- **`_build_loop_state_view` merge** (`stages/execute/execute.py` vs
-  `stages/sidecars/delegate.py`): the two builders intentionally differ
+- **`_build_loop_state_view` merge** (`stations/execute/execute.py` vs
+  `stations/sidecars/delegate.py`): the two builders intentionally differ
   (plan-summary source, recent step outputs); merging would be a
   param-refactor, not a deletion. Skipped per the cleanse rule
   (consolidation must not rewrite behavior).

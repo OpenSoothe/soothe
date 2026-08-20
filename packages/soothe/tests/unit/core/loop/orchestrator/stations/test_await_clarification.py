@@ -14,7 +14,7 @@ from soothe.sloop.clarification.protocol import (
     LoopStateView,
     request_to_state,
 )
-from soothe.sloop.stages.sidecars.await_user import (
+from soothe.sloop.stations.sidecars.await_user import (
     node_await_clarification,
 )
 
@@ -259,7 +259,7 @@ async def test_mode_derived_from_policy_class(policy_factory: Any, expected_mode
 
 async def test_planner_subagent_review_emit_includes_plan_payload() -> None:
     from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
-    from soothe.sloop.stages.sidecars.delegate import _PLANNER_SUBAGENT_REVIEW_QUESTIONS
+    from soothe.sloop.stations.sidecars.delegate import _PLANNER_SUBAGENT_REVIEW_QUESTIONS
 
     req = ClarificationRequest(
         questions=_PLANNER_SUBAGENT_REVIEW_QUESTIONS,
@@ -302,7 +302,7 @@ def _planner_review_pending(
     plan_markdown: str = "# Plan\n",
 ) -> dict[str, Any]:
     from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
-    from soothe.sloop.stages.sidecars.delegate import _PLANNER_SUBAGENT_REVIEW_QUESTIONS
+    from soothe.sloop.stations.sidecars.delegate import _PLANNER_SUBAGENT_REVIEW_QUESTIONS
 
     req = ClarificationRequest(
         questions=_PLANNER_SUBAGENT_REVIEW_QUESTIONS,

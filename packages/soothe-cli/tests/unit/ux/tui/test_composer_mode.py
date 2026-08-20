@@ -6,9 +6,11 @@ import pytest
 
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.composer_mode import (
+    COMPOSER_MODE_ASK,
     COMPOSER_MODE_AUTO,
     COMPOSER_MODE_MANUAL,
     COMPOSER_MODE_PLAN,
+    ComposerWireFields,
     next_composer_mode,
     normalize_composer_mode,
     resolve_composer_wire_fields,
@@ -21,6 +23,7 @@ from soothe_cli.tui.composer_mode import (
         ("auto", COMPOSER_MODE_AUTO),
         ("manual", COMPOSER_MODE_MANUAL),
         ("plan", COMPOSER_MODE_PLAN),
+        ("ask", COMPOSER_MODE_ASK),
         (None, COMPOSER_MODE_MANUAL),
         ("garbage", COMPOSER_MODE_MANUAL),
         ("", COMPOSER_MODE_MANUAL),
@@ -35,7 +38,8 @@ def test_normalize_composer_mode(raw: str | None, expected: str) -> None:
     [
         ("auto", "manual"),
         ("manual", "plan"),
-        ("plan", "auto"),
+        ("plan", "ask"),
+        ("ask", "auto"),
         ("garbage", "manual"),
     ],
 )
@@ -44,16 +48,23 @@ def test_next_composer_mode(current: str, expected: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("mode", "wire_clar", "sticky"),
+    ("mode", "wire_clar", "sticky", "interaction"),
     [
-        ("auto", "auto", None),
-        ("manual", "manual", None),
-        ("plan", "auto", "planner"),
-        ("garbage", "manual", None),
+        ("auto", "auto", None, None),
+        ("manual", "manual", None, None),
+        ("plan", "auto", "planner", None),
+        ("ask", "auto", None, "ask"),
+        ("garbage", "manual", None, None),
     ],
 )
-def test_resolve_composer_wire_fields(mode: str, wire_clar: str, sticky: str | None) -> None:
-    assert resolve_composer_wire_fields(mode) == (wire_clar, sticky)
+def test_resolve_composer_wire_fields(
+    mode: str, wire_clar: str, sticky: str | None, interaction: str | None
+) -> None:
+    assert resolve_composer_wire_fields(mode) == ComposerWireFields(
+        clarification_mode=wire_clar,
+        preferred_subagent=sticky,
+        interaction_mode=interaction,
+    )
 
 
 def test_sticky_plan_applies_when_no_slash_route() -> None:

@@ -12,7 +12,7 @@ from soothe_nano.llm.invoke_policy import EnhancedTimeoutError
 
 from soothe.coreagent import SootheNanoAgent as CoreAgent
 from soothe.sloop.engine.execute.executor import Executor
-from soothe.sloop.stages.execute.execute import _is_rate_limit_error
+from soothe.sloop.stations.execute.execute import _is_rate_limit_error
 
 
 def test_executor_error_classification_enhanced_timeout() -> None:

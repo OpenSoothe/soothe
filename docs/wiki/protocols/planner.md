@@ -127,9 +127,11 @@ source of truth for a goal's `StepDAG`.
 - CE **reconciles** proposals (deterministic by default; LLM only on conflict)
   and commits children. Completions/failures land immediately; only proposals
   wait on the reconcile barrier.
-- Interior failure uses **B-lazy** replacement nodes. Coverage is assessed only
-  at **tree-green** via **ROOT_EVAL** (assess-only); recoverable gaps re-dispatch
-  a new root with `GapResult` in projection.
+- Interior failure uses **B-lazy** replacement nodes. Coverage is an
+  engine-injected **Eval** step when required
+  ([RFC-905](../../specs/RFC-905-sloop-eval-thread.md)): fresh readonly
+  CoreAgent thread plus `decompose_task`. GapResult new-root re-dispatch is
+  withdrawn.
 - **Pass2** (trivial/simple/complex) is **removed**. **Pass1** is **retained**.
 - CoreAgent **`write_todos`** remains intra-step UX and **must not** create
   StepDAG nodes. Autopilot goal-level decomposition (`apply_llm_subgoals`) is
@@ -150,8 +152,8 @@ The **deletion portion** has landed:
 
 The **recursive decomposition topology** — DISPATCH / THREAD / RECONCILE /
 ROOT_EVAL stations, executor-bound `decompose_task`, CE reconciliation
-(deterministic + conflict LLM), B-lazy failure replacement, ROOT_EVAL gap
-handling, and StepDAG schema extensions (`parent_step_id`, `replacement_of`,
+(deterministic + conflict LLM), B-lazy failure replacement, RFC-905 Eval
+thread (ROOT_EVAL gap / GapResult withdrawn), and StepDAG schema extensions (`parent_step_id`, `replacement_of`,
 `decomposed` / `superseded` statuses) — remains **Proposed** and is not yet
 implemented. RFC status stays **Proposed** pending topology implementation; the
 deletion landings are tracked under IG-752 / IG-753 rather than advancing

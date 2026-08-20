@@ -442,6 +442,7 @@ class StrangeLoopMixin:
         preferred_subagent: str | None = None,
         intake_scope: str | None = None,
         clarification_mode: str | None = None,
+        interaction_mode: str | None = None,
         clarification_answer: bool = False,
         clarification_answers: list[str] | None = None,
         resume_interrupted: bool = False,
@@ -462,6 +463,9 @@ class StrangeLoopMixin:
             clarification_mode: RFC-622 mode for this goal (``"auto"`` /
                 ``"manual"``). ``None`` falls back to
                 ``config.agent.clarification.default_mode``.
+            interaction_mode: per-request CoreAgent interaction mode
+                (``"agent"`` / ``"ask"``). ``"ask"`` selects the read-only
+                graph; ``None`` selects the default graph.
             resume_interrupted: When True, recover an interrupted running goal
                 without social-gate routing or continue-keyword cancel.
 
@@ -503,12 +507,13 @@ class StrangeLoopMixin:
             ).to_dict()
         )
 
-        await self._materialize_core_agent()  # type: ignore[attr-defined]
+        await self._materialize_core_agent(interaction_mode)  # type: ignore[attr-defined]
 
         from soothe.sloop.strange_loop import StrangeLoop
 
+        core_agent = self._ask_core_agent if interaction_mode == "ask" else self._agent
         loop_agent = StrangeLoop(
-            core_agent=self._agent,
+            core_agent=core_agent,
             config=self._config,
         )
 

@@ -141,7 +141,7 @@ def test_clarification_resume_command_uses_pending_origin_when_last_missing() ->
 async def test_run_intake_only_passes_isolated_config() -> None:
     from unittest.mock import AsyncMock, patch
 
-    from soothe.sloop.stages.sidecars.delegate import _run_intake_only_runnable
+    from soothe.sloop.stations.sidecars.delegate import _run_intake_only_runnable
 
     runnable = MagicMock()
     runnable.astream = MagicMock(side_effect=TypeError("no stream_mode"))

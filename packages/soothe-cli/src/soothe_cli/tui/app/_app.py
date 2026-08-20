@@ -227,7 +227,7 @@ class SootheApp(
 
         self._router_profile_override: str | None = None
 
-        # Composer mode (Auto / Manual / Plan). Seeded from --mode (CLIConfig);
+        # Composer mode (Auto / Manual / Plan / Ask). Seeded from --mode (CLIConfig);
         # default Manual so TUI sessions relay clarifications unless opted out.
         self._composer_mode: str = normalize_composer_mode(
             getattr(daemon_config, "clarification_mode", None)

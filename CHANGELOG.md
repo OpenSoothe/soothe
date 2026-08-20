@@ -8,8 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- Stop the TUI from leaving the final goal-completion report stuck in streaming state (blinking prefix dot, raw markdown): close the synthesis card on loop completion and at stream end, and stop tier-filtering `soothe.stream.end` out of the turn applier.
-- Emit a synthesis stream-terminal frame for short reports that never cross `adaptive_threshold_chars`, and stop `skip_redundant_tool_message_wire` from dropping empty terminal markers.
+- Finalize TUI goal-completion reports reliably so the prefix stops blinking and Markdown renders after every synthesis.
 
 ## [v0.10.23] - 2026-08-20
 

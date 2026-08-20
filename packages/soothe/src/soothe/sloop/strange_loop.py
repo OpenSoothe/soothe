@@ -369,7 +369,7 @@ class StrangeLoop:
                 and not clarification_answer
                 and not resume_interrupted
             ):
-                from soothe.sloop.stages.preprocess.intake import (
+                from soothe.sloop.stations.preprocess.intake import (
                     INTENT_CLASSIFY_STATUS_LABEL,
                 )
 
@@ -472,7 +472,7 @@ class StrangeLoop:
                         return
 
                 if social_gate_result.is_task:
-                    from soothe.sloop.stages.preprocess.intake import (
+                    from soothe.sloop.stations.preprocess.intake import (
                         intent_pass_reasoning_events,
                     )
 
@@ -1081,7 +1081,7 @@ class StrangeLoop:
                     await pump_task
 
         finally:
-            from soothe.sloop.stages.complete.finalize import (
+            from soothe.sloop.stations.completion.finalize import (
                 await_goal_completion_tail_persistence,
             )
 

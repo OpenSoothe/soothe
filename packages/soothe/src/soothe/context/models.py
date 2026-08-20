@@ -41,6 +41,7 @@ StepStatus = Literal[
 ]
 
 ExecutionHint = Literal["tool", "subagent", "remote", "auto"]
+StepKind = Literal["action", "ask_user", "eval"]
 
 
 MAX_GOAL_DEPTH = 5
@@ -86,6 +87,27 @@ class StepExecution(BaseModel):
     hit_tool_budget: bool = False
 
 
+class DeferredItem(BaseModel):
+    """Untrusted work item reported by an action thread at close."""
+
+    description: str
+    claimed_in_scope: bool = False
+
+
+class StepCloseReport(BaseModel):
+    """Structured action-thread close assessment (RFC-905)."""
+
+    goal_portion_complete: bool = True
+    early_exit: bool = False
+    deferred_items: list[DeferredItem] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+
+    @property
+    def requires_eval(self) -> bool:
+        """Whether this close report requires a coverage Eval."""
+        return self.early_exit or bool(self.deferred_items)
+
+
 # ── Step DAG ────────────────────────────────────────────────────────────
 
 
@@ -111,7 +133,8 @@ class StepNode(BaseModel):
     expected_output: str | None = None
     execution_hint: ExecutionHint | None = None
     recompose_count: int = 0
-    kind: str | None = None
+    kind: StepKind = "action"
+    close_report: StepCloseReport | None = None
 
 
 class StepDAG(BaseModel):
@@ -227,6 +250,47 @@ class StepDAG(BaseModel):
             if node.status != "completed":
                 return False
         return True
+
+    def action_tree_green(self) -> bool:
+        """True when action/ask-user work is terminal and has no failures."""
+        action_nodes = [node for node in self.nodes.values() if node.kind != "eval"]
+        if not action_nodes:
+            return False
+        for node in action_nodes:
+            if node.status in ("pending", "active", "failed"):
+                return False
+            if node.status not in ("completed", "decomposed", "superseded", "skipped"):
+                return False
+        return True
+
+    def latest_eval(self) -> StepNode | None:
+        """Return the latest Eval by plan iteration, preserving insertion order."""
+        eval_nodes = [node for node in self.nodes.values() if node.kind == "eval"]
+        if not eval_nodes:
+            return None
+        return max(eval_nodes, key=lambda node: node.plan_iteration)
+
+    def eval_required(self) -> bool:
+        """Return whether RFC-905 requires a new Eval at action-tree green."""
+        if not self.action_tree_green():
+            return False
+        latest = self.latest_eval()
+        if latest is not None:
+            return latest.status == "decomposed"
+        action_nodes = [node for node in self.nodes.values() if node.kind == "action"]
+        completed_leaves = [
+            node
+            for node in action_nodes
+            if node.status == "completed"
+            and not any(child.parent_step_id == node.id for child in action_nodes)
+        ]
+        used_decompose = any(node.status == "decomposed" for node in action_nodes)
+        early_exit = any(
+            node.close_report is not None and node.close_report.requires_eval
+            for node in action_nodes
+            if node.status == "completed"
+        )
+        return used_decompose or len(completed_leaves) > 1 or early_exit
 
     @property
     def chain_depth(self) -> int:

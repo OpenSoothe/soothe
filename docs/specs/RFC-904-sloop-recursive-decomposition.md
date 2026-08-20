@@ -6,10 +6,11 @@
 **Kind**: Architecture Design
 **Created**: 2026-08-19
 **Authors**: Soothe Team
-**Updated**: 2026-08-19
+**Updated**: 2026-08-20
 **Dependencies**: RFC-220, RFC-624, RFC-630, RFC-903, RFC-622, RFC-219, RFC-803
 **Revises**: RFC-220 §Loop Graph Topology (plan/eval/execute stations); RFC-201 §Plan-Execute structure (upfront plan waves); RFC-213 (per-iteration assess+generate pair); RFC-624 §StepDAG / Step Anchor Registry; RFC-630 §Pass 2 scope classification and complexity-tiered planning routes
-**Related**: RFC-207, RFC-214, RFC-625 (goal-level decompose remains separate), RFC-206
+**Related**: RFC-207, RFC-214, RFC-625 (goal-level decompose remains separate), RFC-206, RFC-905
+**Partially Superseded By**: RFC-905 (§ROOT_EVAL assess-only / MUST NOT `decompose_task`; GapResult new-root continuation)
 **Design draft**: `docs/archive/drafts/2026-08-19-sloop-recursive-decomposition-design.md`
 
 ---
@@ -35,6 +36,13 @@
 > RFC status stays **Proposed** pending topology implementation. The deletion
 > landings are tracked under IG-752 / IG-753 rather than advancing this RFC
 > to Implemented.
+>
+> **Supersession note (RFC-905, 2026-08-20):** Coverage at tree-green is no
+> longer assess-only and **MUST NOT** `decompose_task`. RFC-905 defines Eval
+> as an engine-injected `kind=eval` StepNode (fresh readonly CoreAgent thread
+> + `decompose_task`). GapResult new-root re-dispatch (P4) is **not** the
+> continuation mechanism. DISPATCH / THREAD / RECONCILE / `tree_green` /
+> B-lazy remain normative here.
 
 ## Abstract
 
@@ -49,8 +57,9 @@ its StepDAG. Each step thread either **completes** or calls executor-bound
 proposals (deterministic by default; LLM only on conflict) and commits
 children. Completions/failures land immediately; only proposals wait on the
 reconcile barrier. Interior failure uses **B-lazy** replacement nodes.
-Coverage is assessed only at **tree-green** via **ROOT_EVAL** (assess-only);
-recoverable gaps re-dispatch a new root with `GapResult` in projection.
+Coverage is assessed when the **action tree** is green via **ROOT_EVAL** as
+an insert/skip **gate** for an Eval step ([RFC-905](RFC-905-sloop-eval-thread.md));
+in-scope continuation is Eval `decompose_task`, not GapResult new-root.
 
 **Pass2** (trivial/simple/complex) is **removed**. **Pass1** is **retained**.
 CoreAgent **`write_todos`** remains intra-step UX and **must not** create
@@ -91,7 +100,8 @@ unchanged and unmerged.
 1. **CE owns the StepDAG** — Threads propose; CE reconciles and commits.
 2. **Do-or-decompose** — Scope is discovered in execution, not by pass2.
 3. **B-lazy interior, root-verify** — Happy-path interior nodes are not
-   re-invoked; coverage eval runs only when the tree is green.
+   re-invoked; coverage eval runs when the action tree is green and Eval is
+   required (RFC-905).
 4. **Proposal barrier, completion immediacy** — Completions unblock
    dependents ASAP; proposals never race mid-reconcile.
 5. **Tool authority split** — `decompose_task` ≠ `write_todos`.
@@ -108,7 +118,7 @@ When RFC-904 is **Accepted** / feature flag cut over:
 |---------|--------|
 | RFC-220 topology | Plan/eval/evidence/record/check_limits stations **obsolete** as distinct nodes; replaced by DISPATCH / THREAD / RECONCILE / ROOT_EVAL work-queue |
 | RFC-201 upfront plan waves | Partially superseded — goal-as-root + recursive decompose replaces planner-emitted full waves |
-| RFC-213 | Per-iteration assess+generate pair obsolete; assess survives as ROOT_EVAL; generate folds into `decompose_task` |
+| RFC-213 | Per-iteration assess+generate pair obsolete; generate folds into `decompose_task`; coverage assess survives as RFC-905 Eval thread (not assess-only ROOT_EVAL) |
 | RFC-624 StepDAG | Extended statuses/fields; Step Anchor Registry retired in favor of Step Context Registry; CE gains reconcile |
 | RFC-630 | **Pass2** and complexity-tiered plan routes obsolete; **pass1** retained as sole intake classifier for chitchat vs task |
 | RFC-903 | Remains; topology shrinks further on the same `LoopNode` / `RouteDecision` contract |
@@ -126,8 +136,9 @@ INTAKE (pass1)
   ├─ chitchat → social_response → END
   └─ task → ENTER_LOOP → DISPATCH ⇄ THREAD* → RECONCILE → …
                                   │              ├─ ready? → DISPATCH
-                                  │              └─ tree_green → ROOT_EVAL → FINALIZE
-                                  │                     └─ gap → new root → DISPATCH
+                                  │              └─ action-tree green → ROOT_EVAL gate
+                                  │                     ├─ eval required → kind=eval THREAD → …
+                                  │                     └─ skip / eval complete → FINALIZE
                                   └─ ask_user → AWAIT_USER → resume THREAD
 ```
 
@@ -136,11 +147,11 @@ Settled decisions:
 | Fork | Decision |
 |------|----------|
 | Intent | Keep pass1; delete pass2 |
-| Eval | B-lazy interior + root-verify |
+| Eval | B-lazy interior + RFC-905 Eval thread (readonly + `decompose_task`) |
 | DAG | Real DAG + lineage metadata; scheduler uses `dependencies` only |
 | Finalization | CE reconciles proposals; completions write-through |
 | Barrier | Proposal barrier; completions immediate |
-| Gaps | Eval-assesses / root-decomposes |
+| Gaps | RFC-905 Eval thread / in-scope `decompose_task` (not GapResult new-root) |
 | B-lazy identity | New `StepNode` + `replacement_of` (not same-id reset) |
 | Merged failure | Primary-only recompose |
 | Reconcile LLM | Conflict-triggered; degraded → deterministic |
@@ -174,9 +185,9 @@ As distinct graph nodes: `GATHER_EVIDENCE`, per-iteration `EVALUATE`,
 | INTAKE | Pass1 only |
 | ENTER_LOOP | Create root `StepNode`; project predecessor ledger |
 | DISPATCH | Claim `pending` steps; spawn threads |
-| THREAD | CoreAgent do-or-decompose (executor-bound `decompose_task`) |
+| THREAD | CoreAgent: action do-or-decompose, or RFC-905 `kind=eval` (readonly + `decompose_task`) |
 | RECONCILE | Proposal barrier → CE commit |
-| ROOT_EVAL | Tree-green coverage assess → GapResult |
+| ROOT_EVAL | Action-tree-green **gate**: insert `kind=eval` or FINALIZE (RFC-905). Not assess-only. |
 | FINALIZE | Goal completion synthesis (RFC-219) |
 | AWAIT_USER | Clarification sidecar (RFC-622) |
 
@@ -213,7 +224,8 @@ with proposals, or early when no in-flight proposers remain with a non-empty
 queue). Zero proposals → no-op. v1 **MUST NOT** reconcile while sibling
 proposers in the same claim-set still run.
 
-`plan_iteration` increments **only** on root gap re-dispatch.
+`plan_iteration` increments on Eval-spawned continuation waves (RFC-905)
+and **MUST NOT** increment on ordinary action DISPATCH waves.
 
 ---
 
@@ -363,19 +375,25 @@ tree_green iff
 
 Unresolved failure after recompose budget → **FAIL** before ROOT_EVAL.
 
+**Action-tree green** (RFC-905) ignores pending eval insertion and treats
+`kind=eval` separately from action / `ask_user` leaves. See RFC-905 for the
+predicate used to insert Eval.
+
 ### ROOT_EVAL
 
-**MUST** assess only (reuse `PlanGapAnalysis` + `StatusAssessment` → GapResult).
-**MUST NOT** call `decompose_task` or invent children.
+> **Superseded by RFC-905.** The following assess-only / GapResult-new-root
+> contract is **not** the continuation mechanism.
 
-| Outcome | Action |
-|---------|--------|
-| ready / at_goal | FINALIZE |
-| recoverable gaps | New root + GapResult projection → DISPATCH |
-| unrecoverable / identical gap fingerprint / max-waves | FAIL |
+Historical (obsolete) contract: assess only; **MUST NOT** `decompose_task`;
+recoverable gaps → new root + `GapResult`.
 
-Oscillation: accumulating gap context (soft); identical gap fingerprint (hard);
-max-waves (hard).
+**Normative (RFC-905):** ROOT_EVAL is the **gate** that inserts `kind=eval`
+or routes FINALIZE. The Eval **thread** **MAY** call `decompose_task`.
+Oscillation control is Eval continuation fingerprint + `max_eval_rounds`,
+not GapResult fingerprint.
+
+`plan_iteration` **MAY** increment on Eval-spawned continuation waves
+(RFC-905); it is no longer only “root gap re-dispatch”.
 
 ---
 
@@ -438,7 +456,7 @@ unchanged.
 | P1 | Executor-bound `decompose_task` + THREAD prompts / `write_todos` override |
 | P2 | Deterministic RECONCILE behind flag (prefer skip long dual-write) |
 | P3 | Graph cutover; pass1 kept; pass2 bypassed |
-| P4 | Conflict LLM reconcile; B-lazy; ROOT_EVAL gaps |
+| P4 | Conflict LLM reconcile; B-lazy. ROOT_EVAL GapResult **withdrawn** — coverage continuation is RFC-905 Eval thread |
 | P5 | Delete pass2 + dead plan-generate; docs sync |
 
 ---
@@ -450,7 +468,7 @@ unchanged.
 - Completion readiness before sibling proposal commit.
 - B-lazy `replacement_of`; primary-only recompose.
 - Reconcile LLM skipped when disjoint.
-- Identical gap fingerprint → FAIL.
+- Identical Eval continuation fingerprint → FAIL (RFC-905; replaces gap fingerprint).
 - Clarification park/resume; checkpoint after reconcile.
 - Autopilot `apply_llm_subgoals` unaffected.
 
@@ -468,7 +486,7 @@ obsolete. Do **not** archive them solely because this RFC exists.
 |------|-----------------------------------|-------------------|---------------------|
 | RFC-220 | Plan/eval/evidence/record/check_limits spine | Two-graphs-two-keys, CoreAgent isolation, checkpoint identity | After cutover Implemented: mark obsolete sections Deprecated in-header; whole-RFC archive **only** if a follow-on RFC absorbs remaining norms |
 | RFC-201 | Upfront plan-wave Plan→Execute model | CoreAgent delegation concepts (until absorbed) | Same — partial only |
-| RFC-213 | Per-iteration assess+generate pair | Gap schemas reused by ROOT_EVAL | Prefer keep; or Deprecated after schemas relocated to RFC-904/624 |
+| RFC-213 | Per-iteration assess+generate pair | Historical gap-schema discussion; coverage is RFC-905 | Prefer keep until RFC-905 Implemented; do not reintroduce `PlanGapAnalysis` for ROOT_EVAL |
 | RFC-624 | Step Anchor Registry; pre-reconcile StepDAG-only growth | Goal+Step DAG, projection, persistence, goal APIs | Never archive for RFC-904 alone — CE remains SoT |
 | RFC-630 | Pass 2 + complexity-tiered plan routes | Pass 1 chitchat vs task | After cutover: revise body or split; archive only if replaced by a pass1-only RFC |
 | RFC-903 | None (further shrink only) | `LoopNode`, `RouteDecision` | Not deprecated |
@@ -488,10 +506,9 @@ formalization (historical reference; RFC-904 is normative).
 
 ## Open Items (impl-time)
 
-1. GapResult type vs alias over existing schemas.
-2. `proposing` as CE status vs ExecutionState scratch.
-3. Exact Step Context Registry layout beyond the THREAD system policy addendum.
-4. Supersede old parent at replacement claim vs commit (lean: on commit).
+1. `proposing` as CE status vs ExecutionState scratch.
+2. Exact Step Context Registry layout beyond the THREAD system policy addendum.
+3. Supersede old parent at replacement claim vs commit (lean: on commit).
 5. Optional sloop turn-guard timing (lean: after observed violations).
 
 ---
