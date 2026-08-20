@@ -20,6 +20,7 @@ from soothe.config.constants import (
     PRIOR_STEPS_SUMMARY_OUTCOME_PREVIEW_CHARS,
 )
 from soothe.sloop.engine.predecessor_branch_context import (
+    _message_step_id,
     predecessor_execute_messages_for_branch,
     transitive_dependency_step_ids,
 )
@@ -144,18 +145,6 @@ def build_prior_steps_summary_block(
 
     summaries = build_prior_steps_summaries(step, decision, loop_state)
     return render_prior_steps_tree(summaries, evidence_in_ledger=evidence_in_ledger)
-
-
-def _message_step_id(msg: Any) -> str | None:
-    sid = getattr(msg, "step_id", None)
-    if isinstance(sid, str) and sid.strip():
-        return sid.strip()
-    add = getattr(msg, "additional_kwargs", None) or {}
-    if isinstance(add, dict):
-        v = add.get("step_id")
-        if isinstance(v, str) and v.strip():
-            return v.strip()
-    return None
 
 
 def _ledger_ai_content_for_step(loop_messages: list[Any], step_id: str) -> str:

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
 from typing import Any
 
 from soothe.context.models import StepNode
-from soothe.sloop.orchestrator.node_base import LoopNode, NodeResult, RouteDecision
+from soothe.sloop.orchestrator.node_base import (
+    LoopNode,
+    NodeResult,
+    RouteDecision,
+    _maybe_await,
+)
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.stations import DISPATCH
 from soothe.sloop.state.schemas import (
@@ -19,13 +23,6 @@ from soothe.sloop.state.schemas import (
 from soothe.sloop.utils.goal_text import resolve_user_request
 
 logger = logging.getLogger(__name__)
-
-
-async def _maybe_await(value: Any) -> Any:
-    """Await coroutines; pass through plain values (MagicMock-friendly)."""
-    if inspect.isawaitable(value):
-        return await value
-    return value
 
 
 def _intent_field(ctx: LoopRuntimeContext, name: str) -> str:

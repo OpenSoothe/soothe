@@ -26,7 +26,7 @@ __all__ = [
 def __getattr__(name: str) -> Any:
     """Lazy import root public symbols."""
     if name in ("StrangeLoop", "Sloop"):
-        from soothe.sloop.engine.strange_loop import StrangeLoop
+        from soothe.sloop.strange_loop import StrangeLoop
 
         return StrangeLoop
 

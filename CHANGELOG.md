@@ -10,723 +10,336 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v0.10.23] - 2026-08-20
 
 ### Fixed
-- **langfuse**: flatten inherited callback managers in
-  `merge_langfuse_runnable_config` so LangGraph node-level handlers
-  (including `inheritable_handlers`) cannot leak into nano
-  structured-output invokes via `ensure_config` / `merge_configs`.
-  `GoalLoopTrace` pins `callbacks: []` on its base config for the same
-  reason. Step-completion-report and step-deliverable now get distinct
-  Langfuse run display names.
-- **ci**: `deploy-core` had two "Wait for soothe-sdk on PyPI" steps; the
-  first read the root `VERSION` (0.x) but the SDK publishes from
-  `packages/soothe-sdk/VERSION` (1.x), so the wait always timed out and
-  blocked the core publish. The broken duplicate is removed; the step
-  reading `packages/soothe-sdk/VERSION` is kept.
+- Prevent LangGraph node-level callback handlers from leaking into nano structured-output invokes; pin empty callbacks on the goal-loop trace config and give step reports distinct Langfuse display names.
+- Remove the duplicate "Wait for soothe-sdk on PyPI" step in `deploy-core` that read the wrong VERSION file and timed out, blocking core publish.
 
 ### Changed
-- **llm**: require `soothe-nano>=1.2.5` and route direct host,
-  Autopilot, and daemon chat-model calls through nano's unified traced
-  invocation interfaces. Plain and structured calls now consistently attach
-  Langfuse callbacks when observability is enabled while retaining shared
-  rate-limit, timeout, and retry policy. Nano 1.2.5 routes structured
-  output through public `ainvoke` so Pass 1 / intent generations appear
-  in Langfuse instead of an empty parent span.
-- **sloop**: unify the intake classifier and drop the two-pass
-  coordinator (IG-755). `pass1_*` is renamed to `intake_*` across
-  prompts, models, and tests; `TwoPassIntakeCoordinator` and the Pass 2
-  scope classification are removed — tasks enter do-or-decompose
-  directly. `IntakeClassifier` exposes the social gate (pre-graph) and
-  full classification (post-CE); `IntentClassifier` wraps both. Prompt
-  fragments move to `intake_classify_system.xml` / `social_reply.xml`.
-- **sloop**: graph-entry intent classifier now reuses the LangGraph
-  node's `RunnableConfig` instead of opening its own pinned intake span,
-  so model generation stays a child of the graph intake observation
-  (IG-746). The explicit intake parent span remains only for the
-  pre-graph social gate, where generator suspension points rule out
-  ambient context. `complex_decompose_first_hint` is renamed to
-  `decompose_first_hint` and extended to medium-complexity root tasks.
-- **sloop**: reuse the pre-graph intake verdict as the loop intent
-  (IG-756). The social-gate `IntakeLLMResult` is converted into
-  `IntentClassification` after a task is confirmed, so
-  `node_intent_classify` skips the duplicate structured LLM call.
-  `classify_intake` stays for interrupt-resume / missing-result paths.
-  The `strange_loop_graph` alias to `intake-classify` is dropped and
-  unused `classify_intake` kwargs / CE ledger writes are removed.
-- **sloop**: rename `cognition` to `plans` module and derive
-  `intake_label` from the intake LLM `task_complexity` field instead of
-  stubbing `COMPLEX`. DISPATCH `plan_decision` now carries the real
-  intake label (trivial/simple/complex). Intake reasoning is switched
-  from third-person classification prose to first-person cognition
-  prose so the TUI cognition card reads as the agent's own intent.
-- **sloop**: unify loop-context projection into a single
-  `LoopContextProjector` in `soothe.sloop.context_projection` (IG-750).
-  The CE ledger remains the source of truth; this module is the sole
-  projection layer composing the history slice (preamble + prior-goal
-  tail + current step history) for every StrangeLoop LLM call.
-  `soothe.context.projection` / `soothe.context.semantic`, the parallel
-  `ContextEngineGoalContextAdapter`, and dead projection fields are
-  removed; `PlanPromptLedgerConfig.preamble_max_turns` /
-  `prior_goal_tail` knobs are added and synced across config templates.
-- **prompts**: consolidate host prompts into `soothe.prompts`
-  (IG-754). `sloop.prompts` moves under the host prompt package; nano
-  wrappers (identity, context_xml, project_instructions,
-  system_templates) collapse into re-exports in
-  `soothe.prompts.__init__`. Decompose fragment XMLs are added and all
-  importers/tests updated.
-- **cli**: scope the `/resume` loop picker to the current workspace by
-  default (press W to toggle all-workspaces). `list_loops` forwards an
-  optional `filter.workspace`; the daemon `LoopListParams` accepts a
-  filter dict. The dead column-toggle control panel and
-  `save_loop_columns` stub are dropped.
-- **cli**: plan panel rows now render the full scoped step id (e.g.
-  `KFA-07:`) as the visible prefix instead of a numeric-only token, so
-  operators can correlate rows with logs and external state. The
-  dependency hint keeps the compact numeric-only form for inline brevity.
-- **sdk**: propagate `task_complexity` through `IntentClassifiedEvent`
-  and `StrangeLoopPlanDecisionEvent` so clients display the
-  execute-phase complexity (minimal/trivial/simple/medium/complex)
-  rather than only the routing `intake_label`. The TUI adapter falls
-  back to `intake_label` when `task_complexity` is absent.
+- Require `soothe-nano>=1.2.5`; route host, Autopilot, and daemon chat-model calls through nano's unified traced invocation so Langfuse spans attach consistently for plain and structured calls.
+- Unify the StrangeLoop intake classifier into a single pass; drop the two-pass coordinator so tasks enter do-or-decompose directly.
+- Reuse the graph node's `RunnableConfig` for intent classification so model generation nests under the graph intake span instead of opening a pinned parent span.
+- Reuse the pre-graph intake verdict as the loop intent, skipping the duplicate structured LLM call after task confirmation.
+- Rename `cognition` to `plans` and derive `intake_label` from the real `task_complexity` field; switch intake reasoning to first-person prose so the TUI cognition card reads as the agent's own intent.
+- Unify loop-context projection into a single `LoopContextProjector`; remove the parallel projection adapters and dead fields; add `preamble_max_turns` / `prior_goal_tail` config knobs.
+- Consolidate host prompts into `soothe.prompts`; collapse nano prompt wrappers into re-exports.
+- Scope the `/resume` loop picker to the current workspace by default (press W to toggle all-workspaces); drop the dead column-toggle panel.
+- Render the full scoped step id (e.g. `KFA-07:`) as the plan panel row prefix so operators can correlate rows with logs.
+- Propagate `task_complexity` through `IntentClassifiedEvent` and `StrangeLoopPlanDecisionEvent` so clients show execute-phase complexity, not just the routing label.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.22...v0.10.23
 
 ## [v0.10.22] - 2026-08-19
 
 ### Fixed
-- **sloop**: eliminate a timestamp race in the Pass 1 prompt test where
-  `build_intake_pass1_system_prompt` and `build_prompt_timestamp_block`
-  fetched time independently; both now accept an optional `ctx` so a
-  single context can be reused. Production callers are unaffected.
+- Fix a timestamp race in the Pass 1 prompt test where `build_intake_pass1_system_prompt` and `build_prompt_timestamp_block` fetched time independently; both now accept an optional `ctx` for a single shared context.
 
 ### Changed
-- **sloop**: recursive step decomposition (RFC-904) is now always-on for
-  step THREADS. The `agent.loop.decompose.enabled` flag is removed;
-  `decompose_task` + finish-vs-split guidance is always injected, with
-  budgets still under `agent.loop.decompose.*`. Operator-approved intake
-  plans ground directly onto the root THREAD description at DISPATCH,
-  replacing the legacy plan-generation handoff. The entire legacy plan
-  spine (plan_generate/assess/evaluate/gather_evidence, LLM planner
-  protocol, `PromptBuilder`, plan ledger projectors, and associated
-  config fields/templates) is deleted. Decompose prompts move into the
-  `prompts` package and are de-jargoned (task/thread/subtasks
-  vocabulary); finish/split policy moves to a system addendum, slimming
-  the user envelope. Prior-goals projection is dropped and predecessor
-  evidence is deduped when Slice B replays it. Pass 2 scope classifier is
-  removed — Pass 1 drives all task routing. Includes CI apt-mirror
-  hardening (pin to canonical archive, cover deb822 `.sources` files).
-- **autopilot**: add goal GC and stale-runtime reconciliation. A periodic
-  `gc_orphaned_goals` watchdog cancels non-terminal goals whose job root
-  is already terminal; `reconcile_stale_reservations` releases workspace
-  reservations and ghost-active WorkerPool slots when a completion chunk
-  never reached `_consume_worker_stream`; the daemon calls
-  `reconcile_stale_worker` when demoting a stale autopilot-owned loop,
-  freeing the slot/reservation and re-queueing (or cancelling) the
-  stranded goal. Gated by `AutopilotConfig.gc_enabled` and rate-limited
-  by `gc_interval_seconds`.
-- **autopilot**: add SLA monitor and alert pipeline SLO hardening. New
-  `soothe_autopilot/sla` package (models + monitor) tracks alert
-  pipeline latency SLOs; the notify router and webhook sink are
-  hardened for alert drift scenarios. Adds `benchmark_alert_pipeline.py`
-  and BM-006 benchmark doc, plus SLO/SLA monitor unit tests.
-- **context**: consolidate the projection layer and remove dead code
-  (IG-750). `ContextBundle` is stripped to fields prompt consumers
-  actually read (`active_goal`, `goal_lineage`, `step_lineage`,
-  `prior_goals`); memory-instruction loading moves to the
-  `SemanticLoader` call site. O(n²) char-budget trim loops in
-  `ledger.py`, `plan_ledger_projection.py`, and `graph_wrapper` become
-  single-pass O(N). Langfuse `trace_context` gets a read/write property
-  so base-class `__init__` can set it; `TraceBody` import path is fixed.
-  Drops unused `ModelConfigError`/`get_credential_env_var` (cli) and
-  `tool_lookup_step_id`/`intent_classify` run name (sdk). Drift
-  governance is documented as IG-tracked, removing stale drift IGs and
-  wiki runbook links.
-- **docs**: simplify wiki structure and compress root docs — fix broken
-  goal-engine→context-engine links, consolidate
-  `capabilities/subagents.md` into a single canonical wiki page, update
-  the architecture module map to the real monorepo DAG, add redirect
-  stubs for moved wiki pages, and tighten verbose prose in
-  `rfc-methodology-guide.md`, `threshold-tuning.md`, `rfc-history.md`,
-  `rfc-index.md`, `agent-skill-spec.md`, and `index.md`.
+- Make recursive step decomposition always-on for step THREADS; remove the `agent.loop.decompose.enabled` flag and the legacy plan-generation spine (planner, `PromptBuilder`, ledger projectors). Ground operator-approved intake plans directly onto the root THREAD at DISPATCH.
+- Add goal GC and stale-runtime reconciliation to Autopilot: a periodic watchdog cancels orphaned non-terminal goals, releases stranded workspace reservations and worker slots, and re-queues stranded goals. Gated by `AutopilotConfig.gc_enabled`.
+- Add an SLA monitor for the alert pipeline and harden the notify router and webhook sink against alert drift.
+- Strip `ContextBundle` to fields prompt consumers actually read; make char-budget trim loops single-pass O(N); fix the `trace_context` property and `TraceBody` import path; drop unused cli/sdk helpers.
+- Simplify wiki structure and compress root docs: fix broken goal-engine→context-engine links, consolidate the subagents page, update the module map to the real monorepo DAG, and tighten verbose prose across methodology/history/index guides.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.21...v0.10.22
 
 ## [v0.10.21] - 2026-08-19
 
 ### Fixed
-- **sloop**: harden the clarification relay. Hard-defer parks via the
-  Context Engine (`awaiting_clarification`) and make them resumable;
-  orphaned interrupt-resume now fails closed instead of spinning. The
-  wire `ClarificationDeferredEvent` carries a `defer_kind` taxonomy, and
-  empty `ask_user` / empty questions are captured as failures so they no
-  longer trigger auto-resume spin. Autopilot skips `send_back` when a
-  goal is parked `awaiting_clarification`. The TUI gains a clarification
-  mode badge and composer-mode updates.
-- **docs**: tighten the README intro and vision section; relocate
-  project assets to `docs/assets`.
+- Harden the clarification relay: park hard-defers via the Context Engine and make them resumable; fail orphaned interrupt-resume closed instead of spinning; capture empty `ask_user`/questions as failures so they no longer trigger auto-resume spin; skip `send_back` when a goal is parked awaiting clarification; add a TUI clarification-mode badge.
 
 ### Changed
-- **repo**: Migrate `soothe-sdk` from an independent PyPI repository
-  (`mirasoth/soothe-sdk`) into the monorepo as `packages/soothe-sdk`.
-  The SDK keeps its own `VERSION` file (1.x line, required by
-  `soothe-nano>=1.0.7`) and participates in workspace sync, format,
-  lint, test, and publish targets. CI and release workflows now build
-  and publish the SDK from this repo instead of waiting for an external
-  PyPI release. Module boundary checks now enforce that `soothe-sdk`
-  (leaf) must not import host packages.
+- Migrate `soothe-sdk` from an independent PyPI repository into the monorepo as `packages/soothe-sdk`, keeping its own `VERSION` file (1.x line); CI now builds and publishes the SDK from this repo, and module boundary checks enforce the leaf constraint.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.20...v0.10.21
 
 ## [v0.10.20] - 2026-08-18
 
 ### Changed
-- **sloop**: StrangeLoop v2 graph topology overhaul — introduce a
-  `LoopNode` base class with `pre`/`project`/`prompt`/`process`/`post`
-  lifecycle; replace the route-key bag with a typed `RouteDecision`;
-  fold `validate_plan`→`commit_plan` and `begin_iteration`→`check_limits`
-  (14→12 nodes, 11→8 routers). Centralize
-  `[SystemMessage, projected_ledger, HumanMessage]` assembly in
-  `GraphPromptWrapper`. Add intake/generate_plan/station Langfuse parent
-  spans. Unify orchestrator modules (runtime_context/checkpoint/
-  continuation/stations), reorganize cognition submodules, consolidate
-  clarification origin mapping into `origins.py`, remove
-  `LEGACY_TO_STATION` and dead code, delete archived drafts, and
-  default clarification mode to manual.
-- **sloop**: suppress Pass 1 task reasoning from the resume topic.
-  Pass 1 social-vs-task reasoning was previously surfaced as a TUI
-  cognition card and reused as the resume topic text for task results.
-  The surfacing is removed so `pass1_reasoning_text` stays empty,
-  letting the resume topic fall back to the user's own request text for
-  all task results. Social chitchat handling is unchanged.
-- **cli**: add bare command alias support in the TUI — implement bare
-  command alias resolution in the execution module and register bare
-  command aliases in the command registry.
+- Overhaul the StrangeLoop v2 graph topology: introduce a `LoopNode` base class with a `pre`/`project`/`prompt`/`process`/`post` lifecycle, replace the route-key bag with a typed `RouteDecision`, and fold `validate_plan`→`commit_plan` and `begin_iteration`→`check_limits` (14→12 nodes, 11→8 routers).
+- Suppress Pass 1 task reasoning from the resume topic so task results fall back to the user's own request text; social chitchat handling is unchanged.
+- Add bare command alias support in the TUI.
 
 ### Fixed
-- **docs**: fix RFC archive path references
-  (`docs/specs/archive/` → `docs/archive/specs/`) across the README,
-  RFC-900, rfc-history, rfc-index, and the rfc-standard template; add
-  RFC-613 to the archived list and fix RFC-505/700 supersession refs.
+- Fix RFC archive path references (`docs/specs/archive/` → `docs/archive/specs/`) across the README, RFC-900, and rfc templates.
 
 ### Removed
-- **autopilot**: drop redundant early `_subscribed` init (set in if/else
-  branches so the flag still reflects subscription state), unused
-  `snapshot_for_job` method in `job_loop_index`, and unused
-  `_max_audit_entries` and `_thread` fields from the config reload path.
-- **chore**: scrub internal IG identifiers from comments and docstrings
-  across all owned packages (soothe, soothe-autopilot, soothe-daemon,
-  soothe-cli), keeping RFC references where still relevant. Archive 11
-  completed design drafts from `docs/drafts/` to `docs/archive/drafts/`.
-  No behavior changes — comments and docstrings only.
+- Drop the redundant early `_subscribed` init, unused `snapshot_for_job` method, and unused `_max_audit_entries`/`_thread` fields from the autopilot config reload path.
+- Scrub internal IG identifiers from comments and docstrings across all owned packages; archive 11 completed design drafts. No behavior changes.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.19...v0.10.20
 
 ## [v0.10.19] - 2026-08-18
 
 ### Fixed
-- **autopilot**: goal cancel/deadline paths only issued a cooperative
-  `cancel_event` signal (checked between stream chunks), so a worker
-  blocked mid-LLM-call or in sync code never observed the cancel and
-  kept executing a cancelled goal; the daemon heartbeat thread also
-  defeated stuck-worker detection. Mirror the query engine's
-  `_cancel_loop` ladder — `cancel()` → poll `is_idle()` with
-  exponential backoff → `force_kill()` — and add `is_idle`/`force_kill`
-  to `LoopRunnerProtocol`, implemented across `PoolLoopRunner`,
-  `ThreadLoopRunner`, and `RayLoopRunner`.
-- **build**: the `uv_sync_with_fallback` make macro dropped its
-  `$(1)` argument on the floor, so `make sync-no-cache` never actually
-  passed `--no-cache --refresh` to `uv sync` (the flags were instead
-  appended to `rewrite_uv_lock_to_pypi.sh`, which treats `$1` as the
-  lock path). Thread the flags through the macro correctly.
+- Force-kill stuck workers on goal cancel: add `is_idle`/`force_kill` to `LoopRunnerProtocol` and mirror the query engine's cancel ladder (`cancel()` → poll with backoff → `force_kill()`) across pool, thread, and ray runners.
+- Fix the `uv_sync_with_fallback` make macro that dropped its `$(1)` argument so `make sync-no-cache` now passes `--no-cache --refresh` to `uv sync`.
 
 ### Changed
-- **deploy**: replace the prod daemon's named volume + three separate
-  bind mounts (data/logs/workspaces into `~/.soothe`) with a single
-  `~/.soothe-prod` bind mount as the full `SOOTHE_HOME` workdir.
-  Isolates prod state from dev's `~/.soothe` so `make reset-the-world`
-  no longer endangers prod data, and makes the full workdir (pid,
-  runtime artifacts, data, logs) host-inspectable instead of trapped in
-  a Docker named volume. Pre-creates `~/.soothe-prod/{data,logs,config}`
-  in `docker-prod-up` for Colima/Lima sshfs compatibility.
+- Replace the prod daemon's named volume + three bind mounts with a single `~/.soothe-prod` bind mount as the full `SOOTHE_HOME` workdir, isolating prod state from dev and making the full workdir host-inspectable.
 
 ### Removed
-- **drift**: complete the AsyncAPI drift-detection pipeline removal
-  advertised in v0.10.13 — drop the drift detector script, the `/drift`
-  TUI dashboard, the weekly historical-data-refresh builtin cron job,
-  the CI drift step, and the `verify_finally.sh` `check_asyncapi_drift`
-  phase. The `CronConfig.enable_builtin_jobs` docstring no longer
-  mentions the removed quarterly drift review.
-- **ci**: delete the obsolete manual-branch `docker.yml` workflow
-  (release builds use `release-docker.yml`).
+- Complete the AsyncAPI drift-detection pipeline removal: drop the drift detector script, the `/drift` TUI dashboard, the weekly historical-data-refresh cron job, the CI drift step, and the `verify_finally.sh` drift phase.
+- Delete the obsolete manual-branch `docker.yml` workflow (release builds use `release-docker.yml`).
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.18...v0.10.19
 
 ## [v0.10.18] - 2026-08-17
 
 ### Fixed
-- **persistence**: deployed `agentloop_checkpoints` tables bootstrapped
-  before the `checkpoint_index` column was introduced never received it
-  (`init.sql`'s `CREATE TABLE IF NOT EXISTS` is a no-op against an
-  existing table), so goal-boundary persistence failed with
-  `psycopg.errors.UndefinedColumn`. Add the first versioned migration
-  `001_add_checkpoint_index_column.sql`, which runs
-  `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` on the next pool open
-  (idempotent — a no-op where the column already exists), guarded by a
-  discovery test so the backfill cannot be silently dropped.
+- Add the first versioned migration (`001_add_checkpoint_index_column.sql`) so deployed `agentloop_checkpoints` tables bootstrapped before the `checkpoint_index` column get it via idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` on the next pool open.
 
 ### Changed
-- **build**: bump the `soothe-nano` floor from 1.2.2 to 1.2.3 in
-  `soothe` and `soothe-autopilot` and regenerate `uv.lock`.
-- **daemon**: the runtime Docker image now ships `fd-find` and `git`
-  alongside `ripgrep` (replacing `silversearcher-ag`) so `soothed
-  doctor` reports all expected host tools. Affects `Dockerfile` and
-  `Dockerfile.local`.
+- Bump the `soothe-nano` floor from 1.2.2 to 1.2.3 in `soothe` and `soothe-autopilot`.
+- Ship `fd-find` and `git` alongside `ripgrep` in the runtime Docker image so `soothed doctor` reports all expected host tools.
 
 ### Removed
-- **rfc**: revert RFC-903 (Quarterly RFC Audit Cycle) and RFC-904
-  (Inter-Rater Reliability Reviewer Pool) along with their IG-745
-  implementation guide, the IRR reviewer pool config, and the Q3 2026
-  audit report. All cross-references are stripped from the RFC
-  methodology guide, `rfc-standard`, `rfc-index`, `rfc-history`, and the
-  API-surface alignment rules so the corpus is internally consistent at
-  90 RFCs. The `CronConfig.enable_builtin_jobs` description no longer
-  mentions the quarterly RFC drift review.
+- Revert the quarterly RFC audit cycle and inter-rater reliability reviewer pool along with their implementation guide, config, and Q3 2026 audit report; strip cross-references so the RFC corpus stays internally consistent at 90 RFCs.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.17...v0.10.18
 
 ## [v0.10.17] - 2026-08-17
 
 ### Fixed
-- **ci**: add `deploy-autopilot` job to the release workflow so
-  `soothe-autopilot` publishes to PyPI alongside the other packages
-  (previously missing — the package was never published by CI). The
-  `deploy-daemon` job now waits for both `deploy-core` and
-  `deploy-autopilot`, and its PyPI wait step also waits for
-  `soothe-autopilot` to be available before syncing daemon dependencies.
+- Add a `deploy-autopilot` job to the release workflow so `soothe-autopilot` publishes to PyPI alongside the other packages; `deploy-daemon` now waits for both core and autopilot to be available before syncing.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.16...v0.10.17
 
 ## [v0.10.16] - 2026-08-17
 
 ### Fixed
-- **diagnose**: the host `cron` check no longer returns ERROR when
-  `soothe-daemon` is not installed in an isolated core venv. Since `soothe`
-  sits below `soothe-daemon` in the dependency DAG, the `soothe_daemon.cron`
-  module may legitimately be absent when running host-only checks; the import
-  failure is now surfaced as a non-blocking note with OK status rather than
-  ERROR, while the config-presence check still runs.
+- Stop the host `cron` check from returning ERROR when `soothe-daemon` is absent in an isolated core venv; surface the import failure as a non-blocking OK note while the config-presence check still runs.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.15...v0.10.16
 
 ## [v0.10.15] - 2026-08-17
 
 ### Fixed
-- **diagnose**: the host `autopilot` check no longer returns ERROR when
-  `soothe-autopilot` is not installed and autopilot is disabled
-  (`agent.autopilot.enabled=false`). Since `soothe` sits below
-  `soothe-autopilot` in the dependency DAG, the module may legitimately be
-  absent in an isolated core venv; the import failure is now only surfaced
-  as ERROR when autopilot is actually enabled.
+- Stop the host `autopilot` check from returning ERROR when `soothe-autopilot` is absent and autopilot is disabled; surface the import failure as ERROR only when autopilot is actually enabled.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.14...v0.10.15
 
 ## [v0.10.14] - 2026-08-17
 
 ### Added
-- **autopilot**: extract the autopilot orchestration layer out of the
-  `soothe` host into a standalone `soothe-autopilot` package
-  (AutopilotService, AutopilotMonitor, rails, verify, intake, dispatch,
-  notify), with `soothe` never importing it back — enforcing the one-way
-  dependency DAG. Project goal-DAG pairs are now seeded into the
-  StrangeLoop Context Engine ledger as a real multi-turn transcript
-  before the current goal's user turn (RFC-222 §Goal-Report-Pair), so
-  the executing LLM begins with a genuine conversation leading up to the
-  ask instead of a flattened blob that loses turn structure and
-  provenance. The backoff reasoner is routed through the same
-  ContextProjector path so it sees the same outcome/summary/findings
-  context the worker saw.
-- **autopilot**: master switch
-  `agent.autopilot.verify_periodic_enabled` (default false) gates the
-  periodic DAG health tick; `verify_interval` raised 30s → 120s.
+- Extract the autopilot orchestration layer out of the `soothe` host into a standalone `soothe-autopilot` package (AutopilotService, monitor, rails, verify, intake, dispatch, notify), enforcing the one-way dependency DAG.
+- Seed project goal-DAG pairs into the Context Engine ledger as a real multi-turn transcript before the current goal's user turn so the executing LLM begins with a genuine conversation leading up to the ask.
+- Add a master switch `agent.autopilot.verify_periodic_enabled` (default false) gating the periodic DAG health tick; raise `verify_interval` 30s → 120s.
 
 ### Changed
-- **nano**: migrate to `soothe-nano` 1.2.x unified `soothe_nano.llm`
-  module (litellm-backed, fixing the tool-calling regression where bound
-  `tools=` was dropped on the way to OpenAI-compatible endpoints like
-  DashScope); ~21 src + ~10 test consumers repointed across `soothe`,
-  `soothe-daemon`, and `soothe-autopilot`. Floor bumped to `>=1.2.2` for
-  the `_StructuredOutputRunnable` config leak fix and
-  `LITELLM_LOCAL_MODEL_COST_MAP`.
-- **daemon**: start readiness now requires both a live PID file and the
-  configured WS port accepting connections, so startup crashes surface
-  loudly instead of masking as success.
-- **sloop**: stop emitting Pass 1 intake reasoning as a TUI cognition
-  card; only the Pass 2 scope reasoning card is surfaced. Removed the
-  `pass1_reasoning` field from `IntentClassification` and the structural
-  bypass-prefix heuristic in intake.
-- **rfc**: reconcile per-RFC status headers and index/history tables
-  (82 active / 9 archived / 7 reclassified / 2 process).
+- Migrate to `soothe-nano` 1.2.x unified `soothe_nano.llm` module (litellm-backed, fixing the tool-calling regression where bound `tools=` was dropped on the way to OpenAI-compatible endpoints like DashScope); bump the floor to `>=1.2.2`.
+- Require both a live PID file and the configured WS port accepting connections for daemon start readiness, so startup crashes surface loudly instead of masking as success.
+- Stop emitting Pass 1 intake reasoning as a TUI cognition card; only the Pass 2 scope reasoning card is surfaced. Remove the `pass1_reasoning` field and the structural bypass-prefix heuristic.
+- Reconcile per-RFC status headers and index/history tables (82 active / 9 archived / 7 reclassified / 2 process).
 
 ### Fixed
-- **ci**: bump Docker actions to Node 24
-  (setup-qemu v3→v4, login v3→v4, metadata v5→v6, build-push v6→v7)
-  and add `actions:write` so buildx cache writes succeed.
+- Bump Docker actions to Node 24 (setup-qemu v3→v4, login v3→v4, metadata v5→v6, build-push v6→v7) and add `actions:write` so buildx cache writes succeed.
 
 ### Removed
-- **autopilot**: dead dreaming-distillation stub and its symbols
-  (autopilot dreaming loops, `DreamingModeConfig`, episodic memory,
-  event triggers).
-- **config**: obsolete `.platonic.yml` (superseded by `AGENTS.md` and
-  the `docs/` RFC/IG workflow).
+- Drop the dead dreaming-distillation stub and its symbols (autopilot dreaming loops, `DreamingModeConfig`, episodic memory, event triggers).
+- Delete the obsolete `.platonic.yml` (superseded by `AGENTS.md` and the `docs/` RFC/IG workflow).
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.13...v0.10.14
 
 ## [v0.10.13] - 2026-08-15
 
 ### Fixed
-- **checkpoints**: close loop-0041 race where `SharedPostgreSQLPool.reset_pool`
-  nulled `_pool` before reopening, so a concurrent
-  `for_shared_checkpoint_pool` caller snapshotted `get_pool() is None` and
-  raised "Shared checkpoint pool not initialized". `reset_pool` also
-  deadlocked re-entering `open()` on the non-reentrant `asyncio.Lock`. The
-  open+schema body is extracted into `_open_locked()` (caller holds
-  `_init_lock`); new `await_pool()` acquires `_init_lock` before returning
-  `_pool`, so callers block through the reopen window instead of observing
-  `None`. `StrangeLoopCheckpointPersistenceManager` and
-  `StrangeLoopStateManager` switched to `await_pool()`.
+- Close the loop-0041 race where `SharedPostgreSQLPool.reset_pool` nulled `_pool` before reopening and deadlocked re-entering the non-reentrant lock; extract the open+schema body into `_open_locked()` and add `await_pool()` so callers block through the reopen window instead of observing `None`.
 
 ### Changed
-- **notify**: drift-aware severity, TTL-based dedup, and configurable email
-  rate-limiting (IG-713). Severity classification is now drift-aware
-  (completed root with failed/active children or maturity blockers →
-  warning; suspended beyond `suspend_escalation_multiplier ×
-  suspend_after_seconds` → error). Dedup store switched from `set` to a
-  monotonic-timestamp dict with `dedup_ttl_seconds` (default 86400s; 0
-  disables) so long-running jobs can re-notify when state changes past the
-  window. Email sink `rate_limit_seconds` now flows from config (was
-  hardcoded 5.0). New configurable fields: `suspend_escalation_multiplier`
-  (default 2.0), `dedup_ttl_seconds` (default 86400),
-  `rate_limit_seconds` (default 5.0), synced across template/develop/daemon
-  config copies.
-- **cron**: `BuiltinJobSpec` registry + `BUILTIN_JOBS` tuple with
-  idempotent `seed_builtin_jobs()` on daemon startup; `enable_builtin_jobs`
-  flag (default true).
-- **docs**: RFC methodology guide synthesized from RFC-900,
-  rfc-namings, IG-744, gap-inventory/triage IGs into
-  a reusable playbook (15 sections + appendix) at
-  `docs/rfc-methodology-guide.md`; wired into rfc-standard, rfc-template,
-  rfc-index, and rfc-history.
-- **chore**: removed the obsolete drift-detection pipeline
-  (`scripts/check_asyncapi_drift.py`, drift GitHub workflow, webhook test,
-  and `check_asyncapi_drift()` call sites in `verify_finally.sh`).
+- Make notify severity drift-aware, add TTL-based dedup, and make email rate-limiting configurable; add `suspend_escalation_multiplier`, `dedup_ttl_seconds`, and `rate_limit_seconds` fields synced across config templates.
+- Add a `BuiltinJobSpec` registry with idempotent `seed_builtin_jobs()` on daemon startup; add `enable_builtin_jobs` flag (default true).
+- Synthesize a reusable RFC methodology guide from the existing RFC/IG corpus into `docs/rfc-methodology-guide.md` and wire it into rfc-standard, rfc-template, rfc-index, and rfc-history.
+- Remove the obsolete drift-detection pipeline (detector script, drift GitHub workflow, webhook test, and `check_asyncapi_drift()` call sites in `verify_finally.sh`).
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.12...v0.10.13
 
 ## [v0.10.9] - 2026-08-13
 
 ### Fixed
-- SQLite checkpointer initialization now retries transient errors (WAL
-  contention, file-lock races) with exponential backoff via a new
-  `is_recoverable_sqlite_error`, mirroring the PostgreSQL retry path. The
-  setup ensures the parent directory exists before connecting (defense
-  against worker-subprocess and post-cleanup races) and closes the
-  aiosqlite connection on setup failure to prevent leaked background
-  threads and `ResourceWarning`. Dead resolver re-export shims
-  (`_resolve_sqlite_checkpointer`, `_resolve_postgres_checkpointer`,
-  `_mask_dsn`) were removed.
-- Drop unused `render_markdown=False` argument from the instant-loop
-  assistant message; it was not a valid `AssistantMessage` option.
+- Retry transient SQLite checkpointer errors (WAL contention, file-lock races) with exponential backoff, mirroring the PostgreSQL path; ensure the parent directory exists before connecting and close the aiosqlite connection on setup failure to prevent leaked threads and `ResourceWarning`.
+- Drop the unused `render_markdown=False` argument from the instant-loop assistant message.
 
 ### Changed
-- Default `final_response` switched from `auto` to `always_synthesize`
-  for both the agent and StrangeLoop, so a final CoreAgent report is
-  always produced on goal completion. Synced across the template, develop
-  config, packaged daemon template, and config models.
-- TUI plan panel title now folds the goal line into the overlay title row
-  (`Orchestrating [8d26] · complex · 37s` with the live goal-tree glyph as
-  prefix), leaving the panel body for step rows only. New
-  `compact_id_suffix()` renders trailing UUID chars for tight surfaces.
-- Upgrade `soothe-nano` 1.1.15 → 1.1.16. Adds a vLLM provider (streaming
-  disabled; vLLM-Metal 0.1.0 ignores `stream=True` and returns non-SSE
-  JSON), and replaces the muse-glimmer router profile with a vllm profile.
+- Switch default `final_response` from `auto` to `always_synthesize` for both the agent and StrangeLoop so a final CoreAgent report is always produced on goal completion; sync across template, develop config, packaged daemon template, and config models.
+- Fold the goal line into the TUI plan panel overlay title row (`Orchestrating [8d26] · complex · 37s`) leaving the panel body for step rows only.
+- Upgrade `soothe-nano` 1.1.15 → 1.1.16: adds a vLLM provider (streaming disabled; vLLM-Metal ignores `stream=True`) and replaces the muse-glimmer router profile with a vllm profile.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.8...v0.10.9
 
 ## [v0.10.8] - 2026-08-12
 
 ### Fixed
-- Goal cancel no longer orphans in-flight `run_command` shells.
-  `drain_goal_runtime` now reaps both foreground (`fg-*.session`) and
-  background (`bg-*.log`) process groups on StrangeLoop `user_cancelled` and
-  daemon cancel (SIGTERM → grace → SIGKILL, with marker cleanup on
-  already-dead PIDs). Previously only `run_background` drained at goal
-  completion, leaving interactive-cancelled foreground shells orphaned.
+- Stop goal cancel from orphaning in-flight `run_command` shells; `drain_goal_runtime` now reaps both foreground and background process groups on `user_cancelled` and daemon cancel (SIGTERM → grace → SIGKILL).
 
 ### Changed
-- Upgrade `soothe-nano` 1.1.13 → 1.1.14. Drop host re-export of
-  `PolicyCheckedEvent` (nano no longer emits `soothe.internal.policy.checked`;
-  denials still use `PolicyDeniedEvent`). TUI plan panel is off by default
-  (`--plan-panel` to auto-show).
-- GitHub Pages CHANGELOG is generated from repository root `CHANGELOG.md`
-  via `scripts/sync_wiki_changelog.sh` (no more hand-maintained wiki copy).
+- Upgrade `soothe-nano` 1.1.13 → 1.1.14; drop the host re-export of `PolicyCheckedEvent` (nano no longer emits the policy-checked wire type; denials still use `PolicyDeniedEvent`). TUI plan panel is off by default (`--plan-panel` to auto-show).
+- Generate the GitHub Pages CHANGELOG from the repository root `CHANGELOG.md` via `scripts/sync_wiki_changelog.sh` (no more hand-maintained wiki copy).
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.7...v0.10.8
 
 ## [v0.10.7] - 2026-08-12
 
 ### Fixed
-- TUI dynamic (built-in) themes no longer crash the synthesis card with
-  `TypeError`: `_colors_from_textual_theme` now supplies `card_running` /
-  `card_running_muted`, and a static AST guard over every `ThemeColors()`
-  constructor site prevents regressions across all themes.
-- Autopilot job-maturity assessor now sees full contract context instead of
-  truncated fragments: removed tight char caps on `verification_rules`,
-  `GOAL.md`, DAG summary, workspace inventory, and QA response inputs; bumped
-  `probe_summary`, `load_goal_md_excerpt`, `acceptance_contract_brief`,
-  `format_job_dag_summary`, and snapshot probe truncation limits.
-- Inline `code` spans render in a dedicated warm amber (`LC_CODE` /
-  `LC_LIGHT_CODE`) instead of competing with heading/warning accents, so
-  literals read as literals in assistant prose.
-- Stream cards share a single 1-column inset so every card type's prefix dot
-  lines up; step-card truncation accounts for the narrower padding.
-- Clipboard copy starts with the native OS backend and drops the
-  opportunistic `pyperclip` import that duplicated `pbcopy`/`xclip`/`xsel`.
+- Stop TUI dynamic themes from crashing the synthesis card with `TypeError`; supply the missing `card_running`/`card_running_muted` colors and add a static AST guard over every `ThemeColors()` constructor site.
+- Feed the Autopilot job-maturity assessor full contract context instead of truncated fragments; remove tight char caps on `verification_rules`, `GOAL.md`, DAG summary, workspace inventory, and QA response inputs.
+- Render inline `code` spans in a dedicated warm amber so literals read as literals in assistant prose.
+- Align stream card prefixes via a single 1-column inset so every card type's prefix dot lines up.
+- Start clipboard copy with the native OS backend and drop the opportunistic `pyperclip` import that duplicated `pbcopy`/`xclip`/`xsel`.
 
 ### Changed
-- Prompt/render char-cap sentinels (`*_MAX_CHARS`) scattered across selector,
-  job_maturity, phase, continuation_context, step_predecessor_context,
-  pass2_classifier, planner_assembly, user_message, and vision_context modules
-  centralized into a single Character-Cap Registry in
-  `soothe/config/constants.py` so truncation budgets are auditable in one place.
-- Removed unused `hooks.py` stub and its `dispatch_hook` call sites in
-  `_execution.py` and `textual_adapter.py` (no hooks were ever registered).
+- Centralize scattered `*_MAX_CHARS` sentinels into a single Character-Cap Registry in `soothe/config/constants.py` so truncation budgets are auditable in one place.
+- Remove the unused `hooks.py` stub and its `dispatch_hook` call sites.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.6...v0.10.7
 
 ## [v0.10.6] - 2026-08-12
 
 ### Changed
-- Upgrade `soothe-nano` 1.1.11 → 1.1.12. Nano excised several host-owned
-  helpers back to the host packages; the host now owns the implementations
-  inline (persistence metrics, unified persistence validation, model catalog
-  payload, daemon error-format). Added `hide_thinking_tokens` config field
-  (mirrors nano) for the new thinking-token stripping feature.
+- Upgrade `soothe-nano` 1.1.11 → 1.1.12; nano excised several host-owned helpers back to the host packages (persistence metrics, unified persistence validation, model catalog payload, daemon error-format). Add `hide_thinking_tokens` config field for the new thinking-token stripping feature.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.5...v0.10.6
 
 ## [v0.10.5] - 2026-08-11
 
 ### Fixed
-- Runner ThreadPool shutdown now sets `cancel_event` on busy in-flight workers
-  before the join wait, so daemon restart/stop unwinds dying `astream()` runs
-  through the cooperative-cancel pipeline instead of leaking a spurious
-  "unexpected cancellation" RuntimeError to the client.
-- Workspace-local skills (`.agents/skills`) resolve on freshly created loops
-  before the first `loop_input`. The router now falls back to the
-  `current_workspace` stored in loop metadata at `loop_new` time, mirroring the
-  existing `_handle_skills_list` fallback, instead of returning `SKILL_NOT_FOUND`.
-- Autopilot `soothe ap top` no longer ticks an elapsed clock for queued goals;
-  elapsed is now anchored on `started_at` so pending work shows no running timer.
+- Set `cancel_event` on busy in-flight workers before the join wait on runner ThreadPool shutdown so daemon restart/stop unwinds dying `astream()` runs through the cooperative-cancel pipeline instead of leaking a spurious "unexpected cancellation" RuntimeError.
+- Resolve workspace-local skills (`.agents/skills`) on freshly created loops before the first `loop_input` by falling back to the `current_workspace` stored at `loop_new` time.
+- Stop `soothe ap top` from ticking an elapsed clock for queued goals; anchor elapsed on `started_at` so pending work shows no running timer.
 
 ### Added
-- Resumable interrupted-goal cursor for cancel-then-retry. A mid-Execute cancel
-  now marks the in-flight goal `interrupted` (distinct from terminal
-  `cancelled`) and persists the current iteration cursor; a subsequent resume
-  re-activates the goal in place with one grace iteration at the budget
-  boundary, so retry no longer restarts from iteration 0.
-- Autoresearch loop rail with native exec and 15 prompt fragments: an
-  iterative autonomous research loop that decomposes questions, gathers web
-  evidence, reflects on sufficiency, and synthesizes an adaptive report via
-  find→optimize→verify.
-- CE goal DAG analysis + digraph to the `inspect-autopilot-job` skill.
+- Add a resumable interrupted-goal cursor for cancel-then-retry: a mid-Execute cancel now marks the goal `interrupted` (distinct from terminal `cancelled`) and persists the iteration cursor so retry resumes in place with one grace iteration at the budget boundary.
+- Add an autoresearch loop rail with native exec and 15 prompt fragments: an iterative autonomous research loop that decomposes questions, gathers web evidence, reflects on sufficiency, and synthesizes an adaptive report via find→optimize→verify.
+- Add CE goal DAG analysis and digraph to the `inspect-autopilot-job` skill.
 
 ### Changed
-- Loop `continue` always resumes via the launcher gate (single resume path)
-  instead of the legacy direct-continue path.
-- Plan prompt fragments condensed to telegraphic wording; unused structured
-  plan parser, fatal-error transition, and step-alignment helpers removed.
-- `iter<=N` suffix dropped from the TUI goal-tree header.
-- Packaged daemon/soothe config templates polished (slimmed defaults).
+- Always resume `continue` via the launcher gate (single resume path) instead of the legacy direct-continue path.
+- Condense plan prompt fragments to telegraphic wording; remove the unused structured plan parser, fatal-error transition, and step-alignment helpers.
+- Drop the `iter<=N` suffix from the TUI goal-tree header; slim packaged daemon/soothe config template defaults.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.4...v0.10.5
 
 ## [v0.10.4] - 2026-08-10
 
 ### Fixed
-- WebSocket 1009 (message too big) crash on large autopilot command-RPC replies
-  (e.g. `soothe ap goals`). The client `AsyncCommandClient`/`CommandClient` and the
-  daemon `admin_rpc.send_admin_request` now set `max_size=10 MiB` to match the daemon
-  `transport.websocket.max_frame_size` default instead of the `websockets` library's
-  1 MiB default.
-- TUI no longer hangs on a stale "live" loop probe after a turn completes. The
-  post-completion re-attach guard (`_daemon_loop_is_live`) now requires the
-  daemon's authoritative `active_runner` signal, so a loop whose metadata
-  `status` still reads `"running"` (lagging the 5-minute reconciliation) can't
-  leave the thinking row spinning for minutes. As a backstop, the attach-only
-  turn read (`iter_turn_chunks(idle_timeout_s=…)`) raises after 45s with no
-  real content, surfacing a benign "no follow-on turn" message instead of an
-  indefinite spin.
+- Stop WebSocket 1009 (message too big) crashes on large autopilot command-RPC replies; client and daemon now set `max_size=10 MiB` to match the daemon's `transport.websocket.max_frame_size` default.
+- Stop the TUI from hanging on a stale "live" loop probe after a turn completes; require the daemon's authoritative `active_runner` signal and raise after 45s with no real content on the attach-only turn read.
 
 ### Added
-- Autopilot streaming slice DAG spawn + host worktree lifecycle (IG-732).
-- Veritas auto-clarify for rail `pause_for_user`; Superpowers discipline encoded
-  into rail maker briefs (IG-737).
-- Cognition intake module + CLI guide (IG-733).
-- WavePlan continue short-circuit + dispatch intake_scope (IG-730, IG-731).
-- LLM-based rail auto-pick (IG-728).
-- Autopilot report-commit judgment with bounded DAG ops (IG-726).
-- TUI: auto-show/hide plan panel during goal execution; one-stage vs two-stage
-  Enter for slash autocomplete; clarification mode badge in status bar.
+- Add Autopilot streaming slice DAG spawn and host worktree lifecycle.
+- Add Veritas auto-clarify for rail `pause_for_user`; encode Superpowers discipline into rail maker briefs.
+- Add the cognition intake module and CLI guide.
+- Add WavePlan continue short-circuit and dispatch intake scope.
+- Add LLM-based rail auto-pick.
+- Add Autopilot report-commit judgment with bounded DAG ops.
+- Add TUI auto-show/hide plan panel during goal execution, one-stage vs two-stage Enter for slash autocomplete, and a clarification mode badge in the status bar.
 
 ### Changed
-- Convert `soothe-sdk` from workspace submodule to PyPI dependency
-  (`soothe-sdk>=1.0.8,<2.0.0`); release workflow now waits for the pinned floor
-  on PyPI instead of reading the deleted `packages/soothe-sdk/pyproject.toml`.
-- Remove `packages/soothe-nano` git submodule; consume Coding CoreAgent from
-  PyPI (`soothe-nano>=1.1.6`) only. Local Docker builds and release waits use
-  the host pin instead of a vendored nano checkout.
+- Convert `soothe-sdk` from workspace submodule to PyPI dependency (`soothe-sdk>=1.0.8,<2.0.0`); release workflow waits for the pinned floor on PyPI.
+- Remove the `packages/soothe-nano` git submodule; consume Coding CoreAgent from PyPI (`soothe-nano>=1.1.6`) only.
 - Upgrade `soothe-nano` 1.1.8 → 1.1.10.
-- Raise `soothe-client-python` floor to `>=1.0.15` in soothe-cli and
-  soothe-daemon (WebSocket max_frame_size fix).
-- Raise packaged `llm_rate_limit` globals for Autopilot + CLI coexistence:
-  `rpm_limit=180`, `concurrent_limit=4`, `global_concurrent_limit=18`
-  (keeps `autopilot.max_parallel_goals=3` and per-loop step/subagent caps).
-- Default LLM rate-limit / loop concurrency to develop-safe caps:
-  `autopilot.max_parallel_goals=3`, `max_parallel_steps/subagents=3`,
-  `global_max_llm_calls=8` (requires `soothe-nano>=1.1.7`).
-- Rename autopilot `cognition` → `intake` module; collapse redundant
-  bugfix/migration builtins and raise auto-pick timeout (IG-734, IG-736).
-- Rename `wave_below_max` → `below_slice_budget`; decouple budget from
-  `job_complete` (IG-732).
+- Raise `soothe-client-python` floor to `>=1.0.15` in soothe-cli and soothe-daemon (WebSocket max_frame_size fix).
+- Raise packaged `llm_rate_limit` globals for Autopilot + CLI coexistence: `rpm_limit=180`, `concurrent_limit=4`, `global_concurrent_limit=18`.
+- Default LLM rate-limit / loop concurrency to develop-safe caps: `autopilot.max_parallel_goals=3`, `max_parallel_steps/subagents=3`, `global_max_llm_calls=8` (requires `soothe-nano>=1.1.7`).
+- Rename autopilot `cognition` → `intake` module; collapse redundant bugfix/migration builtins and raise auto-pick timeout.
+- Rename `wave_below_max` → `below_slice_budget`; decouple budget from `job_complete`.
 
 ### Removed
-- `agent.loop.concurrency.max_parallel_goals` — dead after single-goal StrangeLoop
-  workers; use `agent.autopilot.max_parallel_goals` for Autopilot goal fan-out.
-  Stale YAML keys are ignored on load.
-- `ConcurrencyPolicy.max_parallel_goals` (soothe-sdk 1.0.8) — same split; persisted
-  plans with the legacy key still load via `extra="ignore"`.
-- Autopilot evidence turns; trust StrangeLoop completion signal instead.
+- Drop `agent.loop.concurrency.max_parallel_goals` (dead after single-goal StrangeLoop workers); use `agent.autopilot.max_parallel_goals` for Autopilot goal fan-out. Stale YAML keys are ignored on load.
+- Drop `ConcurrencyPolicy.max_parallel_goals` (soothe-sdk 1.0.8); persisted plans with the legacy key still load via `extra="ignore"`.
+- Drop Autopilot evidence turns; trust the StrangeLoop completion signal instead.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.2...v0.10.4
 
 ## [v0.10.2] - 2026-08-07
 
 ### Changed
-- Release fix versions for all clients: Python 1.0.12, TypeScript 0.5.8, Go 0.4.14, Rust 0.3.7
-- Raise `soothe-client-python` floor to `>=1.0.12` in soothe-cli and soothe-daemon
+- Release fix versions for all clients: Python 1.0.12, TypeScript 0.5.8, Go 0.4.14, Rust 0.3.7.
+- Raise `soothe-client-python` floor to `>=1.0.12` in soothe-cli and soothe-daemon.
 
 ## [v0.10.1] - 2026-08-07
 
 ### Added
-- Rail Exec system with YAML verb bodies and migration waves (IG-692).
-- Structure-driven builtin rails with review closeout workflow.
-- Autopilot top `steps_mode` with active/pending filter for StepDAG view.
-- CLI `ap` alias for `autopilot` command and rail/goal display in commands.
-- Multi-channel job lifecycle notify push (email, WebSocket, webhook).
-- Autopilot job notify emails enriched with compact DAG progress.
-- Job descriptions persisted as `data/jobs/{id}/GOAL.md`.
-- WavePlan persisted via Context Engine findings (no file artifact).
+- Add the Rail Exec system with YAML verb bodies and migration waves.
+- Add structure-driven builtin rails with a review closeout workflow.
+- Add Autopilot top `steps_mode` with active/pending filter for the StepDAG view.
+- Add a CLI `ap` alias for the `autopilot` command and rail/goal display in commands.
+- Add multi-channel job lifecycle notify push (email, WebSocket, webhook).
+- Enrich Autopilot job notify emails with compact DAG progress.
+- Persist job descriptions as `data/jobs/{id}/GOAL.md`.
+- Persist WavePlan via Context Engine findings (no file artifact).
 
 ### Fixed
 - Freeze elapsed time for terminal jobs/goals/loops to avoid live drift.
-- Autopilot consensus trust now uses StrangeLoop response signals (IG-710).
-- Consensus suspend replaced with fail for automatic recovery.
+- Make Autopilot consensus trust use StrangeLoop response signals.
+- Replace consensus suspend with fail for automatic recovery.
 - Rename notify target `address` to `to_address` for clarity.
 
 ### Changed
 - Raise `soothe-client-python` floor to `>=1.0.11` (120s `autopilot_submit` timeout).
-- Remove unused `suggest_goal` / `ProposalQueue` mechanism; DAG growth stays
-  via LoopRail, monitor, intake, and reflection `GoalDirective`s (IG-703).
-- Autopilot consensus judges goal text vs StrangeLoop response only; drop host
-  workspace evidence grounding / pytest hard-accept (IG-710).
+- Remove the unused `suggest_goal`/`ProposalQueue` mechanism; DAG growth stays via LoopRail, monitor, intake, and reflection `GoalDirective`s.
+- Make Autopilot consensus judge goal text vs StrangeLoop response only; drop host workspace evidence grounding and pytest hard-accept.
 - Refactor autopilot/rails to one-level subpackages with workflow tracing.
 - Make sensitive config dual-mode: plain YAML or `${ENV_VAR}` placeholders.
 - Replace `files_touched` with domain-agnostic `GoalEffect` for job artifacts.
-- Move `plan_contribution` to dispatch module for cleaner separation.
+- Move `plan_contribution` to the dispatch module for cleaner separation.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.0...v0.10.1
 
 ## [v0.10.0] - 2026-08-06
 
 ### Added
-- Autopilot live top dashboard with htop-style Jobs/Goals/Loops stats,
-  interactive keymaps (`a` all/active, `s`/`l` steps/loops, `d` density,
-  `+/-` delay, vim-style scroll), and pair-column layout (IG-688 / IG-677).
-- Greenfield rails with LLM-determined fanout width, consensus pass with full
-  evidence, thrash rail tag loss detection, and subgoal consensus exhaustion
-  recovery (IG-690 / IG-691 / IG-695 / IG-699 / IG-700).
-- Autopilot job maturity assessment system, scheduling loop enabled by default,
-  and deadlocked failed goal recovery (RFC-230 / IG-685).
-- Job token usage tracking in Context Engine and display in CLI autopilot.
-- `--file` flag for `autopilot submit` to load GOAL.md from a file.
-- Diagnose tools split: `diagnose-loop` and `inspect-autopilot-job` workflows.
-- Web search/crawl backend migration from wizsearch to tarzi via `soothe-nano>=1.1.4`.
+- Add an Autopilot live top dashboard with htop-style Jobs/Goals/Loops stats, interactive keymaps (`a` all/active, `s`/`l` steps/loops, `d` density, `+/-` delay, vim-style scroll), and a pair-column layout.
+- Add greenfield rails with LLM-determined fanout width, consensus pass with full evidence, thrash rail tag loss detection, and subgoal consensus exhaustion recovery.
+- Add an Autopilot job maturity assessment system, enable the scheduling loop by default, and add deadlocked failed-goal recovery.
+- Track job token usage in the Context Engine and display it in the CLI autopilot.
+- Add a `--file` flag for `autopilot submit` to load GOAL.md from a file.
+- Split diagnose tools into `diagnose-loop` and `inspect-autopilot-job` workflows.
+- Migrate the web search/crawl backend from wizsearch to tarzi via `soothe-nano>=1.1.4`.
 
 ### Fixed
-- Autopilot greenfield rail feedback cycle, guards, and wave idle deadlock resolution.
-- Autopilot top preserves StepDAG under live goals when `steps=on`.
-- Autopilot mirrors worker steps onto Context Engine for top display.
-- Autopilot top progress meters colored as success green.
-- CLI autopilot help flags validated on ANSI-stripped output.
-- Rails prevent premature `job_complete` on greenfield without acceptance latch.
+- Fix the Autopilot greenfield rail feedback cycle, guards, and wave idle deadlock resolution.
+- Preserve the StepDAG under live goals in Autopilot top when `steps=on`.
+- Mirror worker steps onto the Context Engine for top display.
+- Color Autopilot top progress meters as success green.
+- Validate CLI autopilot help flags on ANSI-stripped output.
+- Prevent premature `job_complete` on greenfield without an acceptance latch.
 
 ### Changed
 - Align Autopilot config with shared StrangeLoop budgets and always-on dynamic goals.
-- Share `max_iterations` between StrangeLoop and Autopilot instead of duplicate budget.
-- Shorten autopilot top header title to "Autopilot".
-- Remove soothe-desktop submodule and archive desktop docs.
-- Increase default autopilot concurrency limits for better throughput.
-- Require `soothe-nano>=1.1.4` / `tarzi>=0.2.3` for web search/crawl.
-  Tool names and `tools.wizsearch` config keys unchanged. Default engines:
-  `tavily` → `google_serper` → `duckduckgo` → `bing` → `brave`.
+- Share `max_iterations` between StrangeLoop and Autopilot instead of a duplicate budget.
+- Shorten the Autopilot top header title to "Autopilot".
+- Remove the soothe-desktop submodule and archive desktop docs.
+- Increase default Autopilot concurrency limits for better throughput.
+- Require `soothe-nano>=1.1.4` / `tarzi>=0.2.3` for web search/crawl. Default engines: `tavily` → `google_serper` → `duckduckgo` → `bing` → `brave`.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.16...v0.10.0
 
 ## [v0.9.16] - 2026-08-05
 
 ### Added
-- `soothe autopilot top` interactive linux-`top` keymaps (`a` all/active goals,
-  `s`/`l` steps/loops, `d` density, `+/-` delay, scroll, help) plus
-  `include_terminal` on `autopilot_top` (IG-688).
-- Autopilot live top dashboard, JobLoopIndex assignment loop ids, LoopRails
-  wiring, greenfield-system rail, and job-scoped artifacts under `data/jobs/`
-  with full-screen StepDAG nesting (IG-677 / IG-679 / IG-686 / IG-687).
-- Consensus evidence grounding and DAG health guardrails for autopilot
-  (IG-685 / IG-680).
-- StrangeLoop: tool-aware dispatch timeout, resume from successful checkpoint,
-  assess keep/reject for failed steps (IG-681 / IG-683 / IG-684).
-- TUI sticky Plan composer mode (Shift+Tab) and equivalent `-h` / `--help` /
-  `help` everywhere (IG-682).
+- Add `soothe autopilot top` interactive linux-`top` keymaps (`a` all/active goals, `s`/`l` steps/loops, `d` density, `+/-` delay, scroll, help) plus `include_terminal` on `autopilot_top`.
+- Add the Autopilot live top dashboard, JobLoopIndex loop-id assignment, LoopRails wiring, greenfield-system rail, and job-scoped artifacts under `data/jobs/` with full-screen StepDAG nesting.
+- Add consensus evidence grounding and DAG health guardrails for Autopilot.
+- Add tool-aware dispatch timeout, resume from successful checkpoint, and assess keep/reject for failed StrangeLoop steps.
+- Add TUI sticky Plan composer mode (Shift+Tab) and equivalent `-h` / `--help` / `help` everywhere.
 
 ### Fixed
-- Autopilot `dag_snapshot` includes `parent_id` children for correct top trees.
-- Autopilot top/status collapses multiline descriptions to single-line previews.
-- CLI help tests tolerate ANSI styling; pytest runs from workspace root for
-  editable installs.
-- Build: remove duplicate force-include that broke wheel packaging.
-- TUI: dock bottom chrome so the thinking row is not clipped; show intake
-  complexity on the plan panel goal header.
+- Include `parent_id` children in Autopilot `dag_snapshot` for correct top trees.
+- Collapse multiline descriptions to single-line previews in Autopilot top/status.
+- Make CLI help tests tolerate ANSI styling; run pytest from workspace root for editable installs.
+- Remove the duplicate force-include that broke wheel packaging.
+- Dock the TUI bottom chrome so the thinking row is not clipped; show intake complexity on the plan panel goal header.
 
 ### Changed
 - Streamline autopilot CLI submit/run; remove manual dream/wake commands.
-- Pin language clients to python 1.0.10 / typescript 0.5.7 / go 0.4.13;
-  require `soothe-nano>=1.1.2`.
+- Pin language clients to python 1.0.10 / typescript 0.5.7 / go 0.4.13; require `soothe-nano>=1.1.2`.
 
 [Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.15...v0.9.16
 
 ## [v0.9.15] - 2026-08-03
 
 ### Changed
-- StrangeLoop now routes simple fresh-loop tasks through the same trivial
-  pseudo-plan path as TRIVIAL, bypassing the plan_assess/plan_generate cycle
-  entirely. SIMPLE is folded into the COMMIT_PLAN branch with a pre-built
-  1-step plan; the standalone SIMPLE → GENERATE_PLAN branch is removed.
-- Continuation intake is unified at route_after_preprocess: all non-fresh
-  goals now enter gather_evidence, with intake-tiered work
-  (trivial/simple/complex) handled inside the mid-loop spine. The
-  continuation-assess LLM is skipped for continuation+simple (it could never
-  change the route), and goal_progress prose is coerced to none to avoid
-  burning a schema-repair retry. Unused ENTER_LOOP targets are pruned and
-  synthetic StatusAssessment factories are unified.
+- Route simple fresh-loop StrangeLoop tasks through the same trivial pseudo-plan path as TRIVIAL, bypassing the plan_assess/plan_generate cycle entirely; fold SIMPLE into the COMMIT_PLAN branch with a pre-built 1-step plan and remove the standalone SIMPLE → GENERATE_PLAN branch.
+- Unify continuation intake at route_after_preprocess so all non-fresh goals enter gather_evidence with intake-tiered work handled inside the mid-loop spine; skip the continuation-assess LLM for continuation+simple and coerce goal_progress prose to none to avoid burning a schema-repair retry.
 
 ### Added
 - TUI highlights the leading slash-command token (e.g. `/skill:foo`) in the

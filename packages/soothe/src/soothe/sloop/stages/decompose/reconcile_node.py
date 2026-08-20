@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
 from typing import Any
 
@@ -10,17 +9,16 @@ from soothe.sloop.decompose.reconcile import (
     drain_executor_proposals,
     reconcile_proposals_deterministic,
 )
-from soothe.sloop.orchestrator.node_base import LoopNode, NodeResult, RouteDecision
+from soothe.sloop.orchestrator.node_base import (
+    LoopNode,
+    NodeResult,
+    RouteDecision,
+    _maybe_await,
+)
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.stations import RECONCILE
 
 logger = logging.getLogger(__name__)
-
-
-async def _maybe_await(value: Any) -> Any:
-    if inspect.isawaitable(value):
-        return await value
-    return value
 
 
 def _collect_proposals(ctx: LoopRuntimeContext) -> list[Any]:

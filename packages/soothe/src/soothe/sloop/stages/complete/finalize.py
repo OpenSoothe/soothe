@@ -17,8 +17,8 @@ from soothe.sloop.engine.synthesis import (
     SynthesisGenerator,
     generate_user_fallback_summary,
 )
+from soothe.sloop.orchestrator.phase_status import emit_plan_phase_status
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 from soothe.sloop.state.schemas import LoopState
 from soothe.sloop.utils.messages import (
     LoopAIMessage,

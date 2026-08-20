@@ -45,7 +45,7 @@ from soothe.utils.observability.langfuse import (
     open_intake_langfuse_span,
 )
 
-from .anchor_manager import CheckpointAnchorManager
+from .engine.anchor_manager import CheckpointAnchorManager
 
 logger = logging.getLogger(__name__)
 

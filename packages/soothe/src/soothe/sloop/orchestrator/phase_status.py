@@ -1,4 +1,9 @@
-"""Shared plan-phase status card emission for gather/assess/gap/generate."""
+"""Shared ``plan_phase_status`` status-card emission for loop stations.
+
+The event predates the RFC-904 DISPATCH cutover (it covered the old
+gather/assess/gap/generate plan spine, removed in IG-752); it now carries
+phase labels for intake, wired-subagent delegation, and goal finalize.
+"""
 
 from __future__ import annotations
 

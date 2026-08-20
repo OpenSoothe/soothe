@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.sloop.engine.strange_loop import StrangeLoop
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
+from soothe.sloop.strange_loop import StrangeLoop
 
 
 def _make_strange_loop() -> StrangeLoop:
@@ -82,18 +82,18 @@ async def test_continue_keyword_bypasses_social_gate_fast_path() -> None:
     with (
         patch.object(sl, "_ce", ce_instance),
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.strange_loop.CheckpointAnchorManager",
         ) as anchor_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
@@ -163,18 +163,18 @@ async def test_embedded_continue_the_loop_bypasses_social_gate_fast_path() -> No
     with (
         patch.object(sl, "_ce", ce_instance),
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.strange_loop.CheckpointAnchorManager",
         ) as anchor_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",

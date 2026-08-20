@@ -247,7 +247,7 @@ def _patch_strange_loop(monkeypatch: pytest.MonkeyPatch, fake: _FakeStrangeLoop)
         return fake
 
     monkeypatch.setattr(
-        "soothe.sloop.engine.strange_loop.StrangeLoop",
+        "soothe.sloop.strange_loop.StrangeLoop",
         _factory,
     )
 

@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "packages/soothe/src"))
 
 # Pre-import to break orchestrator ↔ engine circular import on cold start.
 import soothe.config  # noqa: F401
-import soothe.sloop.engine.strange_loop  # noqa: F401
+import soothe.sloop.strange_loop  # noqa: F401
 from soothe.config import SootheConfig
 from soothe.sloop.orchestrator import stations
 from soothe.sloop.orchestrator.builder import build_strange_loop_graph

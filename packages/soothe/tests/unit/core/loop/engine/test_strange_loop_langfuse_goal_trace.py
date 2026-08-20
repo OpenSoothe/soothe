@@ -8,12 +8,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.sloop.engine.strange_loop import StrangeLoop
 from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
     TaskComplexity,
 )
+from soothe.sloop.strange_loop import StrangeLoop
 from soothe.utils.observability.langfuse import GoalLoopTrace
 
 
@@ -72,19 +72,19 @@ async def _drive_run_with_progress(
             return_value="/tmp/soothe-test.db",
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
-        patch("soothe.sloop.engine.strange_loop.CheckpointAnchorManager") as am_cls,
+        patch("soothe.sloop.strange_loop.CheckpointAnchorManager") as am_cls,
         patch(
-            "soothe.sloop.engine.strange_loop.open_intake_langfuse_span",
+            "soothe.sloop.strange_loop.open_intake_langfuse_span",
             return_value=intake_span,
         ),
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
-        patch("soothe.sloop.engine.strange_loop.LoopRuntimeContext"),
+        patch("soothe.sloop.strange_loop.LoopRuntimeContext"),
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
             return_value=False,
@@ -166,18 +166,18 @@ async def test_run_with_progress_pins_goal_trace_before_intake() -> None:
             return_value="/tmp/soothe-test.db",
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
@@ -352,18 +352,18 @@ async def test_run_with_progress_skips_begin_goal_loop_when_langfuse_disabled() 
             return_value="/tmp/soothe-test.db",
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",

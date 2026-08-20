@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
     from soothe.sloop.clarification.protocol import ClarificationPolicy
-    from soothe.sloop.engine.strange_loop import StrangeLoop
+    from soothe.sloop.strange_loop import StrangeLoop
     from soothe.utils.observability.langfuse import GoalLoopTrace
 
 logger = logging.getLogger(__name__)

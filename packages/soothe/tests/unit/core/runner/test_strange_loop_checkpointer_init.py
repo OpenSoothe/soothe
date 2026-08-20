@@ -46,7 +46,7 @@ async def test_run_strange_loop_materializes_core_agent_before_graph() -> None:
 
     with (
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoop",
+            "soothe.sloop.strange_loop.StrangeLoop",
             _FakeStrangeLoop,
         ),
         patch(

@@ -178,6 +178,22 @@ infrastructure, cron jobs, or parallel tracking systems.
   this rule. This rule applies only to spec↔code drift governance
   infrastructure.
 
+### 13. Changelog (MUST)
+Keep changelogs **brief and sharp**. Each entry is a single, scannable line that tells a reader *what changed and why* — nothing more.
+
+- **One line per change** — no multi-paragraph prose, no preamble, no "This PR..." narration.
+- **Lead with the user-facing effect**, not the implementation detail. Readers care about behavior, not refactors.
+- **Active voice, imperative mood** — "Add retry backoff to channel sends", not "Retries were added" or "This change adds retries".
+- **Concrete and specific** — name the component, config key, or command affected. Avoid "various improvements", "misc fixes", "updated logic".
+- **Group by release section** (`Added` / `Changed` / `Fixed` / `Removed`); within a section, most impactful first.
+- **No internal jargon** — omit IG-XXX/RFC-XXX, ticket IDs, and commit hashes from the changelog body (per §7 Terminology). Link to the IG/RFC from the release notes if needed, but the entry line itself stays clean.
+- **No AI attribution** — never credit AI tools (per §11).
+- **If a change isn't user-visible, it probably doesn't belong in the changelog.** Internal refactors, test additions, and tooling that don't alter behavior are omitted unless they affect operators.
+
+Good: `Add \`persistence.default_backend\` validation that rejects mixed sqlite/postgres in one process.`
+
+Bad: `This PR updates the persistence layer to add a check for the default backend config so that users don't accidentally mix backends. See IG-612 for details. (#1234, authored by...)`
+
 ---
 
 ## 📁 Structure

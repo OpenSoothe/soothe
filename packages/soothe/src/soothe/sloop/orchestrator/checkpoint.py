@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
-    from soothe.sloop.engine.strange_loop import StrangeLoop
+    from soothe.sloop.strange_loop import StrangeLoop
 
 _STRANGE_LOOP_THREAD_SUFFIX: Final = "__strange_loop"
 

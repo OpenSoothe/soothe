@@ -19,8 +19,8 @@ from soothe.sloop.intention.models import (
     build_loop_routing_classification,
     normalize_response_language,
 )
+from soothe.sloop.orchestrator.phase_status import emit_plan_phase_status
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.stages.plan.phase_status import emit_plan_phase_status
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.sloop.engine.strange_loop import StrangeLoop
 from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
@@ -14,6 +13,7 @@ from soothe.sloop.intention.models import (
     intent_classification_from_intake_scope,
     parse_intake_scope,
 )
+from soothe.sloop.strange_loop import StrangeLoop
 
 
 def _make_strange_loop() -> StrangeLoop:
@@ -80,18 +80,18 @@ async def test_run_with_progress_skips_intake_when_intent_preclassified() -> Non
             return_value="/tmp/soothe-test.db",
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",

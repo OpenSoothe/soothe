@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.sloop.engine.strange_loop import StrangeLoop
 from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
@@ -16,6 +15,7 @@ from soothe.sloop.intention.models import (
 )
 from soothe.sloop.orchestrator.routing import route_by_intent
 from soothe.sloop.stages.preprocess.enter_loop import node_init_or_resume
+from soothe.sloop.strange_loop import StrangeLoop
 
 
 async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
@@ -84,15 +84,15 @@ async def _drive_intake(
             return_value="/tmp/soothe-test.db",
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
-        patch("soothe.sloop.engine.strange_loop.CheckpointAnchorManager") as am_cls,
+        patch("soothe.sloop.strange_loop.CheckpointAnchorManager") as am_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
-        patch("soothe.sloop.engine.strange_loop.LoopRuntimeContext") as runtime_ctx_cls,
+        patch("soothe.sloop.strange_loop.LoopRuntimeContext") as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
             return_value=False,

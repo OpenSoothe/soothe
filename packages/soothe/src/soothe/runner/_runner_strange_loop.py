@@ -505,7 +505,7 @@ class StrangeLoopMixin:
 
         await self._materialize_core_agent()  # type: ignore[attr-defined]
 
-        from soothe.sloop.engine.strange_loop import StrangeLoop
+        from soothe.sloop.strange_loop import StrangeLoop
 
         loop_agent = StrangeLoop(
             core_agent=self._agent,

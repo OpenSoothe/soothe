@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from soothe.sloop.engine.strange_loop import _hydrate_previous_plan_from_ce
 from soothe.sloop.state.schemas import LoopState, PlanResult
+from soothe.sloop.strange_loop import _hydrate_previous_plan_from_ce
 
 
 def test_hydrate_previous_plan_from_ce_dict() -> None:

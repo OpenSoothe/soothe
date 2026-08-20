@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from soothe_sdk.intention.models import TaskComplexity
 
-from soothe.sloop.engine.strange_loop import StrangeLoop, _task_intent_from_pre_graph_intake
 from soothe.sloop.intention.models import (
     IntakeConfidence,
     IntakeLabel,
@@ -15,6 +14,7 @@ from soothe.sloop.intention.models import (
     IntentClassification,
     ResponseLanguage,
 )
+from soothe.sloop.strange_loop import StrangeLoop, _task_intent_from_pre_graph_intake
 
 
 def _make_strange_loop() -> StrangeLoop:
@@ -80,18 +80,18 @@ async def test_run_with_progress_yields_intake_status_pre_graph() -> None:
             return_value="/tmp/soothe-test.db",
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
@@ -205,18 +205,18 @@ async def test_run_with_progress_reuses_social_gate_task_as_loop_intent() -> Non
             return_value="/tmp/soothe-test.db",
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",

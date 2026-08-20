@@ -65,7 +65,7 @@ async def test_fatal_error_surfaces_error_and_completion_events() -> None:
 
     with (
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoop",
+            "soothe.sloop.strange_loop.StrangeLoop",
             _FatalErrorStrangeLoop,
         ),
         patch(

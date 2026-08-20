@@ -124,7 +124,7 @@ class AutopilotSootheRunner(SootheRunner):
 
         # Build a fresh StrangeLoop for this dispatch. The CoreAgent / planner
         # are shared (workers serve many jobs over their lifetime).
-        from soothe.sloop.engine.strange_loop import StrangeLoop
+        from soothe.sloop.strange_loop import StrangeLoop
 
         strange_loop = StrangeLoop(
             core_agent=self._agent,  # type: ignore[attr-defined]

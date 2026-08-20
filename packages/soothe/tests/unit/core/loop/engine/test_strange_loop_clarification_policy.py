@@ -129,7 +129,7 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
 
     with (
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
@@ -137,10 +137,10 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
             return_value=mock_ce,
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch(
-            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
         patch(
@@ -190,7 +190,7 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
 
     with (
         patch(
-            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
@@ -198,10 +198,10 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
             return_value=mock_ce,
         ),
         patch(
-            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch(
-            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
         patch(

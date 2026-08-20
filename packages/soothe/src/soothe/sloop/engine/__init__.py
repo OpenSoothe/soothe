@@ -1,1 +1,1 @@
-"""Main orchestration entry point with execution, branching, and analysis."""
+"""StrangeLoop execution machinery: step executor, synthesis, checkpoint anchors."""

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.sloop.engine.strange_loop import StrangeLoop
+from soothe.sloop.strange_loop import StrangeLoop
 
 
 def _make_strange_loop(*, backend: str) -> StrangeLoop:
@@ -35,10 +35,10 @@ async def test_postgresql_backend_selects_pgsql_persistence() -> None:
         patch("soothe.context.store_sqlite.SqliteContextPersistence") as sqlite_cls,
         patch("soothe.context.engine.ContextEngine") as ce_cls,
         patch("soothe.context.StepPlanManagerAdapter"),
-        patch("soothe.sloop.engine.strange_loop.StrangeLoopStateManager") as sm_cls,
-        patch("soothe.sloop.engine.strange_loop.CheckpointAnchorManager") as am_cls,
-        patch("soothe.sloop.engine.strange_loop.LoopRuntimeContext"),
-        patch("soothe.sloop.engine.strange_loop.asyncio.Queue"),
+        patch("soothe.sloop.strange_loop.StrangeLoopStateManager") as sm_cls,
+        patch("soothe.sloop.strange_loop.CheckpointAnchorManager") as am_cls,
+        patch("soothe.sloop.strange_loop.LoopRuntimeContext"),
+        patch("soothe.sloop.strange_loop.asyncio.Queue"),
         patch("soothe.sloop.orchestrator.runner.invoke_strange_loop_graph", new_callable=AsyncMock),
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",

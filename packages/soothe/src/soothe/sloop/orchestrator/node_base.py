@@ -7,6 +7,7 @@ callables for LangGraph ``add_node``.
 
 from __future__ import annotations
 
+import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
@@ -23,6 +24,13 @@ if TYPE_CHECKING:
 
 _RouteKind = Literal["proceed", "await_user", "deferred", "fatal", "terminal"]
 _GuardKind = Literal["fatal", "deferred", "skip"]
+
+
+async def _maybe_await(value: Any) -> Any:
+    """Await coroutines; pass through plain values (MagicMock-friendly)."""
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 @dataclass

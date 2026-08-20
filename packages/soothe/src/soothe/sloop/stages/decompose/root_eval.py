@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
 from typing import Any
 
-from soothe.sloop.orchestrator.node_base import LoopNode, NodeResult, RouteDecision
+from soothe.sloop.orchestrator.node_base import (
+    LoopNode,
+    NodeResult,
+    RouteDecision,
+    _maybe_await,
+)
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.orchestrator.stations import ROOT_EVAL
 
 logger = logging.getLogger(__name__)
-
-
-async def _maybe_await(value: Any) -> Any:
-    if inspect.isawaitable(value):
-        return await value
-    return value
 
 
 class RootEvalNode(LoopNode):
