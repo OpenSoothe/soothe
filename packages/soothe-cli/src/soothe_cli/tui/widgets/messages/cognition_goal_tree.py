@@ -16,7 +16,10 @@ from soothe_cli.runtime.presentation.duration_format import (
     format_duration_ms,
     format_running_elapsed,
 )
-from soothe_cli.runtime.presentation.step_id_format import numeric_step_prefix
+from soothe_cli.runtime.presentation.step_id_format import (
+    display_step_id,
+    numeric_step_prefix,
+)
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
@@ -344,8 +347,8 @@ class CognitionGoalTreeMessage(Vertical):
         max_line_width: int | None,
     ) -> str:
         """Build a single-line step row, clipping description to fit ``max_line_width``."""
-        numeric = numeric_step_prefix(st.step_id)
-        step_prefix = f"{numeric}: " if numeric else ""
+        step_label = display_step_id(st.step_id)
+        step_prefix = f"{step_label}: " if step_label else ""
         dep_suffix = _dependency_suffix(st.dependencies)
         queued_suffix = " · queued" if st.phase == "queued" else ""
         stats_suffix = self._step_stats_suffix(st)

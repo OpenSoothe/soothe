@@ -1,8 +1,10 @@
 """Step id display formatting for TUI plan panels.
 
 Plan step ids embed a numeric suffix (``KFA-07`` → 7, ``STEP-1`` → 1,
-``01`` → 1). The plan panel renders only that numeric token as a compact
-visual prefix; the full scoped id is never shown to the operator.
+``01`` → 1). The plan panel renders the **full** scoped id as a visual
+prefix (e.g. ``KFA-07: ...``) so operators can correlate rows with logs
+and external state. The dependency-hint surface (``(→ 1, 2)``) keeps the
+compact numeric-only form for inline reference brevity.
 """
 
 from __future__ import annotations
@@ -32,8 +34,23 @@ def _canonical_step_id(step_id: str) -> str:
     return text
 
 
+def display_step_id(step_id: str) -> str:
+    """Return the canonical, operator-facing step id for plan-panel labels.
+
+    The plan panel's row prefix shows the full scoped id (e.g. ``KFA-07``,
+    ``STEP-1``, ``01``, ``PLAN-RV``) so each row is unambiguously traceable.
+    Wire-form underscore fragments are normalized to the canonical hyphen
+    form so both event sources render the same prefix. Returns an empty
+    string when the id is blank so callers can skip the ``": "`` suffix.
+    """
+    return _canonical_step_id(step_id)
+
+
 def numeric_step_prefix(step_id: str) -> str:
-    """Return the numeric-only visual prefix for a plan step id.
+    """Return the compact numeric-only token for an inline step reference.
+
+    The plan panel's dependency hint (``(→ 1, 2)``) uses this token for
+    brevity; the row prefix itself uses :func:`display_step_id`.
 
     Mirrors ``trailing_numeric_suffix_from_step_id`` semantics from the host
     (``soothe`` cannot be imported by ``soothe-cli`` per the monorepo DAG):
