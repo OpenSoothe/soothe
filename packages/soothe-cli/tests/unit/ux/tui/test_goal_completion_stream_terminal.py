@@ -128,3 +128,18 @@ async def test_stream_end_turn_scope_finalizes_inflight_streams() -> None:
 
     stream_msg.stop_stream.assert_awaited_once()
     assert ns_key not in goal_completion_stream_by_namespace
+
+
+def test_stream_end_is_not_tier_filtered() -> None:
+    """``soothe.stream.end`` is a control frame; the applier must still see it."""
+    from soothe_sdk.core.events import STREAM_END
+
+    from soothe_cli.runtime.presentation.engine import PresentationEngine
+    from soothe_cli.runtime.state.session_stats import TurnEventStats
+    from soothe_cli.runtime.turn.prepare import TurnPrepareState, prepare_turn_chunk
+
+    state = TurnPrepareState(ev_stats=TurnEventStats(), presentation=PresentationEngine())
+    prepared = prepare_turn_chunk(state, ([], "custom", {"type": STREAM_END, "scope": "turn"}))
+
+    assert prepared is not None
+    assert prepared.skip is False

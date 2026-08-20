@@ -483,14 +483,64 @@ def test_streaming_mode_passthrough_every_goal_completion_chunk() -> None:
     assert coalescer.goal_completion_phase == "streaming"
     assert coalescer.goal_completion_block_flush_count == 0
 
-    # ``strange_loop.completed`` only emits the custom event — nothing was buffered.
+    # Nothing was buffered, but upstream never marks ``chunk_position=last``, so
+    # completion re-stamps the tail chunk as terminal to close the client card.
     done = coalescer.ingest(
         (),
         "custom",
         {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
-    assert len(done) == 1
-    assert done[0][2]["type"] == STRANGE_LOOP_COMPLETED
+    messages = _messages(done)
+    assert len(messages) == 1
+    terminal = messages[0][2][0]
+    assert terminal["content"] == "streaming!"
+    assert terminal["chunk_position"] == "last"
+    assert terminal["stream_terminal"] is True
+    assert len(_custom(done, event_type=STRANGE_LOOP_COMPLETED)) == 1
+    assert _stream_end_scopes(done) == ["generation", "phase"]
+
+
+def test_adaptive_below_threshold_still_emits_terminal() -> None:
+    """A short synthesis never crosses the threshold but must still terminate.
+
+    Upstream does not mark ``chunk_position=last`` on synthesis chunks, so without
+    a terminal re-stamp the client's synthesis card streams forever.
+    """
+    coalescer = StreamDeliveryCoalescer("adaptive", adaptive_threshold_chars=1000)
+
+    assert len(coalescer.ingest(*_gc_chunk("Short "))) == 1
+    assert len(coalescer.ingest(*_gc_chunk("report."))) == 1
+    assert coalescer.goal_completion_phase == "streaming"
+
+    done = coalescer.ingest(
+        (),
+        "custom",
+        {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
+    )
+    messages = _messages(done)
+    assert len(messages) == 1
+    terminal = messages[0][2][0]
+    assert terminal["content"] == "report."
+    assert terminal["stream_terminal"] is True
+    assert _stream_end_scopes(done) == ["generation", "phase"]
+
+    # Terminal state is consumed: a trailing flush must not re-emit it.
+    assert _messages(coalescer.flush()) == []
+
+
+def test_terminal_frame_survives_skip_redundant_tool_message_wire() -> None:
+    """Empty terminal markers are control frames, not redundant tool output."""
+    coalescer = StreamDeliveryCoalescer("adaptive", skip_redundant_tool_message_wire=True)
+
+    empty_terminal = {
+        "type": "AIMessageChunk",
+        "content": "",
+        "phase": "goal_completion",
+        "chunk_position": "last",
+        "stream_terminal": True,
+    }
+    assert coalescer.should_skip_tool_message_wire(empty_terminal) is False
+    assert coalescer.should_skip_tool_message_wire({"type": "tool", "content": ""}) is True
 
 
 def test_streaming_mode_file_output_still_buffers() -> None:

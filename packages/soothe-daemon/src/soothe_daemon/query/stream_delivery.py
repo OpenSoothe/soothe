@@ -326,6 +326,9 @@ class StreamDeliveryCoalescer:
         self._gc_last_block_monotonic: float = 0.0
         # Last emitted goal_completion block text (for terminal re-stamp without empty marker)
         self._gc_last_emitted_content: str = ""
+        # Last passthrough goal_completion frame (namespace, msg wire, meta). Kept so a
+        # synthesis that never leaves the streaming phase still gets a terminal frame.
+        self._gc_passthrough_tail: tuple[tuple[str, ...], dict[str, Any], Any] | None = None
 
     @property
     def turn_complete_pending(self) -> bool:
@@ -364,6 +367,10 @@ class StreamDeliveryCoalescer:
             return False
         body = _msg_to_wire_dict(msg)
         if body is None:
+            return False
+        # Phase-tagged and stream-terminal frames are control signals: clients use
+        # them to close a streaming card, so an empty body is still meaningful.
+        if assistant_output_phase(body) is not None or is_stream_terminal_wire_dict(body):
             return False
         content = body.get("content")
         if isinstance(content, list):
@@ -739,6 +746,9 @@ class StreamDeliveryCoalescer:
         if self._mode == "streaming":
             if _chunk_position_last(msg):
                 wire_data = _stamp_stream_terminal_wire_data(wire_data)
+                self._gc_passthrough_tail = None
+            else:
+                self._note_goal_completion_passthrough(namespace, msg_wire, meta)
             return [(namespace, "messages", wire_data)]
 
         chunk_chars = len("".join(extract_text_from_ai_message(msg_wire)))
@@ -754,16 +764,47 @@ class StreamDeliveryCoalescer:
                 self._gc_streamed_chars += chunk_chars
                 if _chunk_position_last(msg):
                     wire_data = _stamp_stream_terminal_wire_data(wire_data)
+                    self._gc_passthrough_tail = None
+                else:
+                    self._note_goal_completion_passthrough(namespace, msg_wire, meta)
                 return [(namespace, "messages", wire_data)]
             # Threshold crossed → enter chunked-streaming phase. Buffer this
             # chunk and let the threshold check below decide whether to flush
             # immediately as the first block.
             self._gc_phase = "chunked_streaming"
             self._gc_last_block_monotonic = time.monotonic()
+            self._gc_passthrough_tail = None
 
         # Phase 2: chunked-streaming. Accumulate and flush blocks on demand.
         self._accumulate_goal_completion(namespace, msg_wire, meta)
         return self._maybe_flush_goal_completion_block(time.monotonic())
+
+    def _note_goal_completion_passthrough(
+        self,
+        namespace: tuple[str, ...],
+        msg_wire: dict[str, Any],
+        metadata: Any,
+    ) -> None:
+        """Remember the last un-terminated passthrough frame for terminal re-stamp."""
+        self._gc_passthrough_tail = (namespace, dict(msg_wire), metadata)
+
+    def _flush_passthrough_goal_completion_terminal(
+        self,
+    ) -> list[tuple[tuple[str, ...], str, Any]]:
+        """Re-stamp the last passthrough frame as terminal when no block flush ran.
+
+        Short syntheses never cross ``adaptive_threshold_chars`` (and mode
+        ``streaming`` never buffers at all), so the buffer is empty at turn end and
+        upstream does not mark ``chunk_position=last``. Without this the client has
+        no signal that the synthesis card is complete.
+        """
+        tail = self._gc_passthrough_tail
+        self._gc_passthrough_tail = None
+        if tail is None:
+            return []
+        namespace, msg_wire, metadata = tail
+        wire = _stamp_stream_terminal_wire_data((msg_wire, metadata))
+        return [(namespace, "messages", wire)]
 
     def _maybe_flush_goal_completion_block(
         self, now: float
@@ -915,7 +956,7 @@ class StreamDeliveryCoalescer:
             self._gc_phase = "batch" if self._mode == "batch" else "streaming"
             self._gc_last_block_monotonic = 0.0
             self._gc_last_emitted_content = ""
-            return []
+            return self._flush_passthrough_goal_completion_terminal() if final else []
 
         text = self._joined_gc_text()
 

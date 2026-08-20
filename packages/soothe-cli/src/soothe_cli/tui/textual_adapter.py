@@ -3412,7 +3412,9 @@ async def execute_task_textual(
                             ns_key=ns_key,
                             streaming_overlay=streaming_overlay or None,
                         )
-                        if not blocks:
+                        # A content-free ``goal_completion`` terminal frame still has to
+                        # close the synthesis card, so it bypasses the empty-blocks gate.
+                        if not blocks and not is_goal_completion_stream_terminal(message):
                             continue
 
                         # ``phase=goal_completion`` → standalone ``AssistantMessage`` (all namespaces).
@@ -3468,7 +3470,13 @@ async def execute_task_textual(
                                     assistant_message_by_namespace.pop(ns_key, None)
 
                                 if stream_msg is None:
-                                    if is_gc_terminal and not output_text:
+                                    # A terminal frame after the card was already closed
+                                    # (loop completion beat it, or the daemon re-stamped
+                                    # the last block) must not mount a second report.
+                                    if is_gc_terminal and (
+                                        not output_text
+                                        or adapter._goal_completion_mounted_this_turn
+                                    ):
                                         await _sync_goal_completion_thinking_row_time(
                                             adapter,
                                             goal_loop_start_monotonic=goal_loop_start_monotonic,
@@ -4056,6 +4064,18 @@ async def execute_task_textual(
 
                             if event_type == STRANGE_LOOP_COMPLETED:
                                 if not ns_key:
+                                    # Loop completion is the last frame most clients
+                                    # observe: the turn ends here and the drain window
+                                    # usually closes before ``scope=turn`` arrives. Close
+                                    # any synthesis card now rather than leaving it
+                                    # streaming plain text with a running dot.
+                                    await _finalize_goal_completion_streams_on_turn_end(
+                                        adapter,
+                                        goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+                                        assistant_message_by_namespace=assistant_message_by_namespace,
+                                        goal_loop_start_monotonic=goal_loop_start_monotonic,
+                                        turn_start_monotonic=start_time,
+                                    )
                                     if adapter._goal_tree_message is not None:
                                         goal_elapsed_start = _goal_loop_elapsed_start(
                                             goal_loop_start_monotonic=goal_loop_start_monotonic,
@@ -4590,6 +4610,17 @@ async def execute_task_textual(
 
         await ui_coalesce.flush_final()
 
+        # Last resort: the daemon may end the stream without a terminal frame
+        # (cancel, worker crash, dropped frame). Never leave a synthesis card
+        # stuck in streaming state with unrendered markdown.
+        await _finalize_goal_completion_streams_on_turn_end(
+            adapter,
+            goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+            assistant_message_by_namespace=assistant_message_by_namespace,
+            goal_loop_start_monotonic=goal_loop_start_monotonic,
+            turn_start_monotonic=start_time,
+        )
+
         # Reset summarization state if stream ended mid-summarization
         # (e.g. middleware error, stream exhausted before regular chunks).
         if summarization_in_progress:
@@ -4701,6 +4732,13 @@ async def execute_task_textual(
 
     except (asyncio.CancelledError, KeyboardInterrupt):
         app_exiting = bool(is_shutting_down()) if is_shutting_down is not None else False
+        await _finalize_goal_completion_streams_on_turn_end(
+            adapter,
+            goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+            assistant_message_by_namespace=assistant_message_by_namespace,
+            goal_loop_start_monotonic=goal_loop_start_monotonic,
+            turn_start_monotonic=start_time,
+        )
         await _handle_interrupt_cleanup(
             adapter=adapter,
             config=config,

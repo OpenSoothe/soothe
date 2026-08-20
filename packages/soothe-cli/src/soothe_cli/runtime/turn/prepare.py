@@ -23,6 +23,7 @@ from soothe_sdk.core.events import (
     STRANGE_LOOP_STEP_COMPLETED,
     STRANGE_LOOP_STEP_QUEUED,
     STRANGE_LOOP_STEP_STARTED,
+    STREAM_END,
 )
 from soothe_sdk.ux.classification import classify_event_to_tier
 from soothe_sdk.ux.loop_stream import assistant_output_phase
@@ -49,6 +50,9 @@ _MAIN_LOOP_CUSTOM_TYPES = frozenset(
         STRANGE_LOOP_STEP_STARTED,
         STRANGE_LOOP_STEP_QUEUED,
         STRANGE_LOOP_STEP_COMPLETED,
+        # Turn/generation boundary marker. Carries no display content, but the
+        # applier uses it to close streaming cards, so it must not be tier-filtered.
+        STREAM_END,
     }
 )
 
