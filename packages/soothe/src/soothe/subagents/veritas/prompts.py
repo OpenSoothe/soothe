@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.prompts.project_instructions import load_agent_instructions
+from soothe.prompts import load_agent_instructions
 from soothe.sloop.clarification.protocol import ClarificationRequest
 
 _SYSTEM_PROMPT = """You are veritas, an answerer subagent.

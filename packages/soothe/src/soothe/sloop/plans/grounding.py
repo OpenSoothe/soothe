@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.sloop.prompts.decompose import APPROVED_PLAN_EXECUTE_HINT
+from soothe.prompts import APPROVED_PLAN_EXECUTE_HINT
 
 logger = logging.getLogger(__name__)
 

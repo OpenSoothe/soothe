@@ -1,7 +1,7 @@
 """Prefetched static Autopilot prompt fragments (IG-736).
 
 All fragments are read once at import time to maximize prompt cache hit rate,
-mirroring ``soothe.sloop.prompts.fragments``.
+mirroring ``soothe.prompts.fragments``.
 """
 
 from pathlib import Path

@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def test_headline_max_chars_caps_inlined_body(tmp_path: Path) -> None:
-    from soothe.prompts.project_instructions import (
+    from soothe.prompts import (
         load_agent_instructions,
     )
 
@@ -19,7 +19,7 @@ def test_headline_max_chars_caps_inlined_body(tmp_path: Path) -> None:
 
 
 def test_load_agent_instructions_reads_first_500_lines(tmp_path: Path) -> None:
-    from soothe.prompts.project_instructions import (
+    from soothe.prompts import (
         load_agent_instructions,
     )
 
@@ -43,7 +43,7 @@ def test_load_agent_instructions_reads_first_500_lines(tmp_path: Path) -> None:
 
 def test_load_agent_instructions_claude_fallback(tmp_path: Path) -> None:
     """CLAUDE.md fallback: 600 lines fits under 25K headline cap but trips line cap."""
-    from soothe.prompts.project_instructions import (
+    from soothe.prompts import (
         load_agent_instructions,
     )
 
@@ -69,7 +69,7 @@ def test_load_agent_instructions_claude_fallback(tmp_path: Path) -> None:
 
 
 def test_load_agent_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
-    from soothe.prompts.project_instructions import (
+    from soothe.prompts import (
         load_agent_instructions,
     )
 
@@ -85,7 +85,7 @@ def test_load_agent_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
 
 def test_inlines_small_agents_md_fully(tmp_path: Path) -> None:
     """Files under the headline cap inline verbatim with no read_file hint."""
-    from soothe.prompts.project_instructions import (
+    from soothe.prompts import (
         PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
         load_agent_instructions,
     )
@@ -103,7 +103,7 @@ def test_inlines_small_agents_md_fully(tmp_path: Path) -> None:
 
 def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
     """Files above the headline cap emit a paragraph-clean prefix + read_file hint."""
-    from soothe.prompts.project_instructions import (
+    from soothe.prompts import (
         PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
         load_agent_instructions,
     )
@@ -134,19 +134,16 @@ def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
 
 def test_lru_cache_hits_on_unchanged_file(tmp_path: Path) -> None:
     """Second load with unchanged mtime hits the cache; no second disk read."""
-    from soothe.prompts import project_instructions
-    from soothe.prompts.project_instructions import (
-        load_agent_instructions,
-    )
+    from soothe.prompts import build_block_cached, load_agent_instructions
 
     (tmp_path / "AGENTS.md").write_text("rule\n", encoding="utf-8")
     # Reset the LRU cache so neighboring tests don't pollute hit/miss counts.
-    project_instructions.build_block_cached.cache_clear()
+    build_block_cached.cache_clear()
 
     first = load_agent_instructions(tmp_path)
-    after_first = project_instructions.build_block_cached.cache_info()
+    after_first = build_block_cached.cache_info()
     second = load_agent_instructions(tmp_path)
-    after_second = project_instructions.build_block_cached.cache_info()
+    after_second = build_block_cached.cache_info()
 
     assert first is not None
     assert first == second
@@ -159,14 +156,11 @@ def test_lru_cache_invalidates_on_mtime_change(tmp_path: Path) -> None:
     """Editing the file (advancing mtime) returns updated content on next load."""
     import os
 
-    from soothe.prompts import project_instructions
-    from soothe.prompts.project_instructions import (
-        load_agent_instructions,
-    )
+    from soothe.prompts import build_block_cached, load_agent_instructions
 
     agents = tmp_path / "AGENTS.md"
     agents.write_text("original rule\n", encoding="utf-8")
-    project_instructions.build_block_cached.cache_clear()
+    build_block_cached.cache_clear()
 
     first = load_agent_instructions(tmp_path)
     assert first is not None

@@ -68,7 +68,7 @@ These modules don't have dedicated knowledge articles but are referenced through
 
 - **Middleware Stack** (`soothe.middleware`) — Soothe-specific middlewares assembled by `build_soothe_middleware_stack()`: `IdentityMiddleware` (JWT/identity), `SoothePolicyMiddleware` (policy enforcement), `SystemPromptMiddleware` (dynamic prompt), `LLMRateLimitMiddleware` (LLM-level rate limiting), `WorkspaceContextMiddleware` (thread-aware workspace), `PerTurnModelMiddleware` (per-stream model override), `SootheFilesystemMiddleware` (extended filesystem tools), `CodeInterpreterMiddleware` (embedded QuickJS), `MCPActivationMiddleware` (MCP progressive disclosure), `ToolTimeoutMiddleware` (tool call timeout), plus profiler and tool-context helpers.
 - **Persistence** (`soothe.persistence`) — Artifact store and configuration-driven policy for run outputs.
-- **Prompts** (`soothe.prompts`) — Host loop prompt building via `PromptBuilder`, context XML generation, and template loading (CoreAgent templates: `soothe_nano.prompts`).
+- **Prompts** (`soothe.prompts`) — Host prompt construction: nano CoreAgent re-exports, StrangeLoop envelopes/ledger projection, context XML, and fragment loading.
 
 ---
 

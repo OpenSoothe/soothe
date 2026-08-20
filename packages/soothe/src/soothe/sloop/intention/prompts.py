@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import soothe.sloop.prompts.fragments as _sloop_fragments
+import soothe.prompts.fragments as _prompt_fragments
 
-_INTAKE_FRAGMENTS_DIR = Path(_sloop_fragments.__file__).resolve().parent / "intake"
+_INTAKE_FRAGMENTS_DIR = Path(_prompt_fragments.__file__).resolve().parent / "intake"
 
 
 def _read_intake_fragment(name: str) -> str:
@@ -74,7 +74,7 @@ def build_intake_pass1_system_prompt(
     Pass a pre-fetched ``ctx`` (from :func:`prompt_datetime_context`) to
     avoid a timestamp race when the caller already captured the context.
     """
-    from soothe.prompts.identity import (
+    from soothe.prompts import (
         build_assistant_identity_block,
         normalize_assistant_name,
     )

@@ -328,7 +328,7 @@ THREAD **system** prompts **MUST** include finish-vs-split / write_todos /
 tool-hygiene policy (`THREAD_POLICY_SYSTEM_ADDENDUM`). User envelopes stay
 instance-focused (EXECUTION TASK, evidence, EXPECTED OUTPUT) with at most a
 one-line finish/split reminder. Normative copy lives in
-`soothe.sloop.prompts.decompose`.
+`soothe.prompts` (XML under `soothe.prompts.fragments/decompose/`).
 
 ---
 

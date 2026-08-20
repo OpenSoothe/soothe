@@ -7,18 +7,18 @@ from pathlib import Path
 
 import pytest
 
-from soothe.prompts.system_templates import (
+from soothe.prompts import (
     _TOOL_ORCHESTRATION_GUIDE,
     EXECUTE_WORKSPACE_RULES_FRAGMENT,
     RESPONSE_LANGUAGE_HINT_FALLBACK,
 )
+from soothe.prompts.fragments import (
+    INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT,
+    INTAKE_PASS1_SYSTEM_FRAGMENT,
+)
 from soothe.sloop.intention.prompts import (
     INTAKE_PASS1_HUMAN_TASK,
     INTAKE_PASS1_SYSTEM_PROMPT,
-)
-from soothe.sloop.prompts.fragments import (
-    INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT,
-    INTAKE_PASS1_SYSTEM_FRAGMENT,
 )
 from soothe.subagents.veritas.prompts import build_veritas_system_prompt
 

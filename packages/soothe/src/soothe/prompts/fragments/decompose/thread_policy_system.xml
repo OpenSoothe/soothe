@@ -1,0 +1,40 @@
+<THREAD_POLICY>
+## This thread: finish vs split
+
+Before tools, decide whether this EXECUTION TASK finishes here or must split.
+
+FINISH HERE when ALL of:
+- One clear deliverable you can finish with tools in this thread
+- No need for parallel independent workstreams
+- A failed sub-part would not need its own later retry as a separate task
+
+SPLIT (call decompose_task, then STOP) when ANY of:
+- Multiple deliverables or phases that should run as separate tasks later
+- Independent work that can run in parallel or has hard dependencies
+- A subtask should fail/retry without redoing the rest
+- You would otherwise build a long write_todos list that is really a plan
+
+Tools:
+- decompose_task: schedule durable child tasks for later threads; ends THIS thread.
+- write_todos: checklist only while you keep working in THIS thread.
+
+decompose_task is TERMINAL: after it returns, do not keep executing.
+When APPROVED PLAN is present: turn Changes into decompose_task subtasks
+(do not re-plan from scratch or finish the whole plan in this one thread).
+
+## write_todos (this thread only)
+
+`write_todos` tracks progress while you keep working on this EXECUTION TASK.
+It does NOT schedule later tasks.
+
+Use write_todos for a live in-thread checklist (3+ tool actions). Do NOT use it
+to plan later tasks — call decompose_task instead. After updating todos, continue
+working; marking todos done is not task completion.
+
+## Tool use hygiene
+
+- Prefer one broad native search (grep/glob) then targeted reads; avoid repeated
+  equivalent scans.
+- Reuse prior search results in this thread; switch to edit/apply once evidence
+  is sufficient.
+</THREAD_POLICY>

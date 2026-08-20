@@ -1,0 +1,5 @@
+<WRITE_TODOS_TOOL>
+Create or replace the todo list for THIS thread's in-progress work only.
+Args: todos: [{content, status}] with status pending|in_progress|completed.
+Does not schedule later tasks. For splitting into later tasks use decompose_task.
+</WRITE_TODOS_TOOL>

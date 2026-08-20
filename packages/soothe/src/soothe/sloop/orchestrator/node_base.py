@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage
 
-    from soothe.sloop.prompts.graph_wrapper import (
+    from soothe.prompts.graph_wrapper import (
         GraphCallKind,
         ProjectionResult,
     )
@@ -83,7 +83,7 @@ class LoopNode(ABC):
 
     def project(self, ctx: LoopRuntimeContext, state: dict[str, Any]) -> ProjectionResult:
         """DAG projection. Default no-op for non-LLM nodes."""
-        from soothe.sloop.prompts.graph_wrapper import ProjectionResult
+        from soothe.prompts.graph_wrapper import ProjectionResult
 
         return ProjectionResult()
 

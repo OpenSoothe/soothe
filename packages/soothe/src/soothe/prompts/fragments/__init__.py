@@ -1,35 +1,30 @@
-"""Prefetched static prompt fragments for cache optimization.
+"""Prefetched static host prompt fragments.
 
-This module loads static XML fragments at import time to maximize prompt cache hit rate.
-All fragments are read once and cached as module constants.
-
+All fragments are read once at import time to maximize prompt cache hit rate.
 Cache Strategy (RFC-104):
 - Static fragments loaded at module init (0 file I/O per request)
-- Module constants reused across all agent invocations
-- Estimated cache hit rate: >95% for static content
-- Estimated savings: -5-10ms per request, -200-400 tokens
+- Module constants reused across all StrangeLoop invocations
 
-Jinja2 templates under ``instructions/`` (e.g. ``synthesis_report_system.xml``) are
-loaded on demand via ``prompts.loader.load_prompt_fragment``.
+Asset layout: ``intake/``, ``system/``, ``classifiers/``, ``instructions/``,
+``decompose/``.
 
-StrangeLoop intake fragments live in ``soothe.sloop.prompts.fragments``
-(plan-phase fragments removed after recursive decomposition cutover).
+CoreAgent identity/system-body fragments are re-exported from
+``soothe.prompts`` (canonical: ``soothe_nano.prompts.fragments``).
+
+Jinja2 templates (e.g. ``synthesis_report_system.xml``) are loaded on demand via
+``soothe.prompts.loader.load_prompt_fragment``.
 """
 
-# Re-export facade — canonical source: soothe_nano.prompts.fragments
-# (nano owns the identity / system-prompt body / complexity fragments
-#  re-exported below; host-only XML files loaded further down are local).
+from __future__ import annotations
 
+import re
 from pathlib import Path
 
-from soothe_nano.prompts.fragments import (
-    ASSISTANT_IDENTITY_FRAGMENT,
-    DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT,
-    MEDIUM_SYSTEM_PROMPT_FRAGMENT,
-    SIMPLE_SYSTEM_PROMPT_FRAGMENT,
-)
-
 _FRAGMENTS_DIR = Path(__file__).parent
+_WRAPPED_XML_RE = re.compile(
+    r"^<(?P<tag>[A-Za-z_][\w.]*)>\s*(?P<body>.*?)\s*</(?P=tag)>\s*$",
+    re.DOTALL,
+)
 
 
 def _read(relative: str, *, strip: bool = False) -> str:
@@ -37,32 +32,44 @@ def _read(relative: str, *, strip: bool = False) -> str:
     return text.strip() if strip else text
 
 
-# ---------------------------------------------------------------------------
-# System prompt fragments
-# (consumed by ``soothe.prompts.system_templates`` / host loop builders).
-# Byte-for-byte preserved from previous Python literals — do not ``.strip()``.
-# ---------------------------------------------------------------------------
+def _read_xml_body(relative: str) -> str:
+    """Load a single-root XML fragment and return its inner text."""
+    text = _read(relative, strip=True)
+    match = _WRAPPED_XML_RE.match(text)
+    if match is None:
+        msg = f"Fragment is not a single-root XML document: {relative}"
+        raise ValueError(msg)
+    return match.group("body").strip()
+
+
+INTAKE_PASS1_SYSTEM_FRAGMENT = _read("intake/pass1_system.xml", strip=True)
+INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT = _read("intake/pass1_social_reply.xml", strip=True)
 
 PROMPT_TIMESTAMP_FRAGMENT = _read("system/prompt_timestamp.xml", strip=True)
-
-
-# ---------------------------------------------------------------------------
-# Classifier prompts (synthesis scenario — shared systemwide)
-# Intake classifier fragments live in ``soothe.sloop.prompts.fragments``.
-# ---------------------------------------------------------------------------
 
 SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT = _read(
     "classifiers/scenario_classifier_system.xml", strip=True
 )
 SCENARIO_CLASSIFIER_USER_FRAGMENT = _read("classifiers/scenario_classifier_user.xml", strip=True)
 
+THREAD_POLICY_SYSTEM_ADDENDUM = _read_xml_body("decompose/thread_policy_system.xml")
+WRITE_TODOS_TOOL_DESCRIPTION = _read_xml_body("decompose/write_todos_tool.xml")
+DECOMPOSE_TASK_TOOL_DESCRIPTION = _read_xml_body("decompose/decompose_task_tool.xml")
+APPROVED_PLAN_EXECUTE_HINT = _read_xml_body("decompose/approved_plan_execute_hint.xml")
+THREAD_USER_HINT_ROOT_FRAGMENT = _read_xml_body("decompose/user_hint_root.xml")
+THREAD_USER_HINT_CHILD_FRAGMENT = _read_xml_body("decompose/user_hint_child.xml")
+
 
 __all__ = [
-    "ASSISTANT_IDENTITY_FRAGMENT",
-    "DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT",
-    "MEDIUM_SYSTEM_PROMPT_FRAGMENT",
+    "APPROVED_PLAN_EXECUTE_HINT",
+    "DECOMPOSE_TASK_TOOL_DESCRIPTION",
+    "INTAKE_PASS1_SOCIAL_REPLY_FRAGMENT",
+    "INTAKE_PASS1_SYSTEM_FRAGMENT",
     "PROMPT_TIMESTAMP_FRAGMENT",
     "SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT",
     "SCENARIO_CLASSIFIER_USER_FRAGMENT",
-    "SIMPLE_SYSTEM_PROMPT_FRAGMENT",
+    "THREAD_POLICY_SYSTEM_ADDENDUM",
+    "THREAD_USER_HINT_CHILD_FRAGMENT",
+    "THREAD_USER_HINT_ROOT_FRAGMENT",
+    "WRITE_TODOS_TOOL_DESCRIPTION",
 ]

@@ -53,7 +53,7 @@ async def summarize_step_completion_report(
         llm_rate_limit_config_from,
     )
 
-    from soothe.sloop.prompts.graph_wrapper import GraphPromptWrapper
+    from soothe.prompts.graph_wrapper import GraphPromptWrapper
 
     human = (human_content or "").strip()[:_CONTENT_CAP]
     ai = (ai_content or "").strip()[:_CONTENT_CAP]

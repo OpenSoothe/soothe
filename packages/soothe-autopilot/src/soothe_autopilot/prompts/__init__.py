@@ -1,7 +1,7 @@
 """Autopilot LLM prompts (IG-736).
 
-Autopilot-scoped prompt fragments and builders live here, mirroring
-``soothe.sloop.prompts``. Systemwide prompts stay in ``soothe.prompts``.
+Autopilot-scoped prompt fragments and builders live here. Shared CoreAgent
+and StrangeLoop prompt construction lives in ``soothe.prompts``.
 
 Reasoners and rail evaluators import builders/constants from this package;
 they own invoke + parse only.

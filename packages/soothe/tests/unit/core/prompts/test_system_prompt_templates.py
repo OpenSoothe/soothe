@@ -15,8 +15,8 @@ def test_prompt_templates_exist():
         _DEFAULT_SYSTEM_PROMPT,
         _MEDIUM_SYSTEM_PROMPT,
         _SIMPLE_SYSTEM_PROMPT,
+        ASSISTANT_IDENTITY_FRAGMENT,
     )
-    from soothe.prompts.fragments import ASSISTANT_IDENTITY_FRAGMENT
 
     # All templates should be non-empty strings
     assert isinstance(_SIMPLE_SYSTEM_PROMPT, str)
@@ -46,8 +46,6 @@ def test_token_reduction_estimates():
     from soothe.prompts import (
         _MEDIUM_SYSTEM_PROMPT,
         _SIMPLE_SYSTEM_PROMPT,
-    )
-    from soothe.prompts.system_templates import (
         format_complex_agent_system_prompt_core,
     )
 
@@ -57,7 +55,7 @@ def test_token_reduction_estimates():
         config.agent.system_prompt,
         config.agent.name,
     )
-    from soothe.prompts.identity import build_assistant_identity_block
+    from soothe.prompts import build_assistant_identity_block
 
     identity = build_assistant_identity_block(config.agent.name)
     simple_with_identity = f"{identity}\n\n{simple_prompt}"

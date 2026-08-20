@@ -1,6 +1,6 @@
 """Tests for dynamic response-language hint builder."""
 
-from soothe.prompts.system_templates import (
+from soothe.prompts import (
     RESPONSE_LANGUAGE_HINT_FALLBACK,
     build_response_language_hint,
 )

@@ -14,13 +14,13 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage
 
+from soothe.prompts.user_message import (
+    _goal_text,
+    flatten_user_message_content,
+)
 from soothe.sloop.engine.scenario_classifier import (
     ScenarioClassification,
     format_hint_for_scenario,
-)
-from soothe.sloop.prompts.user_message import (
-    _goal_text,
-    flatten_user_message_content,
 )
 
 if TYPE_CHECKING:
@@ -54,12 +54,12 @@ def render_synthesis_system_prompt(
     response_language: object | None = None,
 ) -> str:
     """Render system instructions from the synthesis template (no orchestration terms)."""
-    from soothe.prompts.loader import load_prompt_fragment
-    from soothe.prompts.project_instructions import load_agent_instructions
-    from soothe.prompts.system_templates import (
+    from soothe.prompts import (
         build_response_language_hint,
         build_timestamp_xml_footer,
+        load_agent_instructions,
     )
+    from soothe.prompts.loader import load_prompt_fragment
 
     template = load_prompt_fragment("instructions/synthesis_report_system.xml")
     focus_items = "\n".join(f"- {item}" for item in classification.contextual_focus)
@@ -100,7 +100,7 @@ def build_synthesis_messages(
     system-prompt assembly so synthesis shares the same pipeline as planner
     calls.
     """
-    from soothe.sloop.prompts.graph_wrapper import GraphPromptWrapper
+    from soothe.prompts.graph_wrapper import GraphPromptWrapper
 
     wrapper = GraphPromptWrapper()
     return wrapper.build_synthesis_messages(

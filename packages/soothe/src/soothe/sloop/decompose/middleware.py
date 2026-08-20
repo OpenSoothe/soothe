@@ -13,12 +13,12 @@ from langchain.agents.middleware.types import (
     ModelResponse,
 )
 
-from soothe.sloop.decompose.runtime import current_step_id
-from soothe.sloop.decompose.tool import build_decompose_task_tool
-from soothe.sloop.prompts.decompose import (
+from soothe.prompts import (
     THREAD_POLICY_SYSTEM_ADDENDUM,
     WRITE_TODOS_TOOL_DESCRIPTION,
 )
+from soothe.sloop.decompose.runtime import current_step_id
+from soothe.sloop.decompose.tool import build_decompose_task_tool
 from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_STEP_ID_KEY
 
 logger = logging.getLogger(__name__)

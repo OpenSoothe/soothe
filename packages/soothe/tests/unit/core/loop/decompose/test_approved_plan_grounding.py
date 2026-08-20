@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from soothe.prompts.user_message import UserMessageBuilder
 from soothe.sloop.plans.grounding import (
     approved_plan_section_body,
     compose_root_full_description,
@@ -9,7 +10,6 @@ from soothe.sloop.plans.grounding import (
     peek_approved_plan_from_state,
     root_already_grounded,
 )
-from soothe.sloop.prompts.user_message import UserMessageBuilder
 
 
 def test_compose_root_full_description_embeds_plan() -> None:

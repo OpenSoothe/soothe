@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from soothe.sloop.engine.step_predecessor_context import build_dependent_execution_hints
-from soothe.sloop.prompts.decompose import (
+from soothe.prompts import (
     DECOMPOSE_TASK_TOOL_DESCRIPTION,
     THREAD_POLICY_SYSTEM_ADDENDUM,
     user_finish_or_split_hint_lines,
 )
-from soothe.sloop.prompts.user_message import UserMessageBuilder
+from soothe.prompts.user_message import UserMessageBuilder
+from soothe.sloop.engine.step_predecessor_context import build_dependent_execution_hints
 from soothe.sloop.state.schemas import StepAction
 
 

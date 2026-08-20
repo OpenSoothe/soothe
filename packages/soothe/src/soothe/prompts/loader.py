@@ -1,4 +1,4 @@
-"""Prompt fragment loader for template loading."""
+"""Jinja2 prompt fragment loader for StrangeLoop templates."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from jinja2 import Environment, FileSystemLoader, Template
 
 logger = logging.getLogger(__name__)
 
-# Shared Jinja2 environment for fragment templates
 _env: Environment | None = None
 
 
@@ -40,7 +39,7 @@ def load_prompt_fragment(relative_path: str) -> Template:
     """Load and return a Jinja2 template from fragments directory.
 
     Args:
-        relative_path: Path relative to fragments directory (e.g., "instructions/synthesis_report_system.xml")
+        relative_path: Path relative to fragments directory (e.g. ``instructions/synthesis_report_system.xml``).
 
     Returns:
         Jinja2 Template object ready for rendering.
@@ -50,7 +49,6 @@ def load_prompt_fragment(relative_path: str) -> Template:
     """
     env = get_jinja_env()
 
-    # Normalize path (remove leading/trailing slashes)
     normalized_path = relative_path.strip("/")
 
     try:

@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from soothe.sloop.prompts.plan_ledger_projection import (
+from soothe.prompts.plan_ledger_projection import (
     project_loop_messages_for_synthesis,
     projected_ledger_has_goal_completion,
 )
@@ -63,7 +63,7 @@ def _format_dag_context(dag_ctx: Any) -> str:
     """Format DagPlanningContext as plain-text DAG STATUS section for prompt injection."""
     if not dag_ctx or not dag_ctx.has_prior_state:
         return ""
-    from soothe.sloop.prompts.user_message import _render_dag_status as _render
+    from soothe.prompts.user_message import _render_dag_status as _render
 
     return _render(dag_ctx)
 
@@ -171,7 +171,7 @@ class GraphPromptWrapper:
               + projected execute ledger
               + HumanMessage(TASK trigger)
         """
-        from soothe.sloop.prompts.user_message import UserMessageBuilder
+        from soothe.prompts.user_message import UserMessageBuilder
 
         user_goal = self._normalize_user_query(user_query if user_query is not None else state.goal)
 
@@ -311,7 +311,7 @@ class GraphPromptWrapper:
 
     def _normalize_user_query(self, goal: str | None) -> str:
         """Normalize stored goal text for the user-facing synthesis request."""
-        from soothe.sloop.prompts.user_message import _goal_text
+        from soothe.prompts.user_message import _goal_text
 
         text = _goal_text(goal)
         if text == "No goal specified":

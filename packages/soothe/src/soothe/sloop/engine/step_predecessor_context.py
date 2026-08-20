@@ -140,7 +140,7 @@ def build_prior_steps_summary_block(
     evidence_in_ledger: bool = True,
 ) -> str:
     """Render transitive predecessor steps for the execute-step human envelope."""
-    from soothe.sloop.prompts.user_message import render_prior_steps_tree
+    from soothe.prompts.user_message import render_prior_steps_tree
 
     summaries = build_prior_steps_summaries(step, decision, loop_state)
     return render_prior_steps_tree(summaries, evidence_in_ledger=evidence_in_ledger)
@@ -327,7 +327,7 @@ def build_dependent_execution_hints(
     Finish-vs-split policy and search hygiene live in system + tool schemas
     (``THREAD_POLICY_SYSTEM_ADDENDUM``); user keeps instance scope only.
     """
-    from soothe.sloop.prompts.decompose import user_finish_or_split_hint_lines
+    from soothe.prompts import user_finish_or_split_hint_lines
 
     root = bool(step.is_dag_root if is_dag_root is None else is_dag_root)
     instruction_lines = [

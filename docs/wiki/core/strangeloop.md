@@ -75,7 +75,7 @@ CE StepDAG:
 3. **RECONCILE** commits proposals; **ROOT_EVAL** finalizes when the tree is green.
 
 Budgets: `agent.loop.decompose.*` (always on for step THREADS).
-THREAD prompt copy: `soothe.sloop.prompts.decompose` (do-or-decompose).
+THREAD prompt copy: `soothe.prompts` / `fragments/decompose/` (do-or-decompose).
 
 ---
 
