@@ -122,9 +122,23 @@ def test_has_resumable_interrupted_goal() -> None:
     assert not has_resumable_interrupted_goal(_checkpoint(status="idle", goal_status="completed"))
 
 
-def test_chitchat_finalize_allowed_only_on_idle_checkpoint() -> None:
+def test_chitchat_finalize_allowed_on_idle_checkpoint_without_running_goal() -> None:
     assert chitchat_may_finalize_checkpoint(_checkpoint(status="idle", goal_status="completed"))
-    assert not chitchat_may_finalize_checkpoint(
-        _checkpoint(status="running", goal_status="running")
-    )
+    assert not chitchat_may_finalize_checkpoint(_checkpoint(status="idle", goal_status="running"))
     assert not chitchat_may_finalize_checkpoint(None)
+
+
+def test_chitchat_finalize_allows_fresh_running_chitchat_goal() -> None:
+    """A running goal with duration_ms == 0 is a fresh chitchat goal whose
+    FINALIZE was skipped by the fast-path — chitchat must finalize it."""
+    fresh = _checkpoint(status="running", goal_status="running")
+    assert fresh.goal_history[0].duration_ms == 0
+    assert chitchat_may_finalize_checkpoint(fresh)
+
+
+def test_chitchat_finalize_blocks_running_task_goal_with_work() -> None:
+    """A running goal with duration_ms > 0 is an in-flight task goal — chitchat
+    must NOT finalize it; the normal graph FINALIZE owns its completion."""
+    in_flight = _checkpoint(status="running", goal_status="running")
+    in_flight.goal_history[0].duration_ms = 1500
+    assert not chitchat_may_finalize_checkpoint(in_flight)

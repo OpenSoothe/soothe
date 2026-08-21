@@ -167,7 +167,7 @@ async def test_finalize_chitchat_skips_running_checkpoint() -> None:
         thread_id="loop-running",
         started_at=now,
         completed_at=None,
-        duration_ms=0,
+        duration_ms=1500,  # in-flight task goal — chitchat must not finalize
         tokens_used=0,
     )
     checkpoint = MagicMock()
@@ -185,6 +185,6 @@ async def test_finalize_chitchat_skips_running_checkpoint() -> None:
         "soothe.sloop.state.sloop_manager.StrangeLoopStateManager",
         return_value=mock_sm,
     ):
-        await runner._finalize_chitchat_loop("loop-running", response="Hi!")
+        await runner._finalize_chitchat_loop("loop-running")
 
     mock_sm.finalize_goal.assert_not_awaited()

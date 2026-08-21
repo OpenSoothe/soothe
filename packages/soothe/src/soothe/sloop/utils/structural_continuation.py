@@ -107,18 +107,31 @@ def should_bypass_chitchat_fast_path(
 def chitchat_may_finalize_checkpoint(checkpoint: Any | None) -> bool:
     """Return True when chitchat is allowed to finalize the active goal.
 
-    Chitchat on a running loop must not mark goals completed. Finalize only when
-    the checkpoint is idle (goal already completed through the normal graph) or
-    when there is no goal history to mutate.
+    Chitchat on a running loop must not mark goals completed — *except* when the
+    active goal is the chitchat goal itself. The chitchat fast-path skips the
+    FINALIZE station, so a fresh chitchat goal is left ``running`` on the
+    checkpoint with ``duration_ms == 0`` (no EXECUTE/RECORD_PROGRESS ran). Such
+    a goal is safe to finalize here.
+
+    An in-flight *task* goal — one that already executed at least one wave — has
+    ``duration_ms > 0`` (incremented only by ``record_iteration``, post-EXECUTE,
+    a station the chitchat fast-path never reaches) and must NOT be finalized by
+    chitchat; the normal graph FINALIZE owns its completion.
     """
     if checkpoint is None:
         return False
     status = getattr(checkpoint, "status", None)
-    if status != "idle":
-        return False
-    if has_active_running_goal(checkpoint):
-        return False
-    return True
+    if status == "idle":
+        # Goal already completed through the normal graph, or no goal to mutate.
+        return not has_active_running_goal(checkpoint)
+    if status == "running":
+        goal = _active_goal_record(checkpoint)
+        if goal is None:
+            return False
+        # Fresh chitchat goal (duration_ms == 0): safe to finalize. In-flight
+        # task goal (duration_ms > 0): leave for the normal graph FINALIZE.
+        return getattr(goal, "duration_ms", 0) == 0
+    return False
 
 
 __all__ = [

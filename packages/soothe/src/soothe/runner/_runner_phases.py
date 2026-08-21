@@ -101,7 +101,6 @@ class PhasesMixin:
         )
         await self._finalize_chitchat_loop(
             loop_id or main_thread_id,
-            response=response,
             context_engine=context_engine,
             ce_goal_id=ce_goal_id,
         )
@@ -173,7 +172,6 @@ class PhasesMixin:
         self,
         loop_id: str,
         *,
-        response: str,
         context_engine: Any | None = None,
         ce_goal_id: str | None = None,
     ) -> None:
