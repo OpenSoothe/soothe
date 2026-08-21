@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.28] - 2026-08-21
+
+### Changed
+- Require `soothe-nano>=1.2.7`; ship the `_StructuredOutputRunnable` callback-manager flattening fix from nano 1.2.7. A leaked LangGraph `AsyncCallbackManager` in a structured-output `RunnableConfig` no longer crashes intake classification with `TypeError: 'AsyncCallbackManager' object is not iterable` (which had routed every query, including chitchat, as a complex task when Langfuse was off).
+- Bump `soothe-autopilot` `soothe-nano` floor to `1.2.7` to match.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.27...v0.10.28
+
 ## [v0.10.27] - 2026-08-21
 
 ### Fixed
