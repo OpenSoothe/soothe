@@ -140,6 +140,79 @@ def test_copy_falls_through_to_osc52_when_native_fails(
     app.notify.assert_called_once()
 
 
+def test_copy_native_empty_stderr_yields_useful_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """pbcopy over SSH/tmux exits rc=1 with empty stderr — message must not be truncated."""
+    # Reproduce the exact macOS pbcopy failure: rc=1, empty stderr.
+    fake_proc = MagicMock()
+    fake_proc.returncode = 1
+    fake_proc.stderr = b""
+    fake_proc.stdout = b""
+    monkeypatch.setattr(
+        "soothe_cli.tui.widgets.clipboard.subprocess.run",
+        MagicMock(return_value=fake_proc),
+    )
+    monkeypatch.setattr("soothe_cli.tui.widgets.clipboard.sys.platform", "darwin")
+    monkeypatch.setattr("soothe_cli.tui.widgets.clipboard.shutil.which", lambda _: None)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        _copy_native("hello")
+
+    # The message must include the command name and a non-empty detail.
+    msg = str(exc_info.value)
+    assert "pbcopy failed:" in msg
+    assert msg != "pbcopy failed:"  # not truncated at the colon
+    assert "rc=1" in msg
+
+
+def test_copy_native_nonzero_with_stderr_includes_stderr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the native command writes stderr, that detail is surfaced."""
+    fake_proc = MagicMock()
+    fake_proc.returncode = 2
+    fake_proc.stderr = b"cannot open display"
+    fake_proc.stdout = b""
+    monkeypatch.setattr(
+        "soothe_cli.tui.widgets.clipboard.subprocess.run",
+        MagicMock(return_value=fake_proc),
+    )
+    monkeypatch.setattr("soothe_cli.tui.widgets.clipboard.sys.platform", "darwin")
+    monkeypatch.setattr("soothe_cli.tui.widgets.clipboard.shutil.which", lambda _: None)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        _copy_native("hello")
+
+    assert "pbcopy failed: cannot open display" in str(exc_info.value)
+
+
+def test_copy_texts_to_clipboard_no_traceback_on_expected_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Expected native-clipboard fallthrough logs a concise line, not a traceback."""
+    monkeypatch.setenv("TMUX", "/tmp/tmux-123/default,12345,0")
+    app = MagicMock()
+    monkeypatch.setattr(
+        "soothe_cli.tui.widgets.clipboard._copy_native",
+        MagicMock(side_effect=RuntimeError("pbcopy failed: no pasteboard server (rc=1)")),
+    )
+    monkeypatch.setattr(
+        "soothe_cli.tui.widgets.clipboard._copy_osc52",
+        MagicMock(),
+    )
+
+    with caplog.at_level("DEBUG", logger="soothe_cli.tui.widgets.clipboard"):
+        _copy_texts_to_clipboard(app, ["hello"])
+
+    # One concise debug line, no traceback frames in the record.
+    clipboard_records = [r for r in caplog.records if "Clipboard copy method" in r.msg]
+    assert clipboard_records
+    record = clipboard_records[0]
+    assert record.exc_info is None  # no traceback logged
+
+
 def test_text_selected_copies_synchronously_not_after_refresh(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

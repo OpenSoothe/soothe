@@ -35,7 +35,11 @@ def _copy_osc52(text: str) -> None:
 
 
 def _copy_native(text: str) -> None:
-    """Copy text using native OS clipboard command (pbcopy/xclip/xsel)."""
+    """Copy text using native OS clipboard command (pbcopy/xclip/xsel).
+
+    Raises ``RuntimeError`` when the native clipboard command is unavailable
+    or exits nonzero — the caller falls through to the next backend (OSC 52).
+    """
     if sys.platform == "darwin":
         cmd = ["pbcopy"]
     elif shutil.which("xclip"):
@@ -54,7 +58,11 @@ def _copy_native(text: str) -> None:
         timeout=5,
     )
     if proc.returncode != 0:
-        raise RuntimeError(f"{cmd[0]} failed: {proc.stderr.decode()}")
+        stderr = proc.stderr.decode(errors="replace").strip()
+        # pbcopy over SSH/tmux exits rc=1 with empty stderr when no pasteboard
+        # server is reachable; that's an expected soft failure, not a crash.
+        detail = stderr or f"no pasteboard server (rc={proc.returncode})"
+        raise RuntimeError(f"{cmd[0]} failed: {detail}")
 
 
 def _shorten_preview(texts: list[str]) -> str:
@@ -141,11 +149,13 @@ def _copy_texts_to_clipboard(app: App, selected_texts: list[str]) -> None:
                 markup=False,
             )
         except (OSError, RuntimeError, TypeError) as e:
+            # Expected fallthrough over SSH/tmux where the native clipboard is
+            # unavailable — the next backend (OSC 52) is tried below. Log a
+            # concise line rather than a full traceback to keep this quiet.
             logger.debug(
                 "Clipboard copy method %s failed: %s",
                 getattr(copy_fn, "__name__", repr(copy_fn)),
                 e,
-                exc_info=True,
             )
             continue
         else:
