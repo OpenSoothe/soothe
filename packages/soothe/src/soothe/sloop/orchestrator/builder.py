@@ -191,11 +191,13 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             END: END,
         },
     )
-    # Plan review → AWAIT_USER (pending clarification) or END (reject).
+    # Plan review → DISPATCH (approve), AWAIT_USER (pending clarification),
+    # or END (reject).
     graph.add_conditional_edges(
         PLAN_REVIEW,
         route_after_plan_review,
         {
+            DISPATCH: DISPATCH,
             AWAIT_USER: AWAIT_USER,
             END: END,
         },

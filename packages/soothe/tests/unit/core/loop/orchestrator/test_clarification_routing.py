@@ -10,6 +10,7 @@ from soothe.sloop.orchestrator.builder import build_strange_loop_graph
 from soothe.sloop.orchestrator.routing import (
     route_after_clarification,
     route_after_execute,
+    route_after_plan_review,
 )
 
 
@@ -95,3 +96,29 @@ def test_route_after_clarification_terminates_when_origin_missing() -> None:
 
 def test_route_after_clarification_terminates_on_invalid_origin() -> None:
     assert route_after_clarification({"last_clarification_origin": "garbage"}) == END
+
+
+def test_route_after_plan_review_routes_to_dispatch_on_approve() -> None:
+    """Approve clears pending and sets approved_plan_markdown → DISPATCH."""
+    assert (
+        route_after_plan_review({"approved_plan_markdown": "# Plan", "pending_clarification": None})
+        == "dispatch"
+    )
+    # approved plan wins even if pending_clarification is somehow still set.
+    assert (
+        route_after_plan_review(
+            {"approved_plan_markdown": "# Plan", "pending_clarification": {"q": "a"}}
+        )
+        == "dispatch"
+    )
+
+
+def test_route_after_plan_review_routes_to_await_user_on_pending() -> None:
+    """Fresh plan review has a pending clarification and no approved plan."""
+    assert route_after_plan_review({"pending_clarification": {"q": "a"}}) == "await_user"
+
+
+def test_route_after_plan_review_routes_to_end_on_reject() -> None:
+    """Reject clears pending with no approved plan → END."""
+    assert route_after_plan_review({}) == END
+    assert route_after_plan_review({"pending_clarification": None, "last_outcome": None}) == END

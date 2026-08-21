@@ -15,10 +15,10 @@ from soothe.sloop.clarification.protocol import (
 )
 
 
-def _request(num_questions: int = 1) -> ClarificationRequest:
+def _request(num_questions: int = 1, *, origin_node: str = "execute") -> ClarificationRequest:
     return ClarificationRequest(
         questions=tuple(f"q{i}" for i in range(num_questions)),
-        origin_node="execute",
+        origin_node=origin_node,
         origin_interrupt_id="i1",
         loop_state=LoopStateView(
             goal_id="g",
@@ -89,6 +89,52 @@ async def test_defers_on_blank_answers(monkeypatch: pytest.MonkeyPatch) -> None:
     policy = InteractiveClarificationPolicy()
     with pytest.raises(ClarificationDeferredError):
         await policy.answer(_request())
+
+
+async def test_plan_mode_review_approve_tolerates_blank_comments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Plan-mode review asks 2 questions; only the action field is required.
+
+    The TUI sends ``["Approve", ""]`` (blank revision-comments field) on
+    approve. The policy must accept it rather than treating the blank optional
+    field as "operator dismissed clarification (no answer)" — that swallowed
+    approvals and parked the goal at ``awaiting_clarification`` forever (loop 0411).
+    """
+    _stub_interrupt(monkeypatch, {"answers": ["Approve", ""]})
+    policy = InteractiveClarificationPolicy()
+    ans = await policy.answer(_request(num_questions=2, origin_node="plan_mode_review"))
+    assert ans.source == "human"
+    assert ans.answers == ("Approve", "")
+
+
+async def test_plan_mode_review_reject_tolerates_blank_comments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_interrupt(monkeypatch, {"answers": ["Reject", ""]})
+    policy = InteractiveClarificationPolicy()
+    ans = await policy.answer(_request(num_questions=2, origin_node="plan_mode_review"))
+    assert ans.answers == ("Reject", "")
+
+
+async def test_plan_mode_review_defers_on_blank_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A blank *action* field is still a genuine dismissal."""
+    _stub_interrupt(monkeypatch, {"answers": ["", ""]})
+    policy = InteractiveClarificationPolicy()
+    with pytest.raises(ClarificationDeferredError):
+        await policy.answer(_request(num_questions=2, origin_node="plan_mode_review"))
+
+
+async def test_plan_mode_review_pads_single_action_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A single-element action list is padded to the expected 2 questions."""
+    _stub_interrupt(monkeypatch, {"answers": ["Approve"]})
+    policy = InteractiveClarificationPolicy()
+    ans = await policy.answer(_request(num_questions=2, origin_node="plan_mode_review"))
+    assert ans.answers == ("Approve", "")
 
 
 async def test_answer_does_not_reemit_clarification_requested(

@@ -19,6 +19,7 @@ from typing import Any
 
 from langgraph.types import interrupt
 
+from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
 from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,
@@ -76,7 +77,9 @@ class InteractiveClarificationPolicy:
             }
         )
 
-        answers = self._extract_answers(payload, expected=len(request.questions))
+        answers = self._extract_answers(
+            payload, expected=len(request.questions), origin=request.origin_node
+        )
         if answers is None:
             raise ClarificationDeferredError(
                 "operator dismissed clarification (no answer)",
@@ -90,7 +93,9 @@ class InteractiveClarificationPolicy:
         )
 
     @staticmethod
-    def _extract_answers(payload: Any, *, expected: int) -> list[str] | None:
+    def _extract_answers(
+        payload: Any, *, expected: int, origin: str | None = None
+    ) -> list[str] | None:
         if payload is None:
             return None
         if isinstance(payload, str):
@@ -111,6 +116,22 @@ class InteractiveClarificationPolicy:
             return None
 
         stripped = [a.strip() for a in answers]
+
+        # Plan-mode review asks two questions (action + revision comments), but
+        # only the action field is required — the revision-comments field is
+        # only meaningful for the "comments" action and is legitimately blank
+        # for approve/reject. Treat it as answered when the action field (index
+        # 0) is non-empty; pad the optional trailing field instead of
+        # dismissing the whole answer as "no answer" (RFC-904 plan-mode review).
+        if origin == ORIGIN_PLAN_MODE_REVIEW and expected == 2:
+            if stripped and stripped[0]:
+                # Pad / truncate to the expected length so downstream parsers
+                # that index answers[1] always see a string.
+                if len(stripped) == 1:
+                    stripped.append("")
+                return stripped[:expected]
+            return None
+
         if any(not a for a in stripped):
             return None
 

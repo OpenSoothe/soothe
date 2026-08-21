@@ -120,11 +120,21 @@ def route_after_record_iteration(state: dict[str, Any]) -> str:
 
 
 def route_after_plan_review(state: dict[str, Any]) -> str:
-    """Plan review → AWAIT_USER (pending clarification) or END."""
+    """Plan review → DISPATCH (approve), AWAIT_USER (pending), or END.
+
+    On approve, ``handle_plan_mode_review_answer`` cleared the pending
+    clarification and set ``approved_plan_markdown`` (a graph channel) so the
+    grounding chain in DISPATCH consumes the approved plan. On reject the
+    pending clarification is also cleared with no approved plan → END. On a
+    fresh plan review the pending clarification is still set → AWAIT_USER.
+    """
+    if state.get("approved_plan_markdown"):
+        logger.debug("[routing] route_after_plan_review → dispatch (plan approved)")
+        return DISPATCH
     if _pending_clarification(state):
         logger.debug("[routing] route_after_plan_review → await_user")
         return AWAIT_USER
-    logger.debug("[routing] route_after_plan_review → END (no pending clarification)")
+    logger.debug("[routing] route_after_plan_review → END (plan rejected)")
     return END
 
 
