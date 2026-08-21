@@ -130,6 +130,50 @@ class TestContextEngineGoalLifecycle:
         assert resumed.status == "active"
         assert resumed.error is None
 
+    @pytest.mark.asyncio
+    async def test_mark_awaiting_clarification_from_active(self) -> None:
+        """A loop running in ``active`` must be parkable for clarification.
+
+        Regression for the InvalidGoalTransitionError raised by the
+        ClarificationRelay when an operator dismissed a clarification on a
+        running goal (goal f53d642d, 2026-08-21).
+        """
+        engine = ContextEngine()
+        goal = await engine.create_goal("Clarify me")
+        await engine.activate_goal(goal.id, loop_id="loop-1")
+        parked = await engine.mark_awaiting_clarification(
+            goal.id, {"questions": ["Which file?"]}, reason="operator dismissed"
+        )
+        assert parked.status == "awaiting_clarification"
+        assert parked.pending_clarification == {"questions": ["Which file?"]}
+        assert parked.assigned_loop_id is None
+
+    @pytest.mark.asyncio
+    async def test_mark_awaiting_clarification_from_pending(self) -> None:
+        """A queued (``pending``) goal is also parkable for clarification."""
+        engine = ContextEngine()
+        goal = await engine.create_goal("Queued clarification")
+        parked = await engine.mark_awaiting_clarification(
+            goal.id, {"questions": ["Which scope?"]}, reason="pre-dispatch gate"
+        )
+        assert parked.status == "awaiting_clarification"
+
+    @pytest.mark.asyncio
+    async def test_mark_awaiting_clarification_idempotent(self) -> None:
+        """Re-parking an already-parked goal refreshes the payload, no throw."""
+        engine = ContextEngine()
+        goal = await engine.create_goal("Re-park me")
+        await engine.activate_goal(goal.id, loop_id="loop-1")
+        await engine.mark_awaiting_clarification(
+            goal.id, {"questions": ["Q1"]}, reason="first park"
+        )
+        # Second park must not raise InvalidGoalTransitionError.
+        reparked = await engine.mark_awaiting_clarification(
+            goal.id, {"questions": ["Q2"]}, reason="re-park"
+        )
+        assert reparked.status == "awaiting_clarification"
+        assert reparked.pending_clarification == {"questions": ["Q2"]}
+
 
 class TestContextEngineStepLifecycle:
     @pytest.mark.asyncio

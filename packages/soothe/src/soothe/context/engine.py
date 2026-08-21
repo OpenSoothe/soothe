@@ -42,8 +42,28 @@ logger = logging.getLogger(__name__)
 # operations (complete, cancel, fail) must be able to terminate a goal from any
 # live state.
 VALID_GOAL_TRANSITIONS: dict[str, frozenset[str]] = {
-    "pending": frozenset({"active", "completed", "failed", "suspended", "blocked", "cancelled"}),
-    "active": frozenset({"completed", "failed", "suspended", "blocked", "cancelled", "pending"}),
+    "pending": frozenset(
+        {
+            "active",
+            "completed",
+            "failed",
+            "suspended",
+            "blocked",
+            "cancelled",
+            "awaiting_clarification",
+        }
+    ),
+    "active": frozenset(
+        {
+            "completed",
+            "failed",
+            "suspended",
+            "blocked",
+            "cancelled",
+            "pending",
+            "awaiting_clarification",
+        }
+    ),
     "completed": frozenset(),  # terminal
     "failed": frozenset({"pending"}),  # retry
     "suspended": frozenset({"pending", "completed", "failed", "cancelled"}),
@@ -1031,6 +1051,11 @@ class ContextEngine:
         goal = self._dag.get_goal(goal_id)
         if goal is None:
             raise KeyError(f"Goal {goal_id} not found")
+        if goal.status == "awaiting_clarification":
+            # Idempotent re-park: refresh the pending payload in place.
+            goal.pending_clarification = pending_clarification
+            goal.updated_at = datetime.now(UTC)
+            return goal
         _validate_transition(goal_id, goal.status, "awaiting_clarification")
         goal.status = "awaiting_clarification"
         goal.pending_clarification = pending_clarification
