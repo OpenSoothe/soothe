@@ -14,6 +14,8 @@ from langchain.agents.middleware.types import (
 )
 
 from soothe.prompts import (
+    ASK_MODE_ADDENDUM,
+    PLAN_MODE_ADDENDUM,
     THREAD_POLICY_SYSTEM_ADDENDUM,
     WRITE_TODOS_TOOL_DESCRIPTION,
 )
@@ -22,6 +24,7 @@ from soothe.sloop.decompose.tool import build_decompose_task_tool
 from soothe.sloop.utils.config_keys import (
     SOOTHE_DECOMPOSE_STEP_ID_KEY,
     SOOTHE_EVAL_STEP_ID_KEY,
+    SOOTHE_INTERACTION_MODE_KEY,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,6 +105,12 @@ class DecomposeTaskMiddleware(AgentMiddleware):
 
         system = request.system_message
         addendum = THREAD_POLICY_SYSTEM_ADDENDUM
+        # Mode-specific addendum for ask/plan modes.
+        mode = conf.get(SOOTHE_INTERACTION_MODE_KEY)
+        if mode == "ask":
+            addendum = f"{addendum}\n\n{ASK_MODE_ADDENDUM}"
+        elif mode == "plan":
+            addendum = f"{addendum}\n\n{PLAN_MODE_ADDENDUM}"
         if system is not None and hasattr(system, "content"):
             content = system.content
             if isinstance(content, str) and addendum not in content:

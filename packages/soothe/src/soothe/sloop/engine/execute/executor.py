@@ -241,6 +241,7 @@ class Executor:
         checkpoint: Any | None = None,
         goal_trace: Any | None = None,
         fast_model: Any | None = None,
+        interaction_mode: str | None = None,
     ) -> None:
         """Initialize Execute phase.
 
@@ -283,6 +284,7 @@ class Executor:
         self._checkpoint = checkpoint
         self._goal_trace = goal_trace
         self._fast_model = fast_model
+        self._interaction_mode = interaction_mode
         # RFC-904 / IG-751: proposals queued by decompose_task during step THREADS.
         self.decompose_proposals: list[Any] = []
 
@@ -1915,6 +1917,10 @@ class Executor:
             )
 
             configurable[SOOTHE_DECOMPOSE_STEP_ID_KEY] = step.id
+            if self._interaction_mode:
+                from soothe.sloop.utils.config_keys import SOOTHE_INTERACTION_MODE_KEY
+
+                configurable[SOOTHE_INTERACTION_MODE_KEY] = self._interaction_mode
             if step.kind == "eval":
                 configurable[SOOTHE_EVAL_STEP_ID_KEY] = step.id
             from soothe.sloop.decompose.runtime import bind_decompose_runtime

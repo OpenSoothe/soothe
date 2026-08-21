@@ -1240,9 +1240,6 @@ def _apply_subagent_wire_activity_event(
     if card is None:
         return True
 
-    if et == "soothe.subagent.planner.progress" and _is_orphan_subagent_card(card):
-        return True
-
     from soothe_sdk.ux.subagent_progress import summarize_subagent_wire_activity
 
     line = summarize_subagent_wire_activity(et, data).strip()

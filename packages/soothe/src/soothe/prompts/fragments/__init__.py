@@ -57,13 +57,17 @@ THREAD_USER_HINT_ROOT_FRAGMENT = _read_xml_body("decompose/user_hint_root.xml")
 THREAD_USER_HINT_CHILD_FRAGMENT = _read_xml_body("decompose/user_hint_child.xml")
 DECOMPOSE_FIRST_HINT = _read_xml_body("decompose/decompose_first_hint.xml")
 EVAL_POLICY_SYSTEM_ADDENDUM = _read_xml_body("eval/eval_policy_system.xml")
+ASK_MODE_ADDENDUM = _read_xml_body("decompose/ask_mode_addendum.xml")
+PLAN_MODE_ADDENDUM = _read_xml_body("decompose/plan_mode_addendum.xml")
 
 
 __all__ = [
     "APPROVED_PLAN_EXECUTE_HINT",
+    "ASK_MODE_ADDENDUM",
     "DECOMPOSE_FIRST_HINT",
     "DECOMPOSE_TASK_TOOL_DESCRIPTION",
     "EVAL_POLICY_SYSTEM_ADDENDUM",
+    "PLAN_MODE_ADDENDUM",
     "PROMPT_TIMESTAMP_FRAGMENT",
     "SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT",
     "SCENARIO_CLASSIFIER_USER_FRAGMENT",

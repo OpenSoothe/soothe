@@ -58,7 +58,7 @@ class ClarificationInputMessage(Vertical):
 
     Mounted when ``soothe.loop.clarification.requested`` arrives. Generic
     clarifications show one ``Input`` per question. Planner-subagent review
-    (``origin_node=planner_subagent_review``) shows the full draft plan, a
+    (``origin_node=plan_mode_review``) shows the full draft plan, a
     saved-path footer, Approve / Reject / Comments actions, and a
     comments field only after Comments is selected.
     """
@@ -262,7 +262,7 @@ class ClarificationInputMessage(Vertical):
             return f"Plan saved to: {self._plan_path}"
         return "Plan held in memory only"
 
-    def _compose_planner_review(self) -> Any:
+    def _compose_plan_review(self) -> Any:
         yield Static(self._title_content(), classes="clarification-title")
         body = _strip_plan_frontmatter(self._plan_markdown)
         # Expand to full plan height — no inner scroll; the chat list scrolls.
@@ -305,7 +305,7 @@ class ClarificationInputMessage(Vertical):
 
     def compose(self) -> Any:
         if self._is_plan_review:
-            yield from self._compose_planner_review()
+            yield from self._compose_plan_review()
         else:
             yield from self._compose_generic()
 

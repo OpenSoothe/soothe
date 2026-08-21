@@ -45,7 +45,7 @@ class CLIConfig:
     """Override daemon streaming mode: 'streaming' or 'batch'."""
 
     # Composer mode (Auto / Manual / Plan). Auto/Manual map to RFC-622
-    # clarification_mode; Plan is sticky preferred_subagent=planner.
+    # clarification_mode; Plan sets interaction_mode=plan (read-only plan graph).
     clarification_mode: str | None = None
     """'manual', 'auto', or 'plan'. None = Manual (TUI default)."""
 

@@ -283,7 +283,7 @@ class _ExecutionMixin:
             return
 
         # When a plan is approved for execution, switch composer mode to Auto
-        # so subsequent turns use standard loop routing without planner hint.
+        # so subsequent turns use standard loop routing (interaction_mode=agent).
         first_answer = str(event.answers[0]).strip() if event.answers else ""
         if first_answer == "Approve":
             self._composer_mode = "auto"

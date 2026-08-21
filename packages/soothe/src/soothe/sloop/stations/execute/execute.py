@@ -517,6 +517,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         checkpoint=checkpoint,
         goal_trace=ctx.goal_trace,
         fast_model=strange_loop._fast_llm,
+        interaction_mode=getattr(ctx, "interaction_mode", None),
     )
     async for item in run_executor.execute(
         decision=decision,

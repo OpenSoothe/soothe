@@ -67,7 +67,6 @@ def show_policy(console: Console, data: dict[str, Any]) -> None:
     """Render policy profile from daemon RPC response."""
     policy = data.get("policy", {})
     console.print(f"[dim]Policy profile: {policy.get('profile', 'unknown')}[/dim]")
-    console.print(f"[dim]Planner routing: {policy.get('planner_routing', 'unknown')}[/dim]")
     console.print(f"[dim]Memory backend: {policy.get('memory_backend', 'unknown')}[/dim]")
 
 

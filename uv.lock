@@ -6730,7 +6730,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
-    { name = "soothe-nano", specifier = ">=1.2.7,<2.0.0" },
+    { name = "soothe-nano", specifier = ">=1.2.8,<2.0.0" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "watchdog", specifier = ">=3.0.0,<5.0.0" },
 ]
@@ -6768,7 +6768,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "soothe", editable = "packages/soothe" },
-    { name = "soothe-nano", specifier = ">=1.2.7,<2.0.0" },
+    { name = "soothe-nano", specifier = ">=1.2.8,<2.0.0" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
 ]
 provides-extras = ["dev"]
@@ -6955,7 +6955,7 @@ wheels = [
 
 [[package]]
 name = "soothe-nano"
-version = "1.2.7"
+version = "1.2.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -6998,9 +6998,9 @@ dependencies = [
     { name = "tarzi" },
     { name = "wcmatch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/77/97/7b8267572412cd4c8b48cbd0a67dedf4c36beacb062cce8860c6b1f46786/soothe_nano-1.2.7.tar.gz", hash = "sha256:e7a4c45466d72bba506843c3814a7dbc6dd39a27037a5cccf816b09e2376e6dd" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/8b/90d53bea0e5fbb9f36af599f8ed6cbc929234adb30f63070b2141c1ccd56/soothe_nano-1.2.8.tar.gz", hash = "sha256:c9df41a1dd931511fea2227167efeeb82eecffd925e6eed6694ebb6b91b2fb34" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/58/0f/d9494bb3bb76c98a5b19fafb0a815a5dd9498c235176c243c468be15e528/soothe_nano-1.2.7-py3-none-any.whl", hash = "sha256:f3387b0e7be32b0c8e2b70499f417a3faee7670473eb725b68c25f4425d7fb1c" },
+    { url = "https://files.pythonhosted.org/packages/17/6c/a0446fcf383000608ad519e9281f8591b875e66c949a6e8461a5bc4794ef/soothe_nano-1.2.8-py3-none-any.whl", hash = "sha256:b65ad15df1f958f1158fee363a6426ff92edcdf6e3e57e57e5070c64555e4397" },
 ]
 
 [[package]]

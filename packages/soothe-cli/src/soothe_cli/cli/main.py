@@ -196,8 +196,8 @@ def main(
             "--mode",
             help=(
                 "Composer mode: 'manual' (relay AI questions to you), "
-                "'auto' (veritas auto-answers), or 'plan' (sticky planner "
-                "routing without typing /plan). Default: 'manual'."
+                "'auto' (veritas auto-answers), or 'plan' (read-only plan "
+                "mode without typing /plan). Default: 'manual'."
             ),
         ),
     ] = None,

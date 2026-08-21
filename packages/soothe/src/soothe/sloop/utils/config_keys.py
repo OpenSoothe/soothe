@@ -14,6 +14,9 @@ SOOTHE_DECOMPOSE_STEP_ID_KEY = "soothe_decompose_step_id"
 # Eval step id owning the current readonly coverage-audit thread.
 SOOTHE_EVAL_STEP_ID_KEY = "soothe_eval_step_id"
 
+# Interaction mode propagated to CoreAgent step threads ("agent" | "ask" | "plan").
+SOOTHE_INTERACTION_MODE_KEY = "soothe_interaction_mode"
+
 
 def positive_config_int(value: Any, default: int, *, minimum: int = 1) -> int:
     """Coerce a config budget to an int at or above ``minimum``.
@@ -29,5 +32,6 @@ __all__ = [
     "SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY",
     "SOOTHE_DECOMPOSE_STEP_ID_KEY",
     "SOOTHE_EVAL_STEP_ID_KEY",
+    "SOOTHE_INTERACTION_MODE_KEY",
     "positive_config_int",
 ]

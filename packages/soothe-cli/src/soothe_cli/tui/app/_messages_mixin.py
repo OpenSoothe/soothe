@@ -990,8 +990,8 @@ class _MessagesMixin:
         """Advance composer mode and refresh the status-bar badge.
 
         The mode is held on the app (``self._composer_mode``). Auto/Manual map
-        to the ``clarification_mode`` wire field; Plan sets sticky
-        ``preferred_subagent=planner`` on subsequent turns. The badge updates
+        to the ``clarification_mode`` wire field; Plan sets
+        ``interaction_mode=plan`` on subsequent turns. The badge updates
         immediately; no toast is emitted because the badge is the feedback.
         """
         from soothe_cli.tui.composer_mode import next_composer_mode
@@ -1031,7 +1031,7 @@ class _MessagesMixin:
         return inputs
 
     def _active_plan_review_action_focus(self) -> Widget | None:
-        """Prefer the Approve button when a planner-review card has no comments yet."""
+        """Prefer the Approve button when a plan-review card has no comments yet."""
         adapter = getattr(self, "_ui_adapter", None)
         if adapter is None:
             return None
