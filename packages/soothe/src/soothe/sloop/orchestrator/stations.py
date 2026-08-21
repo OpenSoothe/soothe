@@ -83,7 +83,6 @@ class LoopGraphState(TypedDict, total=False):
     intake_label: str | None  # IntakeLabel at runtime
     is_continuation: bool | None
     is_fresh_goal: bool | None
-    new_goal_created: bool | None
     is_task: bool | None
     scope: str | None  # IntakeLabel at runtime
     has_deliverable: bool | None

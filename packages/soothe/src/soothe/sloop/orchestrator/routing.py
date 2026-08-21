@@ -7,8 +7,6 @@ from typing import Any
 
 from langgraph.graph import END
 
-from soothe.sloop.intention.models import IntakeLabel
-
 from .stations import (
     AWAIT_USER,
     DELEGATE,
@@ -31,23 +29,17 @@ def _pending_clarification(state: dict[str, Any]) -> bool:
 
 
 def route_after_preprocess(state: dict[str, Any]) -> str:
-    """Branch after enter_loop: chitchat END, wired delegate, or DISPATCH."""
-    new_goal_created = state.get("new_goal_created", False)
+    """Branch after enter_loop: chitchat END, wired delegate, or DISPATCH.
+
+    The chitchat fast-path ENDs the graph here unconditionally. Whether a
+    chitchat message should bypass the fast-path at all is decided upstream in
+    ``enter_loop`` via ``should_bypass_chitchat_fast_path`` (loop-control phrase
+    + intra-loop checkpoint work) — the sole bypass authority. Routing must
+    not re-litigate that decision.
+    """
     label = state.get("intake_label")
 
-    if new_goal_created and label == IntakeLabel.CHITCHAT:
-        logger.warning(
-            "[routing] chitchat blocked by new_goal_created constraint; "
-            "forcing dispatch (structural override)"
-        )
-        label = IntakeLabel.COMPLEX
-
     if state.get("intent_route") == "fast_path":
-        if new_goal_created:
-            logger.warning(
-                "[routing] intent_route fast_path blocked by new_goal_created; forcing dispatch"
-            )
-            return DISPATCH
         logger.debug("[routing] route_after_preprocess → END (chitchat fast-path)")
         return END
 

@@ -5,8 +5,8 @@ Surfaces ``intake_label``, ``is_fresh_goal``, and ``is_continuation`` for routin
 Tasks route to DISPATCH (root StepNode created there). Wired specialists set
 ``intent_route=wired_subagent``.
 
-``new_goal_created`` blocks chitchat fast-path when daemon already
-committed to agentic work.
+Chitchat bypass is decided here via :func:`should_bypass_chitchat_fast_path`
+(loop-control phrase + intra-loop checkpoint work); routing trusts that.
 """
 
 from __future__ import annotations
@@ -31,7 +31,6 @@ def _graph_flags(
     intake_label: IntakeLabel | None,
     is_continuation: bool,
     is_fresh: bool,
-    new_goal_created: bool,
     graph_intake_fields: dict[str, Any],
     intent_route: str,
 ) -> dict[str, Any]:
@@ -40,7 +39,6 @@ def _graph_flags(
         "intake_label": intake_label,
         "is_continuation": is_continuation,
         "is_fresh_goal": is_fresh,
-        "new_goal_created": new_goal_created,
         "last_outcome": None,
         "resume_synth": None,
         "dispatch_route": None,
@@ -71,9 +69,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
     intake_label: IntakeLabel | None = getattr(intent, "intake_label", None)
     is_continuation = is_structural_continuation(ctx)
     is_fresh = is_fresh_goal(ctx)
-
-    # new_goal_created signals daemon committed to agentic work.
-    new_goal_created = not getattr(ctx, "recovery_valid_resume", False)
 
     is_task = intake_label != IntakeLabel.CHITCHAT if intake_label is not None else None
     scope = (
@@ -111,7 +106,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             intake_label=intake_label,
             is_continuation=is_continuation,
             is_fresh=is_fresh,
-            new_goal_created=new_goal_created,
             graph_intake_fields=graph_intake_fields,
             intent_route="fast_path",
         )
@@ -130,7 +124,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
                 intake_label=intake_label,
                 is_continuation=is_continuation,
                 is_fresh=is_fresh,
-                new_goal_created=new_goal_created,
                 graph_intake_fields=graph_intake_fields,
                 intent_route="wired_subagent",
             )
@@ -139,7 +132,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         intake_label=intake_label,
         is_continuation=is_continuation,
         is_fresh=is_fresh,
-        new_goal_created=new_goal_created,
         graph_intake_fields=graph_intake_fields,
         intent_route="continue_loop",
     )

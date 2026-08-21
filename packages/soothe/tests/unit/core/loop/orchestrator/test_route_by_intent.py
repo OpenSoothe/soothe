@@ -3,7 +3,8 @@
 Covers test groups 2 (routing truth table), 4 (branch node sequence),
 and 6 (wired-subagent plan shape + mislabel recovery).
 
-Routing guard tests for new_goal_created constraint blocking chitchat.
+Chitchat fast-path bypass is decided upstream in ``enter_loop`` via
+``should_bypass_chitchat_fast_path``; routing trusts that decision and ENDs.
 """
 
 from __future__ import annotations
@@ -407,78 +408,39 @@ def test_wired_subagent_plan_has_no_synthetic_reasoning_prefix() -> None:
     assert plan.decision.steps[0].requires_tool_use is False
 
 
-# -- Routing guard tests (new_goal_created constraint) --------------
+# -- Chitchat fast-path ENDs unconditionally (bypass is upstream) ------
 
 
-def test_routing_guard_blocks_chitchat_on_new_goal() -> None:
-    """chitchat fast-path blocked when new_goal_created=True."""
-    state = {
-        "is_continuation": False,
-        "intake_label": IntakeLabel.CHITCHAT,
-        "intent_route": "fast_path",
-        "new_goal_created": True,
-    }
-    # Routing guard forces complex instead of END
-    assert route_by_intent(state) == "dispatch"
+def test_chitchat_fast_path_ends_unconditionally() -> None:
+    """The fast-path ENDs the graph regardless of goal freshness.
 
-
-def test_routing_guard_blocks_chitchat_label_on_new_goal() -> None:
-    """chitchat label forced to complex when new_goal_created=True."""
-    state = {
-        "is_continuation": False,
-        "intake_label": IntakeLabel.CHITCHAT,
-        "new_goal_created": True,
-    }
-    # Routing guard forces complex instead of END
-    assert route_by_intent(state) == "dispatch"
-
-
-def test_routing_guard_allows_chitchat_on_existing_goal() -> None:
-    """chitchat allowed when new_goal_created=False (resume existing)."""
-    state = {
-        "is_continuation": False,
-        "intake_label": IntakeLabel.CHITCHAT,
-        "intent_route": "fast_path",
-        "new_goal_created": False,
-    }
-    assert route_by_intent(state) == END
-
-
-def test_routing_guard_complex_not_blocked_by_new_goal() -> None:
-    """complex label not affected by routing guard."""
-    state = {
-        "is_continuation": False,
-        "intake_label": IntakeLabel.COMPLEX,
-        "new_goal_created": True,
-    }
-    assert route_by_intent(state) == "dispatch"
-
-
-def test_routing_guard_simple_not_blocked_by_new_goal() -> None:
-    """simple label not affected by routing guard."""
-    state = {
-        "is_continuation": False,
-        "intake_label": IntakeLabel.SIMPLE,
-        "new_goal_created": True,
-    }
-    assert route_by_intent(state) == "dispatch"
-
-
-def test_routing_guard_minimal_not_blocked_by_new_goal() -> None:
-    """minimal label not affected by routing guard."""
-    state = {
-        "is_continuation": False,
-        "intake_label": IntakeLabel.MINIMAL,
-        "new_goal_created": True,
-    }
-    assert route_by_intent(state) == "dispatch"
-
-
-def test_routing_guard_missing_new_goal_defaults_false() -> None:
-    """missing new_goal_created defaults to False (chitchat allowed)."""
+    A social message like "how are u" on a fresh goal must short-circuit to
+    END here; whether it should bypass the fast-path at all is decided upstream
+    in enter_loop via should_bypass_chitchat_fast_path.
+    """
     state = {
         "is_continuation": False,
         "intake_label": IntakeLabel.CHITCHAT,
         "intent_route": "fast_path",
     }
     assert route_by_intent(state) == END
+
+
+def test_chitchat_fast_path_ends_even_on_continuation() -> None:
+    """Fast-path ENDs even mid-loop; finalize-blocking is handled at finalize."""
+    state = {
+        "is_continuation": True,
+        "intake_label": IntakeLabel.CHITCHAT,
+        "intent_route": "fast_path",
+    }
+    assert route_by_intent(state) == END
+
+
+def test_chitchat_label_without_fast_path_routes_to_dispatch() -> None:
+    """Chitchat that did not take the fast-path (bypassed upstream) dispatches."""
+    state = {
+        "is_continuation": False,
+        "intake_label": IntakeLabel.CHITCHAT,
+        "intent_route": "continue_loop",
+    }
+    assert route_by_intent(state) == "dispatch"
