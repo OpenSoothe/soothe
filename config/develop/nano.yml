@@ -58,7 +58,7 @@ router_profiles:
       fast: "dashscope:qwen3.6-flash"
       think: "dashscope:glm-5.2"
       image: "dashscope:qwen3.7-plus"
-      ocr: "omlx,PaddleOCR-VL-1.5-4bit"
+      ocr: "omlx:DeepSeek-OCR-4bit"
 
   - name: minimax
     router:
@@ -66,7 +66,7 @@ router_profiles:
       fast: "dashscope:qwen3.6-flash"
       think: "dashscope:MiniMax-M3"
       image: "dashscope:MiniMax-M3"
-      ocr: "omlx,PaddleOCR-VL-1.5-4bit"
+      ocr: "omlx:DeepSeek-OCR-4bit"
 
   - name: agnes
     router:
@@ -76,7 +76,7 @@ router_profiles:
 
   - name: qwen
     router:
-      default: "omlx:Qwen3.6-27B-OptiQ-4bit"
+      default: "omlx:Qwen3.8-27B-4bit"
       image: "omlx:GLM-4.6V-Flash-4bit"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
