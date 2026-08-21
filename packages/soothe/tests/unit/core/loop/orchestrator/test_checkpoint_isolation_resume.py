@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from langgraph.types import Command
 
-from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
+from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
 from soothe.sloop.orchestrator.checkpoint import (
     intake_only_invoke_config,
     snapshot_has_resumable_interrupt,
@@ -74,7 +74,7 @@ def test_clarification_resume_command_uses_resume_when_interrupt_live() -> None:
     snap = SimpleNamespace(
         interrupts=(object(),),
         tasks=(),
-        values={"last_clarification_origin": ORIGIN_PLANNER_SUBAGENT_REVIEW},
+        values={"last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW},
     )
     cmd = _clarification_resume_command(
         snapshot=snap,
@@ -90,7 +90,7 @@ def test_clarification_resume_command_goto_recovery_when_interrupt_orphaned() ->
     snap = SimpleNamespace(
         interrupts=(),
         tasks=(),
-        values={"last_clarification_origin": ORIGIN_PLANNER_SUBAGENT_REVIEW},
+        values={"last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW},
     )
     cmd = _clarification_resume_command(
         snapshot=snap,

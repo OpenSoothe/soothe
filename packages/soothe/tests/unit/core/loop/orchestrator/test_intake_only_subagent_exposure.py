@@ -20,10 +20,10 @@ from soothe.sloop.state.schemas import (
 from soothe.sloop.utils.intake_task_guard import IntakeOnlyTaskGuardMiddleware
 
 
-def test_intake_only_set_includes_planner() -> None:
-    assert "planner" in INTAKE_ONLY_WIRE_SUBAGENTS
+def test_intake_only_set_excludes_planner() -> None:
+    assert "planner" not in INTAKE_ONLY_WIRE_SUBAGENTS
     assert "explorer" not in INTAKE_ONLY_WIRE_SUBAGENTS
-    assert is_intake_only_wire_subagent("planner")
+    assert not is_intake_only_wire_subagent("planner")
     assert is_intake_only_wire_subagent("deep_research")
     assert is_intake_only_wire_subagent("browser_use")
     assert is_intake_only_wire_subagent("academic_research")
@@ -32,36 +32,37 @@ def test_intake_only_set_includes_planner() -> None:
 
 def test_filter_task_catalog_excludes_intake_only_subagents() -> None:
     names = [
-        "planner",
+        "planner",  # no longer intake-only (removed from catalog)
         "deep_research",
         "browser_use",
         "academic_research",
         "plugin_agent",
     ]
-    assert filter_task_catalog_subagent_names(names) == ["plugin_agent"]
+    # planner is no longer filtered (not in INTAKE_ONLY_WIRE_SUBAGENTS).
+    assert filter_task_catalog_subagent_names(names) == ["planner", "plugin_agent"]
 
 
 def test_partition_subagent_specs_splits_intake_only() -> None:
     specs = [
-        {"name": "planner", "description": "p"},
+        {"name": "planner", "description": "p"},  # no longer intake-only → catalog
         {"name": "deep_research", "description": "d"},
         {"name": "plugin_agent", "description": "x"},
         {"name": "browser_use", "description": "b"},
     ]
     catalog, intake = partition_subagent_specs(specs)
-    assert [s["name"] for s in catalog] == ["plugin_agent"]
-    assert [s["name"] for s in intake] == ["planner", "deep_research", "browser_use"]
+    assert [s["name"] for s in catalog] == ["planner", "plugin_agent"]
+    assert [s["name"] for s in intake] == ["deep_research", "browser_use"]
 
 
 def test_wired_intake_still_resolves_all_supported_specialists() -> None:
-    assert resolve_wire_subagent(wire_subagent="planner") == "planner"
+    assert resolve_wire_subagent(wire_subagent="planner") is None  # removed
     assert resolve_wire_subagent(wire_subagent="explorer") is None
     assert resolve_wire_subagent(wire_subagent="deep_research") == "deep_research"
     assert resolve_wire_subagent(wire_subagent="academic_research") == "academic_research"
 
 
 def test_plan_delegate_rejects_intake_only() -> None:
-    for name in ("deep_research", "planner"):
+    for name in ("deep_research",):
         steps = [StepAction(id="01", description="work", execution_hint="subagent", subagent=name)]
         out = strip_unrequested_step_delegates(steps)
         assert out[0].execution_hint == "auto"
@@ -71,7 +72,7 @@ def test_plan_delegate_rejects_intake_only() -> None:
 @pytest.mark.asyncio
 async def test_intake_task_guard_always_blocks_intake_only_task() -> None:
     mw = IntakeOnlyTaskGuardMiddleware()
-    for name in ("deep_research", "planner", "browser_use", "academic_research"):
+    for name in ("deep_research", "browser_use", "academic_research"):
         request = SimpleNamespace(
             tool_call={
                 "name": "task",

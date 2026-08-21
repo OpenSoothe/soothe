@@ -81,16 +81,13 @@ def route_after_root_eval(state: dict[str, Any]) -> str:
 
 
 def route_after_wired_subagent(state: dict[str, Any]) -> str:
-    """Intake-only invoke → finalize, clarification, or DISPATCH handoff."""
+    """Intake-only invoke → finalize or clarification (planner handoff removed)."""
     if state.get("last_outcome") == "fatal":
         logger.debug("[routing] route_after_wired_subagent → END (fatal)")
         return END
     if _pending_clarification(state):
         logger.debug("[routing] route_after_wired_subagent → await_user")
         return AWAIT_USER
-    if state.get("planner_implement_handoff"):
-        logger.debug("[routing] route_after_wired_subagent → dispatch (handoff)")
-        return DISPATCH
     logger.debug("[routing] route_after_wired_subagent → finalize")
     return FINALIZE
 
@@ -118,10 +115,19 @@ def route_after_record_iteration(state: dict[str, Any]) -> str:
 
 
 def route_after_clarification(state: dict[str, Any]) -> str:
-    """Return to originating station, or END on defer."""
+    """Return to originating station, DISPATCH on plan-mode approve, or END on defer."""
     if state.get("last_outcome") == "deferred":
         return END
-    from soothe.sloop.clarification.origins import resume_node_for_clarification_origin
+    from soothe.sloop.clarification.origins import (
+        ORIGIN_PLAN_MODE_REVIEW,
+        resume_node_for_clarification_origin,
+    )
 
-    resume = resume_node_for_clarification_origin(state.get("last_clarification_origin"))
+    origin = state.get("last_clarification_origin")
+    # Plan-mode review approve: if an approved plan body is set, route to DISPATCH
+    # so the grounding path (dispatch._ground_root_with_approved_plan) consumes it.
+    if origin == ORIGIN_PLAN_MODE_REVIEW and state.get("approved_plan_markdown"):
+        logger.debug("[routing] route_after_clarification → dispatch (plan approved)")
+        return DISPATCH
+    resume = resume_node_for_clarification_origin(origin)
     return resume if resume is not None else END

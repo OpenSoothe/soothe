@@ -91,20 +91,18 @@ class TestBuildClarificationPolicyForRunner:
             ORIGIN_EXECUTE,
             ORIGIN_PLAN_EVALUATE,
             ORIGIN_PLAN_GENERATE,
-            ORIGIN_PLANNER_SUBAGENT_REVIEW,
+            ORIGIN_PLAN_MODE_REVIEW,
         )
 
         config = _make_config()
         config.agent.clarification.force_manual_origins = [
-            ORIGIN_PLANNER_SUBAGENT_REVIEW,
+            ORIGIN_PLAN_MODE_REVIEW,
             ORIGIN_EXECUTE,
         ]
         policy = build_clarification_policy_for_runner(config, mode="auto")
         assert isinstance(policy, AutoClarificationPolicy)
-        assert policy.force_manual_origins == frozenset(
-            {ORIGIN_PLANNER_SUBAGENT_REVIEW, ORIGIN_EXECUTE}
-        )
-        assert policy.requires_manual(ORIGIN_PLANNER_SUBAGENT_REVIEW)
+        assert policy.force_manual_origins == frozenset({ORIGIN_PLAN_MODE_REVIEW, ORIGIN_EXECUTE})
+        assert policy.requires_manual(ORIGIN_PLAN_MODE_REVIEW)
         assert policy.requires_manual(ORIGIN_EXECUTE)
         assert not policy.requires_manual(ORIGIN_PLAN_GENERATE)
         assert not policy.requires_manual(ORIGIN_PLAN_EVALUATE)

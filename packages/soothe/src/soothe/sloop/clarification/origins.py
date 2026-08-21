@@ -23,14 +23,16 @@ from soothe.sloop.orchestrator.stations import DELEGATE, DISPATCH, EXECUTE
 ORIGIN_EXECUTE: Final = EXECUTE
 """CoreAgent execute-step ``ask_user`` clarification."""
 
-ORIGIN_PLANNER_SUBAGENT_REVIEW: Final = "planner_subagent_review"
-"""Human review gate after the intake ``planner`` subagent (RFC-633)."""
+ORIGIN_PLAN_MODE_REVIEW: Final = "plan_mode_review"
+"""Human review gate after plan-mode draft (approve / reject / more comments)."""
 
 ORIGIN_RAIL_PAUSE: Final = "rail_pause"
 """LoopRail ``pause_for_user`` human gate (IG-737); host-side Veritas only."""
 
 PLANNER_WIRE_SUBAGENT: Final = "planner"
-"""Intake-only wire id for the planner specialist (RFC-633 / RFC-618)."""
+"""Deprecated: intake-only wire id for the planner specialist (RFC-633 / RFC-618).
+
+Kept for legacy checkpoint resume compatibility; no longer set on new turns."""
 
 # --- Legacy plan-spine origins (resume → DISPATCH; dual-read only) --------
 
@@ -42,9 +44,10 @@ ORIGIN_PLAN_EVALUATE: Final = "evaluate"
 
 ClarificationOrigin = Literal[
     "execute",
-    "planner_subagent_review",
+    "plan_mode_review",
     "rail_pause",
     # legacy ids still accepted by normalize / resume
+    "planner_subagent_review",
     "generate_plan",
     "evaluate",
     "assess",
@@ -57,7 +60,7 @@ ClarificationOrigin = Literal[
 CLARIFICATION_ORIGINS: frozenset[str] = frozenset(
     {
         ORIGIN_EXECUTE,
-        ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        ORIGIN_PLAN_MODE_REVIEW,
         ORIGIN_RAIL_PAUSE,
     }
 )
@@ -67,6 +70,7 @@ _LEGACY_CLARIFICATION_ORIGINS: frozenset[str] = frozenset(
     {
         ORIGIN_PLAN_GENERATE,
         ORIGIN_PLAN_EVALUATE,
+        "planner_subagent_review",
         "plan_generate",
         "plan_assess",
         "plan_gap_analysis",
@@ -86,11 +90,12 @@ ACCEPTED_CLARIFICATION_ORIGINS: frozenset[str] = _ACCEPTED_CLARIFICATION_ORIGINS
 STRANGELOOP_PLANNING_ORIGINS: frozenset[str] = _LEGACY_CLARIFICATION_ORIGINS
 
 CLARIFICATION_ORIGIN_RESUME_NODE: dict[str, str] = {
-    ORIGIN_PLANNER_SUBAGENT_REVIEW: DELEGATE,
+    ORIGIN_PLAN_MODE_REVIEW: DELEGATE,
     ORIGIN_EXECUTE: EXECUTE,
     # Plan-spine stations removed from the live graph; land on DISPATCH.
     ORIGIN_PLAN_GENERATE: DISPATCH,
     ORIGIN_PLAN_EVALUATE: DISPATCH,
+    "planner_subagent_review": DELEGATE,  # legacy checkpoint resume
     "plan_generate": DISPATCH,
     "plan_assess": DISPATCH,
     "plan_gap_analysis": DISPATCH,
@@ -98,9 +103,13 @@ CLARIFICATION_ORIGIN_RESUME_NODE: dict[str, str] = {
     "analyze_gaps": DISPATCH,
 }
 
-DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = (ORIGIN_PLANNER_SUBAGENT_REVIEW,)
+DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = (ORIGIN_PLAN_MODE_REVIEW,)
 
 PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX: Final = "planner-subagent-review:"
+"""Deprecated legacy interrupt prefix (kept for checkpoint resume compat)."""
+
+PLAN_MODE_REVIEW_INTERRUPT_PREFIX: Final = "plan-mode-review:"
+"""Interrupt prefix for plan-mode review clarifications."""
 
 
 def resume_node_for_clarification_origin(origin: str | None) -> str | None:
@@ -129,8 +138,9 @@ __all__ = [
     "ORIGIN_EXECUTE",
     "ORIGIN_PLAN_EVALUATE",
     "ORIGIN_PLAN_GENERATE",
-    "ORIGIN_PLANNER_SUBAGENT_REVIEW",
+    "ORIGIN_PLAN_MODE_REVIEW",
     "ORIGIN_RAIL_PAUSE",
+    "PLAN_MODE_REVIEW_INTERRUPT_PREFIX",
     "PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX",
     "PLANNER_WIRE_SUBAGENT",
     "STRANGELOOP_PLANNING_ORIGINS",

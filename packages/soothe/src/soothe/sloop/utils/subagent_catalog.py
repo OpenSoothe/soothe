@@ -14,7 +14,6 @@ from soothe_nano.agent.subagent_catalog import spec_subagent_name
 # Canonical allowlist for wired specialists (all intake-only after).
 INTAKE_ONLY_WIRE_SUBAGENTS = frozenset(
     {
-        "planner",
         "browser_use",
         "deep_research",
         "academic_research",

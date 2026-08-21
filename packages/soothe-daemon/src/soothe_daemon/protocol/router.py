@@ -126,7 +126,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         ``intake_scope``, ``model``, ``model_params``, ``router_profile``,
         ``intent_hint`` (normalized to lowercase when set), ``clarification_mode``
         (RFC-622, normalized to ``"auto"``/``"manual"`` or ``None``),
-        ``interaction_mode`` (normalized to ``"agent"``/``"ask"`` or ``None``).
+        ``interaction_mode`` (normalized to ``"agent"``/``"ask"``/``"plan"`` or ``None``).
     """
     preferred_subagent = msg.get("preferred_subagent")
     preferred_norm = (
@@ -142,7 +142,9 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     raw_interaction_mode = msg.get("interaction_mode")
     if isinstance(raw_interaction_mode, str):
         candidate = raw_interaction_mode.strip().lower()
-        interaction_mode_norm: str | None = candidate if candidate in ("agent", "ask") else None
+        interaction_mode_norm: str | None = (
+            candidate if candidate in ("agent", "ask", "plan") else None
+        )
     else:
         interaction_mode_norm = None
     raw_model = msg.get("model")

@@ -190,7 +190,7 @@ class LoopInputParams(ParamsBase):
     response_schema_name: str | None = None
     response_schema_strict: bool | None = None
     clarification_mode: Any = None  # Handler normalizes to auto/manual or None
-    interaction_mode: Any = None  # Handler normalizes to agent/ask or None
+    interaction_mode: str | None = None  # Handler normalizes to agent/ask/plan or None
     clarification_answer: bool = False
     clarification_answers: list[str] | None = None
 
@@ -353,7 +353,7 @@ class InvokeSkillParams(ParamsBase):
     skill: str = Field(..., min_length=1)
     args: str = ""
     clarification_mode: Any = None  # Handler normalizes to auto/manual or None
-    interaction_mode: Any = None  # Handler normalizes to agent/ask or None
+    interaction_mode: str | None = None  # Handler normalizes to agent/ask/plan or None
 
 
 class McpStatusParams(EmptyParams):

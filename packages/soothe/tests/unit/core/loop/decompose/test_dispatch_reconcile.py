@@ -120,17 +120,15 @@ async def test_dispatch_grounds_root_with_approved_plan() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dispatch_clears_planner_implement_handoff() -> None:
+async def test_dispatch_grounds_approved_plan() -> None:
     ce = ContextEngine()
     goal = await ce.create_goal("migrate auth", loop_id="L1")
     ctx = _ctx_with_ce(ce, goal.id, goal="migrate auth")
-    ctx.scratch.planner_implement_handoff = True
     ctx.loop_state.approved_plan_markdown = "# Solution\n\nUse OAuth.\n"
     node = DispatchNode()
     result = await node(ctx, {})
     assert result["dispatch_route"] == "execute"
-    assert result.get("planner_implement_handoff") is False
-    assert ctx.scratch.planner_implement_handoff is False
+    # Approved plan is consumed (cleared) by the grounding path.
     assert ctx.loop_state.approved_plan_markdown is None
 
 

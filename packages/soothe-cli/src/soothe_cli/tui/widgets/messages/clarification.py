@@ -20,9 +20,11 @@ from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 logger = logging.getLogger(__name__)
 
-# Wire origin id for planner-subagent review (mirrors host ORIGIN_PLANNER_SUBAGENT_REVIEW).
+# Wire origin id for plan-mode review (mirrors host ORIGIN_PLAN_MODE_REVIEW).
 # CLI must not import soothe host packages; keep the wire string local.
-_ORIGIN_PLANNER_SUBAGENT_REVIEW = "planner_subagent_review"
+_ORIGIN_PLAN_MODE_REVIEW = "plan_mode_review"
+# Legacy: accept persisted interrupts from older planner_subagent_review origin.
+_ORIGIN_PLANNER_SUBAGENT_REVIEW_LEGACY = "planner_subagent_review"
 
 _PlanReviewAction = Literal["approve", "reject", "comments"]
 
@@ -225,7 +227,10 @@ class ClarificationInputMessage(Vertical):
 
     @property
     def _is_planner_subagent_review(self) -> bool:
-        return self._origin_node == _ORIGIN_PLANNER_SUBAGENT_REVIEW
+        return self._origin_node in (
+            _ORIGIN_PLAN_MODE_REVIEW,
+            _ORIGIN_PLANNER_SUBAGENT_REVIEW_LEGACY,
+        )
 
     def _title_content(self) -> Content:
         title = "Review this plan" if self._is_planner_subagent_review else "Awaiting your answer"

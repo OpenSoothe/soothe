@@ -1211,7 +1211,7 @@ class StrangeLoopConfig(BaseModel):
         goal_context: Goal context injection for Plan/Execute phases (RFC-217).
         report_output: Goal report display and synthesis limits.
         output_streaming: Enable streaming mode for all AI outputs (true=stream, false=batch).
-        goal_completion_mode: How planner completion (`require_goal_completion`) combines with
+        goal_completion_mode: How goal completion (`require_goal_completion`) combines with
             execution heuristics when the goal is assessed as done.
         plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts.
         execute_prompt_ledger: Caps for execute-step CoreAgent ledger projection.
@@ -1541,7 +1541,8 @@ class ClarificationConfig(BaseModel):
             "execute",
             "generate_plan",
             "evaluate",
-            "planner_subagent_review",
+            "plan_mode_review",
+            "planner_subagent_review",  # legacy persisted interrupt
             "rail_pause",
             # dual-read persisted / pre-origin strings
             "plan_generate",
@@ -1556,8 +1557,8 @@ class ClarificationConfig(BaseModel):
             "Clarification origins that never use veritas auto-answer, even when "
             "``default_mode`` / wire ``clarification_mode`` is ``auto``. "
             "With a human attached, the interactive TUI relay is used; otherwise "
-            "the loop defers. Default is ``planner_subagent_review`` only — the "
-            "planner *subagent* Approve/Reject/Comments gate (RFC-633). This is "
+            "the loop defers. Default is ``plan_mode_review`` only — the "
+            "plan-mode Approve/Reject/Comments gate. This is "
             "not a legacy StrangeLoop plan-spine origin."
         ),
     )
@@ -1646,7 +1647,7 @@ class AgentConfig(NanoAgentConfig):
             "heuristic_only uses execution heuristics only; hybrid uses LLM first with fallback"
         ),
     )
-    """How planner completion (require_goal_completion) combines with execution heuristics."""
+    """How goal completion (require_goal_completion) combines with execution heuristics."""
 
     final_response: AgenticFinalResponseMode = Field(
         default="always_synthesize",

@@ -40,7 +40,7 @@ def test_route_after_clarification_returns_to_origin_node() -> None:
         ORIGIN_EXECUTE,
         ORIGIN_PLAN_EVALUATE,
         ORIGIN_PLAN_GENERATE,
-        ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        ORIGIN_PLAN_MODE_REVIEW,
         resume_node_for_clarification_origin,
     )
 
@@ -57,7 +57,7 @@ def test_route_after_clarification_returns_to_origin_node() -> None:
     )
     assert route_after_clarification({"last_clarification_origin": "assess"}) == "dispatch"
     assert (
-        route_after_clarification({"last_clarification_origin": ORIGIN_PLANNER_SUBAGENT_REVIEW})
+        route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW})
         == "delegate"
     )
 

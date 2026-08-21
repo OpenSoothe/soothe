@@ -169,6 +169,7 @@ class StrangeLoop:
         resume_interrupted: bool = False,  # daemon crash recovery admission
         goal_trace: Any | None = None,  # GoalLoopTrace when Langfuse enabled
         preamble: list[Any] | None = None,  # RFC-222 §Goal-Report-Pair Projection
+        interaction_mode: str | None = None,  # per-goal "agent"|"ask"|"plan" graph selection
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -786,6 +787,7 @@ class StrangeLoop:
                 emit=emit,
                 intent_classifier=intent_classifier,
                 preferred_subagent=preferred_subagent,
+                interaction_mode=interaction_mode,
                 clarification_policy=clarification_policy,
                 clarification_resume_text=goal if clarification_answer else None,
                 clarification_resume_answers=(

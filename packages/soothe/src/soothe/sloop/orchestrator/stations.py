@@ -84,7 +84,6 @@ class LoopGraphState(TypedDict, total=False):
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None
     last_clarification_origin: str | None  # ClarificationOrigin at runtime
-    planner_implement_handoff: bool | None
     resume_synth: bool | None
     after_record_route: Literal["finalize", "goal_completion", ""] | None
 

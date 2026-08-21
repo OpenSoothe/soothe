@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
+from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
 from soothe.sloop.clarification.protocol import (
     ClarificationDeferredError,
     answer_to_state,
@@ -73,8 +73,8 @@ async def node_await_clarification(
         "origin_node": request.origin_node,
         "mode": _mode_for_policy(policy, origin_node=request.origin_node),
     }
-    if request.origin_node == ORIGIN_PLANNER_SUBAGENT_REVIEW:
-        _attach_planner_review_payload(requested_payload, ctx, pending)
+    if request.origin_node == ORIGIN_PLAN_MODE_REVIEW:
+        _attach_plan_review_payload(requested_payload, ctx, pending)
 
     resume_turn = bool(
         (getattr(ctx, "clarification_resume_answers", None) or [])
@@ -177,14 +177,14 @@ async def _hard_defer(
     }
 
 
-def _attach_planner_review_payload(
+def _attach_plan_review_payload(
     payload: dict[str, Any],
     ctx: LoopRuntimeContext,
     pending: Any,
 ) -> None:
     scratch = getattr(ctx, "scratch", None)
-    plan_path = getattr(scratch, "plan_artifact_path", None)
-    plan_markdown = getattr(scratch, "plan_artifact_markdown", None)
+    plan_path = getattr(scratch, "plan_draft_path", None)
+    plan_markdown = getattr(scratch, "plan_draft_markdown", None)
     if not plan_path and isinstance(pending, dict):
         plan_path = pending.get("plan_path")
     if not plan_markdown and isinstance(pending, dict):

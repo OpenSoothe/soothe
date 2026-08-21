@@ -40,6 +40,12 @@ def _graph_flags(
 
 async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Emit pre-classified intake and route chitchat / wired / DISPATCH."""
+    # If request_plan_mode was confirmed on a prior goal, promote to plan mode
+    # for this goal and clear the one-shot flag (the runner's interaction_mode
+    # selection happened before this flag was visible to the TUI composer).
+    if getattr(ctx.loop_state, "pending_plan_mode", False):
+        ctx.interaction_mode = "plan"
+        ctx.loop_state.pending_plan_mode = False
     intent = ctx.loop_state.intent
 
     if intent is not None:

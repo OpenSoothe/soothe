@@ -1,15 +1,12 @@
-"""Wired-subagent intake branch (RFC-630, / / / /).
+"""Wired-subagent intake branch (RFC-630).
 
-Intake-only wires (``planner``, ``browser_use``, ``deep_research``,
+Intake-only wires (``browser_use``, ``deep_research``,
 ``academic_research``): stream the specialist runnable from the intake-only
 registry (not on CoreAgent ``task``), forward curated wire customs for the
 orphan SubAgent card, record Human/AI execute-step ledger rows.
 
-For ``planner`` (RFC-633): persist ``.soothe/plans/`` artifact and pause
-on RFC-622 clarification (Approve / Reject / More comments). Approve hands off
-to StrangeLoop ``DISPATCH`` (root grounded with the approved plan); Reject
-routes to ``goal_completion``. Other wires still route directly to
-``goal_completion``.
+The ``planner`` wire has been removed; plan mode is now handled by the
+``interaction_mode=plan`` profile and ``plan_mode_review.py`` host module.
 """
 
 from __future__ import annotations
@@ -22,26 +19,9 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from soothe.sloop.clarification.origins import (
-    ORIGIN_PLANNER_SUBAGENT_REVIEW,
-    PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX,
-    PLANNER_WIRE_SUBAGENT,
-)
-from soothe.sloop.clarification.protocol import (
-    ClarificationRequest,
-    LoopStateView,
-    answer_from_state,
-    request_to_state,
-)
 from soothe.sloop.engine.execute.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.orchestrator.phase_status import emit_plan_phase_status
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.plans.artifact import (
-    parse_planner_subagent_review_answers,
-    strip_plan_frontmatter,
-    update_plan_artifact_status,
-    write_plan_artifact,
-)
 from soothe.sloop.plans.wired_subagent_plan import build_wired_subagent_plan
 from soothe.sloop.utils.goal_text import resolve_user_request
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -51,10 +31,6 @@ logger = logging.getLogger(__name__)
 
 WIRED_SUBAGENT_STATUS_LABEL = "Delegating to {subagent}"
 _DESC_DISPLAY_MAX = 200
-_PLANNER_SUBAGENT_REVIEW_QUESTIONS: tuple[str, ...] = (
-    "Action for this plan: Approve, Reject, or More comments",
-    "Revision comments (when choosing More comments)",
-)
 
 
 def _extract_subagent_report(result: Any) -> str:
@@ -90,28 +66,6 @@ def _extract_subagent_report(result: Any) -> str:
             return str(structured.model_dump()).strip()
         return str(structured).strip()
     return ""
-
-
-def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
-    state = ctx.loop_state
-    goal_record = getattr(ctx, "goal_record", None)
-    user_request = resolve_user_request(state)
-    plan_path = getattr(ctx.scratch, "plan_artifact_path", None)
-    plan_summary = plan_path or getattr(ctx.scratch, "plan_artifact_markdown", None)
-    if isinstance(plan_summary, str) and len(plan_summary) > 400:
-        plan_summary = plan_summary[:400] + "…"
-    return LoopStateView(
-        goal_id=getattr(goal_record, "goal_id", "") or "",
-        goal_description=user_request,
-        user_request=user_request,
-        iteration=getattr(state, "iteration", 0),
-        intent_classification=getattr(state, "intent_classification", None),
-        plan_summary=plan_summary,
-        recent_step_outputs=(),
-        workspace_summary=getattr(state, "workspace", None),
-        active_skills=tuple(getattr(state, "activated_skill_names", []) or []),
-        active_mcp_servers=tuple(getattr(state, "active_mcp_servers", []) or []),
-    )
 
 
 def _record_wired_execute_ledger(
@@ -285,197 +239,6 @@ async def _run_intake_only_runnable(
             reset_wire_bridge(bridge_token)
 
 
-def _planner_goal_text(ctx: LoopRuntimeContext, base: str) -> str:
-    """Append prior plan + review comments when refining after More comments."""
-    parts = [base.strip()] if base.strip() else []
-    comments = (getattr(ctx.scratch, "planner_subagent_review_comments", None) or "").strip()
-    prior = (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip()
-    path = (getattr(ctx.scratch, "plan_artifact_path", None) or "").strip()
-    if comments:
-        parts.append(f"## Human review comments\n{comments}")
-    if prior:
-        parts.append(f"## Prior plan draft\n{prior}")
-    if path:
-        parts.append(f"## Prior plan file\n{path}")
-    return "\n\n".join(parts) if parts else base
-
-
-def _save_planner_artifact(ctx: LoopRuntimeContext, report: str) -> str | None:
-    workspace = getattr(ctx.loop_state, "workspace", None) or ""
-    if not str(workspace).strip():
-        logger.warning("[WiredSubagent] No workspace; skipping plan artifact write")
-        return None
-    goal_record = getattr(ctx, "goal_record", None)
-    try:
-        path = write_plan_artifact(
-            workspace,
-            report,
-            title=resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or "plan",
-            goal_id=getattr(goal_record, "goal_id", "") or "",
-            loop_id=str(getattr(ctx.loop_state, "thread_id", "") or ""),
-            status="draft",
-        )
-    except OSError:
-        logger.exception("[WiredSubagent] Failed to write plan artifact")
-        return None
-    ctx.scratch.plan_artifact_path = str(path)
-    ctx.scratch.plan_artifact_markdown = report
-    logger.info("[WiredSubagent] Plan artifact written: %s", path)
-    return str(path)
-
-
-def _planner_subagent_review_pending_payload(ctx: LoopRuntimeContext) -> dict[str, Any]:
-    """Build pending clarification after planner artifact write.
-
-    Persist ``plan_path`` / ``plan_markdown`` on the pending channel so a
-    clarification-resume turn (fresh scratch) can still emit or hydrate the
-    plan body. ``await_clarification`` also reads scratch when present.
-    """
-    req = ClarificationRequest(
-        questions=_PLANNER_SUBAGENT_REVIEW_QUESTIONS,
-        origin_node=ORIGIN_PLANNER_SUBAGENT_REVIEW,
-        origin_interrupt_id=(f"{PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX}{uuid.uuid4().hex[:8]}"),
-        loop_state=_build_loop_state_view(ctx),
-    )
-    pending = request_to_state(req)
-    path = (getattr(ctx.scratch, "plan_artifact_path", None) or "").strip()
-    markdown = (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip()
-    if path:
-        pending["plan_path"] = path
-    if markdown:
-        pending["plan_markdown"] = markdown
-    return {
-        "pending_clarification": pending,
-        "last_clarification_origin": ORIGIN_PLANNER_SUBAGENT_REVIEW,
-        "pending_clarification_answer": None,
-    }
-
-
-def _hydrate_planner_scratch_from_pending(ctx: LoopRuntimeContext, state: dict[str, Any]) -> None:
-    """Restore plan artifact onto scratch after a clarification-resume turn."""
-    pending = state.get("pending_clarification")
-    if not isinstance(pending, dict):
-        return
-    path = str(pending.get("plan_path") or "").strip()
-    markdown = str(pending.get("plan_markdown") or "").strip()
-    if path and not (getattr(ctx.scratch, "plan_artifact_path", None) or "").strip():
-        ctx.scratch.plan_artifact_path = path
-    if markdown and not (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip():
-        ctx.scratch.plan_artifact_markdown = markdown
-    if not (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip() and path:
-        try:
-            from pathlib import Path
-
-            text = Path(path).read_text(encoding="utf-8")
-        except OSError:
-            logger.debug("[WiredSubagent] could not reload plan artifact %s", path, exc_info=True)
-        else:
-            ctx.scratch.plan_artifact_markdown = text
-            ctx.scratch.plan_artifact_path = path
-
-
-async def _handle_planner_subagent_review_answer(
-    ctx: LoopRuntimeContext,
-    state: dict[str, Any],
-    *,
-    wire: str,
-    goal_text: str,
-) -> dict[str, Any]:
-    """Resume after planner-subagent review: approve, reject, or re-plan with comments."""
-    _hydrate_planner_scratch_from_pending(ctx, state)
-    raw_answer = state.get("pending_clarification_answer")
-    try:
-        answer = answer_from_state(raw_answer or {})
-    except ValueError:
-        logger.exception("[WiredSubagent] malformed planner-subagent review answer")
-        return {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
-            "last_outcome": "fatal",
-        }
-
-    action, comments = parse_planner_subagent_review_answers(answer.answers)
-    path = getattr(ctx.scratch, "plan_artifact_path", None)
-    report = (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip()
-
-    # Clarification-resume rebuilds LoopPhaseScratch; reinject a wired-subagent
-    # plan so Reject → goal_completion can ledger_direct without a fatal.
-    # Approve clears plan_result and hands off to StrangeLoop DISPATCH
-    # (RFC-904); the approved markdown grounds the root THREAD.
-    if ctx.scratch.plan_result is None:
-        ctx.scratch.plan_result = build_wired_subagent_plan(
-            goal_text,
-            wire_subagent=wire,
-            requires_tool_use=False,
-        )
-
-    step_id = "PLAN-RV"
-    if ctx.scratch.plan_result and getattr(ctx.scratch.plan_result, "decision", None):
-        steps = getattr(ctx.scratch.plan_result.decision, "steps", None) or []
-        if steps:
-            step_id = steps[0].id
-
-    if action == "approve":
-        if path:
-            update_plan_artifact_status(path, "approved")
-        # Short note only — full body stays on loop_state for DISPATCH grounding.
-        note = "Plan approved. Proceeding to implement."
-        if path:
-            note = f"{note}\n\nSaved to: `{path}`"
-        _record_wired_execute_ledger(
-            ctx, goal_text=goal_text, report=note, wire=wire, step_id=step_id
-        )
-        # StrangeLoop DISPATCH owns the decision; drop the intake-only plan.
-        # Approve grounds into DISPATCH; do not synthesize a plan-assess artifact.
-        ctx.scratch.plan_result = None
-        ctx.scratch.planner_subagent_review_comments = None
-        ctx.scratch.planner_implement_handoff = True
-        ctx.preferred_subagent = None
-        body = strip_plan_frontmatter(report) if report else ""
-        if not body and path:
-            body = strip_plan_frontmatter(
-                getattr(ctx.scratch, "plan_artifact_markdown", None) or ""
-            )
-        state_obj = ctx.loop_state
-        if state_obj is not None:
-            state_obj.approved_plan_path = str(path) if path else None
-            state_obj.approved_plan_markdown = body or None
-        return {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
-            "last_clarification_origin": None,
-            "planner_implement_handoff": True,
-            "intent_route": None,
-        }
-
-    if action == "reject":
-        if path:
-            update_plan_artifact_status(path, "rejected")
-        final = "Plan rejected by operator."
-        if path:
-            final = f"{final}\n\nPlan file (rejected): `{path}`"
-        if comments:
-            final = f"{final}\n\nComments: {comments}"
-        _record_wired_execute_ledger(
-            ctx, goal_text=goal_text, report=final, wire=wire, step_id=step_id
-        )
-        ctx.scratch.planner_subagent_review_comments = None
-        ctx.scratch.planner_implement_handoff = False
-        return {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
-            "last_clarification_origin": None,
-            "planner_implement_handoff": False,
-        }
-
-    ctx.scratch.planner_subagent_review_comments = comments
-    return await _invoke_intake_only_direct(
-        ctx,
-        wire=wire,
-        goal_text=_planner_goal_text(ctx, goal_text),
-    )
-
-
 async def _invoke_intake_only_direct(
     ctx: LoopRuntimeContext,
     *,
@@ -587,10 +350,6 @@ async def _invoke_intake_only_direct(
         len(report),
     )
 
-    review = wire == PLANNER_WIRE_SUBAGENT
-    if review:
-        _save_planner_artifact(ctx, report)
-
     _record_wired_execute_ledger(
         ctx, goal_text=goal_text, report=report, wire=wire, step_id=step_id
     )
@@ -606,13 +365,10 @@ async def _invoke_intake_only_direct(
         },
     )
     logger.info(
-        "[WiredSubagent] Intake-only direct invoke done (subagent=%s chars=%d review=%s)",
+        "[WiredSubagent] Intake-only direct invoke done (subagent=%s chars=%d)",
         wire,
         len(report),
-        review,
     )
-    if review:
-        return _planner_subagent_review_pending_payload(ctx)
     return {}
 
 
@@ -621,16 +377,6 @@ async def node_invoke_wired_subagent(
 ) -> dict[str, Any]:
     """Resolve wire and direct-invoke the intake-only specialist."""
     goal_text = resolve_user_request(ctx.loop_state) or ctx.loop_state.goal
-
-    # Clarification resume re-enters this node without wire resolution —
-    # honor planner review answers before requiring a live wire_subagent.
-    if (
-        state.get("pending_clarification_answer")
-        and state.get("last_clarification_origin") == ORIGIN_PLANNER_SUBAGENT_REVIEW
-    ):
-        return await _handle_planner_subagent_review_answer(
-            ctx, state, wire=PLANNER_WIRE_SUBAGENT, goal_text=goal_text
-        )
 
     wire = resolve_user_requested_wire_subagent(
         routing_classification=ctx.loop_state.routing_classification,

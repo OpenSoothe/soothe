@@ -333,10 +333,6 @@ class DispatchNode(LoopNode):
             )
         route = str(payload.get("dispatch_route") or "execute")
         patch: dict[str, Any] = {"dispatch_route": route}
-        # One-shot Approve handoff ends on first DISPATCH (cleared even if no body).
-        if getattr(ctx.scratch, "planner_implement_handoff", False):
-            ctx.scratch.planner_implement_handoff = False
-            patch["planner_implement_handoff"] = False
         return RouteDecision(kind="proceed", state_patch=patch)
 
 

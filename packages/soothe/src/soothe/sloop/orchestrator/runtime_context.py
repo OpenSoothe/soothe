@@ -43,12 +43,10 @@ class LoopPhaseScratch:
     decision: AgentDecision | None = None
     iteration_perf_start: float | None = None
     step_results: list[Any] = field(default_factory=list)
-    # Planner-subagent review gate (not StrangeLoop plan_*).
-    plan_artifact_path: str | None = None
-    plan_artifact_markdown: str | None = None
-    planner_subagent_review_comments: str | None = None
-    # Approve → StrangeLoop DISPATCH handoff (one-shot; cleared on first DISPATCH).
-    planner_implement_handoff: bool = False
+    # Plan-mode review scratch (per-iteration draft before approval).
+    plan_draft_path: str | None = None
+    plan_draft_markdown: str | None = None
+    plan_review_comments: str | None = None
     # RFC-904: proposals from the just-finished THREAD wave.
     decompose_proposals: list[Any] = field(default_factory=list)
 
@@ -69,6 +67,7 @@ class LoopRuntimeContext:
     emit: Callable[[str, Any], Awaitable[None]]
     intent_classifier: Any | None = None
     preferred_subagent: str | None = None
+    interaction_mode: str | None = None
     scratch: LoopPhaseScratch = field(default_factory=LoopPhaseScratch)
     clarification_policy: ClarificationPolicy | None = None
     # Next invoke resumes await_user via Command(resume=...); cleared after consume.

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 # Display names for known soothe core subagents.
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
-    "planner": "Planner",
     "deep_research": "Deep Research",
     "academic_research": "Academic Research",
     "browser_use": "Browser",
@@ -13,19 +12,15 @@ SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
 # Lowercase slash tokens matched after ``/`` for preferred_subagent routing (core only).
 # Longest-first so a shorter id never shadows a longer prefix match.
 # Intake-only specialists (601) must stay here so slash sets preferred_subagent.
-# ``plan`` is the UX slash for wire id ``planner`` (RFC-454 /plan routing).
+# ``/plan`` is now handled separately by command_router (interaction_mode=plan).
 SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = (
     "academic_research",
     "deep_research",
     "browser_use",
-    "planner",
-    "plan",
 )
 
 # Slash token → wire preferred_subagent id when they differ.
-_SUBAGENT_SLASH_TO_WIRE: dict[str, str] = {
-    "plan": "planner",
-}
+_SUBAGENT_SLASH_TO_WIRE: dict[str, str] = {}
 
 
 def get_subagent_display_name(technical_name: str) -> str:
@@ -46,9 +41,10 @@ def get_subagent_display_name(technical_name: str) -> str:
 def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     """Parse subagent subcommand from user input.
 
-    Detects subagent routing commands (e.g. ``/deep_research``, ``/browser_use``,
-    ``/plan``) and extracts the wire subagent name along with the cleaned input
-    text (slash token removed so display cards do not show the prefix).
+    Detects subagent routing commands (e.g. ``/deep_research``, ``/browser_use``)
+    and extracts the wire subagent name along with the cleaned input text
+    (slash token removed so display cards do not show the prefix). ``/plan`` is
+    handled separately by ``command_router`` (sets ``interaction_mode=plan``).
 
     Args:
         user_input: Raw user input string.
@@ -61,7 +57,6 @@ def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     Examples:
         ``"/deep_research check this"`` -> ``("deep_research", "check this")``
         ``"/browser_use open example.com"`` -> ``("browser_use", "open example.com")``
-        ``"/plan draft a migration"`` -> ``("planner", "draft a migration")``
         ``"hello world"`` -> ``(None, "hello world")``
     """
     first_match: tuple[int, str] | None = None

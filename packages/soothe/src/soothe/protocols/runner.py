@@ -87,8 +87,9 @@ class LoopRunRequest:
     timeout_seconds: float | None = None
     # RFC-622: per-request clarification mode ("auto" / "manual" / None for daemon default)
     clarification_mode: str | None = None
-    # Per-request CoreAgent interaction mode ("agent" / "ask" / None for config default).
+    # Per-request CoreAgent interaction mode ("agent" / "ask" / "plan" / None for config default).
     # "ask" restricts the graph to read-only tools for this turn.
+    # "plan" compiles a read-only plan-mode graph (same read-only constraints, plan-specific prompt).
     interaction_mode: str | None = None
     # RFC-622: when True, the runner treats ``user_input`` as the answer to the
     # loop's currently pending clarification interrupt and resumes the graph

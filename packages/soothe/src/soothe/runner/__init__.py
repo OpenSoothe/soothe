@@ -189,6 +189,10 @@ class SootheRunner(
         # Shares ``self._checkpointer`` with the default agent so thread state
         # carries across mode switches within a conversation.
         self._ask_core_agent: CoreAgentProtocol | None = None
+        # Read-only "plan" graph, compiled lazily on the first plan turn.
+        # Same read-only constraints as ask, but with a plan-specific system prompt
+        # and empty subagent allowlist.
+        self._plan_core_agent: CoreAgentProtocol | None = None
 
         durability_start = time.perf_counter()
         self._durability = resolve_durability(self._config)
@@ -236,6 +240,8 @@ class SootheRunner(
 
         if interaction_mode == "ask":
             return await self._materialize_ask_core_agent()
+        if interaction_mode == "plan":
+            return await self._materialize_plan_core_agent()
         if isinstance(self._core_agent, LazyCoreAgent):
             return await self._core_agent.amaterialize()
         await self._ensure_checkpointer_initialized()
@@ -262,6 +268,25 @@ class SootheRunner(
             agent_ms = (time.perf_counter() - agent_start) * 1000
             logger.info("CoreAgent (ask) created in %.1fms", agent_ms)
         return self._ask_core_agent
+
+    async def _materialize_plan_core_agent(self) -> CoreAgentProtocol:
+        """Compile (once) and return the read-only ``interaction_mode="plan"`` agent."""
+        if self._plan_core_agent is None:
+            await self._ensure_checkpointer_initialized()
+            import time
+
+            from soothe.coreagent import create_soothe_agent
+
+            agent_start = time.perf_counter()
+            self._plan_core_agent = create_soothe_agent(
+                self._config,
+                checkpointer=self._checkpointer,
+                identity_runtime=self._identity_runtime,
+                interaction_mode="plan",
+            )
+            agent_ms = (time.perf_counter() - agent_start) * 1000
+            logger.info("CoreAgent (plan) created in %.1fms", agent_ms)
+        return self._plan_core_agent
 
     def _materialized_core_agent(self) -> CoreAgentProtocol:
         """Return a compiled CoreAgent, materializing lazily when needed."""

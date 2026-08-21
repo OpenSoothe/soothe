@@ -258,13 +258,13 @@ async def test_mode_derived_from_policy_class(policy_factory: Any, expected_mode
 
 
 async def test_planner_subagent_review_emit_includes_plan_payload() -> None:
-    from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
-    from soothe.sloop.stations.sidecars.delegate import _PLANNER_SUBAGENT_REVIEW_QUESTIONS
+    from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
+    from soothe.sloop.plans.plan_mode_review import _PLAN_MODE_REVIEW_QUESTIONS
 
     req = ClarificationRequest(
-        questions=_PLANNER_SUBAGENT_REVIEW_QUESTIONS,
-        origin_node=ORIGIN_PLANNER_SUBAGENT_REVIEW,
-        origin_interrupt_id="planner-subagent-review:abc",
+        questions=_PLAN_MODE_REVIEW_QUESTIONS,
+        origin_node=ORIGIN_PLAN_MODE_REVIEW,
+        origin_interrupt_id="plan-mode-review:abc",
         loop_state=LoopStateView(
             goal_id="g",
             goal_description="",
@@ -284,8 +284,8 @@ async def test_planner_subagent_review_emit_includes_plan_payload() -> None:
         "Scratch",
         (),
         {
-            "plan_artifact_path": "/ws/.soothe/plans/demo.md",
-            "plan_artifact_markdown": "# Plan\n\nBody.\n",
+            "plan_draft_path": "/ws/.soothe/plans/demo.md",
+            "plan_draft_markdown": "# Plan\n\nBody.\n",
         },
     )()
     await node_await_clarification(ctx, {"pending_clarification": request_to_state(req)})
@@ -293,7 +293,7 @@ async def test_planner_subagent_review_emit_includes_plan_payload() -> None:
     assert len(requested) == 1
     assert requested[0]["plan_path"] == "/ws/.soothe/plans/demo.md"
     assert requested[0]["plan_markdown"].startswith("# Plan")
-    assert requested[0]["questions"] == list(_PLANNER_SUBAGENT_REVIEW_QUESTIONS)
+    assert requested[0]["questions"] == list(_PLAN_MODE_REVIEW_QUESTIONS)
 
 
 def _planner_review_pending(
@@ -301,13 +301,13 @@ def _planner_review_pending(
     plan_path: str = "/ws/.soothe/plans/demo.md",
     plan_markdown: str = "# Plan\n",
 ) -> dict[str, Any]:
-    from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
-    from soothe.sloop.stations.sidecars.delegate import _PLANNER_SUBAGENT_REVIEW_QUESTIONS
+    from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
+    from soothe.sloop.plans.plan_mode_review import _PLAN_MODE_REVIEW_QUESTIONS
 
     req = ClarificationRequest(
-        questions=_PLANNER_SUBAGENT_REVIEW_QUESTIONS,
-        origin_node=ORIGIN_PLANNER_SUBAGENT_REVIEW,
-        origin_interrupt_id="planner-subagent-review:abc",
+        questions=_PLAN_MODE_REVIEW_QUESTIONS,
+        origin_node=ORIGIN_PLAN_MODE_REVIEW,
+        origin_interrupt_id="plan-mode-review:abc",
         loop_state=LoopStateView(
             goal_id="g",
             goal_description="",
@@ -353,8 +353,8 @@ async def test_second_park_after_resume_reemits_clarification_requested() -> Non
         "Scratch",
         (),
         {
-            "plan_artifact_path": "/ws/.soothe/plans/v1.md",
-            "plan_artifact_markdown": "# Plan v1\n",
+            "plan_draft_path": "/ws/.soothe/plans/v1.md",
+            "plan_draft_markdown": "# Plan v1\n",
         },
     )()
 
@@ -379,8 +379,8 @@ async def test_second_park_after_resume_reemits_clarification_requested() -> Non
         "Scratch",
         (),
         {
-            "plan_artifact_path": "/ws/.soothe/plans/v2.md",
-            "plan_artifact_markdown": "# Plan v2\n\nUnified model.\n",
+            "plan_draft_path": "/ws/.soothe/plans/v2.md",
+            "plan_draft_markdown": "# Plan v2\n\nUnified model.\n",
         },
     )()
     await node_await_clarification(

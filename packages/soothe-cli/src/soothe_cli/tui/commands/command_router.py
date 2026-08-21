@@ -248,12 +248,12 @@ async def handle_routing_command(
     *,
     loop_id: str | None = None,
 ) -> None:
-    """Handle daemon routing command by sending input with optional subagent (RFC-454).
+    """Handle daemon routing command by sending input with optional subagent or interaction mode.
 
     For routing commands that map to a configured subagent id (e.g. ``/deep_research``,
-    ``/browser_use``, ``/plan`` → ``planner``), strips the slash token from the query and
-    sets the WebSocket ``preferred_subagent`` field so the daemon merges a subagent hint
-    into StrangeLoop.
+    ``/browser_use``), strips the slash token from the query and sets the WebSocket
+    ``preferred_subagent`` field so the daemon merges a subagent hint into StrangeLoop.
+    The ``/plan`` command sets ``interaction_mode=plan`` instead (read-only plan graph).
 
     Args:
         cmd_input: Full command input (e.g., "/deep_research topic summary")
@@ -264,7 +264,13 @@ async def handle_routing_command(
     if not loop_id:
         console.print("[red]Error: No active loop for routing command[/red]")
         return
-    subagent_name, text = parse_subagent_from_input(cmd_input.strip())
+    stripped = cmd_input.strip()
+    # /plan sets interaction_mode=plan (goal-scoped plan mode, not subagent routing).
+    if stripped.lower().startswith("/plan") and (len(stripped) == 5 or stripped[5].isspace()):
+        text = stripped[5:].strip()
+        await client.send_input(loop_id, text, interaction_mode="plan")
+        return
+    subagent_name, text = parse_subagent_from_input(stripped)
     await client.send_input(loop_id, text, preferred_subagent=subagent_name)
 
 

@@ -9,7 +9,7 @@ from soothe.sloop.clarification.origins import (
     ORIGIN_EXECUTE,
     ORIGIN_PLAN_EVALUATE,
     ORIGIN_PLAN_GENERATE,
-    ORIGIN_PLANNER_SUBAGENT_REVIEW,
+    ORIGIN_PLAN_MODE_REVIEW,
     ORIGIN_RAIL_PAUSE,
     STRANGELOOP_PLANNING_ORIGINS,
     resume_node_for_clarification_origin,
@@ -19,17 +19,18 @@ from soothe.sloop.clarification.origins import (
 def test_clarification_origins_are_live_only() -> None:
     assert CLARIFICATION_ORIGINS == {
         ORIGIN_EXECUTE,
-        ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        ORIGIN_PLAN_MODE_REVIEW,
         ORIGIN_RAIL_PAUSE,
     }
 
 
 def test_strange_loop_planning_origins_are_legacy_plan_spine() -> None:
-    assert ORIGIN_PLANNER_SUBAGENT_REVIEW not in STRANGELOOP_PLANNING_ORIGINS
+    assert ORIGIN_PLAN_MODE_REVIEW not in STRANGELOOP_PLANNING_ORIGINS
     assert ORIGIN_EXECUTE not in STRANGELOOP_PLANNING_ORIGINS
     assert STRANGELOOP_PLANNING_ORIGINS == {
         ORIGIN_PLAN_GENERATE,
         ORIGIN_PLAN_EVALUATE,
+        "planner_subagent_review",  # legacy checkpoint resume compat
         "plan_generate",
         "plan_assess",
         "plan_gap_analysis",
@@ -39,7 +40,7 @@ def test_strange_loop_planning_origins_are_legacy_plan_spine() -> None:
 
 
 def test_default_force_manual_is_planner_subagent_review_only() -> None:
-    assert DEFAULT_FORCE_MANUAL_ORIGINS == (ORIGIN_PLANNER_SUBAGENT_REVIEW,)
+    assert DEFAULT_FORCE_MANUAL_ORIGINS == (ORIGIN_PLAN_MODE_REVIEW,)
 
 
 def test_resume_node_mapping() -> None:
@@ -51,7 +52,7 @@ def test_resume_node_mapping() -> None:
     assert resume_node_for_clarification_origin("analyze_gaps") == "dispatch"
     assert resume_node_for_clarification_origin("plan_assess") == "dispatch"
     assert resume_node_for_clarification_origin("plan_gap_analysis") == "dispatch"
-    assert resume_node_for_clarification_origin(ORIGIN_PLANNER_SUBAGENT_REVIEW) == "delegate"
+    assert resume_node_for_clarification_origin(ORIGIN_PLAN_MODE_REVIEW) == "delegate"
     assert resume_node_for_clarification_origin(ORIGIN_RAIL_PAUSE) is None
     assert resume_node_for_clarification_origin("not_a_stage") is None
     assert resume_node_for_clarification_origin(None) is None

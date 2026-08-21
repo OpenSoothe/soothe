@@ -32,10 +32,10 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
     return None
 
 
-def test_allowlist_includes_academic_research_and_planner() -> None:
+def test_allowlist_includes_academic_research() -> None:
     assert resolve_wire_subagent(wire_subagent="explorer") is None
     assert resolve_wire_subagent(wire_subagent="academic_research") == "academic_research"
-    assert resolve_wire_subagent(wire_subagent="planner") == "planner"
+    assert resolve_wire_subagent(wire_subagent="planner") is None  # removed
     assert resolve_wire_subagent(wire_subagent="plan") is None
     assert resolve_wire_subagent(wire_subagent="not_a_subagent") is None
 
@@ -159,6 +159,7 @@ async def test_init_or_resume_slash_specialist_wins_over_continue_keyword_goal()
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="planner delegate path removed")
 async def test_invoke_wired_planner_direct_ainvoke(tmp_path) -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
@@ -196,9 +197,9 @@ async def test_invoke_wired_planner_direct_ainvoke(tmp_path) -> None:
         preferred_subagent="planner",
         scratch=SimpleNamespace(
             plan_result=None,
-            plan_artifact_path=None,
-            plan_artifact_markdown=None,
-            planner_subagent_review_comments=None,
+            plan_draft_path=None,
+            plan_draft_markdown=None,
+            plan_review_comments=None,
         ),
         emit=_emit,
         core_agent=SimpleNamespace(
@@ -211,13 +212,13 @@ async def test_invoke_wired_planner_direct_ainvoke(tmp_path) -> None:
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
     assert out.get("pending_clarification")
-    from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
+    from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
 
-    assert out.get("last_clarification_origin") == ORIGIN_PLANNER_SUBAGENT_REVIEW
+    assert out.get("last_clarification_origin") == ORIGIN_PLAN_MODE_REVIEW
     assert route_after_wired_subagent(out) == "await_user"
     assert ctx.scratch.plan_result is not None
-    assert ctx.scratch.plan_artifact_path
-    assert Path(ctx.scratch.plan_artifact_path).is_file()
+    assert ctx.scratch.plan_draft_path
+    assert Path(ctx.scratch.plan_draft_path).is_file()
     assert any(e[0] == "plan_phase_status" for e in emitted)
     assert any(e[0] == "wired_subagent_started" for e in emitted)
     assert any(e[0] == "wired_subagent_completed" for e in emitted)
@@ -225,6 +226,7 @@ async def test_invoke_wired_planner_direct_ainvoke(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="planner delegate path removed")
 async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
     from soothe.sloop.stations.sidecars.delegate import _planner_subagent_review_pending_payload
@@ -263,10 +265,10 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
         preferred_subagent="planner",
         scratch=SimpleNamespace(
             plan_result=SimpleNamespace(decision=SimpleNamespace(steps=[SimpleNamespace(id="P1")])),
-            plan_artifact_path=str(plan_path),
-            plan_artifact_markdown="# Plan\n\nDo the migration.\n",
-            planner_subagent_review_comments=None,
-            planner_implement_handoff=False,
+            plan_draft_path=str(plan_path),
+            plan_draft_markdown="# Plan\n\nDo the migration.\n",
+            plan_review_comments=None,
+            plan_implement_handoff=False,
         ),
         emit=_emit,
         core_agent=SimpleNamespace(lookup_intake_only_subagent=lambda _n: None),
@@ -282,11 +284,11 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     }
     out = await node_invoke_wired_subagent(ctx, state)  # type: ignore[arg-type]
     assert out.get("pending_clarification") is None
-    assert out.get("planner_implement_handoff") is True
+    assert out.get("plan_implement_handoff") is True
     assert route_after_wired_subagent(out) == "dispatch"
     assert "status: approved" in plan_path.read_text(encoding="utf-8")
     assert ctx.preferred_subagent is None
-    assert ctx.scratch.planner_implement_handoff is True
+    assert ctx.scratch.plan_implement_handoff is True
     assert ctx.scratch.plan_result is None
     assert ctx.loop_state.approved_plan_markdown is not None
     assert "Do the migration" in ctx.loop_state.approved_plan_markdown
@@ -296,15 +298,19 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     assert not any("Do the migration" in t for t in ai_texts)
 
 
+@pytest.mark.skip(
+    reason="planner delegate path removed; handoff via LoopState.approved_plan_markdown now"
+)
 def test_route_after_wired_subagent_handoff_to_dispatch() -> None:
-    assert route_after_wired_subagent({"planner_implement_handoff": True}) == "dispatch"
+    # Planner handoff removed; wired subagent always goes to finalize now.
     assert route_after_wired_subagent({}) == "finalize"
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="planner delegate path removed")
 async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
     """Reject after clarification resume must not require a live specialist route."""
-    from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
+    from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
     from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
     from soothe.sloop.stations.sidecars.delegate import _planner_subagent_review_pending_payload
 
@@ -334,9 +340,9 @@ async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
         preferred_subagent=None,
         scratch=SimpleNamespace(
             plan_result=None,
-            plan_artifact_path=None,
-            plan_artifact_markdown=None,
-            planner_subagent_review_comments=None,
+            plan_draft_path=None,
+            plan_draft_markdown=None,
+            plan_review_comments=None,
         ),
         emit=_emit,
         core_agent=SimpleNamespace(lookup_intake_only_subagent=lambda _n: None),
@@ -346,8 +352,8 @@ async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
     # Seed pending as if written on the prior turn (includes plan fields).
     seed_ctx = SimpleNamespace(
         scratch=SimpleNamespace(
-            plan_artifact_path=str(plan_path),
-            plan_artifact_markdown="# Plan\n",
+            plan_draft_path=str(plan_path),
+            plan_draft_markdown="# Plan\n",
         ),
         loop_state=ctx.loop_state,
         goal_record=ctx.goal_record,
@@ -357,7 +363,7 @@ async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
     assert pending["pending_clarification"].get("plan_path") == str(plan_path)
     state = {
         **pending,
-        "last_clarification_origin": ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        "last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW,
         "pending_clarification_answer": answer_to_state(
             ClarificationAnswer(answers=("Reject", ""), source="human")
         ),
@@ -367,7 +373,7 @@ async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
     assert out.get("pending_clarification") is None
     assert route_after_wired_subagent(out) == "finalize"
     assert "status: rejected" in plan_path.read_text(encoding="utf-8")
-    assert ctx.scratch.plan_artifact_path == str(plan_path)
+    assert ctx.scratch.plan_draft_path == str(plan_path)
     assert ctx.scratch.plan_result is not None
     assert out.get("last_clarification_origin") is None
 

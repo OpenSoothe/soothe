@@ -280,7 +280,7 @@ class SootheConfig(BaseSettings):
     subagents: dict[str, SubagentConfig] = Field(default_factory=dict)
     """Subagent name to config mapping. Set ``enabled: false`` to disable.
 
-    Builtin subagents (planner, deep_research, academic_research, browser_use) are added
+    Builtin subagents (deep_research, academic_research, browser_use) are added
     automatically. browser_use is provided by soothe-nano and is enabled by default.
     Plugin-discovered subagents are merged during config validation.
     """
@@ -496,7 +496,6 @@ class SootheConfig(BaseSettings):
         # Built-in subagent entries merged before user YAML and plugin registry.
         # browser_use ships with soothe-nano.
         builtin_subagents = {
-            "planner": SubagentConfig(model_role="think"),
             "deep_research": SubagentConfig(),
             "academic_research": SubagentConfig(),
             "browser_use": SubagentConfig(enabled=True, model_role="default"),

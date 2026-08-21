@@ -9,7 +9,7 @@ from soothe.sloop.clarification.origins import (
     ORIGIN_EXECUTE,
     ORIGIN_PLAN_EVALUATE,
     ORIGIN_PLAN_GENERATE,
-    ORIGIN_PLANNER_SUBAGENT_REVIEW,
+    ORIGIN_PLAN_MODE_REVIEW,
 )
 from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
@@ -264,9 +264,9 @@ async def test_force_manual_origin_uses_fallback_and_skips_veritas() -> None:
     policy = AutoClarificationPolicy(
         _veritas,
         interactive_fallback=fallback,
-        force_manual_origins=(ORIGIN_PLANNER_SUBAGENT_REVIEW,),
+        force_manual_origins=(ORIGIN_PLAN_MODE_REVIEW,),
     )
-    request = _request(origin_node=ORIGIN_PLANNER_SUBAGENT_REVIEW)
+    request = _request(origin_node=ORIGIN_PLAN_MODE_REVIEW)
     ans = await policy.answer(request)
     assert ans is fallback_answer
     assert fallback.calls == [request]
@@ -280,9 +280,9 @@ async def test_force_manual_origin_defers_without_fallback() -> None:
 
     policy = AutoClarificationPolicy(
         _veritas,
-        force_manual_origins=(ORIGIN_PLANNER_SUBAGENT_REVIEW,),
+        force_manual_origins=(ORIGIN_PLAN_MODE_REVIEW,),
     )
-    request = _request(origin_node=ORIGIN_PLANNER_SUBAGENT_REVIEW)
+    request = _request(origin_node=ORIGIN_PLAN_MODE_REVIEW)
     with pytest.raises(ClarificationDeferredError) as exc_info:
         await policy.answer(request)
     assert "manual confirmation" in exc_info.value.reason
@@ -295,7 +295,7 @@ async def test_force_manual_does_not_affect_other_origins() -> None:
         _veritas_returning(
             VeritasAnswerSchema(answers=["auth"], confidence=0.9, defer=False, rationale="ok")
         ),
-        force_manual_origins=(ORIGIN_PLANNER_SUBAGENT_REVIEW,),
+        force_manual_origins=(ORIGIN_PLAN_MODE_REVIEW,),
     )
     ans = await policy.answer(_request(origin_node=ORIGIN_EXECUTE))
     assert ans.source == "veritas"
@@ -309,7 +309,7 @@ async def test_force_manual_does_not_apply_to_legacy_plan_origins() -> None:
         _veritas_returning(
             VeritasAnswerSchema(answers=["ok"], confidence=0.9, defer=False, rationale="ok")
         ),
-        force_manual_origins=(ORIGIN_PLANNER_SUBAGENT_REVIEW,),
+        force_manual_origins=(ORIGIN_PLAN_MODE_REVIEW,),
     )
     for origin in (ORIGIN_PLAN_GENERATE, ORIGIN_PLAN_EVALUATE):
         ans = await policy.answer(_request(origin_node=origin))

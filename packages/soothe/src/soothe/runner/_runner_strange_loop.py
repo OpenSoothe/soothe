@@ -510,7 +510,12 @@ class StrangeLoopMixin:
 
         from soothe.sloop.strange_loop import StrangeLoop
 
-        core_agent = self._ask_core_agent if interaction_mode == "ask" else self._agent
+        if interaction_mode == "plan":
+            core_agent = self._plan_core_agent
+        elif interaction_mode == "ask":
+            core_agent = self._ask_core_agent
+        else:
+            core_agent = self._agent
         loop_agent = StrangeLoop(
             core_agent=core_agent,
             config=self._config,
@@ -584,6 +589,7 @@ class StrangeLoopMixin:
                 clarification_answer=clarification_answer,
                 clarification_answers=clarification_answers,
                 resume_interrupted=resume_interrupted,
+                interaction_mode=interaction_mode,
             ):
                 if event_type == "intent_classified_reasoning":
                     payload = event_data if isinstance(event_data, dict) else {}
