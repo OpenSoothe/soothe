@@ -5,6 +5,16 @@ All notable changes to soothe-sdk are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.10] - 2026-08-21
+
+### Changed
+- Drop the `medium` task-complexity tier from `TaskComplexity` (and its `MEDIUM` member) so routing collapses to three levels: `minimal`, `simple`, and `complex`. Update the `RoutingClassification.task_complexity` field description accordingly.
+
+### Removed
+- Drop the legacy `trivial` label from the loop-stream phase allowlist test in favor of the renamed `minimal` label.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v1.0.9...v1.0.10
+
 ## [1.0.9] - 2026-08-20
 
 ### Fixed
