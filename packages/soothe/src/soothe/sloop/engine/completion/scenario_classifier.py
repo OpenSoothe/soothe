@@ -365,9 +365,9 @@ async def classify_synthesis_scenario(
     """
     # intent_type is always "agentic" after RFC-630 3-class intake
     intent_type = "agentic"
-    task_complexity = "medium"
+    task_complexity = "complex"
     if state.intent:
-        task_complexity = getattr(state.intent, "task_complexity", "medium")
+        task_complexity = getattr(state.intent, "task_complexity", "complex")
 
     # Extract execution summary
     execution_summary = _extract_execution_summary(state)

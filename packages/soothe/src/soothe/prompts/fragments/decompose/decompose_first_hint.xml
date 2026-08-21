@@ -1,5 +1,5 @@
 <DECOMPOSE_FIRST_HINT>
-This task is classified as medium or complex complexity (a multi-step task).
+This task is classified as complex (a multi-step task).
 Before doing any work, analyze it and call decompose_task to break it into
 child tasks, then stop.
 </DECOMPOSE_FIRST_HINT>

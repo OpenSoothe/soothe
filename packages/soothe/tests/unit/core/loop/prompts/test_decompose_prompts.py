@@ -74,15 +74,6 @@ def test_root_complex_task_prompts_decompose_first() -> None:
     assert "call decompose_task" in (body.instructions or "")
 
 
-def test_root_medium_task_prompts_decompose_first() -> None:
-    step = StepAction(description="review arch", is_dag_root=True)
-    body = build_dependent_execution_hints(
-        step, has_predecessor_evidence=False, expected_output="done", task_complexity="medium"
-    )
-    assert "multi-step task" in (body.instructions or "")
-    assert "call decompose_task" in (body.instructions or "")
-
-
 def test_root_simple_task_does_not_force_decompose() -> None:
     step = StepAction(description="apply fix", is_dag_root=True)
     body = build_dependent_execution_hints(

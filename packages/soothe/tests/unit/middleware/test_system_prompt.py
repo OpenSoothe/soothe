@@ -133,31 +133,6 @@ def test_simple_query_gets_minimal_prompt():
     assert "Today's date is" not in content
 
 
-def test_medium_query_gets_medium_prompt():
-    """Medium queries (LLM-classified) should receive medium system prompt."""
-    config = SootheConfig()
-    middleware = SystemPromptMiddleware(config=config)
-
-    # LLM classified this as "medium"
-    classification = RoutingClassification(
-        task_complexity="medium",
-        reasoning="Multi-step task",
-    )
-
-    request = MockModelRequest(
-        state={"routing_classification": classification},
-        system_message=SystemMessage(content="original prompt"),
-    )
-
-    modified = middleware.modify_request(request)
-
-    # Should have medium prompt with guidelines
-    assert "Handle practical tasks" in modified.system_message.content
-    assert "Be direct and concise" in modified.system_message.content
-    # RFC-214: no date line in system prompt
-    assert "Today's date is" not in modified.system_message.content
-
-
 def test_simple_query_gets_compact_prompt() -> None:
     """Simple task complexity should use compact system prompt tier."""
     config = SootheConfig()
@@ -197,8 +172,8 @@ def test_complex_query_gets_full_prompt():
     assert len(modified.system_message.content) > 400
 
 
-def test_no_classification_uses_medium_optimized_prompt():
-    """Requests without classification still get optimized medium-tier system prompt."""
+def test_no_classification_uses_fallback_prompt():
+    """Requests without classification still get a middleware-supplied prompt."""
     config = SootheConfig()
     middleware = SystemPromptMiddleware(config=config)
 
@@ -210,7 +185,6 @@ def test_no_classification_uses_medium_optimized_prompt():
     modified = middleware.modify_request(request)
 
     assert modified.system_message.content != "original prompt"
-    assert "Handle practical tasks" in modified.system_message.content
     # RFC-214: Date is in user envelope
     assert "Today's date is" not in modified.system_message.content
 
@@ -219,7 +193,7 @@ def test_execution_hints_extracted_to_state():
     """RFC-214: Execution hints extracted from state for user envelope, not merged into system."""
     config = SootheConfig()
     middleware = SystemPromptMiddleware(config=config)
-    classification = RoutingClassification(task_complexity="medium")
+    classification = RoutingClassification(task_complexity="simple")
     hint_body = (
         "Suggested subagent: deep_research. Expected output: paths under src/. "
         "Consider using the suggested approach first."
@@ -267,7 +241,7 @@ def test_all_prompts_do_not_include_date():
     middleware = SystemPromptMiddleware(config=config)
 
     # Test all complexity levels - none should have date in system prompt
-    for complexity in ["minimal", "simple", "medium", "complex"]:
+    for complexity in ["minimal", "simple", "complex"]:
         classification = RoutingClassification(
             task_complexity=complexity,
             reasoning="Test",
@@ -312,7 +286,7 @@ def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
     enforcement = ToolEnforcementMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
-        task_complexity="medium",
+        task_complexity="simple",
         preferred_subagent="plugin_agent",
         routing_hint="subagent",
     )
@@ -339,7 +313,7 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
     enforcement = ToolEnforcementMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
-        task_complexity="medium",
+        task_complexity="simple",
         preferred_subagent="deep_research",
         routing_hint="subagent",
     )
@@ -535,7 +509,7 @@ class TestComposeSkillsBlockJustInvokedExclusion:
             state=state,
         )
         listing.modify_request(request)
-        prompt = middleware._get_prompt_for_complexity("medium", state)
+        prompt = middleware._get_prompt_for_complexity("simple", state)
         assert "<SKILL_CONTEXT_GUIDE>" in prompt
         assert '<SKILL_CONTEXT name="weather">' in prompt
         assert "search_tools" in prompt
@@ -644,7 +618,7 @@ class TestWorkspaceInjection:
         """
         (tmp_path / "AGENTS.md").write_text("# Rules\n\nBe terse.\n", encoding="utf-8")
         mw = self._middleware()
-        prompt = mw._get_prompt_for_complexity("medium", {"workspace": str(tmp_path)})
+        prompt = mw._get_prompt_for_complexity("simple", {"workspace": str(tmp_path)})
 
         idx_env = prompt.find("<ENVIRONMENT")
         idx_rules = prompt.find("<WORKSPACE_RULES>")

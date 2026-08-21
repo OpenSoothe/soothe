@@ -9,7 +9,7 @@ FINISH HERE when ALL of:
 - A failed sub-part would not need its own later retry as a separate task
 
 SPLIT (call decompose_task, then STOP) when ANY of:
-- The task is classified medium or complex (complexity above simple)
+- The task is classified complex (complexity above simple)
 - Multiple deliverables or phases that should run as separate tasks later
 - Independent work that can run in parallel or has hard dependencies
 - A subtask should fail/retry without redoing the rest

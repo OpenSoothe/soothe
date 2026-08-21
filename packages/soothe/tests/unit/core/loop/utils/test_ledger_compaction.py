@@ -11,7 +11,7 @@ from soothe.sloop.utils.ledger_compaction import (
 
 
 def test_compact_human_rewrites_goal_to_goal_recap() -> None:
-    content = "GOAL:\nweight stuff\n\nINTENT: agentic (complexity: medium)"
+    content = "GOAL:\nweight stuff\n\nINTENT: agentic (complexity: complex)"
     out = compact_planning_human_content(content)
     assert "GOAL:\n" not in out
     assert "GOAL RECAP:" in out

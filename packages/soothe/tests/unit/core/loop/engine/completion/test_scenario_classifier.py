@@ -37,7 +37,7 @@ class _StubLLM:
 def _build_state(
     step_count: int = 1,
     all_success: bool = True,
-    task_complexity: str = "medium",
+    task_complexity: str = "complex",
 ) -> SimpleNamespace:
     results = []
     for i in range(step_count):

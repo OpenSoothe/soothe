@@ -182,12 +182,12 @@ class TestProtocolsSection:
 class TestBuildContextSectionsForComplexity:
     """Sanity checks for ordered block builder."""
 
-    def test_medium_order(self) -> None:
+    def test_simple_order(self) -> None:
         config = MagicMock()
         config.resolve_model.return_value = "m"
         state = {"workspace": "/tmp"}
         blocks = build_context_sections_for_complexity(
-            config=config, complexity="medium", state=state, include_workspace_extras=False
+            config=config, complexity="simple", state=state, include_workspace_extras=False
         )
         # build_context_sections_for_complexity returns both ENVIRONMENT and WORKSPACE
         # but _get_prompt_for_complexity only uses ENVIRONMENT in static sections
@@ -219,13 +219,13 @@ class TestComplexityMapping:
         assert "Today's date is" not in prompt
         assert "<ENVIRONMENT" in prompt  # ENVIRONMENT is always included for minimal tier
 
-    def test_medium_gets_environment_only(self, middleware: SystemPromptMiddleware) -> None:
-        """Medium complexity gets ENVIRONMENT section (RFC-214: WORKSPACE_RULES when workspace set)."""
+    def test_simple_gets_environment_only(self, middleware: SystemPromptMiddleware) -> None:
+        """Simple complexity gets ENVIRONMENT section (RFC-214: WORKSPACE_RULES when workspace set)."""
         state = {
             "workspace": Path("/project"),
         }
 
-        prompt = middleware._get_prompt_for_complexity("medium", state)
+        prompt = middleware._get_prompt_for_complexity("simple", state)
 
         # RFC-207: Removed SOOTHE_ prefix from ENVIRONMENT tag
         assert "<ENVIRONMENT" in prompt
@@ -266,10 +266,10 @@ class TestComplexityMapping:
             "workspace": Path("/project"),
         }
 
-        prompt = middleware._get_prompt_for_complexity("medium", state)
+        prompt = middleware._get_prompt_for_complexity("simple", state)
 
         assert "Soothe" in prompt
         # RFC-214: Date is in user message envelope, not system prompt
         assert "Today's date is" not in prompt
-        core = middleware._get_base_prompt_core("medium")
+        core = middleware._get_base_prompt_core("simple")
         assert core in prompt

@@ -33,7 +33,7 @@ def _run_through_hook(middleware: object, request: ModelRequest) -> ModelRequest
 def test_wire_subagent_routing_first_hop_narrows_to_task() -> None:
     middleware = ToolEnforcementMiddleware()
     classification = RoutingClassification(
-        task_complexity="medium",
+        task_complexity="simple",
         preferred_subagent="plugin_agent",
         routing_hint="subagent",
     )
@@ -54,7 +54,7 @@ def test_wire_subagent_routing_first_hop_narrows_to_task() -> None:
 def test_wire_subagent_routing_after_first_hop_keeps_full_tools() -> None:
     middleware = ToolEnforcementMiddleware()
     classification = RoutingClassification(
-        task_complexity="medium",
+        task_complexity="simple",
         preferred_subagent="plugin_agent",
         routing_hint="subagent",
     )
@@ -77,7 +77,7 @@ def test_intake_only_preferred_subagent_does_not_narrow_tools() -> None:
     middleware = ToolEnforcementMiddleware()
     for name in ("deep_research", "planner"):
         classification = RoutingClassification(
-            task_complexity="medium",
+            task_complexity="simple",
             preferred_subagent=name,
             routing_hint="subagent",
         )
@@ -103,7 +103,7 @@ def test_goal_step_guard_keeps_tools_without_synthesis() -> None:
         messages=[HumanMessage(content="x"), AIMessage(content="delegating")],
         system_message=SystemMessage(content="orig"),
         tools=[SimpleNamespace(name="run_command"), SimpleNamespace(name="task")],
-        state={"routing_classification": RoutingClassification(task_complexity="medium")},
+        state={"routing_classification": RoutingClassification(task_complexity="simple")},
     )
     with patch("langgraph.config.get_config", return_value={"configurable": {"thread_id": "t1"}}):
         modified = _run_through_hook(middleware, request)

@@ -13,7 +13,6 @@ def test_prompt_templates_exist():
     """Test that all prompt templates are defined."""
     from soothe.prompts import (
         _DEFAULT_SYSTEM_PROMPT,
-        _MEDIUM_SYSTEM_PROMPT,
         _SIMPLE_SYSTEM_PROMPT,
         ASSISTANT_IDENTITY_FRAGMENT,
     )
@@ -21,9 +20,6 @@ def test_prompt_templates_exist():
     # All templates should be non-empty strings
     assert isinstance(_SIMPLE_SYSTEM_PROMPT, str)
     assert len(_SIMPLE_SYSTEM_PROMPT) > 0
-
-    assert isinstance(_MEDIUM_SYSTEM_PROMPT, str)
-    assert len(_MEDIUM_SYSTEM_PROMPT) > 0
 
     assert isinstance(_DEFAULT_SYSTEM_PROMPT, str)
     assert len(_DEFAULT_SYSTEM_PROMPT) > 0
@@ -44,13 +40,11 @@ def test_token_reduction_estimates():
 
     # Get prompts for each complexity
     from soothe.prompts import (
-        _MEDIUM_SYSTEM_PROMPT,
         _SIMPLE_SYSTEM_PROMPT,
         format_complex_agent_system_prompt_core,
     )
 
     simple_prompt = _SIMPLE_SYSTEM_PROMPT.format(assistant_name=config.agent.name)
-    medium_prompt = _MEDIUM_SYSTEM_PROMPT.format(assistant_name=config.agent.name)
     complex_prompt = format_complex_agent_system_prompt_core(
         config.agent.system_prompt,
         config.agent.name,
@@ -59,21 +53,15 @@ def test_token_reduction_estimates():
 
     identity = build_assistant_identity_block(config.agent.name)
     simple_with_identity = f"{identity}\n\n{simple_prompt}"
-    medium_with_identity = f"{identity}\n\n{medium_prompt}"
     complex_with_identity = f"{identity}\n\n{complex_prompt}"
 
     # Rough token count (words * 1.3 is a common approximation)
     simple_tokens = len(simple_with_identity.split()) * 1.3
-    medium_tokens = len(medium_with_identity.split()) * 1.3
     complex_tokens = len(complex_with_identity.split()) * 1.3
 
     # Simple should be ~80% reduction
     simple_reduction = (complex_tokens - simple_tokens) / complex_tokens
     assert simple_reduction > 0.7, f"Expected >70% reduction, got {simple_reduction:.1%}"
-
-    # Medium should be ~50% reduction
-    medium_reduction = (complex_tokens - medium_tokens) / complex_tokens
-    assert medium_reduction > 0.3, f"Expected >30% reduction, got {medium_reduction:.1%}"
 
 
 if __name__ == "__main__":

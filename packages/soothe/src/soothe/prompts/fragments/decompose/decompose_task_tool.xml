@@ -1,7 +1,7 @@
 <DECOMPOSE_TASK_TOOL>
 First decide: can this EXECUTION TASK finish in this thread, or must it split?
 
-Call decompose_task when the task's complexity is medium or complex (anything
+Call decompose_task when the task's complexity is complex (anything
 above simple), or when the work is splittable in a *schedulable* sense:
 multiple deliverables/phases, parallel workstreams, hard dependencies, or
 independent failure/retry per subtask. Propose child tasks for later threads;

@@ -34,9 +34,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# Host may send an execute-phase complexity (``minimal``/``simple``/``medium``/
-# ``complex``) or a routing label (``trivial``/``simple``/``complex``).
-_INTAKE_LABELS = frozenset({"minimal", "trivial", "simple", "medium", "complex"})
+# Host may send an execute-phase complexity (``minimal``/``simple``/``complex``)
+# or a routing label (``trivial``/``simple``/``complex``).
+_INTAKE_LABELS = frozenset({"minimal", "trivial", "simple", "complex"})
 
 _MAX_GOAL_HEADER = 100
 _MAX_GOAL_STEP_DESC = 80

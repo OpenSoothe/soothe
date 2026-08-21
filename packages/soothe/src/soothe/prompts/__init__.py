@@ -19,7 +19,6 @@ from soothe_nano.prompts.context_xml import (
 from soothe_nano.prompts.fragments import (
     ASSISTANT_IDENTITY_FRAGMENT,
     DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT,
-    MEDIUM_SYSTEM_PROMPT_FRAGMENT,
     SIMPLE_SYSTEM_PROMPT_FRAGMENT,
 )
 from soothe_nano.prompts.identity import (
@@ -36,7 +35,6 @@ from soothe_nano.prompts.system_templates import (
     _DATA_GUIDE,
     _DEFAULT_SYSTEM_PROMPT,
     _FILE_OPS_GUIDE,
-    _MEDIUM_SYSTEM_PROMPT,
     _RESEARCH_GUIDE,
     _SHELL_GUIDE,
     _SIMPLE_SYSTEM_PROMPT,
@@ -84,7 +82,6 @@ __all__ = [
     "EVAL_POLICY_SYSTEM_ADDENDUM",
     "DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT",
     "EXECUTE_WORKSPACE_RULES_FRAGMENT",
-    "MEDIUM_SYSTEM_PROMPT_FRAGMENT",
     "PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS",
     "RESPONSE_LANGUAGE_HINT_FALLBACK",
     "SIMPLE_SYSTEM_PROMPT_FRAGMENT",
@@ -93,7 +90,6 @@ __all__ = [
     "_DATA_GUIDE",
     "_DEFAULT_SYSTEM_PROMPT",
     "_FILE_OPS_GUIDE",
-    "_MEDIUM_SYSTEM_PROMPT",
     "_RESEARCH_GUIDE",
     "_SHELL_GUIDE",
     "_SIMPLE_SYSTEM_PROMPT",

@@ -70,10 +70,7 @@ class TestDeriveIntakeLabelFromTaskComplexity:
     def test_simple_maps_to_simple(self) -> None:
         assert derive_intake_label_from_task_complexity(TaskComplexity.SIMPLE) == IntakeLabel.SIMPLE
 
-    def test_medium_and_complex_map_to_complex(self) -> None:
-        assert (
-            derive_intake_label_from_task_complexity(TaskComplexity.MEDIUM) == IntakeLabel.COMPLEX
-        )
+    def test_complex_maps_to_complex(self) -> None:
         assert (
             derive_intake_label_from_task_complexity(TaskComplexity.COMPLEX) == IntakeLabel.COMPLEX
         )

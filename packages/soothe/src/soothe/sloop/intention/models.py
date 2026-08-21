@@ -73,7 +73,6 @@ def derive_intake_label_from_task_complexity(
     """Map intake LLM ``task_complexity`` to the 4-class routing label.
 
     The TUI plan panel and ``route_after_preprocess`` read ``intake_label``.
-    ``medium`` has no dedicated label and routes as ``complex``.
 
     Args:
         task_complexity: Execute-phase complexity from intake, or ``None``.
@@ -151,7 +150,7 @@ def build_loop_routing_classification(
     if intent is None:
         if resolved_wire:
             return RoutingClassification(
-                task_complexity=TaskComplexity.MEDIUM,
+                task_complexity=TaskComplexity.COMPLEX,
                 preferred_subagent=resolved_wire,
                 routing_hint="subagent",
             )
@@ -227,7 +226,7 @@ class IntakeLLMResult(BaseModel):
     task_complexity: TaskComplexity | None = Field(
         default=None,
         description=(
-            "When is_task=True: task complexity minimal, simple, medium, or complex. "
+            "When is_task=True: task complexity minimal, simple, or complex. "
             "When is_task=False: null."
         ),
     )

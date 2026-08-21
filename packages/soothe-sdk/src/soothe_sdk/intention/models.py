@@ -12,13 +12,11 @@ class TaskComplexity(StrEnum):
 
     - minimal: No tools needed (direct reply)
     - simple: Single focused step
-    - medium: Multi-step with moderate tool use
     - complex: Architecture, migration, deep multi-phase work
     """
 
     MINIMAL = "minimal"
     SIMPLE = "simple"
-    MEDIUM = "medium"
     COMPLEX = "complex"
 
 
@@ -32,7 +30,7 @@ class RoutingClassification(BaseModel):
     """
 
     task_complexity: TaskComplexity = Field(
-        description="Routing complexity: minimal (no tools), simple, medium, or complex"
+        description="Routing complexity: minimal (no tools), simple, or complex"
     )
     preferred_subagent: str | None = Field(
         default=None,

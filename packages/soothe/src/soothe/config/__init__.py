@@ -17,7 +17,6 @@ from soothe_nano.config.settings import SootheConfig as NanoSootheConfig
 # Re-export facade — canonical source: soothe_nano.prompts.system_templates
 from soothe_nano.prompts.system_templates import (
     _DEFAULT_SYSTEM_PROMPT,
-    _MEDIUM_SYSTEM_PROMPT,
     _SIMPLE_SYSTEM_PROMPT,
     _TOOL_ORCHESTRATION_GUIDE,
 )
@@ -101,7 +100,6 @@ __all__ = [
     "SOOTHE_HOME",
     "_DEFAULT_SYSTEM_PROMPT",
     "_ENV_VAR_RE",
-    "_MEDIUM_SYSTEM_PROMPT",
     "_SIMPLE_SYSTEM_PROMPT",
     "_TOOL_ORCHESTRATION_GUIDE",
     "AgentConfig",
