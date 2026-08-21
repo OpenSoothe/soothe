@@ -215,6 +215,13 @@ class PhasesMixin:
                             "CE finalize_goal failed for chitchat fast path",
                             exc_info=True,
                         )
+                    try:
+                        await context_engine.save()
+                    except Exception:
+                        logger.debug(
+                            "CE save failed for chitchat fast path",
+                            exc_info=True,
+                        )
                 await sm.finalize_goal(goal_record)
             finally:
                 await sm.close()

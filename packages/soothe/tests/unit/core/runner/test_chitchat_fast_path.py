@@ -188,3 +188,79 @@ async def test_finalize_chitchat_skips_running_checkpoint() -> None:
         await runner._finalize_chitchat_loop("loop-running")
 
     mock_sm.finalize_goal.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_finalize_chitchat_persists_ce_goal_completed(tmp_path: Path) -> None:
+    """Chitchat CE goal must be persisted as 'completed' after finalize.
+
+    Regression for the missing ``ce.save()`` in ``_finalize_chitchat_loop``.
+    Before the fix, ``finalize_goal`` mutated the in-memory DAG node to
+    ``completed`` but never persisted; the next ``ce.load()`` reverted to the
+    on-disk ``active`` status. This test fails on the old code and passes after
+    the ``await context_engine.save()`` tail-persistence call is added.
+    """
+    from datetime import UTC, datetime
+
+    from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
+
+    loop_id = "loop-chitchat-persist"
+    db_path = tmp_path / "context_engine.db"
+
+    # (1) Real CE with SQLite file persistence.
+    ce = ContextEngine(
+        persistence=SqliteContextPersistence(loop_id=loop_id, db_path=db_path),
+    )
+
+    # (2) Create + activate goal (mirrors strange_loop.py:714, 720).
+    goal = await ce.create_goal("chitchat exchange")
+    await ce.activate_goal(goal.id, loop_id=loop_id)
+
+    # (3) Save while still 'active' (mirrors strange_loop.py:726 pre-graph save).
+    await ce.save()
+    assert (await ce.get_goal(goal.id)).status == "active"
+
+    # (4) Build a fresh-chitchat checkpoint (duration_ms==0 → finalize allowed).
+    now = datetime.now(UTC)
+    goal_record = GoalIndexEntry(
+        goal_id=goal.id,
+        status="running",
+        thread_id=loop_id,
+        started_at=now,
+        completed_at=None,
+        duration_ms=0,  # fresh chitchat goal — chitchat_may_finalize_checkpoint → True
+        tokens_used=0,
+    )
+    checkpoint = MagicMock()
+    checkpoint.status = "running"
+    checkpoint.current_goal_index = 0
+    checkpoint.goal_history = [goal_record]
+
+    mock_sm = MagicMock()
+    mock_sm.load = AsyncMock(return_value=checkpoint)
+    mock_sm.finalize_goal = AsyncMock()
+    mock_sm.close = AsyncMock()
+
+    runner = _ChitchatRunner(config=MagicMock(), loop_id=loop_id)
+    runner.get_sloop_shared_pool = AsyncMock(return_value=None)
+
+    with patch(
+        "soothe.sloop.state.sloop_manager.StrangeLoopStateManager",
+        return_value=mock_sm,
+    ):
+        await runner._finalize_chitchat_loop(
+            loop_id,
+            context_engine=ce,
+            ce_goal_id=goal.id,
+        )
+
+    # (5) Reload from disk via a fresh CE instance (mirrors next ce.load()).
+    ce_reloaded = ContextEngine(
+        persistence=SqliteContextPersistence(loop_id=loop_id, db_path=db_path),
+    )
+    await ce_reloaded.load()
+
+    # (6) Assert persisted status is 'completed', not 'active'.
+    reloaded_goal = await ce_reloaded.get_goal(goal.id)
+    assert reloaded_goal is not None
+    assert reloaded_goal.status == "completed"
