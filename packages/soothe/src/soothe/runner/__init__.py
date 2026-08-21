@@ -114,6 +114,13 @@ class SootheRunner(
         self._identity_runtime = identity_runtime
         self._checkpointer_pool = None  # Will be set if using PostgreSQL
 
+        # Apply configurable persona identity to nano's module-level fragment
+        # so the runtime SystemPromptMiddleware hot path renders the configured
+        # creator/role/vendor denylist. No-op when all fields are defaults.
+        from soothe.identity.persona import apply_identity_fragment_override
+
+        apply_identity_fragment_override(self._config)
+
         # Initialize intent classifier (core.intention module).
         # Unified classification is always enabled; classifier is omitted only if fast model is unavailable.
         fast_model = None
@@ -131,6 +138,7 @@ class SootheRunner(
                 model=fast_model,
                 assistant_name=self._config.agent.name,
                 soothe_config=self._config,
+                assistant_identity=self._config.agent.assistant_identity,
             )
             logger.info("[IntentClassifier] Initialized in LLM mode")
         else:

@@ -834,20 +834,25 @@ def project_execute_step_graph_input(
     excluded_step_ids: frozenset[str] = frozenset()
 
     if mode == "goal_boundary" and exec_cfg.cross_goal_completion_tail >= 0:
-        if getattr(state, "continue_loop", False):
-            tail_k = exec_cfg.cross_goal_completion_tail
-            slice_a = project_cross_goal_completion_tail(
+        # Always project prior goal_completion terminal units at the goal boundary
+        # so the next goal has complete context (plan approvals, prior completions,
+        # interrupted digests). The ``continue_loop`` gate was removed because plan
+        # mode goals that end via PLAN_REVIEW (not FINALIZE) still need their
+        # goal_completion pairs projected to the next goal regardless of whether
+        # the loop was explicitly continued.
+        tail_k = exec_cfg.cross_goal_completion_tail
+        slice_a = project_cross_goal_completion_tail(
+            loop_messages,
+            k=tail_k,
+            ledger_cfg=plan_cfg,
+        )
+        if slice_a:
+            out.extend(slice_a)
+            cross_goal_projected = True
+            excluded_step_ids = execute_step_ids_subsumed_by_cross_goal_completion(
                 loop_messages,
                 k=tail_k,
-                ledger_cfg=plan_cfg,
             )
-            if slice_a:
-                out.extend(slice_a)
-                cross_goal_projected = True
-                excluded_step_ids = execute_step_ids_subsumed_by_cross_goal_completion(
-                    loop_messages,
-                    k=tail_k,
-                )
 
     predecessor_projected = False
     cap = exec_cfg.predecessor_max_messages

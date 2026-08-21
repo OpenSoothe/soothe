@@ -266,6 +266,9 @@ class TextualUIAdapter:
         already shows that text on the step card.
         """
 
+        self.interaction_mode: str | None = None
+        """Current interaction mode (``"plan"`` / ``"ask"`` / ``None``=agent) for step card titles."""
+
         self._last_main_flushed_assistant_prose: str = ""
         """Body last written to a main-namespace ``AssistantMessage`` via flush.
 
@@ -1238,6 +1241,11 @@ def _apply_subagent_wire_activity_event(
         return True
     card = _display_target_for_task_scope(adapter, task_scope)
     if card is None:
+        return True
+
+    # Planner progress on orphan cards is swallowed: no activity notes, no stage
+    # title. Other subagent progress still appends activity lines.
+    if et == "soothe.subagent.planner.progress" and _is_orphan_subagent_card(card):
         return True
 
     from soothe_sdk.ux.subagent_progress import summarize_subagent_wire_activity
@@ -3132,6 +3140,9 @@ async def execute_task_textual(
     # below and clear ``adapter._clarification_pending`` so the next turn does
     # not double-send. The new turn's events will re-arm the flag if the
     # daemon emits another ``clarification_requested``.
+    # Store interaction mode on the adapter so step card titles can show [Plan]/[Ask].
+    adapter.interaction_mode = interaction_mode
+
     sending_clarification_answer = bool(getattr(adapter, "_clarification_pending", False))
     pending_clarification_answers: list[str] | None = None
     if sending_clarification_answer:
@@ -4131,7 +4142,7 @@ async def execute_task_textual(
                                 if (
                                     event_type == LOOP_CLARIFICATION_REQUESTED
                                     and origin_node
-                                    in ("plan_mode_review", "planner_subagent_review")
+                                    in {"plan_mode_review", "planner_subagent_review"}
                                     and not plan_path.strip()
                                     and not plan_markdown.strip()
                                 ):
@@ -4256,6 +4267,7 @@ async def execute_task_textual(
                                         step_widget = CognitionStepMessage(
                                             step_id=step_id,
                                             description=description or "(step)",
+                                            interaction_mode=adapter.interaction_mode,
                                             id=f"step-{uuid.uuid4().hex[:8]}",
                                         )
                                         await adapter._mount_message(step_widget)

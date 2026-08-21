@@ -6,8 +6,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import soothe.prompts.fragments as _prompt_fragments
+
+if TYPE_CHECKING:
+    from soothe.config.models import AssistantIdentity
 
 _INTAKE_FRAGMENTS_DIR = Path(_prompt_fragments.__file__).resolve().parent / "intake"
 
@@ -68,16 +72,22 @@ def build_intake_system_prompt(
     assistant_name: str,
     *,
     ctx: dict[str, str] | None = None,
+    identity: AssistantIdentity | None = None,
 ) -> str:
     """Assemble the intake system prompt with identity and live timestamp at the tail.
 
     Pass a pre-fetched ``ctx`` (from :func:`prompt_datetime_context`) to
     avoid a timestamp race when the caller already captured the context.
+
+    Args:
+        body: Intake fragment text (from ``_read_intake_fragment``).
+        assistant_name: Configured assistant display name.
+        ctx: Optional pre-fetched datetime context.
+        identity: Optional configured persona. ``None`` reproduces the
+            original hardcoded identity line (backward compat).
     """
-    from soothe.prompts import (
-        build_assistant_identity_block,
-        normalize_assistant_name,
-    )
+    from soothe.identity.persona import _format_vendor_denylist, build_assistant_identity_block
+    from soothe.prompts import normalize_assistant_name
     from soothe.utils.prompt_clock import prompt_datetime_context
 
     name = normalize_assistant_name(assistant_name)
@@ -85,11 +95,25 @@ def build_intake_system_prompt(
     # the second ticks over between independent calls.
     if ctx is None:
         ctx = prompt_datetime_context()
-    format_ctx = {"assistant_name": name, **ctx}
+    format_ctx = {
+        "assistant_name": name,
+        "assistant_creator": "Dr. Xiaming Chen",
+        "assistant_role": "a helpful AI assistant",
+        "assistant_vendor_denylist": _format_vendor_denylist(
+            ["Claude", "ChatGPT", "Gemini", "Anthropic", "OpenAI", "Google"]
+        ),
+        **ctx,
+    }
+    if identity is not None:
+        format_ctx["assistant_creator"] = identity.creator.strip() or "Dr. Xiaming Chen"
+        format_ctx["assistant_role"] = identity.role_description.strip() or "a helpful AI assistant"
+        format_ctx["assistant_vendor_denylist"] = _format_vendor_denylist(
+            list(identity.vendor_denylist)
+        )
     formatted_body = _substitute_prompt_placeholders(body.strip(), format_ctx)
 
     parts = [
-        build_assistant_identity_block(name),
+        build_assistant_identity_block(name, identity=identity),
         formatted_body,
         build_prompt_timestamp_block(format_ctx),
     ]

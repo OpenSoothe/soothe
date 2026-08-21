@@ -36,6 +36,11 @@ from soothe.identity.identity_service import (
     initialize_identity_tables_sync,
 )
 from soothe.identity.middleware import IdentityMiddleware
+from soothe.identity.persona import (
+    apply_identity_fragment_override,
+    build_assistant_identity_block,
+    build_intake_identity_line,
+)
 from soothe.identity.runtime import (
     AKSKConfig,
     IdentityConfig,
@@ -87,6 +92,10 @@ __all__ = [
     "TokenConfig",
     "AKSKConfig",
     "ThreadContextProvider",
+    # Persona identity
+    "apply_identity_fragment_override",
+    "build_assistant_identity_block",
+    "build_intake_identity_line",
     # Service
     "IdentityService",
     "initialize_identity_tables_sync",

@@ -11,7 +11,7 @@ from soothe.sloop.clarification.events import (
 def test_clarification_requested_event_forwards_plan_payload() -> None:
     ev = ClarificationRequestedEvent(
         questions=["Action for this plan: Approve, Reject, or More comments"],
-        origin_node="planner_subagent_review",
+        origin_node="plan_mode_review",
         mode="manual",
         plan_path="/ws/.soothe/plans/demo.md",
         plan_markdown="# Plan\n\nDo the thing.\n",
@@ -19,7 +19,7 @@ def test_clarification_requested_event_forwards_plan_payload() -> None:
     payload = ev.to_dict()
     assert payload["plan_path"] == "/ws/.soothe/plans/demo.md"
     assert payload["plan_markdown"].startswith("# Plan")
-    assert payload["origin_node"] == "planner_subagent_review"
+    assert payload["origin_node"] == "plan_mode_review"
 
 
 def test_clarification_deferred_event_carries_defer_kind() -> None:

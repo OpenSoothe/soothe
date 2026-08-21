@@ -184,11 +184,11 @@ def message_from_widget(widget: Widget) -> MessageData:
             summary = " | ".join(a for a in widget._answers if a)  # noqa: SLF001
             prefix = (
                 "Plan review"
-                if widget._origin_node in ("plan_mode_review", "planner_subagent_review")  # noqa: SLF001
+                if widget._origin_node in {"plan_mode_review", "planner_subagent_review"}  # noqa: SLF001
                 else "Clarification"
             )
             content = f"{prefix}: {summary}" if summary else f"{prefix} answered"
-        elif widget._origin_node in ("plan_mode_review", "planner_subagent_review"):  # noqa: SLF001
+        elif widget._origin_node in {"plan_mode_review", "planner_subagent_review"}:  # noqa: SLF001
             content = "Plan review: awaiting Approve / Reject / More comments"
         else:
             content = "Clarification: awaiting answer"

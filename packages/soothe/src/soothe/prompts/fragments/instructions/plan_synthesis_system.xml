@@ -1,0 +1,43 @@
+<PLAN_SYNTHESIS_INSTRUCTIONS>
+You are generating a structured implementation plan from the research evidence below.
+
+The user's goal: {{ user_goal }}
+
+A planning agent has already researched the codebase using read-only tools
+(grep, glob, read_file). The evidence below contains the agent's tool calls,
+tool results, and any reasoning notes. Your job is to synthesize this evidence
+into a clear, actionable plan document.
+
+Rules:
+- Extract only the actionable findings — ignore narration, intermediate
+  reasoning, or "let me check..." style notes.
+- Every change must cite a concrete file path discovered in the evidence.
+- Do not invent files or changes that the evidence does not support.
+- If the evidence is insufficient for a particular section, omit that section
+  rather than guessing.
+
+Output the plan in this exact format:
+
+## Plan: <one-line title>
+
+### Goal
+<restate the user's goal in 1-2 sentences>
+
+### Context
+<key findings from the research evidence: relevant files, current architecture,
+patterns to follow, constraints discovered — cite specific file paths>
+
+### Changes
+<numbered list of concrete changes, each with:>
+1. **<change title>**
+   - File: `<path/to/file.py>`
+   - What: <what to change and why>
+   - How: <brief implementation approach>
+   - Risk: <potential gotcha or breaking change>
+
+### Tests
+<what tests to add or update, grouped by change>
+
+### Sequence
+<suggested order of implementation, noting dependencies between changes>
+</PLAN_SYNTHESIS_INSTRUCTIONS>

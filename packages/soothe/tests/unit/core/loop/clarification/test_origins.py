@@ -30,7 +30,7 @@ def test_strange_loop_planning_origins_are_legacy_plan_spine() -> None:
     assert STRANGELOOP_PLANNING_ORIGINS == {
         ORIGIN_PLAN_GENERATE,
         ORIGIN_PLAN_EVALUATE,
-        "planner_subagent_review",  # legacy checkpoint resume compat
+        "planner_subagent_review",  # persisted interrupt origin
         "plan_generate",
         "plan_assess",
         "plan_gap_analysis",
@@ -39,7 +39,7 @@ def test_strange_loop_planning_origins_are_legacy_plan_spine() -> None:
     }
 
 
-def test_default_force_manual_is_planner_subagent_review_only() -> None:
+def test_default_force_manual_is_plan_mode_review_only() -> None:
     assert DEFAULT_FORCE_MANUAL_ORIGINS == (ORIGIN_PLAN_MODE_REVIEW,)
 
 

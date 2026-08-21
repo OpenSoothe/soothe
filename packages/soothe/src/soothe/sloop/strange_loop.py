@@ -257,7 +257,7 @@ class StrangeLoop:
         elif parsed_skill is not None:
             logger.warning(
                 "[StrangeLoop] /skill: user line did not expand (missing skill on this host "
-                "or unreadable SKILL.md); planner will see the raw line: %s",
+                "or unreadable SKILL.md); CoreAgent will see the raw line: %s",
                 log_preview(goal, 120),
             )
 
@@ -720,8 +720,8 @@ class StrangeLoop:
                 )
                 await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
 
-            # Persist CE before the graph can park on ``await_user`` (planner
-            # review / ask_user). Without this, clarification resume loads an
+            # Persist CE before the graph can park on ``await_user`` (plan review
+            # / ask_user). Without this, clarification resume loads an
             # empty DAG and fabricates a blank CE goal.
             try:
                 await ce_instance.save()
@@ -751,7 +751,7 @@ class StrangeLoop:
             # pairs into the CE ledger as a preamble transcript before the
             # graph runs. ``loop_messages`` is rebuilt from this ledger on
             # every access (RFC-214), so the pairs surface to the planner /
-            # executor with no extra wiring. ``None``/empty → existing path.
+            # plan review / executor with no extra wiring. ``None``/empty → existing path.
             if preamble:
                 from soothe.sloop.orchestrator.stations import PHASE_PREAMBLE
 

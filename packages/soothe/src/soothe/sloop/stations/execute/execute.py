@@ -118,7 +118,7 @@ def _append_ask_user_loop_messages(
     """Mirror the executor (Execute → AI) ledger pattern for ask_user steps.
 
     plan-assess / plan-generate consume ``state.loop_messages`` to ground the
-    next planning iteration. Without this pair the planner re-asks the same
+    next planning iteration. Without this pair the loop re-asks the same
     clarification because it has no record of what was asked or answered.
     """
     from soothe.sloop.utils.ledger_compaction import compact_execute_human_content

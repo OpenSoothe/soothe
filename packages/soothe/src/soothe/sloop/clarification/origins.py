@@ -37,7 +37,7 @@ ClarificationOrigin = Literal[
     "execute",
     "plan_mode_review",
     "rail_pause",
-    # legacy ids still accepted by normalize / resume
+    # persisted interrupt origins accepted for checkpoint resume
     "planner_subagent_review",
     "generate_plan",
     "evaluate",
@@ -74,10 +74,10 @@ _ACCEPTED_CLARIFICATION_ORIGINS: frozenset[str] = (
     CLARIFICATION_ORIGINS | _LEGACY_CLARIFICATION_ORIGINS
 )
 
-# Public alias for (de)serializers that must accept legacy interrupt origins.
+# Public alias for (de)serializers that must accept persisted interrupt origins.
 ACCEPTED_CLARIFICATION_ORIGINS: frozenset[str] = _ACCEPTED_CLARIFICATION_ORIGINS
 
-# All legacy plan-spine origins that resume at DISPATCH (incl. ledger aliases).
+# All persisted plan-spine origins that resume at DISPATCH (incl. ledger aliases).
 STRANGELOOP_PLANNING_ORIGINS: frozenset[str] = _LEGACY_CLARIFICATION_ORIGINS
 
 CLARIFICATION_ORIGIN_RESUME_NODE: dict[str, str] = {
@@ -86,7 +86,7 @@ CLARIFICATION_ORIGIN_RESUME_NODE: dict[str, str] = {
     # Plan-spine stations removed from the live graph; land on DISPATCH.
     ORIGIN_PLAN_GENERATE: DISPATCH,
     ORIGIN_PLAN_EVALUATE: DISPATCH,
-    "planner_subagent_review": DELEGATE,  # legacy checkpoint resume
+    "planner_subagent_review": DELEGATE,  # persisted checkpoint resume
     "plan_generate": DISPATCH,
     "plan_assess": DISPATCH,
     "plan_gap_analysis": DISPATCH,
@@ -103,7 +103,7 @@ PLAN_MODE_REVIEW_INTERRUPT_PREFIX: Final = "plan-mode-review:"
 def resume_node_for_clarification_origin(origin: str | None) -> str | None:
     """Map a clarification origin to the StrangeLoop graph station that should resume.
 
-    Accepts legacy origin ids (``generate_plan``, ``plan_assess``, …) and maps
+    Accepts persisted origin ids (``generate_plan``, ``plan_assess``, …) and maps
     them to a live graph station (``DISPATCH`` for former plan-spine origins).
 
     Returns:

@@ -1040,10 +1040,10 @@ class _MessagesMixin:
             if getattr(message, "_submitted", False):
                 continue
             # String compare — avoid MagicMock truthiness on property access in tests.
-            if getattr(message, "_origin_node", None) not in (
+            if getattr(message, "_origin_node", None) not in {
                 "plan_mode_review",
                 "planner_subagent_review",
-            ):
+            }:
                 continue
             buttons = getattr(message, "_action_buttons", None) or {}
             if not isinstance(buttons, dict):

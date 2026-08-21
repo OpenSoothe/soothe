@@ -149,10 +149,13 @@ class CognitionStepMessage(Vertical):
         self,
         step_id: str,
         description: str,
+        *,
+        interaction_mode: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._step_id = step_id
+        self._interaction_mode = interaction_mode
         self._description = description.strip()
         self._status = "pending"  # pending | running | success | error
         self._spinner_position = 0
@@ -238,6 +241,15 @@ class CognitionStepMessage(Vertical):
         """Prose accumulated from ``execute_step`` for this step when it completed."""
         return self._last_completed_execute_prose
 
+    @property
+    def _mode_prefix(self) -> str:
+        """Title prefix for ask/plan modes (empty for agent mode)."""
+        if self._interaction_mode == "plan":
+            return "[Plan] "
+        if self._interaction_mode == "ask":
+            return "[Ask] "
+        return ""
+
     def set_description(self, description: str) -> None:
         """Update the step title (full plan/execute brief, no abbreviation)."""
         text = (description or "").strip() or "(step)"
@@ -289,9 +301,12 @@ class CognitionStepMessage(Vertical):
 
     def _step_header_content(self) -> Content:
         orphan = self._is_orphan_subagent_card()
+        prefix = self._mode_prefix
         body = (
             subagent_task_label(self._subagent_type, self._description)
             if orphan
+            else f"{prefix}{self._description}"
+            if prefix
             else self._description
         )
         header = _assemble_card_header(

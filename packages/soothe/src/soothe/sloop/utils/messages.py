@@ -172,14 +172,14 @@ class LoopHumanMessage(HumanMessage):
     phase: (
         Literal[
             "intake",
-            "intent_classify",  # legacy intake alias
-            "evaluate",  # legacy plan-spine ledger
-            "assess",  # legacy plan-spine ledger
-            "plan_assess",  # legacy plan-spine ledger
-            "generate_plan",  # legacy plan-spine ledger
-            "plan_generate",  # legacy plan-spine ledger
-            "analyze_gaps",  # legacy plan-spine ledger
-            "plan_gap_analysis",  # legacy plan-spine ledger
+            "intent_classify",  # persisted intake alias
+            "evaluate",  # persisted plan-spine phase
+            "assess",  # persisted plan-spine phase
+            "plan_assess",  # persisted plan-spine phase
+            "generate_plan",  # persisted plan-spine phase
+            "plan_generate",  # persisted plan-spine phase
+            "analyze_gaps",  # persisted plan-spine phase
+            "plan_gap_analysis",  # persisted plan-spine phase
             "execute_wave",
             "execute_step",
             "goal_completion",  # wire-stable

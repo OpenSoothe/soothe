@@ -4,21 +4,27 @@ When ``interaction_mode == "plan"`` and a plan draft is ready, this module
 builds a clarification request (origin ``ORIGIN_PLAN_MODE_REVIEW``) that
 pauses execution for user input on critical design points.
 
+On fresh plan review:
+    - Collect the plan draft from the step's final AI message.
+    - Write the plan to ``.soothe/plans/`` via ``save_plan_draft``.
+    - Record a ``goal_completion`` ledger pair: Human = goal text,
+      AI = plan body (the synthesized plan, not intermediate step messages).
+    - Emit the approve/reject/comment clarification.
+
 On approve:
-    - Write/update the plan markdown to ``.soothe/plans/`` via ``write_plan_artifact``.
     - Set ``LoopState.approved_plan_markdown`` + ``LoopState.approved_plan_path``
-      so the existing DISPATCH grounding chain
-      (``dispatch._ground_root_with_approved_plan`` → ``grounding.compose_root_full_description``
-      → ``consume_approved_plan_from_state``) picks it up and grounds it into
-      the root THREAD description, then clears it one-shot.
-    - Routing to DISPATCH is handled by ``route_after_clarification`` checking
-      ``LoopState.approved_plan_markdown`` non-empty — no scratch flag needed.
+      so the existing DISPATCH grounding chain consumes it.
+    - Record the user's action as a new ``goal_completion`` AI message:
+      "Plan approved by operator." (so subsequent goals see the approval in
+      the ledger).
 
 On reject:
-    - Re-enter plan mode with prior context preserved.
+    - Record "Plan rejected by operator." as a ``goal_completion`` AI message.
 
 On comment:
-    - Incorporate feedback into ``plan_review_comments`` and regenerate.
+    - Record "Plan revision requested: <comments>" as a ``goal_completion``
+      AI message.
+    - Re-emit the plan review clarification for the next iteration.
 """
 
 from __future__ import annotations
@@ -42,6 +48,7 @@ from soothe.sloop.plans.artifact import (
     update_plan_artifact_status,
     write_plan_artifact,
 )
+from soothe.sloop.plans.plan_synthesizer import synthesize_plan
 from soothe.sloop.utils.goal_text import resolve_user_request
 
 logger = logging.getLogger(__name__)
@@ -151,6 +158,99 @@ def hydrate_scratch_from_pending(ctx: LoopRuntimeContext, state: dict[str, Any])
             ctx.scratch.plan_draft_path = path
 
 
+def _collect_plan_draft(ctx: LoopRuntimeContext) -> str:
+    """Fallback: collect the last AI message from the step ledger.
+
+    Used only when LLM synthesis is unavailable (no model configured).
+    Returns the raw last AI text which may contain narration.
+    """
+    from soothe.sloop.utils.messages import last_ledger_ai_content
+
+    report = (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip()
+    if report:
+        return report
+    return last_ledger_ai_content(ctx.loop_state).strip()
+
+
+def _record_plan_completion_ledger(
+    ctx: LoopRuntimeContext,
+    plan_body: str,
+) -> None:
+    """Record the plan as a ``goal_completion`` Human–AI pair in the ledger.
+
+    The Human message carries the goal text; the AI message carries the full
+    plan body (not just the path). This replaces the intermediate
+    ``execute_step`` messages as the canonical terminal report so subsequent
+    goals see a clean plan-completion entry in the ledger projection.
+    """
+    if ctx.ce is None:
+        logger.debug("[PlanModeReview] No CE; skipping goal_completion ledger pair")
+        return
+    from soothe.sloop.utils.messages import (
+        LoopAIMessage,
+        LoopHumanMessage,
+        _record_ledger_message,
+    )
+
+    state = ctx.loop_state
+    goal_text = resolve_user_request(state) or state.goal or "plan"
+    iteration = getattr(state, "iteration", 0)
+    thread_id = getattr(state, "thread_id", None)
+    workspace = getattr(state, "workspace", None)
+
+    human_msg = LoopHumanMessage(
+        content=goal_text,
+        thread_id=thread_id,
+        iteration=iteration,
+        goal_summary=(goal_text[:200] if goal_text else None),
+        workspace=workspace,
+        phase="goal_completion",
+    )
+    ai_msg = LoopAIMessage(
+        content=plan_body,
+        thread_id=thread_id,
+        iteration=iteration,
+        phase="goal_completion",
+    )
+    _record_ledger_message(ctx.ce, human_msg, "goal_completion")
+    _record_ledger_message(ctx.ce, ai_msg, "goal_completion")
+    logger.info(
+        "[PlanModeReview] Recorded goal_completion ledger pair (plan chars=%d)",
+        len(plan_body),
+    )
+
+
+def _record_plan_action_ledger(
+    ctx: LoopRuntimeContext,
+    action_text: str,
+) -> None:
+    """Record the user's plan review action as a new ``goal_completion`` AI message.
+
+    Called on approve / reject / comment so the ledger has a terminal record
+    of the user's decision. Subsequent goals (e.g. the implementation goal
+    after approve) will see this in the ledger projection.
+    """
+    if ctx.ce is None:
+        return
+    from soothe.sloop.utils.messages import (
+        LoopAIMessage,
+        _record_ledger_message,
+    )
+
+    state = ctx.loop_state
+    ai_msg = LoopAIMessage(
+        content=action_text,
+        thread_id=getattr(state, "thread_id", None),
+        iteration=getattr(state, "iteration", 0),
+        phase="goal_completion",
+    )
+    _record_ledger_message(ctx.ce, ai_msg, "goal_completion")
+    logger.info(
+        "[PlanModeReview] Recorded plan action in ledger: %s",
+        action_text[:120],
+    )
+
+
 def handle_plan_mode_review_answer(
     ctx: LoopRuntimeContext,
     state: dict[str, Any],
@@ -158,8 +258,7 @@ def handle_plan_mode_review_answer(
     """Handle approve / reject / comment after plan-mode review.
 
     On approve: set ``LoopState.approved_plan_*`` so the DISPATCH grounding
-    chain consumes it. No scratch handoff flag — routing reads
-    ``approved_plan_markdown`` non-empty.
+    chain consumes it. Record the action in the ledger.
     """
     from soothe.sloop.clarification.protocol import answer_from_state
 
@@ -188,6 +287,7 @@ def handle_plan_mode_review_answer(
             state_obj.approved_plan_path = str(path) if path else None
             state_obj.approved_plan_markdown = body or None
         ctx.scratch.plan_review_comments = None
+        _record_plan_action_ledger(ctx, "Plan approved by operator.")
         logger.info("[PlanModeReview] Plan approved; grounding into DISPATCH")
         return {
             "pending_clarification": None,
@@ -202,6 +302,7 @@ def handle_plan_mode_review_answer(
         if path:
             update_plan_artifact_status(path, "rejected")
         ctx.scratch.plan_review_comments = None
+        _record_plan_action_ledger(ctx, "Plan rejected by operator.")
         logger.info("[PlanModeReview] Plan rejected")
         return {
             "pending_clarification": None,
@@ -211,81 +312,62 @@ def handle_plan_mode_review_answer(
 
     # More comments → store feedback for the next plan-mode iteration.
     ctx.scratch.plan_review_comments = comments
+    action_text = f"Plan revision requested: {comments}" if comments else "Plan revision requested."
+    _record_plan_action_ledger(ctx, action_text)
     logger.info("[PlanModeReview] Plan needs revision; comments stored")
     return build_plan_mode_review_pending(ctx)
 
 
-def _collect_plan_draft(ctx: LoopRuntimeContext) -> str:
-    """Collect the agent's final output from the ledger as the plan draft."""
-    from soothe.sloop.utils.messages import last_ledger_ai_content
-
-    report = (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip()
-    if report:
-        return report
-    # Fallback: last AI message from the ledger.
-    return last_ledger_ai_content(ctx.loop_state).strip()
-
-
 async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> dict[str, Any]:
-    """Plan review graph node: collect plan draft, write artifact, emit clarification.
+    """Plan review graph node: collect plan, write artifact, record completion, emit clarification.
 
     When ``interaction_mode == "plan"``, ``route_after_root_eval`` routes here
     instead of ``FINALIZE``. This node:
 
-    1. Collects the agent's final output from the ledger as the plan draft.
-    2. Writes the plan draft to ``.soothe/plans/`` via ``save_plan_draft``.
-    3. Records a ledger pair (goal + plan_path, not full plan content) so the
-       ledger shows what the goal was and where the plan was saved.
+    1. Synthesizes a plan document from the step's execution evidence via an
+       LLM call (``synthesize_plan``). This avoids extracting/truncating from
+       raw step output which contains mixed narration + tool results.
+    2. Writes the synthesized plan to ``.soothe/plans/`` via ``save_plan_draft``.
+    3. Records a ``goal_completion`` Human–AI pair in the ledger with the full
+       plan body as the AI message (so subsequent goals see a clean terminal
+       report, not intermediate ``execute_step`` messages).
     4. Returns a pending clarification (``ORIGIN_PLAN_MODE_REVIEW``) so the
        graph routes to ``AWAIT_USER`` for the approve/reject/comment popup.
 
     On clarification resume (approve/reject/comment), ``route_after_clarification``
-    routes back here; ``handle_plan_mode_review_answer`` processes the answer.
+    routes back here; ``handle_plan_mode_review_answer`` processes the answer and
+    records the user's action in the ledger.
     """
     # If this is a clarification-resume turn, handle the answer first.
     if state.get("pending_clarification_answer"):
         return handle_plan_mode_review_answer(ctx, state)
 
-    # Fresh plan review: collect the plan draft and write it.
-    plan_draft = _collect_plan_draft(ctx)
+    # Fresh plan review: synthesize the plan from step execution evidence.
+    # If a draft is already on scratch (e.g. from a prior comment iteration),
+    # use it instead of making another LLM call.
+    plan_draft = (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip()
     if not plan_draft:
-        logger.warning("[PlanModeReview] No plan draft found; ending goal")
-        return {"last_outcome": "fatal"}
+        # LLM-driven plan synthesis from execute_step ledger evidence.
+        strange_loop = ctx.strange_loop
+        synth_llm = strange_loop.goal_synthesis_model() or strange_loop._fast_llm
+        if synth_llm is None:
+            logger.warning("[PlanModeReview] No synthesis model available; using fallback")
+            plan_draft = _collect_plan_draft(ctx)
+        else:
+            plan_draft = await synthesize_plan(ctx, llm=synth_llm, config=strange_loop.config)
+        if not plan_draft:
+            logger.warning("[PlanModeReview] Plan synthesis produced empty output; using fallback")
+            plan_draft = _collect_plan_draft(ctx)
 
     path = save_plan_draft(ctx, plan_draft)
     if not path:
         logger.warning("[PlanModeReview] Failed to write plan artifact; ending goal")
         return {"last_outcome": "fatal"}
 
-    # Record ledger pair: goal + plan_path (not full plan content).
-    if ctx.ce is not None:
-        from soothe.sloop.utils.messages import (
-            LoopAIMessage,
-            LoopHumanMessage,
-            _record_ledger_message,
-        )
-
-        goal_text = resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or "plan"
-        human_msg = LoopHumanMessage(
-            content=goal_text,
-            thread_id=getattr(ctx.loop_state, "thread_id", None),
-            iteration=getattr(ctx.loop_state, "iteration", 0),
-            goal_summary=(goal_text[:200] if goal_text else None),
-            workspace=getattr(ctx.loop_state, "workspace", None),
-            phase="execute_step",
-            step_id="PLAN-DRAFT",
-        )
-        ai_msg = LoopAIMessage(
-            content=f"Plan draft saved to: `{path}`",
-            thread_id=getattr(ctx.loop_state, "thread_id", None),
-            iteration=getattr(ctx.loop_state, "iteration", 0),
-            phase="execute_step",
-            step_id="PLAN-DRAFT",
-        )
-        _record_ledger_message(ctx.ce, human_msg, "execute_step")
-        _record_ledger_message(ctx.ce, ai_msg, "execute_step")
-    else:
-        logger.debug("[PlanModeReview] No CE; skipping ledger pair for plan draft")
+    # Record the plan as a goal_completion ledger pair (full plan body, not
+    # just the path). This replaces intermediate execute_step messages as
+    # the canonical terminal report for this goal.
+    _record_plan_completion_ledger(ctx, plan_draft)
 
     # Emit the approve/reject/comment clarification.
     return build_plan_mode_review_pending(ctx)

@@ -89,6 +89,7 @@ def test_host_agent_config_subclasses_nano() -> None:
         nano_models.AgentConfig.model_fields
     )
     assert host_only == {
+        "assistant_identity",
         "autopilot",
         "clarification",
         "final_response",

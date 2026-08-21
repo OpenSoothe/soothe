@@ -98,6 +98,41 @@ def normalize_agentic_final_response_mode(value: Any) -> Any:
     return value
 
 
+class AssistantIdentity(BaseModel):
+    """Configurable assistant persona for identity blocks and intake replies.
+
+    All fields default to the original hardcoded values so existing
+    deployments see zero behavior change. Override via
+    ``agent.assistant_identity`` in ``soothe.yml``.
+
+    Args:
+        creator: Attribution line rendered as "invented by {creator}".
+        role_description: Short role clause rendered after the assistant name.
+        vendor_denylist: Model/vendor names the assistant must never claim
+            to be (rendered as a readable "never X, Y, Z" list).
+    """
+
+    creator: str = Field(
+        default="Dr. Xiaming Chen",
+        description="Attribution rendered as 'invented by {creator}' in identity blocks.",
+    )
+    role_description: str = Field(
+        default="a helpful AI assistant",
+        description="Short role clause rendered after the assistant name.",
+    )
+    vendor_denylist: list[str] = Field(
+        default_factory=lambda: [
+            "Claude",
+            "ChatGPT",
+            "Gemini",
+            "Anthropic",
+            "OpenAI",
+            "Google",
+        ],
+        description="Model/vendor names the assistant must never claim to be.",
+    )
+
+
 class NotifyTargetConfig(BaseModel):
     """One delivery destination for job lifecycle notify (IG-713).
 
@@ -1542,7 +1577,7 @@ class ClarificationConfig(BaseModel):
             "generate_plan",
             "evaluate",
             "plan_mode_review",
-            "planner_subagent_review",  # legacy persisted interrupt
+            "planner_subagent_review",  # persisted interrupt origin
             "rail_pause",
             # dual-read persisted / pre-origin strings
             "plan_generate",
@@ -1639,6 +1674,12 @@ class AgentConfig(NanoAgentConfig):
     Adds StrangeLoop/Autopilot/clarification/veritas and goal-completion behavior
     on top of nano ``AgentConfig`` (identity, protocols, runtime, middleware).
     """
+
+    assistant_identity: AssistantIdentity = Field(
+        default_factory=AssistantIdentity,
+        description="Configurable persona: creator, role, vendor denylist.",
+    )
+    """Configurable assistant identity for prompt blocks and intake replies."""
 
     goal_completion_mode: AgenticGoalCompletionMode = Field(
         default="llm_only",

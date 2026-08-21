@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class AgentBuilder(nano_builder.AgentBuilder):
-    """Soothe AgentBuilder: planner injection + intake-only catalog split."""
+    """Soothe AgentBuilder: host injections + intake-only catalog split."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

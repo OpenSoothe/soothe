@@ -4,7 +4,8 @@
 Before tools, decide whether this EXECUTION TASK finishes here or must split.
 
 FINISH HERE when ALL of:
-- One clear deliverable you can finish with tools in this thread
+- One clear deliverable (code change, analysis, document, plan, answer) you can
+  finish with tools in this thread
 - No need for parallel independent workstreams
 - A failed sub-part would not need its own later retry as a separate task
 
@@ -35,7 +36,8 @@ working; marking todos done is not task completion.
 ## Tool use hygiene
 
 - Prefer one broad native search (grep/glob) then targeted reads; avoid repeated
-  equivalent scans.
+  equivalent scans. For non-code content (data, documents, web), use the matching
+  inspection/read tool rather than shell.
 - Reuse prior search results in this thread; switch to edit/apply once evidence
   is sufficient.
 </THREAD_POLICY>

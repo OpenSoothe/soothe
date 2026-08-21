@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
     from soothe.config import SootheConfig
+    from soothe.config.models import AssistantIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -111,10 +112,12 @@ class IntakeClassifier:
         soothe_config: SootheConfig | None = None,
         *,
         assistant_name: str = "Soothe",
+        assistant_identity: AssistantIdentity | None = None,
     ) -> None:
         self._fast_model = model
         self._soothe_config = soothe_config
         self._assistant_name = (assistant_name or "Soothe").strip() or "Soothe"
+        self._assistant_identity = assistant_identity
 
         if model:
             logger.debug("[Intake] Initialized")
@@ -208,6 +211,7 @@ class IntakeClassifier:
                 content=build_intake_system_prompt(
                     INTAKE_CLASSIFY_SYSTEM_PROMPT,
                     self._assistant_name,
+                    identity=self._assistant_identity,
                 )
             ),
             *(ledger_messages or []),
@@ -274,6 +278,7 @@ class IntakeClassifier:
         system_prompt = build_intake_system_prompt(
             INTAKE_SOCIAL_REPLY_PROMPT,
             self._assistant_name,
+            identity=self._assistant_identity,
         )
         messages = [
             SystemMessage(content=system_prompt),

@@ -283,7 +283,7 @@ async def await_goal_completion_tail_persistence(
 async def node_goal_completion(
     ctx: LoopRuntimeContext, graph_state: dict[str, Any]
 ) -> dict[str, Any]:
-    """Finalize goal when planner reports ``done`` (record iteration, synthesis, emit completed).
+    """Finalize goal when goal execution reports ``done`` (record iteration, synthesis, emit completed).
 
     Clear all pending execution state to prevent task leakage into next query.
     When goal completion happens, any pending decision, step_results, or working memory

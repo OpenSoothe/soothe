@@ -23,13 +23,8 @@ logger = logging.getLogger(__name__)
 # Wire origin id for plan-mode review (mirrors host ORIGIN_PLAN_MODE_REVIEW).
 # CLI must not import soothe host packages; keep the wire string local.
 _ORIGIN_PLAN_MODE_REVIEW = "plan_mode_review"
-# Legacy: accept persisted interrupts from older planner_subagent_review origin.
+# Accept persisted interrupts from older planner_subagent_review origin (checkpoint resume).
 _ORIGIN_PLANNER_SUBAGENT_REVIEW_LEGACY = "planner_subagent_review"
-
-
-def _is_plan_review_origin(origin: str | None) -> bool:
-    """Check if origin is plan-mode review (current or legacy id)."""
-    return origin in (_ORIGIN_PLAN_MODE_REVIEW, _ORIGIN_PLANNER_SUBAGENT_REVIEW_LEGACY)
 
 
 _PlanReviewAction = Literal["approve", "reject", "comments"]

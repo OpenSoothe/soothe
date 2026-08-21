@@ -218,8 +218,8 @@ class IntakeLLMResult(BaseModel):
         default=None,
         description=(
             "Required when is_task=False: friendly direct reply to the user. "
-            "For identity: name the configured assistant and Dr. Xiaming Chen; "
-            "never Claude, ChatGPT, Gemini, or other vendor models."
+            "For identity: name the configured assistant and its configured creator; "
+            "never identify as a vendor model (see ASSISTANT_IDENTITY block)."
         ),
     )
     task_complexity: TaskComplexity | None = Field(

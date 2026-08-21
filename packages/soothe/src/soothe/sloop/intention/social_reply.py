@@ -20,8 +20,8 @@ class SocialReplyResult(BaseModel):
     social_response: str = Field(
         description=(
             "Direct friendly reply to the user's social message. "
-            "For identity: name the configured assistant and Dr. Xiaming Chen; "
-            "never Claude, ChatGPT, Gemini, or other vendor models."
+            "For identity: name the configured assistant and its configured creator; "
+            "never identify as a vendor model (see ASSISTANT_IDENTITY block)."
         ),
     )
 

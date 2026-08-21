@@ -204,7 +204,7 @@ class StepDAG(BaseModel):
             node.status = "decomposed"
 
     def mark_superseded(self, step_id: str) -> None:
-        """Mark a step as superseded (B-lazy replace / obsolete planner)."""
+        """Mark a step as superseded (B-lazy replace / obsolete step)."""
         node = self.nodes.get(step_id)
         if node is not None:
             node.status = "superseded"

@@ -1,4 +1,11 @@
-"""Middleware: inject decompose prompts / tool on step THREADS (RFC-904)."""
+"""Middleware: inject decompose prompts / tool on step THREADS (RFC-904).
+
+In plan/ask modes the ``decompose_task`` tool is **stripped** from the schema
+so the LLM cannot call it. A ``awrap_tool_call`` guard also intercepts any
+stray ``decompose_task`` call (e.g. from a cached/forced tool choice) and
+returns a guidance ``ToolMessage`` directing the LLM to finish its plan /
+answer in-thread.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +19,7 @@ from langchain.agents.middleware.types import (
     ModelRequest,
     ModelResponse,
 )
+from langchain_core.messages import ToolMessage
 
 from soothe.prompts import (
     ASK_MODE_ADDENDUM,
@@ -81,11 +89,112 @@ class DecomposeTaskMiddleware(AgentMiddleware):
     configurable ``soothe_decompose_step_id``). Hidden on non-step threads
     (synthesis, intake specialists, etc.).
 
-    System gets finish-vs-split / write_todos / hygiene policy; tool schemas
-    carry the contracts; user envelope stays instance-focused.
+    In plan/ask modes the tool is stripped from the schema (coded policy)
+    and an ``awrap_tool_call`` guard intercepts stray calls with a guidance
+    message. System gets finish-vs-split / write_todos / hygiene policy +
+    mode-specific addendum; user envelope stays instance-focused.
     """
 
     tools = [_DECOMPOSE_TOOL]
+
+    # ------------------------------------------------------------------
+    # Mode resolution
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _active_mode(conf: dict[str, Any]) -> str | None:
+        """Return ``"plan"``, ``"ask"``, or ``None`` (agent) from config."""
+        mode = conf.get(SOOTHE_INTERACTION_MODE_KEY)
+        return mode if mode in ("plan", "ask") else None
+
+    # ------------------------------------------------------------------
+    # Tool-call guard (coded policy)
+    # ------------------------------------------------------------------
+
+    async def awrap_tool_call(
+        self,
+        request: Any,
+        handler: Callable[[Any], Awaitable[Any]],
+    ) -> Any:
+        """Intercept ``decompose_task`` in plan/ask modes.
+
+        Even though the tool is stripped from the schema, a forced
+        ``tool_choice`` or cached tool map might still route a call here.
+        Return a ``ToolMessage`` that guides the LLM to finish in-thread.
+        """
+        tool_call = getattr(request, "tool_call", None) or {}
+        tool_name = str(tool_call.get("name", ""))
+        if tool_name != "decompose_task":
+            return await handler(request)
+        conf = _langgraph_configurable()
+        mode = self._active_mode(conf)
+        if mode is None:
+            return await handler(request)
+        step_id = current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY, "?")
+        logger.info(
+            "[decompose] blocked decompose_task call in %s mode (step=%s)",
+            mode,
+            step_id,
+        )
+        if mode == "plan":
+            guidance = (
+                "decompose_task is not available in Plan mode. "
+                "Finish your research and output the plan document in this thread. "
+                "Do not split into subtasks — produce the full plan now."
+            )
+        else:
+            guidance = (
+                "decompose_task is not available in Ask mode. "
+                "Answer the user's question directly in this thread. "
+                "Do not split into subtasks."
+            )
+        return ToolMessage(
+            content=guidance,
+            tool_call_id=tool_call.get("id", ""),
+            name="decompose_task",
+        )
+
+    def wrap_tool_call(
+        self,
+        request: Any,
+        handler: Callable[[Any], Any],
+    ) -> Any:
+        """Sync variant of the tool-call guard."""
+        tool_call = getattr(request, "tool_call", None) or {}
+        tool_name = str(tool_call.get("name", ""))
+        if tool_name != "decompose_task":
+            return handler(request)
+        conf = _langgraph_configurable()
+        mode = self._active_mode(conf)
+        if mode is None:
+            return handler(request)
+        step_id = current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY, "?")
+        logger.info(
+            "[decompose] blocked decompose_task call in %s mode (step=%s)",
+            mode,
+            step_id,
+        )
+        if mode == "plan":
+            guidance = (
+                "decompose_task is not available in Plan mode. "
+                "Finish your research and output the plan document in this thread. "
+                "Do not split into subtasks — produce the full plan now."
+            )
+        else:
+            guidance = (
+                "decompose_task is not available in Ask mode. "
+                "Answer the user's question directly in this thread. "
+                "Do not split into subtasks."
+            )
+        return ToolMessage(
+            content=guidance,
+            tool_call_id=tool_call.get("id", ""),
+            name="decompose_task",
+        )
+
+    # ------------------------------------------------------------------
+    # Tool-set injection / system-prompt addendum
+    # ------------------------------------------------------------------
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         conf = _langgraph_configurable()
@@ -98,19 +207,27 @@ class DecomposeTaskMiddleware(AgentMiddleware):
             stripped = _strip_decompose_tool(tools)
             return request.override(tools=stripped) if len(stripped) != len(tools) else request
 
-        logger.debug("[decompose] injecting decompose_task on step %s thread", step_id)
+        mode = self._active_mode(conf)
         tools = list(request.tools or [])
         tools = _override_write_todos_description(tools)
-        tools = _ensure_decompose_tool(tools)
 
-        system = request.system_message
+        if mode in ("plan", "ask"):
+            # Coded policy: strip decompose_task so the LLM can't call it.
+            tools = _strip_decompose_tool(tools)
+            logger.debug("[decompose] stripped decompose_task for %s mode (step=%s)", mode, step_id)
+        else:
+            # Agent mode: inject decompose_task as usual.
+            tools = _ensure_decompose_tool(tools)
+            logger.debug("[decompose] injecting decompose_task on step %s thread", step_id)
+
+        # Build system-prompt addendum.
         addendum = THREAD_POLICY_SYSTEM_ADDENDUM
-        # Mode-specific addendum for ask/plan modes.
-        mode = conf.get(SOOTHE_INTERACTION_MODE_KEY)
         if mode == "ask":
             addendum = f"{addendum}\n\n{ASK_MODE_ADDENDUM}"
         elif mode == "plan":
             addendum = f"{addendum}\n\n{PLAN_MODE_ADDENDUM}"
+
+        system = request.system_message
         if system is not None and hasattr(system, "content"):
             content = system.content
             if isinstance(content, str) and addendum not in content:

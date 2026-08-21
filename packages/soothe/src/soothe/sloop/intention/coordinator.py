@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
     from soothe.config import SootheConfig
+    from soothe.config.models import AssistantIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -99,11 +100,13 @@ class IntakeCoordinator:
         soothe_config: SootheConfig | None = None,
         *,
         assistant_name: str = "Soothe",
+        assistant_identity: AssistantIdentity | None = None,
     ) -> None:
         self._intake_classifier = IntakeClassifier(
             fast_model,
             soothe_config,
             assistant_name=assistant_name,
+            assistant_identity=assistant_identity,
         )
         self._soothe_config = soothe_config
 

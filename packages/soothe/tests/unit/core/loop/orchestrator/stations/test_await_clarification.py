@@ -257,7 +257,7 @@ async def test_mode_derived_from_policy_class(policy_factory: Any, expected_mode
     assert requested[0]["mode"] == expected_mode
 
 
-async def test_planner_subagent_review_emit_includes_plan_payload() -> None:
+async def test_plan_mode_review_emit_includes_plan_payload() -> None:
     from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
     from soothe.sloop.plans.plan_mode_review import _PLAN_MODE_REVIEW_QUESTIONS
 
