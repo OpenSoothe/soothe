@@ -158,20 +158,6 @@ def hydrate_scratch_from_pending(ctx: LoopRuntimeContext, state: dict[str, Any])
             ctx.scratch.plan_draft_path = path
 
 
-def _collect_plan_draft(ctx: LoopRuntimeContext) -> str:
-    """Fallback: collect the last AI message from the step ledger.
-
-    Used only when LLM synthesis is unavailable (no model configured).
-    Returns the raw last AI text which may contain narration.
-    """
-    from soothe.sloop.utils.messages import last_ledger_ai_content
-
-    report = (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip()
-    if report:
-        return report
-    return last_ledger_ai_content(ctx.loop_state).strip()
-
-
 def _record_plan_completion_ledger(
     ctx: LoopRuntimeContext,
     plan_body: str,
@@ -351,13 +337,27 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
         strange_loop = ctx.strange_loop
         synth_llm = strange_loop.goal_synthesis_model() or strange_loop._fast_llm
         if synth_llm is None:
-            logger.warning("[PlanModeReview] No synthesis model available; using fallback")
-            plan_draft = _collect_plan_draft(ctx)
+            logger.warning("[PlanModeReview] No synthesis model available")
+            plan_draft = ""
         else:
             plan_draft = await synthesize_plan(ctx, llm=synth_llm, config=strange_loop.config)
-        if not plan_draft:
-            logger.warning("[PlanModeReview] Plan synthesis produced empty output; using fallback")
-            plan_draft = _collect_plan_draft(ctx)
+
+    if not plan_draft:
+        # Synthesis failed (rate limit, error, no model). Do NOT fall back to
+        # raw step output — it contains narration/tool results, not a plan.
+        # Emit a placeholder so the user can comment to retry.
+        plan_draft = (
+            "## Plan: Synthesis Failed\n\n"
+            "### Goal\n"
+            f"{resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or 'unknown'}\n\n"
+            "### Context\n"
+            "Plan synthesis from step evidence failed (rate limit or LLM error). "
+            "The step execution evidence is available in the ledger.\n\n"
+            "### Changes\n"
+            "1. **Retry plan synthesis**\n"
+            "   - Select 'Comments' below and type 'retry' to regenerate the plan.\n"
+        )
+        logger.warning("[PlanModeReview] Plan synthesis failed; emitting placeholder")
 
     path = save_plan_draft(ctx, plan_draft)
     if not path:
