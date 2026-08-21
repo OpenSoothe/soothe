@@ -250,6 +250,104 @@ async def test_root_eval_finalizes_after_completed_eval() -> None:
 
 
 @pytest.mark.asyncio
+async def test_root_eval_trivial_skips_eval_and_finalizes() -> None:
+    """Trivial tasks skip the coverage Eval phase and go directly to finalize,
+    even with a decomposed action tree that would otherwise require Eval."""
+    from soothe_sdk.intention.models import TaskComplexity
+
+    from soothe.sloop.intention.models import IntakeLabel, IntentClassification
+
+    ce = ContextEngine()
+    goal = await ce.create_goal("do work", loop_id="L1")
+    await ce.add_steps(
+        goal.id,
+        [
+            StepNode(id="ROOT", description="root", status="decomposed"),
+            StepNode(
+                id="CHILD",
+                description="child",
+                status="completed",
+                parent_step_id="ROOT",
+            ),
+        ],
+    )
+    ctx = _ctx_with_ce(ce, goal.id)
+    ctx.loop_state.intent = IntentClassification(
+        intake_label=IntakeLabel.TRIVIAL,
+        task_complexity=TaskComplexity.MINIMAL,
+    )
+    result = await RootEvalNode()(ctx, {})
+    assert result["root_eval_route"] == "finalize"
+
+
+@pytest.mark.asyncio
+async def test_root_eval_simple_skips_eval_and_finalizes() -> None:
+    """Simple tasks skip the coverage Eval phase and go directly to finalize,
+    even with a decomposed action tree that would otherwise require Eval."""
+    from soothe_sdk.intention.models import TaskComplexity
+
+    from soothe.sloop.intention.models import IntakeLabel, IntentClassification
+
+    ce = ContextEngine()
+    goal = await ce.create_goal("do work", loop_id="L1")
+    await ce.add_steps(
+        goal.id,
+        [
+            StepNode(id="ROOT", description="root", status="decomposed"),
+            StepNode(
+                id="CHILD",
+                description="child",
+                status="completed",
+                parent_step_id="ROOT",
+            ),
+        ],
+    )
+    ctx = _ctx_with_ce(ce, goal.id)
+    ctx.loop_state.intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    result = await RootEvalNode()(ctx, {})
+    assert result["root_eval_route"] == "finalize"
+
+
+@pytest.mark.asyncio
+async def test_root_eval_complex_inserts_eval_step() -> None:
+    """Complex tasks still run the full coverage Eval gate when Eval is
+    required — the simple/trivial skip does not apply."""
+    from soothe_sdk.intention.models import TaskComplexity
+
+    from soothe.sloop.intention.models import IntakeLabel, IntentClassification
+
+    ce = ContextEngine()
+    goal = await ce.create_goal("do work", loop_id="L1")
+    await ce.add_steps(
+        goal.id,
+        [
+            StepNode(id="ROOT", description="root", status="decomposed"),
+            StepNode(
+                id="CHILD",
+                description="child",
+                status="completed",
+                parent_step_id="ROOT",
+            ),
+        ],
+    )
+    ctx = _ctx_with_ce(ce, goal.id)
+    ctx.loop_state.intent = IntentClassification(
+        intake_label=IntakeLabel.COMPLEX,
+        task_complexity=TaskComplexity.COMPLEX,
+    )
+    result = await RootEvalNode()(ctx, {})
+    assert result["root_eval_route"] == "dispatch"
+    refreshed = await ce.get_goal(goal.id)
+    assert refreshed is not None
+    eval_nodes = [step for step in refreshed.steps.nodes.values() if step.kind == "eval"]
+    assert len(eval_nodes) == 1
+    assert eval_nodes[0].status == "pending"
+
+
+@pytest.mark.asyncio
 async def test_dispatch_claims_pending_eval_after_max_waves() -> None:
     ce = ContextEngine()
     goal = await ce.create_goal("do work", loop_id="L1")

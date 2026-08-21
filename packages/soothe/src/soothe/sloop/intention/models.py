@@ -8,7 +8,8 @@ checkpoint, not classified here.
 
 The intake LLM emits ``task_complexity`` for agentic goals; ``intake_label``
 is derived from that field for the TUI and graph routing. DISPATCH owns
-decomposition.
+decomposition. Only ``complex`` runs the coverage Eval gate; ``trivial`` and
+``simple`` finalize directly from the CoreAgent execute result.
 
 CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
 ``soothe_sdk.intention.models`` and re-exported here.
@@ -33,9 +34,12 @@ class IntakeLabel(StrEnum):
     - ``chitchat``: small talk (greetings, thanks, casual banter); the intake
       LLM piggybacks ``chitchat_response`` and the runner emits it directly.
     - ``trivial``: trivia, single obvious tool call, or direct answer; DISPATCH
-      grounds a one-step root (no multi-step decomposition).
+      grounds a one-step root (no multi-step decomposition). Skips the coverage
+      Eval phase and finalizes from the CoreAgent result.
     - ``simple``: single focused deliverable CoreAgent can finish in one execute.
-    - ``complex``: multi-phase / parallel workstreams / durable phase gates.
+      Skips the coverage Eval phase and finalizes from the CoreAgent result.
+    - ``complex``: multi-phase / parallel workstreams / durable phase gates; runs
+      the full coverage Eval gate before finalization.
     """
 
     CHITCHAT = "chitchat"
@@ -91,9 +95,11 @@ class IntentClassification(BaseModel):
     - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.
     - ``trivial``: direct execute via DISPATCH root; skips the coverage Eval phase
       and finalizes from the CoreAgent result.
-    - ``simple``/``complex``: agentic goals of increasing effort; run the full
-      coverage Eval gate; the runner / StrangeLoop derive loop continuation
-      structurally from the checkpoint.
+    - ``simple``: single focused deliverable; skips the coverage Eval phase and
+      finalizes from the CoreAgent result.
+    - ``complex``: multi-phase / parallel workstreams; runs the full coverage
+      Eval gate. The runner / StrangeLoop derive loop continuation structurally
+      from the checkpoint.
 
     ``intake_label`` drives ``route_by_intent``.
 
