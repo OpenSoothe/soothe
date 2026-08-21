@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.27] - 2026-08-21
+
+### Fixed
+- Simple tasks now skip the coverage Eval gate and finalize directly from the CoreAgent execute result via the `root_eval` short-circuit, matching the trivial-task path; only `complex` goals run the full coverage Eval gate.
+
+### Changed
+- Drop the `medium` task-complexity tier so routing collapses to three levels: `minimal`, `simple`, and `complex`. Update `IntakeLabel`/`IntentClassification` docstrings and intake prompts accordingly.
+- Rename the `trivial` intake label to `minimal` across the StrangeLoop engine, Autopilot rails, daemon protocol schemas, and TUI widgets.
+- Require `soothe-sdk>=1.0.10`; ship the `TaskComplexity` `medium`-tier removal from the SDK.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.26...v0.10.27
+
 ## [v0.10.26] - 2026-08-21
 
 ### Changed
