@@ -16,9 +16,11 @@ from soothe_cli.tui.commands.subagent_routing import (
         ("/deep_research papers", "deep_research", "papers"),
         ("/academic_research transformers", "academic_research", "transformers"),
         ("/browser_use open example.com", "browser_use", "open example.com"),
-        ("/plan draft a migration", "planner", "draft a migration"),
-        ("/planner outline steps", "planner", "outline steps"),
-        ("Please /plan find sources", "planner", "Please find sources"),
+        # /plan and /planner are no longer subagent routes; plan mode is
+        # handled by command_router setting interaction_mode=plan.
+        ("/plan draft a migration", None, "/plan draft a migration"),
+        ("/planner outline steps", None, "/planner outline steps"),
+        ("Please /plan find sources", None, "Please /plan find sources"),
         ("Please /deep_research find sources", "deep_research", "Please find sources"),
         ("Please /browser_use click login", "browser_use", "Please click login"),
         ("/browser alone", None, "/browser alone"),
@@ -38,7 +40,8 @@ def test_get_subagent_display_name_research_subagents() -> None:
     assert get_subagent_display_name("deep_research") == "Deep Research"
     assert get_subagent_display_name("academic_research") == "Academic Research"
     assert get_subagent_display_name("browser_use") == "Browser"
-    assert get_subagent_display_name("planner") == "Planner"
+    # planner removed — returns the raw id unmapped.
+    assert get_subagent_display_name("planner") == "planner"
 
 
 def test_slash_registries_include_browser_use() -> None:
@@ -48,7 +51,8 @@ def test_slash_registries_include_browser_use() -> None:
     from soothe_cli.tui.commands.subagent_routing import SUBAGENT_SLASH_ROUTE_IDS
 
     assert "browser_use" in SUBAGENT_SLASH_ROUTE_IDS
-    assert "plan" in SUBAGENT_SLASH_ROUTE_IDS
+    # "plan" removed from subagent slash routes (now handled by command_router).
+    assert "plan" not in SUBAGENT_SLASH_ROUTE_IDS
     assert any(cmd.name == "/browser_use" for cmd in UI_COMMANDS)
     assert any(name == "/browser_use" for name, _desc, _kw in SLASH_COMMANDS)
     entry = RFC_COMMANDS.get("/browser_use")

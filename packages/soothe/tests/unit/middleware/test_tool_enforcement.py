@@ -75,7 +75,7 @@ def test_intake_only_preferred_subagent_does_not_narrow_tools() -> None:
     """Host guard clears intake-only preferred_subagent before tool enforcement."""
     guard = IntakeOnlyTaskGuardMiddleware()
     middleware = ToolEnforcementMiddleware()
-    for name in ("deep_research", "planner"):
+    for name in ("deep_research",):  # planner removed from intake-only set
         classification = RoutingClassification(
             task_complexity="simple",
             preferred_subagent=name,

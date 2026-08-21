@@ -86,7 +86,7 @@ class TestSubagentDisplayNames:
         """Known subagent types should return mapped display names."""
         # Built-in soothe core subagents
         assert get_subagent_display_name("deep_research") == "Deep Research"
-        assert get_subagent_display_name("planner") == "Planner"
+        assert get_subagent_display_name("planner") == "planner"  # removed, no longer mapped
         # Plugin-based subagent
         assert get_subagent_display_name("browser_use") == "Browser"
 
