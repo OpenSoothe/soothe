@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.29] - 2026-08-21
+
+### Fixed
+- Allow a fresh chitchat goal (a `running` checkpoint with `duration_ms == 0`) to finalize via the chitchat fast-path. The fast-path skips the FINALIZE station, so such goals previously stayed stuck in `running` because `chitchat_may_finalize_checkpoint` rejected all non-idle checkpoints. In-flight task goals (`duration_ms > 0`) are still blocked — their completion belongs to the normal graph FINALIZE.
+- Quiet the clipboard fallthrough over SSH/tmux: `pbcopy` exits rc=1 with empty stderr when no pasteboard server is reachable, so surface a useful "no pasteboard server" detail instead of an empty message and stop logging a full traceback for expected native-clipboard failures (the OSC 52 backend is tried next).
+
+### Changed
+- Centralize the chitchat fast-path bypass decision in `enter_loop` via `should_bypass_chitchat_fast_path` (loop-control phrase + intra-loop checkpoint work); routing now trusts that decision and ENDs unconditionally. Drop the `new_goal_created` routing guard from `route_after_preprocess` and the `LoopGraphState`/`enter_loop` plumbing that fed it. Bump the `soothe-client-python` floor to `1.0.17` in CLI and daemon.
+- Remove the legacy `route_by_intent` backward-compat alias; callers now use the canonical `route_after_preprocess` name. Drop unused intake-derived fields from `LoopGraphState` and `enter_loop` (`is_continuation`, `is_fresh_goal`, `is_task`, `scope`, `has_deliverable`) — routing is driven by `intake_label` + `intent_route` only. Rename `test_route_by_intent.py` → `test_route_after_preprocess.py`.
+- Harden the Docker release workflow to retry the first-party PyPI resolve up to 5× (15s backoff) to ride out CDN propagation lag before the multi-arch build.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.28...v0.10.29
+
 ## [v0.10.28] - 2026-08-21
 
 ### Changed
