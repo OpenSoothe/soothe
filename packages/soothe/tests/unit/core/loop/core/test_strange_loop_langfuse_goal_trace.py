@@ -1,8 +1,8 @@
 """Goal-loop trace pinning for in-graph intake classify.
 
-The pre-graph social gate is gone; intake classification runs in the graph
-INTAKE node. The goal trace is pinned before the graph runs so the classify
-LLM and ``strange-loop-graph`` share one trace.
+Intake classification runs in the graph INTAKE node. The goal trace is pinned
+before the graph runs so the classify LLM and ``strange-loop-graph`` share one
+trace.
 """
 
 from __future__ import annotations

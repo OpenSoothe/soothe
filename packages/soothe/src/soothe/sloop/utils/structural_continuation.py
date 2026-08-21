@@ -98,7 +98,7 @@ def should_bypass_chitchat_fast_path(
     Loop-control phrases bypass chitchat routing only when this loop's checkpoint
     has intra-loop work to continue. Otherwise keep the intake classify result
     (typically social). Other social messages on a running loop still use the
-    chitchat path; chitchat finalize is blocked separately via
+    chitchat path; the chitchat goal is finalized afterward via
     :func:`chitchat_may_finalize_checkpoint`.
     """
     return is_loop_control_signal(user_text) and has_intra_loop_checkpoint_to_continue(checkpoint)

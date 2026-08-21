@@ -467,7 +467,7 @@ class StrangeLoopMixin:
                 (``"agent"`` / ``"ask"``). ``"ask"`` selects the read-only
                 graph; ``None`` selects the default graph.
             resume_interrupted: When True, recover an interrupted running goal
-                without social-gate routing or continue-keyword cancel.
+                without chitchat routing or continue-keyword cancel.
 
         Yields:
             StreamChunk events during execution

@@ -1,7 +1,7 @@
 """In-graph intake classify progress events.
 
-The pre-graph social gate is gone; the graph INTAKE node is the sole classify
-call site. It projects the full CE ledger (prior-goal completion + preamble).
+The graph INTAKE node is the sole classify call site. It projects the full CE
+ledger (prior-goal completion + preamble).
 """
 
 from __future__ import annotations
@@ -118,9 +118,9 @@ async def test_run_with_progress_uses_in_graph_classify() -> None:
         finally:
             await gen.aclose()
 
-    # No pre-graph social gate: state.intent starts None; the graph INTAKE
-    # node classifies. The intent_classifier is wired to the runtime context
-    # so the (mocked-out) graph node would call classify_intake with full ledger.
+    # state.intent starts None; the graph INTAKE node classifies. The
+    # intent_classifier is wired to the runtime context so the (mocked-out)
+    # graph node would call classify_intake with full ledger.
     loop_state = runtime_ctx_cls.call_args.kwargs["loop_state"]
     assert loop_state.intent is None
     ctx_kwargs = runtime_ctx_cls.call_args.kwargs

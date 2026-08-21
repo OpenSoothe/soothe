@@ -1,8 +1,8 @@
 """Structural continuation bypass for in-graph intake classify.
 
-The pre-graph social gate is gone; chitchat is decided in the graph INTAKE
-node. A bare "continue" on a running checkpoint must resume via checkpoint,
-not chitchat-finalize — that bypass now lives in ``enter_loop``.
+Chitchat is decided in the graph INTAKE node. A bare "continue" on a running
+checkpoint must resume via checkpoint, not chitchat-finalize — that bypass
+lives in ``enter_loop``.
 """
 
 from __future__ import annotations
