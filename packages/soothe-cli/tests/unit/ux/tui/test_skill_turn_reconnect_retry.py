@@ -134,8 +134,8 @@ async def test_connection_drop_without_content_is_not_retried(monkeypatch: Any) 
 
 
 @pytest.mark.asyncio
-async def test_plan_mode_passes_sticky_planner(monkeypatch: Any) -> None:  # noqa: ANN401
-    """Composer Plan mode forwards sticky preferred_subagent=planner."""
+async def test_plan_mode_passes_interaction_mode(monkeypatch: Any) -> None:  # noqa: ANN401
+    """Composer Plan mode forwards interaction_mode=plan (not preferred_subagent)."""
     app = _execution_app()
     app._composer_mode = "plan"
     captured: dict[str, Any] = {}
@@ -149,7 +149,8 @@ async def test_plan_mode_passes_sticky_planner(monkeypatch: Any) -> None:  # noq
     await app._run_agent_task("draft a migration", skip_daemon_send_turn=False)
 
     assert captured["clarification_mode"] == "auto"
-    assert captured["sticky_preferred_subagent"] == "planner"
+    assert captured["interaction_mode"] == "plan"
+    assert captured["sticky_preferred_subagent"] is None
 
 
 @pytest.mark.asyncio

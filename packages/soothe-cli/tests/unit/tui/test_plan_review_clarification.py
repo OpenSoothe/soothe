@@ -1,4 +1,4 @@
-"""Plan-review clarification widget (planner_subagent_review)."""
+"""Plan-review clarification widget (plan_mode_review)."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def test_path_footer_text() -> None:
     with_path = ClarificationInputMessage(
         step_id="s1",
         questions=["Action?", "Comments?"],
-        origin_node="planner_subagent_review",
+        origin_node="plan_mode_review",
         plan_path="/tmp/plans/x.md",
         plan_markdown="# Plan",
     )
@@ -57,7 +57,7 @@ def test_path_footer_text() -> None:
     memory = ClarificationInputMessage(
         step_id="s1",
         questions=["Action?", "Comments?"],
-        origin_node="planner_subagent_review",
+        origin_node="plan_mode_review",
     )
     assert memory._path_footer_text() == "Plan held in memory only"
 
@@ -68,7 +68,7 @@ def test_widget_to_message_serializes_plan_review() -> None:
     widget = ClarificationInputMessage(
         step_id="s1",
         questions=["Action?", "Comments?"],
-        origin_node="planner_subagent_review",
+        origin_node="plan_mode_review",
         plan_path="/tmp/x.md",
         plan_markdown="# Plan",
         id="clarify-test",
@@ -97,12 +97,12 @@ class _PlanReviewHarnessApp(App[None]):
 @pytest.mark.asyncio
 async def test_plan_review_approve_submits_immediately() -> None:
     app = _PlanReviewHarnessApp(
-        step_id="planner_subagent_review",
+        step_id="plan_mode_review",
         questions=[
             "Action for this plan: Approve, Reject, or More comments",
             "Revision comments (when choosing More comments)",
         ],
-        origin_node="planner_subagent_review",
+        origin_node="plan_mode_review",
         plan_path="/ws/.soothe/plans/demo.md",
         plan_markdown="---\nstatus: draft\n---\n\n# Optimize deps\n\nStep 1.\n",
         id="clarify-approve",
@@ -120,12 +120,12 @@ async def test_plan_review_approve_submits_immediately() -> None:
 @pytest.mark.asyncio
 async def test_plan_review_arrow_keys_cycle_actions() -> None:
     app = _PlanReviewHarnessApp(
-        step_id="planner_subagent_review",
+        step_id="plan_mode_review",
         questions=[
             "Action for this plan: Approve, Reject, or More comments",
             "Revision comments (when choosing More comments)",
         ],
-        origin_node="planner_subagent_review",
+        origin_node="plan_mode_review",
         plan_path="/ws/.soothe/plans/demo.md",
         plan_markdown="# Plan\n\nBody.\n",
         id="clarify-arrows",
@@ -156,12 +156,12 @@ async def test_plan_review_body_shows_full_content_without_inner_scroll() -> Non
 
     long_plan = "# Solution\n\n" + "\n".join(f"- step {i}" for i in range(60))
     app = _PlanReviewHarnessApp(
-        step_id="planner_subagent_review",
+        step_id="plan_mode_review",
         questions=[
             "Action for this plan: Approve, Reject, or More comments",
             "Revision comments (when choosing More comments)",
         ],
-        origin_node="planner_subagent_review",
+        origin_node="plan_mode_review",
         plan_path="/ws/.soothe/plans/demo.md",
         plan_markdown=long_plan,
         id="clarify-full-body",
@@ -180,12 +180,12 @@ async def test_plan_review_body_shows_full_content_without_inner_scroll() -> Non
 @pytest.mark.asyncio
 async def test_plan_review_comments_requires_text() -> None:
     app = _PlanReviewHarnessApp(
-        step_id="planner_subagent_review",
+        step_id="plan_mode_review",
         questions=[
             "Action for this plan: Approve, Reject, or More comments",
             "Revision comments (when choosing More comments)",
         ],
-        origin_node="planner_subagent_review",
+        origin_node="plan_mode_review",
         plan_path="/ws/.soothe/plans/demo.md",
         plan_markdown="# Plan\n",
         id="clarify-comments",

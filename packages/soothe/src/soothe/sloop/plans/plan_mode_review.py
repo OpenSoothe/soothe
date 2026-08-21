@@ -37,7 +37,7 @@ from soothe.sloop.clarification.protocol import (
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.plans.artifact import (
-    parse_planner_subagent_review_answers,
+    parse_plan_review_answers,
     strip_plan_frontmatter,
     update_plan_artifact_status,
     write_plan_artifact,
@@ -175,7 +175,7 @@ def handle_plan_mode_review_answer(
             "last_outcome": "fatal",
         }
 
-    action, comments = parse_planner_subagent_review_answers(answer.answers)
+    action, comments = parse_plan_review_answers(answer.answers)
     path = getattr(ctx.scratch, "plan_draft_path", None)
     report = (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip()
 

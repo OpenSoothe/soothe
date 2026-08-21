@@ -123,10 +123,10 @@ def update_plan_artifact_status(path: str | Path, status: str) -> None:
     p.write_text(f"---\n{fm}\n---\n{body}", encoding="utf-8")
 
 
-def parse_planner_subagent_review_answers(
+def parse_plan_review_answers(
     answers: tuple[str, ...] | list[str],
 ) -> tuple[str, str]:
-    """Parse planner-subagent review answers into ``(action, comments)``.
+    """Parse plan-review answers into ``(action, comments)``.
 
     Actions: ``approve`` | ``reject`` | ``comments``.
 

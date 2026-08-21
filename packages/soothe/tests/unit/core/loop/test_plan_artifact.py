@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from soothe.sloop.plans.artifact import (
-    parse_planner_subagent_review_answers,
+    parse_plan_review_answers,
     slugify_plan_name,
     strip_plan_frontmatter,
     update_plan_artifact_status,
@@ -41,19 +41,19 @@ def test_write_and_update_plan_artifact(tmp_path: Path) -> None:
     assert "status: approved" in path.read_text(encoding="utf-8")
 
 
-def test_parse_planner_subagent_review_answers() -> None:
-    assert parse_planner_subagent_review_answers(("Approve", "looks good")) == (
+def test_parse_plan_review_answers() -> None:
+    assert parse_plan_review_answers(("Approve", "looks good")) == (
         "approve",
         "looks good",
     )
-    assert parse_planner_subagent_review_answers(("reject", "nope")) == ("reject", "nope")
-    assert parse_planner_subagent_review_answers(("Please add error handling", "")) == (
+    assert parse_plan_review_answers(("reject", "nope")) == ("reject", "nope")
+    assert parse_plan_review_answers(("Please add error handling", "")) == (
         "comments",
         "Please add error handling",
     )
-    assert parse_planner_subagent_review_answers(("More comments", "tighten scope")) == (
+    assert parse_plan_review_answers(("More comments", "tighten scope")) == (
         "comments",
         "tighten scope",
     )
-    assert parse_planner_subagent_review_answers(("More comments", "")) == ("comments", "")
-    assert parse_planner_subagent_review_answers(("Approve", "")) == ("approve", "")
+    assert parse_plan_review_answers(("More comments", "")) == ("comments", "")
+    assert parse_plan_review_answers(("Approve", "")) == ("approve", "")

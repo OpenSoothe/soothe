@@ -26,6 +26,12 @@ _ORIGIN_PLAN_MODE_REVIEW = "plan_mode_review"
 # Legacy: accept persisted interrupts from older planner_subagent_review origin.
 _ORIGIN_PLANNER_SUBAGENT_REVIEW_LEGACY = "planner_subagent_review"
 
+
+def _is_plan_review_origin(origin: str | None) -> bool:
+    """Check if origin is plan-mode review (current or legacy id)."""
+    return origin in (_ORIGIN_PLAN_MODE_REVIEW, _ORIGIN_PLANNER_SUBAGENT_REVIEW_LEGACY)
+
+
 _PlanReviewAction = Literal["approve", "reject", "comments"]
 
 _ACTION_ORDER: tuple[_PlanReviewAction, ...] = ("approve", "reject", "comments")
@@ -226,14 +232,14 @@ class ClarificationInputMessage(Vertical):
         self._action_buttons: dict[_PlanReviewAction, Button] = {}
 
     @property
-    def _is_planner_subagent_review(self) -> bool:
+    def _is_plan_review(self) -> bool:
         return self._origin_node in (
             _ORIGIN_PLAN_MODE_REVIEW,
             _ORIGIN_PLANNER_SUBAGENT_REVIEW_LEGACY,
         )
 
     def _title_content(self) -> Content:
-        title = "Review this plan" if self._is_planner_subagent_review else "Awaiting your answer"
+        title = "Review this plan" if self._is_plan_review else "Awaiting your answer"
         if self._submitted:
             return _assemble_card_header(self, title, status="success")
         colors = theme.get_theme_colors(self)
@@ -298,13 +304,13 @@ class ClarificationInputMessage(Vertical):
             yield inp
 
     def compose(self) -> Any:
-        if self._is_planner_subagent_review:
+        if self._is_plan_review:
             yield from self._compose_planner_review()
         else:
             yield from self._compose_generic()
 
     def on_mount(self) -> None:
-        if self._is_planner_subagent_review:
+        if self._is_plan_review:
             self._render_plan_body()
             self._set_selected_action("approve")
             approve = self._action_buttons.get("approve")
@@ -400,7 +406,7 @@ class ClarificationInputMessage(Vertical):
         return focused is comments
 
     def _cycle_plan_review_action(self, delta: int) -> None:
-        if self._submitted or not self._is_planner_subagent_review:
+        if self._submitted or not self._is_plan_review:
             return
         if self._plan_review_focus_on_comments():
             return
@@ -432,7 +438,7 @@ class ClarificationInputMessage(Vertical):
 
     def action_plan_review_confirm(self) -> None:
         """Confirm the selected plan-review action (Enter)."""
-        if self._submitted or not self._is_planner_subagent_review:
+        if self._submitted or not self._is_plan_review:
             return
         if self._plan_review_focus_on_comments():
             # Let Input.Submitted handle Enter while typing comments.
@@ -445,7 +451,7 @@ class ClarificationInputMessage(Vertical):
 
     @on(Button.Pressed)
     def _on_plan_review_button(self, event: Button.Pressed) -> None:
-        if self._submitted or not self._is_planner_subagent_review:
+        if self._submitted or not self._is_plan_review:
             return
         btn_id = event.button.id or ""
         action: _PlanReviewAction | None = None
@@ -466,7 +472,7 @@ class ClarificationInputMessage(Vertical):
         if self._submitted:
             event.stop()
             return
-        if self._is_planner_subagent_review:
+        if self._is_plan_review:
             if event.input is not self._comments_input:
                 return
             if self._selected_action != "comments":

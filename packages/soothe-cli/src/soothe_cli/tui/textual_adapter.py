@@ -4129,11 +4129,12 @@ async def execute_task_textual(
                                 origin_node = str(data.get("origin_node") or "")
                                 plan_path = str(data.get("plan_path") or "")
                                 plan_markdown = str(data.get("plan_markdown") or "")
-                                # Defense: skip empty planner-review remounts
+                                # Defense: skip empty plan-review remounts
                                 # (resume re-emit with fresh scratch / no plan body).
                                 if (
                                     event_type == LOOP_CLARIFICATION_REQUESTED
-                                    and origin_node == "planner_subagent_review"
+                                    and origin_node
+                                    in ("plan_mode_review", "planner_subagent_review")
                                     and not plan_path.strip()
                                     and not plan_markdown.strip()
                                 ):

@@ -296,7 +296,7 @@ async def test_planner_subagent_review_emit_includes_plan_payload() -> None:
     assert requested[0]["questions"] == list(_PLAN_MODE_REVIEW_QUESTIONS)
 
 
-def _planner_review_pending(
+def _plan_review_pending(
     *,
     plan_path: str = "/ws/.soothe/plans/demo.md",
     plan_markdown: str = "# Plan\n",
@@ -331,7 +331,7 @@ async def test_resume_turn_skips_clarification_requested_reemit() -> None:
     """Reject/Approve resume must not remount an empty plan-review widget."""
     policy = _InteractivePolicyStub(ClarificationAnswer(answers=("Reject", ""), source="human"))
     ctx = _StubCtx(policy=policy, clarification_resume_answers=["Reject", ""])
-    await node_await_clarification(ctx, {"pending_clarification": _planner_review_pending()})
+    await node_await_clarification(ctx, {"pending_clarification": _plan_review_pending()})
     assert not any(n == "clarification_requested" for n, _ in ctx.emitted)
     assert any(n == "clarification_answered" for n, _ in ctx.emitted)
     # Sticky resume inputs must be consumed so a later park can re-announce.
@@ -361,7 +361,7 @@ async def test_second_park_after_resume_reemits_clarification_requested() -> Non
     await node_await_clarification(
         ctx,
         {
-            "pending_clarification": _planner_review_pending(
+            "pending_clarification": _plan_review_pending(
                 plan_path="/ws/.soothe/plans/v1.md",
                 plan_markdown="# Plan v1\n",
             )
@@ -386,7 +386,7 @@ async def test_second_park_after_resume_reemits_clarification_requested() -> Non
     await node_await_clarification(
         ctx,
         {
-            "pending_clarification": _planner_review_pending(
+            "pending_clarification": _plan_review_pending(
                 plan_path="/ws/.soothe/plans/v2.md",
                 plan_markdown="# Plan v2\n\nUnified model.\n",
             )

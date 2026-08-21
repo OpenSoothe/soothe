@@ -372,14 +372,14 @@ async def test_manual_clarification_mounts_without_step_or_orphan() -> None:
     key = await _mount_manual_clarification_input(
         adapter,
         questions=["Approve this plan?", "Comments?"],
-        origin_node="planner_subagent_review",
+        origin_node="plan_mode_review",
         plan_path="/tmp/plans/demo.md",
         plan_markdown="# Plan\n\nDo things.\n",
     )
-    assert key == "planner_subagent_review"
+    assert key == "plan_mode_review"
     widget = adapter._clarification_input_by_step[key]
     assert widget in adapter._mounted  # type: ignore[attr-defined]
-    assert getattr(widget, "_origin_node", "") == "planner_subagent_review"
+    assert getattr(widget, "_origin_node", "") == "plan_mode_review"
     assert getattr(widget, "_plan_path", "") == "/tmp/plans/demo.md"
     assert "# Plan" in getattr(widget, "_plan_markdown", "")
 
@@ -397,6 +397,6 @@ async def test_manual_clarification_prefers_active_orphan_step_id() -> None:
     key = await _mount_manual_clarification_input(
         adapter,
         questions=["Approve?"],
-        origin_node="planner_subagent_review",
+        origin_node="plan_mode_review",
     )
     assert key == "HYE_01"

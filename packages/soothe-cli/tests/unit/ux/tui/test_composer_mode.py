@@ -52,7 +52,7 @@ def test_next_composer_mode(current: str, expected: str) -> None:
     [
         ("auto", "auto", None, None),
         ("manual", "manual", None, None),
-        ("plan", "auto", "planner", None),
+        ("plan", "auto", None, "plan"),
         ("ask", "auto", None, "ask"),
         ("garbage", "manual", None, None),
     ],
@@ -68,18 +68,18 @@ def test_resolve_composer_wire_fields(
 
 
 def test_sticky_plan_applies_when_no_slash_route() -> None:
-    """Plan mode injects planner when the message has no subagent slash."""
+    """Plan mode no longer injects a subagent; interaction_mode=plan is used."""
     parsed, cleaned = parse_subagent_from_input("draft a migration plan")
-    sticky = "planner"
+    sticky = None  # plan mode no longer sets preferred_subagent
     subagent = parsed or sticky
-    assert subagent == "planner"
+    assert subagent is None
     assert cleaned == "draft a migration plan"
 
 
 def test_explicit_slash_route_wins_over_sticky_plan() -> None:
     """``/deep_research`` still wins when composer mode is Plan."""
     parsed, cleaned = parse_subagent_from_input("/deep_research find sources")
-    sticky = "planner"
+    sticky = None  # plan mode no longer sets preferred_subagent
     subagent = parsed or sticky
     assert subagent == "deep_research"
     assert cleaned == "find sources"
