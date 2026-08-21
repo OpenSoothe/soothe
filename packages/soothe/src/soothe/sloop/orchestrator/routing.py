@@ -54,10 +54,6 @@ def route_after_preprocess(state: dict[str, Any]) -> str:
     return DISPATCH
 
 
-# Historical name used by tests and docs.
-route_by_intent = route_after_preprocess
-
-
 def route_after_dispatch(state: dict[str, Any]) -> str:
     """DISPATCH → EXECUTE | ROOT_EVAL | END."""
     route = state.get("dispatch_route")

@@ -2,7 +2,7 @@
 
 Intent classification produces a 4-class intake label (RFC-630) —
 ``chitchat`` | ``minimal`` | ``simple`` | ``complex`` — that drives
-``route_by_intent`` branch routing. Whether an agentic query continues an
+``route_after_preprocess`` branch routing. Whether an agentic query continues an
 in-flight loop is derived structurally inside ``StrangeLoop`` from the loaded
 checkpoint, not classified here.
 
@@ -100,7 +100,7 @@ class IntentClassification(BaseModel):
       Eval gate. The runner / StrangeLoop derive loop continuation structurally
       from the checkpoint.
 
-    ``intake_label`` drives ``route_by_intent``.
+    ``intake_label`` drives ``route_after_preprocess``.
 
     Args:
         intake_label: 4-class intake label for branch routing (RFC-630).

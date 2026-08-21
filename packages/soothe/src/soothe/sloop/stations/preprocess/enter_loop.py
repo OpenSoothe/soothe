@@ -1,8 +1,8 @@
 """Loop Graph ``init_or_resume`` node (RFC-904 / RFC-630).
 
 Hydrates intent/routing from intake classified in the graph entry node.
-Surfaces ``intake_label``, ``is_fresh_goal``, and ``is_continuation`` for routing.
-Tasks route to DISPATCH (root StepNode created there). Wired specialists set
+Surfaces ``intake_label`` and ``intent_route`` for routing. Tasks route to
+DISPATCH (root StepNode created there). Wired specialists set
 ``intent_route=wired_subagent``.
 
 Chitchat bypass is decided here via :func:`should_bypass_chitchat_fast_path`
@@ -16,10 +16,6 @@ from typing import Any
 
 from soothe.sloop.engine.execute.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.intention.models import IntakeLabel
-from soothe.sloop.orchestrator.continuation import (
-    is_fresh_goal,
-    is_structural_continuation,
-)
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.utils.structural_continuation import should_bypass_chitchat_fast_path
 
@@ -29,22 +25,16 @@ logger = logging.getLogger(__name__)
 def _graph_flags(
     *,
     intake_label: IntakeLabel | None,
-    is_continuation: bool,
-    is_fresh: bool,
-    graph_intake_fields: dict[str, Any],
     intent_route: str,
 ) -> dict[str, Any]:
     return {
         "intent_route": intent_route,
         "intake_label": intake_label,
-        "is_continuation": is_continuation,
-        "is_fresh_goal": is_fresh,
         "last_outcome": None,
         "resume_synth": None,
         "dispatch_route": None,
         "reconcile_route": None,
         "root_eval_route": None,
-        **graph_intake_fields,
     }
 
 
@@ -67,20 +57,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         )
 
     intake_label: IntakeLabel | None = getattr(intent, "intake_label", None)
-    is_continuation = is_structural_continuation(ctx)
-    is_fresh = is_fresh_goal(ctx)
-
-    is_task = intake_label != IntakeLabel.CHITCHAT if intake_label is not None else None
-    scope = (
-        intake_label if intake_label is not None and intake_label != IntakeLabel.CHITCHAT else None
-    )
-    has_deliverable = intake_label is not None and intake_label != IntakeLabel.CHITCHAT
-
-    graph_intake_fields = {
-        "is_task": is_task,
-        "scope": scope,
-        "has_deliverable": has_deliverable,
-    }
 
     if (
         intake_label == IntakeLabel.CHITCHAT
@@ -104,9 +80,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         )
         return _graph_flags(
             intake_label=intake_label,
-            is_continuation=is_continuation,
-            is_fresh=is_fresh,
-            graph_intake_fields=graph_intake_fields,
             intent_route="fast_path",
         )
 
@@ -122,16 +95,10 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             )
             return _graph_flags(
                 intake_label=intake_label,
-                is_continuation=is_continuation,
-                is_fresh=is_fresh,
-                graph_intake_fields=graph_intake_fields,
                 intent_route="wired_subagent",
             )
 
     return _graph_flags(
         intake_label=intake_label,
-        is_continuation=is_continuation,
-        is_fresh=is_fresh,
-        graph_intake_fields=graph_intake_fields,
         intent_route="continue_loop",
     )

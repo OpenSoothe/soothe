@@ -20,7 +20,7 @@ from soothe.sloop.intention.models import (
     TaskComplexity,
     build_loop_routing_classification,
 )
-from soothe.sloop.orchestrator.routing import route_after_wired_subagent, route_by_intent
+from soothe.sloop.orchestrator.routing import route_after_preprocess, route_after_wired_subagent
 from soothe.sloop.state.schemas import resolve_wire_subagent
 from soothe.sloop.stations.preprocess.enter_loop import node_init_or_resume
 from soothe.sloop.stations.sidecars.delegate import (
@@ -81,22 +81,22 @@ def test_intake_never_infers_a_specialist() -> None:
     )
 
 
-def test_route_by_intent_wired_subagent() -> None:
+def test_route_after_preprocess_wired_subagent() -> None:
     state = {
         "intent_route": "wired_subagent",
         "intake_label": IntakeLabel.COMPLEX,
         "is_continuation": True,
     }
-    assert route_by_intent(state) == "delegate"
+    assert route_after_preprocess(state) == "delegate"
 
 
-def test_route_by_intent_chitchat_still_wins_over_wired() -> None:
+def test_route_after_preprocess_chitchat_still_wins_over_wired() -> None:
     state = {
         "intent_route": "fast_path",
         "intake_label": IntakeLabel.CHITCHAT,
         "is_continuation": False,
     }
-    assert route_by_intent(state) == END
+    assert route_after_preprocess(state) == END
 
 
 @pytest.mark.asyncio
@@ -126,7 +126,7 @@ async def test_init_or_resume_sets_wired_subagent_route() -> None:
     result = await node_init_or_resume(ctx, {})  # type: ignore[arg-type]
     assert result["intent_route"] == "wired_subagent"
     assert ctx.scratch.plan_result is None  # plan owned by invoke_wired_subagent
-    assert route_by_intent(result) == "delegate"
+    assert route_after_preprocess(result) == "delegate"
 
 
 @pytest.mark.asyncio
@@ -155,7 +155,7 @@ async def test_init_or_resume_slash_specialist_wins_over_continue_keyword_goal()
     )
     result = await node_init_or_resume(ctx, {})  # type: ignore[arg-type]
     assert result["intent_route"] == "wired_subagent"
-    assert route_by_intent(result) == "delegate"
+    assert route_after_preprocess(result) == "delegate"
 
 
 @pytest.mark.asyncio

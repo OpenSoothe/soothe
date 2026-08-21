@@ -13,7 +13,7 @@ from soothe.sloop.intention.models import (
     TaskComplexity,
     build_loop_routing_classification,
 )
-from soothe.sloop.orchestrator.routing import route_by_intent
+from soothe.sloop.orchestrator.routing import route_after_preprocess
 from soothe.sloop.stations.preprocess.enter_loop import node_init_or_resume
 from soothe.sloop.strange_loop import StrangeLoop
 
@@ -181,7 +181,7 @@ async def test_enter_loop_skips_wired_branch_without_slash_hint() -> None:
     )
     result = await node_init_or_resume(ctx, {})  # type: ignore[arg-type]
     assert result["intent_route"] != "wired_subagent"
-    assert route_by_intent(result) != "delegate"
+    assert route_after_preprocess(result) != "delegate"
 
 
 @pytest.mark.asyncio

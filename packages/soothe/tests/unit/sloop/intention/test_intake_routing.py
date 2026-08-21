@@ -14,7 +14,7 @@ from soothe.sloop.intention import (
     IntakeLabel,
     IntakeLLMResult,
 )
-from soothe.sloop.orchestrator.routing import route_by_intent
+from soothe.sloop.orchestrator.routing import route_after_preprocess
 
 
 def create_mock_coordinator(
@@ -74,14 +74,16 @@ async def test_social_intake_routes_to_chitchat() -> None:
 
 def test_route_task_goes_to_dispatch() -> None:
     assert (
-        route_by_intent({"intent_route": "continue_loop", "intake_label": IntakeLabel.COMPLEX})
+        route_after_preprocess(
+            {"intent_route": "continue_loop", "intake_label": IntakeLabel.COMPLEX}
+        )
         == "dispatch"
     )
 
 
 def test_route_fast_path_ends() -> None:
-    assert route_by_intent({"intent_route": "fast_path"}) is END
+    assert route_after_preprocess({"intent_route": "fast_path"}) is END
 
 
 def test_route_wired_subagent() -> None:
-    assert route_by_intent({"intent_route": "wired_subagent"}) == "delegate"
+    assert route_after_preprocess({"intent_route": "wired_subagent"}) == "delegate"

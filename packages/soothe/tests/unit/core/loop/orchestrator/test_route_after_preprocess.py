@@ -1,4 +1,4 @@
-"""Tests for RFC-630 ``route_by_intent`` branch dispatch and minimal intake routing.
+"""Tests for RFC-630 ``route_after_preprocess`` branch dispatch and minimal intake routing.
 
 Covers test groups 2 (routing truth table), 4 (branch node sequence),
 and 6 (wired-subagent plan shape + mislabel recovery).
@@ -16,7 +16,7 @@ from langgraph.graph import END
 from soothe_sdk.intention.models import TaskComplexity
 
 from soothe.sloop.intention.models import IntakeLabel
-from soothe.sloop.orchestrator.routing import route_by_intent
+from soothe.sloop.orchestrator.routing import route_after_preprocess
 from soothe.sloop.plans.wired_subagent_plan import build_wired_subagent_plan
 from soothe.sloop.stations.preprocess.enter_loop import node_init_or_resume
 
@@ -26,92 +26,92 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
     return None
 
 
-# -- Group 2: route_by_intent truth table ---------------------------------
+# -- Group 2: route_after_preprocess truth table ---------------------------------
 
 
-def test_route_by_intent_continuation_minimal() -> None:
+def test_route_after_preprocess_continuation_minimal() -> None:
     """Mid-loop minimal enters dispatch (default spine;)."""
     state = {
         "is_continuation": True,
         "is_fresh_goal": False,
         "intake_label": IntakeLabel.MINIMAL,
     }
-    assert route_by_intent(state) == "dispatch"
+    assert route_after_preprocess(state) == "dispatch"
 
 
-def test_route_by_intent_continuation_simple() -> None:
+def test_route_after_preprocess_continuation_simple() -> None:
     state = {
         "is_continuation": True,
         "is_fresh_goal": False,
         "intake_label": IntakeLabel.SIMPLE,
     }
-    assert route_by_intent(state) == "dispatch"
+    assert route_after_preprocess(state) == "dispatch"
 
 
-def test_route_by_intent_continuation_complex() -> None:
+def test_route_after_preprocess_continuation_complex() -> None:
     state = {
         "is_continuation": True,
         "is_fresh_goal": False,
         "intake_label": IntakeLabel.COMPLEX,
     }
-    assert route_by_intent(state) == "dispatch"
+    assert route_after_preprocess(state) == "dispatch"
 
 
-def test_route_by_intent_continuation_missing_label() -> None:
+def test_route_after_preprocess_continuation_missing_label() -> None:
     state = {"is_continuation": True, "is_fresh_goal": False, "intake_label": None}
-    assert route_by_intent(state) == "dispatch"
+    assert route_after_preprocess(state) == "dispatch"
 
 
-def test_route_by_intent_minimal() -> None:
+def test_route_after_preprocess_minimal() -> None:
     state = {
         "is_continuation": False,
         "is_fresh_goal": True,
         "intake_label": IntakeLabel.MINIMAL,
     }
-    assert route_by_intent(state) == "dispatch"
+    assert route_after_preprocess(state) == "dispatch"
 
 
-def test_route_by_intent_chitchat_fast_path() -> None:
+def test_route_after_preprocess_chitchat_fast_path() -> None:
     state = {
         "is_continuation": False,
         "intake_label": IntakeLabel.CHITCHAT,
         "intent_route": "fast_path",
     }
-    assert route_by_intent(state) == END
+    assert route_after_preprocess(state) == END
 
 
-def test_route_by_intent_chitchat_fast_path_wins_over_continuation() -> None:
+def test_route_after_preprocess_chitchat_fast_path_wins_over_continuation() -> None:
     """Chitchat fast-path must bypass continuation overlay (RFC-630)."""
     state = {
         "is_continuation": True,
         "intake_label": IntakeLabel.CHITCHAT,
         "intent_route": "fast_path",
     }
-    assert route_by_intent(state) == END
+    assert route_after_preprocess(state) == END
 
 
-def test_route_by_intent_simple() -> None:
+def test_route_after_preprocess_simple() -> None:
     state = {
         "is_continuation": False,
         "is_fresh_goal": True,
         "intake_label": IntakeLabel.SIMPLE,
     }
-    assert route_by_intent(state) == "dispatch"
+    assert route_after_preprocess(state) == "dispatch"
 
 
-def test_route_by_intent_complex() -> None:
+def test_route_after_preprocess_complex() -> None:
     state = {
         "is_continuation": False,
         "is_fresh_goal": True,
         "intake_label": IntakeLabel.COMPLEX,
     }
-    assert route_by_intent(state) == "dispatch"
+    assert route_after_preprocess(state) == "dispatch"
 
 
-def test_route_by_intent_missing_label_falls_back_to_complex() -> None:
+def test_route_after_preprocess_missing_label_falls_back_to_complex() -> None:
     """Fail-safe: a missing label on fresh routes to DISPATCH."""
     state = {"is_continuation": False, "is_fresh_goal": True, "intake_label": None}
-    assert route_by_intent(state) == "dispatch"
+    assert route_after_preprocess(state) == "dispatch"
 
 
 # -- Group 4: minimal intake routing (DISPATCH) -----------------------------
@@ -159,7 +159,6 @@ async def test_init_or_resume_chitchat_fast_path_with_continue_loop_mode() -> No
     result = await node_init_or_resume(ctx, {})
 
     assert result["intent_route"] == "fast_path"
-    assert result["is_continuation"] is True
     assert any(t == "intent_fast_path" for t, _ in emitted)
     assert scratch.plan_result is None
 
@@ -265,7 +264,6 @@ async def test_init_or_resume_minimal_routes_to_dispatch() -> None:
     result = await node_init_or_resume(ctx, {})
 
     assert result["intake_label"] == IntakeLabel.MINIMAL
-    assert result["is_fresh_goal"] is True
     assert result["intent_route"] == "continue_loop"
     assert not any(t == "intent_fast_path" for t, _ in emitted)
     # RFC-904: enter_loop no longer injects minimal plans; DISPATCH owns the root step.
@@ -303,7 +301,7 @@ async def test_init_or_resume_minimal_skipped_when_continue_loop() -> None:
 
     result = await node_init_or_resume(ctx, {})
 
-    assert result["is_continuation"] is True
+    assert result["intent_route"] == "continue_loop"
     assert scratch.plan_result is None
 
 
@@ -337,8 +335,7 @@ async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuat
 
     result = await node_init_or_resume(ctx, {})
 
-    assert result["is_continuation"] is True
-    assert result["is_fresh_goal"] is False
+    assert result["intent_route"] == "continue_loop"
     assert scratch.plan_result is None
 
 
@@ -364,7 +361,6 @@ async def test_init_or_resume_simple_no_plan_injection() -> None:
     result = await node_init_or_resume(ctx, {})
 
     assert result["intake_label"] == IntakeLabel.SIMPLE
-    assert result["is_fresh_goal"] is True
     assert scratch.plan_result is None
 
 
@@ -423,7 +419,7 @@ def test_chitchat_fast_path_ends_unconditionally() -> None:
         "intake_label": IntakeLabel.CHITCHAT,
         "intent_route": "fast_path",
     }
-    assert route_by_intent(state) == END
+    assert route_after_preprocess(state) == END
 
 
 def test_chitchat_fast_path_ends_even_on_continuation() -> None:
@@ -433,7 +429,7 @@ def test_chitchat_fast_path_ends_even_on_continuation() -> None:
         "intake_label": IntakeLabel.CHITCHAT,
         "intent_route": "fast_path",
     }
-    assert route_by_intent(state) == END
+    assert route_after_preprocess(state) == END
 
 
 def test_chitchat_label_without_fast_path_routes_to_dispatch() -> None:
@@ -443,4 +439,4 @@ def test_chitchat_label_without_fast_path_routes_to_dispatch() -> None:
         "intake_label": IntakeLabel.CHITCHAT,
         "intent_route": "continue_loop",
     }
-    assert route_by_intent(state) == "dispatch"
+    assert route_after_preprocess(state) == "dispatch"

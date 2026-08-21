@@ -81,11 +81,6 @@ class LoopGraphState(TypedDict, total=False):
     reconcile_route: _ReconcileRoute | None
     root_eval_route: _RootEvalRoute | None
     intake_label: str | None  # IntakeLabel at runtime
-    is_continuation: bool | None
-    is_fresh_goal: bool | None
-    is_task: bool | None
-    scope: str | None  # IntakeLabel at runtime
-    has_deliverable: bool | None
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None
     last_clarification_origin: str | None  # ClarificationOrigin at runtime
