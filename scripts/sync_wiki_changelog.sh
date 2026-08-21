@@ -57,7 +57,7 @@ every Soothe version — lives in a single file in the repository root:
 
 → **[`CHANGELOG.md`](https://github.com/mirasoth/soothe/blob/main/CHANGELOG.md)**
 
-This page intentionally does **not** duplicate that file. Edit the root
+This page **intentionally** does not duplicate that file. Edit the root
 `CHANGELOG.md` directly; the link above always points to the latest `main`
 revision.
 EOF

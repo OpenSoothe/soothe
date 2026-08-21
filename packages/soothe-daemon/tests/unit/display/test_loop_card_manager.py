@@ -272,8 +272,14 @@ async def test_ingest_stream_tuple_returns_before_flush_completes(monkeypatch) -
     await manager.ingest_stream_tuple("loop_async", (), "messages", (wire, {}))
     assert not flush_started.is_set()
     await asyncio.wait_for(flush_started.wait(), timeout=1.0)
-    await asyncio.sleep(0.2)
+    # Wait deterministically for the real flush (thread-pool bind + persist)
+    # to land the card in the ledger, instead of a fixed sleep that flakes
+    # under CI runner load.
     ledger = await manager.ensure_for_loop("loop_async")
+    for _ in range(100):
+        if ledger.card_count() >= 1:
+            break
+        await asyncio.sleep(0.02)
     assert ledger.card_count() >= 1
     await manager.stop_for_loop("loop_async")
 

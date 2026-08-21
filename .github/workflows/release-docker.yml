@@ -166,13 +166,28 @@ jobs:
           set -euo pipefail
           # Catch disjoint first-party pins (e.g. soothe-nano) before the
           # multi-arch Docker build burns CI minutes on an unsatisfiable set.
+          # The PyPI JSON API may return 200 before package files propagate to
+          # all CDN nodes, so retry the resolve a few times.
           curl -LsSf https://astral.sh/uv/install.sh | sh
           export PATH="${HOME}/.local/bin:${PATH}"
           uv venv /tmp/soothe-resolve
-          uv pip install --python /tmp/soothe-resolve/bin/python \
-            "soothe==${SOOTHE_VERSION}" \
-            "soothe-daemon==${SOOTHE_VERSION}"
-          echo "✓ soothe==${SOOTHE_VERSION} and soothe-daemon==${SOOTHE_VERSION} resolve"
+          max_attempts=5
+          attempt=0
+          while [ ${attempt} -lt ${max_attempts} ]; do
+            attempt=$((attempt + 1))
+            if uv pip install --python /tmp/soothe-resolve/bin/python \
+              "soothe==${SOOTHE_VERSION}" \
+              "soothe-daemon==${SOOTHE_VERSION}"; then
+              echo "✓ soothe==${SOOTHE_VERSION} and soothe-daemon==${SOOTHE_VERSION} resolve"
+              exit 0
+            fi
+            if [ ${attempt} -lt ${max_attempts} ]; then
+              echo "Attempt ${attempt}/${max_attempts} failed; waiting 15s for PyPI CDN propagation..."
+              sleep 15
+            fi
+          done
+          echo "::error::Could not resolve soothe==${SOOTHE_VERSION} + soothe-daemon==${SOOTHE_VERSION} after ${max_attempts} attempts"
+          exit 1
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
