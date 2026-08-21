@@ -5,7 +5,6 @@ Langfuse tags (``strange-loop-graph``, ``execute-step``).
 """
 
 _HOST_LOOP_GRAPH_RUN_NAME = "strange-loop-graph"
-_HOST_INTAKE_RUN_NAME = "intake"
 _HOST_INTAKE_PHASE_RUN_NAMES = {
     "intake_classify": "intake-classify",
 }
@@ -23,11 +22,6 @@ def _with_trace_prefix(trace_name: str | None, suffix: str) -> str:
 def loop_graph_langfuse_run_display_name(trace_name: str | None) -> str:
     """Return host root graph run display name for a trace."""
     return _with_trace_prefix(trace_name, _HOST_LOOP_GRAPH_RUN_NAME)
-
-
-def intake_langfuse_run_display_name(trace_name: str | None) -> str:
-    """Return host preprocess ``intake`` child run display name for a trace."""
-    return _with_trace_prefix(trace_name, _HOST_INTAKE_RUN_NAME)
 
 
 def intake_phase_langfuse_run_display_name(trace_name: str | None, phase: str) -> str | None:
@@ -61,7 +55,6 @@ def finalize_langfuse_run_display_name(trace_name: str | None) -> str:
 __all__ = [
     "execute_step_langfuse_run_display_name",
     "finalize_langfuse_run_display_name",
-    "intake_langfuse_run_display_name",
     "intake_phase_langfuse_run_display_name",
     "loop_graph_langfuse_run_display_name",
     "step_completion_report_langfuse_run_display_name",

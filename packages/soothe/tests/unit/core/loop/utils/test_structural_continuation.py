@@ -12,7 +12,7 @@ from soothe.sloop.utils.structural_continuation import (
     has_resumable_interrupted_goal,
     is_loop_continuation_phrase,
     is_loop_control_signal,
-    should_bypass_social_gate_fast_path,
+    should_bypass_chitchat_fast_path,
 )
 
 
@@ -71,18 +71,18 @@ def test_is_loop_control_signal_includes_keyword_and_phrase() -> None:
     assert not is_loop_control_signal("hello")
 
 
-def test_should_bypass_social_gate_for_control_phrase_on_idle_checkpoint() -> None:
+def test_should_bypass_chitchat_for_control_phrase_on_idle_checkpoint() -> None:
     checkpoint = _checkpoint(status="idle", goal_status="completed", current_goal_index=-1)
-    assert should_bypass_social_gate_fast_path(checkpoint, "continue this loop")
-    assert should_bypass_social_gate_fast_path(checkpoint, "retry")
+    assert should_bypass_chitchat_fast_path(checkpoint, "continue this loop")
+    assert should_bypass_chitchat_fast_path(checkpoint, "retry")
 
 
-def test_should_not_bypass_social_gate_without_intra_loop_checkpoint() -> None:
+def test_should_not_bypass_chitchat_without_intra_loop_checkpoint() -> None:
     empty = _checkpoint(status="running", current_goal_index=-1, empty_history=True)
     assert not has_intra_loop_checkpoint_to_continue(empty)
     assert not has_intra_loop_checkpoint_to_continue(None)
-    assert not should_bypass_social_gate_fast_path(empty, "continue")
-    assert not should_bypass_social_gate_fast_path(None, "retry")
+    assert not should_bypass_chitchat_fast_path(empty, "continue")
+    assert not should_bypass_chitchat_fast_path(None, "retry")
 
 
 def test_has_intra_loop_checkpoint_to_continue() -> None:
@@ -97,14 +97,14 @@ def test_has_intra_loop_checkpoint_to_continue() -> None:
     )
 
 
-def test_should_not_bypass_social_gate_for_social_on_running_checkpoint() -> None:
+def test_should_not_bypass_chitchat_for_social_on_running_checkpoint() -> None:
     checkpoint = _checkpoint(status="running", goal_status="running")
-    assert not should_bypass_social_gate_fast_path(checkpoint, "thanks")
+    assert not should_bypass_chitchat_fast_path(checkpoint, "thanks")
 
 
-def test_should_not_bypass_social_gate_for_social_on_idle_without_running_goal() -> None:
+def test_should_not_bypass_chitchat_for_social_on_idle_without_running_goal() -> None:
     checkpoint = _checkpoint(status="idle", goal_status="completed", current_goal_index=-1)
-    assert not should_bypass_social_gate_fast_path(checkpoint, "thanks")
+    assert not should_bypass_chitchat_fast_path(checkpoint, "thanks")
 
 
 def test_has_active_running_goal() -> None:

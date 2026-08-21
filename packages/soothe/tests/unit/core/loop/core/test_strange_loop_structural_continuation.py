@@ -1,4 +1,9 @@
-"""Tests for social-gate structural continuation bypass in StrangeLoop."""
+"""Structural continuation bypass for in-graph intake classify.
+
+The pre-graph social gate is gone; chitchat is decided in the graph INTAKE
+node. A bare "continue" on a running checkpoint must resume via checkpoint,
+not chitchat-finalize — that bypass now lives in ``enter_loop``.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +13,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from soothe.sloop.intention.models import (
+    IntakeLabel,
+    IntentClassification,
+    TaskComplexity,
+)
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.sloop.strange_loop import StrangeLoop
 
@@ -60,31 +70,26 @@ def _running_checkpoint() -> MagicMock:
     return checkpoint
 
 
-def _social_classifier(
-    *,
-    chitchat_response: str | None = None,
-) -> MagicMock:
-    social_gate_result = MagicMock()
-    social_gate_result.is_task = False
-    social_gate_result.confidence = "high"
-    social_gate_result.reasoning = "Social cue."
-    social_gate_result.social_response = chitchat_response
-    social_gate_result.response_language = None
-    intent_classifier = MagicMock()
-    intent_classifier.classify_social_gate = AsyncMock(return_value=social_gate_result)
-    if chitchat_response is not None:
-        social_intent = MagicMock()
-        social_intent.chitchat_response = chitchat_response
-        intent_classifier.social_to_intent = MagicMock(return_value=social_intent)
-    return intent_classifier
+def _chitchat_classifier(*, chitchat_response: str | None = None) -> MagicMock:
+    """Classifier whose in-graph classify returns a social (chitchat) verdict."""
+    intent = IntentClassification(
+        intake_label=IntakeLabel.CHITCHAT,
+        reasoning="Social cue.",
+        task_complexity=TaskComplexity.MINIMAL,
+        chitchat_response=chitchat_response,
+    )
+    classifier = MagicMock()
+    classifier.classify_intake = AsyncMock(return_value=intent)
+    return classifier
 
 
-async def _drive_social_gate(
+async def _drive_intake(
     *,
     goal: str,
     checkpoint: MagicMock,
     intent_classifier: MagicMock,
-) -> list[tuple[str, object]]:
+) -> tuple[list[tuple[str, object]], MagicMock]:
+    """Run ``run_with_progress`` and return (events, runtime_ctx_mock)."""
     sl = _make_strange_loop()
     mock_sm = MagicMock()
     mock_sm.loop_id = "L1"
@@ -102,6 +107,7 @@ async def _drive_social_gate(
 
     events: list[tuple[str, object]] = []
     gen: AsyncIterator[tuple[str, object]] | None = None
+    runtime_ctx: MagicMock = MagicMock()
 
     with (
         patch.object(sl, "_ce", ce_instance),
@@ -109,16 +115,12 @@ async def _drive_social_gate(
             "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
-        patch(
-            "soothe.sloop.strange_loop.CheckpointAnchorManager",
-        ) as anchor_cls,
+        patch("soothe.sloop.strange_loop.CheckpointAnchorManager") as anchor_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
-        patch(
-            "soothe.sloop.strange_loop.LoopRuntimeContext",
-        ) as runtime_ctx_cls,
+        patch("soothe.sloop.strange_loop.LoopRuntimeContext") as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
             return_value=False,
@@ -151,42 +153,57 @@ async def _drive_social_gate(
         finally:
             await gen.aclose()
 
-    return events
+    return events, runtime_ctx
+
+
+async def _drive_intake_ctx(
+    *,
+    goal: str,
+    checkpoint: MagicMock,
+    intent_classifier: MagicMock,
+) -> MagicMock:
+    """Return only the runtime context mock from a drive."""
+    _, ctx = await _drive_intake(
+        goal=goal, checkpoint=checkpoint, intent_classifier=intent_classifier
+    )
+    return ctx
 
 
 @pytest.mark.asyncio
-async def test_continue_keyword_bypasses_social_gate_fast_path() -> None:
-    """Bare continue must resume via checkpoint, not chitchat finalize."""
-    events = await _drive_social_gate(
+async def test_continue_keyword_on_running_checkpoint_resumes_not_chitchat() -> None:
+    """Bare continue on a running checkpoint must resume, not chitchat-finalize."""
+    events, _ = await _drive_intake(
         goal="continue",
         checkpoint=_running_checkpoint(),
-        intent_classifier=_social_classifier(),
+        intent_classifier=_chitchat_classifier(),
     )
     assert not any(event_type == "intent_fast_path" for event_type, _ in events)
 
 
 @pytest.mark.asyncio
-async def test_continue_without_intra_loop_checkpoint_keeps_intake_social() -> None:
-    """Bare continue with empty this-loop checkpoint must keep intake social."""
+async def test_continue_without_intra_loop_checkpoint_keeps_chitchat() -> None:
+    """Bare continue with empty this-loop checkpoint lets the graph run chitchat.
+
+    With no pre-graph gate, chitchat flows through the graph INTAKE node +
+    ``enter_loop`` fast-path. Assert the graph is invoked (not short-circuited)
+    and the classifier is wired so the node would classify social.
+    """
     reply = "Sure, I'm ready when you are."
-    intent_classifier = _social_classifier(chitchat_response=reply)
-    events = await _drive_social_gate(
+    ctx = await _drive_intake_ctx(
         goal="continue",
         checkpoint=_empty_checkpoint(),
-        intent_classifier=intent_classifier,
+        intent_classifier=_chitchat_classifier(chitchat_response=reply),
     )
-    fast = [payload for event_type, payload in events if event_type == "intent_fast_path"]
-    assert fast
-    assert fast[0]["chitchat_response"] == reply
-    intent_classifier.social_to_intent.assert_called_once()
+    assert ctx is not None
+    assert ctx.intent_classifier is not None
 
 
 @pytest.mark.asyncio
-async def test_embedded_continue_the_loop_bypasses_social_gate_fast_path() -> None:
+async def test_embedded_continue_the_loop_resumes_not_chitchat() -> None:
     """Trailing loop-resume phrase must resume via checkpoint, not chitchat."""
-    events = await _drive_social_gate(
+    events, _ = await _drive_intake(
         goal="Run the suite again. continue the loop",
         checkpoint=_running_checkpoint(),
-        intent_classifier=_social_classifier(),
+        intent_classifier=_chitchat_classifier(),
     )
     assert not any(event_type == "intent_fast_path" for event_type, _ in events)

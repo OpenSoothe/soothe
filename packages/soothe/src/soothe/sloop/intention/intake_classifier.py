@@ -1,10 +1,9 @@
 """Intake classifier: social vs task, with task complexity and short description.
 
-Runs as two entry points:
-- ``classify`` — classification with optional ledger-projected history.
-- ``classify_social_gate`` — context-free social-vs-task gate (pre-graph).
-  Task results include ``task_complexity`` and ``task_short_description`` and
-  are reused as loop intent (no second classify LLM call).
+Single entry point:
+- ``classify`` — classification with optional ledger-projected history. Runs
+  in the graph INTAKE node so the CE ledger (prior-goal completion + preamble)
+  reaches the classify LLM.
 """
 
 from __future__ import annotations

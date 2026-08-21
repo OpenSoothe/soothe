@@ -9,7 +9,6 @@ from soothe.sloop.orchestrator.runner import build_loop_graph_invoke_config
 from soothe.utils.observability.langfuse import (
     GoalLoopTrace,
     SootheLangfuse,
-    intake_langfuse_run_display_name,
     intake_phase_langfuse_run_display_name,
     loop_graph_langfuse_run_display_name,
     step_completion_report_langfuse_run_display_name,
@@ -186,8 +185,7 @@ def test_goal_trace_intake_invoke_config_pins_trace_id() -> None:
     handler = out["callbacks"][0]
     assert isinstance(handler, SootheLangfuseCallbackHandler)
     assert handler.trace_context == {"trace_id": "trace-goal-1"}
-    assert out["run_name"] == intake_langfuse_run_display_name("soothe-dev")
-    assert out["run_name"] == "soothe-dev:intake"
+    assert out["run_name"] == "soothe-dev:intake-classify"
     assert out["metadata"]["langfuse_trace_name"] == "soothe-dev:strange-loop-graph"
     assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
 

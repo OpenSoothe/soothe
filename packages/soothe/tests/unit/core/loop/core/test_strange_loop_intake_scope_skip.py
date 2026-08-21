@@ -40,9 +40,6 @@ async def test_run_with_progress_skips_intake_when_intent_preclassified() -> Non
     assert forced.intake_label == IntakeLabel.SIMPLE
 
     intent_classifier = MagicMock()
-    intent_classifier.classify_social_gate = AsyncMock(
-        return_value=MagicMock(is_task=True, reasoning="should not run")
-    )
     intent_classifier.classify_intake = AsyncMock(
         return_value=IntentClassification(
             intake_label=IntakeLabel.COMPLEX,
@@ -125,6 +122,5 @@ async def test_run_with_progress_skips_intake_when_intent_preclassified() -> Non
         finally:
             await gen.aclose()
 
-    intent_classifier.classify_social_gate.assert_not_awaited()
     intent_classifier.classify_intake.assert_not_awaited()
     assert ("plan_phase_status", {"label": "Interpreting goal"}) not in events

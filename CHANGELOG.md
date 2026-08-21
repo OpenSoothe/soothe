@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Remove the pre-graph social gate; the in-graph `intent_classify` node is now the sole intake classification call site. It projects the full CE ledger (prior-goal completion + preamble) so the second goal's intake sees the first goal's context instead of "No prior context provided." Chitchat flows through the graph INTAKE node → `enter_loop` fast-path → END; the structural continuation bypass (`should_bypass_chitchat_fast_path`) is checkpoint-based and lives in `enter_loop`.
+- Delete `IntakeLangfuseSpan` / `open_intake_langfuse_span` module; the graph node inherits the LangGraph RunnableConfig for tracing. Remove `with_intake_parent_span` / `intake_parent_span_id` / `nest_under_intake_span` / `_intake_parent_handler` from `GoalLoopTrace`. Drop the `intake_langfuse_run_display_name` fallback (never reached since `intake_invoke_config` defaults to `phase="intake_classify"`).
+- Rename `should_bypass_social_gate_fast_path` to `should_bypass_chitchat_fast_path` (the social gate is gone).
+
 ## [v0.10.25] - 2026-08-21
 
 ### Fixed

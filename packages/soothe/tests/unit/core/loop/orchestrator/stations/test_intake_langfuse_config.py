@@ -1,9 +1,9 @@
-"""Intake station Langfuse parent span + nested pass run names."""
+"""Intake station Langfuse invoke config + graph node inheritance."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from soothe_sdk.intention.models import TaskComplexity
@@ -12,10 +12,7 @@ from soothe.config import SootheConfig
 from soothe.sloop.intention import IntentClassification
 from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.stations.preprocess.intake import node_intent_classify
-from soothe.utils.observability.langfuse import (
-    GoalLoopTrace,
-    open_intake_langfuse_span,
-)
+from soothe.utils.observability.langfuse import GoalLoopTrace
 
 
 def _goal_trace(*, enabled: bool = True, trace_id: str | None = "trace-goal-1") -> GoalLoopTrace:
@@ -31,85 +28,18 @@ def _goal_trace(*, enabled: bool = True, trace_id: str | None = "trace-goal-1") 
     )
 
 
-def test_open_intake_span_is_inert_without_trace() -> None:
-    assert open_intake_langfuse_span(None).parent_span_id is None
-    assert open_intake_langfuse_span(_goal_trace(enabled=False)).parent_span_id is None
-    assert open_intake_langfuse_span(_goal_trace(trace_id=None)).parent_span_id is None
-
-
-def test_open_intake_span_starts_named_span_on_goal_trace() -> None:
-    span = MagicMock()
-    span.id = "span-intake-1"
-    client = MagicMock()
-    client.start_observation.return_value = span
-
-    with patch(
-        "soothe.utils.observability.langfuse._intake_span.host_langfuse_client",
-        return_value=client,
-    ):
-        handle = open_intake_langfuse_span(_goal_trace(), input_text="analyze repo")
-
-    kwargs = client.start_observation.call_args.kwargs
-    assert kwargs["trace_context"] == {"trace_id": "trace-goal-1"}
-    assert kwargs["name"] == "soothe-dev:intake"
-    assert kwargs["input"] == "analyze repo"
-    assert kwargs["metadata"]["soothe_station"] == "intake"
-    assert handle.parent_span_id == "span-intake-1"
-
-    handle.end(output="simple")
-    handle.end()
-    span.update.assert_called_once_with(output="simple")
-    span.end.assert_called_once()
-
-
-def test_open_intake_span_survives_client_failure() -> None:
-    with patch(
-        "soothe.utils.observability.langfuse._intake_span.host_langfuse_client",
-        side_effect=RuntimeError("no langfuse"),
-    ):
-        handle = open_intake_langfuse_span(_goal_trace())
-
-    assert handle.parent_span_id is None
-    handle.end(output="simple")
-
-
-def test_intake_invoke_config_nests_passes_under_span() -> None:
-    pytest.importorskip("langfuse")
-    from soothe_sdk.observability.langfuse.callback_handler import (
-        SootheLangfuseCallbackHandler,
-    )
-
-    nested = _goal_trace().with_intake_parent_span("span-intake-1")
-    out = nested.intake_invoke_config(
-        purpose="classify_social_gate",
-        component="classifier.intake.classify",
-        phase="intake_classify",
-    )
-
-    handlers = [h for h in out["callbacks"] if isinstance(h, SootheLangfuseCallbackHandler)]
-    assert len(handlers) == 1
-    assert handlers[0].trace_context == {
-        "trace_id": "trace-goal-1",
-        "parent_span_id": "span-intake-1",
-    }
-    assert out["run_name"] == "soothe-dev:intake-classify"
-    assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
-
-
-def test_intake_invoke_config_without_span_stays_trace_pinned() -> None:
+def test_intake_invoke_config_pins_trace_id() -> None:
     pytest.importorskip("langfuse")
 
-    base = _goal_trace()
-    assert base.with_intake_parent_span(None) is base
-
-    out = base.intake_invoke_config(
-        purpose="classify_social_gate",
+    out = _goal_trace().intake_invoke_config(
+        purpose="classify_intake",
         component="classifier.intake.classify",
         phase="intake_classify",
     )
     handler = out["callbacks"][0]
     assert handler.trace_context == {"trace_id": "trace-goal-1"}
     assert out["run_name"] == "soothe-dev:intake-classify"
+    assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
 
 
 def test_intake_invoke_config_inherits_graph_handler() -> None:
@@ -119,8 +49,7 @@ def test_intake_invoke_config_inherits_graph_handler() -> None:
     )
 
     graph_handler = SootheLangfuseCallbackHandler(trace_context={"trace_id": "trace-goal-1"})
-    nested = _goal_trace().with_intake_parent_span("span-intake-1")
-    out = nested.intake_invoke_config(
+    out = _goal_trace().intake_invoke_config(
         purpose="classify_intake",
         component="classifier.intake.classify",
         phase="intake_classify",

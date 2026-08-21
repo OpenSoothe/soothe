@@ -89,13 +89,13 @@ def has_intra_loop_checkpoint_to_continue(checkpoint: Any | None) -> bool:
     return len(history) > 0
 
 
-def should_bypass_social_gate_fast_path(
+def should_bypass_chitchat_fast_path(
     checkpoint: Any | None,
     user_text: str | None,
 ) -> bool:
-    """Return True when the social gate fast-path must not short-circuit intake.
+    """Return True when the chitchat fast-path must not short-circuit intake.
 
-    Loop-control phrases bypass social routing only when this loop's checkpoint
+    Loop-control phrases bypass chitchat routing only when this loop's checkpoint
     has intra-loop work to continue. Otherwise keep the intake classify result
     (typically social). Other social messages on a running loop still use the
     chitchat path; chitchat finalize is blocked separately via
@@ -128,5 +128,5 @@ __all__ = [
     "has_resumable_interrupted_goal",
     "is_loop_continuation_phrase",
     "is_loop_control_signal",
-    "should_bypass_social_gate_fast_path",
+    "should_bypass_chitchat_fast_path",
 ]

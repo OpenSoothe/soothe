@@ -32,11 +32,10 @@ logger = logging.getLogger(__name__)
 class IntentClassifier:
     """Intake classification facade.
 
-    Two entry points:
-    - ``classify_social_gate``: context-free social-vs-task gate (pre-graph).
-      Task verdicts (complexity + short title) are reused as loop intent.
-    - ``classify_intake``: fallback classification when the pre-graph gate
-      did not run (interrupt resume, missing gate result).
+    Single entry point:
+    - ``classify_intake``: runs in the graph INTAKE node. Projects prior-goal
+      completion units from the CE ledger into the prompt so the second goal
+      sees the first goal's context.
 
     Args:
         model: Fast LLM for classification (e.g., gpt-4o-mini).
@@ -65,23 +64,6 @@ class IntentClassifier:
         else:
             logger.warning("[IntentClassifier] No model provided, classification disabled")
 
-    async def classify_social_gate(
-        self,
-        query: str,
-        *,
-        prior_response_language: ResponseLanguage | None = None,
-        observability_metadata: dict[str, str] | None = None,
-        goal_trace: Any | None = None,
-    ) -> IntakeLLMResult:
-        """Run the social-vs-task gate (context-free) for the pre-graph fast path."""
-        result = await self._coordinator.classify_social_gate(
-            query,
-            prior_response_language=prior_response_language,
-            observability_metadata=observability_metadata,
-            goal_trace=goal_trace,
-        )
-        return result._intake_result  # noqa: SLF001
-
     async def classify_intake(
         self,
         query: str,
@@ -92,7 +74,7 @@ class IntentClassifier:
         goal_trace: Any | None = None,
         parent_runnable_config: dict[str, Any] | None = None,
     ) -> IntentClassification:
-        """Classify query when the pre-graph gate did not already set intent.
+        """Classify query as social or task with full CE ledger context.
 
         Projects prior-goal completion units from the ledger into the prompt when
         ``loop_messages`` is provided.

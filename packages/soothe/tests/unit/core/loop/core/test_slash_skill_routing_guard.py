@@ -46,13 +46,14 @@ async def _drive_intake(
     """Run ``run_with_progress`` through intake and return the ``LoopRuntimeContext`` mock."""
     sl = _make_strange_loop()
 
-    social_gate_result = MagicMock()
-    social_gate_result.is_task = True
-    social_gate_result.confidence = "high"
-    social_gate_result.reasoning = "This is a request to use the skill."
-
     intent_classifier = MagicMock()
-    intent_classifier.classify_social_gate = AsyncMock(return_value=social_gate_result)
+    intent_classifier.classify_intake = AsyncMock(
+        return_value=IntentClassification(
+            intake_label=IntakeLabel.SIMPLE,
+            task_complexity=TaskComplexity.SIMPLE,
+            reasoning="This is a request to use the skill.",
+        )
+    )
 
     ce_instance = MagicMock()
     ce_instance.load = AsyncMock(return_value=False)

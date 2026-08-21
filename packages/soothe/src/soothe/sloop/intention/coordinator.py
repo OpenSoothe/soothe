@@ -159,34 +159,6 @@ class IntakeCoordinator:
         )
         return IntakeResult(intake_result)
 
-    async def classify_social_gate(
-        self,
-        query: str,
-        *,
-        prior_response_language: ResponseLanguage | None = None,
-        observability_metadata: dict[str, str] | None = None,
-        goal_trace: Any | None = None,
-    ) -> IntakeResult:
-        """Run the pre-graph social gate (context-free fast-path)."""
-        intake_result = await self._intake_classifier.classify(
-            query,
-            prior_response_language=prior_response_language,
-            observability_metadata=observability_metadata,
-            goal_trace=goal_trace,
-        )
-        intake_result = _apply_low_confidence_fail_safe(intake_result)
-
-        if not intake_result.is_task:
-            logger.info(
-                "Social gate: SOCIAL (confidence=%s) - %s",
-                intake_result.confidence,
-                query[:50],
-            )
-            return IntakeResult(intake_result)
-
-        logger.debug("Social gate: TASK - %s", query[:50])
-        return IntakeResult(intake_result)
-
 
 def _apply_low_confidence_fail_safe(intake_result: IntakeLLMResult) -> IntakeLLMResult:
     """Low-confidence social verdicts fail-safe to task."""
