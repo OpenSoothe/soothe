@@ -1,15 +1,11 @@
-"""Clarification verification-stage origin constants (RFC-622, RFC-633, RFC-904).
+"""Clarification verification-stage origin constants (RFC-622, RFC-904).
 
-Two different planning concepts must not be conflated:
+Live origins: ``execute`` (step ``ask_user``), ``plan_mode_review``
+(plan draft approve/reject/comment gate), ``rail_pause`` (host gate).
 
-* **Live StrangeLoop origins** — ``execute`` (step ``ask_user``) plus host
-  gates ``planner_subagent_review`` / ``rail_pause``.
-* **Legacy plan-spine origins** — ``generate_plan`` / ``evaluate`` and older
-  ledger aliases (``plan_assess``, ``plan_gap_analysis``, …). Still accepted
-  for resume of persisted interrupts; resume lands on ``DISPATCH``.
-* **Planner subagent review** — ``planner_subagent_review``: human Approve /
-  Reject / More comments after the intake-only ``planner`` subagent writes a
-  plan artifact. Not a StrangeLoop planning-stage station.
+Legacy plan-spine origins (``generate_plan``, ``evaluate``, and ledger
+aliases) are still accepted for resume of persisted interrupts from
+pre-RFC-904 runs; they resume at ``DISPATCH``.
 """
 
 from __future__ import annotations
@@ -28,11 +24,6 @@ ORIGIN_PLAN_MODE_REVIEW: Final = "plan_mode_review"
 
 ORIGIN_RAIL_PAUSE: Final = "rail_pause"
 """LoopRail ``pause_for_user`` human gate (IG-737); host-side Veritas only."""
-
-PLANNER_WIRE_SUBAGENT: Final = "planner"
-"""Deprecated: intake-only wire id for the planner specialist (RFC-633 / RFC-618).
-
-Kept for legacy checkpoint resume compatibility; no longer set on new turns."""
 
 # --- Legacy plan-spine origins (resume → DISPATCH; dual-read only) --------
 
@@ -105,9 +96,6 @@ CLARIFICATION_ORIGIN_RESUME_NODE: dict[str, str] = {
 
 DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = (ORIGIN_PLAN_MODE_REVIEW,)
 
-PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX: Final = "planner-subagent-review:"
-"""Deprecated legacy interrupt prefix (kept for checkpoint resume compat)."""
-
 PLAN_MODE_REVIEW_INTERRUPT_PREFIX: Final = "plan-mode-review:"
 """Interrupt prefix for plan-mode review clarifications."""
 
@@ -141,8 +129,6 @@ __all__ = [
     "ORIGIN_PLAN_MODE_REVIEW",
     "ORIGIN_RAIL_PAUSE",
     "PLAN_MODE_REVIEW_INTERRUPT_PREFIX",
-    "PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX",
-    "PLANNER_WIRE_SUBAGENT",
     "STRANGELOOP_PLANNING_ORIGINS",
     "resume_node_for_clarification_origin",
 ]

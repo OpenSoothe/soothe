@@ -1,7 +1,7 @@
 """Loop graph node that resolves a pending clarification (RFC-622).
 
 Invoked when a prior node set ``pending_clarification`` (execute ask_user,
-planner-subagent review, etc.). Dispatches to ``ClarificationPolicy``; on
+plan-mode review, etc.). Dispatches to ``ClarificationPolicy``; on
 success writes ``pending_clarification_answer``. On defer, parks via CE when
 wired and sets ``last_outcome="deferred"`` while keeping graph pending.
 """

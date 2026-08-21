@@ -26,6 +26,7 @@ def _graph_flags(
     *,
     intake_label: IntakeLabel | None,
     intent_route: str,
+    interaction_mode: str | None = None,
 ) -> dict[str, Any]:
     return {
         "intent_route": intent_route,
@@ -35,6 +36,7 @@ def _graph_flags(
         "dispatch_route": None,
         "reconcile_route": None,
         "root_eval_route": None,
+        "interaction_mode": interaction_mode,
     }
 
 
@@ -87,6 +89,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         return _graph_flags(
             intake_label=intake_label,
             intent_route="fast_path",
+            interaction_mode=getattr(ctx, "interaction_mode", None),
         )
 
     if intake_label != IntakeLabel.CHITCHAT:
@@ -102,9 +105,11 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             return _graph_flags(
                 intake_label=intake_label,
                 intent_route="wired_subagent",
+                interaction_mode=getattr(ctx, "interaction_mode", None),
             )
 
     return _graph_flags(
         intake_label=intake_label,
         intent_route="continue_loop",
+        interaction_mode=getattr(ctx, "interaction_mode", None),
     )

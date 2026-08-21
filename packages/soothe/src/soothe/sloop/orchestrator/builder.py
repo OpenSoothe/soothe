@@ -35,6 +35,7 @@ from .routing import (
     route_after_clarification,
     route_after_dispatch,
     route_after_execute,
+    route_after_plan_review,
     route_after_preprocess,
     route_after_reconcile,
     route_after_record_iteration,
@@ -50,6 +51,7 @@ from .stations import (
     EXECUTE,
     FINALIZE,
     INTAKE,
+    PLAN_REVIEW,
     RECONCILE,
     RECORD_PROGRESS,
     ROOT_EVAL,
@@ -105,6 +107,11 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     async def await_user(state: dict[str, Any]) -> dict[str, Any]:
         return await node_await_clarification(ctx, state)
 
+    async def plan_review(state: dict[str, Any]) -> dict[str, Any]:
+        from soothe.sloop.plans.plan_mode_review import node_plan_review
+
+        return await node_plan_review(ctx, state)
+
     graph = StateGraph(LoopGraphState)
     graph.add_node(INTAKE, intake)
     graph.add_node(ENTER_LOOP, enter_loop)
@@ -116,6 +123,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_node(ROOT_EVAL, wrap_node(ROOT_EVAL, root_eval_node, ctx))
     graph.add_node(FINALIZE, finalize)
     graph.add_node(AWAIT_USER, await_user)
+    graph.add_node(PLAN_REVIEW, plan_review)
 
     graph.add_edge(START, INTAKE)
     graph.add_edge(INTAKE, ENTER_LOOP)
@@ -178,7 +186,17 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         route_after_root_eval,
         {
             FINALIZE: FINALIZE,
+            PLAN_REVIEW: PLAN_REVIEW,
             DISPATCH: DISPATCH,
+            END: END,
+        },
+    )
+    # Plan review → AWAIT_USER (pending clarification) or END (reject).
+    graph.add_conditional_edges(
+        PLAN_REVIEW,
+        route_after_plan_review,
+        {
+            AWAIT_USER: AWAIT_USER,
             END: END,
         },
     )
@@ -190,6 +208,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             EXECUTE: EXECUTE,
             DISPATCH: DISPATCH,
             DELEGATE: DELEGATE,
+            PLAN_REVIEW: PLAN_REVIEW,
             END: END,
         },
     )

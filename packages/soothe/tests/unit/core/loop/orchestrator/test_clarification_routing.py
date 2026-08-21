@@ -56,9 +56,27 @@ def test_route_after_clarification_returns_to_origin_node() -> None:
         route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_EVALUATE}) == "dispatch"
     )
     assert route_after_clarification({"last_clarification_origin": "assess"}) == "dispatch"
+    # Plan-mode review without approved plan or pending clarification → END (reject).
+    assert route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW}) == END
+    # Plan-mode review with approved plan → DISPATCH (grounding).
     assert (
-        route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW})
-        == "delegate"
+        route_after_clarification(
+            {
+                "last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW,
+                "approved_plan_markdown": "# Plan",
+            }
+        )
+        == "dispatch"
+    )
+    # Plan-mode review with pending clarification → PLAN_REVIEW (comment/regenerate).
+    assert (
+        route_after_clarification(
+            {
+                "last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW,
+                "pending_clarification": {"q": "a"},
+            }
+        )
+        == "plan_review"
     )
 
 

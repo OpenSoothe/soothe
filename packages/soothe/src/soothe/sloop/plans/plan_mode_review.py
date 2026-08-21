@@ -215,9 +215,86 @@ def handle_plan_mode_review_answer(
     return build_plan_mode_review_pending(ctx)
 
 
+def _collect_plan_draft(ctx: LoopRuntimeContext) -> str:
+    """Collect the agent's final output from the ledger as the plan draft."""
+    from soothe.sloop.utils.messages import last_ledger_ai_content
+
+    report = (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip()
+    if report:
+        return report
+    # Fallback: last AI message from the ledger.
+    return last_ledger_ai_content(ctx.loop_state).strip()
+
+
+async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> dict[str, Any]:
+    """Plan review graph node: collect plan draft, write artifact, emit clarification.
+
+    When ``interaction_mode == "plan"``, ``route_after_root_eval`` routes here
+    instead of ``FINALIZE``. This node:
+
+    1. Collects the agent's final output from the ledger as the plan draft.
+    2. Writes the plan draft to ``.soothe/plans/`` via ``save_plan_draft``.
+    3. Records a ledger pair (goal + plan_path, not full plan content) so the
+       ledger shows what the goal was and where the plan was saved.
+    4. Returns a pending clarification (``ORIGIN_PLAN_MODE_REVIEW``) so the
+       graph routes to ``AWAIT_USER`` for the approve/reject/comment popup.
+
+    On clarification resume (approve/reject/comment), ``route_after_clarification``
+    routes back here; ``handle_plan_mode_review_answer`` processes the answer.
+    """
+    # If this is a clarification-resume turn, handle the answer first.
+    if state.get("pending_clarification_answer"):
+        return handle_plan_mode_review_answer(ctx, state)
+
+    # Fresh plan review: collect the plan draft and write it.
+    plan_draft = _collect_plan_draft(ctx)
+    if not plan_draft:
+        logger.warning("[PlanModeReview] No plan draft found; ending goal")
+        return {"last_outcome": "fatal"}
+
+    path = save_plan_draft(ctx, plan_draft)
+    if not path:
+        logger.warning("[PlanModeReview] Failed to write plan artifact; ending goal")
+        return {"last_outcome": "fatal"}
+
+    # Record ledger pair: goal + plan_path (not full plan content).
+    if ctx.ce is not None:
+        from soothe.sloop.utils.messages import (
+            LoopAIMessage,
+            LoopHumanMessage,
+            _record_ledger_message,
+        )
+
+        goal_text = resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or "plan"
+        human_msg = LoopHumanMessage(
+            content=goal_text,
+            thread_id=getattr(ctx.loop_state, "thread_id", None),
+            iteration=getattr(ctx.loop_state, "iteration", 0),
+            goal_summary=(goal_text[:200] if goal_text else None),
+            workspace=getattr(ctx.loop_state, "workspace", None),
+            phase="execute_step",
+            step_id="PLAN-DRAFT",
+        )
+        ai_msg = LoopAIMessage(
+            content=f"Plan draft saved to: `{path}`",
+            thread_id=getattr(ctx.loop_state, "thread_id", None),
+            iteration=getattr(ctx.loop_state, "iteration", 0),
+            phase="execute_step",
+            step_id="PLAN-DRAFT",
+        )
+        _record_ledger_message(ctx.ce, human_msg, "execute_step")
+        _record_ledger_message(ctx.ce, ai_msg, "execute_step")
+    else:
+        logger.debug("[PlanModeReview] No CE; skipping ledger pair for plan draft")
+
+    # Emit the approve/reject/comment clarification.
+    return build_plan_mode_review_pending(ctx)
+
+
 __all__ = [
     "build_plan_mode_review_pending",
     "handle_plan_mode_review_answer",
     "hydrate_scratch_from_pending",
+    "node_plan_review",
     "save_plan_draft",
 ]

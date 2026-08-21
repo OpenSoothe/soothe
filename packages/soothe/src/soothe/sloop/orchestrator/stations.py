@@ -33,6 +33,7 @@ ROOT_EVAL: Final = "root_eval"
 
 # --- Complete ---
 FINALIZE: Final = "finalize"
+PLAN_REVIEW: Final = "plan_review"
 
 # --- Sidecars ---
 AWAIT_USER: Final = "await_user"
@@ -86,6 +87,7 @@ class LoopGraphState(TypedDict, total=False):
     last_clarification_origin: str | None  # ClarificationOrigin at runtime
     resume_synth: bool | None
     after_record_route: Literal["finalize", "goal_completion", ""] | None
+    interaction_mode: str | None  # "agent" | "ask" | "plan" — set by enter_loop
 
 
 __all__ = [
@@ -99,6 +101,7 @@ __all__ = [
     "INTAKE_LEDGER_PHASES",
     "LoopGraphState",
     "PHASE_EXECUTE_STEP",
+    "PLAN_REVIEW",
     "PHASE_GOAL_COMPLETION",
     "PHASE_GOAL_INTERRUPTED",
     "PHASE_PREAMBLE",

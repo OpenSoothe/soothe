@@ -13,6 +13,7 @@ from .stations import (
     DISPATCH,
     EXECUTE,
     FINALIZE,
+    PLAN_REVIEW,
     RECONCILE,
     RECORD_PROGRESS,
     ROOT_EVAL,
@@ -72,11 +73,15 @@ def route_after_reconcile(state: dict[str, Any]) -> str:
 
 
 def route_after_root_eval(state: dict[str, Any]) -> str:
-    """ROOT_EVAL → FINALIZE | DISPATCH | END."""
+    """ROOT_EVAL → FINALIZE | PLAN_REVIEW | DISPATCH | END."""
     if state.get("root_eval_route") == "fatal" or state.get("last_outcome") == "fatal":
         return END
     if state.get("root_eval_route") == "dispatch":
         return DISPATCH
+    # Plan mode: route to plan review instead of goal completion.
+    if state.get("interaction_mode") == "plan":
+        logger.debug("[routing] route_after_root_eval → plan_review (plan mode)")
+        return PLAN_REVIEW
     return FINALIZE
 
 
@@ -114,6 +119,15 @@ def route_after_record_iteration(state: dict[str, Any]) -> str:
     return RECONCILE
 
 
+def route_after_plan_review(state: dict[str, Any]) -> str:
+    """Plan review → AWAIT_USER (pending clarification) or END."""
+    if _pending_clarification(state):
+        logger.debug("[routing] route_after_plan_review → await_user")
+        return AWAIT_USER
+    logger.debug("[routing] route_after_plan_review → END (no pending clarification)")
+    return END
+
+
 def route_after_clarification(state: dict[str, Any]) -> str:
     """Return to originating station, DISPATCH on plan-mode approve, or END on defer."""
     if state.get("last_outcome") == "deferred":
@@ -124,10 +138,19 @@ def route_after_clarification(state: dict[str, Any]) -> str:
     )
 
     origin = state.get("last_clarification_origin")
-    # Plan-mode review approve: if an approved plan body is set, route to DISPATCH
-    # so the grounding path (dispatch._ground_root_with_approved_plan) consumes it.
-    if origin == ORIGIN_PLAN_MODE_REVIEW and state.get("approved_plan_markdown"):
-        logger.debug("[routing] route_after_clarification → dispatch (plan approved)")
-        return DISPATCH
+    # Plan-mode review: approve → DISPATCH (grounding path consumes approved plan);
+    # reject → END; comment → PLAN_REVIEW (regenerate with feedback).
+    if origin == ORIGIN_PLAN_MODE_REVIEW:
+        if state.get("approved_plan_markdown"):
+            logger.debug("[routing] route_after_clarification → dispatch (plan approved)")
+            return DISPATCH
+        # No approved plan = reject or comment-without-approve.
+        # Comment re-enters PLAN_REVIEW; reject ends.
+        pending = state.get("pending_clarification")
+        if pending is not None:
+            logger.debug("[routing] route_after_clarification → plan_review (comment)")
+            return PLAN_REVIEW
+        logger.debug("[routing] route_after_clarification → END (plan rejected)")
+        return END
     resume = resume_node_for_clarification_origin(origin)
     return resume if resume is not None else END

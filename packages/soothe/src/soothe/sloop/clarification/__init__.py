@@ -24,7 +24,6 @@ from soothe.sloop.clarification.origins import (
     ORIGIN_PLAN_MODE_REVIEW,
     ORIGIN_RAIL_PAUSE,
     PLAN_MODE_REVIEW_INTERRUPT_PREFIX,
-    PLANNER_WIRE_SUBAGENT,
     STRANGELOOP_PLANNING_ORIGINS,
     resume_node_for_clarification_origin,
 )
@@ -69,7 +68,6 @@ __all__ = [
     "ORIGIN_PLAN_MODE_REVIEW",
     "ORIGIN_RAIL_PAUSE",
     "PLAN_MODE_REVIEW_INTERRUPT_PREFIX",
-    "PLANNER_WIRE_SUBAGENT",
     "STRANGELOOP_PLANNING_ORIGINS",
     "answer_from_state",
     "answer_to_state",
