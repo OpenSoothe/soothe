@@ -106,7 +106,7 @@ def test_plan_quick_view_content_shows_pending_and_running() -> None:
 
 
 def test_plan_quick_view_ignores_invalid_intake_label() -> None:
-    """Only trivial/simple/complex reach the panel title."""
+    """Only minimal/simple/complex reach the panel title."""
     tree = CognitionGoalTreeMessage(goal="Ship feature", id="gt-intake")
     tree.set_intake_label("chitchat")
     tree.set_intake_label("dependency")

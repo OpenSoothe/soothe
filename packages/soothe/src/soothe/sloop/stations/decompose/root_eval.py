@@ -76,13 +76,13 @@ class RootEvalNode(LoopNode):
                         logger.info("[root_eval] latest Eval completed; finalize")
                         return NodeResult(payload={"root_eval_route": "finalize"})
 
-                # Trivial and simple tasks trust the CoreAgent execute result and skip
+                # Minimal and simple tasks trust the CoreAgent execute result and skip
                 # the coverage Eval + root_eval insertion; go directly to finalize.
                 # Only complex tasks run the full coverage Eval gate. This is the only
                 # finalization difference between task complexities.
                 intent = getattr(ctx.loop_state, "intent", None)
                 intake_label = getattr(intent, "intake_label", None) if intent is not None else None
-                if intake_label in (IntakeLabel.TRIVIAL, IntakeLabel.SIMPLE):
+                if intake_label in (IntakeLabel.MINIMAL, IntakeLabel.SIMPLE):
                     logger.info("[root_eval] %s task; skip Eval; finalize", intake_label.value)
                     return NodeResult(payload={"root_eval_route": "finalize"})
 

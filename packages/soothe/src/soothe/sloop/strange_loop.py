@@ -692,7 +692,7 @@ class StrangeLoop:
                         # A bare resume keyword ("retry") must not take the chitchat
                         # fast-path to END — that would skip the resumed goal's
                         # remaining work. Only CHITCHAT/None need upgrading; under
-                        # the unified workflow simple and trivial route to DISPATCH
+                        # the unified workflow simple and minimal route to DISPATCH
                         # but skip the coverage Eval gate (root_eval short-circuit);
                         # only complex runs the full Eval gate.
                         if is_interrupt_resume_keyword(user_submission_line):

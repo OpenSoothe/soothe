@@ -20,8 +20,7 @@ def test_chitchat_phase_in_allowlist() -> None:
     assert "goal_completion" in LOOP_ASSISTANT_OUTPUT_PHASES
 
 
-def test_legacy_trivial_quiz_phases_removed() -> None:
-    assert "trivial" not in LOOP_ASSISTANT_OUTPUT_PHASES
+def test_legacy_quiz_phase_removed() -> None:
     assert "quiz" not in LOOP_ASSISTANT_OUTPUT_PHASES
 
 

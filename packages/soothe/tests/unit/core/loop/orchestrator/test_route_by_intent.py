@@ -1,4 +1,4 @@
-"""Tests for RFC-630 ``route_by_intent`` branch dispatch and trivial intake routing.
+"""Tests for RFC-630 ``route_by_intent`` branch dispatch and minimal intake routing.
 
 Covers test groups 2 (routing truth table), 4 (branch node sequence),
 and 6 (wired-subagent plan shape + mislabel recovery).
@@ -28,12 +28,12 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
 # -- Group 2: route_by_intent truth table ---------------------------------
 
 
-def test_route_by_intent_continuation_trivial() -> None:
-    """Mid-loop trivial enters dispatch (default spine;)."""
+def test_route_by_intent_continuation_minimal() -> None:
+    """Mid-loop minimal enters dispatch (default spine;)."""
     state = {
         "is_continuation": True,
         "is_fresh_goal": False,
-        "intake_label": IntakeLabel.TRIVIAL,
+        "intake_label": IntakeLabel.MINIMAL,
     }
     assert route_by_intent(state) == "dispatch"
 
@@ -61,11 +61,11 @@ def test_route_by_intent_continuation_missing_label() -> None:
     assert route_by_intent(state) == "dispatch"
 
 
-def test_route_by_intent_trivial() -> None:
+def test_route_by_intent_minimal() -> None:
     state = {
         "is_continuation": False,
         "is_fresh_goal": True,
-        "intake_label": IntakeLabel.TRIVIAL,
+        "intake_label": IntakeLabel.MINIMAL,
     }
     assert route_by_intent(state) == "dispatch"
 
@@ -113,7 +113,7 @@ def test_route_by_intent_missing_label_falls_back_to_complex() -> None:
     assert route_by_intent(state) == "dispatch"
 
 
-# -- Group 4: trivial intake routing (DISPATCH) -----------------------------
+# -- Group 4: minimal intake routing (DISPATCH) -----------------------------
 
 
 @pytest.mark.asyncio
@@ -232,7 +232,7 @@ async def test_init_or_resume_chitchat_continue_with_goal_history_skips_fast_pat
 
 
 @pytest.mark.asyncio
-async def test_init_or_resume_trivial_routes_to_dispatch() -> None:
+async def test_init_or_resume_minimal_routes_to_dispatch() -> None:
     """Trivial label routes to DISPATCH without plan injection."""
     from soothe.sloop.intention import IntentClassification
 
@@ -242,7 +242,7 @@ async def test_init_or_resume_trivial_routes_to_dispatch() -> None:
         emitted.append((event_type, event_data))
 
     intent = IntentClassification(
-        intake_label=IntakeLabel.TRIVIAL,
+        intake_label=IntakeLabel.MINIMAL,
         task_complexity=TaskComplexity.MINIMAL,
     )
     scratch = SimpleNamespace(plan_result=None, decision=None)
@@ -263,21 +263,21 @@ async def test_init_or_resume_trivial_routes_to_dispatch() -> None:
 
     result = await node_init_or_resume(ctx, {})
 
-    assert result["intake_label"] == IntakeLabel.TRIVIAL
+    assert result["intake_label"] == IntakeLabel.MINIMAL
     assert result["is_fresh_goal"] is True
     assert result["intent_route"] == "continue_loop"
     assert not any(t == "intent_fast_path" for t, _ in emitted)
-    # RFC-904: enter_loop no longer injects trivial plans; DISPATCH owns the root step.
+    # RFC-904: enter_loop no longer injects minimal plans; DISPATCH owns the root step.
     assert scratch.plan_result is None
 
 
 @pytest.mark.asyncio
-async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
+async def test_init_or_resume_minimal_skipped_when_continue_loop() -> None:
     """Trivial intake still routes through DISPATCH when loop continuation is active."""
     from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
-        intake_label=IntakeLabel.TRIVIAL,
+        intake_label=IntakeLabel.MINIMAL,
         task_complexity=TaskComplexity.SIMPLE,
     )
     scratch = SimpleNamespace(plan_result=None, decision=None)
@@ -464,11 +464,11 @@ def test_routing_guard_simple_not_blocked_by_new_goal() -> None:
     assert route_by_intent(state) == "dispatch"
 
 
-def test_routing_guard_trivial_not_blocked_by_new_goal() -> None:
-    """trivial label not affected by routing guard."""
+def test_routing_guard_minimal_not_blocked_by_new_goal() -> None:
+    """minimal label not affected by routing guard."""
     state = {
         "is_continuation": False,
-        "intake_label": IntakeLabel.TRIVIAL,
+        "intake_label": IntakeLabel.MINIMAL,
         "new_goal_created": True,
     }
     assert route_by_intent(state) == "dispatch"

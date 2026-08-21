@@ -210,7 +210,7 @@ async def test_goal_intake_scope_overrides_config() -> None:
         runner_factory=IdleFakeFactory(),
     )
     goal = await svc.submit_task("verify wave plan", max_send_backs=3)
-    goal.intake_scope = "trivial"
+    goal.intake_scope = "minimal"
 
     captured: dict[str, object] = {}
 
@@ -232,4 +232,4 @@ async def test_goal_intake_scope_overrides_config() -> None:
 
     req = captured["request"]
     assert req is not None
-    assert getattr(req, "intake_scope", "MISSING") == "trivial"
+    assert getattr(req, "intake_scope", "MISSING") == "minimal"

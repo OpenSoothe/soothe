@@ -440,7 +440,7 @@ class GoalNode(BaseModel):
 
     # Forced StrangeLoop intake scope for Autopilot dispatch (IG-735).
     # null (default) → AutopilotConfig.intake_scope, else loop intake classification.
-    intake_scope: Literal["trivial", "simple", "complex"] | None = None
+    intake_scope: Literal["minimal", "simple", "complex"] | None = None
 
     # Cron job tracking (RFC-229)
     cron_job_id: str | None = None  # Cron job that spawned this goal (for recurring rescheduling)

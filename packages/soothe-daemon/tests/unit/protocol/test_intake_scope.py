@@ -13,7 +13,7 @@ from soothe_daemon.protocol.intake_scope import validate_and_normalize_intake_sc
         (None, None),
         ("", None),
         ("   ", None),
-        ("trivial", "trivial"),
+        ("minimal", "minimal"),
         (" SIMPLE ", "simple"),
         ("Complex", "complex"),
     ],

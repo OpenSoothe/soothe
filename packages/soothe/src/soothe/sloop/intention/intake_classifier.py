@@ -255,10 +255,9 @@ class IntakeClassifier:
 
         if result_dict.get("confidence") not in (
             IntakeConfidence.HIGH,
-            IntakeConfidence.MEDIUM,
             IntakeConfidence.LOW,
         ):
-            result_dict["confidence"] = IntakeConfidence.MEDIUM
+            result_dict["confidence"] = IntakeConfidence.HIGH
 
         result_dict = coalesce_intake_dict(result_dict)
         return IntakeLLMResult(**result_dict)

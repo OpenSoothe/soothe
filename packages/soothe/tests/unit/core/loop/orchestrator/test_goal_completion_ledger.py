@@ -354,7 +354,7 @@ async def test_empty_ledger_direct_falls_back_to_synthesis() -> None:
 
 
 @pytest.mark.asyncio
-async def test_trivial_intake_ledger_direct_uses_synthesis_prompt_as_human() -> None:
+async def test_minimal_intake_ledger_direct_uses_synthesis_prompt_as_human() -> None:
     """Trivial goals use the same synthesis ledger prompt as all complexities."""
     from types import SimpleNamespace
 
@@ -363,7 +363,7 @@ async def test_trivial_intake_ledger_direct_uses_synthesis_prompt_as_human() -> 
     ce = _make_ce()
     loop_state = LoopState(goal="what time is it", thread_id="loop-1")
     loop_state.goal_user_submission = "what time is it"
-    loop_state.intent = SimpleNamespace(intake_label=IntakeLabel.TRIVIAL)
+    loop_state.intent = SimpleNamespace(intake_label=IntakeLabel.MINIMAL)
     goal = GoalNode(description="what time is it")
     ce._dag.add_goal(goal)
     loop_state.bind_ce(ce, goal.id)
@@ -419,7 +419,7 @@ async def test_trivial_intake_ledger_direct_uses_synthesis_prompt_as_human() -> 
         if getattr(m, "phase", None) == "goal_completion" and isinstance(m, LoopAIMessage)
     )
     # Trivial no longer substitutes the raw user submission; it uses the same
-    # synthesis ledger prompt as all task complexities (trivial and simple skip
+    # synthesis ledger prompt as all task complexities (minimal and simple skip
     # the Eval phase at ROOT_EVAL; only complex runs the gate).
     assert "Produce the final user-facing response" in gc_human.content
     assert gc_ai.content == "It is 3 PM."

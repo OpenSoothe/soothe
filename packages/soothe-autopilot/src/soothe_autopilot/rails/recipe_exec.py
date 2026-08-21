@@ -192,9 +192,9 @@ class RecipeRunner:
         intake_scope_s: str | None = None
         if isinstance(intake_scope, str) and intake_scope.strip():
             intake_scope_s = intake_scope.strip().lower()
-            if intake_scope_s not in {"trivial", "simple", "complex"}:
+            if intake_scope_s not in {"minimal", "simple", "complex"}:
                 raise ValueError(
-                    f"spawn_goal.intake_scope must be trivial|simple|complex; got {intake_scope!r}"
+                    f"spawn_goal.intake_scope must be minimal|simple|complex; got {intake_scope!r}"
                 )
 
         ws = _job_workspace(self._ex._ce, ctx.job_id)

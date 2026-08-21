@@ -28,12 +28,12 @@ from soothe.sloop.intention.prompts import (
 class TestIntentClassificationModel:
     """Test IntentClassification Pydantic model."""
 
-    def test_model_creation_trivial(self) -> None:
+    def test_model_creation_minimal(self) -> None:
         intent = IntentClassification(
-            intake_label=IntakeLabel.TRIVIAL,
+            intake_label=IntakeLabel.MINIMAL,
             task_complexity=TaskComplexity.MINIMAL,
         )
-        assert intent.intake_label == IntakeLabel.TRIVIAL
+        assert intent.intake_label == IntakeLabel.MINIMAL
 
     def test_model_creation_complex(self) -> None:
         intent = IntentClassification(
@@ -49,8 +49,8 @@ class TestDeriveTaskComplexityFromIntake:
     def test_chitchat_maps_to_minimal(self) -> None:
         assert derive_task_complexity_from_intake(IntakeLabel.CHITCHAT) == TaskComplexity.MINIMAL
 
-    def test_trivial_maps_to_minimal(self) -> None:
-        assert derive_task_complexity_from_intake(IntakeLabel.TRIVIAL) == TaskComplexity.MINIMAL
+    def test_minimal_label_maps_to_minimal(self) -> None:
+        assert derive_task_complexity_from_intake(IntakeLabel.MINIMAL) == TaskComplexity.MINIMAL
 
     def test_simple_maps_to_simple(self) -> None:
         assert derive_task_complexity_from_intake(IntakeLabel.SIMPLE) == TaskComplexity.SIMPLE
@@ -62,9 +62,9 @@ class TestDeriveTaskComplexityFromIntake:
 class TestDeriveIntakeLabelFromTaskComplexity:
     """``intake_label`` follows the intake LLM complexity, not a complex stub."""
 
-    def test_minimal_maps_to_trivial(self) -> None:
+    def test_minimal_maps_to_minimal(self) -> None:
         assert (
-            derive_intake_label_from_task_complexity(TaskComplexity.MINIMAL) == IntakeLabel.TRIVIAL
+            derive_intake_label_from_task_complexity(TaskComplexity.MINIMAL) == IntakeLabel.MINIMAL
         )
 
     def test_simple_maps_to_simple(self) -> None:
@@ -105,10 +105,10 @@ class TestClientIntakeScope:
             parse_intake_scope("chitchat")
 
     def test_intent_classification_from_intake_scope(self) -> None:
-        intent = intent_classification_from_intake_scope(IntakeScope.TRIVIAL)
-        assert intent.intake_label == IntakeLabel.TRIVIAL
+        intent = intent_classification_from_intake_scope(IntakeScope.MINIMAL)
+        assert intent.intake_label == IntakeLabel.MINIMAL
         assert intent.task_complexity == TaskComplexity.MINIMAL
-        assert "intake_scope=trivial" in (intent.reasoning or "")
+        assert "intake_scope=minimal" in (intent.reasoning or "")
 
 
 class TestIntakePrompts:

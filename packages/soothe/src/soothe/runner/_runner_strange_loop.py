@@ -457,7 +457,7 @@ class StrangeLoopMixin:
             workspace: Thread-specific workspace path (RFC-103)
             max_iterations: Maximum loop iterations (default: 8)
             preferred_subagent: Optional subagent hint for routing
-            intake_scope: Optional client-forced scope (``trivial``|``simple``|
+            intake_scope: Optional client-forced scope (``minimal``|``simple``|
                 ``complex``). When set (and not a clarification resume), skips
                 intake classification.
             clarification_mode: RFC-622 mode for this goal (``"auto"`` /
@@ -483,9 +483,8 @@ class StrangeLoopMixin:
         # ask_user) uses ``interrupt()``; without a checkpointer that pause is
         # not resumable and Approve / ``Command(resume=...)`` is a no-op.
 
-        # The social gate runs pre-graph in StrangeLoop (parallel with checkpoint);
-        # full intake classification runs after CE load. Social queries END before
-        # the graph.
+        # Intake classification runs in the graph INTAKE node (after CE load);
+        # social queries END before the rest of the graph.
         #
         # When the caller flags this turn as a clarification answer (RFC-622), the graph
         # skips classification so a bare word like "soothe" does not short-circuit resume.

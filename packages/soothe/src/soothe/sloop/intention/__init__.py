@@ -1,9 +1,9 @@
 """Intent classification module (RFC-225, RFC-630, RFC-904).
 
 Intake classification (social vs task + task complexity + short description)
-via ``IntakeClassifier``; the facade ``IntentClassifier`` exposes the social
-gate (pre-graph; task verdict reused as loop intent) and fallback
-classification when the gate did not run.
+via ``IntakeClassifier``; the facade ``IntentClassifier`` runs in the graph
+INTAKE node with full CE ledger projection. Fallback classification runs
+when the classifier is disabled or the call fails.
 """
 
 from __future__ import annotations

@@ -303,7 +303,7 @@ class AutopilotConfig(BaseModel):
         judge_allow_structural_dag_ops: Allowlisted structural judge ops
             (``spawn_goal`` / ``cancel_goal``). Empty = deny (LoopRail owns fan-out).
         intake_scope: Forced StrangeLoop intake scope for dispatched goals
-            (``trivial``|``simple``|``complex``). Default ``None`` lets the
+            (``minimal``|``simple``|``complex``). Default ``None`` lets the
             loop run intake classification.
         verify_periodic_enabled: Master switch for periodic DAG health verification.
             When ``False`` (default), the monitor's background health tick is
@@ -475,13 +475,13 @@ class AutopilotConfig(BaseModel):
     )
 
     # Forced StrangeLoop intake scope for dispatched goals (RFC-630 / loop_input).
-    # null (default) = intake classification; trivial|simple|complex skip the intake LLM.
-    intake_scope: Literal["trivial", "simple", "complex"] | None = Field(
+    # null (default) = intake classification; minimal|simple|complex skip the intake LLM.
+    intake_scope: Literal["minimal", "simple", "complex"] | None = Field(
         default=None,
         description=(
             "Forced StrangeLoop intake scope for autopilot-dispatched goals "
-            "(trivial|simple|complex). Null (default) lets the loop classify "
-            "intake. Set simple/trivial/complex to skip the intake LLM."
+            "(minimal|simple|complex). Null (default) lets the loop classify "
+            "intake. Set simple/minimal/complex to skip the intake LLM."
         ),
     )
 

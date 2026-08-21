@@ -305,14 +305,14 @@ async def test_generate_social_response_after_empty_first_call() -> None:
     mock_generate.assert_awaited_once()
 
 
-async def test_invalid_confidence_defaults_to_medium() -> None:
-    """Invalid confidence value defaults to medium."""
+async def test_invalid_confidence_falls_back_to_low() -> None:
+    """Invalid confidence value triggers the fail-safe fallback (low-confidence task)."""
     classifier = create_intake_classifier_with_raw_result(
         {"is_task": True, "confidence": "invalid", "social_response": None, "reasoning": "test"}
     )
     result = await classifier.classify("test")
-    # Invalid confidence triggers fallback to complex in current impl
-    assert result.confidence in (IntakeConfidence.MEDIUM, IntakeConfidence.LOW)
+    # Structured output fails on invalid confidence → fail-safe fallback (LOW)
+    assert result.confidence == IntakeConfidence.LOW
 
 
 def test_log_intake_result_emits_reasoning_at_info(caplog: pytest.LogCaptureFixture) -> None:

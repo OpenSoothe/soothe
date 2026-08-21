@@ -1,8 +1,9 @@
 """Loop Graph entry node: LLM intake classification (RFC-220, RFC-630).
 
-The pre-graph social gate already classifies tasks (complexity + short title).
-This node runs a classify LLM call only when that verdict is missing (gate
-skipped, or no intent on loop state).
+This node is the sole intake classification call site. It projects the CE
+ledger (prior-goal completion + preamble) into the classify LLM. When
+``loop_state.intent`` is already set (client-forced ``intake_scope`` or
+clarification resume), the classify call is skipped.
 """
 
 from __future__ import annotations

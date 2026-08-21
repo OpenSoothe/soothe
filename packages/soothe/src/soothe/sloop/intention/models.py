@@ -1,14 +1,14 @@
 """Intent classification Pydantic models (RFC-225, RFC-630).
 
 Intent classification produces a 4-class intake label (RFC-630) —
-``chitchat`` | ``trivial`` | ``simple`` | ``complex`` — that drives
+``chitchat`` | ``minimal`` | ``simple`` | ``complex`` — that drives
 ``route_by_intent`` branch routing. Whether an agentic query continues an
 in-flight loop is derived structurally inside ``StrangeLoop`` from the loaded
 checkpoint, not classified here.
 
 The intake LLM emits ``task_complexity`` for agentic goals; ``intake_label``
 is derived from that field for the TUI and graph routing. DISPATCH owns
-decomposition. Only ``complex`` runs the coverage Eval gate; ``trivial`` and
+decomposition. Only ``complex`` runs the coverage Eval gate; ``minimal`` and
 ``simple`` finalize directly from the CoreAgent execute result.
 
 CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
@@ -33,7 +33,7 @@ class IntakeLabel(StrEnum):
 
     - ``chitchat``: small talk (greetings, thanks, casual banter); the intake
       LLM piggybacks ``chitchat_response`` and the runner emits it directly.
-    - ``trivial``: trivia, single obvious tool call, or direct answer; DISPATCH
+    - ``minimal``: trivia, single obvious tool call, or direct answer; DISPATCH
       grounds a one-step root (no multi-step decomposition). Skips the coverage
       Eval phase and finalizes from the CoreAgent result.
     - ``simple``: single focused deliverable CoreAgent can finish in one execute.
@@ -43,7 +43,7 @@ class IntakeLabel(StrEnum):
     """
 
     CHITCHAT = "chitchat"
-    TRIVIAL = "trivial"
+    MINIMAL = "minimal"
     SIMPLE = "simple"
     COMPLEX = "complex"
 
@@ -60,7 +60,7 @@ def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplex
     Returns:
         Task complexity for ``RoutingClassification`` and system prompt tiers.
     """
-    if intake_label in (IntakeLabel.CHITCHAT, IntakeLabel.TRIVIAL):
+    if intake_label in (IntakeLabel.CHITCHAT, IntakeLabel.MINIMAL):
         return TaskComplexity.MINIMAL
     if intake_label == IntakeLabel.SIMPLE:
         return TaskComplexity.SIMPLE
@@ -78,10 +78,10 @@ def derive_intake_label_from_task_complexity(
         task_complexity: Execute-phase complexity from intake, or ``None``.
 
     Returns:
-        ``trivial``, ``simple``, or ``complex`` (never ``chitchat``).
+        ``minimal``, ``simple``, or ``complex`` (never ``chitchat``).
     """
     if task_complexity == TaskComplexity.MINIMAL:
-        return IntakeLabel.TRIVIAL
+        return IntakeLabel.MINIMAL
     if task_complexity == TaskComplexity.SIMPLE:
         return IntakeLabel.SIMPLE
     return IntakeLabel.COMPLEX
@@ -92,7 +92,7 @@ class IntentClassification(BaseModel):
 
     4-class LLM intake classification:
     - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.
-    - ``trivial``: direct execute via DISPATCH root; skips the coverage Eval phase
+    - ``minimal``: direct execute via DISPATCH root; skips the coverage Eval phase
       and finalizes from the CoreAgent result.
     - ``simple``: single focused deliverable; skips the coverage Eval phase and
       finalizes from the CoreAgent result.
@@ -111,7 +111,7 @@ class IntentClassification(BaseModel):
     """
 
     intake_label: IntakeLabel = Field(
-        description="4-class intake label for branch routing: chitchat, trivial, simple, or complex"
+        description="4-class intake label for branch routing: chitchat, minimal, simple, or complex"
     )
     reasoning: str | None = Field(
         default=None,
@@ -187,7 +187,6 @@ class IntakeConfidence(StrEnum):
     """Confidence level for intake social vs task classification."""
 
     HIGH = "high"
-    MEDIUM = "medium"
     LOW = "low"
 
 
@@ -201,7 +200,7 @@ class IntakeLLMResult(BaseModel):
 
     Args:
         is_task: True if work request, False if social interaction.
-        confidence: High/medium/low confidence in the classification.
+        confidence: High/low confidence in the classification.
         social_response: Direct reply when is_task=False (required for chitchat path).
         reasoning: First-person TUI line (work ≤50 words/300 chars, social
             ≤25 words), e.g. "I'll apply the fix.".
@@ -213,7 +212,7 @@ class IntakeLLMResult(BaseModel):
         description="True if the GOAL is a work request; False if social (greeting, thanks, etc.)"
     )
     confidence: IntakeConfidence = Field(
-        description="Confidence in the classification: high, medium, or low"
+        description="Confidence in the classification: high or low"
     )
     social_response: str | None = Field(
         default=None,
@@ -274,13 +273,13 @@ def normalize_response_language(value: object | None) -> ResponseLanguage | None
 
 
 class IntakeScope(StrEnum):
-    """3-class forced scope (trivial, simple, complex).
+    """3-class forced scope (minimal, simple, complex).
 
     The same values are accepted on ``loop_input.intake_scope`` to skip LLM
     intake classification and force branch routing.
     """
 
-    TRIVIAL = "trivial"
+    MINIMAL = "minimal"
     SIMPLE = "simple"
     COMPLEX = "complex"
 
@@ -295,20 +294,20 @@ def parse_intake_scope(raw: object | None) -> IntakeScope | None:
         Normalized ``IntakeScope``, or ``None`` when unset.
 
     Raises:
-        ValueError: When ``raw`` is a non-empty string outside trivial|simple|complex,
+        ValueError: When ``raw`` is a non-empty string outside minimal|simple|complex,
             or a non-string non-None value.
     """
     if raw is None:
         return None
     if not isinstance(raw, str):
-        raise ValueError("intake_scope must be a string (trivial, simple, or complex)")
+        raise ValueError("intake_scope must be a string (minimal, simple, or complex)")
     text = raw.strip().lower()
     if not text:
         return None
     try:
         return IntakeScope(text)
     except ValueError as exc:
-        raise ValueError(f"intake_scope must be trivial, simple, or complex; got {raw!r}") from exc
+        raise ValueError(f"intake_scope must be minimal, simple, or complex; got {raw!r}") from exc
 
 
 def intent_classification_from_intake_scope(

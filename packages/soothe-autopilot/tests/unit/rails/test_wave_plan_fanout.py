@@ -243,7 +243,7 @@ async def test_spawn_wave_makers_from_record_wave_plan(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_plan_milestones_verifies_existing_workspace_dump(tmp_path: Path) -> None:
-    """Continue/resume: dump present → pending trivial verify planner; no makers yet."""
+    """Continue/resume: dump present → pending minimal verify planner; no makers yet."""
     import json
 
     ce = ContextEngine()
@@ -274,7 +274,7 @@ async def test_plan_milestones_verifies_existing_workspace_dump(tmp_path: Path) 
     arch = await ce.get_goal(result.created_goal_ids[0])
     assert arch is not None
     assert arch.status == "pending"
-    assert arch.intake_scope == "trivial"
+    assert arch.intake_scope == "minimal"
     assert "Verify candidate WavePlan" in (arch.description or "")
     assert "wave-plan.json" in (arch.description or "")
 

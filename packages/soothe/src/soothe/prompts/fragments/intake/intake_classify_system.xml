@@ -26,7 +26,7 @@ Rules:
   - Write reasoning in response_language
 
 JSON only:
-{{"is_task":bool,"confidence":"high"|"medium"|"low","social_response":"string|null","task_complexity":"minimal"|"simple"|"complex"|null,"task_short_description":"string|null","response_language":"en"|"zh"|"ja"|"ko"|"other","reasoning":"work ≤50 words/300 chars; social ≤25 words; friendly"}}
+{{"is_task":bool,"confidence":"high"|"low","social_response":"string|null","task_complexity":"minimal"|"simple"|"complex"|null,"task_short_description":"string|null","response_language":"en"|"zh"|"ja"|"ko"|"other","reasoning":"work ≤50 words/300 chars; social ≤25 words; friendly"}}
 
 Examples:
 "hi" → is_task:false, response_language:en, social_response:"Hi! How can I help you today?", task_complexity:null, task_short_description:null, reasoning:"I'll say hello."

@@ -16,9 +16,7 @@ from soothe_cli.tui.textual_adapter import (
 
 
 def test_removed_legacy_phases_not_in_instant_or_allowlist() -> None:
-    assert "trivial" not in _INSTANT_LOOP_ASSISTANT_PHASES
     assert "quiz" not in _INSTANT_LOOP_ASSISTANT_PHASES
-    assert "trivial" not in LOOP_ASSISTANT_OUTPUT_PHASES
     assert "quiz" not in LOOP_ASSISTANT_OUTPUT_PHASES
 
 

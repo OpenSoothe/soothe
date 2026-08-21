@@ -655,7 +655,7 @@ class RailBuiltinExecutor:
         return diagnosed.plan is not None and bool(diagnosed.source_path)
 
     async def _plan_milestones_verify_existing(self, *, job_id: str) -> BuiltinResult:
-        """Spawn a pending trivial StrangeLoop planner to verify a candidate dump.
+        """Spawn a pending minimal StrangeLoop planner to verify a candidate dump.
 
         Host never auto-completes architecture or spawns makers here — the
         agent must accept (wave_plan_path / inline wave_plan) or rewrite.
@@ -682,7 +682,7 @@ class RailBuiltinExecutor:
             priority=80,
             workspace=str(ws) if ws else None,
             rail_id=state.rail_id,
-            intake_scope="trivial",
+            intake_scope="minimal",
         )
         await self.annotate_goal(
             arch.id,
@@ -700,7 +700,7 @@ class RailBuiltinExecutor:
 
         logger.info(
             "plan_milestones verify existing WavePlan job=%s arch=%s source=%s "
-            "intake_scope=trivial",
+            "intake_scope=minimal",
             job_id[:8],
             arch.id[:8],
             source,
@@ -1814,7 +1814,7 @@ class RailBuiltinExecutor:
         detail: str,
         workspace: str | None,
     ) -> str:
-        """Spawn or reuse a trivial StrangeLoop resolve goal for host merge failure."""
+        """Spawn or reuse a minimal StrangeLoop resolve goal for host merge failure."""
         existing = self.resolve_inflight_for_maker(job_id, maker_id)
         if existing is not None:
             return existing

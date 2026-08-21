@@ -99,7 +99,7 @@ class AutopilotSootheRunner(SootheRunner):
                 ``autopilot__goal_<id>__attempt_<N>``).
             workspace: Resolved workspace path for StrangeLoop's CoreAgent.
             max_iterations: Upper bound for StrangeLoop iterations.
-            intake_scope: Optional forced scope (``trivial`` for evidence turns).
+            intake_scope: Optional forced scope (``minimal`` for evidence turns).
 
         Yields:
             Stream chunks. The penultimate chunk is always a

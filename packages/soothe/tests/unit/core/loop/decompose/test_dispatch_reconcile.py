@@ -250,7 +250,7 @@ async def test_root_eval_finalizes_after_completed_eval() -> None:
 
 
 @pytest.mark.asyncio
-async def test_root_eval_trivial_skips_eval_and_finalizes() -> None:
+async def test_root_eval_minimal_skips_eval_and_finalizes() -> None:
     """Trivial tasks skip the coverage Eval phase and go directly to finalize,
     even with a decomposed action tree that would otherwise require Eval."""
     from soothe_sdk.intention.models import TaskComplexity
@@ -273,7 +273,7 @@ async def test_root_eval_trivial_skips_eval_and_finalizes() -> None:
     )
     ctx = _ctx_with_ce(ce, goal.id)
     ctx.loop_state.intent = IntentClassification(
-        intake_label=IntakeLabel.TRIVIAL,
+        intake_label=IntakeLabel.MINIMAL,
         task_complexity=TaskComplexity.MINIMAL,
     )
     result = await RootEvalNode()(ctx, {})
@@ -314,7 +314,7 @@ async def test_root_eval_simple_skips_eval_and_finalizes() -> None:
 @pytest.mark.asyncio
 async def test_root_eval_complex_inserts_eval_step() -> None:
     """Complex tasks still run the full coverage Eval gate when Eval is
-    required — the simple/trivial skip does not apply."""
+    required — the simple/minimal skip does not apply."""
     from soothe_sdk.intention.models import TaskComplexity
 
     from soothe.sloop.intention.models import IntakeLabel, IntentClassification

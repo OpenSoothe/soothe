@@ -214,7 +214,7 @@ def slice_maker_brief(
 
 
 def waveplan_verify_existing_brief(*, job_id: str, source: str) -> str:
-    """Brief for a trivial StrangeLoop verify of a candidate WavePlan dump.
+    """Brief for a minimal StrangeLoop verify of a candidate WavePlan dump.
 
     Host never auto-accepts a dump; the agent must accept or rewrite.
     """

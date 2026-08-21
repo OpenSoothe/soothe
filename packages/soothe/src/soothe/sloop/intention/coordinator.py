@@ -84,14 +84,9 @@ class IntakeResult:
         """IntentClassification for passing to StrangeLoop (task queries only)."""
         return self._intent_classification
 
-    @property
-    def intake_confidence(self) -> str:
-        """Intake confidence level."""
-        return self._intake_result.confidence
-
 
 class IntakeCoordinator:
-    """Orchestrates intake classification (social gate + full classification).
+    """Orchestrates intake classification (social vs task + task complexity).
 
     Args:
         fast_model: Fast LLM for intake classification.

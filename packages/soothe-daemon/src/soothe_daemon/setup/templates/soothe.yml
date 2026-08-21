@@ -40,8 +40,8 @@ agent:
     # Veritas auto-clarify before pause_for_user CE suspend.
     # PROCEED skips suspend and fires user_intervention; false = always suspend.
     rail_pause_auto_clarify: true
-    # Forced StrangeLoop intake for dispatched goals (null|trivial|simple|complex).
-    # null (default) lets the loop classify; simple/trivial/complex skip Pass 1+2.
+    # Forced StrangeLoop intake for dispatched goals (null|minimal|simple|complex).
+    # null (default) lets the loop classify; minimal/simple/complex skip Pass 1+2.
     intake_scope: null
     # Master switch for periodic DAG health verification (structural + LLM).
     # false (default) skips the background health tick entirely; event-driven
