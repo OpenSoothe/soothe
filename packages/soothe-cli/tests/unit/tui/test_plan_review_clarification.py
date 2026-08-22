@@ -38,17 +38,27 @@ def test_clarification_wire_content_plan_review() -> None:
     assert clarification_wire_content(["Reject", ""]) == "Plan review: Reject"
     assert clarification_wire_content(["Approve", ""]) == "Plan review: Approve"
     assert (
-        clarification_wire_content(["More comments", "narrow scope"])
-        == "Plan review: More comments — narrow scope"
+        clarification_wire_content(["Reject", "narrow scope"])
+        == "Plan review: Reject — narrow scope"
     )
     assert clarification_wire_content(["auth flows"]) == "auth flows"
     assert clarification_wire_content(["a", "b"]) == "A1: a | A2: b"
 
 
+def test_plan_review_reject_wire_content_with_refinement() -> None:
+    """Reject carries optional refinement text in answers[1]; wire formats it."""
+    from soothe_cli.tui.app._execution import clarification_wire_content
+
+    assert clarification_wire_content(["Reject", "tighten scope to auth"]) == (
+        "Plan review: Reject — tighten scope to auth"
+    )
+    assert clarification_wire_content(["Reject", ""]) == "Plan review: Reject"
+
+
 def test_path_footer_text() -> None:
     with_path = ClarificationInputMessage(
         step_id="s1",
-        questions=["Action?", "Comments?"],
+        questions=["Action?", "Refinement instructions (when choosing Reject)"],
         origin_node="plan_mode_review",
         plan_path="/tmp/plans/x.md",
         plan_markdown="# Plan",
@@ -56,7 +66,7 @@ def test_path_footer_text() -> None:
     assert with_path._path_footer_text() == "Plan saved to: /tmp/plans/x.md"
     memory = ClarificationInputMessage(
         step_id="s1",
-        questions=["Action?", "Comments?"],
+        questions=["Action?", "Refinement instructions (when choosing Reject)"],
         origin_node="plan_mode_review",
     )
     assert memory._path_footer_text() == "Plan held in memory only"
@@ -67,7 +77,7 @@ def test_widget_to_message_serializes_plan_review() -> None:
 
     widget = ClarificationInputMessage(
         step_id="s1",
-        questions=["Action?", "Comments?"],
+        questions=["Action?", "Refinement instructions (when choosing Reject)"],
         origin_node="plan_mode_review",
         plan_path="/tmp/x.md",
         plan_markdown="# Plan",
@@ -99,8 +109,7 @@ async def test_plan_review_approve_submits_immediately() -> None:
     app = _PlanReviewHarnessApp(
         step_id="plan_mode_review",
         questions=[
-            "Action for this plan: Approve, Reject, or More comments",
-            "Revision comments (when choosing More comments)",
+            "Action for this plan: Approve or Reject",
         ],
         origin_node="plan_mode_review",
         plan_path="/ws/.soothe/plans/demo.md",
@@ -110,8 +119,6 @@ async def test_plan_review_approve_submits_immediately() -> None:
     async with app.run_test() as pilot:
         widget = app.query_one(ClarificationInputMessage)
         assert widget._path_footer_text() == "Plan saved to: /ws/.soothe/plans/demo.md"
-        comments = widget.query_one("#plan-review-comments-input")
-        assert comments.has_class("hidden")
         await pilot.click("#plan-review-btn-approve")
         assert len(app.submitted) == 1
         assert app.submitted[0].answers == ["Approve", ""]
@@ -122,8 +129,7 @@ async def test_plan_review_arrow_keys_cycle_actions() -> None:
     app = _PlanReviewHarnessApp(
         step_id="plan_mode_review",
         questions=[
-            "Action for this plan: Approve, Reject, or More comments",
-            "Revision comments (when choosing More comments)",
+            "Action for this plan: Approve or Reject",
         ],
         origin_node="plan_mode_review",
         plan_path="/ws/.soothe/plans/demo.md",
@@ -138,12 +144,9 @@ async def test_plan_review_arrow_keys_cycle_actions() -> None:
         await pilot.press("right")
         assert widget._selected_action == "reject"
         await pilot.press("right")
-        assert widget._selected_action == "comments"
-        comments = widget.query_one("#plan-review-comments-input")
-        assert not comments.has_class("hidden")
+        assert widget._selected_action == "approve"
         await pilot.press("left")
         assert widget._selected_action == "reject"
-        assert comments.has_class("hidden")
         await pilot.press("enter")
         assert len(app.submitted) == 1
         assert app.submitted[0].answers == ["Reject", ""]
@@ -158,8 +161,7 @@ async def test_plan_review_body_shows_full_content_without_inner_scroll() -> Non
     app = _PlanReviewHarnessApp(
         step_id="plan_mode_review",
         questions=[
-            "Action for this plan: Approve, Reject, or More comments",
-            "Revision comments (when choosing More comments)",
+            "Action for this plan: Approve or Reject",
         ],
         origin_node="plan_mode_review",
         plan_path="/ws/.soothe/plans/demo.md",
@@ -175,31 +177,3 @@ async def test_plan_review_body_shows_full_content_without_inner_scroll() -> Non
         body = widget.query_one(".plan-review-body")
         rendered = str(getattr(body, "renderable", "") or "")
         assert "step 0" in rendered or "step 59" in rendered or body.display
-
-
-@pytest.mark.asyncio
-async def test_plan_review_comments_requires_text() -> None:
-    app = _PlanReviewHarnessApp(
-        step_id="plan_mode_review",
-        questions=[
-            "Action for this plan: Approve, Reject, or More comments",
-            "Revision comments (when choosing More comments)",
-        ],
-        origin_node="plan_mode_review",
-        plan_path="/ws/.soothe/plans/demo.md",
-        plan_markdown="# Plan\n",
-        id="clarify-comments",
-    )
-    async with app.run_test() as pilot:
-        widget = app.query_one(ClarificationInputMessage)
-        await pilot.click("#plan-review-btn-comments")
-        comments = widget.query_one("#plan-review-comments-input")
-        assert not comments.has_class("hidden")
-        assert app.submitted == []
-        await pilot.press("enter")
-        assert app.submitted == []
-        comments.value = "tighten scope"
-        comments.focus()
-        await pilot.press("enter")
-        assert len(app.submitted) == 1
-        assert app.submitted[0].answers == ["More comments", "tighten scope"]

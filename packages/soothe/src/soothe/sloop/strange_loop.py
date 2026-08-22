@@ -170,6 +170,7 @@ class StrangeLoop:
         goal_trace: Any | None = None,  # GoalLoopTrace when Langfuse enabled
         preamble: list[Any] | None = None,  # RFC-222 §Goal-Report-Pair Projection
         interaction_mode: str | None = None,  # per-goal "agent"|"ask"|"plan" graph selection
+        approved_plan_path: str | None = None,  # Bug #3: plan-mode approve exec goal
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -537,6 +538,7 @@ class StrangeLoop:
                 ),
                 routing_classification=routing_classification,
                 loop_messages=[],  # RFC-624 Phase 4 Stage 2: CE ledger spans all goals
+                approved_plan_path=approved_plan_path,
             )
 
             # RFC-225: propagate continue_loop_mode onto LoopState for executor wiring

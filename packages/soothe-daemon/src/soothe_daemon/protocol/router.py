@@ -181,6 +181,15 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         clarification_answers = [str(a) for a in raw_clar_answers]
     else:
         clarification_answers = None
+    # Bug #3: plan-mode approve auto-enqueues an exec goal carrying the
+    # approved plan artifact path; pass it through so the runner can ground
+    # it onto the exec goal's fresh root via DISPATCH.
+    raw_plan_path = msg.get("_approved_plan_path") or msg.get("approved_plan_path")
+    approved_plan_path: str | None = (
+        str(raw_plan_path).strip()
+        if isinstance(raw_plan_path, str) and raw_plan_path.strip()
+        else None
+    )
     return {
         "preferred_subagent": preferred_norm,
         "intake_scope": msg.get("intake_scope"),
@@ -196,6 +205,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         "clarification_answer": bool(msg.get("clarification_answer", False)),
         "clarification_answers": clarification_answers,
         "resume_interrupted": bool(msg.get("resume_interrupted", False)),
+        "approved_plan_path": approved_plan_path,
     }
 
 

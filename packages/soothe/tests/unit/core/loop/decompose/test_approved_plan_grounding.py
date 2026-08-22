@@ -54,3 +54,30 @@ def test_execute_step_message_includes_approved_plan_section() -> None:
 
 def test_approved_plan_section_body_empty_without_markdown() -> None:
     assert approved_plan_section_body(approved_plan_markdown="") == ""
+
+
+def test_peek_approved_plan_reloads_body_from_path(tmp_path) -> None:
+    """When the body is absent but a path is set, reload from disk (Bug #3)."""
+    plan_file = tmp_path / "plan.md"
+    plan_file.write_text(
+        "---\nstatus: approved\n---\n\n# Plan\n\nDo the thing.\n", encoding="utf-8"
+    )
+    state = type("S", (), {})()
+    state.approved_plan_markdown = None
+    state.approved_plan_path = str(plan_file)
+    body, path = peek_approved_plan_from_state(state)
+    assert path == str(plan_file)
+    assert body is not None
+    assert "Do the thing." in body
+    # Frontmatter stripped so the grounding envelope stays clean.
+    assert "status: approved" not in body
+
+
+def test_peek_approved_plan_returns_none_when_path_missing() -> None:
+    """No body and an unreadable path → (None, path)."""
+    state = type("S", (), {})()
+    state.approved_plan_markdown = None
+    state.approved_plan_path = "/nonexistent/plan.md"
+    body, path = peek_approved_plan_from_state(state)
+    assert body is None
+    assert path == "/nonexistent/plan.md"

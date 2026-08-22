@@ -54,6 +54,7 @@ class LoopRunnerActor:
                     clarification_answer=request.clarification_answer,
                     clarification_answers=request.clarification_answers,
                     resume_interrupted=request.resume_interrupted,
+                    approved_plan_path=request.approved_plan_path,
                 ):
                     if self._cancelled:
                         break

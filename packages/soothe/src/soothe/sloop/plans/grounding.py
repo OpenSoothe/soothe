@@ -65,11 +65,27 @@ def consume_approved_plan_from_state(loop_state: Any) -> tuple[str | None, str |
 
 
 def peek_approved_plan_from_state(loop_state: Any) -> tuple[str | None, str | None]:
-    """Read approved plan fields without clearing."""
+    """Read approved plan fields without clearing.
+
+    When the plan body is not cached on ``loop_state`` (e.g. the plan-mode
+    approve exec-goal carries only ``approved_plan_path``), reload the body
+    from the artifact on disk so DISPATCH can ground it onto the exec root.
+    """
     if loop_state is None:
         return None, None
     body = (getattr(loop_state, "approved_plan_markdown", None) or "").strip() or None
     path = (getattr(loop_state, "approved_plan_path", None) or "").strip() or None
+    if not body and path:
+        try:
+            from pathlib import Path
+
+            text = Path(path).read_text(encoding="utf-8")
+        except OSError:
+            logger.debug("[grounding] could not reload approved plan from %s", path, exc_info=True)
+        else:
+            from soothe.sloop.plans.artifact import strip_plan_frontmatter
+
+            body = strip_plan_frontmatter(text).strip() or text.strip() or None
     return body, path
 
 

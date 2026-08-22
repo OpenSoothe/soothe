@@ -91,12 +91,12 @@ async def test_defers_on_blank_answers(monkeypatch: pytest.MonkeyPatch) -> None:
         await policy.answer(_request())
 
 
-async def test_plan_mode_review_approve_tolerates_blank_comments(
+async def test_plan_mode_review_approve_tolerates_blank_refinement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Plan-mode review asks 2 questions; only the action field is required.
 
-    The TUI sends ``["Approve", ""]`` (blank revision-comments field) on
+    The TUI sends ``["Approve", ""]`` (blank refinement-text field) on
     approve. The policy must accept it rather than treating the blank optional
     field as "operator dismissed clarification (no answer)" — that swallowed
     approvals and parked the goal at ``awaiting_clarification`` forever (loop 0411).
@@ -108,13 +108,23 @@ async def test_plan_mode_review_approve_tolerates_blank_comments(
     assert ans.answers == ("Approve", "")
 
 
-async def test_plan_mode_review_reject_tolerates_blank_comments(
+async def test_plan_mode_review_reject_tolerates_blank_refinement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _stub_interrupt(monkeypatch, {"answers": ["Reject", ""]})
     policy = InteractiveClarificationPolicy()
     ans = await policy.answer(_request(num_questions=2, origin_node="plan_mode_review"))
     assert ans.answers == ("Reject", "")
+
+
+async def test_plan_mode_review_reject_carries_refinement_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject with refinement text in answers[1] is passed through intact."""
+    _stub_interrupt(monkeypatch, {"answers": ["Reject", "narrow scope to auth"]})
+    policy = InteractiveClarificationPolicy()
+    ans = await policy.answer(_request(num_questions=2, origin_node="plan_mode_review"))
+    assert ans.answers == ("Reject", "narrow scope to auth")
 
 
 async def test_plan_mode_review_defers_on_blank_action(

@@ -110,6 +110,11 @@ class LoopRunRequest:
     # RFC-222 revised: set by daemon's AutopilotService for autopilot-dispatched
     # goals. None for solo-mode requests (default).
     autopilot_job: GoalDispatchEnvelope | None = None
+    # Bug #3: plan-mode approve auto-enqueues an exec goal carrying the approved
+    # plan artifact path. The runner passes it to LoopState.approved_plan_path
+    # so DISPATCH grounds the plan body (read from disk) onto the exec goal's
+    # fresh root. None for normal goals.
+    approved_plan_path: str | None = None
 
     def resolve_workspace_path(self) -> str:
         """Absolute workspace path for ``SootheRunner.astream(workspace=...)``."""

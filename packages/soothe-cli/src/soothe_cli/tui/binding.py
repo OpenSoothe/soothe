@@ -189,7 +189,7 @@ def message_from_widget(widget: Widget) -> MessageData:
             )
             content = f"{prefix}: {summary}" if summary else f"{prefix} answered"
         elif widget._origin_node in {"plan_mode_review", "planner_subagent_review"}:  # noqa: SLF001
-            content = "Plan review: awaiting Approve / Reject / More comments"
+            content = "Plan review: awaiting Approve / Reject"
         else:
             content = "Clarification: awaiting answer"
         return MessageData(type=MessageType.APP, content=content, id=widget_id)

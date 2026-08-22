@@ -126,12 +126,15 @@ def update_plan_artifact_status(path: str | Path, status: str) -> None:
 def parse_plan_review_answers(
     answers: tuple[str, ...] | list[str],
 ) -> tuple[str, str]:
-    """Parse plan-review answers into ``(action, comments)``.
+    """Parse plan-review answers into ``(action, text)``.
 
-    Actions: ``approve`` | ``reject`` | ``comments``.
+    Actions: ``approve`` | ``reject``.
 
-    Expects the plan-review widget (or equivalent) to send action label in
-    answers[0] and optional revision text in answers[1].
+    Expects the plan-review widget (or equivalent) to send the action label
+    in answers[0] and optional refinement text in answers[1]. Free-text
+    input that does not start with ``Approve`` or ``Reject`` is treated as
+    a reject carrying that text as refinement feedback, so a typed
+    refinement still works.
     """
     vals = [str(a or "").strip() for a in answers]
     q1 = vals[0] if vals else ""
@@ -141,7 +144,6 @@ def parse_plan_review_answers(
         return "approve", q2
     if low.startswith("reject"):
         return "reject", q2
-    if low.startswith("more") or low in {"comments", "comment", "c"}:
-        return "comments", q2
-    # Untagged free-text body (single answer) → revise with comments.
-    return "comments", q2 or q1
+    # Untagged free-text body (single answer) → reject with that text as
+    # refinement feedback.
+    return "reject", q2 or q1

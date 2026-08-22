@@ -1,43 +1,67 @@
 <PLAN_SYNTHESIS_INSTRUCTIONS>
-You are generating a structured implementation plan from the research evidence below.
+You are generating a structured solution report from the research evidence below.
 
 The user's goal: {{ user_goal }}
 
 A planning agent has already researched the codebase using read-only tools
 (grep, glob, read_file). The evidence below contains the agent's tool calls,
 tool results, and any reasoning notes. Your job is to synthesize this evidence
-into a clear, actionable plan document.
+into a **solution report** — what will be done to complete the goal — not an
+investigation roadmap. State what will be true when the goal is complete; do not
+schedule "read X / diagnose Y" as steps (the research already happened).
 
 Rules:
 - Extract only the actionable findings — ignore narration, intermediate
   reasoning, or "let me check..." style notes.
-- Every change must cite a concrete file path discovered in the evidence.
-- Do not invent files or changes that the evidence does not support.
-- If the evidence is insufficient for a particular section, omit that section
-  rather than guessing.
+- Every codebase change must cite a concrete file path discovered in the
+  evidence. Do not invent files or changes the evidence does not support.
+- Scale the plan to the goal. Not every goal is a codebase change — a trivial
+  or non-code task gets a short plan (Goal, Solution, concrete steps) and `None`
+  for sections that do not apply; a structural codebase change gets the full
+  section set below.
+- If the evidence is insufficient for a section, omit that section (or set it to
+  `None`) rather than guessing.
 
-Output the plan in this exact format:
+Output the plan in this format. Required sections are marked; optional sections
+may be omitted or set to `None` when they do not apply to the goal.
 
 ## Plan: <one-line title>
 
-### Goal
+### Goal                                              (required)
 <restate the user's goal in 1-2 sentences>
 
-### Context
-<key findings from the research evidence: relevant files, current architecture,
-patterns to follow, constraints discovered — cite specific file paths>
+### Solution                                          (required)
+<the decided design / outcome — 2-6 sentences. State what will be true when
+the goal is complete. Do NOT schedule "we will first read / diagnose".>
 
-### Changes
-<numbered list of concrete changes, each with:>
+### Design principles                                 (optional)
+<concise bullets for product/UX/engineering principles this solution upholds
+or introduces. Use `None` when the change is purely mechanical.>
+
+### Architecture changes                              (optional)
+<structural deltas when needed: module/layout moves, new/removed components,
+dependency or data-flow shifts. Use `None` when the work stays within existing
+structure.>
+
+### Changes                                           (required)
+<numbered, ordered implementation steps. Each step MUST be a concrete change
+(edit / add / remove / rename / rewire) naming the intended delta — for
+codebase work, name workspace-relative paths from the evidence. Forbidden as
+steps: read, inspect, diagnose, "determine whether", or any further recon.
+Example shape:
 1. **<change title>**
    - File: `<path/to/file.py>`
    - What: <what to change and why>
    - How: <brief implementation approach>
-   - Risk: <potential gotcha or breaking change>
+   - Risk: <potential gotcha or breaking change>>
 
-### Tests
-<what tests to add or update, grouped by change>
+### Evidence                                          (optional)
+<brief citations from the research evidence — paths/symbols already seen.
+Omit for non-codebase tasks.>
 
-### Sequence
-<suggested order of implementation, noting dependencies between changes>
+### Risks & assumptions                              (optional)
+<potential gotchas, breaking changes, or assumptions. Omit or `None` when trivial.>
+
+### Open questions                                    (optional)
+<only if truly blocking; otherwise `None`.>
 </PLAN_SYNTHESIS_INSTRUCTIONS>

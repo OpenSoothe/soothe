@@ -661,6 +661,7 @@ class SootheRunner(
         clarification_answer: bool = False,  # RFC-622: resume hint
         clarification_answers: list[str] | None = None,  # RFC-622: per-question answers
         resume_interrupted: bool = False,  # daemon crash recovery
+        approved_plan_path: str | None = None,  # Bug #3: plan-mode approve exec goal
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
@@ -762,6 +763,7 @@ class SootheRunner(
                 clarification_answer=clarification_answer,
                 clarification_answers=clarification_answers,
                 resume_interrupted=resume_interrupted,
+                approved_plan_path=approved_plan_path,
             ):
                 yield chunk
         finally:

@@ -710,6 +710,18 @@ class PlanResult(BaseModel):
     Default False elsewhere.
     """
 
+    follow_on_exec: dict[str, str | None] | None = Field(
+        default=None,
+        description=(
+            "Plan-mode approve signal: enqueue a follow-on exec goal carrying "
+            "the approved plan. Keys: ``goal_prompt`` (goal text for the exec "
+            "goal) and ``plan_path`` (approved plan artifact path for DISPATCH "
+            "grounding). Set only on plan-mode approve; None otherwise. Rides "
+            "the ``completed`` event to the runner/daemon, which enqueues the "
+            "exec goal after the plan-mode goal terminates."
+        ),
+    )
+
     @model_validator(mode="after")
     def _validate_plan_action(self) -> PlanResult:
         """Ensure keep/new and decision align when status requires execution.

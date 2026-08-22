@@ -471,6 +471,11 @@ async def node_goal_completion(
             "full_output": final_output,
             "status": "done",
             "evidence_summary": seeded_evidence or plan_result.evidence_summary,
+            # Bug #3: carry the plan-mode approve follow-on exec signal so the
+            # daemon enqueues the exec goal after this plan-mode goal ends.
+            # ``ctx.scratch.follow_on_exec`` is set by handle_plan_mode_review_answer
+            # on approve and is None for every other completion path.
+            "follow_on_exec": getattr(ctx.scratch, "follow_on_exec", None),
         }
     )
 

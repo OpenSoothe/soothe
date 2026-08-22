@@ -49,6 +49,10 @@ class LoopPhaseScratch:
     plan_review_comments: str | None = None
     # RFC-904: proposals from the just-finished THREAD wave.
     decompose_proposals: list[Any] = field(default_factory=list)
+    # Plan-mode approve (Bug #3): follow-on exec goal signal. Set by
+    # ``handle_plan_mode_review_answer`` on approve; the finalize node attaches
+    # it to the ``completed`` event so the daemon enqueues the exec goal.
+    follow_on_exec: dict[str, str | None] | None = None
 
 
 @dataclass

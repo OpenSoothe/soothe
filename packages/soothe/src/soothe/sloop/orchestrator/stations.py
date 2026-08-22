@@ -95,6 +95,12 @@ class LoopGraphState(TypedDict, total=False):
     # router.
     approved_plan_markdown: str | None
     approved_plan_path: str | None
+    # Plan-mode approve (Bug #3 fix): set True by ``handle_plan_mode_review_answer``
+    # on approve so routers finalize the plan-mode goal (instead of grounding
+    # onto its already-completed root). The finalize node reads the follow-on
+    # exec signal from ctx.scratch and attaches it to the ``completed`` event;
+    # the daemon enqueues the exec goal. Survives the AWAIT_USER round-trip.
+    plan_approved_follow_on: bool | None
 
 
 __all__ = [

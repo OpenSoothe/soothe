@@ -1,4 +1,4 @@
-"""Plan-mode review host module: approve / reject / comment for plan mode.
+"""Plan-mode review host module: approve / reject for plan mode.
 
 When ``interaction_mode == "plan"`` and a plan draft is ready, this module
 builds a clarification request (origin ``ORIGIN_PLAN_MODE_REVIEW``) that
@@ -9,7 +9,7 @@ On fresh plan review:
     - Write the plan to ``.soothe/plans/`` via ``save_plan_draft``.
     - Record a ``goal_completion`` ledger pair: Human = goal text,
       AI = plan body (the synthesized plan, not intermediate step messages).
-    - Emit the approve/reject/comment clarification.
+    - Emit the approve/reject clarification.
 
 On approve:
     - Set ``LoopState.approved_plan_markdown`` + ``LoopState.approved_plan_path``
@@ -19,17 +19,18 @@ On approve:
       the ledger).
 
 On reject:
-    - Record "Plan rejected by operator." as a ``goal_completion`` AI message.
-
-On comment:
-    - Record "Plan revision requested: <comments>" as a ``goal_completion``
-      AI message.
-    - Re-emit the plan review clarification for the next iteration.
+    - Store the user's rejection text as ``plan_review_comments`` refinement
+      feedback for the next plan-mode iteration.
+    - Record "Plan rejected; refinement requested: <text>" as a
+      ``goal_completion`` AI message.
+    - Re-emit the plan review clarification so the goal stays in plan mode
+      (``AWAIT_USER``) and the user can provide further refinement.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from typing import Any
 
@@ -44,21 +45,28 @@ from soothe.sloop.clarification.protocol import (
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.plans.artifact import (
     parse_plan_review_answers,
-    strip_plan_frontmatter,
     update_plan_artifact_status,
     write_plan_artifact,
 )
 from soothe.sloop.plans.plan_synthesizer import synthesize_plan
+from soothe.sloop.state.schemas import PlanResult
 from soothe.sloop.utils.goal_text import resolve_user_request
+from soothe.sloop.utils.messages import last_ledger_ai_content
 
 logger = logging.getLogger(__name__)
 
 _PLAN_MODE_REVIEW_QUESTIONS: tuple[str, ...] = (
-    "Action for this plan: Approve, Reject, or More comments",
-    "Revision comments (when choosing More comments)",
+    "Action for this plan: Approve or Reject",
+    "Refinement instructions (when choosing Reject)",
 )
 
 _PLAN_MODE_REVIEW_INTERRUPT_PREFIX = "plan-mode-review:"
+
+# Matches the ``## Plan: <title>`` marker that the plan-mode addendum
+# (``plan_mode_addendum.xml``) instructs the agent to emit as its final
+# message. When present in the step's last AI message, the plan body can
+# be extracted directly — no LLM synthesis call needed.
+_PLAN_TITLE_RE = re.compile(r"(?m)^[ \t]*##[ \t]+Plan:[ \t]+\S")
 
 
 def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
@@ -82,6 +90,40 @@ def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
         active_skills=tuple(getattr(state, "activated_skill_names", []) or []),
         active_mcp_servers=tuple(getattr(state, "active_mcp_servers", []) or []),
     )
+
+
+def _extract_plan_from_step_result(ctx: LoopRuntimeContext) -> str:
+    """Extract a plan document from the step's final AI message.
+
+    The plan-mode addendum instructs the planning agent to output ONLY the
+    final plan document (``## Plan: <title>``) as its last message. When the
+    agent followed that instruction, the step's last non-planning ledger AI
+    message already contains a complete, well-structured plan — no LLM
+    synthesis call is needed.
+
+    This returns the plan body (stripped) when the ``## Plan:`` marker is
+    present, otherwise an empty string so the caller falls back to
+    ``synthesize_plan``.
+    """
+    try:
+        content = last_ledger_ai_content(ctx.loop_state)
+    except Exception:
+        logger.debug("[PlanModeReview] step result extraction failed", exc_info=True)
+        return ""
+    content = (content or "").strip()
+    if not content:
+        return ""
+    if not _PLAN_TITLE_RE.search(content):
+        # Final AI message is not plan-shaped (narration / chitchat / error).
+        # Let synthesis rebuild a plan from the execution evidence.
+        logger.debug("[PlanModeReview] step result lacks '## Plan:' marker; will synthesize")
+        return ""
+    # Trim any leading preface before the plan title (agent occasionally emits
+    # a short prose lead-in despite the addendum). Keep the title line onward.
+    match = _PLAN_TITLE_RE.search(content)
+    if match and match.start() > 0:
+        content = content[match.start() :].strip()
+    return content
 
 
 def save_plan_draft(ctx: LoopRuntimeContext, report: str) -> str | None:
@@ -212,7 +254,7 @@ def _record_plan_action_ledger(
 ) -> None:
     """Record the user's plan review action as a new ``goal_completion`` AI message.
 
-    Called on approve / reject / comment so the ledger has a terminal record
+    Called on approve / reject so the ledger has a terminal record
     of the user's decision. Subsequent goals (e.g. the implementation goal
     after approve) will see this in the ledger projection.
     """
@@ -241,10 +283,14 @@ def handle_plan_mode_review_answer(
     ctx: LoopRuntimeContext,
     state: dict[str, Any],
 ) -> dict[str, Any]:
-    """Handle approve / reject / comment after plan-mode review.
+    """Handle approve / reject after plan-mode review.
 
     On approve: set ``LoopState.approved_plan_*`` so the DISPATCH grounding
     chain consumes it. Record the action in the ledger.
+
+    On reject: store the user's rejection text as ``plan_review_comments``
+    refinement feedback and re-emit the plan review clarification so the
+    goal stays in plan mode (``AWAIT_USER``) for further refinement.
     """
     from soothe.sloop.clarification.protocol import answer_from_state
 
@@ -267,41 +313,74 @@ def handle_plan_mode_review_answer(
     if action == "approve":
         if path:
             update_plan_artifact_status(path, "approved")
-        body = strip_plan_frontmatter(report) if report else ""
-        state_obj = ctx.loop_state
-        if state_obj is not None:
-            state_obj.approved_plan_path = str(path) if path else None
-            state_obj.approved_plan_markdown = body or None
+        # Bug #3: do NOT ground the approved plan onto this goal's root — the
+        # plan-mode root already executed and completed (with decompose_task
+        # stripped), so grounding there would leave ready_steps() empty and
+        # route to an Eval step instead of executing the plan. Instead, stash
+        # a follow-on exec signal for the finalize node to attach to the
+        # ``completed`` event; the daemon enqueues a fresh exec goal carrying
+        # the approved plan path, which DISPATCH grounds onto its own fresh
+        # root in agent mode (decompose_task available).
+        goal_prompt = (
+            resolve_user_request(ctx.loop_state)
+            or ctx.loop_state.goal
+            or "Execute the approved plan"
+        )
+        ctx.scratch.follow_on_exec = {
+            "goal_prompt": goal_prompt,
+            "plan_path": str(path) if path else None,
+        }
+        # Bug #4: ``route_after_plan_review`` routes approve → FINALIZE, and
+        # ``node_goal_completion`` requires ``ctx.scratch.plan_result`` (it
+        # fatally errors with "Goal completion reached without plan result" when
+        # it is None). The plan-mode path skips DISPATCH, so the dispatch/agent
+        # branches that normally set ``plan_result`` never ran. Build a terminal
+        # PlanResult here so finalize proceeds, attaches ``follow_on_exec`` to
+        # the ``completed`` event, and enqueues the exec goal. ``status="done"``
+        # marks the plan-mode goal terminal and ``require_goal_completion=False``
+        # selects the ``ledger_direct`` completion strategy — the plan body is
+        # already in the ledger as a ``goal_completion`` AI message (recorded by
+        # ``_record_plan_completion_ledger``), so no synthesis call is needed.
+        plan_body = report or (
+            "Plan approved by operator. Implementation will run in a follow-on goal."
+        )
+        ctx.scratch.plan_result = PlanResult(
+            status="done",
+            goal_progress="complete",
+            assessment_reasoning="Plan-mode goal: plan approved by operator.",
+            plan_action="new",
+            decision=None,
+            next_action=goal_prompt[:500],
+            full_output=plan_body,
+            evidence_summary=plan_body[:2048],
+            require_goal_completion=False,
+        )
         ctx.scratch.plan_review_comments = None
         _record_plan_action_ledger(ctx, "Plan approved by operator.")
-        logger.info("[PlanModeReview] Plan approved; grounding into DISPATCH")
+        logger.info("[PlanModeReview] Plan approved; follow-on exec goal enqueues on finalize")
         return {
             "pending_clarification": None,
             "pending_clarification_answer": None,
             "last_clarification_origin": None,
             "intent_route": None,
-            "approved_plan_markdown": body or None,
-            "approved_plan_path": str(path) if path else None,
+            "plan_approved_follow_on": True,
         }
 
     if action == "reject":
         if path:
             update_plan_artifact_status(path, "rejected")
-        ctx.scratch.plan_review_comments = None
-        _record_plan_action_ledger(ctx, "Plan rejected by operator.")
-        logger.info("[PlanModeReview] Plan rejected")
-        return {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
-            "last_clarification_origin": None,
-        }
-
-    # More comments → store feedback for the next plan-mode iteration.
-    ctx.scratch.plan_review_comments = comments
-    action_text = f"Plan revision requested: {comments}" if comments else "Plan revision requested."
-    _record_plan_action_ledger(ctx, action_text)
-    logger.info("[PlanModeReview] Plan needs revision; comments stored")
-    return build_plan_mode_review_pending(ctx)
+        # Store the user's rejection text as refinement feedback for the
+        # next plan-mode iteration, then re-emit the plan review
+        # clarification so the goal stays in plan mode (AWAIT_USER).
+        ctx.scratch.plan_review_comments = comments
+        action_text = (
+            f"Plan rejected; refinement requested: {comments}"
+            if comments
+            else "Plan rejected; refinement requested."
+        )
+        _record_plan_action_ledger(ctx, action_text)
+        logger.info("[PlanModeReview] Plan rejected; refinement requested; re-emitting review")
+        return build_plan_mode_review_pending(ctx)
 
 
 async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> dict[str, Any]:
@@ -310,17 +389,22 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
     When ``interaction_mode == "plan"``, ``route_after_root_eval`` routes here
     instead of ``FINALIZE``. This node:
 
-    1. Synthesizes a plan document from the step's execution evidence via an
-       LLM call (``synthesize_plan``). This avoids extracting/truncating from
-       raw step output which contains mixed narration + tool results.
-    2. Writes the synthesized plan to ``.soothe/plans/`` via ``save_plan_draft``.
-    3. Records a ``goal_completion`` Human–AI pair in the ledger with the full
+    1. Extracts the plan document from the step's final AI message (the
+       plan-mode addendum instructs the agent to output ``## Plan: <title>``
+       as its last message). When the agent followed that instruction, no LLM
+       call is needed — the step result already IS the plan. This mirrors the
+       ``LEDGER_DIRECT`` completion strategy and avoids a synthesis call.
+    2. Falls back to LLM synthesis (``synthesize_plan``) only when extraction
+       fails — e.g. the final message lacks the ``## Plan:`` marker (agent
+       narrated instead of producing a plan, or an error truncated output).
+    3. Writes the plan to ``.soothe/plans/`` via ``save_plan_draft``.
+    4. Records a ``goal_completion`` Human–AI pair in the ledger with the full
        plan body as the AI message (so subsequent goals see a clean terminal
        report, not intermediate ``execute_step`` messages).
-    4. Returns a pending clarification (``ORIGIN_PLAN_MODE_REVIEW``) so the
-       graph routes to ``AWAIT_USER`` for the approve/reject/comment popup.
+    5. Returns a pending clarification (``ORIGIN_PLAN_MODE_REVIEW``) so the
+       graph routes to ``AWAIT_USER`` for the approve/reject popup.
 
-    On clarification resume (approve/reject/comment), ``route_after_clarification``
+    On clarification resume (approve/reject), ``route_after_clarification``
     routes back here; ``handle_plan_mode_review_answer`` processes the answer and
     records the user's action in the ledger.
     """
@@ -328,12 +412,20 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
     if state.get("pending_clarification_answer"):
         return handle_plan_mode_review_answer(ctx, state)
 
-    # Fresh plan review: synthesize the plan from step execution evidence.
+    # Fresh plan review: prefer extracting the plan from the step's final AI
+    # message (the plan-mode addendum tells the agent to output the plan as its
+    # last message). Only fall back to LLM synthesis when extraction fails —
+    # this skips a full synthesis call + its input-token cost in the common
+    # case where the agent already produced a plan-shaped final message.
     # If a draft is already on scratch (e.g. from a prior comment iteration),
-    # use it instead of making another LLM call.
+    # use it instead of re-extracting or synthesizing.
     plan_draft = (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip()
     if not plan_draft:
-        # LLM-driven plan synthesis from execute_step ledger evidence.
+        plan_draft = _extract_plan_from_step_result(ctx)
+
+    if not plan_draft:
+        # Extraction failed: fall back to LLM-driven plan synthesis from
+        # execute_step ledger evidence.
         strange_loop = ctx.strange_loop
         synth_llm = strange_loop.goal_synthesis_model() or strange_loop._fast_llm
         if synth_llm is None:
@@ -350,12 +442,12 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
             "## Plan: Synthesis Failed\n\n"
             "### Goal\n"
             f"{resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or 'unknown'}\n\n"
-            "### Context\n"
+            "### Solution\n"
             "Plan synthesis from step evidence failed (rate limit or LLM error). "
             "The step execution evidence is available in the ledger.\n\n"
             "### Changes\n"
             "1. **Retry plan synthesis**\n"
-            "   - Select 'Comments' below and type 'retry' to regenerate the plan.\n"
+            "   - Select 'Reject' below and type 'retry' to regenerate the plan.\n"
         )
         logger.warning("[PlanModeReview] Plan synthesis failed; emitting placeholder")
 
@@ -369,7 +461,7 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
     # the canonical terminal report for this goal.
     _record_plan_completion_ledger(ctx, plan_draft)
 
-    # Emit the approve/reject/comment clarification.
+    # Emit the approve/reject clarification.
     return build_plan_mode_review_pending(ctx)
 
 

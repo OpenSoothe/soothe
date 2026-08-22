@@ -340,14 +340,14 @@ async def test_resume_turn_skips_clarification_requested_reemit() -> None:
 
 
 async def test_second_park_after_resume_reemits_clarification_requested() -> None:
-    """Planner rewrite after 'More comments' must remount plan review (loop 6580)."""
+    """Planner rewrite after 'Reject' must remount plan review (loop 6580)."""
     first_policy = _InteractivePolicyStub(
-        ClarificationAnswer(answers=("More comments", "Show unified mental model"), source="human")
+        ClarificationAnswer(answers=("Reject", "Show unified mental model"), source="human")
     )
     ctx = _StubCtx(
         policy=first_policy,
-        clarification_resume_answers=["More comments", "Show unified mental model"],
-        clarification_resume_text="Plan review: More comments",
+        clarification_resume_answers=["Reject", "Show unified mental model"],
+        clarification_resume_text="Plan review: Reject",
     )
     ctx.scratch = type(  # type: ignore[attr-defined]
         "Scratch",

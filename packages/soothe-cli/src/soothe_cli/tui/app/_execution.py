@@ -53,7 +53,7 @@ InputMode = Literal["normal", "shell", "command"]
 
 logger = logging.getLogger(__name__)
 
-_PLAN_REVIEW_ACTIONS = frozenset({"Approve", "Reject", "More comments"})
+_PLAN_REVIEW_ACTIONS = frozenset({"Approve", "Reject"})
 
 
 def clarification_wire_content(answers: list[str]) -> str:
@@ -61,15 +61,16 @@ def clarification_wire_content(answers: list[str]) -> str:
 
     Plan-review actions use a stable ``Plan review: …`` prefix so a dropped
     ``clarification_answer`` flag cannot turn bare ``Reject`` into Pass1 TASK.
+    ``Reject`` may carry refinement text in ``answers[1]``.
     """
     non_empty = [a for a in answers if str(a).strip()]
     if not non_empty:
         return ""
     first = str(answers[0]).strip() if answers else ""
     if first in _PLAN_REVIEW_ACTIONS:
-        comments = str(answers[1]).strip() if len(answers) > 1 else ""
-        if comments:
-            return f"Plan review: {first} — {comments}"
+        refinement = str(answers[1]).strip() if len(answers) > 1 else ""
+        if refinement:
+            return f"Plan review: {first} — {refinement}"
         return f"Plan review: {first}"
     if len(non_empty) == 1:
         return non_empty[0]
@@ -283,7 +284,10 @@ class _ExecutionMixin:
             return
 
         # When a plan is approved for execution, switch composer mode to Auto
-        # so subsequent turns use standard loop routing (interaction_mode=agent).
+        # so a subsequent manual turn uses standard loop routing (agent mode).
+        # The daemon also auto-enqueues the exec goal carrying the approved
+        # plan (Bug #3 fix); this composer flip just aligns the badge for the
+        # user's next manual input and is not the execution mechanism.
         first_answer = str(event.answers[0]).strip() if event.answers else ""
         if first_answer == "Approve":
             self._composer_mode = "auto"

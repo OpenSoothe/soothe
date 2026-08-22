@@ -117,10 +117,10 @@ class InteractiveClarificationPolicy:
 
         stripped = [a.strip() for a in answers]
 
-        # Plan-mode review asks two questions (action + revision comments), but
-        # only the action field is required — the revision-comments field is
-        # only meaningful for the "comments" action and is legitimately blank
-        # for approve/reject. Treat it as answered when the action field (index
+        # Plan-mode review asks two questions (action + refinement text), but
+        # only the action field is required — the refinement-text field is
+        # only meaningful for the "reject" action and is legitimately blank
+        # for approve. Treat it as answered when the action field (index
         # 0) is non-empty; pad the optional trailing field instead of
         # dismissing the whole answer as "no answer" (RFC-904 plan-mode review).
         if origin == ORIGIN_PLAN_MODE_REVIEW and expected == 2:

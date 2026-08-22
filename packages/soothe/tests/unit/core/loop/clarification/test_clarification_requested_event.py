@@ -10,7 +10,7 @@ from soothe.sloop.clarification.events import (
 
 def test_clarification_requested_event_forwards_plan_payload() -> None:
     ev = ClarificationRequestedEvent(
-        questions=["Action for this plan: Approve, Reject, or More comments"],
+        questions=["Action for this plan: Approve or Reject"],
         origin_node="plan_mode_review",
         mode="manual",
         plan_path="/ws/.soothe/plans/demo.md",

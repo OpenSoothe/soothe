@@ -1,7 +1,7 @@
 """Clarification verification-stage origin constants (RFC-622, RFC-904).
 
 Live origins: ``execute`` (step ``ask_user``), ``plan_mode_review``
-(plan draft approve/reject/comment gate), ``rail_pause`` (host gate).
+(plan draft approve/reject gate), ``rail_pause`` (host gate).
 
 Legacy plan-spine origins (``generate_plan``, ``evaluate``, and ledger
 aliases) are still accepted for resume of persisted interrupts from

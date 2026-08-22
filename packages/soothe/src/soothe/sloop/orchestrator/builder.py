@@ -191,13 +191,14 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             END: END,
         },
     )
-    # Plan review → DISPATCH (approve), AWAIT_USER (pending clarification),
-    # or END (reject).
+    # Plan review → FINALIZE (approve; follow-on exec goal enqueued on
+    # completion), AWAIT_USER (pending clarification), or END (reject).
     graph.add_conditional_edges(
         PLAN_REVIEW,
         route_after_plan_review,
         {
             DISPATCH: DISPATCH,
+            FINALIZE: FINALIZE,
             AWAIT_USER: AWAIT_USER,
             END: END,
         },
@@ -211,6 +212,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             DISPATCH: DISPATCH,
             DELEGATE: DELEGATE,
             PLAN_REVIEW: PLAN_REVIEW,
+            FINALIZE: FINALIZE,
             END: END,
         },
     )

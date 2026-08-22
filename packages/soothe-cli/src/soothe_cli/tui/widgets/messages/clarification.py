@@ -27,14 +27,13 @@ _ORIGIN_PLAN_MODE_REVIEW = "plan_mode_review"
 _ORIGIN_PLANNER_SUBAGENT_REVIEW_LEGACY = "planner_subagent_review"
 
 
-_PlanReviewAction = Literal["approve", "reject", "comments"]
+_PlanReviewAction = Literal["approve", "reject"]
 
-_ACTION_ORDER: tuple[_PlanReviewAction, ...] = ("approve", "reject", "comments")
+_ACTION_ORDER: tuple[_PlanReviewAction, ...] = ("approve", "reject")
 
 _ACTION_LABELS: dict[_PlanReviewAction, str] = {
     "approve": "Approve",
     "reject": "Reject",
-    "comments": "Comments",
 }
 
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n?", re.DOTALL)
@@ -54,8 +53,7 @@ class ClarificationInputMessage(Vertical):
     Mounted when ``soothe.loop.clarification.requested`` arrives. Generic
     clarifications show one ``Input`` per question. Planner-subagent review
     (``origin_node=plan_mode_review``) shows the full draft plan, a
-    saved-path footer, Approve / Reject / Comments actions, and a
-    comments field only after Comments is selected.
+    saved-path footer, and Approve / Reject actions.
     """
 
     BINDINGS = [
@@ -155,10 +153,6 @@ class ClarificationInputMessage(Vertical):
         color: $text-muted;
     }
 
-    ClarificationInputMessage .plan-review-comments.hidden {
-        display: none;
-    }
-
     /* Match the main ChatInput visual: solid primary border on a $surface
        fill, transparent inner padding so the cursor sits where the user
        expects. */
@@ -223,7 +217,6 @@ class ClarificationInputMessage(Vertical):
         self._answers: list[str] = []
         self._widget_id = widget_id or self.id or ""
         self._selected_action: _PlanReviewAction = "approve"
-        self._comments_input: Input | None = None
         self._action_buttons: dict[_PlanReviewAction, Button] = {}
 
     @property
@@ -279,13 +272,6 @@ class ClarificationInputMessage(Vertical):
                 self._action_buttons[action] = btn
                 yield btn
         yield Static("←/→ switch · Enter confirm", classes="plan-review-hint", markup=False)
-        comments = Input(
-            placeholder="Describe what to change…",
-            id="plan-review-comments-input",
-            classes="plan-review-comments hidden",
-        )
-        self._comments_input = comments
-        yield comments
 
     def _compose_generic(self) -> Any:
         yield Static(self._title_content(), classes="clarification-title")
@@ -375,35 +361,8 @@ class ClarificationInputMessage(Vertical):
             else:
                 btn.remove_class("plan-review-selected")
 
-    def _show_comments(self, *, show: bool, focus: bool = True) -> None:
-        comments = self._comments_input
-        if comments is None:
-            return
-        if show:
-            comments.remove_class("hidden")
-            if comments not in self._inputs:
-                self._inputs = [comments]
-            if focus:
-                self._schedule_focus(comments)
-            else:
-                btn = self._action_buttons.get("comments")
-                if btn is not None:
-                    self._schedule_focus(btn)
-        else:
-            comments.add_class("hidden")
-            self._inputs = []
-
-    def _plan_review_focus_on_comments(self) -> bool:
-        comments = self._comments_input
-        if comments is None or comments.has_class("hidden"):
-            return False
-        focused = getattr(self.app, "focused", None)
-        return focused is comments
-
     def _cycle_plan_review_action(self, delta: int) -> None:
         if self._submitted or not self._is_plan_review:
-            return
-        if self._plan_review_focus_on_comments():
             return
         idx = _ACTION_ORDER.index(self._selected_action)
         action = _ACTION_ORDER[(idx + delta) % len(_ACTION_ORDER)]
@@ -411,17 +370,11 @@ class ClarificationInputMessage(Vertical):
 
     def _apply_plan_review_selection(self, action: _PlanReviewAction, *, activate: bool) -> None:
         self._set_selected_action(action)
-        if action == "comments":
-            # Arrow selection keeps focus on the Comments button so ←/→ still work;
-            # click / Enter moves focus into the comments field.
-            self._show_comments(show=True, focus=activate)
-            return
-        self._show_comments(show=False)
         btn = self._action_buttons.get(action)
         if btn is not None:
             self._schedule_focus(btn)
         if activate:
-            self._finalize_plan_review(action=action, comments="")
+            self._finalize_plan_review(action=action)
 
     def action_plan_review_prev(self) -> None:
         """Select the previous plan-review action (←)."""
@@ -435,14 +388,7 @@ class ClarificationInputMessage(Vertical):
         """Confirm the selected plan-review action (Enter)."""
         if self._submitted or not self._is_plan_review:
             return
-        if self._plan_review_focus_on_comments():
-            # Let Input.Submitted handle Enter while typing comments.
-            return
-        action = self._selected_action
-        if action == "comments":
-            self._show_comments(show=True, focus=True)
-            return
-        self._finalize_plan_review(action=action, comments="")
+        self._finalize_plan_review(action=self._selected_action)
 
     @on(Button.Pressed)
     def _on_plan_review_button(self, event: Button.Pressed) -> None:
@@ -454,12 +400,10 @@ class ClarificationInputMessage(Vertical):
             action = "approve"
         elif btn_id == "plan-review-btn-reject":
             action = "reject"
-        elif btn_id == "plan-review-btn-comments":
-            action = "comments"
         if action is None:
             return
         event.stop()
-        # Click selects and activates (Approve/Reject submit; Comments opens input).
+        # Click selects and activates (Approve/Reject submit).
         self._apply_plan_review_selection(action, activate=True)
 
     @on(Input.Submitted)
@@ -468,17 +412,6 @@ class ClarificationInputMessage(Vertical):
             event.stop()
             return
         if self._is_plan_review:
-            if event.input is not self._comments_input:
-                return
-            if self._selected_action != "comments":
-                event.stop()
-                return
-            comments = str(event.input.value or "").strip()
-            if not comments:
-                event.stop()
-                return
-            self._finalize_plan_review(action="comments", comments=comments)
-            event.stop()
             return
         idx = self._inputs.index(event.input) if event.input in self._inputs else -1
         if idx < 0:
@@ -502,16 +435,13 @@ class ClarificationInputMessage(Vertical):
         self._finalize()
         event.stop()
 
-    def _finalize_plan_review(self, *, action: _PlanReviewAction, comments: str) -> None:
+    def _finalize_plan_review(self, *, action: _PlanReviewAction) -> None:
         if self._submitted:
             return
-        # Wire still expects the full "More comments" label for the comments action.
-        label = "More comments" if action == "comments" else _ACTION_LABELS[action]
-        answers = [label, comments]
+        label = _ACTION_LABELS[action]
+        answers = [label, ""]
         self._submitted = True
         self._answers = answers
-        for inp in self._inputs:
-            inp.disabled = True
         for btn in self._action_buttons.values():
             btn.disabled = True
         self.add_class("is-submitted")

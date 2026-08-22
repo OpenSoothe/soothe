@@ -305,6 +305,10 @@ class StrangeLoopCompletedEvent(LifecycleEvent):
     completion_summary: str = ""
     # Layer-2 act steps completed in this thread (for goal-done line when pipeline has 0).
     total_steps: int = 0
+    # Bug #3: plan-mode approve follow-on exec signal. When present, the daemon
+    # auto-enqueues a fresh exec goal carrying the approved plan (goal_prompt +
+    # plan_path) after this goal's stream ends. None for non-plan-mode goals.
+    follow_on_exec: dict[str, str | None] | None = None
 
 
 class StrangeLoopPlanDecisionEvent(LifecycleEvent):

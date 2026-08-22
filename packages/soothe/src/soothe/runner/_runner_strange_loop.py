@@ -446,6 +446,7 @@ class StrangeLoopMixin:
         clarification_answer: bool = False,
         clarification_answers: list[str] | None = None,
         resume_interrupted: bool = False,
+        approved_plan_path: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: StrangeLoop goal execution (RFC-0008).
 
@@ -590,6 +591,7 @@ class StrangeLoopMixin:
                 clarification_answers=clarification_answers,
                 resume_interrupted=resume_interrupted,
                 interaction_mode=interaction_mode,
+                approved_plan_path=approved_plan_path,
             ):
                 if event_type == "intent_classified_reasoning":
                     payload = event_data if isinstance(event_data, dict) else {}
@@ -944,6 +946,9 @@ class StrangeLoopMixin:
                             goal=display_goal,  # Pass goal for CLI trophy display
                             completion_summary=completion_summary,
                             total_steps=n_act_steps,
+                            # Bug #3: forward plan-mode approve follow-on exec
+                            # signal so the daemon auto-enqueues the exec goal.
+                            follow_on_exec=getattr(final_result, "follow_on_exec", None),
                         ).to_dict()
                     )
 

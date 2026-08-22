@@ -55,6 +55,7 @@ def test_queue_options_from_daemon_message_defaults() -> None:
         "clarification_answer": False,
         "clarification_answers": None,
         "resume_interrupted": False,
+        "approved_plan_path": None,
     }
 
 

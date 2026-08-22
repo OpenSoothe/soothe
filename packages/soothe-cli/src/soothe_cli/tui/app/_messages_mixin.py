@@ -1031,7 +1031,7 @@ class _MessagesMixin:
         return inputs
 
     def _active_plan_review_action_focus(self) -> Widget | None:
-        """Prefer the Approve button when a plan-review card has no comments yet."""
+        """Prefer the Approve button when a plan-review card is active."""
         adapter = getattr(self, "_ui_adapter", None)
         if adapter is None:
             return None
@@ -1067,8 +1067,8 @@ class _MessagesMixin:
         """Return the single input that should receive typing focus, if unambiguous.
 
         When an inline clarification card is active, its answer field takes
-        precedence over the bottom chat prompt. Planner-subagent review with no
-        comments field yet focuses the Approve action. On modal screens, a lone
+        precedence over the bottom chat prompt. Planner-subagent review
+        focuses the Approve action. On modal screens, a lone
         filter box is focused automatically.
         """
         clar_inputs = self._active_clarification_inputs()

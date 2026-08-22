@@ -47,13 +47,11 @@ def test_parse_plan_review_answers() -> None:
         "looks good",
     )
     assert parse_plan_review_answers(("reject", "nope")) == ("reject", "nope")
+    # Free-text body (no Approve/Reject prefix) → reject with that text.
     assert parse_plan_review_answers(("Please add error handling", "")) == (
-        "comments",
+        "reject",
         "Please add error handling",
     )
-    assert parse_plan_review_answers(("More comments", "tighten scope")) == (
-        "comments",
-        "tighten scope",
-    )
-    assert parse_plan_review_answers(("More comments", "")) == ("comments", "")
+    assert parse_plan_review_answers(("Reject", "tighten scope")) == ("reject", "tighten scope")
+    assert parse_plan_review_answers(("Reject", "")) == ("reject", "")
     assert parse_plan_review_answers(("Approve", "")) == ("approve", "")

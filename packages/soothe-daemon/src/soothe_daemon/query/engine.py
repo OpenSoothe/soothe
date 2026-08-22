@@ -952,6 +952,7 @@ class QueryEngine:
         clarification_answer: bool = False,
         clarification_answers: list[str] | None = None,
         resume_interrupted: bool = False,
+        approved_plan_path: str | None = None,
     ) -> None:
         """Stream a query through subprocess workers and broadcast events."""
         d = self._daemon
@@ -1144,6 +1145,10 @@ class QueryEngine:
         phase_tagged_assistant_written = [False]
         turn_stream_end_emitted = False
         turn_cancelled = False
+        # Bug #3: plan-mode approve follow-on exec signal, captured from the
+        # ``strange_loop.completed`` chunk and consumed after the stream ends
+        # to auto-enqueue the exec goal carrying the approved plan.
+        follow_on_exec: dict[str, str | None] | None = None
 
         async def _run_stream() -> None:
             nonlocal turn_cancelled
@@ -1246,6 +1251,7 @@ class QueryEngine:
                     clarification_answer=clarification_answer,
                     clarification_answers=clarification_answers,
                     resume_interrupted=resume_interrupted,
+                    approved_plan_path=approved_plan_path,
                 )
                 run_workspace = run_request.resolve_workspace_path()
                 loop_runner = d._runner_factory.create_runner(_runner_key)
@@ -1296,6 +1302,7 @@ class QueryEngine:
 
                 async def _process_stream() -> None:
                     nonlocal chunk_count, warning_sent, full_response_chars, goal_completion_chars
+                    nonlocal follow_on_exec
                     # Scope cancellation to this stream task only. The daemon keeps a
                     # single ``_current_query_task`` pointer that concurrent queries
                     # overwrite; checking that global slot caused unrelated finished
@@ -1375,6 +1382,18 @@ class QueryEngine:
 
                         if effective_loop_id:
                             ns_tuple = tuple(namespace) if namespace else ()
+                            # Bug #3: capture plan-mode approve follow-on exec
+                            # signal from the completed event before coalescer
+                            # ingestion (coalescer doesn't surface payload fields).
+                            from soothe_sdk.core.events import STRANGE_LOOP_COMPLETED
+
+                            if (
+                                mode == "custom"
+                                and isinstance(data, dict)
+                                and data.get("type") == STRANGE_LOOP_COMPLETED
+                                and data.get("follow_on_exec")
+                            ):
+                                follow_on_exec = data["follow_on_exec"]
                             outputs = list(coalescer.ingest(ns_tuple, mode, data))
                             if outputs:
                                 await self._broadcast_coalescer_outputs(
@@ -1398,6 +1417,40 @@ class QueryEngine:
                         turn_completed_via_coalescer,
                     )
                     await _ensure_turn_stream_end()
+
+                    # Bug #3: plan-mode approve enqueues a follow-on exec goal
+                    # carrying the approved plan (agent mode so decompose_task
+                    # is available). Runs after the plan-mode goal's stream ends
+                    # and before the worker is released to idle. Guarded by
+                    # turn_completed so a crash/timeout never auto-enqueues.
+                    if turn_completed_via_coalescer and follow_on_exec and effective_loop_id:
+                        exec_prompt = str(follow_on_exec.get("goal_prompt") or "").strip()
+                        exec_plan_path = follow_on_exec.get("plan_path")
+                        if exec_prompt:
+                            try:
+                                await d._loop_input_dispatcher.enqueue(
+                                    effective_loop_id,
+                                    {
+                                        "type": "input",
+                                        "text": exec_prompt,
+                                        "client_id": None,
+                                        "interaction_mode": None,
+                                        "_approved_plan_path": exec_plan_path,
+                                        "_auto_enqueued_exec": True,
+                                    },
+                                )
+                                logger.info(
+                                    "[Query] auto-enqueued exec goal loop=%s plan=%s",
+                                    effective_loop_id,
+                                    exec_plan_path,
+                                )
+                                # Consume so a re-entrant finally can't double-enqueue.
+                                follow_on_exec = None
+                            except Exception:
+                                logger.exception(
+                                    "[Query] failed to auto-enqueue exec goal loop=%s",
+                                    effective_loop_id,
+                                )
 
                 if timeout_enabled:
                     async with asyncio.timeout(timeout_seconds):
