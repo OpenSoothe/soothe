@@ -83,9 +83,31 @@ def test_root_simple_task_does_not_force_decompose() -> None:
     assert "full goal" in (body.instructions or "")
 
 
-def test_child_complex_task_does_not_force_decompose() -> None:
+def test_child_complex_task_prompts_decompose_first() -> None:
+    """Complex child steps now also get the decompose-first directive."""
     step = StepAction(description="child work", is_dag_root=False)
     body = build_dependent_execution_hints(
         step, has_predecessor_evidence=False, expected_output="done", task_complexity="complex"
     )
+    assert "multi-step task" in (body.instructions or "")
+    assert "call decompose_task" in (body.instructions or "")
+
+
+def test_child_simple_task_does_not_force_decompose() -> None:
+    """Simple child steps do not get the decompose-first directive."""
+    step = StepAction(description="child work", is_dag_root=False)
+    body = build_dependent_execution_hints(
+        step, has_predecessor_evidence=False, expected_output="done", task_complexity="simple"
+    )
     assert "multi-step task" not in (body.instructions or "")
+    assert "Prefer finish" in (body.instructions or "")
+
+
+def test_child_simple_task_allows_dynamic_decision() -> None:
+    """Simple child hint guides dynamic decision, not blanket prohibition."""
+    step = StepAction(description="child work", is_dag_root=False)
+    body = build_dependent_execution_hints(
+        step, has_predecessor_evidence=False, expected_output="done", task_complexity="simple"
+    )
+    instructions = body.instructions or ""
+    assert "genuinely splittable" in instructions

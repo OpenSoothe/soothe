@@ -46,6 +46,7 @@ def build_wired_subagent_plan(
         expected_output=_WIRED_SUBAGENT_EXPECTED_OUTPUT,
         requires_tool_use=requires_tool_use,
         is_dag_root=True,
+        task_complexity="simple",
     )
     if resolved_wire:
         step = step.model_copy(

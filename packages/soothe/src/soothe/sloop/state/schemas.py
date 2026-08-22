@@ -243,6 +243,10 @@ class StepAction(BaseModel):
         default=False,
         description="True when CE StepNode has no parent_step_id (root THREAD).",
     )
+    task_complexity: str | None = Field(
+        default=None,
+        description="Per-step complexity (simple/complex); None falls back to goal-level intent.",
+    )
 
     @model_validator(mode="after")
     def _validate_ask_user(self) -> StepAction:

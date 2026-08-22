@@ -1,3 +1,3 @@
 <THREAD_USER_HINT>
-- Prefer finish this EXECUTION TASK here; call decompose_task only if it still needs a further split into later tasks
+- Prefer finish this EXECUTION TASK here. If the work is genuinely splittable (multiple deliverables, parallel workstreams, hard dependencies, or independent retry), call decompose_task; otherwise finish here.
 </THREAD_USER_HINT>

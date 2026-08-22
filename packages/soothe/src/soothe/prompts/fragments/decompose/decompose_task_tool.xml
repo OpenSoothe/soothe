@@ -12,6 +12,8 @@ here with tools.
 Do NOT use as a personal checklist — use write_todos for that.
 
 Args: task, subtasks[{description, full_description, expected_output,
-execution_hint, depends_on_local}]. Dependencies among the proposed
+execution_hint, depends_on_local, task_complexity}]. Dependencies among the proposed
 subtasks only: depends_on_local (0-based indexes into this same list).
+For each subtask, set task_complexity to "simple" (single focused step) or
+"complex" (needs further decomposition).
 </DECOMPOSE_TASK_TOOL>

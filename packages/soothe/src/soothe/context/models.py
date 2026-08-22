@@ -135,6 +135,7 @@ class StepNode(BaseModel):
     recompose_count: int = 0
     kind: StepKind = "action"
     close_report: StepCloseReport | None = None
+    task_complexity: str | None = None
 
 
 class StepDAG(BaseModel):

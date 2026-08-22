@@ -223,6 +223,7 @@ def plan_commit_from_proposals(
             parent_step_id=primary,
             secondary_parent_step_ids=list(secondaries),
             status="pending",
+            task_complexity=sub.task_complexity.value if sub.task_complexity else None,
         )
         new_nodes.append(node)
 

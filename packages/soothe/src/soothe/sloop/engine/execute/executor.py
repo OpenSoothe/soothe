@@ -578,11 +578,7 @@ class Executor:
                 has_prior_goal_completion=True,
             )
         else:
-            task_complexity = None
-            intent = getattr(loop_state, "intent", None) if loop_state is not None else None
-            if intent is not None:
-                raw = getattr(intent, "task_complexity", None)
-                task_complexity = getattr(raw, "value", raw) if raw is not None else None
+            task_complexity = getattr(step, "task_complexity", None) or "simple"
             envelope_body = build_dependent_execution_hints(
                 step,
                 has_predecessor_evidence=has_predecessor_ledger,

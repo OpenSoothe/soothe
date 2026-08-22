@@ -326,7 +326,7 @@ def build_dependent_execution_hints(
         "tasks that will run in later threads",
         "- Produce output matching the EXPECTED OUTPUT specification",
     ]
-    if root and task_complexity == "complex":
+    if task_complexity == "complex":
         instruction_lines = [
             *decompose_first_hint_lines(),
             *instruction_lines,

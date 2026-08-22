@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+from soothe_sdk.intention.models import TaskComplexity
 
 from soothe.context.models import ExecutionHint
 
@@ -30,6 +31,13 @@ class ProposedSubtask(BaseModel):
     necessary_for_user_goal: bool = Field(
         default=True,
         description="Eval assertion that this child is necessary to complete the user goal.",
+    )
+    task_complexity: TaskComplexity = Field(
+        default=TaskComplexity.SIMPLE,
+        description=(
+            "Complexity of this child step: simple (single focused step) or "
+            "complex (needs further decomposition)."
+        ),
     )
 
     @field_validator("description")

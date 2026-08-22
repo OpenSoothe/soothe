@@ -50,6 +50,7 @@ def _step_action_from_node(node: StepNode) -> StepAction:
         execution_hint=hint,
         kind=kind,  # type: ignore[arg-type]
         is_dag_root=node.parent_step_id is None,
+        task_complexity=node.task_complexity,
     )
 
 
@@ -78,6 +79,12 @@ async def _ensure_root_step(ctx: LoopRuntimeContext) -> str | None:
         goal_text = resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or "Execute task"
         intent = getattr(ctx.loop_state, "intent", None)
         short_title = (getattr(intent, "task_short_description", None) or "").strip()
+        raw_complexity = getattr(intent, "task_complexity", None) if intent else None
+        root_complexity = (
+            getattr(raw_complexity, "value", raw_complexity)
+            if raw_complexity is not None
+            else "simple"
+        )
         plan_id = allocate_plan_id()
         root_id = f"{plan_id}-01"
         root = StepNode(
@@ -87,6 +94,7 @@ async def _ensure_root_step(ctx: LoopRuntimeContext) -> str | None:
             status="pending",
             parent_step_id=None,
             plan_iteration=0,
+            task_complexity=root_complexity,
         )
         await _maybe_await(ce.add_step(goal_id, root))
         logger.info("[dispatch] created root step %s for goal %s", root_id, goal_id)
@@ -181,12 +189,19 @@ class DispatchNode(LoopNode):
             )
             intent = getattr(ctx.loop_state, "intent", None)
             short_title = (getattr(intent, "task_short_description", None) or "").strip()
+            raw_complexity = getattr(intent, "task_complexity", None) if intent else None
+            fallback_complexity = (
+                getattr(raw_complexity, "value", raw_complexity)
+                if raw_complexity is not None
+                else "simple"
+            )
             plan_id = allocate_plan_id()
             step = StepAction(
                 id=f"{plan_id}-01",
                 description=short_title or goal_text,
                 full_description=goal_text,
                 is_dag_root=True,
+                task_complexity=fallback_complexity,
             )
             decision = AgentDecision(
                 type="execute_steps",
