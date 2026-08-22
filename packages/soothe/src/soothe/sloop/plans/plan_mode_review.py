@@ -12,8 +12,12 @@ On fresh plan review:
     - Emit the approve/reject clarification.
 
 On approve:
-    - Set ``LoopState.approved_plan_markdown`` + ``LoopState.approved_plan_path``
-      so the existing DISPATCH grounding chain consumes it.
+    - Stash a follow-on exec signal on ``ctx.scratch.follow_on_exec`` (goal
+      prompt + approved plan path) so the finalize node attaches it to the
+      ``completed`` event; the daemon enqueues a fresh exec goal carrying the
+      approved plan, which DISPATCH grounds onto its own fresh root.
+    - Set ``plan_approved_follow_on`` so routers finalize the plan-mode goal
+      (its root already completed during exploration).
     - Record the user's action as a new ``goal_completion`` AI message:
       "Plan approved by operator." (so subsequent goals see the approval in
       the ledger).
@@ -36,6 +40,7 @@ from typing import Any
 
 from soothe.sloop.clarification.origins import (
     ORIGIN_PLAN_MODE_REVIEW,
+    PLAN_MODE_REVIEW_INTERRUPT_PREFIX,
 )
 from soothe.sloop.clarification.protocol import (
     ClarificationRequest,
@@ -60,8 +65,6 @@ _PLAN_MODE_REVIEW_QUESTIONS: tuple[str, ...] = (
     "Action for this plan: Approve or Reject",
     "Refinement instructions (when choosing Reject)",
 )
-
-_PLAN_MODE_REVIEW_INTERRUPT_PREFIX = "plan-mode-review:"
 
 # Matches the ``## Plan: <title>`` marker that the plan-mode addendum
 # (``plan_mode_addendum.xml``) instructs the agent to emit as its final
@@ -161,7 +164,7 @@ def build_plan_mode_review_pending(ctx: LoopRuntimeContext) -> dict[str, Any]:
     req = ClarificationRequest(
         questions=_PLAN_MODE_REVIEW_QUESTIONS,
         origin_node=ORIGIN_PLAN_MODE_REVIEW,
-        origin_interrupt_id=(f"{_PLAN_MODE_REVIEW_INTERRUPT_PREFIX}{uuid.uuid4().hex[:8]}"),
+        origin_interrupt_id=(f"{PLAN_MODE_REVIEW_INTERRUPT_PREFIX}{uuid.uuid4().hex[:8]}"),
         loop_state=_build_loop_state_view(ctx),
     )
     pending = request_to_state(req)
@@ -286,8 +289,11 @@ def handle_plan_mode_review_answer(
 ) -> dict[str, Any]:
     """Handle approve / reject after plan-mode review.
 
-    On approve: set ``LoopState.approved_plan_*`` so the DISPATCH grounding
-    chain consumes it. Record the action in the ledger.
+    On approve: stash a follow-on exec signal on ``ctx.scratch.follow_on_exec``
+    and set ``plan_approved_follow_on`` so routers finalize the plan-mode goal
+    (its root already completed during exploration). The daemon enqueues a
+    fresh exec goal carrying the approved plan path. Record the action in the
+    ledger.
 
     On reject: store the user's rejection text as ``plan_review_comments``
     refinement feedback and re-emit the plan review clarification so the

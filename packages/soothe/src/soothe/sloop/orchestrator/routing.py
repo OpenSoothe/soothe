@@ -126,23 +126,16 @@ def route_after_plan_review(state: dict[str, Any]) -> str:
     and stashed a follow-on exec signal on ``ctx.scratch.follow_on_exec``. The
     plan-mode goal finalizes (its root already completed during exploration);
     the finalize node attaches the follow-on signal to the ``completed`` event
-    so the daemon enqueues a fresh exec goal carrying the approved plan. The
-    legacy ``approved_plan_markdown`` → DISPATCH grounding path is retained for
-    any non-plan-mode approve that sets it directly. On reject the pending
-    clarification is re-emitted (storing refinement text) → AWAIT_USER so the
-    user can provide more instruction. On a fresh plan review the pending
-    clarification is still set → AWAIT_USER.
+    so the daemon enqueues a fresh exec goal carrying the approved plan. On
+    reject the pending clarification is re-emitted (storing refinement text)
+    → AWAIT_USER so the user can provide more instruction. On a fresh plan
+    review the pending clarification is still set → AWAIT_USER.
     """
     if state.get("plan_approved_follow_on"):
         logger.debug(
             "[routing] route_after_plan_review → finalize (plan approved; exec goal follows)"
         )
         return FINALIZE
-    if state.get("approved_plan_markdown"):
-        logger.debug(
-            "[routing] route_after_plan_review → dispatch (plan approved, legacy grounding)"
-        )
-        return DISPATCH
     if _pending_clarification(state):
         logger.debug("[routing] route_after_plan_review → await_user")
         return AWAIT_USER
@@ -151,7 +144,7 @@ def route_after_plan_review(state: dict[str, Any]) -> str:
 
 
 def route_after_clarification(state: dict[str, Any]) -> str:
-    """Return to originating station, DISPATCH/FINALIZE on plan-mode approve, or END on defer."""
+    """Return to originating station, FINALIZE on plan-mode approve, or END on defer."""
     if state.get("last_outcome") == "deferred":
         return END
     from soothe.sloop.clarification.origins import (
@@ -171,11 +164,6 @@ def route_after_clarification(state: dict[str, Any]) -> str:
                 "[routing] route_after_clarification → finalize (plan approved; exec goal follows)"
             )
             return FINALIZE
-        if state.get("approved_plan_markdown"):
-            logger.debug(
-                "[routing] route_after_clarification → dispatch (plan approved, legacy grounding)"
-            )
-            return DISPATCH
         # No approved plan = reject. Route to PLAN_REVIEW so the answer is
         # processed (refinement text stored, pending re-emitted). After
         # processing, route_after_plan_review routes the re-emitted pending to

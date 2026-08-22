@@ -60,16 +60,6 @@ def test_route_after_clarification_returns_to_origin_node() -> None:
     # Plan-mode review without approved plan or pending clarification → END
     # (fallback; reject re-emits pending so this path is not normally hit).
     assert route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW}) == END
-    # Plan-mode review with approved plan → DISPATCH (grounding).
-    assert (
-        route_after_clarification(
-            {
-                "last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW,
-                "approved_plan_markdown": "# Plan",
-            }
-        )
-        == "dispatch"
-    )
     # Plan-mode review with pending clarification → PLAN_REVIEW (process the
     # reject answer: store refinement text, re-emit pending → AWAIT_USER).
     assert (
@@ -100,21 +90,6 @@ def test_route_after_clarification_terminates_on_invalid_origin() -> None:
     assert route_after_clarification({"last_clarification_origin": "garbage"}) == END
 
 
-def test_route_after_plan_review_routes_to_dispatch_on_approve() -> None:
-    """Legacy approve (approved_plan_markdown set, no follow_on) → DISPATCH."""
-    assert (
-        route_after_plan_review({"approved_plan_markdown": "# Plan", "pending_clarification": None})
-        == "dispatch"
-    )
-    # approved plan wins even if pending_clarification is somehow still set.
-    assert (
-        route_after_plan_review(
-            {"approved_plan_markdown": "# Plan", "pending_clarification": {"q": "a"}}
-        )
-        == "dispatch"
-    )
-
-
 def test_route_after_plan_review_routes_to_finalize_on_follow_on() -> None:
     """Plan-mode approve sets plan_approved_follow_on → FINALIZE.
 
@@ -124,13 +99,6 @@ def test_route_after_plan_review_routes_to_finalize_on_follow_on() -> None:
     """
     assert (
         route_after_plan_review({"plan_approved_follow_on": True, "pending_clarification": None})
-        == "finalize"
-    )
-    # follow_on wins over legacy approved_plan_markdown if both are set.
-    assert (
-        route_after_plan_review(
-            {"plan_approved_follow_on": True, "approved_plan_markdown": "# Plan"}
-        )
         == "finalize"
     )
 

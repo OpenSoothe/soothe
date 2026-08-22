@@ -88,13 +88,6 @@ class LoopGraphState(TypedDict, total=False):
     resume_synth: bool | None
     after_record_route: Literal["finalize", "goal_completion", ""] | None
     interaction_mode: str | None  # "agent" | "ask" | "plan" — set by enter_loop
-    # RFC-904 plan-mode review: set by ``handle_plan_mode_review_answer`` on
-    # approve so routers can ground the approved plan into DISPATCH. Must be a
-    # graph channel (not just a LoopState attribute) so the value survives the
-    # AWAIT_USER interrupt/resume round-trip and reaches the post-clarification
-    # router.
-    approved_plan_markdown: str | None
-    approved_plan_path: str | None
     # Plan-mode approve (Bug #3 fix): set True by ``handle_plan_mode_review_answer``
     # on approve so routers finalize the plan-mode goal (instead of grounding
     # onto its already-completed root). The finalize node reads the follow-on
