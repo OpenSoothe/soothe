@@ -11,11 +11,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 
+from soothe.config.constants import DEFAULT_MAX_TOOL_CALLS_PER_STEP
 from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode
 from soothe.context.store_sqlite import SqliteContextPersistence
 from soothe.sloop.engine.execute.executor import (
-    _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     Executor,
     _ActStreamBudget,
 )
@@ -68,13 +68,13 @@ async def test_stream_stops_after_tool_budget_with_partial_outcomes() -> None:
     assert len(final.outcomes) == 2
 
 
-def test_default_max_tool_calls_per_step_is_100() -> None:
-    assert _DEFAULT_MAX_TOOL_CALLS_PER_STEP == 100
+def test_default_max_tool_calls_per_step_is_999() -> None:
+    assert DEFAULT_MAX_TOOL_CALLS_PER_STEP == 999
     assert (
         Executor(
             MagicMock(), max_parallel_steps=1, context_engine=_make_ce()
         )._max_tool_calls_per_step()
-        == 100
+        == 999
     )
 
 
@@ -110,7 +110,7 @@ async def test_execute_parallel_step_returns_partial_on_tool_budget() -> None:
             "messages",
             (ToolMessage(content=f"out-{i}", tool_call_id=str(i), name="run_command"), {}),
         )
-        for i in range(_DEFAULT_MAX_TOOL_CALLS_PER_STEP + 5)
+        for i in range(DEFAULT_MAX_TOOL_CALLS_PER_STEP + 5)
     ]
     agent = _make_mock_agent(tool_msgs)
 
@@ -134,7 +134,7 @@ async def test_execute_parallel_step_returns_partial_on_tool_budget() -> None:
     assert len(results) == 1
     sr = results[0]
     assert sr.hit_tool_budget is True
-    assert sr.tool_call_count == _DEFAULT_MAX_TOOL_CALLS_PER_STEP
+    assert sr.tool_call_count == DEFAULT_MAX_TOOL_CALLS_PER_STEP
     assert sr.success is True
     assert state.last_wave_hit_tool_budget is True
     preview = sr.outcome.get("wave_join_preview") or sr.outcome.get("output_summary") or ""

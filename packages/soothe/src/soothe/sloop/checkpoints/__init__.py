@@ -9,8 +9,6 @@ ArchiveBackend for loop archival and knowledge transfer.
 
 from soothe.sloop.checkpoints.archive_backend import (
     ArchiveBackend,
-    ArchiveMetadata,
-    GoalSummary,
 )
 from soothe.sloop.checkpoints.manager import (
     StrangeLoopCheckpointPersistenceManager,
@@ -18,7 +16,5 @@ from soothe.sloop.checkpoints.manager import (
 
 __all__ = [
     "ArchiveBackend",
-    "ArchiveMetadata",
-    "GoalSummary",
     "StrangeLoopCheckpointPersistenceManager",
 ]

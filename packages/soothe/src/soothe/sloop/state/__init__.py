@@ -5,9 +5,7 @@ from .checkpoint import (
     WorkingMemoryState,
 )
 from .execution_checkpoint import (
-    ExecutionCheckpoint,
     GoalIndexEntry,
-    WaveMetrics,
 )
 from .schemas import (
     AgentDecision,
@@ -23,7 +21,6 @@ from .working_memory import LoopWorkingMemory
 __all__ = [
     "AgentDecision",
     "EvidenceEntry",
-    "ExecutionCheckpoint",
     "GoalIndexEntry",
     "LoopState",
     "LoopWorkingMemory",
@@ -32,6 +29,5 @@ __all__ = [
     "StrangeLoopStateManager",
     "StepAction",
     "StepExecutionRecord",
-    "WaveMetrics",
     "WorkingMemoryState",
 ]

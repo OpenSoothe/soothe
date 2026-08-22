@@ -49,7 +49,7 @@ class IdentityConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Enable identity service. Disabled by default for backward compatibility.",
+        description="Enable identity service. Disabled by default (opt-in security).",
     )
     tokens: TokenConfig = Field(
         default_factory=TokenConfig,

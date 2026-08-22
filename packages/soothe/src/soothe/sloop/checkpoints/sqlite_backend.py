@@ -78,7 +78,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
 
         self.db_path = Path(db_path)
-        self._pool_size = pool_size
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.initialize_database_sync(self.db_path)
         self._runtime = SqliteRuntimeRegistry.acquire(
@@ -1044,21 +1043,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     def _ensure_goal_record_columns(db: sqlite3.Connection) -> None:
         """Migrate ``goal_records`` to RFC-626 slim schema when legacy columns exist."""
         SQLitePersistenceBackend._migrate_goal_records_slim(db)
-
-    @staticmethod
-    def _ensure_loop_columns_on_path(db_path: Path) -> None:
-        """Migrate ``agentloop_loops`` and ``goal_records`` columns on an existing database file."""
-        from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
-
-        def _migrate(conn: sqlite3.Connection) -> None:
-            SQLitePersistenceBackend._ensure_loop_columns(conn)
-            SQLitePersistenceBackend._ensure_goal_record_columns(conn)
-
-        runtime = SqliteRuntimeRegistry.acquire(db_path)
-        try:
-            runtime.run_write_sync(_migrate)
-        finally:
-            SqliteRuntimeRegistry.release_sync(db_path)
 
     @staticmethod
     def initialize_database_sync(db_path: Path) -> None:

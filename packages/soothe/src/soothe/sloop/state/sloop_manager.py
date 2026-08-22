@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
+from soothe.config.constants import DEFAULT_MAX_ITERATIONS
 from soothe.sloop.checkpoints.directory_manager import (
     PersistenceDirectoryManager,
 )
@@ -240,7 +240,7 @@ class StrangeLoopStateManager:
     async def initialize(
         self,
         thread_id: str,
-        max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
+        max_iterations: int = DEFAULT_MAX_ITERATIONS,
     ) -> StrangeLoopCheckpoint:
         """Create new loop for thread (RFC-216: loop-scoped).
 
@@ -840,7 +840,7 @@ class StrangeLoopStateManager:
     def start_new_goal(
         self,
         goal: str,
-        max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
+        max_iterations: int = DEFAULT_MAX_ITERATIONS,
     ) -> GoalIndexEntry:
         """Create new goal index entry and clear working memory (RFC-216).
 

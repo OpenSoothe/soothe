@@ -1165,13 +1165,13 @@ class DecomposeLoopConfig(BaseModel):
     """
 
     max_depth: int = Field(
-        default=5,
+        default=3,
         ge=1,
         le=20,
         description="Max parent_step_id lineage depth per goal.",
     )
     max_steps: int = Field(
-        default=50,
+        default=30,
         ge=1,
         le=500,
         description="Max total StepNodes per goal (including superseded).",

@@ -42,6 +42,7 @@ from soothe_sdk.ux.execute_namespace import is_step_level_execute_namespace_key
 
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
+    DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
 from soothe.sloop.clarification import (
@@ -89,7 +90,6 @@ from soothe.sloop.engine.execute.step_predecessor_context import (
     step_needs_brief_hydration,
 )
 from soothe.sloop.engine.execute.step_wave_types import (
-    _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     _DELEGATE_FINAL_PER_TASK_CAP,
     _TUPLE_LEN,
     StepCompletionReport,
@@ -105,7 +105,6 @@ from soothe.sloop.engine.execute.step_wave_types import (
     _PendingInterruptFetch,
     _StreamCollectChunk,
     all_tool_outcomes_failed,
-    max_tool_calls_for_step,
     wave_gather_failed,
     wave_gather_slot,
 )
@@ -370,7 +369,7 @@ class Executor:
 
     def _max_tool_calls_per_step(self) -> int:
         if self._config is None:
-            return _DEFAULT_MAX_TOOL_CALLS_PER_STEP
+            return DEFAULT_MAX_TOOL_CALLS_PER_STEP
         return max(0, int(self._config.agent.loop.max_tool_calls_per_step))
 
     def _dispatch_idle_seconds(self) -> float:
@@ -1874,10 +1873,7 @@ class Executor:
         output = ""  # Still collect for Layer 1 final report
         budget = _ActStreamBudget(
             max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave(),
-            max_tool_calls_per_step=max_tool_calls_for_step(
-                step,
-                default=self._max_tool_calls_per_step(),
-            ),
+            max_tool_calls_per_step=self._max_tool_calls_per_step(),
         )
         # Init tool_call_args_registry directly (semaphore removed, registry preserved)
         init_tool_call_args_registry()
@@ -1910,9 +1906,17 @@ class Executor:
             from soothe.sloop.utils.config_keys import (
                 SOOTHE_DECOMPOSE_STEP_ID_KEY,
                 SOOTHE_EVAL_STEP_ID_KEY,
+                SOOTHE_MAX_BRANCH_ROOT_KEY,
             )
 
             configurable[SOOTHE_DECOMPOSE_STEP_ID_KEY] = step.id
+            if self._config is not None:
+                try:
+                    configurable[SOOTHE_MAX_BRANCH_ROOT_KEY] = int(
+                        self._config.agent.loop.decompose.max_branch_root
+                    )
+                except (AttributeError, TypeError, ValueError):
+                    pass
             if self._interaction_mode:
                 from soothe.sloop.utils.config_keys import SOOTHE_INTERACTION_MODE_KEY
 

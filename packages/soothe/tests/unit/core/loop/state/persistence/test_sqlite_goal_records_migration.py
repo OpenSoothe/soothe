@@ -58,7 +58,7 @@ def test_migrate_goal_records_drops_legacy_columns(tmp_path: Path) -> None:
 
     assert "goal_text" in _legacy_goal_records_columns(db_path)
 
-    SQLitePersistenceBackend._ensure_loop_columns_on_path(db_path)
+    SQLitePersistenceBackend.initialize_database_sync(db_path)
 
     columns = _legacy_goal_records_columns(db_path)
     assert "goal_text" not in columns

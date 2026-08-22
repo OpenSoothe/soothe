@@ -153,7 +153,20 @@ def plan_commit_from_proposals(
                 continue
         cap = _branch_cap(parent_id, dag, config)
         if len(subtasks) > cap:
-            rejections.append(ReconcileRejection(parent_id, "branch_cap_exceeded"))
+            # RFC-904: Over-cap → reject proposal (no silent truncate).
+            # The LLM must group work into fewer, broader subtasks.
+            logger.info(
+                "Decompose rejected: parent=%s subtasks=%d cap=%d (excess rejected, not truncated)",
+                parent_id,
+                len(subtasks),
+                cap,
+            )
+            rejections.append(
+                ReconcileRejection(
+                    parent_id,
+                    f"branch_cap_exceeded:{len(subtasks)}>{cap}",
+                )
+            )
             continue
         accepted.append((parent_id, subtasks))
 

@@ -1,15 +1,27 @@
 <DECOMPOSE_TASK_TOOL>
 First decide: can this EXECUTION TASK finish in this thread, or must it split?
 
-Call decompose_task when the task's complexity is complex (anything
-above simple), or when the work is splittable in a *schedulable* sense:
-multiple deliverables/phases, parallel workstreams, hard dependencies, or
-independent failure/retry per subtask. Propose child tasks for later threads;
-this call is TERMINAL for this thread (children run separately afterward).
+Default to FINISHING in this thread. Most tasks can be completed here
+with tools. Call decompose_task only when the work is genuinely splittable
+in a *schedulable* sense: multiple deliverables that benefit from parallel
+execution, independent retry per subtask, or hard ordering dependencies
+between phases.
+
+Do NOT call decompose_task just because the task is classified complex
+or seems large. A single thread with good tool usage is usually more
+efficient than spawning child threads.
 
 Do NOT call when the task is simple or minimal: finish one clear deliverable
 here with tools.
 Do NOT use as a personal checklist — use write_todos for that.
+
+## Subtask count limit
+
+There is a hard cap on the number of child subtasks per call (shown in the
+system prompt as "decompose_task subtask limit"). Stay at or under this cap.
+If the work needs more subtasks than the cap allows, group related items into
+fewer broader subtasks. Proposing more than the cap causes the entire
+proposal to be rejected, cancelling all subtasks.
 
 Args: task, subtasks[{description, full_description, expected_output,
 execution_hint, depends_on_local, task_complexity}]. Dependencies among the proposed

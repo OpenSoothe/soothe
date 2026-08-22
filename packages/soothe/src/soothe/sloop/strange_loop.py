@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_nano.utils.text_preview import log_preview
 
-from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
+from soothe.config.constants import DEFAULT_MAX_ITERATIONS
 from soothe.sloop.intention.models import (
     build_loop_routing_classification,
     normalize_response_language,
@@ -121,7 +121,7 @@ class StrangeLoop:
         self,
         goal: str,
         thread_id: str,
-        max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
+        max_iterations: int = DEFAULT_MAX_ITERATIONS,
     ) -> PlanResult:
         """Run Plan → Execute loop for goal execution.
 
@@ -153,7 +153,7 @@ class StrangeLoop:
         goal: str,
         thread_id: str,
         workspace: str | None = None,
-        max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
+        max_iterations: int = DEFAULT_MAX_ITERATIONS,
         loop_id: str | None = None,  # explicit loop_id parameter
         intent: Any | None = None,  # Intent classification
         routing_classification: Any | None = None,  # , RoutingClassification

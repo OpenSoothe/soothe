@@ -3,6 +3,13 @@
 > Implementation guide for [RFC-904](../specs/RFC-904-sloop-recursive-decomposition.md).
 > Status: **In progress** (P0–P3 done; P4 B-lazy + LLM reconcile next).
 > Design draft (archived): `docs/archive/drafts/2026-08-19-sloop-recursive-decomposition-design.md`
+>
+> **Revision (2026-08-22):** The forced `DECOMPOSE_FIRST_HINT` directive has been
+> removed. Steps classified `complex` no longer get a "decompose before working"
+> instruction — they default to finishing in-thread, splitting only with concrete
+> evidence. Over-cap proposals are now rejected (not silently truncated) per
+> RFC-904 §Branch caps. Budgets tightened: `max_depth` 5→3, `max_steps` 50→30,
+> `max_branch_root` code default 10→5.
 
 ---
 

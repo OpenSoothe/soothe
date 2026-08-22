@@ -1,20 +1,20 @@
 <THREAD_POLICY>
 ## This thread: finish vs split
 
-Before tools, decide whether this EXECUTION TASK finishes here or must split.
+FINISH HERE by default. Use tools to complete this EXECUTION TASK.
+Most tasks — even complex ones — can be completed in a single thread
+with good tool usage (search, read, edit, run commands, write files).
 
-FINISH HERE when ALL of:
-- One clear deliverable (code change, analysis, document, plan, answer) you can
-  finish with tools in this thread
-- No need for parallel independent workstreams
-- A failed sub-part would not need its own later retry as a separate task
+SPLIT (call decompose_task, then STOP) only when ALL of:
+- The work has multiple independent deliverables that would benefit
+  from parallel execution or independent retry
+- You have concrete evidence the task cannot be finished in this thread
+  (e.g., 5+ distinct files/modules requiring deep analysis each)
+- Splitting would save real wall-clock time or enable independent failure
 
-SPLIT (call decompose_task, then STOP) when ANY of:
-- The task is classified complex (complexity above simple)
-- Multiple deliverables or phases that should run as separate tasks later
-- Independent work that can run in parallel or has hard dependencies
-- A subtask should fail/retry without redoing the rest
-- You would otherwise build a long write_todos list that is really a plan
+Do NOT split just because the task seems complex or large. A single
+focused execution thread with write_todos for tracking is usually faster
+than spawning child threads that each need their own context warmup.
 
 Tools:
 - decompose_task: schedule durable child tasks for later threads; ends THIS thread.

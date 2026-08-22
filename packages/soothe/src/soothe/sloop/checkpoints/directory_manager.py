@@ -53,16 +53,6 @@ class PersistenceDirectoryManager:
         return Path(SOOTHE_HOME).expanduser() / THREADS_DATA_DIR / thread_id
 
     @staticmethod
-    def get_thread_artifacts_dir(thread_id: str) -> Path:
-        """Get CoreAgent thread artifacts directory.
-
-        Returns:
-            Path to thread's artifacts/ directory.
-        """
-        # No need to import SOOTHE_HOME here - uses get_thread_directory
-        return PersistenceDirectoryManager.get_thread_directory(thread_id) / "artifacts"
-
-    @staticmethod
     def get_loops_directory() -> Path:
         """Get StrangeLoop loops base directory path.
 
@@ -99,45 +89,6 @@ class PersistenceDirectoryManager:
         return Path(SOOTHE_HOME).expanduser() / ARCHIVED_LOOPS_DATA_DIR
 
     @staticmethod
-    def get_goal_directory(loop_id: str, goal_id: str) -> Path:
-        """Get StrangeLoop goal directory path.
-
-        Args:
-            loop_id: Loop identifier.
-            goal_id: Goal identifier.
-
-        Returns:
-            Path to goal's directory: data/loops/{loop_id}/goals/{goal_id}/
-        """
-        from soothe.config import SOOTHE_HOME
-
-        return Path(SOOTHE_HOME).expanduser() / LOOPS_DATA_DIR / loop_id / "goals" / goal_id
-
-    @staticmethod
-    def get_step_directory(loop_id: str, goal_id: str, step_id: str) -> Path:
-        """Get StrangeLoop step directory path.
-
-        Args:
-            loop_id: Loop identifier.
-            goal_id: Goal identifier.
-            step_id: Step identifier.
-
-        Returns:
-            Path to step's directory: data/loops/{loop_id}/goals/{goal_id}/steps/{step_id}/
-        """
-        from soothe.config import SOOTHE_HOME
-
-        return (
-            Path(SOOTHE_HOME).expanduser()
-            / LOOPS_DATA_DIR
-            / loop_id
-            / "goals"
-            / goal_id
-            / "steps"
-            / step_id
-        )
-
-    @staticmethod
     def get_loop_checkpoint_path() -> Path:
         """Get StrangeLoop global checkpoint database path (unified SQLite).
 
@@ -148,16 +99,6 @@ class PersistenceDirectoryManager:
         from soothe_sdk.paths import resolve_checkpoints_db_path
 
         return resolve_checkpoints_db_path()
-
-    @staticmethod
-    def get_loop_working_memory_dir(loop_id: str) -> Path:
-        """Get StrangeLoop working memory spill directory.
-
-        Returns:
-            Path to loop's working_memory/ directory.
-        """
-        # No need to import SOOTHE_HOME here - uses get_loop_directory
-        return PersistenceDirectoryManager.get_loop_directory(loop_id) / "working_memory"
 
 
 __all__ = [

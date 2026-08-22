@@ -49,6 +49,7 @@ def test_plan_commit_assigns_ids_and_marks_parents() -> None:
 
 
 def test_branch_cap_rejects_root_overflow() -> None:
+    """RFC-904: Over-cap → reject proposal, not silent truncate."""
     dag = StepDAG(nodes={"ROOT": StepNode(id="ROOT", description="root", status="active")})
     proposals = [
         DecompositionProposal(
@@ -61,10 +62,13 @@ def test_branch_cap_rejects_root_overflow() -> None:
     )
     assert not nodes
     assert not parents
-    assert rejected[0].reason == "branch_cap_exceeded"
+    assert len(rejected) == 1
+    assert rejected[0].parent_step_id == "ROOT"
+    assert rejected[0].reason.startswith("branch_cap_exceeded")
 
 
-def test_inner_branch_cap() -> None:
+def test_inner_branch_cap_rejects() -> None:
+    """RFC-904: Over-cap inner → reject proposal, not silent truncate."""
     dag = StepDAG(
         nodes={
             "ROOT": StepNode(id="ROOT", description="root", status="decomposed"),
@@ -82,11 +86,14 @@ def test_inner_branch_cap() -> None:
             subtasks=[ProposedSubtask(description=f"c{i}") for i in range(4)],
         )
     ]
-    nodes, _, rejected, _ = plan_commit_from_proposals(
+    nodes, parents, rejected, _ = plan_commit_from_proposals(
         dag, proposals, config=_cfg(max_branch_inner=3)
     )
     assert not nodes
-    assert rejected[0].reason == "branch_cap_exceeded"
+    assert not parents
+    assert len(rejected) == 1
+    assert rejected[0].parent_step_id == "CHILD"
+    assert rejected[0].reason.startswith("branch_cap_exceeded")
 
 
 def test_max_depth_reject() -> None:

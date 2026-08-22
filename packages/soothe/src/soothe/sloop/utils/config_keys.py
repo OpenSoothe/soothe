@@ -17,6 +17,10 @@ SOOTHE_EVAL_STEP_ID_KEY = "soothe_eval_step_id"
 # Interaction mode propagated to CoreAgent step threads ("agent" | "ask" | "plan").
 SOOTHE_INTERACTION_MODE_KEY = "soothe_interaction_mode"
 
+# Max children per root-level decompose_task proposal (from DecomposeLoopConfig).
+# Propagated so middleware can inject the live limit into the decompose prompt.
+SOOTHE_MAX_BRANCH_ROOT_KEY = "soothe_max_branch_root"
+
 
 def positive_config_int(value: Any, default: int, *, minimum: int = 1) -> int:
     """Coerce a config budget to an int at or above ``minimum``.
@@ -33,5 +37,6 @@ __all__ = [
     "SOOTHE_DECOMPOSE_STEP_ID_KEY",
     "SOOTHE_EVAL_STEP_ID_KEY",
     "SOOTHE_INTERACTION_MODE_KEY",
+    "SOOTHE_MAX_BRANCH_ROOT_KEY",
     "positive_config_int",
 ]

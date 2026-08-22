@@ -27,7 +27,6 @@ below. The base ``SootheRunner`` is autopilot-agnostic.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -94,8 +93,6 @@ class SootheRunner(
         """
         import time
 
-        from soothe_sdk.protocols.concurrency import ConcurrencyPolicy
-
         from soothe.coreagent import create_soothe_agent
         from soothe.coreagent.lazy import LazyCoreAgent
         from soothe.runner.resolver import (
@@ -105,8 +102,6 @@ class SootheRunner(
             resolve_policy,
         )
         from soothe.sloop.intention import IntentClassifier
-
-        from ._concurrency import ConcurrencyController
 
         init_start = time.perf_counter()
 
@@ -132,7 +127,6 @@ class SootheRunner(
             )
             fast_model = None
 
-        self._fast_model: Any | None = fast_model
         if fast_model:
             self._intent_classifier = IntentClassifier(
                 model=fast_model,
@@ -209,17 +203,6 @@ class SootheRunner(
 
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
-        _concurrency_cfg = self._config.agent.loop.concurrency
-        # Goal fan-out is Autopilot-owned (agent.autopilot.max_parallel_goals).
-        self._concurrency = ConcurrencyController(
-            ConcurrencyPolicy(
-                max_parallel_steps=_concurrency_cfg.max_parallel_steps,
-                max_parallel_subagents=_concurrency_cfg.max_parallel_subagents,
-                global_max_llm_calls=_concurrency_cfg.global_max_llm_calls,
-                step_parallelism=_concurrency_cfg.step_parallelism,
-            )
-        )
-        self._context_restore_lock = asyncio.Lock()
         # Client-visible loop id for the active ``astream`` (daemon loop scope / logging).
         self._client_loop_id_for_stream: str | None = None
 
@@ -772,7 +755,7 @@ class SootheRunner(
 
     async def _run_autopilot_job(
         self,
-        job: Any,
+        _job: Any,
         *,
         thread_id: str | None,
         workspace: str,

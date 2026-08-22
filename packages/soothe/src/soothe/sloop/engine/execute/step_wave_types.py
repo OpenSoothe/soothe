@@ -16,8 +16,6 @@ from langchain_core.messages import BaseMessage
 from soothe.config.constants import DEFAULT_MAX_TOOL_CALLS_PER_STEP
 from soothe.sloop.state.schemas import StepAction, StepExecutionRecord
 
-_DEFAULT_MAX_TOOL_CALLS_PER_STEP = DEFAULT_MAX_TOOL_CALLS_PER_STEP
-
 # ``task`` tool return text cap per invocation before joining (delegate finals).
 _DELEGATE_FINAL_PER_TASK_CAP = 80_000
 
@@ -54,7 +52,7 @@ class _ActStreamBudget:
     """Mutable counters for a single CoreAgent stream."""
 
     max_subagent_tasks_per_wave: int = 0
-    max_tool_calls_per_step: int = _DEFAULT_MAX_TOOL_CALLS_PER_STEP
+    max_tool_calls_per_step: int = DEFAULT_MAX_TOOL_CALLS_PER_STEP
     subagent_task_completions: int = 0
     tool_call_count: int = 0
     hit_subagent_cap: bool = False
@@ -196,16 +194,6 @@ def _append_parallel_stream_event(
         events.append(event)
 
 
-def max_tool_calls_for_step(
-    step: StepAction,
-    *,
-    default: int = _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
-) -> int:
-    """Return per-step tool budget."""
-    _ = step
-    return default
-
-
 def wave_gather_slot(gather_results: list[Any], index: int) -> Any:
     """Return one parallel-wave result slot, or ``None`` when missing."""
     if index >= len(gather_results):
@@ -225,7 +213,6 @@ __all__ = [
     "_StreamCollectChunk",
     "_first_tool_error_message",
     "all_tool_outcomes_failed",
-    "_DEFAULT_MAX_TOOL_CALLS_PER_STEP",
     "_PendingInterruptFetch",
     "_ParallelStepDone",
     "_ParallelLiveQueueItem",
@@ -235,7 +222,6 @@ __all__ = [
     "StepWaveQueued",
     "StepWaveStart",
     "_append_parallel_stream_event",
-    "max_tool_calls_for_step",
     "wave_gather_failed",
     "wave_gather_slot",
 ]

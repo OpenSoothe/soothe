@@ -13,7 +13,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, BeforeValidator, Field, PrivateAttr, model_validator
 from soothe_sdk.protocols.planner import planner_outcome_text_preview
 
-from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
+from soothe.config.constants import DEFAULT_MAX_ITERATIONS
 from soothe.goal_contracts import GoalEffect
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.sloop.utils.subagent_catalog import (  # noqa: F401
@@ -739,7 +739,7 @@ class LoopState(BaseModel):
     thread_id: str
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
     iteration: int = 0
-    max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
+    max_iterations: int = DEFAULT_MAX_ITERATIONS
 
     current_decision: AgentDecision | None = None
     plan_id: str | None = None

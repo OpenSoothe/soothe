@@ -12,8 +12,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, Field
-
 from soothe.sloop.checkpoints.directory_manager import (
     PersistenceDirectoryManager,
 )
@@ -22,31 +20,6 @@ if TYPE_CHECKING:
     from soothe.sloop.state.checkpoint import StrangeLoopCheckpoint
 
 logger = logging.getLogger(__name__)
-
-
-class GoalSummary(BaseModel):
-    """Summary of a goal for archive index."""
-
-    goal_id: str
-    goal_text: str = Field(..., max_length=200)
-    final_report_preview: str = Field(default="", max_length=500)
-
-
-class ArchiveMetadata(BaseModel):
-    """Lightweight archive index entry."""
-
-    loop_id: str
-    archived_at: datetime
-    reason: Literal["user_clear", "finalized", "expired"]
-
-    # Summary for /recall search
-    goal_count: int
-    goals_completed: int
-    total_tokens_used: int
-    total_duration_ms: int
-
-    # Goal summaries for semantic search
-    goal_summaries: list[GoalSummary] = Field(default_factory=list)
 
 
 class ArchiveBackend:
@@ -118,60 +91,3 @@ class ArchiveBackend:
 
         # Return relative path
         return str(checkpoint_file.relative_to(self._base_path.parent.parent))
-
-    async def list_archived_loops(
-        self,
-        *,
-        limit: int = 50,
-        after: datetime | None = None,
-    ) -> list[ArchiveMetadata]:
-        """List archived loops for /recall queries.
-
-        Args:
-            limit: Maximum number of archives to return
-            after: Only return archives after this datetime
-
-        Returns:
-            List of archive metadata, sorted by archived_at descending
-        """
-        archives: list[ArchiveMetadata] = []
-
-        def _load_archives() -> list[ArchiveMetadata]:
-            loaded: list[ArchiveMetadata] = []
-            if not self._base_path.exists():
-                return loaded
-
-            for loop_dir in self._base_path.iterdir():
-                if not loop_dir.is_dir():
-                    continue
-
-                metadata_file = loop_dir / "metadata.json"
-                if not metadata_file.exists():
-                    continue
-
-                try:
-                    with open(metadata_file, encoding="utf-8") as f:
-                        data = json.load(f)
-                    meta = ArchiveMetadata(**data)
-
-                    # Filter by date if specified
-                    if after is not None and meta.archived_at <= after:
-                        continue
-
-                    loaded.append(meta)
-                except Exception as e:
-                    logger.warning(
-                        "Failed to load metadata from %s: %s",
-                        metadata_file,
-                        e,
-                    )
-                    continue
-
-            # Sort by archived_at descending
-            loaded.sort(key=lambda m: m.archived_at, reverse=True)
-            return loaded[:limit]
-
-        import asyncio
-
-        archives = await asyncio.to_thread(_load_archives)
-        return archives

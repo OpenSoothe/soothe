@@ -14,7 +14,7 @@ from soothe_nano.utils.text_preview import preview_first
 from soothe_sdk.core.subagent_wire import is_curated_subagent_wire_event_type
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
-from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
+from soothe.config.constants import DEFAULT_MAX_ITERATIONS
 from soothe.events import (
     ERROR,
     IntentClassifiedEvent,  #
@@ -438,7 +438,7 @@ class StrangeLoopMixin:
         *,
         thread_id: str | None = None,
         workspace: str | None = None,
-        max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
+        max_iterations: int = DEFAULT_MAX_ITERATIONS,
         preferred_subagent: str | None = None,
         intake_scope: str | None = None,
         clarification_mode: str | None = None,

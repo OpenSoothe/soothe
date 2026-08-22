@@ -6,14 +6,11 @@ Functions extracted from local_runner.py for reuse across runner implementations
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from dataclasses import replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
-    from soothe.protocols.runner import LoopRunRequest
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +32,6 @@ def spawn_safe_config(config: SootheConfig | None) -> SootheConfig:
 
     base = config if config is not None else SootheConfig()
     return SootheConfig.model_validate(base.model_dump(mode="json"))
-
-
-def spawn_safe_request(request: LoopRunRequest) -> LoopRunRequest:
-    """Ensure ``model_params`` contains only JSON-round-trippable values."""
-    if not request.model_params:
-        return request
-    safe_params = json.loads(json.dumps(request.model_params, default=str))
-    return replace(request, model_params=safe_params)
 
 
 def cancel_orphan_loop_tasks(
@@ -92,4 +81,4 @@ def cancel_orphan_loop_tasks(
         )
 
 
-__all__ = ["cancel_orphan_loop_tasks", "spawn_safe_config", "spawn_safe_request"]
+__all__ = ["cancel_orphan_loop_tasks", "spawn_safe_config"]

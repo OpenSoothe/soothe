@@ -27,7 +27,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
+from soothe.config.constants import DEFAULT_MAX_ITERATIONS
 from soothe.events import custom_event
 from soothe.goal_contracts import (
     Finding,
@@ -193,9 +193,7 @@ class AutopilotSootheRunner(SootheRunner):
                 goal=goal_text,
                 thread_id=tid,
                 workspace=workspace,
-                max_iterations=max_iterations
-                if max_iterations
-                else DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
+                max_iterations=max_iterations if max_iterations else DEFAULT_MAX_ITERATIONS,
                 loop_id=tid,
                 intent=preclassified_intent,
                 routing_classification=routing_classification,

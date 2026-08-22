@@ -36,9 +36,6 @@ DEFAULT_MAX_ITERATIONS = 99
 # (DEFAULT_MAX_ITERATIONS) and consecutive rate-limit gate still bound runaway.
 DEFAULT_MAX_TOOL_CALLS_PER_STEP = 999
 
-# Back-compat alias
-DEFAULT_STRANGE_LOOP_MAX_ITERATIONS = DEFAULT_MAX_ITERATIONS
-
 # ============================================================================
 # Prompt / Render Character-Cap Registry
 # ============================================================================

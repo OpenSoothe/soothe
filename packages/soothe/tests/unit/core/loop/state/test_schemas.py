@@ -18,13 +18,7 @@ from soothe.sloop.state.schemas import (
     StepAction,
     StepExecutionRecord,
     allocate_plan_id,
-    assign_plan_step_ids,
     composite_step_id,
-    max_goal_step_numeric_suffix,
-    next_goal_local_step_id_start,
-    plan_generate_steps_to_step_actions,
-    prepare_decision_for_plan_scoping,
-    renumber_decision_local_step_ids_for_goal_continuation,
     resolve_wire_subagent,
     trailing_numeric_suffix_from_step_id,
 )
@@ -161,95 +155,6 @@ class TestAgentDecision:
         assert composite_step_id("KFA-001", "KFA") == "KFA-001"
         assert composite_step_id("001", "KFA") == "KFA-001"
 
-    def test_assign_plan_step_ids_remaps_dependencies(self) -> None:
-        """preserve model suffix; in-plan dependency rewrite."""
-
-        d0 = StepAction(
-            id="001",
-            description="First",
-            expected_output="o",
-        )
-        d1 = StepAction(
-            id="002",
-            description="Second",
-            expected_output="o",
-            dependencies=["001"],
-        )
-        d2 = StepAction(
-            id="003",
-            description="Third",
-            expected_output="o",
-            dependencies=["002", "step_001"],
-        )
-        decision = AgentDecision(
-            type="execute_steps",
-            steps=[d0, d1, d2],
-            execution_mode="parallel",
-            reasoning="t",
-        )
-        out = assign_plan_step_ids(decision, plan_id="KFA")
-        assert [s.id for s in out.steps] == ["KFA-001", "KFA-002", "KFA-003"]
-        assert out.steps[0].dependencies is None
-        assert out.steps[1].dependencies == ["KFA-001"]
-        assert out.steps[2].dependencies == ["KFA-002", "step_001"]
-
-    def test_assign_plan_step_ids_digit_alias_dependency_ig379(self) -> None:
-        """Numeric dependency string maps to the unique digit-only step id."""
-        d0 = StepAction(id="01", description="First", expected_output="o")
-        d1 = StepAction(
-            id="02",
-            description="Second",
-            expected_output="o",
-            dependencies=["1"],
-        )
-        decision = AgentDecision(
-            type="execute_steps",
-            steps=[d0, d1],
-            execution_mode="dependency",
-            reasoning="t",
-        )
-        out = assign_plan_step_ids(decision, plan_id="ZZZ")
-        assert out.steps[0].id == "ZZZ-01"
-        assert out.steps[1].dependencies == ["ZZZ-01"]
-
-    def test_assign_plan_step_ids_ambiguous_digit_dependency_untouched(self, caplog) -> None:
-        """Two digit-only ids with the same int value: do not guess; leave dep unchanged."""
-        import logging
-
-        from soothe.sloop.state import schemas as schemas_mod
-
-        d0 = StepAction(id="01", description="a", expected_output="o")
-        d1 = StepAction(id="001", description="b", expected_output="o")
-        d2 = StepAction(
-            id="03",
-            description="c",
-            expected_output="o",
-            dependencies=["1"],
-        )
-        decision = AgentDecision(
-            type="execute_steps",
-            steps=[d0, d1, d2],
-            execution_mode="dependency",
-            reasoning="t",
-        )
-        with caplog.at_level(logging.WARNING, logger=schemas_mod.logger.name):
-            out = assign_plan_step_ids(decision, plan_id="ZZZ")
-        assert out.steps[2].dependencies == ["1"]
-        assert any("Ambiguous numeric dependency" in r.message for r in caplog.records)
-
-    def test_assign_plan_step_ids_duplicate_composite_raises(self) -> None:
-        """Model id 001 and already-scoped KFA-001 collapse under the same plan."""
-        d0 = StepAction(id="001", description="a", expected_output="o")
-        d1 = StepAction(id="KFA-001", description="b", expected_output="o")
-        decision = AgentDecision(
-            type="execute_steps",
-            steps=[d0, d1],
-            execution_mode="parallel",
-            reasoning="t",
-        )
-        with pytest.raises(ValueError, match="duplicate composite"):
-            assign_plan_step_ids(decision, plan_id="KFA")
-
     def test_allocate_plan_id_returns_random_uppercase_letters(self) -> None:
         """Plan id is exactly three uppercase A-Z letters."""
         alphabet = schemas_mod.PLAN_ID_ALPHABET
@@ -258,84 +163,6 @@ class TestAgentDecision:
         assert pid == "KFA"
         assert len(pid) == schemas_mod.PLAN_ID_LENGTH
         assert all(c in alphabet for c in pid)
-
-    def test_prepare_decision_for_plan_scoping_strips_and_dedupes(self) -> None:
-        """Prior scoped ids are normalized so a new plan can scope safely."""
-        decision = AgentDecision(
-            type="execute_steps",
-            steps=[
-                StepAction(id="001", description="a", expected_output="o"),
-                StepAction(id="KFA-001", description="b", expected_output="o"),
-                StepAction(
-                    id="XYZ-002",
-                    description="prior scoped",
-                    expected_output="o",
-                ),
-                StepAction(
-                    id="003",
-                    description="c",
-                    expected_output="o",
-                    dependencies=["KFA-001"],
-                ),
-            ],
-            execution_mode="dependency",
-            reasoning="r",
-        )
-        prepared = prepare_decision_for_plan_scoping(decision, known_plan_ids={"KFA", "XYZ"})
-        assert [s.id for s in prepared.steps] == ["001", "001_2", "002", "003"]
-        assert prepared.steps[3].dependencies == ["001_2"]
-        pid = "ZZZ"
-        scoped = assign_plan_step_ids(prepared, plan_id=pid)
-        assert scoped.steps[0].id == f"{pid}-001"
-        assert scoped.steps[1].id == f"{pid}-001_2"
-        assert scoped.steps[2].id == f"{pid}-002"
-
-    def test_prepare_decision_preserves_model_ask_step_id(self) -> None:
-        """Planner ids like ASK-01 must not be mistaken for plan prefixes."""
-        decision = AgentDecision(
-            type="execute_steps",
-            steps=[
-                StepAction(
-                    id="ASK-01",
-                    description="ask user",
-                    kind="ask_user",
-                    questions=["Which format?"],
-                )
-            ],
-            execution_mode="parallel",
-            reasoning="r",
-        )
-        prepared = prepare_decision_for_plan_scoping(decision)
-        assert prepared.steps[0].id == "ASK-01"
-
-    def test_replan_scoping_prefixes_new_steps(self) -> None:
-        """New plan scope prefixes step ids within the loop."""
-
-        sr = StepExecutionRecord(
-            step_id="1",
-            success=True,
-            outcome={"type": "generic"},
-            duration_ms=1,
-            thread_id="t",
-        )
-        state = LoopState(goal="g", thread_id="t", step_results=[sr])
-        new_step = StepAction(id="more", description="More work", expected_output="o")
-        decision = AgentDecision(
-            type="execute_steps",
-            steps=[new_step],
-            execution_mode="parallel",
-            reasoning="r",
-        )
-        reserved = set(state.dependency_completion_ids())
-        plan_id = "ZZZ"
-        normalized = assign_plan_step_ids(
-            prepare_decision_for_plan_scoping(decision, known_plan_ids=state.known_plan_ids()),
-            plan_id=plan_id,
-        )
-        ready = normalized.get_ready_steps(reserved)
-        assert len(ready) == 1
-        assert ready[0].id == "ZZZ-more"
-        assert ready[0].id not in reserved
 
 
 class TestPlanResult:
@@ -479,22 +306,6 @@ class TestPlanGeneration:
         agent_em = AgentDecision.model_json_schema()["properties"]["execution_mode"]["enum"]
         assert set(agent_em) == {"parallel", "dependency"}
 
-    def test_plan_generate_steps_convert_to_step_actions(self) -> None:
-        steps = [
-            PlanGenerateStep(
-                id="01",
-                description="Draft migration plan",
-                expected_output="List",
-                dependencies=None,
-                execution_hint="subagent",
-                subagent="planner",
-            )
-        ]
-        out = plan_generate_steps_to_step_actions(steps)
-        assert len(out) == 1
-        assert out[0].description == "Draft migration plan"
-        assert "evidence_refs" not in StepAction.model_fields
-
     def test_step_action_has_no_wire_subagent_field(self) -> None:
         """Steps carry no resolved executor wiring; execute chooses its own tools."""
         assert "wire_subagent" not in StepAction.model_fields
@@ -566,14 +377,6 @@ class TestPlanGeneration:
         assert "plan_action" not in props
         assert "next_action" not in props
         assert "reasoning" not in props
-
-    def test_derive_plan_action(self) -> None:
-        from soothe.sloop.state.schemas import derive_plan_action
-
-        assert derive_plan_action(assessment_status="continue", has_remaining_steps=True) == "keep"
-        assert derive_plan_action(assessment_status="continue", has_remaining_steps=False) == "new"
-        assert derive_plan_action(assessment_status="replan", has_remaining_steps=True) == "new"
-        assert derive_plan_action(assessment_status="done", has_remaining_steps=True) == "new"
 
 
 class TestStepResult:
@@ -795,59 +598,3 @@ class TestGoalContinuousStepIdsIg388:
         assert trailing_numeric_suffix_from_step_id("ZZ-001") == 1
         assert trailing_numeric_suffix_from_step_id("step_004") == 4
         assert trailing_numeric_suffix_from_step_id("no-digits-here") is None
-
-    def test_next_start_from_step_results_and_current_decision(self) -> None:
-        state = LoopState(goal="g", thread_id="t1")
-        assert next_goal_local_step_id_start(state) == 1
-        state.add_step_result(
-            StepExecutionRecord(step_id="ABC-02", success=True, duration_ms=1, thread_id="t1")
-        )
-        assert max_goal_step_numeric_suffix(state) == 2
-        assert next_goal_local_step_id_start(state) == 3
-        state.current_decision = AgentDecision(
-            type="execute_steps",
-            steps=[
-                StepAction(id="ABC-05", description="pending", expected_output="x"),
-            ],
-            execution_mode="parallel",
-            reasoning="",
-        )
-        assert next_goal_local_step_id_start(state) == 6
-
-    def test_renumber_new_plan_after_prior_suffixes(self) -> None:
-        state = LoopState(goal="g", thread_id="t1")
-        state.add_step_result(
-            StepExecutionRecord(step_id="X-02", success=True, duration_ms=1, thread_id="t1")
-        )
-        d0 = StepAction(id="01", description="a", expected_output="o")
-        d1 = StepAction(id="02", description="b", expected_output="o", dependencies=["01"])
-        decision = AgentDecision(
-            type="execute_steps",
-            steps=[d0, d1],
-            execution_mode="dependency",
-            reasoning="",
-        )
-        out = renumber_decision_local_step_ids_for_goal_continuation(decision, state)
-        assert [s.id for s in out.steps] == ["03", "04"]
-        assert out.steps[1].dependencies == ["03"]
-
-    def test_renumber_preserves_cross_wave_dependency_strings(self) -> None:
-        state = LoopState(goal="g", thread_id="t1")
-        state.add_step_result(
-            StepExecutionRecord(step_id="PRIOR-01", success=True, duration_ms=1, thread_id="t1")
-        )
-        d0 = StepAction(
-            id="01",
-            description="a",
-            expected_output="o",
-            dependencies=["PRIOR-01"],
-        )
-        decision = AgentDecision(
-            type="execute_steps",
-            steps=[d0],
-            execution_mode="dependency",
-            reasoning="",
-        )
-        out = renumber_decision_local_step_ids_for_goal_continuation(decision, state)
-        assert out.steps[0].id == "02"
-        assert out.steps[0].dependencies == ["PRIOR-01"]

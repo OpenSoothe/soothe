@@ -25,7 +25,8 @@ def test_thread_policy_system_addendum_avoids_host_jargon() -> None:
 
 def test_decompose_tool_description_leads_with_decision() -> None:
     assert "First decide" in DECOMPOSE_TASK_TOOL_DESCRIPTION
-    assert "TERMINAL" in DECOMPOSE_TASK_TOOL_DESCRIPTION
+    assert "FINISHING in this thread" in DECOMPOSE_TASK_TOOL_DESCRIPTION
+    assert "Do NOT call decompose_task just because" in DECOMPOSE_TASK_TOOL_DESCRIPTION
     assert "StepDAG" not in DECOMPOSE_TASK_TOOL_DESCRIPTION
 
 
@@ -65,13 +66,18 @@ def test_hints_include_child_prefer_complete() -> None:
     assert "Prefer one broad native search" not in (body.instructions or "")
 
 
-def test_root_complex_task_prompts_decompose_first() -> None:
+def test_root_complex_task_does_not_force_decompose() -> None:
+    """Complex root steps must NOT get a forced decompose-first directive."""
     step = StepAction(description="review arch", is_dag_root=True)
     body = build_dependent_execution_hints(
         step, has_predecessor_evidence=False, expected_output="done", task_complexity="complex"
     )
-    assert "multi-step task" in (body.instructions or "")
-    assert "call decompose_task" in (body.instructions or "")
+    instructions = body.instructions or ""
+    # The forced "Before doing any work, call decompose_task" must NOT appear.
+    assert "Before doing any work" not in instructions
+    assert "multi-step task" not in instructions
+    # Root hint still mentions decompose_task as an option, not a mandate.
+    assert "full goal" in instructions
 
 
 def test_root_simple_task_does_not_force_decompose() -> None:
@@ -83,14 +89,16 @@ def test_root_simple_task_does_not_force_decompose() -> None:
     assert "full goal" in (body.instructions or "")
 
 
-def test_child_complex_task_prompts_decompose_first() -> None:
-    """Complex child steps now also get the decompose-first directive."""
+def test_child_complex_task_does_not_force_decompose() -> None:
+    """Complex child steps must NOT get a forced decompose-first directive."""
     step = StepAction(description="child work", is_dag_root=False)
     body = build_dependent_execution_hints(
         step, has_predecessor_evidence=False, expected_output="done", task_complexity="complex"
     )
-    assert "multi-step task" in (body.instructions or "")
-    assert "call decompose_task" in (body.instructions or "")
+    instructions = body.instructions or ""
+    assert "Before doing any work" not in instructions
+    assert "multi-step task" not in instructions
+    assert "Prefer finish" in instructions
 
 
 def test_child_simple_task_does_not_force_decompose() -> None:
