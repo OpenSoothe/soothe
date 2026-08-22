@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.30] - 2026-08-22
+
+### Added
+- Introduce `interaction_mode` (`ask` / `plan`) prompt addenda and wire the mode through the executor, replacing the old planner wired-subagent delegate with a first-class plan-mode review station in the StrangeLoop graph.
+- Plan-mode approve now enqueues a follow-on exec goal (the approved plan) and drops the "More comments" affordance — approve means "execute this plan."
+
+### Fixed
+- Plan-mode approve no longer runs the goal-completion synthesis summary; the approved plan proceeds directly to execution.
+- Strip `None`/`N/A` plan sections so the rendered plan card never shows empty placeholder sections; the TUI submit feedback and badge are now theme-aware.
+- Accept a blank `revision-comments` field on plan-mode review instead of erroring.
+- Swallow planner progress events on orphan SubAgent cards in the TUI.
+- Use the daemon default clarification mode on plan approval and show the submitting spinner before the mode-resolution RPC.
+- Allow `awaiting_clarification` to re-park from `pending`/`active` Context Engine goals idempotently.
+- Persist chitchat Context Engine goal finalization to disk instead of leaving it in-memory.
+
+### Changed
+- Remove dead plan-mode approve graph channels (`approved_plan_markdown` / `approved_plan_path`) and the routing branches that read them; the approve path is driven by `plan_approved_follow_on` + `follow_on_exec` only. The `LoopState` attributes of the same name remain live (used by grounding/dispatch for operator-approved intake plans).
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.29...v0.10.30
+
 ## [v0.10.29] - 2026-08-21
 
 ### Fixed
