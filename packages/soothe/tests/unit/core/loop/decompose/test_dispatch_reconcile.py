@@ -279,12 +279,23 @@ async def test_root_eval_minimal_skips_eval_and_finalizes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_root_eval_simple_skips_eval_and_finalizes() -> None:
-    """Simple tasks skip the coverage Eval phase and go directly to finalize,
-    even with a decomposed action tree that would otherwise require Eval."""
+async def test_root_eval_simple_llm_decides_skip(monkeypatch) -> None:
+    """SIMPLE tasks: when the LLM decides no coverage audit is needed, skip
+    Eval and finalize. This replaces the old deterministic SIMPLE skip."""
     from soothe_sdk.intention.models import TaskComplexity
 
+    from soothe.sloop.eval.eval_decision import EvalDecision
     from soothe.sloop.intention.models import IntakeLabel, IntentClassification
+
+    async def _fake_decide(*args, **kwargs):
+        return EvalDecision(should_run_eval=False, reasoning="Goal fully achieved.")
+
+    # The lazy import inside RootEvalNode.process resolves the function at call
+    # time from the eval_decision module, so patch the source module.
+    monkeypatch.setattr(
+        "soothe.sloop.eval.eval_decision.decide_eval_required",
+        _fake_decide,
+    )
 
     ce = ContextEngine()
     goal = await ce.create_goal("do work", loop_id="L1")
@@ -301,12 +312,83 @@ async def test_root_eval_simple_skips_eval_and_finalizes() -> None:
         ],
     )
     ctx = _ctx_with_ce(ce, goal.id)
+    ctx.strange_loop._fast_llm = None  # LLM call is mocked; fast_model not used
     ctx.loop_state.intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         task_complexity=TaskComplexity.SIMPLE,
     )
     result = await RootEvalNode()(ctx, {})
     assert result["root_eval_route"] == "finalize"
+
+
+@pytest.mark.asyncio
+async def test_root_eval_simple_llm_decides_run_eval(monkeypatch) -> None:
+    """SIMPLE tasks: when the LLM decides a coverage audit IS needed, insert
+    an Eval step and route to dispatch."""
+    from soothe_sdk.intention.models import TaskComplexity
+
+    from soothe.sloop.eval.eval_decision import EvalDecision
+    from soothe.sloop.intention.models import IntakeLabel, IntentClassification
+
+    async def _fake_decide(*args, **kwargs):
+        return EvalDecision(should_run_eval=True, reasoning="Worker early-terminated.")
+
+    monkeypatch.setattr(
+        "soothe.sloop.eval.eval_decision.decide_eval_required",
+        _fake_decide,
+    )
+
+    ce = ContextEngine()
+    goal = await ce.create_goal("do work", loop_id="L1")
+    await ce.add_steps(
+        goal.id,
+        [
+            StepNode(id="ROOT", description="root", status="completed"),
+        ],
+    )
+    ctx = _ctx_with_ce(ce, goal.id)
+    ctx.strange_loop._fast_llm = None
+    ctx.loop_state.intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    result = await RootEvalNode()(ctx, {})
+    assert result["root_eval_route"] == "dispatch"
+    refreshed = await ce.get_goal(goal.id)
+    assert refreshed is not None
+    eval_nodes = [step for step in refreshed.steps.nodes.values() if step.kind == "eval"]
+    assert len(eval_nodes) == 1
+    assert eval_nodes[0].status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_root_eval_simple_no_fast_model_fails_safe() -> None:
+    """SIMPLE tasks: when no fast model is available, fail-safe to running
+    Eval (should_run_eval=True) rather than silently skipping."""
+    from soothe_sdk.intention.models import TaskComplexity
+
+    from soothe.sloop.intention.models import IntakeLabel, IntentClassification
+
+    ce = ContextEngine()
+    goal = await ce.create_goal("do work", loop_id="L1")
+    await ce.add_steps(
+        goal.id,
+        [
+            StepNode(id="ROOT", description="root", status="completed"),
+        ],
+    )
+    ctx = _ctx_with_ce(ce, goal.id)
+    ctx.strange_loop._fast_llm = None
+    ctx.loop_state.intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    result = await RootEvalNode()(ctx, {})
+    assert result["root_eval_route"] == "dispatch"
+    refreshed = await ce.get_goal(goal.id)
+    assert refreshed is not None
+    eval_nodes = [step for step in refreshed.steps.nodes.values() if step.kind == "eval"]
+    assert len(eval_nodes) == 1
 
 
 @pytest.mark.asyncio

@@ -76,18 +76,45 @@ class RootEvalNode(LoopNode):
                         logger.info("[root_eval] latest Eval completed; finalize")
                         return NodeResult(payload={"root_eval_route": "finalize"})
 
-                # Minimal and simple tasks trust the CoreAgent execute result and skip
-                # the coverage Eval + root_eval insertion; go directly to finalize.
-                # Only complex tasks run the full coverage Eval gate. This is the only
-                # finalization difference between task complexities.
+                # MINIMAL tasks trust the CoreAgent execute result and skip the
+                # coverage Eval entirely — no LLM call needed.
                 intent = getattr(ctx.loop_state, "intent", None)
                 intake_label = getattr(intent, "intake_label", None) if intent is not None else None
-                if intake_label in (IntakeLabel.MINIMAL, IntakeLabel.SIMPLE):
-                    logger.info("[root_eval] %s task; skip Eval; finalize", intake_label.value)
+                if intake_label == IntakeLabel.MINIMAL:
+                    logger.info("[root_eval] minimal task; skip Eval; finalize")
                     return NodeResult(payload={"root_eval_route": "finalize"})
 
-                if not goal.steps.eval_required():
-                    logger.info("[root_eval] Eval skip predicate matched; finalize")
+                # SIMPLE tasks: the LLM decides dynamically whether a coverage
+                # audit is warranted based on the full execution evidence.
+                # The LLM sees the step history, close reports, and outcomes,
+                # and may override the structural ``eval_required()`` predicate
+                # in either direction.
+                if intake_label == IntakeLabel.SIMPLE:
+                    from soothe.sloop.eval.eval_decision import decide_eval_required
+
+                    decision = await decide_eval_required(
+                        fast_model=ctx.strange_loop._fast_llm,
+                        user_goal=(resolve_user_request(ctx.loop_state) or goal.description),
+                        step_history=list(goal.steps.nodes.values()),
+                        intake_label=intake_label,
+                        soothe_config=ctx.strange_loop.config,
+                        goal_trace=ctx.goal_trace,
+                    )
+                    logger.info(
+                        "[root_eval] SIMPLE eval decision: should_run=%s reasoning=%s",
+                        decision.should_run_eval,
+                        decision.reasoning,
+                    )
+                    if not decision.should_run_eval:
+                        return NodeResult(payload={"root_eval_route": "finalize"})
+                    # should_run_eval=True → fall through to Eval insertion.
+
+                # COMPLEX (and unlabeled) tasks use the structural
+                # ``eval_required()`` predicate: insert Eval when the action
+                # tree shows decomposition, multi-leaf, or early-exit; skip
+                # otherwise (single-leaf no-decompose no early-exit).
+                elif not goal.steps.eval_required():
+                    logger.info("[root_eval] eval skip predicate matched; finalize")
                     return NodeResult(payload={"root_eval_route": "finalize"})
 
                 eval_cfg = getattr(ctx.strange_loop.config.agent.loop, "eval", None)

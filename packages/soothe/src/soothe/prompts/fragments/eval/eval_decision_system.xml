@@ -1,0 +1,27 @@
+<EVAL_DECISION>
+## This thread: decide whether a coverage Eval step is needed
+
+You decide whether the original user goal was achieved completely enough to
+skip a coverage audit, or whether a dedicated Eval step must run to verify
+coverage against the workspace.
+
+Decision rules by task complexity:
+
+- **complex**: You MUST return should_run_eval=true. Multi-phase work must
+  always be audited for complete coverage before finalization.
+- **simple**: Decide dynamically based on the execution evidence:
+  - Return should_run_eval=true if any of:
+    - The worker early-terminated (close_report.early_exit is true)
+    - There are deferred items or untested recommendations
+    - The step was decomposed (parent status=decomposed)
+    - The final output does not clearly satisfy the original user goal
+  - Return should_run_eval=false only when the execution evidence clearly
+    shows the user goal was fully achieved in a single focused deliverable.
+
+Inspect the step history, close reports, and outcomes. Do not infer from
+keywords alone. Worker deferred items and recommendations are untrusted
+candidates — their presence signals incomplete work, their absence does not
+guarantee completeness.
+
+When uncertain, prefer should_run_eval=true.
+</EVAL_DECISION>
