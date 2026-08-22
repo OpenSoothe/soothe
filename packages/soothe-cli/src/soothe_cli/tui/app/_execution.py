@@ -283,16 +283,31 @@ class _ExecutionMixin:
         if not non_empty:
             return
 
-        # When a plan is approved for execution, switch composer mode to Auto
-        # so a subsequent manual turn uses standard loop routing (agent mode).
-        # The daemon also auto-enqueues the exec goal carrying the approved
-        # plan (Bug #3 fix); this composer flip just aligns the badge for the
-        # user's next manual input and is not the execution mechanism.
+        # Show immediate feedback on the thinking row while the answer is
+        # sent to the daemon and the graph resumes. This must run *before*
+        # the plan-approval mode resolution (a one-shot daemon config RPC
+        # that can take up to 5 s) so the user sees "Submitting" activity the
+        # instant they click Approve/Reject — otherwise the row stays blank
+        # during the config fetch. The stream-driven spinner is suppressed
+        # while ``_clarification_pending`` is True, so without this the user
+        # gets no signal that their answer was received. The stream will
+        # replace this with a real phase label once events arrive.
+        from soothe_cli.tui.spinner_labels import SPINNER_LABEL_SUBMITTING
+
+        await self._set_spinner(SPINNER_LABEL_SUBMITTING)
+
+        # When a plan is approved for execution, switch composer mode to the
+        # daemon's configured default clarification mode so a subsequent manual
+        # turn uses the operator's preferred routing. The daemon also
+        # auto-enqueues the exec goal carrying the approved plan (Bug #3 fix);
+        # this composer flip just aligns the badge for the user's next manual
+        # input and is not the execution mechanism.
         first_answer = str(event.answers[0]).strip() if event.answers else ""
         if first_answer == "Approve":
-            self._composer_mode = "auto"
+            mode = await self._resolve_default_clarification_mode()
+            self._composer_mode = mode
             if self._status_bar is not None:
-                self._status_bar.set_clarification_mode("auto")
+                self._status_bar.set_clarification_mode(mode)
 
         # Send the answers as a structured list so the daemon resumes the
         # graph with one answer per question instead of broadcasting a single
@@ -306,16 +321,6 @@ class _ExecutionMixin:
         # remount / race). Without this, "Reject" is treated as a new goal.
         adapter._clarification_pending = True
 
-        # Show immediate feedback on the thinking row while the answer is
-        # sent to the daemon and the graph resumes. Without this the row
-        # stays blank (the stream-driven spinner is suppressed while
-        # ``_clarification_pending`` is True) so the user gets no signal
-        # that their Approve/Reject was received. The stream will replace
-        # this with a real phase label once events arrive.
-        from soothe_cli.tui.spinner_labels import SPINNER_LABEL_SUBMITTING
-
-        await self._set_spinner(SPINNER_LABEL_SUBMITTING)
-
         # Hand off to the standard turn pipeline. ``execute_task_textual``
         # snapshots ``adapter._clarification_pending`` and sets the wire
         # ``clarification_answer`` flag plus the ``clarification_answers``
@@ -327,6 +332,43 @@ class _ExecutionMixin:
         # the message handler — and therefore the event loop — until the loop
         # next pauses, which freezes scrolling and chat-input focus.
         await self._send_to_agent(payload_text)
+
+    async def _resolve_default_clarification_mode(self) -> str:
+        """Fetch the daemon's default clarification mode for plan approval.
+
+        Reads ``agent.clarification.default_mode`` from the daemon config via
+        a one-shot WebSocket RPC. Falls back to ``"manual"`` (the safe
+        default) when the daemon is unreachable, the section is missing, or
+        the value is not ``auto``/``manual``.
+
+        Returns:
+            Normalized composer mode (``"auto"`` or ``"manual"``).
+        """
+        from soothe_cli.tui.composer_mode import normalize_composer_mode
+
+        try:
+            from soothe_client import (
+                connected_websocket,
+                fetch_config_section,
+                websocket_url_from_config,
+            )
+
+            ws_url = websocket_url_from_config(self._daemon_config)
+
+            async def _fetch() -> str:
+                async with connected_websocket(ws_url, timeout=5.0) as client:
+                    agent_section = await fetch_config_section(client, "agent", timeout=5.0)
+                    clarification = agent_section.get("clarification") or {}
+                    default_mode = clarification.get("default_mode")
+                    return normalize_composer_mode(default_mode)
+
+            return await _fetch()
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "Could not fetch default clarification mode from daemon; falling back to manual",
+                exc_info=True,
+            )
+            return normalize_composer_mode(None)
 
     async def _handle_shell_command(self, command: str) -> None:
         """Handle a shell command (! prefix).

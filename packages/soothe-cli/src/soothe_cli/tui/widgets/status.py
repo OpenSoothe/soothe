@@ -73,10 +73,11 @@ class ModelLabel(Widget):
 class ClarificationModeBadge(Static):
     """Visual block showing the active composer mode (Auto / Manual / Plan / Ask).
 
-    Rendered Claude Code-style as ``⏵⏵ <label> (shift+Tab to cycle)``. Default is
-    ``Manual`` (bold warning pill) so operators see that clarifications will be
-    relayed. ``Auto`` renders as muted/dim text, ``Plan`` as an accent pill, and
-    ``Ask`` as a primary pill for read-only. All colors use theme-aware CSS
+    Rendered Claude Code-style as ``⏵⏵ <label> (shift+Tab to cycle)``. Each mode
+    uses a distinct foreground color with no background, so the badge blends into
+    the status bar rather than appearing as a colored chip. ``Manual`` (the
+    default) renders as dim muted text so it stays low-emphasis; ``Auto`` is green,
+    ``Plan`` teal accent, and ``Ask`` blue primary. All colors use theme-aware CSS
     variables so they adapt to dark and light themes.
     """
 
@@ -85,26 +86,21 @@ class ClarificationModeBadge(Static):
         width: auto;
         height: 1;
         padding: 0 1;
-        background: $surface-lighten-2;
-        color: $text-muted;
+        background: transparent;
+        color: $success;
     }
 
     ClarificationModeBadge.manual {
-        background: $warning;
-        color: $background;
-        text-style: bold;
+        color: $text-muted;
+        text-style: dim;
     }
 
     ClarificationModeBadge.plan {
-        background: $accent;
-        color: $background;
-        text-style: bold;
+        color: $accent;
     }
 
     ClarificationModeBadge.ask {
-        background: $primary;
-        color: $background;
-        text-style: bold;
+        color: $primary;
     }
     """
 

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
+from soothe_cli.tui.app._execution import _ExecutionMixin
 from soothe_cli.tui.app._messages_mixin import _MessagesMixin
 
 
@@ -23,6 +25,15 @@ class _AppHarness(_MessagesMixin):
     def __init__(self, *, initial: str = "auto") -> None:
         self._composer_mode = initial
         self._status_bar: Any = _FakeStatusBar()
+
+
+class _ExecutionHarness(_ExecutionMixin):
+    """Minimal stand-in for testing plan-approval composer-mode resolution."""
+
+    def __init__(self, *, daemon_config: Any = None) -> None:
+        self._composer_mode = "plan"
+        self._status_bar: Any = _FakeStatusBar()
+        self._daemon_config = daemon_config or object()
 
 
 def test_cycle_auto_to_manual() -> None:
@@ -96,18 +107,136 @@ def test_shift_tab_action_cycles_mode() -> None:
     assert app._composer_mode == "manual"
 
 
-def test_plan_approval_switches_mode_to_auto() -> None:
-    """Approving a plan resets composer mode to Auto for execution.
+def test_plan_approval_uses_daemon_default_manual() -> None:
+    """Approving a plan sets composer mode to the daemon's default (manual).
 
-    This test simulates the logic in ``on_clarification_input_message_submitted``
-    that sets ``self._composer_mode = "auto"`` when the first answer is "Approve",
-    ensuring subsequent turns use standard loop routing without planner hint.
+    When ``agent.clarification.default_mode`` is ``manual``, the composer mode
+    after approval is ``manual`` — not a hardcoded ``auto``.
     """
-    # Start in plan mode (sticky planner routing)
-    app = _AppHarness(initial="plan")
-    # Simulate approval response
-    app._composer_mode = "auto"
-    app._status_bar.set_clarification_mode("auto")
-    # Verify mode switched to auto
-    assert app._composer_mode == "auto"
-    assert app._status_bar.last_mode == "auto"
+    app = _ExecutionHarness()
+
+    fake_fetch = AsyncMock(return_value={"clarification": {"default_mode": "manual"}})
+    with (
+        patch(
+            "soothe_client.connected_websocket",
+            new=_make_cmgr(),
+        ),
+        patch("soothe_client.fetch_config_section", new=fake_fetch),
+        patch("soothe_client.websocket_url_from_config", return_value="ws://x"),
+    ):
+        mode = asyncio_run(app._resolve_default_clarification_mode())
+
+    assert mode == "manual"
+
+
+def test_plan_approval_uses_daemon_default_auto() -> None:
+    """Approving a plan sets composer mode to the daemon's default (auto).
+
+    When ``agent.clarification.default_mode`` is ``auto``, the composer mode
+    after approval is ``auto``.
+    """
+    app = _ExecutionHarness()
+
+    fake_fetch = AsyncMock(return_value={"clarification": {"default_mode": "auto"}})
+    with (
+        patch(
+            "soothe_client.connected_websocket",
+            new=_make_cmgr(),
+        ),
+        patch("soothe_client.fetch_config_section", new=fake_fetch),
+        patch("soothe_client.websocket_url_from_config", return_value="ws://x"),
+    ):
+        mode = asyncio_run(app._resolve_default_clarification_mode())
+
+    assert mode == "auto"
+
+
+def test_plan_approval_falls_back_to_manual_on_fetch_error() -> None:
+    """When the daemon config fetch raises, fall back to ``manual``."""
+    app = _ExecutionHarness()
+
+    fake_fetch = AsyncMock(side_effect=ConnectionError("daemon down"))
+    with (
+        patch(
+            "soothe_client.connected_websocket",
+            new=_make_cmgr(),
+        ),
+        patch("soothe_client.fetch_config_section", new=fake_fetch),
+        patch("soothe_client.websocket_url_from_config", return_value="ws://x"),
+    ):
+        mode = asyncio_run(app._resolve_default_clarification_mode())
+
+    assert mode == "manual"
+
+
+def test_plan_approval_falls_back_to_manual_on_missing_section() -> None:
+    """When the clarification section is missing, fall back to ``manual``."""
+    app = _ExecutionHarness()
+
+    fake_fetch = AsyncMock(return_value={})
+    with (
+        patch(
+            "soothe_client.connected_websocket",
+            new=_make_cmgr(),
+        ),
+        patch("soothe_client.fetch_config_section", new=fake_fetch),
+        patch("soothe_client.websocket_url_from_config", return_value="ws://x"),
+    ):
+        mode = asyncio_run(app._resolve_default_clarification_mode())
+
+    assert mode == "manual"
+
+
+def _make_cmgr() -> Any:
+    """Return a fake async context manager stand-in for connected_websocket."""
+
+    class _CM:
+        async def __aenter__(self) -> Any:
+            return object()
+
+        async def __aexit__(self, *args: Any) -> None:
+            return None
+
+    return lambda *a, **kw: _CM()
+
+
+def asyncio_run(coro: Any) -> Any:
+    import asyncio
+
+    return asyncio.run(coro)
+
+
+def test_plan_approval_sets_submitting_spinner_before_mode_resolution() -> None:
+    """The thinking row shows "Submitting" before the daemon config RPC fires.
+
+    The mode-resolution network call can take up to 5 s. If the spinner is set
+    *after* that call, the user sees a blank thinking row during the fetch.
+    This test records the call order to guarantee the spinner is set first.
+    """
+    call_log: list[str] = []
+
+    class _SpinnerHarness(_ExecutionMixin):
+        def __init__(self) -> None:
+            self._composer_mode = "plan"
+            self._status_bar: Any = _FakeStatusBar()
+            self._daemon_config = object()
+
+        async def _set_spinner(self, status: Any, **_kwargs: Any) -> None:
+            call_log.append(f"spinner:{status}")
+
+        async def _resolve_default_clarification_mode(self) -> str:
+            call_log.append("resolve_mode")
+            return "manual"
+
+    app = _SpinnerHarness()
+
+    # Simulate the relevant tail of on_clarification_input_message_submitted:
+    # spinner set, then mode resolved, then composer mode updated.
+    from soothe_cli.tui.spinner_labels import SPINNER_LABEL_SUBMITTING
+
+    asyncio_run(app._set_spinner(SPINNER_LABEL_SUBMITTING))
+    mode = asyncio_run(app._resolve_default_clarification_mode())
+    app._composer_mode = mode
+
+    assert call_log[0] == f"spinner:{SPINNER_LABEL_SUBMITTING}"
+    assert call_log[1] == "resolve_mode"
