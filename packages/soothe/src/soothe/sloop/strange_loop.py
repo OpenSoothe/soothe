@@ -8,8 +8,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe_nano.utils.text_preview import log_preview
-from soothe_sdk.protocols.planner import PlanContext
-from soothe_sdk.protocols.planner import StepResult as SdkStepResult
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.sloop.intention.models import (
@@ -18,7 +16,6 @@ from soothe.sloop.intention.models import (
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.state.schemas import (
-    AgentDecision,
     LoopState,
     PlanResult,
 )
@@ -899,79 +896,3 @@ class StrangeLoop:
             # Always stop async checkpoint worker even when setup fails before graph start.
             await state_manager.close()
             await anchor_manager.close()
-
-    def _resolve_decision(
-        self,
-        plan_result: PlanResult,
-        state: LoopState,
-    ) -> AgentDecision | None:
-        """Pick the AgentDecision to execute for this Execute phase."""
-        if plan_result.plan_action == "keep":
-            if state.current_decision is None:
-                logger.warning(
-                    "[Plan] plan_action=keep but no current_decision; falling back to new decision"
-                )
-                return plan_result.decision
-            return state.current_decision
-        return plan_result.decision
-
-    def _build_plan_context(self, state: LoopState) -> PlanContext:
-        """Build planning context with available capabilities and completed steps.
-
-        Args:
-            state: Current loop state with step results
-
-        Returns:
-            PlanContext with tools, subagents, and completed steps for the reasoner
-        """
-        capabilities = None
-        capability_reader = getattr(self.core_agent, "list_capabilities", None)
-        if callable(capability_reader):
-            capabilities = capability_reader()
-
-        raw_tools = getattr(capabilities, "tools", ())
-        if (
-            not raw_tools
-            and hasattr(self.core_agent, "tools")
-            and isinstance(self.core_agent.tools, dict)
-        ):
-            raw_tools = tuple(str(name) for name in self.core_agent.tools.keys())
-        available_tools = (
-            [str(name) for name in raw_tools if isinstance(name, str)]
-            if isinstance(raw_tools, (list, tuple, set))
-            else []
-        )
-
-        from soothe.sloop.state.schemas import filter_task_catalog_subagent_names
-
-        available_subagents = filter_task_catalog_subagent_names(
-            [name for name, cfg in self.config.subagents.items() if cfg.enabled]
-        )
-        raw_subagents = getattr(capabilities, "subagents", ())
-        capability_subagents = (
-            [str(name) for name in raw_subagents if isinstance(name, str)]
-            if isinstance(raw_subagents, (list, tuple, set))
-            else []
-        )
-        for capability_subagent in filter_task_catalog_subagent_names(capability_subagents):
-            if capability_subagent not in available_subagents:
-                available_subagents.append(capability_subagent)
-
-        completed_steps = [
-            SdkStepResult(
-                step_id=r.step_id,
-                outcome=r.outcome if r.success else {"type": "error", "error": r.error or ""},
-                success=r.success,
-                duration_ms=r.duration_ms,
-            )
-            for r in state.step_results
-        ]
-
-        return PlanContext(
-            available_capabilities=available_tools + available_subagents,
-            recent_messages=[],  # RFC-214: Now using loop_messages ledger directly
-            completed_steps=completed_steps,
-            routing_classification=getattr(state, "routing_classification", None),
-            workspace=state.workspace,
-            thread_id=state.thread_id,
-        )

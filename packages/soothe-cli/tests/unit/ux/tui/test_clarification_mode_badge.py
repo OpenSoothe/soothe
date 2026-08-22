@@ -31,14 +31,14 @@ class _BadgeOnlyApp(App[None]):
 
 
 @pytest.mark.asyncio
-async def test_badge_defaults_to_manual_text_and_class() -> None:
-    """Initial mount renders the Manual label and applies the ``manual`` class."""
+async def test_badge_defaults_to_auto_text_and_class() -> None:
+    """Initial mount renders the Auto label and applies the ``auto`` class."""
     async with _BadgeOnlyApp().run_test() as pilot:
         badge = pilot.app.query_one("#badge", ClarificationModeBadge)
-        assert badge.mode == COMPOSER_MODE_MANUAL
-        assert badge.has_class("manual")
-        assert not badge.has_class("auto")
-        assert _read_static_content(badge) == "⏵⏵ manual clarification (shift+Tab to cycle)"
+        assert badge.mode == COMPOSER_MODE_AUTO
+        assert badge.has_class("auto")
+        assert not badge.has_class("manual")
+        assert _read_static_content(badge) == "⏵⏵ auto clarification (shift+Tab to cycle)"
 
 
 @pytest.mark.asyncio
@@ -95,21 +95,21 @@ async def test_badge_flips_to_ask_when_mode_assigned() -> None:
 
 
 @pytest.mark.asyncio
-async def test_badge_rejects_unknown_mode_falls_back_to_manual() -> None:
-    """Unknown values do not crash; the badge clamps to Manual."""
+async def test_badge_rejects_unknown_mode_falls_back_to_auto() -> None:
+    """Unknown values do not crash; the badge clamps to Auto."""
     async with _BadgeOnlyApp().run_test() as pilot:
         badge = pilot.app.query_one("#badge", ClarificationModeBadge)
         badge.mode = "nonsense"
         await pilot.pause()
-        assert badge.has_class("manual")
-        assert _read_static_content(badge) == "⏵⏵ manual clarification (shift+Tab to cycle)"
+        assert badge.has_class("auto")
+        assert _read_static_content(badge) == "⏵⏵ auto clarification (shift+Tab to cycle)"
 
 
 def test_badge_has_initial_content_before_mount() -> None:
     """The constructor seeds the Static content so the badge paints immediately."""
     badge = ClarificationModeBadge(id="pre-mount")
-    assert _read_static_content(badge) == "⏵⏵ manual clarification (shift+Tab to cycle)"
-    assert badge.has_class("manual")
+    assert _read_static_content(badge) == "⏵⏵ auto clarification (shift+Tab to cycle)"
+    assert badge.has_class("auto")
 
 
 def test_badge_constructor_accepts_initial_manual_mode() -> None:

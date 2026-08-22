@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from contextvars import ContextVar, Token
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from soothe.context.decomposition import DecompositionProposal
+
+logger = logging.getLogger(__name__)
 
 _current_step_id: ContextVar[str | None] = ContextVar("decompose_step_id", default=None)
 _wave_seq: ContextVar[int] = ContextVar("decompose_wave_seq", default=0)
@@ -23,21 +26,6 @@ class DecomposeRuntimeTokens:
     sink: Token[list[DecompositionProposal] | None]
 
 
-@dataclass
-class ProposalSink:
-    """Mutable queue of proposals for one goal run."""
-
-    proposals: list[DecompositionProposal] = field(default_factory=list)
-
-    def enqueue(self, proposal: DecompositionProposal) -> None:
-        self.proposals.append(proposal)
-
-    def drain(self) -> list[DecompositionProposal]:
-        out = list(self.proposals)
-        self.proposals.clear()
-        return out
-
-
 def bind_decompose_runtime(
     *,
     step_id: str,
@@ -45,6 +33,13 @@ def bind_decompose_runtime(
     wave_seq: int = 0,
 ) -> DecomposeRuntimeTokens:
     """Bind step id + proposal sink for the current CoreAgent turn."""
+    logger.debug(
+        "[decompose] bind runtime step=%s wave=%d sink_id=%d sink_bound=%s",
+        step_id,
+        wave_seq,
+        id(sink),
+        sink is not None,
+    )
     return DecomposeRuntimeTokens(
         step=_current_step_id.set(step_id),
         wave=_wave_seq.set(wave_seq),
@@ -54,6 +49,10 @@ def bind_decompose_runtime(
 
 def reset_decompose_runtime(tokens: DecomposeRuntimeTokens) -> None:
     """Restore prior contextvar values."""
+    step_id = _current_step_id.get()
+    sink = _proposal_sink.get()
+    queued = len(sink) if sink else 0
+    logger.debug("[decompose] reset runtime step=%s proposals_queued=%d", step_id, queued)
     _current_step_id.reset(tokens.step)
     _wave_seq.reset(tokens.wave)
     _proposal_sink.reset(tokens.sink)

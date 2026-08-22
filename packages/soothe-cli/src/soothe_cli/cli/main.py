@@ -195,9 +195,9 @@ def main(
         typer.Option(
             "--mode",
             help=(
-                "Composer mode: 'manual' (relay AI questions to you), "
-                "'auto' (veritas auto-answers), or 'plan' (read-only plan "
-                "mode without typing /plan). Default: 'manual'."
+                "Composer mode: 'auto' (veritas auto-answers), "
+                "'manual' (relay AI questions to you), or 'plan' (read-only "
+                "plan mode without typing /plan). Default: 'auto'."
             ),
         ),
     ] = None,

@@ -616,7 +616,17 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     proposals = getattr(run_executor, "decompose_proposals", None)
     if isinstance(proposals, list) and proposals:
         ctx.scratch.decompose_proposals.extend(list(proposals))
+        logger.info(
+            "[decompose] hoisted %d proposal(s) from executor → scratch (total=%d)",
+            len(proposals),
+            len(ctx.scratch.decompose_proposals),
+        )
         proposals.clear()
+    else:
+        logger.debug(
+            "[decompose] no proposals queued on executor (tool_budget_hit=%s)",
+            getattr(state, "last_wave_hit_tool_budget", False),
+        )
 
     # RFC-224: Check context window and compact if needed
     if checkpointer is not None and strange_loop.config is not None:

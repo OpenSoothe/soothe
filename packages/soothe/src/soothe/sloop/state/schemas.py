@@ -118,85 +118,6 @@ class PlanGenerateStep(BaseModel):
         return self
 
 
-def strip_unrequested_step_delegates(steps: list[StepAction]) -> list[StepAction]:
-    """Clear all plan-wave subagent wiring from generated steps.
-
-    Built-in wire specialists are intake-only and never reach plan-generate, so
-    any planner-emitted delegate hint is dropped and execute picks its own tools.
-    """
-    out: list[StepAction] = []
-    stripped = 0
-    for step in steps:
-        if step.execution_hint == "subagent" or step.subagent:
-            stripped += 1
-            out.append(
-                step.model_copy(
-                    update={
-                        "execution_hint": "auto",
-                        "subagent": None,
-                    }
-                )
-            )
-        else:
-            out.append(step)
-    if stripped:
-        logger.info(
-            "[PlanGen] Cleared subagent delegate on %d step(s); execute CoreAgent will choose",
-            stripped,
-        )
-    return out
-
-
-def _merged_step_dependencies(step: PlanGenerateStep) -> list[str] | None:
-    """Merge in-wave dependencies and cross-wave continues_from tokens."""
-    deps: list[str] = []
-    seen: set[str] = set()
-    for token in list(step.dependencies or []) + list(step.continues_from or []):
-        t = token.strip()
-        if not t or t in seen:
-            continue
-        deps.append(t)
-        seen.add(t)
-    return deps or None
-
-
-def plan_generate_steps_to_step_actions(steps: list[PlanGenerateStep]) -> list[StepAction]:
-    """Convert plan-generate steps into runtime ``StepAction`` rows."""
-    return [
-        StepAction(
-            id=s.id,
-            description=s.description,
-            full_description=s.full_description,
-            expected_output=s.expected_output,
-            dependencies=_merged_step_dependencies(s),
-            kind=s.kind,
-            questions=list(s.questions) if s.questions else None,
-            execution_hint=s.execution_hint,
-            subagent=s.subagent,
-        )
-        for s in steps
-    ]
-
-
-def step_actions_to_plan_generate_steps(steps: list[StepAction]) -> list[PlanGenerateStep]:
-    """Convert runtime steps into plan-generate schema rows (fallback paths)."""
-    return [
-        PlanGenerateStep(
-            id=s.id,
-            description=s.description,
-            full_description=s.full_description,
-            expected_output=s.expected_output,
-            dependencies=s.dependencies,
-            continues_from=None,
-            kind=s.kind,
-            questions=list(s.questions) if s.questions else None,
-            execution_hint=s.execution_hint,
-            subagent=s.subagent,
-        )
-        for s in steps
-    ]
-
-
 class StepAction(BaseModel):
     """Single step in execution strategy.
 
@@ -344,80 +265,6 @@ def _plan_id_prefix_from_step_id(step_id: str) -> str | None:
     return None
 
 
-def _model_local_step_id(raw_id: str, *, known_plan_ids: frozenset[str]) -> str:
-    """Strip a loop plan prefix only when it matches a known scoped plan id."""
-    s = raw_id.strip()
-    if not s or "-" not in s:
-        return s
-    prefix, suffix = s.split("-", 1)
-    if len(prefix) == PLAN_ID_LENGTH and prefix in known_plan_ids:
-        return suffix
-    return s
-
-
-def prepare_decision_for_plan_scoping(
-    decision: AgentDecision,
-    *,
-    known_plan_ids: set[str] | frozenset[str] | None = None,
-) -> AgentDecision:
-    """Normalize model step ids before scoping under a new plan.
-
-    Strips prior loop ``PLAN-`` prefixes from step ids and in-plan dependencies when
-    the prefix matches a plan id already used in this loop, then deduplicates local
-    ids that would collapse under :func:`composite_step_id`.
-
-    Args:
-        decision: Parsed execution decision from the planner.
-        known_plan_ids: Plan ids from the current loop (e.g. ``LoopState.known_plan_ids()``).
-
-    Returns:
-        Copy with model-local step ids safe for :func:`assign_plan_step_ids`.
-    """
-    if not decision.steps:
-        return decision
-
-    known = frozenset(known_plan_ids or ())
-    used_local_ids: set[str] = set()
-    old_to_new: dict[str, str] = {}
-
-    def unique_local_id(raw_id: str) -> str:
-        local = _model_local_step_id(raw_id, known_plan_ids=known)
-        if local not in used_local_ids:
-            used_local_ids.add(local)
-            return local
-        suffix = 2
-        while True:
-            candidate = f"{local}_{suffix}"
-            suffix += 1
-            if candidate not in used_local_ids:
-                used_local_ids.add(candidate)
-                return candidate
-
-    for step in decision.steps:
-        new_id = unique_local_id(step.id)
-        old_to_new[step.id] = new_id
-        stripped = _model_local_step_id(step.id, known_plan_ids=known)
-        if stripped not in old_to_new:
-            old_to_new[stripped] = new_id
-
-    new_steps: list[StepAction] = []
-    for step in decision.steps:
-        new_id = old_to_new[step.id]
-        new_deps: list[str] | None = None
-        if step.dependencies:
-            new_deps = []
-            for dep in step.dependencies:
-                dep_stripped = _model_local_step_id(dep, known_plan_ids=known)
-                if dep in old_to_new:
-                    new_deps.append(old_to_new[dep])
-                elif dep_stripped in old_to_new:
-                    new_deps.append(old_to_new[dep_stripped])
-                else:
-                    new_deps.append(dep)
-        new_steps.append(step.model_copy(update={"id": new_id, "dependencies": new_deps}))
-    return decision.model_copy(update={"steps": new_steps})
-
-
 def composite_step_id(raw_id: str, plan_id: str) -> str:
     """Build scoped step id ``PLAN-MODEL``; idempotent if ``raw_id`` already has this plan prefix."""
     prefix = f"{plan_id}-"
@@ -426,102 +273,17 @@ def composite_step_id(raw_id: str, plan_id: str) -> str:
     return f"{prefix}{raw_id}"
 
 
-def _resolve_in_plan_dependency(dep: str, id_map: dict[str, str]) -> str:
-    """Map a model dependency string to a scoped in-plan composite id when resolvable.
-
-    Resolution order:
-    1. Strip; exact key in ``id_map`` (model local id, e.g. ``01``).
-    2. If dependency is all digits, match the unique in-plan step whose ``id`` is all digits and
-       has the same integer value (``1`` matches ``01``); if multiple in-plan digit ids collide,
-       leave ``dep`` unchanged and log once.
-    3. Case-insensitive match against raw step ids when exactly one step matches.
-
-    Otherwise returns ``dep`` unchanged (cross-plan / historical composite refs).
-
-    Args:
-        dep: Dependency string from the model.
-        id_map: Raw step ``id`` → composite ``PLANID-raw`` for the current decision.
-
-    Returns:
-        Scoped composite id, or ``dep`` if external / unresolved.
-    """
-    d = dep.strip()
-    if not d:
-        return dep
-    if d in id_map:
-        return id_map[d]
-    raw_ids = list(id_map.keys())
-    if d.isdigit():
-        matches = [rid for rid in raw_ids if rid.isdigit() and int(rid, 10) == int(d, 10)]
-        if len(matches) == 1:
-            return id_map[matches[0]]
-        if len(matches) > 1:
-            logger.warning(
-                "Ambiguous numeric dependency %r matches in-plan step ids %s; leaving as-is ",
-                d,
-                matches,
-            )
-            return dep
-    lower = d.lower()
-    ci_matches = [rid for rid in raw_ids if rid.lower() == lower]
-    if len(ci_matches) == 1:
-        return id_map[ci_matches[0]]
-    return dep
-
-
 def allocate_plan_id() -> str:
     """Return a random 3-character plan scope id (uppercase ``A-Z`` only).
 
     Plan ids distinguish step waves within a single loop; they are not required
     to be unique across loops or threads. Step uniqueness within a loop comes
-    from ``composite_step_id`` scoping in :func:`assign_plan_step_ids`.
+    from ``composite_step_id`` scoping.
 
     Returns:
         Three uppercase letters from :data:`PLAN_ID_ALPHABET`.
     """
     return "".join(secrets.choice(PLAN_ID_ALPHABET) for _ in range(PLAN_ID_LENGTH))
-
-
-def assign_plan_step_ids(
-    decision: AgentDecision,
-    *,
-    plan_id: str,
-) -> AgentDecision:
-    """Scope model step ids with ``plan_id`` and remap in-plan ``dependencies``.
-
-    Each step becomes ``composite_step_id(step.id, plan_id)``, preserving the model suffix
-    (e.g. ``001`` → ``KFA-001``). Dependency edges between steps in this decision are
-    rewritten via :func:`_resolve_in_plan_dependency` (exact id, digit-alias, or
-    single case-insensitive match); other dependency strings (e.g. cross-wave refs)
-    are unchanged.
-
-    Args:
-        decision: Parsed or merged execution decision.
-        plan_id: Plan scope id from :func:`allocate_plan_id` or inherited ``LoopState.plan_id``.
-
-    Returns:
-        Copy with scoped ids; unchanged if ``steps`` is empty.
-
-    Raises:
-        ValueError: If two steps collapse to the same composite id after scoping.
-    """
-    if not decision.steps:
-        return decision
-    id_map: dict[str, str] = {
-        step.id: composite_step_id(step.id, plan_id) for step in decision.steps
-    }
-    mapped_values = list(id_map.values())
-    if len(set(mapped_values)) != len(mapped_values):
-        msg = "Plan step ids collapse to duplicate composite ids after scoping"
-        raise ValueError(msg)
-    new_steps: list[StepAction] = []
-    for step in decision.steps:
-        mapped = id_map[step.id]
-        new_deps: list[str] | None = None
-        if step.dependencies:
-            new_deps = [_resolve_in_plan_dependency(dep, id_map) for dep in step.dependencies]
-        new_steps.append(step.model_copy(update={"id": mapped, "dependencies": new_deps}))
-    return decision.model_copy(update={"steps": new_steps})
 
 
 _STEP_ID_TRAILING_DIGITS = re.compile(r"(\d+)$")
@@ -550,104 +312,6 @@ def trailing_numeric_suffix_from_step_id(step_id: str) -> int | None:
     if m:
         return int(m.group(1), 10)
     return None
-
-
-def max_goal_step_numeric_suffix(state: LoopState) -> int:
-    """Largest numeric step suffix seen so far on this goal.
-
-    Scans successful/failed ``step_results``, ``completed_step_ids``, and any in-flight
-    ``current_decision`` steps so new plans do not reuse lower indices.
-
-    Args:
-        state: Active loop state for the goal.
-
-    Returns:
-        Maximum parsed suffix, or 0 when none found.
-    """
-    max_n = 0
-    for r in state.step_results:
-        n = trailing_numeric_suffix_from_step_id(r.step_id)
-        if n is not None:
-            max_n = max(max_n, n)
-    for sid in state.completed_step_ids:
-        n = trailing_numeric_suffix_from_step_id(sid)
-        if n is not None:
-            max_n = max(max_n, n)
-    if state.current_decision:
-        for step in state.current_decision.steps:
-            n = trailing_numeric_suffix_from_step_id(step.id)
-            if n is not None:
-                max_n = max(max_n, n)
-    return max_n
-
-
-def next_goal_local_step_id_start(state: LoopState) -> int:
-    """Next free 1-based local step index for a new plan wave on this goal."""
-    return max_goal_step_numeric_suffix(state) + 1
-
-
-def _remap_dependency_after_local_renumber(dep: str, old_to_new: dict[str, str]) -> str:
-    """Rewrite a dependency string after local id renumber; leave cross-wave refs unchanged."""
-    d = dep.strip()
-    if not d:
-        return dep
-    if d in old_to_new:
-        return old_to_new[d]
-    old_ids = list(old_to_new.keys())
-    if d.isdigit():
-        matches = [oid for oid in old_ids if oid.isdigit() and int(oid, 10) == int(d, 10)]
-        if len(matches) == 1:
-            return old_to_new[matches[0]]
-    lower = d.lower()
-    ci_matches = [oid for oid in old_ids if oid.lower() == lower]
-    if len(ci_matches) == 1:
-        return old_to_new[ci_matches[0]]
-    return dep
-
-
-def _local_step_token_width(next_start: int, step_count: int) -> int:
-    if step_count <= 0:
-        return 2
-    end = next_start + step_count - 1
-    return max(2, len(str(end)))
-
-
-def renumber_decision_local_step_ids_for_goal_continuation(
-    decision: AgentDecision,
-    state: LoopState,
-) -> AgentDecision:
-    """Assign consecutive local step ids starting after the goal's max suffix.
-
-    Models often emit ``01``, ``02`` on every plan-generate call; this rewrites new-plan
-    steps to ``next``, ``next+1``, … before ``assign_plan_step_ids`` scopes them with
-    ``plan_id``. In-plan ``dependencies`` are remapped; other dependency strings are unchanged.
-
-    Args:
-        decision: Parsed execution decision from plan-generate (local ids).
-        state: Loop state carrying prior step ids for the same goal.
-
-    Returns:
-        Copy of ``decision`` with updated step ids and dependencies, or the original when
-        there are no steps.
-    """
-    if not decision.steps:
-        return decision
-    next_start = next_goal_local_step_id_start(state)
-    width = _local_step_token_width(next_start, len(decision.steps))
-    old_to_new: dict[str, str] = {}
-    for i, step in enumerate(decision.steps):
-        new_id = str(next_start + i).zfill(width)
-        old_to_new[step.id] = new_id
-    new_steps: list[StepAction] = []
-    for step in decision.steps:
-        mapped = old_to_new[step.id]
-        new_deps: list[str] | None = None
-        if step.dependencies:
-            new_deps = [
-                _remap_dependency_after_local_renumber(d, old_to_new) for d in step.dependencies
-            ]
-        new_steps.append(step.model_copy(update={"id": mapped, "dependencies": new_deps}))
-    return decision.model_copy(update={"steps": new_steps})
 
 
 class PlanResult(BaseModel):
@@ -850,25 +514,6 @@ class PlanGeneration(BaseModel):
         if self.type == "execute_steps" and not self.steps:
             raise ValueError("type 'execute_steps' requires non-empty steps")
         return self
-
-
-def derive_plan_action(
-    *,
-    assessment_status: Literal["continue", "replan", "done"],
-    has_remaining_steps: bool,
-) -> Literal["keep", "new"]:
-    """Derive runtime plan reuse vs replace from assess status and in-flight plan state.
-
-    Args:
-        assessment_status: Status from the assess phase.
-        has_remaining_steps: Whether ``current_decision`` still has pending steps.
-
-    Returns:
-        ``keep`` when assess says continue and pending steps remain; otherwise ``new``.
-    """
-    if assessment_status == "continue" and has_remaining_steps:
-        return "keep"
-    return "new"
 
 
 class StepExecutionRecord(BaseModel):

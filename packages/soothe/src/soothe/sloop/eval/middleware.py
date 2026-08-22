@@ -122,4 +122,4 @@ class EvalStepMiddleware(AgentMiddleware):
         )
 
 
-__all__ = ["EVAL_READONLY_TOOL_NAMES", "EvalStepMiddleware"]
+__all__ = ["EvalStepMiddleware"]

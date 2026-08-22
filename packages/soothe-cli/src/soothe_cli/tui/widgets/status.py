@@ -14,7 +14,11 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
-from soothe_cli.tui.composer_mode import COMPOSER_MODE_MANUAL, normalize_composer_mode
+from soothe_cli.tui.composer_mode import (
+    COMPOSER_MODE_AUTO,
+    COMPOSER_MODE_MANUAL,
+    normalize_composer_mode,
+)
 from soothe_cli.tui.config import get_glyphs
 
 logger = logging.getLogger(__name__)
@@ -112,9 +116,9 @@ class ClarificationModeBadge(Static):
     }
     _CYCLE_HINT = "(shift+Tab to cycle)"
 
-    mode: reactive[str] = reactive(COMPOSER_MODE_MANUAL, init=False)
+    mode: reactive[str] = reactive(COMPOSER_MODE_AUTO, init=False)
 
-    def __init__(self, *args: Any, mode: str = COMPOSER_MODE_MANUAL, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, mode: str = COMPOSER_MODE_AUTO, **kwargs: Any) -> None:
         """Initialize with the badge text already rendered so it shows on first paint."""
         initial = normalize_composer_mode(mode)
         super().__init__(self._render_label(initial), *args, **kwargs)
@@ -232,7 +236,7 @@ class StatusBar(Horizontal):
     }
     """
     mode: reactive[str] = reactive("normal", init=False)
-    clarification_mode: reactive[str] = reactive(COMPOSER_MODE_MANUAL, init=False)
+    clarification_mode: reactive[str] = reactive(COMPOSER_MODE_AUTO, init=False)
     status_message: reactive[str] = reactive("", init=False)
     session_tip: reactive[str] = reactive("", init=False)
     tip_is_notification: reactive[bool] = reactive(False, init=False)

@@ -2256,7 +2256,22 @@ class Executor:
                         parent_step_id=step.id,
                     )
                     if recovered:
+                        logger.info(
+                            "[decompose] RFC-905 text recovery: recovered %d "
+                            "proposal(s) from eval step %s final text "
+                            "(ai_text_len=%d)",
+                            len(recovered),
+                            step.id,
+                            len(final_ai_text),
+                        )
                         self.decompose_proposals.extend(recovered)
+                    else:
+                        logger.debug(
+                            "[decompose] RFC-905 text recovery: no proposals "
+                            "recoverable from eval step %s (ai_text_len=%d)",
+                            step.id,
+                            len(final_ai_text),
+                        )
 
             return _ExecuteStepResult(
                 events=events,

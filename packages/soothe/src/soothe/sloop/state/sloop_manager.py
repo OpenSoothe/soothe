@@ -1112,23 +1112,6 @@ class StrangeLoopStateManager:
         checkpoint.updated_at = datetime.now(UTC)
         await self.save(checkpoint, include_goal_history=True)
 
-    async def finalize_loop(self, status: str) -> None:
-        """Mark loop finalized (no more goals accepted).
-
-        RFC-803 Phase 6: Uses force_flush for critical final state persistence.
-
-        Args:
-            status: Final status (finalized, cancelled)
-        """
-        if self._checkpoint is None:
-            return
-
-        self._checkpoint.status = status
-        # Use force_flush for critical operations - must persist final state
-        await self.force_flush()
-
-        logger.info("Finalized loop %s (status: %s)", self.loop_id, status)
-
     async def archive_and_finalize(
         self,
         *,

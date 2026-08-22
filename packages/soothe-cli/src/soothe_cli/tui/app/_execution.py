@@ -337,8 +337,8 @@ class _ExecutionMixin:
         """Fetch the daemon's default clarification mode for plan approval.
 
         Reads ``agent.clarification.default_mode`` from the daemon config via
-        a one-shot WebSocket RPC. Falls back to ``"manual"`` (the safe
-        default) when the daemon is unreachable, the section is missing, or
+        a one-shot WebSocket RPC. Falls back to ``"auto"`` (the default)
+        when the daemon is unreachable, the section is missing, or
         the value is not ``auto``/``manual``.
 
         Returns:
@@ -365,7 +365,7 @@ class _ExecutionMixin:
             return await _fetch()
         except Exception:  # noqa: BLE001
             logger.debug(
-                "Could not fetch default clarification mode from daemon; falling back to manual",
+                "Could not fetch default clarification mode from daemon; falling back to auto",
                 exc_info=True,
             )
             return normalize_composer_mode(None)

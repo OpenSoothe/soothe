@@ -35,15 +35,21 @@ def _collect_proposals(ctx: LoopRuntimeContext) -> list[Any]:
             queued.clear()
 
     # Executor instances attach to strange_loop during tests / optional wiring.
-    for holder in (
-        getattr(ctx, "executor", None),
-        getattr(ctx.strange_loop, "executor", None),
-        getattr(ctx.strange_loop, "_last_executor", None),
-    ):
+    _executor_holders = (
+        ("ctx.executor", getattr(ctx, "executor", None)),
+        ("strange_loop.executor", getattr(ctx.strange_loop, "executor", None)),
+        ("strange_loop._last_executor", getattr(ctx.strange_loop, "_last_executor", None)),
+    )
+    for holder_label, holder in _executor_holders:
         if holder is None:
             continue
         drained = drain_executor_proposals(holder)
         if drained:
+            logger.debug(
+                "[reconcile] drained %d proposal(s) from '%s'",
+                len(drained),
+                holder_label,
+            )
             proposals.extend(drained)
 
     if not proposals:
@@ -61,6 +67,9 @@ def _collect_proposals(ctx: LoopRuntimeContext) -> list[Any]:
             continue
         seen.add(key)
         unique.append(p)
+    if len(unique) != len(proposals):
+        logger.debug("[reconcile] dedup %d → %d proposals", len(proposals), len(unique))
+    logger.debug("[reconcile] collected %d proposal(s) from scratch+executor", len(unique))
     return unique
 
 
@@ -78,6 +87,13 @@ class ReconcileNode(LoopNode):
     ) -> NodeResult:
         proposals = _collect_proposals(ctx)
         cfg = getattr(ctx.strange_loop.config.agent.loop, "decompose", None)
+        if not proposals:
+            logger.debug(
+                "[reconcile] no proposals to commit (ce=%s goal=%s cfg=%s)",
+                ctx.ce is not None,
+                ctx.ce_goal_id,
+                cfg is not None,
+            )
         if proposals and ctx.ce is not None and ctx.ce_goal_id and cfg is not None:
             result = await reconcile_proposals_deterministic(
                 ctx.ce,

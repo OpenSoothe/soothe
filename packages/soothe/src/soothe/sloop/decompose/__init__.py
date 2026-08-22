@@ -19,7 +19,6 @@ from soothe.sloop.decompose.reconcile import (
     reconcile_proposals_deterministic,
 )
 from soothe.sloop.decompose.runtime import (
-    ProposalSink,
     bind_decompose_runtime,
     reset_decompose_runtime,
 )
@@ -31,7 +30,6 @@ __all__ = [
     "THREAD_POLICY_SYSTEM_ADDENDUM",
     "WRITE_TODOS_TOOL_DESCRIPTION",
     "DecomposeTaskMiddleware",
-    "ProposalSink",
     "ReconcileRejection",
     "ReconcileResult",
     "bind_decompose_runtime",

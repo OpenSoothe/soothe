@@ -213,12 +213,28 @@ class DecomposeTaskMiddleware(AgentMiddleware):
 
         if mode in ("plan", "ask"):
             # Coded policy: strip decompose_task so the LLM can't call it.
+            before = len(tools)
             tools = _strip_decompose_tool(tools)
-            logger.debug("[decompose] stripped decompose_task for %s mode (step=%s)", mode, step_id)
+            logger.debug(
+                "[decompose] stripped decompose_task for %s mode (step=%s tools=%d→%d)",
+                mode,
+                step_id,
+                before,
+                len(tools),
+            )
         else:
             # Agent mode: inject decompose_task as usual.
+            before = len(tools)
+            already_present = "decompose_task" in {getattr(t, "name", None) for t in tools}
             tools = _ensure_decompose_tool(tools)
-            logger.debug("[decompose] injecting decompose_task on step %s thread", step_id)
+            logger.debug(
+                "[decompose] injecting decompose_task on step %s thread "
+                "(tools=%d→%d already_present=%s)",
+                step_id,
+                before,
+                len(tools),
+                already_present,
+            )
 
         # Build system-prompt addendum.
         addendum = THREAD_POLICY_SYSTEM_ADDENDUM
