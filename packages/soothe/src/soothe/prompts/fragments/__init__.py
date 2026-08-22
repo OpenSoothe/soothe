@@ -59,6 +59,7 @@ EVAL_POLICY_SYSTEM_ADDENDUM = _read_xml_body("eval/eval_policy_system.xml")
 EVAL_DECISION_SYSTEM = _read_xml_body("eval/eval_decision_system.xml")
 ASK_MODE_ADDENDUM = _read_xml_body("decompose/ask_mode_addendum.xml")
 PLAN_MODE_ADDENDUM = _read_xml_body("decompose/plan_mode_addendum.xml")
+PARALLEL_NUDGE_ADDENDUM = _read_xml_body("decompose/parallel_nudge_addendum.xml")
 WESTWORLD_FANOUT_ADDENDUM = _read_xml_body("decompose/westworld_fanout_addendum.xml")
 
 
@@ -68,6 +69,7 @@ __all__ = [
     "DECOMPOSE_TASK_TOOL_DESCRIPTION",
     "EVAL_DECISION_SYSTEM",
     "EVAL_POLICY_SYSTEM_ADDENDUM",
+    "PARALLEL_NUDGE_ADDENDUM",
     "PLAN_MODE_ADDENDUM",
     "PROMPT_TIMESTAMP_FRAGMENT",
     "SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT",

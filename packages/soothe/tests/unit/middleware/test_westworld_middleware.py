@@ -77,6 +77,30 @@ def test_case_insensitive_substring_match() -> None:
     assert WESTWORLD_FANOUT_ADDENDUM in modified.system_message.content
 
 
+def test_fan_out_subagents_triggers_same_addendum() -> None:
+    """The ``fan out subagents`` phrase must fire the same addendum as
+    ``fan out beams`` (same effect, alternate phrasing)."""
+    middleware = WestWorldMiddleware()
+    request = _make_request([HumanMessage(content="fan out subagents the goal")])
+    with patch(
+        "langgraph.config.get_config",
+        return_value=_configurable(**{SOOTHE_DECOMPOSE_STEP_ID_KEY: "step-1"}),
+    ):
+        modified = _run_through_hook(middleware, request)
+    assert WESTWORLD_FANOUT_ADDENDUM in modified.system_message.content
+
+
+def test_fan_out_subagents_case_insensitive() -> None:
+    middleware = WestWorldMiddleware()
+    request = _make_request([HumanMessage(content="Please Fan Out Subagents now")])
+    with patch(
+        "langgraph.config.get_config",
+        return_value=_configurable(**{SOOTHE_DECOMPOSE_STEP_ID_KEY: "step-1"}),
+    ):
+        modified = _run_through_hook(middleware, request)
+    assert WESTWORLD_FANOUT_ADDENDUM in modified.system_message.content
+
+
 # ── No trigger ─────────────────────────────────────────────────────────────
 
 

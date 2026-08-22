@@ -21,6 +21,17 @@ SOOTHE_INTERACTION_MODE_KEY = "soothe_interaction_mode"
 # Propagated so middleware can inject the live limit into the decompose prompt.
 SOOTHE_MAX_BRANCH_ROOT_KEY = "soothe_max_branch_root"
 
+# Intake LLM 4-class label ("chitchat" | "minimal" | "simple" | "complex")
+# from ``loop_state.intent.intake_label``. Propagated so the decompose
+# middleware can apply a soft parallelization nudge on complex root steps
+# (language-independent semantic signal — no keyword matching).
+SOOTHE_INTAKE_LABEL_KEY = "soothe_intake_label"
+
+# Whether the owning step is a DAG root (``StepAction.is_dag_root``).
+# Propagated so the soft nudge fires only on root steps, never on children
+# (prevents recursive fan-out nudging at every decompose layer).
+SOOTHE_IS_DAG_ROOT_KEY = "soothe_is_dag_root"
+
 
 def positive_config_int(value: Any, default: int, *, minimum: int = 1) -> int:
     """Coerce a config budget to an int at or above ``minimum``.
@@ -38,5 +49,7 @@ __all__ = [
     "SOOTHE_EVAL_STEP_ID_KEY",
     "SOOTHE_INTERACTION_MODE_KEY",
     "SOOTHE_MAX_BRANCH_ROOT_KEY",
+    "SOOTHE_INTAKE_LABEL_KEY",
+    "SOOTHE_IS_DAG_ROOT_KEY",
     "positive_config_int",
 ]

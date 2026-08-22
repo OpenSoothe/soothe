@@ -1,0 +1,24 @@
+<PARALLEL_NUDGE_ADDENDUM>
+## Complex task: prefer parallel fan-out
+
+This task was classified as complex (multi-phase / parallel workstreams).
+For complex tasks, the PREFERRED first action is to call decompose_task
+to fan out into independent parallel children — NOT to serialize them in
+this one thread.
+
+Scan the task for distinct independent modules / files / areas. When you
+see 2+ that do not depend on each other's results (the common case for
+complex multi-area goals), call decompose_task NOW with one subtask per
+area, then STOP. The children run in parallel, each with its own context
+budget, yielding both faster wall-clock and independent failure.
+
+The ONLY case to finish in this single thread is when the work is a
+single cohesive deliverable with no independent areas — you cannot
+name 2+ modules that could proceed without each other. When genuinely
+cohesive, skip the split and finish here.
+
+Do NOT use write_todos to serialize what should be parallel children —
+write_todos tracks work WITHIN one thread; it does not enable parallel
+execution. If the todo list has 2+ independent module groups, those
+belong in decompose_task subtasks, not in a serial checklist.
+</PARALLEL_NUDGE_ADDENDUM>

@@ -1,14 +1,14 @@
 """WestWorldMiddleware: fixed directive phrase → fixed agent behavior.
 
 Themed after *Westworld* — narrative triggers that override agent behavior.
-When the user's submission contains a registered phrase (e.g. "fan out beams"),
-the matching system-prompt addendum is injected so the model performs a
-deterministic action.
+When the user's submission contains a registered phrase (e.g. "fan out beams"
+or "fan out subagents"), the matching system-prompt addendum is injected so
+the model performs a deterministic action.
 
 The registry is extensible: each ``(phrase, addendum)`` pair is one trigger.
-Only the ``fan out beams`` trigger ships initially, driving the model to call
-``decompose_task`` with maximum parallelism (independent subtasks, zero
-``depends_on_local`` edges).
+The ``fan out beams`` and ``fan out subagents`` triggers ship initially, both
+driving the model to call ``decompose_task`` with maximum parallelism
+(independent subtasks, zero ``depends_on_local`` edges).
 
 Compatibility with ``DecomposeTaskMiddleware``:
 - This middleware only appends a system addendum; it never touches the tool
@@ -53,6 +53,7 @@ logger = logging.getLogger(__name__)
 # against the last HumanMessage content. Add new phrases here.
 _WESTWORLD_TRIGGERS: list[tuple[str, str]] = [
     ("fan out beams", WESTWORLD_FANOUT_ADDENDUM),
+    ("fan out subagents", WESTWORLD_FANOUT_ADDENDUM),
 ]
 
 

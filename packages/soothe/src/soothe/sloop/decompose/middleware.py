@@ -23,6 +23,7 @@ from langchain_core.messages import ToolMessage
 
 from soothe.prompts import (
     ASK_MODE_ADDENDUM,
+    PARALLEL_NUDGE_ADDENDUM,
     PLAN_MODE_ADDENDUM,
     THREAD_POLICY_SYSTEM_ADDENDUM,
     WRITE_TODOS_TOOL_DESCRIPTION,
@@ -32,7 +33,9 @@ from soothe.sloop.decompose.tool import build_decompose_task_tool
 from soothe.sloop.utils.config_keys import (
     SOOTHE_DECOMPOSE_STEP_ID_KEY,
     SOOTHE_EVAL_STEP_ID_KEY,
+    SOOTHE_INTAKE_LABEL_KEY,
     SOOTHE_INTERACTION_MODE_KEY,
+    SOOTHE_IS_DAG_ROOT_KEY,
     SOOTHE_MAX_BRANCH_ROOT_KEY,
 )
 
@@ -255,6 +258,19 @@ class DecomposeTaskMiddleware(AgentMiddleware):
             addendum = f"{addendum}\n\n{ASK_MODE_ADDENDUM}"
         elif mode == "plan":
             addendum = f"{addendum}\n\n{PLAN_MODE_ADDENDUM}"
+        else:
+            # Agent mode: soft parallelization nudge for complex root steps.
+            # Fires only on a DAG root (never child steps — prevents recursive
+            # fan-out nudging at every decompose layer) when the intake LLM
+            # classified the goal as complex ("multi-phase / parallel
+            # workstreams"). Language-independent semantic signal — no keyword
+            # matching. Soft, not mandatory: the LLM is invited to *assess*
+            # parallelization, not forced to split (avoids the
+            # DECOMPOSE_FIRST_HINT pass-through chain regression).
+            is_root = conf.get(SOOTHE_IS_DAG_ROOT_KEY) is True
+            intake_label = conf.get(SOOTHE_INTAKE_LABEL_KEY)
+            if is_root and isinstance(intake_label, str) and intake_label.lower() == "complex":
+                addendum = f"{addendum}\n\n{PARALLEL_NUDGE_ADDENDUM}"
 
         system = request.system_message
         if system is not None and hasattr(system, "content"):

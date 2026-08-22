@@ -1906,6 +1906,9 @@ class Executor:
             from soothe.sloop.utils.config_keys import (
                 SOOTHE_DECOMPOSE_STEP_ID_KEY,
                 SOOTHE_EVAL_STEP_ID_KEY,
+                SOOTHE_INTAKE_LABEL_KEY,
+                SOOTHE_INTERACTION_MODE_KEY,
+                SOOTHE_IS_DAG_ROOT_KEY,
                 SOOTHE_MAX_BRANCH_ROOT_KEY,
             )
 
@@ -1918,11 +1921,19 @@ class Executor:
                 except (AttributeError, TypeError, ValueError):
                     pass
             if self._interaction_mode:
-                from soothe.sloop.utils.config_keys import SOOTHE_INTERACTION_MODE_KEY
-
                 configurable[SOOTHE_INTERACTION_MODE_KEY] = self._interaction_mode
             if step.kind == "eval":
                 configurable[SOOTHE_EVAL_STEP_ID_KEY] = step.id
+            # Propagate intake label + root flag so DecomposeTaskMiddleware can
+            # apply a soft parallelization nudge on complex root steps
+            # (language-independent semantic signal — no keyword matching).
+            if step.is_dag_root:
+                configurable[SOOTHE_IS_DAG_ROOT_KEY] = True
+            if loop_state is not None:
+                intent = getattr(loop_state, "intent", None)
+                intake_label = getattr(intent, "intake_label", None) if intent else None
+                if intake_label:
+                    configurable[SOOTHE_INTAKE_LABEL_KEY] = str(intake_label)
             from soothe.sloop.decompose.runtime import bind_decompose_runtime
 
             decompose_tokens = bind_decompose_runtime(
