@@ -12,9 +12,11 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
 from soothe_sdk.intention.models import RoutingClassification
 
+from soothe.sloop.middleware import (
+    GoalStepGuardMiddleware,
+    IntakeOnlyTaskGuardMiddleware,
+)
 from soothe.sloop.utils.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
-from soothe.sloop.utils.goal_step_guard import GoalStepGuardMiddleware
-from soothe.sloop.utils.intake_task_guard import IntakeOnlyTaskGuardMiddleware
 
 
 def _run_through_hook(middleware: object, request: ModelRequest) -> ModelRequest:

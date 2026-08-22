@@ -124,8 +124,8 @@ agent:
     max_iterations: 99
     # Recursive step decomposition budgets (RFC-904; always on for step THREADS).
     decompose:
-      max_depth: 5
-      max_steps: 50
+      max_depth: 3
+      max_steps: 30
       max_recompose: 2
       max_waves: 10
       max_branch_root: 5

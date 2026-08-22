@@ -334,8 +334,8 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
 
 def test_goal_synthesis_disables_all_tools() -> None:
     """Goal-completion synthesis must not expose tools (read-only ledger synthesis)."""
+    from soothe.sloop.middleware import GoalStepGuardMiddleware
     from soothe.sloop.utils.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
-    from soothe.sloop.utils.goal_step_guard import GoalStepGuardMiddleware
 
     config = SootheConfig()
     guard = GoalStepGuardMiddleware()

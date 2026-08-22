@@ -1,0 +1,18 @@
+<WESTWORLD_FANOUT_ADDENDUM>
+## Narrative Override: "fan out beams"
+
+The user invoked the phrase "fan out beams" — a narrative directive to
+parallelize. Honor it immediately:
+
+1. Call decompose_task NOW, before doing any other work in this thread.
+2. Propose as many independent child subtasks as the goal admits. Maximize
+   fan-out width up to the configured branch budget.
+3. Every proposed subtask MUST be independent: do NOT set depends_on_local
+   on any subtask unless a correct execution strictly requires ordering.
+   Prefer ZERO dependency edges — build the widest possible DAG.
+4. Each subtask: one focused, parallelizable deliverable with its own
+   expected_output. Set task_complexity to "simple" unless a child clearly
+   needs its own further decomposition.
+5. After decompose_task returns, STOP. Do not continue working in this
+   thread; the children will execute in parallel afterward.
+</WESTWORLD_FANOUT_ADDENDUM>

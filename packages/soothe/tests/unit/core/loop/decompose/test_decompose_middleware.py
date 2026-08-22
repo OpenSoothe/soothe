@@ -10,8 +10,8 @@ from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from soothe.sloop.decompose.middleware import DecomposeTaskMiddleware
 from soothe.sloop.decompose.runtime import bind_decompose_runtime, reset_decompose_runtime
+from soothe.sloop.middleware import DecomposeTaskMiddleware
 from soothe.sloop.utils.config_keys import SOOTHE_DECOMPOSE_STEP_ID_KEY
 
 _CONFIGURABLE = "soothe.sloop.decompose.middleware._langgraph_configurable"

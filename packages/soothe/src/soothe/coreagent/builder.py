@@ -7,8 +7,11 @@ from typing import TYPE_CHECKING, Any
 from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 from soothe_nano.agent import builder as nano_builder
 
-from soothe.sloop.utils.goal_step_guard import GoalStepGuardMiddleware
-from soothe.sloop.utils.intake_task_guard import IntakeOnlyTaskGuardMiddleware
+from soothe.sloop.middleware import (
+    GoalStepGuardMiddleware,
+    IntakeOnlyTaskGuardMiddleware,
+    WestWorldMiddleware,
+)
 from soothe.sloop.utils.subagent_catalog import partition_subagent_specs
 
 if TYPE_CHECKING:
@@ -42,11 +45,11 @@ class AgentBuilder(nano_builder.AgentBuilder):
 
     def _host_middleware_suffix(self) -> tuple:
         # Apply after ToolEnforcement so step/synthesis configurables win.
-        from soothe.sloop.decompose.middleware import DecomposeTaskMiddleware
-        from soothe.sloop.eval.middleware import EvalStepMiddleware
+        from soothe.sloop.middleware import DecomposeTaskMiddleware, EvalStepMiddleware
 
         return (
             GoalStepGuardMiddleware(),
+            WestWorldMiddleware(),
             DecomposeTaskMiddleware(),
             EvalStepMiddleware(),
         )
