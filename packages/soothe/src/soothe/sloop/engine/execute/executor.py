@@ -2238,6 +2238,26 @@ class Executor:
                     execution_metrics,
                 )
 
+            # RFC-905 fail-safe: when an Eval step's LLM emits decomposition
+            # subtasks as text/JSON instead of calling the decompose_task tool,
+            # recover the proposal from the final assistant text so RECONCILE
+            # can still commit the children.
+            if step.kind == "eval" and not self.decompose_proposals and messages:
+                final_ai_text = self._extract_final_assistant_text_from_step_messages(
+                    messages,
+                )
+                if final_ai_text:
+                    from soothe.sloop.eval.text_recovery import (
+                        recover_proposals_from_text,
+                    )
+
+                    recovered = recover_proposals_from_text(
+                        final_ai_text,
+                        parent_step_id=step.id,
+                    )
+                    if recovered:
+                        self.decompose_proposals.extend(recovered)
+
             return _ExecuteStepResult(
                 events=events,
                 step_result=StepExecutionRecord(
