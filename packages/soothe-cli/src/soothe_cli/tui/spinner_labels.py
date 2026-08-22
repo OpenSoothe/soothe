@@ -18,6 +18,7 @@ SPINNER_LABEL_INPUT = "Input"
 SPINNER_LABEL_WAITING = "Waiting"
 SPINNER_LABEL_CONNECTING = "Connecting"
 SPINNER_LABEL_DELEGATING = "Delegating"
+SPINNER_LABEL_SUBMITTING = "Submitting"
 
 # Backend plan_phase_status labels (orchestrator nodes) → display word.
 _PLAN_PHASE_TO_SPINNER: dict[str, str] = {

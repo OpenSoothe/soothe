@@ -16,14 +16,15 @@ Rules:
 - Every codebase change must cite a concrete file path discovered in the
   evidence. Do not invent files or changes the evidence does not support.
 - Scale the plan to the goal. Not every goal is a codebase change — a trivial
-  or non-code task gets a short plan (Goal, Solution, concrete steps) and `None`
-  for sections that do not apply; a structural codebase change gets the full
+  or non-code task gets a short plan (Goal, Solution, concrete steps) with the
+  optional sections omitted entirely; a structural codebase change gets the full
   section set below.
-- If the evidence is insufficient for a section, omit that section (or set it to
-  `None`) rather than guessing.
+- If the evidence is insufficient for an optional section, OMIT that section
+  entirely — do NOT write `None` or `N/A` as a placeholder. Simply leave the
+  section out so the plan stays compact and relevant.
 
 Output the plan in this format. Required sections are marked; optional sections
-may be omitted or set to `None` when they do not apply to the goal.
+should be OMITTED (not filled with `None`) when they do not apply to the goal.
 
 ## Plan: <one-line title>
 
@@ -34,14 +35,14 @@ may be omitted or set to `None` when they do not apply to the goal.
 <the decided design / outcome — 2-6 sentences. State what will be true when
 the goal is complete. Do NOT schedule "we will first read / diagnose".>
 
-### Design principles                                 (optional)
+### Design principles                                 (optional — omit if purely mechanical)
 <concise bullets for product/UX/engineering principles this solution upholds
-or introduces. Use `None` when the change is purely mechanical.>
+or introduces. Omit entirely when the change is purely mechanical.>
 
-### Architecture changes                              (optional)
+### Architecture changes                              (optional — omit if no structural change)
 <structural deltas when needed: module/layout moves, new/removed components,
-dependency or data-flow shifts. Use `None` when the work stays within existing
-structure.>
+dependency or data-flow shifts. Omit entirely when the work stays within
+existing structure.>
 
 ### Changes                                           (required)
 <numbered, ordered implementation steps. Each step MUST be a concrete change
@@ -55,13 +56,13 @@ Example shape:
    - How: <brief implementation approach>
    - Risk: <potential gotcha or breaking change>>
 
-### Evidence                                          (optional)
+### Evidence                                          (optional — omit for non-codebase tasks)
 <brief citations from the research evidence — paths/symbols already seen.
-Omit for non-codebase tasks.>
+Omit entirely for non-codebase tasks.>
 
-### Risks & assumptions                              (optional)
-<potential gotchas, breaking changes, or assumptions. Omit or `None` when trivial.>
+### Risks & assumptions                              (optional — omit when trivial)
+<potential gotchas, breaking changes, or assumptions. Omit entirely when trivial.>
 
-### Open questions                                    (optional)
-<only if truly blocking; otherwise `None`.>
+### Open questions                                    (optional — omit unless truly blocking)
+<only if truly blocking; otherwise omit entirely.>
 </PLAN_SYNTHESIS_INSTRUCTIONS>

@@ -9,6 +9,42 @@ from pathlib import Path
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n?", re.DOTALL)
 
+# Matches a section heading (``### Title``) whose body is a bare placeholder
+# like ``None``, ``None.``, ``N/A``, ``- None``, or ``—``. The heading + body
+# block is removed so the plan stays compact.
+_NONE_SECTION_RE = re.compile(
+    r"\n?^#{2,3}\s+[^\n]+\n"  # heading line (## or ###) + newline
+    r"(?:[\s-]*"  # optional whitespace / bullet dashes before placeholder
+    r"(?:None|N/?A|—|--|n/a)"  # placeholder variants
+    r"[.\s]*"  # optional trailing punctuation/whitespace
+    r")\s*\n",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def strip_empty_plan_sections(markdown: str) -> str:
+    """Remove plan sections whose body is a bare ``None`` / ``N/A`` placeholder.
+
+    The plan templates instruct the LLM to OMIT inapplicable optional sections
+    entirely, but models sometimes emit a literal ``None`` or ``N/A`` as the
+    section body. This post-processor strips those dead sections so the
+    rendered plan stays compact and relevant.
+
+    Only sections with a placeholder body are removed; sections with real
+    content (even short) are left untouched.
+    """
+    text = (markdown or "").strip()
+    if not text:
+        return text
+    # Ensure a trailing newline so the regex can match the last section.
+    text += "\n"
+    # Repeat until stable — adjacent sections may collapse.
+    prev: str | None = None
+    while prev != text:
+        prev = text
+        text = _NONE_SECTION_RE.sub("\n", text)
+    return text.strip()
+
 
 def slugify_plan_name(text: str, *, max_len: int = 48) -> str:
     """Return a filesystem-safe slug from a goal or plan title."""

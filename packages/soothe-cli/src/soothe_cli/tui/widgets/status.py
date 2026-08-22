@@ -74,9 +74,10 @@ class ClarificationModeBadge(Static):
     """Visual block showing the active composer mode (Auto / Manual / Plan / Ask).
 
     Rendered Claude Code-style as ``⏵⏵ <label> (shift+Tab to cycle)``. Default is
-    ``Manual`` (bold orange pill) so operators see that clarifications will be
-    relayed. ``Auto`` renders as muted/dim text, ``Plan`` as a teal pill, and
-    ``Ask`` as a blue pill for read-only.
+    ``Manual`` (bold warning pill) so operators see that clarifications will be
+    relayed. ``Auto`` renders as muted/dim text, ``Plan`` as an accent pill, and
+    ``Ask`` as a primary pill for read-only. All colors use theme-aware CSS
+    variables so they adapt to dark and light themes.
     """
 
     DEFAULT_CSS = """
@@ -89,20 +90,20 @@ class ClarificationModeBadge(Static):
     }
 
     ClarificationModeBadge.manual {
-        background: #e67e22;
-        color: black;
+        background: $warning;
+        color: $background;
         text-style: bold;
     }
 
     ClarificationModeBadge.plan {
-        background: #1abc9c;
-        color: black;
+        background: $accent;
+        color: $background;
         text-style: bold;
     }
 
     ClarificationModeBadge.ask {
-        background: #3498db;
-        color: black;
+        background: $primary;
+        color: $background;
         text-style: bold;
     }
     """

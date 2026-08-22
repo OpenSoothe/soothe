@@ -18,7 +18,8 @@ read it now with your read-only tools, then write the answer.
 Scale the plan to the goal. Not every goal is a codebase change:
 - A trivial or non-code task (e.g. "count from 1 to 5", "summarize this text")
   gets a short plan: Goal, Solution, and the concrete steps to do it — no fake
-  file paths, no invented architecture. Use `None` for sections that do not apply.
+  file paths, no invented architecture. OMIT optional sections that do not apply
+  entirely; do NOT write `None` or `N/A` as a placeholder.
 - A structural codebase change gets the full section set below, grounded in
   evidence from real files you read.
 
@@ -34,8 +35,8 @@ Output discipline:
 - Output ONLY the final plan document as your last message — nothing before it.
 
 Your final output must be a plan document structured as follows. Required
-sections are marked; optional sections may be omitted or set to `None` when
-they do not apply to the goal.
+sections are marked; optional sections should be OMITTED entirely (do NOT
+write `None` or `N/A` as a placeholder) when they do not apply to the goal.
 
 ## Plan: <one-line title>
 
@@ -47,15 +48,15 @@ they do not apply to the goal.
 the goal is complete. Do NOT say "we will first read / diagnose / investigate";
 research already happened above.>
 
-### Design principles                                 (optional)
+### Design principles                                 (optional — omit if purely mechanical)
 <concise bullets for product/UX/engineering principles this solution upholds
-or introduces. Use `None` when the change is purely mechanical with no
+or introduces. Omit entirely when the change is purely mechanical with no
 principle worth stating.>
 
-### Architecture changes                              (optional)
+### Architecture changes                              (optional — omit if no structural change)
 <structural deltas when needed: module/layout moves, new/removed components,
-dependency or data-flow shifts. Use `None` when the work stays within existing
-structure with no boundary or topology change.>
+dependency or data-flow shifts. Omit entirely when the work stays within
+existing structure with no boundary or topology change.>
 
 ### Changes                                           (required)
 <numbered, ordered implementation steps. Each step MUST be a concrete change
@@ -69,15 +70,15 @@ further recon. Example shape (adapt to the goal):
    - How: <brief implementation approach>
    - Risk: <potential gotcha or breaking change>>
 
-### Evidence                                          (optional)
-<brief citations from grounding — paths/symbols already seen. Omit for
-non-codebase tasks.>
+### Evidence                                          (optional — omit for non-codebase tasks)
+<brief citations from grounding — paths/symbols already seen. Omit entirely
+for non-codebase tasks.>
 
-### Risks & assumptions                              (optional)
-<potential gotchas, breaking changes, or assumptions. Omit or `None` when trivial.>
+### Risks & assumptions                              (optional — omit when trivial)
+<potential gotchas, breaking changes, or assumptions. Omit entirely when trivial.>
 
-### Open questions                                    (optional)
-<only if truly blocking; otherwise `None`.>
+### Open questions                                    (optional — omit unless truly blocking)
+<only if truly blocking; otherwise omit entirely.>
 
 Anti-patterns (avoid these shapes):
 - Solution/Changes that mostly schedule more reading of files already (or
@@ -87,4 +88,6 @@ Anti-patterns (avoid these shapes):
 - Padding Design principles / Architecture with vague slogans unrelated to the
   goal.
 - Inventing file paths or changes the evidence does not support.
+- Writing `None`, `N/A`, or `—` as a section body. OMIT the section entirely
+  instead of using a placeholder.
 </PLAN_MODE_ADDENDUM>

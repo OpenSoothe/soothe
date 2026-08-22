@@ -45,6 +45,7 @@ from soothe.sloop.clarification.protocol import (
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.plans.artifact import (
     parse_plan_review_answers,
+    strip_empty_plan_sections,
     update_plan_artifact_status,
     write_plan_artifact,
 )
@@ -450,6 +451,11 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
             "   - Select 'Reject' below and type 'retry' to regenerate the plan.\n"
         )
         logger.warning("[PlanModeReview] Plan synthesis failed; emitting placeholder")
+
+    # Strip sections whose body is a bare ``None`` / ``N/A`` placeholder.
+    # The templates instruct the LLM to omit inapplicable sections, but models
+    # sometimes emit a literal ``None`` instead. This keeps the plan compact.
+    plan_draft = strip_empty_plan_sections(plan_draft)
 
     path = save_plan_draft(ctx, plan_draft)
     if not path:

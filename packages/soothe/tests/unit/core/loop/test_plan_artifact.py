@@ -7,6 +7,7 @@ from pathlib import Path
 from soothe.sloop.plans.artifact import (
     parse_plan_review_answers,
     slugify_plan_name,
+    strip_empty_plan_sections,
     strip_plan_frontmatter,
     update_plan_artifact_status,
     write_plan_artifact,
@@ -55,3 +56,58 @@ def test_parse_plan_review_answers() -> None:
     assert parse_plan_review_answers(("Reject", "tighten scope")) == ("reject", "tighten scope")
     assert parse_plan_review_answers(("Reject", "")) == ("reject", "")
     assert parse_plan_review_answers(("Approve", "")) == ("approve", "")
+
+
+def test_strip_empty_plan_sections_removes_none_bodies() -> None:
+    """Sections with a bare ``None`` / ``N/A`` body are removed."""
+    plan = (
+        "## Plan: Do the thing\n\n"
+        "### Goal\nDo the thing.\n\n"
+        "### Solution\nWe will do it.\n\n"
+        "### Design principles\nNone\n\n"
+        "### Architecture changes\nN/A\n\n"
+        "### Changes\n1. Step one.\n\n"
+        "### Risks & assumptions\nNone.\n\n"
+        "### Open questions\n- None\n"
+    )
+    result = strip_empty_plan_sections(plan)
+    assert "### Design principles" not in result
+    assert "### Architecture changes" not in result
+    assert "### Risks & assumptions" not in result
+    assert "### Open questions" not in result
+    # Required sections with real content are preserved.
+    assert "### Goal" in result
+    assert "### Solution" in result
+    assert "### Changes" in result
+    assert "1. Step one." in result
+
+
+def test_strip_empty_plan_sections_preserves_real_content() -> None:
+    """Sections with actual content (even short) are left untouched."""
+    plan = (
+        "## Plan: Fix bug\n\n"
+        "### Goal\nFix the bug.\n\n"
+        "### Solution\nPatch the file.\n\n"
+        "### Risks & assumptions\nNone of the public API changes.\n\n"
+        "### Changes\n1. Fix it.\n"
+    )
+    result = strip_empty_plan_sections(plan)
+    # ``None of the public API changes`` is real content, not a placeholder.
+    assert "### Risks & assumptions" in result
+    assert "None of the public API changes" in result
+
+
+def test_strip_empty_plan_sections_passthrough_clean_plan() -> None:
+    """A plan with no placeholder sections is unchanged (trailing whitespace stripped)."""
+    plan = (
+        "## Plan: Count\n\n"
+        "### Goal\nCount to five.\n\n"
+        "### Solution\nOutput 1-5.\n\n"
+        "### Changes\n1. Print numbers.\n"
+    )
+    assert strip_empty_plan_sections(plan) == plan.strip()
+
+
+def test_strip_empty_plan_sections_empty_input() -> None:
+    assert strip_empty_plan_sections("") == ""
+    assert strip_empty_plan_sections("   ") == ""

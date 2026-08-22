@@ -306,6 +306,16 @@ class _ExecutionMixin:
         # remount / race). Without this, "Reject" is treated as a new goal.
         adapter._clarification_pending = True
 
+        # Show immediate feedback on the thinking row while the answer is
+        # sent to the daemon and the graph resumes. Without this the row
+        # stays blank (the stream-driven spinner is suppressed while
+        # ``_clarification_pending`` is True) so the user gets no signal
+        # that their Approve/Reject was received. The stream will replace
+        # this with a real phase label once events arrive.
+        from soothe_cli.tui.spinner_labels import SPINNER_LABEL_SUBMITTING
+
+        await self._set_spinner(SPINNER_LABEL_SUBMITTING)
+
         # Hand off to the standard turn pipeline. ``execute_task_textual``
         # snapshots ``adapter._clarification_pending`` and sets the wire
         # ``clarification_answer`` flag plus the ``clarification_answers``
