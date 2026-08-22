@@ -695,9 +695,9 @@ class StrangeLoop:
                         # A bare resume keyword ("retry") must not take the chitchat
                         # fast-path to END — that would skip the resumed goal's
                         # remaining work. Only CHITCHAT/None need upgrading; under
-                        # the unified workflow simple and minimal route to DISPATCH
-                        # but skip the coverage Eval gate (root_eval short-circuit);
-                        # only complex runs the full Eval gate.
+                        # the unified workflow simple and minimal route to DISPATCH.
+                        # At ROOT_EVAL, minimal skips Eval, simple uses an LLM
+                        # decision, and complex runs the structural Eval gate.
                         if is_interrupt_resume_keyword(user_submission_line):
                             from soothe.sloop.intention.models import IntakeLabel
 

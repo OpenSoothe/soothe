@@ -8,8 +8,10 @@ checkpoint, not classified here.
 
 The intake LLM emits ``task_complexity`` for agentic goals; ``intake_label``
 is derived from that field for the TUI and graph routing. DISPATCH owns
-decomposition. Only ``complex`` runs the coverage Eval gate; ``minimal`` and
-``simple`` finalize directly from the CoreAgent execute result.
+decomposition. ``complex`` runs the coverage Eval gate via the structural
+``eval_required()`` predicate; ``simple`` uses an LLM decision
+(``decide_eval_required``) to determine dynamically whether a coverage audit is
+warranted; ``minimal`` skips Eval entirely (no LLM call).
 
 CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
 ``soothe_sdk.intention.models`` and re-exported here.
@@ -35,9 +37,10 @@ class IntakeLabel(StrEnum):
       LLM piggybacks ``chitchat_response`` and the runner emits it directly.
     - ``minimal``: trivia, single obvious tool call, or direct answer; DISPATCH
       grounds a one-step root (no multi-step decomposition). Skips the coverage
-      Eval phase and finalizes from the CoreAgent result.
+      Eval phase and finalizes from the CoreAgent result (no LLM decision).
     - ``simple``: single focused deliverable CoreAgent can finish in one execute.
-      Skips the coverage Eval phase and finalizes from the CoreAgent result.
+      An LLM decision (``decide_eval_required``) dynamically determines whether
+      a coverage Eval is warranted based on execution evidence.
     - ``complex``: multi-phase / parallel workstreams / durable phase gates; runs
       the full coverage Eval gate before finalization.
     """
@@ -93,9 +96,9 @@ class IntentClassification(BaseModel):
     4-class LLM intake classification:
     - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.
     - ``minimal``: direct execute via DISPATCH root; skips the coverage Eval phase
-      and finalizes from the CoreAgent result.
-    - ``simple``: single focused deliverable; skips the coverage Eval phase and
-      finalizes from the CoreAgent result.
+      and finalizes from the CoreAgent result (no LLM decision).
+    - ``simple``: single focused deliverable; an LLM decision at ROOT_EVAL
+      dynamically determines whether a coverage Eval is warranted.
     - ``complex``: multi-phase / parallel workstreams; runs the full coverage
       Eval gate. The runner / StrangeLoop derive loop continuation structurally
       from the checkpoint.

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `SIMPLE` tasks now use an LLM decision (`decide_eval_required`) at ROOT_EVAL to dynamically determine whether a coverage Eval is warranted, replacing the deterministic skip. `COMPLEX` tasks continue using the structural `eval_required()` predicate; `MINIMAL` tasks still skip Eval without an LLM call. Fail-safe: when the fast model is unavailable or the call errors, Eval is required rather than silently skipped.
+
 ## [v0.10.30] - 2026-08-22
 
 ### Added

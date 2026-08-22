@@ -35,21 +35,6 @@ if TYPE_CHECKING:
 GraphCallKind = Literal["synthesis", "step_completion"]
 """Discriminator for LLM calls assembled by this wrapper (RFC-904)."""
 
-_PRIOR_CONVERSATION_TAGS: tuple[tuple[str, Literal["human", "ai"]], ...] = (
-    ("USER", "human"),
-    ("ASSISTANT", "ai"),
-)
-
-
-def _parse_prior_conversation_xml(msg_xml: str) -> tuple[Literal["human", "ai"], str] | None:
-    """Parse ``<USER>`` / ``<ASSISTANT>`` blocks from prior conversation projection."""
-    msg_xml = msg_xml.strip()
-    for tag, role in _PRIOR_CONVERSATION_TAGS:
-        open_tag, close_tag = f"<{tag}>", f"</{tag}>"
-        if msg_xml.startswith(open_tag) and msg_xml.endswith(close_tag):
-            return role, msg_xml[len(open_tag) : -len(close_tag)].strip()
-    return None
-
 
 def _format_dag_context(dag_ctx: Any) -> str:
     """Format DagPlanningContext as plain-text DAG STATUS section for prompt injection."""

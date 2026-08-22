@@ -11,31 +11,6 @@ logger = logging.getLogger(__name__)
 _DEFAULT_DECISION_GOAL_SNIP_LEN = 350
 
 
-def _extract_text_content(content: Any) -> str:
-    """Normalise LLM response content to a plain string.
-
-    Handles both the simple string case and the Anthropic-style list-of-blocks
-    case (e.g. ``[{'type': 'text', 'text': '...'}, {'type': 'tool_use', ...}]``).
-
-    Args:
-        content: The ``content`` attribute from a LangChain AIMessage.
-
-    Returns:
-        Plain text, joining all ``text``-type blocks when content is a list.
-    """
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                parts.append(block)
-            elif isinstance(block, dict) and block.get("type") == "text":
-                parts.append(block.get("text", ""))
-        return "\n".join(parts)
-    return str(content)
-
-
 def _default_agent_decision(goal: str, iteration: int = 0) -> Any:
     """Minimal single-step decision used when parsing fails.
 

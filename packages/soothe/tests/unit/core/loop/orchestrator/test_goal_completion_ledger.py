@@ -419,8 +419,8 @@ async def test_minimal_intake_ledger_direct_uses_synthesis_prompt_as_human() -> 
         if getattr(m, "phase", None) == "goal_completion" and isinstance(m, LoopAIMessage)
     )
     # Trivial no longer substitutes the raw user submission; it uses the same
-    # synthesis ledger prompt as all task complexities (minimal and simple skip
-    # the Eval phase at ROOT_EVAL; only complex runs the gate).
+    # synthesis ledger prompt as all task complexities (minimal skips Eval at
+    # ROOT_EVAL; simple uses an LLM decision; complex runs the structural gate).
     assert "Produce the final user-facing response" in gc_human.content
     assert gc_ai.content == "It is 3 PM."
 
