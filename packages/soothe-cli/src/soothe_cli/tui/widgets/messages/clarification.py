@@ -128,7 +128,8 @@ class ClarificationInputMessage(Vertical):
         padding: 0 1;
         border: none;
         background: transparent;
-        color: $text-muted;
+        /* Dim grey for the non-selected option. */
+        color: $text-muted 60%;
     }
 
     ClarificationInputMessage .plan-review-actions Button:focus {
@@ -137,7 +138,8 @@ class ClarificationInputMessage(Vertical):
     }
 
     ClarificationInputMessage .plan-review-actions Button.plan-review-selected {
-        color: $primary;
+        /* Bold green to make the selection obvious. */
+        color: $success;
         text-style: bold;
         background: transparent;
     }
@@ -174,7 +176,14 @@ class ClarificationInputMessage(Vertical):
     }
 
     ClarificationInputMessage.is-submitted .plan-review-actions Button {
+        /* After submit, the selected action stays bold green; the other
+           dims to grey so the user's choice is visually obvious. */
+        color: $text-muted 60%;
+    }
+
+    ClarificationInputMessage.is-submitted .plan-review-actions Button.plan-review-selected {
         color: $success;
+        text-style: bold;
     }
     """
 

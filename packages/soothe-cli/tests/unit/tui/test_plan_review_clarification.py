@@ -22,14 +22,17 @@ def test_strip_plan_frontmatter_passthrough() -> None:
 
 
 def test_plan_review_actions_use_primary_text_highlight() -> None:
-    """Selected action is blue text only — no reverse/white-on-blue fill."""
+    """Selected action is bold green; non-selected is dim grey — no reverse fill."""
     css = ClarificationInputMessage.DEFAULT_CSS
     assert "Button.plan-review-selected" in css
-    assert "color: $primary;" in css
+    assert "color: $success;" in css
     assert "text-style: bold reverse;" not in css
     selected_block = css.split("Button.plan-review-selected {", 1)[1].split("}", 1)[0]
     assert "background: transparent;" in selected_block
     assert "background: $primary;" not in selected_block
+    # Non-selected (base Button rule) is dim grey.
+    base_block = css.split(".plan-review-actions Button {", 1)[1].split("}", 1)[0]
+    assert "color: $text-muted" in base_block
 
 
 def test_clarification_wire_content_plan_review() -> None:

@@ -280,6 +280,106 @@ async def await_goal_completion_tail_persistence(
         )
 
 
+async def _finalize_plan_mode_approve(
+    ctx: LoopRuntimeContext,
+    *,
+    graph_state: dict[str, Any],
+    plan_result: Any,
+    goal_record: Any,
+) -> dict[str, Any]:
+    """Terminal completion for a plan-mode approve (Bug #5).
+
+    The plan-mode goal's sole purpose was to produce a plan; the plan body is
+    already the terminal ledger entry (recorded by
+    ``_record_plan_completion_ledger`` at plan-draft time in ``node_plan_review``).
+    So this path skips goal-completion synthesis, the ``goal_completion``
+    Human/AI ledger pair, and any ``full_output`` — the user must NOT see a
+    summary here. Only the follow-on exec goal (enqueued by the daemon from
+    the ``follow_on_exec`` signal carried on the ``completed`` event) should
+    produce a user-facing summary.
+
+    Keeps the bookkeeping the rest of ``node_goal_completion`` does: iteration
+    checkpoint, state clear, CE goal finalization, tail persistence, and the
+    ``completed`` wire event (carrying ``follow_on_exec``).
+    """
+    state = ctx.loop_state
+    state_manager = ctx.state_manager
+
+    logger.info(
+        "[finalize] plan-mode approve completion (no summary) loop_id=%s iteration=%s",
+        state_manager.loop_id,
+        state.iteration,
+    )
+
+    state.previous_plan = plan_result
+    iteration_already_recorded = graph_state.get("after_record_route") in (
+        "finalize",
+        "goal_completion",
+    )
+    if iteration_already_recorded:
+        iteration_completed = max(state.iteration - 1, 0)
+    else:
+        iteration_completed = state.iteration
+        state.iteration += 1
+
+    state.clear_goal_state()
+    ctx.scratch.decision = None
+    ctx.scratch.step_results = []
+    ctx.scratch.plan_result = None
+    logger.debug(
+        "[goal_completion] Cleared goal state for plan-mode approve (iter=%d)",
+        iteration_completed,
+    )
+
+    if not iteration_already_recorded:
+        await state_manager.record_iteration(
+            goal_record=goal_record,
+            iteration=iteration_completed,
+            plan_result=plan_result,
+            decision=None,
+            step_results=[],
+            state=state,
+            working_memory=None,
+        )
+
+    if ctx.ce is not None:
+        try:
+            await ctx.ce.finalize_goal(ctx.ce_goal_id, status="completed")
+        except Exception:
+            logger.warning("[goal_completion] CE goal finalization failed", exc_info=True)
+
+    # No synthesis, no ``goal_completion`` ledger pair, no ``full_output``.
+    # The plan body already in the ledger is this goal's terminal record.
+    # Empty ``full_output`` + ``skip_goal_completion_wire_duplicate`` ensures
+    # the runner surfaces nothing to the user; ``follow_on_exec`` is carried
+    # so the daemon enqueues the exec goal after this goal terminates.
+    updated_result = plan_result.model_copy(
+        update={
+            "full_output": "",
+            "status": "done",
+            "evidence_summary": "",
+            "follow_on_exec": getattr(ctx.scratch, "follow_on_exec", None),
+        }
+    )
+    await ctx.emit(
+        "completed",
+        {
+            "result": updated_result,
+            "step_results_count": 0,
+            "skip_goal_completion_wire_duplicate": True,
+        },
+    )
+
+    logger.info(
+        "Plan-mode goal completed (no summary): iterations=%d action=plan_mode_approve",
+        state.iteration,
+    )
+
+    _start_goal_completion_tail_persistence(ctx, goal_record=goal_record)
+    gc.collect()
+    return {"last_outcome": "completed"}
+
+
 async def node_goal_completion(
     ctx: LoopRuntimeContext, graph_state: dict[str, Any]
 ) -> dict[str, Any]:
@@ -311,6 +411,26 @@ async def node_goal_completion(
         return {"last_outcome": "fatal"}
 
     await emit_plan_phase_status(ctx, label=_GOAL_FINALIZE_STATUS_LABEL)
+
+    # Bug #5: plan-mode approve terminates the plan-mode goal WITHOUT a
+    # goal-completion synthesis summary. The plan body is already the terminal
+    # ledger entry (recorded by ``_record_plan_completion_ledger`` at
+    # plan-draft time in ``node_plan_review``); only the follow-on exec goal
+    # (enqueued by the daemon from ``follow_on_exec``) should produce a
+    # user-facing summary. ``follow_on_exec`` is set only by
+    # ``handle_plan_mode_review_answer`` on approve; None for every other
+    # completion path (including the exec goal itself, whose scratch starts
+    # fresh). Under the default ``final_response=always_synthesize`` mode the
+    # strategy logic below would force synthesis anyway, so short-circuit here
+    # before constructing the SynthesisGenerator.
+    follow_on_exec = getattr(ctx.scratch, "follow_on_exec", None)
+    if follow_on_exec is not None:
+        return await _finalize_plan_mode_approve(
+            ctx,
+            graph_state=graph_state,
+            plan_result=plan_result,
+            goal_record=goal_record,
+        )
 
     perf_start = ctx.scratch.iteration_perf_start or time.perf_counter()
 

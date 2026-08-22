@@ -617,3 +617,115 @@ async def test_goal_completion_emits_finalize_phase_status() -> None:
     ]
     assert phase_emits
     assert phase_emits[0]["label"] == "Finalizing goal"
+
+
+@pytest.mark.asyncio
+async def test_plan_mode_approve_skips_summary() -> None:
+    """Bug #5: plan-mode approve terminates the goal WITHOUT a synthesis summary.
+
+    The plan body is already the terminal ledger entry (recorded by
+    ``_record_plan_completion_ledger`` at plan-draft time); only the follow-on
+    exec goal should produce a user-facing summary. So finalize must NOT run a
+    synthesis stream, write a ``goal_completion`` ledger pair, or surface a
+    ``full_output`` — but it must still emit ``completed`` carrying
+    ``follow_on_exec`` so the daemon enqueues the exec goal.
+    """
+    ce = _make_ce()
+    loop_state = LoopState(goal="count one to five", thread_id="thr-plan")
+    goal = GoalNode(description="count one to five")
+    ce._dag.add_goal(goal)
+    loop_state.bind_ce(ce, goal.id)
+    # Pre-existing plan body + approve action in the ledger (as node_plan_review
+    # would have recorded them before the approve reached finalize).
+    ce.ledger.record_message(
+        LoopAIMessage(
+            content="## Plan: count\n1, 2, 3, 4, 5",
+            thread_id="thr-plan",
+            iteration=0,
+            phase="goal_completion",
+        ),
+        phase="goal_completion",
+    )
+    ce.ledger.record_message(
+        LoopAIMessage(
+            content="Plan approved by operator.",
+            thread_id="thr-plan",
+            iteration=0,
+            phase="goal_completion",
+        ),
+        phase="goal_completion",
+    )
+    plan_result = PlanResult(
+        status="done",
+        goal_progress="complete",
+        require_goal_completion=False,
+        full_output="## Plan: count\n1, 2, 3, 4, 5",
+    )
+    pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
+    pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.SYNTHESIZE)
+
+    strange_loop = Mock()
+    strange_loop.loop_planner = Mock()
+    strange_loop.loop_planner._model = Mock()
+    strange_loop.core_agent = Mock()
+    # Default mode is always_synthesize — the bug forces synthesis even though
+    # require_goal_completion=False. The fix must short-circuit regardless.
+    strange_loop.config.agent.loop.final_response = "always_synthesize"
+    strange_loop._fast_llm = Mock()  # would be invoked if synthesis ran
+
+    sm = Mock()
+    sm.record_iteration = AsyncMock()
+    sm.finalize_goal = AsyncMock()
+
+    ctx = _ctx(
+        loop_state=loop_state,
+        plan_manager=pm,
+        strange_loop=strange_loop,
+        state_manager=sm,
+        plan_result=plan_result,
+        ce=ce,
+        goal=goal,
+    )
+    # follow_on_exec is set only on plan-mode approve.
+    ctx.scratch.follow_on_exec = {
+        "goal_prompt": "count one to five",
+        "plan_path": "/ws/.soothe/plans/p.md",
+    }
+
+    async def fail_gen(self, goal, state):  # noqa: ARG002
+        raise AssertionError("plan-mode approve must not run synthesis")
+        yield  # pragma: no cover - make this a generator
+
+    with patch.object(SynthesisGenerator, "generate_synthesis", fail_gen):
+        await node_goal_completion(ctx, {})
+
+    # No synthesis stream events.
+    stream_events = [
+        c.args[0] for c in ctx.emit.await_args_list if c.args and c.args[0] == "stream_event"
+    ]
+    assert stream_events == []
+
+    # No NEW goal_completion ledger pair was appended by finalize (the two
+    # pre-existing entries are the plan body + approve action).
+    gc_ai = [
+        m
+        for m in loop_state.loop_messages
+        if getattr(m, "phase", None) == "goal_completion" and isinstance(m, LoopAIMessage)
+    ]
+    assert len(gc_ai) == 2
+    assert gc_ai[0].content == "## Plan: count\n1, 2, 3, 4, 5"
+    assert gc_ai[1].content == "Plan approved by operator."
+
+    # completed event carries follow_on_exec and empty full_output.
+    completed_payload = next(
+        (c.args[1] for c in ctx.emit.await_args_list if c.args and c.args[0] == "completed"),
+        None,
+    )
+    assert completed_payload is not None
+    assert completed_payload["result"].full_output == ""
+    assert completed_payload["result"].status == "done"
+    assert completed_payload["skip_goal_completion_wire_duplicate"] is True
+    assert completed_payload["result"].follow_on_exec == {
+        "goal_prompt": "count one to five",
+        "plan_path": "/ws/.soothe/plans/p.md",
+    }
