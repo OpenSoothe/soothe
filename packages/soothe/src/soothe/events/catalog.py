@@ -81,13 +81,6 @@ PLUGIN_UNLOADED = "soothe.internal.plugin.unloaded"
 PLAN_DAG_SNAPSHOT = "soothe.internal.plan.dag_snapshot"
 PLAN_BATCH_STARTED = "soothe.internal.plan.batch.started"
 
-# Skill internals
-SKILL_BODY_LOADED = "soothe.internal.skill.body.loaded"
-
-# MCP internals
-MCP_LIST_CHANGED = "soothe.internal.mcp.list_changed"
-MCP_TOOL_TIMEOUT = "soothe.internal.mcp.tool.timeout"
-
 # Branch internals
 BRANCH_ANALYZED = "soothe.internal.branch.analyzed"
 BRANCH_PRUNED = "soothe.internal.branch.pruned"
@@ -160,9 +153,6 @@ AUTOPILOT_GOAL_BLOCKED = "soothe.system.autopilot.goal.blocked"
 
 StreamChunk = tuple[tuple[str, ...], str, Any]
 """Deepagents-canonical stream chunk: ``(namespace, mode, data)``."""
-
-STREAM_CHUNK_LEN = 3
-MSG_PAIR_LEN = 2
 
 
 def custom_event(data: dict[str, Any]) -> StreamChunk:

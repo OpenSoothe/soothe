@@ -134,7 +134,6 @@ class InternalGoalUnblockedEvent(SootheEvent):
     reason: str | None = None
     loop_id: str | None = None  # Loop that was blocked
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ============================================================================

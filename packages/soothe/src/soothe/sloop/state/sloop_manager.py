@@ -138,7 +138,6 @@ class StrangeLoopStateManager:
         self._loop_writer = None
 
         # P1b: process-scoped SQLite coalesce (no per-manager flush worker)
-        self._sqlite_flush = None
         self._last_save_checkpoint: StrangeLoopCheckpoint | None = None
         self._checkpoint_write_lock = asyncio.Lock()
         self._closed = False
@@ -610,7 +609,6 @@ class StrangeLoopStateManager:
         if coord is None:
             await self._do_save_checkpoint(checkpoint)
             return
-        self._sqlite_flush = coord
         await coord.submit_enqueue(
             self.loop_id,
             checkpoint,
@@ -682,7 +680,6 @@ class StrangeLoopStateManager:
             self._goal_boundary_persisted = True
             logger.info("Force checkpoint flush: loop=%s", self.loop_id)
             return
-        self._sqlite_flush = coord
         await coord.submit_enqueue(
             self.loop_id,
             self._last_save_checkpoint,
@@ -1326,7 +1323,6 @@ class StrangeLoopStateManager:
                             )
                             self._goal_boundary_persisted = True
                     else:
-                        self._sqlite_flush = coord
                         if not self._goal_boundary_persisted and self._last_save_checkpoint:
                             await coord.submit_enqueue(
                                 self.loop_id,

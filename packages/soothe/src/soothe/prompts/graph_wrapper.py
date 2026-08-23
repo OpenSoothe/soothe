@@ -36,15 +36,6 @@ GraphCallKind = Literal["synthesis", "step_completion"]
 """Discriminator for LLM calls assembled by this wrapper (RFC-904)."""
 
 
-def _format_dag_context(dag_ctx: Any) -> str:
-    """Format DagPlanningContext as plain-text DAG STATUS section for prompt injection."""
-    if not dag_ctx or not dag_ctx.has_prior_state:
-        return ""
-    from soothe.prompts.user_message import _render_dag_status as _render
-
-    return _render(dag_ctx)
-
-
 @dataclass
 class ProjectionResult:
     """Result of centralized ledger projection for one LLM call.

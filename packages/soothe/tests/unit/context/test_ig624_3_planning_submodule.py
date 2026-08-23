@@ -777,7 +777,7 @@ class TestStepPlanManagerAdapter:
         assert adapter.goal_id == "abc123"
 
     def test_dag_planning_context_has_all_nine_fields(self) -> None:
-        """Verify the DagPlanningContext from adapter works with _format_dag_context."""
+        """Verify the DagPlanningContext from adapter has all expected fields."""
         ce = ContextEngine()
         goal = GoalNode(description="Test goal")
         goal.steps.add_step(StepNode(id="KFA-01", description="S1", status="completed"))
@@ -798,33 +798,6 @@ class TestStepPlanManagerAdapter:
         assert isinstance(ctx.chain_depth, int)
         assert isinstance(ctx.success_rate, float)
         assert isinstance(ctx.replan_count, int)
-
-    def test_format_dag_context_produces_text(self) -> None:
-        """Verify the DagPlanningContext from adapter works with _format_dag_context."""
-        from soothe.prompts.graph_wrapper import _format_dag_context
-
-        ce = ContextEngine()
-        goal = GoalNode(description="Test goal")
-        goal.steps.add_step(StepNode(id="KFA-01", description="S1", status="completed"))
-        goal.steps.add_step(StepNode(id="KFA-02", description="S2", status="pending"))
-        ce._dag.add_goal(goal)
-
-        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
-
-        ctx = adapter.get_planning_context()
-        text = _format_dag_context(ctx)
-
-        assert "Total steps planned: 2" in text
-        assert "KFA-02" in text
-
-    def test_format_dag_context_empty_when_no_prior_state(self) -> None:
-        from soothe.prompts.graph_wrapper import _format_dag_context
-
-        ce = ContextEngine()
-        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")
-        ctx = adapter.get_planning_context()
-        text = _format_dag_context(ctx)
-        assert text == ""
 
 
 # ═══════════════════════════════════════════════════════════════════════

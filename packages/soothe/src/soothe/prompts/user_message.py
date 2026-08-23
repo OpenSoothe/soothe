@@ -88,38 +88,6 @@ def render_prior_steps_tree(
     return "\n\n".join(blocks)
 
 
-def _render_dag_status(dag_ctx: Any) -> str:
-    """Render DagPlanningContext as plain-text DAG STATUS section.
-
-    Accepts either a DagPlanningContext object or a pre-rendered string.
-    Retained for ``graph_wrapper._format_dag_context`` (not execute/synthesis).
-    """
-    # Handle pre-rendered string (already formatted by _format_dag_context)
-    if isinstance(dag_ctx, str):
-        return dag_ctx
-    if not dag_ctx or not dag_ctx.has_prior_state:
-        return ""
-    lines = [f"- Total steps planned: {dag_ctx.total_steps}"]
-    lines.append(f"- Completed: {dag_ctx.completed_steps}")
-    if dag_ctx.failed_step_ids:
-        lines.append(
-            f"- Failed: {len(dag_ctx.failed_step_ids)} (IDs: {', '.join(sorted(dag_ctx.failed_step_ids))})"
-        )
-    if dag_ctx.ready_step_ids:
-        lines.append(f"- Ready to execute: {', '.join(sorted(dag_ctx.ready_step_ids))}")
-    elif dag_ctx.pending_step_ids:
-        lines.append(f"- Pending: {', '.join(sorted(dag_ctx.pending_step_ids))}")
-    lines.append(f"- Dependency chain depth: {dag_ctx.chain_depth}")
-    lines.append(f"- Success rate: {dag_ctx.success_rate:.0%}")
-    if dag_ctx.replan_count > 0:
-        lines.append(f"- Replans: {dag_ctx.replan_count}")
-    if dag_ctx.failed_step_ids:
-        lines.append(
-            "- NOTE: Prior steps failed — propose a DIFFERENT approach, do not retry the same failed steps."
-        )
-    return "\n".join(lines)
-
-
 def _render_mcp_resource_blocks(blocks: list[str] | None) -> str:
     """Render pre-resolved MCP resource blocks as text content."""
     if not blocks:

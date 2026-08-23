@@ -1036,17 +1036,6 @@ class LoopState(BaseModel):
             return self._loop_messages_cache
         return result
 
-    async def _build_loop_messages_from_ce(self) -> list[LoopHumanMessage | LoopAIMessage]:
-        """Convert CE ledger entries to Loop message types (async, non-blocking).
-
-        Wraps ``_build_loop_messages_from_ce_sync`` via ``asyncio.to_thread``
-        so the synchronous ledger scan runs in a worker thread, leaving the
-        event loop free to process I/O and other coroutines.  Prefer calling
-        ``await get_loop_messages()`` (which memoizes) over this low-level
-        method.
-        """
-        return await asyncio.to_thread(self._build_loop_messages_from_ce_sync)
-
     def _build_step_results_from_ce(self) -> list[StepExecutionRecord]:
         """Map CE StepNode + StepExecution to StepExecutionRecord."""
         try:
@@ -1157,7 +1146,7 @@ class LoopState(BaseModel):
         """Trim loop_messages to bounded size.
 
         When CE is bound, trimming is unnecessary — CE ledger is authoritative
-        and the _build_loop_messages_from_ce helper applies its own bound.
+        and the _build_loop_messages_from_ce_sync helper applies its own bound.
         When CE is not bound, trims the local cache.
         """
         if self._ce is not None:

@@ -130,7 +130,7 @@ class TestPlanAdapterGetPlanningContext:
 
         ctx = adapter.get_planning_context()
 
-        # All 9 fields that _format_dag_context accesses
+        # All 9 DagPlanningContext fields
         assert isinstance(ctx.has_prior_state, bool)
         assert isinstance(ctx.total_steps, int)
         assert isinstance(ctx.completed_steps, int)
@@ -317,8 +317,7 @@ class TestPlanAdapterGoalIdProperty:
 
 
 class TestDagPlanningContextDuckTyping:
-    """Verify the adapter produces DagPlanningContext with all 9 attributes
-    that _format_dag_context() in builder.py accesses via duck typing."""
+    """Verify the adapter produces DagPlanningContext with all 9 attributes."""
 
     @pytest.mark.asyncio
     async def test_all_format_dag_context_attributes(self) -> None:
@@ -338,7 +337,7 @@ class TestDagPlanningContextDuckTyping:
 
         ctx = adapter.get_planning_context()
 
-        # These are the exact attributes _format_dag_context accesses
+        # Verify all DagPlanningContext attributes exist on the adapter output
         assert hasattr(ctx, "has_prior_state")
         assert hasattr(ctx, "total_steps")
         assert hasattr(ctx, "completed_steps")
@@ -359,37 +358,3 @@ class TestDagPlanningContextDuckTyping:
         assert ctx.chain_depth >= 1
         assert 0.0 <= ctx.success_rate <= 1.0
         assert ctx.replan_count == 0
-
-    @pytest.mark.asyncio
-    async def test_format_dag_context_produces_text(self) -> None:
-        """Verify the DagPlanningContext from adapter works with _format_dag_context."""
-        from soothe.prompts.graph_wrapper import _format_dag_context
-
-        ce = ContextEngine()
-        goal = await ce.create_goal("Test goal")
-        await ce.add_steps(
-            goal.id,
-            [
-                StepNode(id="KFA-01", description="S1", status="completed"),
-                StepNode(id="KFA-02", description="S2", status="pending"),
-            ],
-        )
-
-        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
-        adapter.plan_history.append(_make_plan_result())
-
-        ctx = adapter.get_planning_context()
-        text = _format_dag_context(ctx)
-
-        assert "Total steps planned: 2" in text
-        assert "KFA-02" in text
-
-    @pytest.mark.asyncio
-    async def test_format_dag_context_empty_when_no_prior_state(self) -> None:
-        from soothe.prompts.graph_wrapper import _format_dag_context
-
-        ce = ContextEngine()
-        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")
-        ctx = adapter.get_planning_context()
-        text = _format_dag_context(ctx)
-        assert text == ""

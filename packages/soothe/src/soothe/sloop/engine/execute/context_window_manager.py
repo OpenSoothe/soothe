@@ -128,12 +128,6 @@ class ContextWindowManager:
             return 0.80  # Default fallback
         return self._config.agent.loop.context_overflow_threshold_pct
 
-    def _target_pct(self) -> float:
-        """Get compaction target percentage from config."""
-        if self._config is None:
-            return 0.60  # Default fallback
-        return self._config.agent.loop.context_compaction_target_pct
-
     async def estimate_checkpoint_tokens(self, thread_id: str) -> int:
         """Estimate token count from checkpoint messages (async).
 

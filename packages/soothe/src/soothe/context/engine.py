@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from langchain_core.messages import (
     AIMessage,
@@ -27,9 +27,6 @@ from soothe.context.models import (
     StepNode,
 )
 from soothe.utils.text_preview import goal_description_for_log
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

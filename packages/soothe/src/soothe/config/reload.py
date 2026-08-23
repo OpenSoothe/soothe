@@ -669,7 +669,7 @@ class ConfigWatcher:
         if self._sighup_handler_installed:
             return
 
-        def handle_sighup(_signum: int, frame: Any) -> None:
+        def handle_sighup(_signum: int, _frame: Any) -> None:
             _logger.info("Received SIGHUP, triggering config reload")
             self.reload_now()
 

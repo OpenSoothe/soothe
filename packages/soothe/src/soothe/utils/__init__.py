@@ -2,6 +2,4 @@
 
 from __future__ import annotations
 
-from soothe.utils.goal_completion_stream import *  # noqa: F403
-
-__all__ = [n for n in globals() if not n.startswith("_")]
+__all__: list[str] = []
