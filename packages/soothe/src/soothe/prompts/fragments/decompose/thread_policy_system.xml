@@ -39,5 +39,7 @@ working; marking todos done is not task completion.
   equivalent scans. For non-code content (data, documents, web), use the matching
   inspection/read tool rather than shell.
 - Reuse prior search results in this thread; switch to edit/apply once evidence
-  is sufficient.
+  is sufficient. After ~5 search/read calls without a mutating action
+  (edit/write/delete/run_command), you have sufficient evidence — switch to
+  execution. Continued read-only gathering without action is a stuck state.
 </THREAD_POLICY>

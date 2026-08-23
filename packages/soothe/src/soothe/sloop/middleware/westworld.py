@@ -37,7 +37,7 @@ from langchain.agents.middleware.types import (
 )
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from soothe.prompts import WESTWORLD_FANOUT_ADDENDUM
+from soothe.prompts import WESTWORLD_ESCALATION_ADDENDUM, WESTWORLD_FANOUT_ADDENDUM
 from soothe.sloop.decompose import runtime as _decompose_runtime
 from soothe.sloop.utils.config_keys import (
     SOOTHE_DECOMPOSE_STEP_ID_KEY,
@@ -55,6 +55,13 @@ _WESTWORLD_TRIGGERS: list[tuple[str, str]] = [
     ("fan out beams", WESTWORLD_FANOUT_ADDENDUM),
     ("fan out subagents", WESTWORLD_FANOUT_ADDENDUM),
 ]
+
+# After this many evidence-gathering calls without a decompose_task proposal
+# queued, switch from the fan-out addendum to the escalation addendum (a85d:
+# 666 read-only calls stuck in evidence-gathering). The executor's read-only
+# streak circuit breaker is the hard stop; this is the soft nudge that fires
+# earlier to redirect the model.
+_WESTWORLD_ESCALATION_EVIDENCE_THRESHOLD = 10
 
 
 def _last_human_text(request: ModelRequest[ContextT]) -> str:
@@ -147,11 +154,35 @@ class WestWorldMiddleware(AgentMiddleware):
         addenda = _match_triggers(_last_human_text(request))
         if not addenda:
             return request
+
+        # ── Escalation (a85d: evidence-gathering loop) ──────────────────
+        # After enough evidence calls without a decompose proposal queued,
+        # the model is stuck gathering. Replace the fan-out addendum with
+        # the escalation addendum that forces a decision: decompose NOW or
+        # execute directly.
+        evidence_calls = _decompose_runtime.current_evidence_calls()
+        proposal_sink = _decompose_runtime.current_proposal_sink()
+        proposals_queued = len(proposal_sink) if proposal_sink else 0
+        if (
+            evidence_calls >= _WESTWORLD_ESCALATION_EVIDENCE_THRESHOLD
+            and proposals_queued == 0
+        ):
+            logger.info(
+                "[westworld] escalation on step %s (mode=%s evidence_calls=%d "
+                "proposals_queued=0) — switching to escalation addendum",
+                step_id,
+                mode or "agent",
+                evidence_calls,
+            )
+            return _append_addenda(request, [WESTWORLD_ESCALATION_ADDENDUM])
+
         logger.info(
-            "[westworld] phrase trigger fired on step %s (mode=%s addenda=%d)",
+            "[westworld] phrase trigger fired on step %s (mode=%s addenda=%d "
+            "evidence_calls=%d)",
             step_id,
             mode or "agent",
             len(addenda),
+            evidence_calls,
         )
         return _append_addenda(request, addenda)
 

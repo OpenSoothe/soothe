@@ -18,6 +18,12 @@ multi-area goals), call decompose_task with one subtask per confirmed
 area, then STOP. The children run in parallel, each with its own context
 budget, yielding both faster wall-clock and independent failure.
 
+If you have already gathered evidence (including from a prior goal's
+completion report projected in your context) and the work is a single
+cohesive deliverable or you have prior findings to act on, execute
+directly in this thread (edit/write/run_command) — do NOT keep gathering
+evidence without making progress.
+
 The ONLY case to finish in this single thread is when the work is a
 single cohesive deliverable with no independent areas — you cannot
 name 2+ confirmed modules that could proceed without each other. When

@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 
-from soothe.config.constants import DEFAULT_MAX_TOOL_CALLS_PER_STEP
+from soothe.config.constants import DEFAULT_MAX_TOOL_CALLS_PER_STEP, DEFAULT_READ_ONLY_STREAK_LIMIT
 from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode
 from soothe.context.store_sqlite import SqliteContextPersistence
@@ -68,13 +68,13 @@ async def test_stream_stops_after_tool_budget_with_partial_outcomes() -> None:
     assert len(final.outcomes) == 2
 
 
-def test_default_max_tool_calls_per_step_is_999() -> None:
-    assert DEFAULT_MAX_TOOL_CALLS_PER_STEP == 999
+def test_default_max_tool_calls_per_step_is_500() -> None:
+    assert DEFAULT_MAX_TOOL_CALLS_PER_STEP == 500
     assert (
         Executor(
             MagicMock(), max_parallel_steps=1, context_engine=_make_ce()
         )._max_tool_calls_per_step()
-        == 999
+        == 500
     )
 
 
@@ -204,3 +204,77 @@ async def test_stream_collect_no_progress_watchdog_raises_timeout() -> None:
             step_id="s_watchdog",
         ):
             pass
+
+
+@pytest.mark.asyncio
+async def test_read_only_streak_circuit_breaker_stops_stream() -> None:
+    """Consecutive read-only tools (grep/read_file) above the streak limit
+    must stop the Act stream (a85d: 666 read-only calls, no mutating action)."""
+    budget = _ActStreamBudget(max_tool_calls_per_step=100, max_read_only_streak=3)
+    # 5 consecutive read-only tools — should stop after the 3rd.
+    chunks = [
+        (
+            (),
+            "messages",
+            (ToolMessage(content=f"hit-{i}", tool_call_id=str(i), name="grep"), {}),
+        )
+        for i in range(5)
+    ]
+
+    async def fake_stream():
+        for c in chunks:
+            yield c
+
+    ex = Executor(MagicMock(), max_parallel_steps=1, context_engine=_make_ce())
+    rows = [
+        r
+        async for r in ex._stream_and_collect(fake_stream(), budget=budget, step_id="s_streak")
+        if r.output is not None
+    ]
+
+    assert len(rows) == 1
+    final = rows[0]
+    assert budget.hit_read_only_streak is True
+    assert final.main_tool_count == 3  # stopped at the 3rd read-only call
+    assert final.execution_metrics.get("hit_read_only_streak") == 1
+    assert final.execution_metrics.get("read_only_streak_max") == 3
+
+
+@pytest.mark.asyncio
+async def test_mutating_call_resets_read_only_streak() -> None:
+    """A mutating call (write_file) between read-only calls must reset the
+    streak counter so a model that interleaves read+write is not stopped."""
+    budget = _ActStreamBudget(max_tool_calls_per_step=100, max_read_only_streak=3)
+    chunks = [
+        ((), "messages", (ToolMessage(content="h1", tool_call_id="1", name="grep"), {})),
+        ((), "messages", (ToolMessage(content="h2", tool_call_id="2", name="grep"), {})),
+        # Mutating call resets the streak.
+        (
+            (),
+            "messages",
+            (ToolMessage(content="wrote", tool_call_id="3", name="write_file"), {}),
+        ),
+        ((), "messages", (ToolMessage(content="h3", tool_call_id="4", name="grep"), {})),
+        ((), "messages", (ToolMessage(content="h4", tool_call_id="5", name="grep"), {})),
+    ]
+
+    async def fake_stream():
+        for c in chunks:
+            yield c
+
+    ex = Executor(MagicMock(), max_parallel_steps=1, context_engine=_make_ce())
+    rows = [
+        r
+        async for r in ex._stream_and_collect(fake_stream(), budget=budget, step_id="s_reset")
+        if r.output is not None
+    ]
+
+    assert len(rows) == 1
+    final = rows[0]
+    assert budget.hit_read_only_streak is False
+    assert final.main_tool_count == 5  # all 5 tools ran — no streak hit
+
+
+def test_default_read_only_streak_limit_is_50() -> None:
+    assert DEFAULT_READ_ONLY_STREAK_LIMIT == 50
+

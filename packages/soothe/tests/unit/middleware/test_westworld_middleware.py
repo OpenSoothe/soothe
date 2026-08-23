@@ -10,7 +10,7 @@ from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from soothe.prompts import WESTWORLD_FANOUT_ADDENDUM
+from soothe.prompts import WESTWORLD_ESCALATION_ADDENDUM, WESTWORLD_FANOUT_ADDENDUM
 from soothe.sloop.middleware import WestWorldMiddleware
 from soothe.sloop.utils.config_keys import (
     SOOTHE_DECOMPOSE_STEP_ID_KEY,
@@ -240,3 +240,86 @@ def test_fanout_addendum_requires_evidence_before_decompose() -> None:
     assert any(w in text for w in ("ls", "glob", "grep", "read_file", "search"))
     # Must NOT contain the old unconditional "before doing any other work" order.
     assert "before doing any other work" not in text
+
+
+def test_fanout_addendum_has_evidence_cap_and_stuck_guard() -> None:
+    """The fan-out addendum must cap evidence gathering and include a stuck
+    guard so the model does not loop on read-only calls forever (a85d)."""
+    text = WESTWORLD_FANOUT_ADDENDUM.lower()
+    assert "~5" in text or "5 evidence" in text
+    assert "stuck" in text
+    # Must offer an "execute directly" escape when decompose is not called.
+    assert "execute" in text or "directly" in text
+
+
+# ── Escalation (a85d: evidence-gathering loop) ────────────────────────────
+
+
+def _patch_runtime(evidence_calls: int, proposal_sink: list | None = None):
+    """Patch decompose runtime to return the given evidence count + sink."""
+    return [
+        patch(
+            "soothe.sloop.middleware.westworld._decompose_runtime.current_evidence_calls",
+            return_value=evidence_calls,
+        ),
+        patch(
+            "soothe.sloop.middleware.westworld._decompose_runtime.current_proposal_sink",
+            return_value=proposal_sink if proposal_sink is not None else None,
+        ),
+    ]
+
+
+def test_escalation_after_evidence_threshold() -> None:
+    """After >=10 evidence calls with no proposal queued, the escalation
+    addendum replaces the fan-out addendum (a85d: stuck gathering)."""
+    middleware = WestWorldMiddleware()
+    request = _make_request([HumanMessage(content="fan out beams the goal")])
+    patches = _patch_runtime(evidence_calls=15, proposal_sink=[])
+    with (
+        patch(
+            "langgraph.config.get_config",
+            return_value=_configurable(**{SOOTHE_DECOMPOSE_STEP_ID_KEY: "step-1"}),
+        ),
+        patches[0],
+        patches[1],
+    ):
+        modified = _run_through_hook(middleware, request)
+    assert WESTWORLD_ESCALATION_ADDENDUM in modified.system_message.content
+
+
+def test_no_escalation_below_threshold() -> None:
+    """Below the evidence threshold, the normal fan-out addendum is used."""
+    middleware = WestWorldMiddleware()
+    request = _make_request([HumanMessage(content="fan out beams the goal")])
+    patches = _patch_runtime(evidence_calls=3, proposal_sink=[])
+    with (
+        patch(
+            "langgraph.config.get_config",
+            return_value=_configurable(**{SOOTHE_DECOMPOSE_STEP_ID_KEY: "step-1"}),
+        ),
+        patches[0],
+        patches[1],
+    ):
+        modified = _run_through_hook(middleware, request)
+    assert WESTWORLD_FANOUT_ADDENDUM in modified.system_message.content
+    assert WESTWORLD_ESCALATION_ADDENDUM not in modified.system_message.content
+
+
+def test_no_escalation_when_proposal_queued() -> None:
+    """When a decompose proposal is already queued, the fan-out worked —
+    do not escalate even with high evidence calls."""
+    middleware = WestWorldMiddleware()
+    request = _make_request([HumanMessage(content="fan out beams the goal")])
+    patches = _patch_runtime(evidence_calls=20, proposal_sink=["fake-proposal"])
+    with (
+        patch(
+            "langgraph.config.get_config",
+            return_value=_configurable(**{SOOTHE_DECOMPOSE_STEP_ID_KEY: "step-1"}),
+        ),
+        patches[0],
+        patches[1],
+    ):
+        modified = _run_through_hook(middleware, request)
+    assert WESTWORLD_FANOUT_ADDENDUM in modified.system_message.content
+    assert WESTWORLD_ESCALATION_ADDENDUM not in modified.system_message.content
+

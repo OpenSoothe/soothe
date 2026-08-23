@@ -44,6 +44,7 @@ from soothe_sdk.ux.execute_namespace import is_step_level_execute_namespace_key
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
+    DEFAULT_READ_ONLY_STREAK_LIMIT,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
 from soothe.sloop.clarification import (
@@ -157,6 +158,11 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
+
+# Tools that gather evidence (search / inspection) — never mutate state.
+# Tracked for the read-only streak circuit breaker: a long run of only
+# these without a mutating call means the model is stuck gathering.
+_READ_ONLY_TOOL_NAMES = frozenset({"grep", "glob", "read_file", "ls", "file_info"})
 
 
 # --- Helper functions ---
@@ -372,6 +378,12 @@ class Executor:
         if self._config is None:
             return DEFAULT_MAX_TOOL_CALLS_PER_STEP
         return max(0, int(self._config.agent.loop.max_tool_calls_per_step))
+
+    def _read_only_streak_limit(self) -> int:
+        """Consecutive read-only tool calls before the stream is force-stopped."""
+        if self._config is None:
+            return DEFAULT_READ_ONLY_STREAK_LIMIT
+        return max(0, int(self._config.agent.loop.read_only_streak_limit))
 
     def _dispatch_idle_seconds(self) -> float:
         """Deadlock detector: max inactivity when no root tool is pending."""
@@ -1891,6 +1903,7 @@ class Executor:
         budget = _ActStreamBudget(
             max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave(),
             max_tool_calls_per_step=self._max_tool_calls_per_step(),
+            max_read_only_streak=self._read_only_streak_limit(),
         )
         # Init tool_call_args_registry directly (semaphore removed, registry preserved)
         init_tool_call_args_registry()
@@ -2265,13 +2278,14 @@ class Executor:
                 )
             else:
                 logger.info(
-                    "Step %s completed successfully in %dms (main_tools=%d, subgraph_tools=%d, subagent_cap_hit=%s, tool_budget_hit=%s)",
+                    "Step %s completed successfully in %dms (main_tools=%d, subgraph_tools=%d, subagent_cap_hit=%s, tool_budget_hit=%s, read_only_streak_hit=%s)",
                     step.id,
                     duration_ms,
                     main_tool_call_count,
                     subgraph_tool_call_count,
                     budget.hit_subagent_cap,
                     budget.hit_tool_budget,
+                    budget.hit_read_only_streak,
                 )
             if execution_metrics:
                 logger.debug(
@@ -2627,6 +2641,27 @@ class Executor:
                     format_todos_for_log(logged_args.get("todos")),
                 )
 
+            # ── Read-only streak circuit breaker (a85d: 666 read-only calls) ──
+            # Track consecutive read-only tools (search/inspection) without a
+            # mutating call. When the streak exceeds the limit, stop the stream
+            # — the model is stuck in an evidence-gathering loop.
+            if budget is not None and budget.max_read_only_streak > 0:
+                if tool_name in _READ_ONLY_TOOL_NAMES:
+                    budget.consecutive_read_only += 1
+                else:
+                    budget.consecutive_read_only = 0
+                if budget.consecutive_read_only >= budget.max_read_only_streak:
+                    budget.hit_read_only_streak = True
+                    logger.warning(
+                        "Read-only streak reached (%d consecutive read-only calls "
+                        "without a mutating action, limit=%d), stopping Act stream "
+                        "(step=%s)",
+                        budget.consecutive_read_only,
+                        budget.max_read_only_streak,
+                        step_id or "?",
+                    )
+                    return True
+
             if budget is not None and budget.max_tool_calls_per_step > 0:
                 budget.tool_call_count = tool_call_count
                 if tool_call_count >= budget.max_tool_calls_per_step:
@@ -2904,6 +2939,8 @@ class Executor:
             "search_calls_shell_fallback": int(search_calls_shell_fallback),
             "evidence_reads_total": int(evidence_reads_total),
             "no_progress_watchdog_triggered": int(no_progress_watchdog_triggered),
+            "read_only_streak_max": int(budget.consecutive_read_only if budget else 0),
+            "hit_read_only_streak": int(budget.hit_read_only_streak if budget else False),
             **{k: int(v) for k, v in reuse_metrics.items()},
         }
         yield _StreamCollectChunk.finalized(

@@ -4,10 +4,13 @@
 The user invoked the phrase "fan out beams" — a narrative directive to
 parallelize. Honor it, but ground it in evidence first:
 
-1. Gather evidence: run one broad search or inspection (ls, glob, grep,
+1. Gather evidence: run ONE broad search or inspection (ls, glob, grep,
    or read_file) to confirm which independent areas the goal actually
    spans. Do not propose subtasks for areas you have not confirmed exist
    — proposals citing non-existent paths will be rejected.
+   **Cap: gather at most ~5 evidence calls before deciding.** If a prior
+   goal's completion report is projected in your context (continuation
+   goals), skip re-gathering — proceed directly to step 2.
 2. After confirming the real areas, call decompose_task with one subtask
    per confirmed independent area. Maximize fan-out width up to the
    configured branch budget.
@@ -19,4 +22,10 @@ parallelize. Honor it, but ground it in evidence first:
    needs its own further decomposition.
 5. After decompose_task returns, STOP. Do not continue working in this
    thread; the children will execute in parallel afterward.
+
+**Stuck guard:** If you have gathered evidence but keep running more
+search/read calls without calling decompose_task or making a mutating
+action (edit/write/delete), you are stuck. Either call decompose_task
+NOW, or if the work can be done in this thread, execute it directly.
+Do NOT gather more evidence.
 </WESTWORLD_FANOUT_ADDENDUM>
