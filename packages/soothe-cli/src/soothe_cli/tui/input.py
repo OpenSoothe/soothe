@@ -10,13 +10,13 @@ from urllib.parse import unquote, urlparse
 
 from rich.markup import escape as escape_markup
 
-from soothe_cli.tui.config import console
-from soothe_cli.tui.media_utils import ImageData, VideoData
-from soothe_cli.tui.path_utils import path_exists, path_is_dir, path_is_file
-from soothe_cli.tui.preview_limits import (
+from soothe_cli.display.media_utils import ImageData, VideoData
+from soothe_cli.display.path_utils import path_exists, path_is_dir, path_is_file
+from soothe_cli.display.preview_limits import (
     CHAT_INPUT_PASTE_ABBREVIATE_CHAR_COUNT,
     CHAT_INPUT_PASTE_ABBREVIATE_LINE_COUNT,
 )
+from soothe_cli.settings import console
 
 logger = logging.getLogger(__name__)
 

@@ -11,10 +11,10 @@ from textual.events import Click
 from textual.reactive import var
 from textual.widgets import Static
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs
-from soothe_cli.tui.markdown_theme import build_markdown
-from soothe_cli.tui.preview_limits import SKILL_CARD_PREVIEW_CHARS, SKILL_CARD_PREVIEW_LINES
+from soothe_cli.display import theme
+from soothe_cli.display.markdown_theme import build_markdown
+from soothe_cli.display.preview_limits import SKILL_CARD_PREVIEW_CHARS, SKILL_CARD_PREVIEW_LINES
+from soothe_cli.settings import get_glyphs
 from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 if TYPE_CHECKING:

@@ -17,9 +17,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
-from soothe_cli.tui.command_registry import EnterAction, enter_action_for
-from soothe_cli.tui.path_utils import path_is_file
-from soothe_cli.tui.project_utils import find_project_root
+from soothe_cli.commands.command_registry import EnterAction, enter_action_for
+from soothe_cli.display.path_utils import path_is_file
+from soothe_cli.project_utils import find_project_root
 
 
 def _get_git_executable() -> str | None:

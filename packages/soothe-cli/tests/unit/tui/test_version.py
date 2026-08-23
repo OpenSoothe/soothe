@@ -5,7 +5,7 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 
-from soothe_cli.tui import _version
+from soothe_cli import _version
 
 
 def test_parse_version_file_text_reads_semver() -> None:

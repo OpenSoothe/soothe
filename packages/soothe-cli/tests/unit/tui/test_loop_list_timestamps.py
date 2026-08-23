@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from soothe_cli.tui.sessions import (
+from soothe_cli.loops.sessions import (
     _parse_iso_to_local,
     format_relative_timestamp,
     format_timestamp,
@@ -69,7 +69,7 @@ def test_format_relative_timestamp_naive_input_does_not_drift_by_hours() -> None
     truncated_iso = "2026-06-04T12:00"  # 30 seconds earlier, no offset
 
     # Patch datetime inside sessions module
-    with patch("soothe_cli.tui.sessions.datetime") as mock_dt:
+    with patch("soothe_cli.loops.sessions.datetime") as mock_dt:
         mock_dt.now.return_value = fake_now
         mock_dt.fromisoformat = datetime.fromisoformat  # delegate
 

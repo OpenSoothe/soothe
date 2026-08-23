@@ -25,12 +25,12 @@ if TYPE_CHECKING:
     from textual.app import ComposeResult
     from textual.events import Click, Key
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import (
+from soothe_cli.display import theme
+from soothe_cli.loops.sessions import loop_matches_workspace, normalize_workspace_path
+from soothe_cli.settings import (
     get_glyphs,
     is_ascii_mode,
 )
-from soothe_cli.tui.sessions import loop_matches_workspace, normalize_workspace_path
 from soothe_cli.tui.widgets._links import open_style_link
 
 logger = logging.getLogger(__name__)
@@ -98,7 +98,7 @@ def _get_format_fns() -> _FormatFns:
     global _format_fns_cache  # noqa: PLW0603
     if _format_fns_cache is not None:
         return _format_fns_cache
-    from soothe_cli.tui.sessions import (
+    from soothe_cli.loops.sessions import (
         format_relative_timestamp,
         format_timestamp,
     )
@@ -601,7 +601,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         self._cell_text: dict[tuple[str, str], str] = {}
         self._daemon_session = daemon_session
 
-        from soothe_cli.tui.model_config import load_loop_config
+        from soothe_cli.model_config import load_loop_config
 
         cfg = load_loop_config()
         self._columns = dict(cfg.columns)
@@ -692,7 +692,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Return the resolved loop limit for display purposes."""
         if self._loop_limit is not None:
             return self._loop_limit
-        from soothe_cli.tui.sessions import get_loop_limit
+        from soothe_cli.loops.sessions import get_loop_limit
 
         return get_loop_limit()
 
@@ -1076,14 +1076,14 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         try:
             limit = self._loop_limit
             if limit is None:
-                from soothe_cli.tui.sessions import get_loop_limit
+                from soothe_cli.loops.sessions import get_loop_limit
 
                 limit = get_loop_limit()
             sort_by = "updated" if self._sort_by_updated else "created"
 
             # Use daemon RPC if available (queries actual loop persistence)
             if self._daemon_session is not None:
-                from soothe_cli.tui.sessions import list_loops_via_daemon_rpc
+                from soothe_cli.loops.sessions import list_loops_via_daemon_rpc
 
                 self._all_loops = await list_loops_via_daemon_rpc(
                     daemon_session=self._daemon_session,
@@ -1439,7 +1439,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Toggle timestamp display between relative and absolute."""
         self._relative_time = not self._relative_time
 
-        from soothe_cli.tui.model_config import save_loop_relative_time
+        from soothe_cli.model_config import save_loop_relative_time
 
         self.run_worker(
             asyncio.to_thread(save_loop_relative_time, self._relative_time),
@@ -1451,7 +1451,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Save sort-order preference to config, notifying on failure."""
 
         async def _save() -> None:
-            from soothe_cli.tui.model_config import save_loop_sort_order
+            from soothe_cli.model_config import save_loop_sort_order
 
             ok = await asyncio.to_thread(save_loop_sort_order, order)
             if not ok:

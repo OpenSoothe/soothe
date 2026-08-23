@@ -48,7 +48,7 @@ async def test_mount_orphan_subagent_card_registers_keys() -> None:
 
 
 def test_orphan_subagent_card_header_is_single_line_length_preview() -> None:
-    from soothe_cli.tui.preview_limits import TASK_DELEGATION_DESC_MAX_CHARS
+    from soothe_cli.display.preview_limits import TASK_DELEGATION_DESC_MAX_CHARS
     from soothe_cli.tui.widgets.messages.cognition_step import create_subagent_card
 
     long_multiline = "Investigate deps\n" + ("across packages " * 20)
@@ -68,7 +68,7 @@ def test_orphan_subagent_card_header_is_single_line_length_preview() -> None:
 
 def test_orphan_subagent_card_header_includes_compact_title_meta() -> None:
     """Orphan cards share step-card compact title meta (elapsed · counts · tokens)."""
-    from soothe_cli.tui.config import get_glyphs
+    from soothe_cli.settings import get_glyphs
     from soothe_cli.tui.widgets.messages.cognition_step import create_subagent_card
 
     card = create_subagent_card(

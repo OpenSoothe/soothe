@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING
 from textual.content import Content
 from textual.widgets import Static
 
+from soothe_cli.display import theme
 from soothe_cli.runtime.presentation.duration_format import format_running_elapsed
 from soothe_cli.runtime.state.session_stats import format_token_count
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs
+from soothe_cli.settings import get_glyphs
 
 if TYPE_CHECKING:
     from textual.await_remove import AwaitRemove

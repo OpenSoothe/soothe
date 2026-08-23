@@ -16,7 +16,7 @@ from textual.containers import VerticalScroll
 from textual.css.query import NoMatches
 from textual.theme import Theme
 
-from soothe_cli.tui import theme
+from soothe_cli.display import theme
 from soothe_cli.tui.app._module_init import (
     DeferredAction,
     save_theme_preference,
@@ -42,8 +42,8 @@ class _ModelMixin:
         """
         from functools import partial
 
-        from soothe_cli.tui.config import settings
-        from soothe_cli.tui.model_config import ModelSpec
+        from soothe_cli.model_config import ModelSpec
+        from soothe_cli.settings import settings
         from soothe_cli.tui.widgets.model_selector import ModelSelectorScreen
 
         def handle_result(result: tuple[str, str] | None) -> None:
@@ -91,7 +91,7 @@ class _ModelMixin:
                 preloaded = self._preloaded_model_data
                 wire_creds = self._wire_credential_map
             else:
-                from soothe_cli.tui.model_config import parse_models_list_response
+                from soothe_cli.model_config import parse_models_list_response
 
                 try:
                     resp = await self._daemon_session.list_models()
@@ -206,7 +206,7 @@ class _ModelMixin:
 
     async def _show_notification_settings(self) -> None:
         """Show notification settings modal."""
-        from soothe_cli.tui.model_config import is_warning_suppressed
+        from soothe_cli.model_config import is_warning_suppressed
         from soothe_cli.tui.widgets.notification_settings import (
             WARNING_TOGGLES,
             NotificationSettingsScreen,
@@ -261,7 +261,7 @@ class _ModelMixin:
 
     async def _load_token_usage_snapshot(self) -> TokenUsageSnapshot:
         """Build the token usage snapshot for the context modal."""
-        from soothe_cli.tui.config import settings
+        from soothe_cli.settings import settings
         from soothe_cli.tui.widgets.context_data import load_token_usage_snapshot
 
         return await load_token_usage_snapshot(
@@ -412,7 +412,7 @@ class _ModelMixin:
         """Show interactive loop selector as a modal screen."""
         from functools import partial
 
-        from soothe_cli.tui.sessions import get_loop_limit
+        from soothe_cli.loops.sessions import get_loop_limit
         from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 
         current = self._session_state.loop_id if self._session_state else None
@@ -561,7 +561,7 @@ class _ModelMixin:
 
     def _clear_loop_model_override(self) -> None:
         """Drop per-loop model override; next turns use config/CLI defaults."""
-        from soothe_cli.tui.config import settings
+        from soothe_cli.settings import settings
 
         self._model_override = None
         self._model_params_override = None
@@ -680,8 +680,8 @@ class _ModelMixin:
                 for auto-detection.
             extra_kwargs: Extra constructor kwargs from `--model-params`.
         """
-        from soothe_cli.tui.config import detect_provider, settings
-        from soothe_cli.tui.model_config import ModelSpec
+        from soothe_cli.model_config import ModelSpec
+        from soothe_cli.settings import detect_provider, settings
 
         logger.info("Switching model to %s", model_spec)
 
@@ -757,8 +757,8 @@ class _ModelMixin:
         Args:
             model_spec: The model specification (e.g., `'anthropic:claude-opus-4-6'`).
         """
-        from soothe_cli.tui.config import detect_provider
-        from soothe_cli.tui.model_config import ModelSpec, save_default_model
+        from soothe_cli.model_config import ModelSpec, save_default_model
+        from soothe_cli.settings import detect_provider
 
         model_spec = model_spec.removeprefix(":")
 
@@ -781,7 +781,7 @@ class _ModelMixin:
         After clearing, future launches fall back to `[models].recent` or
         environment auto-detection.
         """
-        from soothe_cli.tui.model_config import clear_default_model
+        from soothe_cli.model_config import clear_default_model
 
         if await asyncio.to_thread(clear_default_model):
             await self._mount_message(

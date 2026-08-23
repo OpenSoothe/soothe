@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any
 from textual.content import Content
 from textual.widgets import Static
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs
-from soothe_cli.tui.preview_limits import APPROVAL_DIFF_MAX_LINES
+from soothe_cli.display import theme
+from soothe_cli.display.preview_limits import APPROVAL_DIFF_MAX_LINES
+from soothe_cli.settings import get_glyphs
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult

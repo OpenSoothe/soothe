@@ -13,8 +13,8 @@ from textual.events import (
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs, is_ascii_mode
+from soothe_cli.display import theme
+from soothe_cli.settings import get_glyphs, is_ascii_mode
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult

@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 from textual.containers import VerticalScroll
 from textual.css.query import NoMatches
 
-from soothe_cli.tui._version import CHANGELOG_URL
+from soothe_cli._version import CHANGELOG_URL
 from soothe_cli.tui.app._module_init import (
     TextualSessionState,
 )
@@ -232,7 +232,7 @@ class _StartupMixin:
         # Background update check and what's-new banner (on by default; opt-out via
         # SOOTHE_CLI_NO_UPDATE_CHECK or [update].check: false; SOOTHE_CLI_UPDATE_CHECK
         # forces on if config disables)
-        from soothe_cli.tui.update_check import is_update_check_enabled
+        from soothe_cli.update_check import is_update_check_enabled
 
         if is_update_check_enabled():
             self.run_worker(
@@ -272,7 +272,7 @@ class _StartupMixin:
 
     def _apply_slash_command_autocomplete(self) -> None:
         """Merge static slash commands with skill entries (daemon catalog or local)."""
-        from soothe_cli.tui.command_registry import (
+        from soothe_cli.commands.command_registry import (
             SLASH_COMMANDS,
             build_skill_commands,
             build_skill_commands_from_wire,
@@ -447,13 +447,13 @@ class _StartupMixin:
     @staticmethod
     def _daemon_connect_hint_extra(*, attempt: int, max_attempts: int) -> str | None:
         """Hint suffix for daemon connect retries (label stays a single word)."""
-        from soothe_cli.tui.spinner_labels import daemon_connect_hint_extra
+        from soothe_cli.display.spinner_labels import daemon_connect_hint_extra
 
         return daemon_connect_hint_extra(attempt=attempt, max_attempts=max_attempts)
 
     async def _connect_daemon_background(self) -> None:
         """Background worker: connect the TUI directly to the daemon."""
-        from soothe_cli.tui.spinner_labels import SPINNER_LABEL_WAITING
+        from soothe_cli.display.spinner_labels import SPINNER_LABEL_WAITING
 
         for attempt in range(1, _DAEMON_CONNECT_MAX_ATTEMPTS + 1):
             await self._set_spinner(
@@ -504,9 +504,9 @@ class _StartupMixin:
             websocket_url_from_config,
         )
 
+        from soothe_cli._env_vars import resolve_cli_loop_workspace
+        from soothe_cli.display.spinner_labels import SPINNER_LABEL_CONNECTING
         from soothe_cli.runtime.transport.session import TuiDaemonSession
-        from soothe_cli.tui._env_vars import resolve_cli_loop_workspace
-        from soothe_cli.tui.spinner_labels import SPINNER_LABEL_CONNECTING
 
         ws_url = websocket_url_from_config(self._daemon_config)
 
@@ -646,14 +646,14 @@ class _StartupMixin:
         # we let the exception propagate (the worker catches it and logs
         # at WARNING). textual_adapter and update_check are included so
         # _post_paint_init's inline imports are dict lookups.
-        from soothe_cli.tui.command_registry import ALWAYS_IMMEDIATE  # noqa: F401
-        from soothe_cli.tui.config import settings  # noqa: F401
-        from soothe_cli.tui.model_config import ModelSpec  # noqa: F401
+        from soothe_cli.commands.command_registry import ALWAYS_IMMEDIATE  # noqa: F401
+        from soothe_cli.model_config import ModelSpec  # noqa: F401
+        from soothe_cli.settings import settings  # noqa: F401
         from soothe_cli.tui.textual_adapter import TextualUIAdapter  # noqa: F401
-        from soothe_cli.tui.update_check import is_update_check_enabled  # noqa: F401
         from soothe_cli.tui.widgets.clipboard import (
             copy_selection_to_clipboard,  # noqa: F401
         )
+        from soothe_cli.update_check import is_update_check_enabled  # noqa: F401
 
         # First user message: ``execute_task_textual`` + CLI stream pipeline.
         # Warm on this thread so the asyncio loop does not stall on cold import.
@@ -693,7 +693,7 @@ class _StartupMixin:
         try:
             import termaid  # noqa: F401
 
-            from soothe_cli.tui.markdown_theme import build_markdown
+            from soothe_cli.display.markdown_theme import build_markdown
 
             build_markdown("```mermaid\nflowchart TD\n  A-->B\n```\n")
         except Exception:
@@ -714,7 +714,7 @@ class _StartupMixin:
             logger.debug("Skipping model cache prewarm - daemon session not ready")
             return
         try:
-            from soothe_cli.tui.model_config import parse_models_list_response
+            from soothe_cli.model_config import parse_models_list_response
 
             resp = await session.list_models()
             all_models, default_spec, profiles, wire_creds = parse_models_list_response(resp)
@@ -727,7 +727,7 @@ class _StartupMixin:
         """Check PyPI for a newer version and optionally auto-update."""
         # Phase 1: version check (benign failure)
         try:
-            from soothe_cli.tui.update_check import (
+            from soothe_cli.update_check import (
                 is_auto_update_enabled,
                 is_update_available,
                 upgrade_command,
@@ -746,7 +746,7 @@ class _StartupMixin:
         # Phase 2: optional auto-update (version notice lives on the welcome banner only)
         try:
             if is_auto_update_enabled():
-                from soothe_cli.tui.update_check import perform_upgrade
+                from soothe_cli.update_check import perform_upgrade
 
                 self.notify(
                     f"Updating to v{latest}...",
@@ -788,7 +788,7 @@ class _StartupMixin:
     async def _show_whats_new(self) -> None:
         """Show a 'what's new' banner on the first launch after an upgrade."""
         try:
-            from soothe_cli.tui.update_check import should_show_whats_new
+            from soothe_cli.update_check import should_show_whats_new
 
             if not await asyncio.to_thread(should_show_whats_new):
                 return
@@ -797,8 +797,8 @@ class _StartupMixin:
             return
 
         try:
-            from soothe_cli.tui._version import __version__ as cli_version
-            from soothe_cli.tui.config import _is_editable_install
+            from soothe_cli._version import __version__ as cli_version
+            from soothe_cli.settings import _is_editable_install
 
             if await asyncio.to_thread(_is_editable_install):
                 heading = f"Now running v{cli_version}"
@@ -811,8 +811,8 @@ class _StartupMixin:
             return
 
         try:
-            from soothe_cli.tui._version import __version__ as cli_version
-            from soothe_cli.tui.update_check import mark_version_seen
+            from soothe_cli._version import __version__ as cli_version
+            from soothe_cli.update_check import mark_version_seen
 
             await asyncio.to_thread(mark_version_seen, cli_version)
         except Exception:
@@ -822,7 +822,7 @@ class _StartupMixin:
         """Handle the `/update` slash command — check for and install updates."""
         await self._mount_message(UserMessage("/update"))
         try:
-            from soothe_cli.tui.update_check import (
+            from soothe_cli.update_check import (
                 is_update_available,
                 perform_upgrade,
                 upgrade_command,
@@ -836,7 +836,7 @@ class _StartupMixin:
                 await self._mount_message(AppMessage("Already on the latest version."))
                 return
 
-            from soothe_cli.tui._version import __version__ as cli_version
+            from soothe_cli._version import __version__ as cli_version
 
             self._update_available = (True, latest)
             self._apply_welcome_update_notice(latest)
@@ -863,8 +863,8 @@ class _StartupMixin:
     async def _handle_auto_update_toggle(self) -> None:
         """Handle the `/auto-update` slash command — persist toggle immediately."""
         try:
-            from soothe_cli.tui.config import _is_editable_install
-            from soothe_cli.tui.update_check import (
+            from soothe_cli.settings import _is_editable_install
+            from soothe_cli.update_check import (
                 is_auto_update_enabled,
                 set_auto_update,
             )

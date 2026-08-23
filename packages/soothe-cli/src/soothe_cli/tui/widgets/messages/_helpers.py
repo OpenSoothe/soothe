@@ -11,13 +11,13 @@ from typing import TYPE_CHECKING, Any
 
 from textual.content import Content
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs
+from soothe_cli.display import theme
+from soothe_cli.settings import get_glyphs
 
 if TYPE_CHECKING:
     pass
 
-from soothe_cli.tui.preview_limits import STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
+from soothe_cli.display.preview_limits import STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def _get_tui_refresh_interval_ms() -> int:
     global _global_refresh_interval_ms
     if _global_refresh_interval_ms is not None:
         return _global_refresh_interval_ms
-    from soothe_cli.tui._env_vars import TUI_REFRESH_INTERVAL_MS
+    from soothe_cli._env_vars import TUI_REFRESH_INTERVAL_MS
 
     env_val = os.environ.get(TUI_REFRESH_INTERVAL_MS)
     if env_val:
@@ -130,7 +130,7 @@ def _display_width(text: str) -> int:
     Thin wrapper over ``termaid.utils.display_width`` so prefix/gutter math
     does not each need a lazy import. Falls back to ``len()`` if termaid is
     unavailable (e.g. minimal test environments), matching the fallback in
-    ``soothe_cli.tui.tool_display.display_width``.
+    ``soothe_cli.display.tool_display.display_width``.
     """
     try:
         from termaid.utils import display_width as _dw

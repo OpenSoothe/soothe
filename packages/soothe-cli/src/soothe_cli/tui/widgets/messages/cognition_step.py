@@ -18,14 +18,14 @@ from textual.content import Content
 from textual.events import Click
 from textual.widgets import Static
 
-from soothe_cli.runtime.presentation.duration_format import format_duration_ms
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs
-from soothe_cli.tui.preview_limits import STEP_CARD_SHOW_TOOL_ROW_DETAILS
-from soothe_cli.tui.tool_display import (
+from soothe_cli.display import theme
+from soothe_cli.display.preview_limits import STEP_CARD_SHOW_TOOL_ROW_DETAILS
+from soothe_cli.display.tool_display import (
     display_width,
     format_step_tool_activity_line,
 )
+from soothe_cli.runtime.presentation.duration_format import format_duration_ms
+from soothe_cli.settings import get_glyphs
 from soothe_cli.tui.widgets.clipboard import (
     screen_has_text_selection,
 )
@@ -1023,7 +1023,7 @@ class CognitionStepMessage(Vertical):
         # for the same delegation (same subagent_type + description). Check for
         # existing task row with matching semantics, not just tool_call_id.
         if is_task_row and tool_name == "task":
-            from soothe_cli.tui.tool_display import compact_arg_text
+            from soothe_cli.display.tool_display import compact_arg_text
 
             candidate_subagent = str(args.get("subagent_type") or "").strip()
             candidate_desc = str(args.get("description") or args.get("prompt") or "").strip()

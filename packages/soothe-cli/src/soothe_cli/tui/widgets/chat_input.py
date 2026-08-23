@@ -19,9 +19,9 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Static, TextArea
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.command_registry import SLASH_COMMANDS
-from soothe_cli.tui.config import (
+from soothe_cli.commands.command_registry import SLASH_COMMANDS
+from soothe_cli.display import theme
+from soothe_cli.settings import (
     MODE_DISPLAY_GLYPHS,
     MODE_PREFIXES,
     PREFIX_TO_MODE,
@@ -1641,7 +1641,7 @@ class ChatInput(Vertical):
                 )
             return False
 
-        from soothe_cli.tui.media_utils import get_image_from_clipboard
+        from soothe_cli.display.media_utils import get_image_from_clipboard
 
         try:
             media = await asyncio.to_thread(get_image_from_clipboard)
@@ -1768,7 +1768,7 @@ class ChatInput(Vertical):
         if not self._image_tracker:
             return raw_text, False
 
-        from soothe_cli.tui.media_utils import (
+        from soothe_cli.display.media_utils import (
             IMAGE_EXTENSIONS,
             MAX_MEDIA_BYTES,
             VIDEO_EXTENSIONS,

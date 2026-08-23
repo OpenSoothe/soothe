@@ -395,7 +395,7 @@ class EventProcessor:
             return
 
         # Find rendering handler from registry
-        from soothe_cli.tui.commands.command_router import find_command_by_daemon_command
+        from soothe_cli.commands.command_router import find_command_by_daemon_command
 
         entry = find_command_by_daemon_command(command)
         if entry and entry.get("handler") and data:

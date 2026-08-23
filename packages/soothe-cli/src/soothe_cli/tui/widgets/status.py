@@ -14,12 +14,12 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
+from soothe_cli.settings import get_glyphs
 from soothe_cli.tui.composer_mode import (
     COMPOSER_MODE_AUTO,
     COMPOSER_MODE_MANUAL,
     normalize_composer_mode,
 )
-from soothe_cli.tui.config import get_glyphs
 
 logger = logging.getLogger(__name__)
 
@@ -292,7 +292,7 @@ class StatusBar(Horizontal):
 
     def on_mount(self) -> None:
         """Set reactive values after mount to trigger watchers safely."""
-        from soothe_cli.tui.config import settings
+        from soothe_cli.settings import settings
 
         self.cwd = self._initial_cwd
         # Set initial model display

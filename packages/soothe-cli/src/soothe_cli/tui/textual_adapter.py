@@ -98,6 +98,21 @@ from soothe_sdk.wire.codec import (
     messages_from_wire_dicts,
 )
 
+from soothe_cli._cli_context import CLIContext
+from soothe_cli.commands.subagent_routing import parse_subagent_from_input
+from soothe_cli.display.spinner_labels import (
+    SPINNER_LABEL_EXECUTING,
+    SPINNER_LABEL_INPUT,
+    SPINNER_LABEL_OFFLOADING,
+    SPINNER_LABEL_RETRYING,
+    SPINNER_LABEL_SUBMITTING,
+    SPINNER_LABEL_SYNTHESIZING,
+    SPINNER_LABEL_THINKING,
+    SPINNER_LABEL_TOOLS,
+    SPINNER_LABEL_WRITING,
+    map_plan_phase_spinner_label,
+    retry_spinner_hint,
+)
 from soothe_cli.runtime.parse.tool_call_resolution import (
     build_streaming_args_overlay,
     is_step_card_tool_scope,
@@ -143,28 +158,13 @@ from soothe_cli.runtime.turn.prepare import (
     prepare_turn_chunk,
 )
 from soothe_cli.runtime.wire.messages import normalize_lc_stream_message
-from soothe_cli.tui._cli_context import CLIContext
-from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
-from soothe_cli.tui.config import build_stream_config
+from soothe_cli.settings import build_stream_config
 from soothe_cli.tui.file_change_notify import (
     complete_file_change_preview,
     handle_file_change_result_without_active_track,
     mount_file_change_preview,
 )
 from soothe_cli.tui.input import MediaTracker, parse_file_mentions
-from soothe_cli.tui.spinner_labels import (
-    SPINNER_LABEL_EXECUTING,
-    SPINNER_LABEL_INPUT,
-    SPINNER_LABEL_OFFLOADING,
-    SPINNER_LABEL_RETRYING,
-    SPINNER_LABEL_SUBMITTING,
-    SPINNER_LABEL_SYNTHESIZING,
-    SPINNER_LABEL_THINKING,
-    SPINNER_LABEL_TOOLS,
-    SPINNER_LABEL_WRITING,
-    map_plan_phase_spinner_label,
-    retry_spinner_hint,
-)
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
@@ -3386,7 +3386,7 @@ async def execute_task_textual(
                                 output_tokens=output_toks,
                                 total_tokens=total_toks,
                             )
-                            from soothe_cli.tui.config import settings
+                            from soothe_cli.settings import settings
 
                             active_model = settings.model_name or ""
                             if input_toks or output_toks:

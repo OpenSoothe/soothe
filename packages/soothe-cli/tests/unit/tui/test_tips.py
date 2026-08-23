@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe_cli.tui.tips import SESSION_TIPS, TipRotator
+from soothe_cli.display.tips import SESSION_TIPS, TipRotator
 
 
 def test_session_tips_is_non_empty_str_list() -> None:

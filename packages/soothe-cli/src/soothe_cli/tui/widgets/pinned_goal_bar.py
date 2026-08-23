@@ -7,8 +7,8 @@ from typing import Any
 from textual.content import Content
 from textual.widgets import Static
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import (
+from soothe_cli.display import theme
+from soothe_cli.settings import (
     MODE_DISPLAY_GLYPHS,
     PREFIX_TO_MODE,
     is_ascii_mode,

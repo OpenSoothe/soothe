@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from soothe_sdk.core.events import CARD_CREATED, CARD_UPDATED
 
-from soothe_cli.tui.card_wire import parse_card_custom_payload
+from soothe_cli.card_wire import parse_card_custom_payload
 
 
 def test_parse_card_created() -> None:

@@ -14,8 +14,8 @@ from textual.widgets.option_list import Option
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs, is_ascii_mode
+from soothe_cli.display import theme
+from soothe_cli.settings import get_glyphs, is_ascii_mode
 
 logger = logging.getLogger(__name__)
 

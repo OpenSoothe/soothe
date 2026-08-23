@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from soothe_cli.display.preview_limits import TOOL_APPROVAL_PREVIEW_LINES
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
     FileOperationRecord,
@@ -15,7 +16,6 @@ from soothe_cli.runtime.state.file_tracker import (
     read_physical_file_text,
     resolve_physical_path,
 )
-from soothe_cli.tui.preview_limits import TOOL_APPROVAL_PREVIEW_LINES
 from soothe_cli.tui.widgets.file_change_preview import (
     DeleteFilePreviewWidget,
     EditFileLinesPreviewWidget,

@@ -12,9 +12,9 @@ from textual.widgets import Static
 if TYPE_CHECKING:
     from textual.events import Click
 
-from soothe_cli.tui import theme
-from soothe_cli.tui._version import __version__
-from soothe_cli.tui.config import _is_editable_install, get_banner, get_glyphs
+from soothe_cli._version import __version__
+from soothe_cli.display import theme
+from soothe_cli.settings import _is_editable_install, get_banner, get_glyphs
 from soothe_cli.tui.widgets._links import open_style_link
 
 
@@ -143,7 +143,7 @@ class WelcomeBanner(Static):
             segments.append((f"Loop: {self._cli_loop_id}", dim_style))
 
         if self._update_latest and not self._failed:
-            from soothe_cli.tui.update_check import upgrade_command
+            from soothe_cli.update_check import upgrade_command
 
             cmd = upgrade_command()
             update_text = (

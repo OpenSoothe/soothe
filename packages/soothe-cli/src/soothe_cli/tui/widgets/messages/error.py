@@ -7,7 +7,7 @@ from typing import Any
 from textual.content import Content
 from textual.widgets import Static
 
-from soothe_cli.tui import theme
+from soothe_cli.display import theme
 from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 

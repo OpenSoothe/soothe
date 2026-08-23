@@ -23,8 +23,9 @@ from textual.binding import Binding, BindingType
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.message import Message
 
+from soothe_cli.display import theme
+from soothe_cli.display.tips import TipRotator
 from soothe_cli.runtime.state.session_stats import SessionStats
-from soothe_cli.tui import theme
 from soothe_cli.tui.app._execution import _ExecutionMixin
 from soothe_cli.tui.app._history import _HistoryMixin
 from soothe_cli.tui.app._messages_mixin import _MessagesMixin
@@ -38,7 +39,6 @@ from soothe_cli.tui.app._module_init import (
 from soothe_cli.tui.app._startup import _StartupMixin
 from soothe_cli.tui.app._ui import _UIMixin
 from soothe_cli.tui.composer_mode import normalize_composer_mode
-from soothe_cli.tui.tips import TipRotator
 from soothe_cli.tui.widgets.chat_input import ChatInput
 from soothe_cli.tui.widgets.loading import LoadingWidget
 from soothe_cli.tui.widgets.message_store import MessageStore

@@ -14,8 +14,8 @@ from textual.content import Content
 from textual.message import Message
 from textual.widgets import Button, Input, Static
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.markdown_theme import ThemedMarkdownRenderer, resolve_markdown_theme_parts
+from soothe_cli.display import theme
+from soothe_cli.display.markdown_theme import ThemedMarkdownRenderer, resolve_markdown_theme_parts
 from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 logger = logging.getLogger(__name__)

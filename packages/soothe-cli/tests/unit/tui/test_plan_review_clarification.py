@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from textual.app import App, ComposeResult
 
-from soothe_cli.tui.binding import message_from_widget
+from soothe_cli.commands.binding import message_from_widget
 from soothe_cli.tui.widgets.messages.clarification import (
     ClarificationInputMessage,
     _strip_plan_frontmatter,

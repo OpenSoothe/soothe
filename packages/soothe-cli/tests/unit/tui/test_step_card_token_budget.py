@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from soothe_cli.tui import theme
+from soothe_cli.display import theme
 from soothe_cli.tui.widgets.messages import CognitionStepMessage
 
 

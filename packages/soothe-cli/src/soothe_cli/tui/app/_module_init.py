@@ -12,16 +12,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from soothe_cli.runtime.state.session_stats import (
-    SessionStats,
-)
-from soothe_cli.tui import theme
-
 # Keep module-level imports minimal before first paint.
 # All other config imports — settings, detect_provider, etc. — are deferred to
 # local imports at their call sites since they are only accessed after user
 # interaction begins.
-from soothe_cli.tui._version import CHANGELOG_URL, DOCS_URL
+from soothe_cli._version import CHANGELOG_URL, DOCS_URL
+from soothe_cli.display import theme
+from soothe_cli.runtime.state.session_stats import (
+    SessionStats,
+)
 from soothe_cli.tui.widgets.message_store import (
     MessageData,
 )
@@ -104,7 +103,7 @@ def _load_theme_preference() -> str:
     import yaml
 
     try:
-        from soothe_cli.tui.model_config import resolve_cli_config_path
+        from soothe_cli.model_config import resolve_cli_config_path
 
         config_path = resolve_cli_config_path()
         if not config_path.exists():
@@ -146,7 +145,7 @@ def save_theme_preference(name: str) -> bool:
     try:
         import yaml
 
-        from soothe_cli.tui.model_config import resolve_cli_config_path
+        from soothe_cli.model_config import resolve_cli_config_path
 
         config_path = resolve_cli_config_path()
         config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -314,7 +313,7 @@ def _new_loop_id() -> str:
     Returns:
         UUID7 string.
     """
-    from soothe_cli.tui.sessions import generate_loop_id
+    from soothe_cli.loops.sessions import generate_loop_id
 
     return generate_loop_id()
 

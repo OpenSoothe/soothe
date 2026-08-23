@@ -10,11 +10,11 @@ from textual.containers import Vertical, VerticalScroll
 from textual.content import Content
 from textual.widgets import Static
 
+from soothe_cli.display import theme
+from soothe_cli.display.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
+from soothe_cli.display.tool_display import display_width, truncate_to_width
 from soothe_cli.runtime.presentation.id_format import compact_id_suffix
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs
-from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
-from soothe_cli.tui.tool_display import display_width, truncate_to_width
+from soothe_cli.settings import get_glyphs
 from soothe_cli.tui.widgets.messages._helpers import (
     _RUNNING_SPINNER_INTERVAL_SECONDS,
     _card_body_gutter,

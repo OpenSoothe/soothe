@@ -12,8 +12,8 @@ import sys
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING
 
-from soothe_cli.tui.config import get_glyphs
-from soothe_cli.tui.preview_limits import CLIPBOARD_TOAST_PREVIEW_CHARS
+from soothe_cli.display.preview_limits import CLIPBOARD_TOAST_PREVIEW_CHARS
+from soothe_cli.settings import get_glyphs
 
 logger = logging.getLogger(__name__)
 

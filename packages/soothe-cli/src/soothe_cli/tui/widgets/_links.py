@@ -7,7 +7,7 @@ import threading
 import webbrowser
 from typing import TYPE_CHECKING
 
-from soothe_cli.tui.unicode_security import check_url_safety, strip_dangerous_unicode
+from soothe_cli.display.unicode_security import check_url_safety, strip_dangerous_unicode
 
 if TYPE_CHECKING:
     from textual.events import Click

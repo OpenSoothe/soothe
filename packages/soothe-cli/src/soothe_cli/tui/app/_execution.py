@@ -18,6 +18,7 @@ from textual.content import Content
 from textual.css.query import NoMatches
 from textual.style import Style as TStyle
 
+from soothe_cli._cli_context import CLIContext
 from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_connection_error,
     is_attach_idle_timeout,
@@ -26,16 +27,15 @@ from soothe_cli.cli.execution.daemon_errors import (
 from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_execution_error as _friendly_agent_execution_error,
 )
+from soothe_cli.display import theme
+from soothe_cli.display.shell_color import shell_subprocess_env, wrap_shell_command_for_color
 from soothe_cli.runtime.state.session_stats import SessionStats
-from soothe_cli.tui import theme
-from soothe_cli.tui._cli_context import CLIContext
 from soothe_cli.tui.app._module_init import (
     _COMMAND_URLS,
     DeferredAction,
     QueuedMessage,
     _extract_model_params_flag,
 )
-from soothe_cli.tui.shell_color import shell_subprocess_env, wrap_shell_command_for_color
 from soothe_cli.tui.widgets.chat_input import ChatInput
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
@@ -151,7 +151,7 @@ class _ExecutionMixin:
         Returns:
             `True` if the command should bypass the busy-state queue.
         """
-        from soothe_cli.tui.command_registry import (
+        from soothe_cli.commands.command_registry import (
             BYPASS_WHEN_CONNECTING,
             IMMEDIATE_UI,
             SIDE_EFFECT_FREE,
@@ -173,7 +173,7 @@ class _ExecutionMixin:
 
         # /quit, /q, /exit, and bare exit/quit always execute immediately,
         # even mid-loop-switch or while the agent is busy.
-        from soothe_cli.tui.command_registry import (
+        from soothe_cli.commands.command_registry import (
             ALWAYS_IMMEDIATE,
             BARE_COMMAND_ALIASES,
             BARE_QUIT_WORDS,
@@ -309,7 +309,7 @@ class _ExecutionMixin:
         # while ``_clarification_pending`` is True, so without this the user
         # gets no signal that their answer was received. The stream will
         # replace this with a real phase label once events arrive.
-        from soothe_cli.tui.spinner_labels import SPINNER_LABEL_SUBMITTING
+        from soothe_cli.display.spinner_labels import SPINNER_LABEL_SUBMITTING
 
         await self._set_spinner(SPINNER_LABEL_SUBMITTING)
 
@@ -591,11 +591,11 @@ class _ExecutionMixin:
         Args:
             command: The slash command (including /)
         """
-        from soothe_cli.tui.commands.command_router import (
+        from soothe_cli.commands.command_router import (
             parse_slash_command,
             validate_command,
         )
-        from soothe_cli.tui.commands.slash_commands import COMMANDS as _RFC404_COMMANDS
+        from soothe_cli.commands.slash_commands import COMMANDS as _RFC404_COMMANDS
 
         # RFC-454 daemon *routing* commands (/deep_research, /plan, /browser_use, …):
         # send the full line as a normal user turn so ``parse_subagent_from_input``
@@ -619,8 +619,8 @@ class _ExecutionMixin:
                     self.query_one("#chat", VerticalScroll).anchor()
                 return
 
-        from soothe_cli.tui.command_registry import resolve_command_head
-        from soothe_cli.tui.config import settings
+        from soothe_cli.commands.command_registry import resolve_command_head
+        from soothe_cli.settings import settings
 
         cmd = command.lower().strip()
         cmd_head = resolve_command_head(command)
@@ -645,7 +645,7 @@ class _ExecutionMixin:
             await self._open_url_command(command, cmd)
         elif cmd == "/version":
             await self._mount_message(UserMessage(command))
-            from soothe_cli.tui._version import __version__ as cli_version
+            from soothe_cli._version import __version__ as cli_version
 
             await self._mount_message(AppMessage(f"Soothe version: {cli_version}"))
         elif cmd == "/clear":
@@ -791,7 +791,7 @@ class _ExecutionMixin:
             try:
                 changes = settings.reload_from_environment()
 
-                from soothe_cli.tui.model_config import clear_caches
+                from soothe_cli.model_config import clear_caches
 
                 clear_caches()
             except (OSError, ValueError):
@@ -856,7 +856,7 @@ class _ExecutionMixin:
         Args:
             command: The full command string (e.g., `/skill:web-research find X`).
         """
-        from soothe_cli.tui.command_registry import parse_skill_command
+        from soothe_cli.commands.command_registry import parse_skill_command
 
         skill_name, args = parse_skill_command(command)
         if not skill_name:
@@ -1207,7 +1207,7 @@ class _ExecutionMixin:
             adapter is not None and getattr(adapter, "_plan_approve_follow_on_pending", False)
         )
         if plan_approve_follow_on:
-            from soothe_cli.tui.spinner_labels import SPINNER_LABEL_SUBMITTING
+            from soothe_cli.display.spinner_labels import SPINNER_LABEL_SUBMITTING
 
             await self._set_spinner(SPINNER_LABEL_SUBMITTING)
         else:

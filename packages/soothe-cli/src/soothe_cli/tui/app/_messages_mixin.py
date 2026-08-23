@@ -198,7 +198,7 @@ class _MessagesMixin:
                 # Create and mount only visible widgets (max WINDOW_SIZE).
                 from soothe_sdk.display.card_binder import sanitize_resume_display_cards
 
-                from soothe_cli.tui.binding import message_to_widget
+                from soothe_cli.commands.binding import message_to_widget
 
                 visible = self._dedupe_message_data_by_id(visible)
                 visible = sanitize_resume_display_cards(visible)
@@ -241,13 +241,13 @@ class _MessagesMixin:
 
         from soothe_sdk.display.transcript_types import MessageType
 
-        from soothe_cli.tui.binding import message_to_widget
-        from soothe_cli.tui.card_wire import (
+        from soothe_cli.card_wire import (
             CARD_CREATED,
             CARD_FINALIZED,
             CARD_UPDATED,
             parse_card_custom_payload,
         )
+        from soothe_cli.commands.binding import message_to_widget
         from soothe_cli.tui.widgets.messages import CognitionStepMessage
 
         parsed = parse_card_custom_payload(data)
@@ -489,7 +489,7 @@ class _MessagesMixin:
             return
 
         # Store message data for virtualization
-        from soothe_cli.tui.binding import message_from_widget
+        from soothe_cli.commands.binding import message_from_widget
 
         message_data = message_from_widget(widget)
         # Ensure the widget's DOM id matches the store id so that

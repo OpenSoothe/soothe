@@ -20,18 +20,18 @@ from soothe_sdk.ux.task_namespace import (
 )
 from textual.content import Content
 
-from soothe_cli.runtime.presentation.duration_format import format_running_elapsed_compact
-from soothe_cli.tui import theme
-from soothe_cli.tui.commands.subagent_routing import get_subagent_display_name
-from soothe_cli.tui.preview_limits import (
+from soothe_cli.commands.subagent_routing import get_subagent_display_name
+from soothe_cli.display import theme
+from soothe_cli.display.preview_limits import (
     STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
     TASK_DELEGATION_DESC_MAX_CHARS,
 )
-from soothe_cli.tui.tool_display import (
+from soothe_cli.display.tool_display import (
     compact_arg_text,
     display_width,
     format_step_tool_activity_line,
 )
+from soothe_cli.runtime.presentation.duration_format import format_running_elapsed_compact
 from soothe_cli.tui.widgets.messages._helpers import (
     _card_body_gutter,
     _card_item_indent,

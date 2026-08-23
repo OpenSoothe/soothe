@@ -14,9 +14,9 @@ if TYPE_CHECKING:
 from textual.containers import Container, VerticalScroll
 from textual.css.query import NoMatches
 
+from soothe_cli.display.spinner_labels import SPINNER_LABEL_INPUT
 from soothe_cli.runtime.state.session_stats import SpinnerStatus
 from soothe_cli.runtime.token_events_debug import TokenEventTrace
-from soothe_cli.tui.spinner_labels import SPINNER_LABEL_INPUT
 from soothe_cli.tui.widgets.loading import LoadingWidget
 from soothe_cli.tui.widgets.messages import AssistantMessage, UserMessage
 from soothe_cli.tui.widgets.pinned_goal_bar import PinnedGoalBar
@@ -306,7 +306,10 @@ class _UIMixin:
             hydrated_widgets: list[tuple[Widget, Any]] = []  # (widget, msg_data)
             for msg_data in to_hydrate:
                 try:
-                    from soothe_cli.tui.binding import is_restorable_message_data, message_to_widget
+                    from soothe_cli.commands.binding import (
+                        is_restorable_message_data,
+                        message_to_widget,
+                    )
 
                     if not is_restorable_message_data(msg_data):
                         continue

@@ -22,9 +22,8 @@ if TYPE_CHECKING:
 
     from textual.app import ComposeResult
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import Glyphs, get_glyphs, is_ascii_mode
-from soothe_cli.tui.model_config import (
+from soothe_cli.display import theme
+from soothe_cli.model_config import (
     ModelConfig,
     clear_default_model,
     get_available_models,
@@ -32,6 +31,7 @@ from soothe_cli.tui.model_config import (
     has_provider_credentials,
     save_default_model,
 )
+from soothe_cli.settings import Glyphs, get_glyphs, is_ascii_mode
 
 logger = logging.getLogger(__name__)
 

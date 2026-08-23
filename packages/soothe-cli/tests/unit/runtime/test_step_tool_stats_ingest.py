@@ -322,7 +322,7 @@ async def test_wire_update_task_call_ids_keep_step_rows_without_subagent_cards()
 @pytest.mark.asyncio
 async def test_wire_update_registers_subgraph_tool_with_placeholder_args() -> None:
     """Subgraph placeholder args must still create a step-card row (tool name only)."""
-    from soothe_cli.tui.tool_display import format_step_tool_activity_command
+    from soothe_cli.display.tool_display import format_step_tool_activity_command
 
     adapter = TextualUIAdapter(
         mount_message=lambda _w: None,

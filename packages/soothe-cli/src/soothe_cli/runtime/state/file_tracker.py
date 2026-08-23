@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from soothe_sdk.tools.metadata import get_file_write_tool_names
 
-from soothe_cli.tui.preview_limits import APPROVAL_DIFF_MAX_LINES
+from soothe_cli.display.preview_limits import APPROVAL_DIFF_MAX_LINES
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ def resolve_physical_path(path_str: str | None, assistant_id: str | None) -> Pat
         return None
     try:
         if assistant_id and path_str.startswith("/memories/"):
-            from soothe_cli.tui.config import settings
+            from soothe_cli.settings import settings
 
             agent_dir = settings.get_agent_dir(assistant_id)
             suffix = path_str.removeprefix("/memories/").lstrip("/")

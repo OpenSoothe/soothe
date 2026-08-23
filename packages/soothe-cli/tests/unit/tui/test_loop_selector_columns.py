@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe_cli.tui.model_config import load_loop_config
+from soothe_cli.model_config import load_loop_config
 from soothe_cli.tui.widgets.loop_selector import (
     _format_column_value,
     _is_active_loop,

@@ -13,10 +13,10 @@ from textual.widgets import Static
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
-from soothe_cli.tui import theme
-from soothe_cli.tui._version import DOCS_URL
-from soothe_cli.tui.command_registry import COMMANDS as SLASH_COMMANDS
-from soothe_cli.tui.config import get_glyphs, is_ascii_mode, newline_shortcut
+from soothe_cli._version import DOCS_URL
+from soothe_cli.commands.command_registry import COMMANDS as SLASH_COMMANDS
+from soothe_cli.display import theme
+from soothe_cli.settings import get_glyphs, is_ascii_mode, newline_shortcut
 
 _EXTRA_COMMANDS: tuple[tuple[str, str], ...] = (
     ("/skill:<name>", "Run a discovered skill by name"),

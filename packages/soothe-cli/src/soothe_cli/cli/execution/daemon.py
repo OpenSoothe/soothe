@@ -19,15 +19,15 @@ from soothe_client import (
 from soothe_client.appkit import DaemonSession
 from soothe_client.appkit.events import is_loop_scoped_event, unwrap_next
 
+from soothe_cli._env_vars import resolve_cli_loop_workspace
 from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_execution_error,
     is_daemon_worker_subprocess_lost,
 )
 from soothe_cli.cli.execution.headless_renderer import HeadlessCliRenderer
+from soothe_cli.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.runtime import EventProcessor
 from soothe_cli.runtime.presentation.engine import PresentationEngine
-from soothe_cli.tui._env_vars import resolve_cli_loop_workspace
-from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 
 logger = logging.getLogger(__name__)
 

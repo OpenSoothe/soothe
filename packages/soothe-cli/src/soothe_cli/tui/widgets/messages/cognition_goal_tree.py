@@ -11,6 +11,8 @@ from textual.containers import Vertical
 from textual.content import Content
 from textual.widgets import Static
 
+from soothe_cli.display import theme
+from soothe_cli.display.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
 from soothe_cli.runtime.presentation.duration_format import (
     format_duration,
     format_duration_ms,
@@ -20,9 +22,7 @@ from soothe_cli.runtime.presentation.step_id_format import (
     display_step_id,
     numeric_step_prefix,
 )
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs
-from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
+from soothe_cli.settings import get_glyphs
 from soothe_cli.tui.widgets.messages._helpers import (
     _card_body_gutter,
     _card_dot_prefix_content,

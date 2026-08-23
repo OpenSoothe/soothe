@@ -48,7 +48,7 @@ class _ApplyCardHost(_MessagesMixin):
         self.mounted.append(widget)
         if getattr(widget, "id", None):
             self._widgets_by_id[widget.id] = widget
-        from soothe_cli.tui.binding import message_from_widget
+        from soothe_cli.commands.binding import message_from_widget
 
         self._message_store.append(message_from_widget(widget))
 

@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from textual.app import ComposeResult
 
 from soothe_cli.runtime.presentation.id_format import abbreviate_compact_id
-from soothe_cli.tui.config import get_glyphs, is_ascii_mode
+from soothe_cli.settings import get_glyphs, is_ascii_mode
 from soothe_cli.tui.widgets.context_data import (
     LoadTokenSnapshotFn,
     TokenUsageSnapshot,
@@ -391,7 +391,7 @@ class ContextViewerScreen(ModalScreen[None]):
         self._apply_responsive_mode()
         if is_ascii_mode():
             container = self.query_one(Vertical)
-            from soothe_cli.tui import theme
+            from soothe_cli.display import theme
 
             colors = theme.get_theme_colors(self)
             container.styles.border = ("ascii", colors.success)

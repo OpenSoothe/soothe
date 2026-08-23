@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any
 from textual.content import Content
 from textual.widgets import Static
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import is_ascii_mode
-from soothe_cli.tui.preview_limits import APPROVAL_DIFF_MAX_LINES
+from soothe_cli.display import theme
+from soothe_cli.display.preview_limits import APPROVAL_DIFF_MAX_LINES
+from soothe_cli.settings import is_ascii_mode
 from soothe_cli.tui.widgets.diff import compose_diff_lines
 
 if TYPE_CHECKING:

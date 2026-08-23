@@ -14,8 +14,8 @@ from textual.widgets import Checkbox, Static
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs, is_ascii_mode
+from soothe_cli.display import theme
+from soothe_cli.settings import get_glyphs, is_ascii_mode
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ class NotificationSettingsScreen(ModalScreen[None]):
         enabled = event.value
 
         async def _persist() -> None:
-            from soothe_cli.tui.model_config import (
+            from soothe_cli.model_config import (
                 suppress_warning,
                 unsuppress_warning,
             )

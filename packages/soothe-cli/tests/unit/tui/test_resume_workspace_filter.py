@@ -8,12 +8,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe_cli.runtime.transport.session import TuiDaemonSession
-from soothe_cli.tui.sessions import (
+from soothe_cli.loops.sessions import (
     list_loops_via_daemon_rpc,
     loop_matches_workspace,
     normalize_workspace_path,
 )
+from soothe_cli.runtime.transport.session import TuiDaemonSession
 from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe_cli.tui.commands.subagent_routing import get_subagent_display_name
+from soothe_cli.commands.subagent_routing import get_subagent_display_name
 from soothe_cli.tui.widgets.messages.cognition_step import CognitionStepMessage
 
 

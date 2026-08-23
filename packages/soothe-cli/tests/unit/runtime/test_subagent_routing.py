@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe_cli.tui.commands.subagent_routing import (
+from soothe_cli.commands.subagent_routing import (
     get_subagent_display_name,
     parse_subagent_from_input,
 )
@@ -45,10 +45,10 @@ def test_get_subagent_display_name_research_subagents() -> None:
 
 
 def test_slash_registries_include_browser_use() -> None:
-    from soothe_cli.tui.command_registry import COMMANDS as UI_COMMANDS
-    from soothe_cli.tui.command_registry import SLASH_COMMANDS
-    from soothe_cli.tui.commands.slash_commands import COMMANDS as RFC_COMMANDS
-    from soothe_cli.tui.commands.subagent_routing import SUBAGENT_SLASH_ROUTE_IDS
+    from soothe_cli.commands.command_registry import COMMANDS as UI_COMMANDS
+    from soothe_cli.commands.command_registry import SLASH_COMMANDS
+    from soothe_cli.commands.slash_commands import COMMANDS as RFC_COMMANDS
+    from soothe_cli.commands.subagent_routing import SUBAGENT_SLASH_ROUTE_IDS
 
     assert "browser_use" in SUBAGENT_SLASH_ROUTE_IDS
     # "plan" removed from subagent slash routes (now handled by command_router).
