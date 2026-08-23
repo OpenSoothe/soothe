@@ -32,6 +32,20 @@ _proposal_sink: ContextVar[list[DecompositionProposal] | None] = ContextVar(
 # snapshot that shares the reference bound at ``bind_decompose_runtime``.
 _evidence_calls: ContextVar[list[int]] = ContextVar("decompose_evidence_calls", default=None)
 
+# Accumulated excerpts of grounding-tool *outputs* (ToolMessage content) in
+# the current step thread. Fed to the LLM grounding critic in
+# ``grounding_guard.check_proposal_grounded`` so it can judge whether a
+# decompose proposal's claims are backed by evidence the model actually saw
+# — without touching the filesystem (sandbox-compatible). Same mutable-list
+# pattern as ``_evidence_calls``: a list is *referenced* (not copied) by
+# LangGraph's ``copy_context()`` snapshots, so in-place appends are visible
+# across every snapshot that shares the reference bound at
+# ``bind_decompose_runtime``.
+_EVIDENCE_EXCERPT_CAP = 2000  # per-entry char cap (bounds memory)
+_evidence_corpus: ContextVar[list[str] | None] = ContextVar(
+    "decompose_evidence_corpus", default=None
+)
+
 
 def _evidence_counter() -> list[int]:
     """Return the bound evidence counter list, binding a fresh one if absent.
@@ -56,6 +70,7 @@ class DecomposeRuntimeTokens:
     wave: Token[int]
     sink: Token[list[DecompositionProposal] | None]
     evidence: Token[list[int] | None]
+    evidence_corpus: Token[list[str] | None]
 
 
 def bind_decompose_runtime(
@@ -77,6 +92,7 @@ def bind_decompose_runtime(
         wave=_wave_seq.set(wave_seq),
         sink=_proposal_sink.set(sink),
         evidence=_evidence_calls.set([0]),
+        evidence_corpus=_evidence_corpus.set([]),
     )
 
 
@@ -90,6 +106,7 @@ def reset_decompose_runtime(tokens: DecomposeRuntimeTokens) -> None:
     _wave_seq.reset(tokens.wave)
     _proposal_sink.reset(tokens.sink)
     _evidence_calls.reset(tokens.evidence)
+    _evidence_corpus.reset(tokens.evidence_corpus)
 
 
 def current_step_id() -> str | None:
@@ -112,6 +129,39 @@ def current_evidence_calls() -> int:
 def record_evidence_call() -> None:
     """Increment the evidence-gathering call counter for this step thread."""
     _evidence_counter()[0] += 1
+
+
+def _evidence_corpus_list() -> list[str]:
+    """Return the bound evidence-corpus list, binding a fresh one if absent.
+
+    Lazy-binds a shared list (same copy_context-safe pattern as
+    ``_evidence_counter``) so appends made inside a Pregel ``copy_context()``
+    snapshot are visible to the snapshot that runs ``decompose_task``.
+    """
+    lst = _evidence_corpus.get()
+    if lst is None:
+        lst = []
+        _evidence_corpus.set(lst)
+    return lst
+
+
+def record_evidence_output(text: str) -> None:
+    """Append a truncated excerpt of a grounding-tool output to the corpus.
+
+    Called by ``DecomposeTaskMiddleware`` after each grounding tool runs.
+    Per-entry cap bounds memory; the critic prompt also caps the total.
+    """
+    excerpt = (text or "").strip()
+    if not excerpt:
+        return
+    if len(excerpt) > _EVIDENCE_EXCERPT_CAP:
+        excerpt = excerpt[: _EVIDENCE_EXCERPT_CAP - 1] + "…"
+    _evidence_corpus_list().append(excerpt)
+
+
+def current_evidence_corpus() -> list[str]:
+    """Return the accumulated evidence excerpts for this step thread."""
+    return _evidence_corpus_list()
 
 
 def langgraph_configurable() -> dict[str, Any]:

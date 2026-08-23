@@ -100,6 +100,43 @@ def _record_evidence_if_grounding(tool_call: dict[str, Any]) -> None:
         _decompose_runtime.record_evidence_call()
 
 
+def _extract_result_text(result: Any) -> str:
+    """Best-effort extraction of a tool result's text for the evidence corpus.
+
+    Handles ``ToolMessage`` (str or list content) and ``Command`` (with
+    messages). Defensive — never raises; returns "" on any failure so the
+    tool call itself is never broken by evidence capture.
+    """
+    try:
+        content = getattr(result, "content", None)
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for block in content:
+                if isinstance(block, str):
+                    parts.append(block)
+                elif isinstance(block, dict):
+                    text = block.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+            return " ".join(parts)
+        # Command with messages: pull the last ToolMessage.
+        messages = getattr(result, "messages", None) or getattr(result, "update", None)
+        if isinstance(messages, dict):
+            messages = messages.get("messages")
+        if isinstance(messages, list) and messages:
+            last = messages[-1]
+            last_content = getattr(last, "content", None)
+            if isinstance(last_content, str):
+                return last_content
+            if isinstance(last_content, list):
+                return _extract_result_text(type("X", (), {"content": last_content})())
+        return ""
+    except Exception:
+        return ""
+
+
 class DecomposeTaskMiddleware(AgentMiddleware):
     """Inject ``decompose_task`` + THREAD policy on step threads.
 
@@ -143,10 +180,13 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         tool_call = getattr(request, "tool_call", None) or {}
         tool_name = str(tool_call.get("name", ""))
         if tool_name != "decompose_task":
-            # Count evidence-gathering calls so the decompose tool handler
-            # can reject proposals issued with zero prior grounding.
-            _record_evidence_if_grounding(tool_call)
-            return await handler(request)
+            result = await handler(request)
+            # Capture grounding-tool outputs for the LLM grounding critic.
+            if _is_grounding_call(tool_name, tool_call):
+                text = _extract_result_text(result)
+                if text:
+                    _decompose_runtime.record_evidence_output(text)
+            return result
         conf = _decompose_runtime.langgraph_configurable()
         mode = self._active_mode(conf)
         if mode is None:
@@ -186,10 +226,13 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         tool_call = getattr(request, "tool_call", None) or {}
         tool_name = str(tool_call.get("name", ""))
         if tool_name != "decompose_task":
-            # Count evidence-gathering calls so the decompose tool handler
-            # can reject proposals issued with zero prior grounding.
-            _record_evidence_if_grounding(tool_call)
-            return handler(request)
+            result = handler(request)
+            # Capture grounding-tool outputs for the LLM grounding critic.
+            if _is_grounding_call(tool_name, tool_call):
+                text = _extract_result_text(result)
+                if text:
+                    _decompose_runtime.record_evidence_output(text)
+            return result
         conf = _decompose_runtime.langgraph_configurable()
         mode = self._active_mode(conf)
         if mode is None:

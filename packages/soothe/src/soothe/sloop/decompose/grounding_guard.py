@@ -2,10 +2,15 @@
 
 Two runtime layers that reject decompose proposals issued without evidence:
 
-- ``find_unconfirmed_paths``: a proposal whose subtasks cite files/dirs that
-  do not exist in the workspace is rejected — the model must re-ground.
+- ``check_proposal_grounded``: an LLM-driven critic (FAST model) that judges
+  whether the concrete claims in a proposal (paths, modules, functions,
+  quantities, behavioral assertions) are supported by the evidence the agent
+  actually gathered in the step thread. Replaces the old rigid
+  filesystem-path existence check so it works in sandboxes with no real
+  project paths and catches hallucinations beyond paths.
 - ``current_evidence_calls`` (in :mod:`runtime`): a decompose_task issued
-  with zero prior evidence-gathering tool calls in the thread is rejected.
+  with zero prior evidence-gathering tool calls in the thread is rejected
+  without invoking the model (cheap short-circuit).
 
 Together they prevent the d15f failure: a complex root step called
 ``decompose_task`` as its first action (no grounding) and fabricated
@@ -15,146 +20,177 @@ Together they prevent the d15f failure: a complex root step called
 from __future__ import annotations
 
 import logging
-import re
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+from pydantic import BaseModel, Field
 
 from soothe.context.decomposition import DecompositionProposal
 
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
+
+    from soothe.config import SootheConfig
+    from soothe.utils.observability.langfuse import GoalLoopTrace
+
 logger = logging.getLogger(__name__)
 
-# Cap the number of cited paths checked per proposal, so a verbose proposal
-# with many path-like tokens does not trigger an unbounded stat storm.
-_MAX_PATHS_TO_CHECK = 20
-
-# A path-like token: at least one ``/`` separating segments of word chars,
-# dots, dashes. Filters out plain words and prose. ``client/swift/``,
-# ``packages/client-go/src/goosews/``, ``src/foo.py`` all match; ``Swift``,
-# ``Go``, ``do the work`` do not.
-_PATH_TOKEN_RE = re.compile(r"(?<![\w./-])[\w][\w./-]*\/[\w./-]+")
-
-# Common English words that the regex might capture when they contain a
-# slash from a contraction or heading like "add/delete" — drop these.
-_PROSE_DENYLIST = frozenset(
-    {
-        "add/delete",
-        "create/replace",
-        "read/write",
-        "input/output",
-        "source/destination",
-        "before/after",
-        "and/or",
-    }
-)
+# Cap the total evidence text fed to the critic prompt (bounds cost/latency).
+_EVIDENCE_PROMPT_CAP = 6000
 
 
-def _looks_like_path(token: str) -> bool:
-    """Heuristic: does this token look like a deliberate file/dir reference?
+class UngroundedClaim(BaseModel):
+    """A proposal claim the critic judges as unsupported by evidence."""
 
-    Conservative — when in doubt return False so the guard does not block
-    legitimate prose. A token is path-like when it has a path separator AND
-    either ends with ``/`` (dir), has a file extension (``.py``/``.go``),
-    or has 2+ segments where one looks like a code identifier.
-    """
-    if not token or "/" not in token:
-        return False
-    if token.lower() in _PROSE_DENYLIST:
-        return False
-    stripped = token.strip("/.")
-    if not stripped:
-        return False
-    # Drop tokens that are really two English words joined by a slash
-    # (e.g. "enhance/test", "review/polish") unless one segment has a dot
-    # (extension) or the token ends with ``/`` (explicit dir).
-    if token.endswith("/"):
-        return True
-    if "." in stripped.split("/")[-1]:  # last segment has a file extension
-        return True
-    return False
+    subtask: int = Field(description="Index of the subtask (0-based) in the proposal")
+    claim: str = Field(description="The specific unsupported claim")
+    reason: str = Field(description="Why the evidence does not support this claim (concise)")
 
 
-def extract_cited_paths(text: str) -> list[str]:
-    """Extract candidate relative file/dir paths from ``text``.
+class GroundingVerdict(BaseModel):
+    """Structured verdict from the FAST grounding critic."""
 
-    Returns deduplicated paths (preserving first-seen order). Conservative:
-    only tokens that pass :func:`_looks_like_path` are returned.
-    """
-    if not text:
-        return []
-    seen: set[str] = set()
-    out: list[str] = []
-    for match in _PATH_TOKEN_RE.finditer(text):
-        token = match.group(0).strip(".,;:()[]\"'`")
-        if _looks_like_path(token) and token not in seen:
-            seen.add(token)
-            out.append(token)
-    return out
+    grounded: bool = Field(
+        description=(
+            "True when every concrete claim in the proposal is supported by "
+            "the evidence (paths, modules, functions, quantities, behavioral "
+            "assertions appear or are close-variant in the evidence)."
+        )
+    )
+    ungrounded_claims: list[UngroundedClaim] = Field(
+        default_factory=list,
+        description="Claims NOT supported by the evidence (empty if grounded)",
+    )
 
 
-def _collect_proposal_paths(proposal: DecompositionProposal) -> list[str]:
-    """Gather all cited paths across the proposal's subtasks (deduped)."""
-    seen: set[str] = set()
-    out: list[str] = []
-    for sub in proposal.subtasks:
-        for field in (sub.description, sub.full_description, sub.expected_output):
-            for path in extract_cited_paths(field or ""):
-                if path not in seen:
-                    seen.add(path)
-                    out.append(path)
-    return out
+def _render_proposal(proposal: DecompositionProposal) -> str:
+    """Render a proposal's subtasks into text for the critic prompt."""
+    lines: list[str] = []
+    for idx, sub in enumerate(proposal.subtasks):
+        parts = [f"### Subtask {idx}"]
+        if sub.description:
+            parts.append(f"description: {sub.description}")
+        if sub.full_description:
+            parts.append(f"full_description: {sub.full_description}")
+        if sub.expected_output:
+            parts.append(f"expected_output: {sub.expected_output}")
+        lines.append("\n".join(parts))
+    return "\n\n".join(lines)
 
 
-def find_unconfirmed_paths(
+def _render_evidence(corpus: list[str]) -> str:
+    """Concatenate evidence excerpts with an overall cap."""
+    chunks: list[str] = []
+    total = 0
+    for excerpt in corpus:
+        if total + len(excerpt) > _EVIDENCE_PROMPT_CAP:
+            remaining = _EVIDENCE_PROMPT_CAP - total
+            if remaining > 80:
+                chunks.append(excerpt[: remaining - 1] + "…")
+            break
+        chunks.append(excerpt)
+        total += len(excerpt)
+    return "\n---\n".join(chunks) if chunks else "(no evidence)"
+
+
+_CRITIC_PROMPT = """\
+You are a grounding critic for an AI coding agent's task decomposition.
+
+Below is EVIDENCE — the concatenated outputs of search/inspection tool calls \
+the agent gathered in this step thread — and a PROPOSAL — the subtasks the \
+agent wants to decompose the current step into.
+
+For each concrete claim in the PROPOSAL — a file/dir path, a module, function, \
+or class name, a file count or quantity, or a behavioral assertion (e.g. \
+"X is a backward-compat shim", "Y depends on Z") — decide whether the EVIDENCE \
+supports it. A claim is supported when the item (or a close variant, e.g. a \
+path with a longer prefix/suffix, or the same identifier) appears in the \
+evidence. Do NOT require an exact string match; semantic near-match counts.
+
+List ONLY claims that are NOT supported by the evidence — things the agent \
+appears to have invented without having observed them. If every concrete claim \
+is supported, set grounded=true with an empty ungrounded_claims list.
+
+Do not reject legitimate inferences: if the agent saw "packages/soothe/src/\
+soothe/sloop/state/checkpoint.py" in evidence and the proposal cites \
+"sloop/state/checkpoint.py", that is supported (the path was observed).
+
+EVIDENCE:
+{evidence}
+
+PROPOSAL (parent step {step_id}):
+{proposal}
+"""
+
+
+async def check_proposal_grounded(
     proposal: DecompositionProposal,
     *,
-    workspace: str | None,
-) -> list[str]:
-    """Return cited paths in ``proposal`` that do not exist in ``workspace``.
+    evidence_corpus: list[str],
+    fast_model: BaseChatModel | None,
+    soothe_config: SootheConfig | None = None,
+    step_id: str,
+    goal_trace: GoalLoopTrace | None = None,
+) -> GroundingVerdict | None:
+    """Run the FAST grounding critic on a decompose proposal.
 
-    Resolves each cited path against the workspace root. A path is confirmed
-    when it exists as a file, directory, or any filesystem entry. Returns only
-    the missing paths.
-
-    Fails open when no workspace is available (``None`` or empty): the guard
-    cannot reliably resolve paths without a workspace root, so it returns no
-    missing paths rather than risk blocking legitimate work on a misresolved
-    cwd. The evidence-call gate (scheme 2d) still applies.
-
-    Conservative: caps at :data:`_MAX_PATHS_TO_CHECK` cited paths; when in
-    doubt about whether a token is a real path, it is not checked (fail
-    open — never block legitimate work on a misread).
+    Returns a :class:`GroundingVerdict`, or ``None`` on failure (fail-open: \
+    the caller should not block the proposal when the critic itself errors).
     """
-    if not workspace:
-        return []
-    cited = _collect_proposal_paths(proposal)
-    if not cited:
-        return []
-    base = Path(workspace).expanduser()
-    missing: list[str] = []
-    for path_str in cited[:_MAX_PATHS_TO_CHECK]:
-        candidate = Path(path_str)
-        resolved = candidate if candidate.is_absolute() else (base / candidate)
-        try:
-            if not resolved.exists():
-                missing.append(path_str)
-        except OSError:
-            # Filesystem error — treat as confirmed (fail open).
-            continue
-    return missing
+    if fast_model is None:
+        # No fast model resolved — fail open (don't block legitimate work).
+        return None
+    evidence = _render_evidence(evidence_corpus)
+    if not evidence_corpus:
+        # No evidence text captured; the zero-evidence gate in tool.py
+        # should have caught this, but be defensive.
+        return None
+    proposal_text = _render_proposal(proposal)
+    prompt = _CRITIC_PROMPT.format(evidence=evidence, proposal=proposal_text, step_id=step_id)
+    try:
+        from soothe_nano.llm import ainvoke_structured_traced
+
+        data = await ainvoke_structured_traced(
+            fast_model,
+            [{"role": "user", "content": prompt}],
+            json_schema=GroundingVerdict.model_json_schema(),
+            schema_name="GroundingVerdict",
+            soothe_config=soothe_config,
+            purpose="decompose_grounding_critic",
+            component="sloop.decompose.grounding_guard",
+            phase="execute_step",
+            goal_trace=goal_trace,
+        )
+        return GroundingVerdict.model_validate(data)
+    except Exception:
+        logger.warning(
+            "[decompose] grounding critic LLM call failed (step=%s); fail-open",
+            step_id,
+            exc_info=True,
+        )
+        return None
 
 
-def build_unconfirmed_paths_guidance(
-    missing: list[str],
+def build_ungrounded_claims_guidance(
+    verdict: GroundingVerdict,
     *,
     step_id: str,
 ) -> str:
-    """Build the soft-rejection guidance returned to the LLM for unconfirmed paths."""
-    preview = ", ".join(missing[:5])
+    """Build the soft-rejection guidance returned to the LLM for ungrounded claims."""
+    claims_preview = "; ".join(
+        f"subtask[{c.subtask}]: {c.claim}" for c in verdict.ungrounded_claims[:5]
+    )
+    reasons = "\n".join(
+        f'  - subtask[{c.subtask}] "{c.claim}": {c.reason}' for c in verdict.ungrounded_claims
+    )
     return (
-        f"Decomposition proposal for step {step_id} was NOT queued: it cites "
-        f"areas that could not be confirmed to exist ({preview}"
-        f"{', …' if len(missing) > 5 else ''}). Gather evidence first — run "
-        f"ls/glob/grep to confirm which of these areas exist, then re-propose "
-        f"only the confirmed ones. Do not fabricate subtasks for paths you "
+        f"Decomposition proposal for step {step_id} was NOT queued: it contains "
+        f"claims not supported by the evidence you gathered ({claims_preview}"
+        f"{'; …' if len(verdict.ungrounded_claims) > 5 else ''}).\n\n"
+        f"Unsupported claims:\n{reasons}\n\n"
+        f"Re-ground: run ls/glob/grep/read_file to confirm the areas this task "
+        f"spans, then re-propose only subtasks whose concrete claims (paths, "
+        f"modules, quantities, behavioral assertions) you have actually "
+        f"observed in tool outputs. Do not fabricate subtasks for things you "
         f"have not verified."
     )
 
@@ -172,8 +208,9 @@ def build_no_evidence_guidance(*, step_id: str) -> str:
 
 
 __all__ = [
+    "GroundingVerdict",
+    "UngroundedClaim",
     "build_no_evidence_guidance",
-    "build_unconfirmed_paths_guidance",
-    "extract_cited_paths",
-    "find_unconfirmed_paths",
+    "build_ungrounded_claims_guidance",
+    "check_proposal_grounded",
 ]

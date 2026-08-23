@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from soothe.context.decomposition import DecompositionProposal, ProposedSubtask
 from soothe.prompts.user_message import UserMessageBuilder
 from soothe.sloop.decompose.runtime import (
@@ -11,6 +13,7 @@ from soothe.sloop.decompose.runtime import (
     current_evidence_calls,
     current_step_id,
     record_evidence_call,
+    record_evidence_output,
     reset_decompose_runtime,
 )
 from soothe.sloop.decompose.tool import build_decompose_task_tool
@@ -102,24 +105,86 @@ def test_decompose_tool_accepted_after_one_evidence_call() -> None:
         reset_decompose_runtime(tokens)
 
 
-# ── Path-existence guard (d15f hallucination defense, scheme 2c) ───────────
+# ── LLM grounding critic (d15f hallucination defense, scheme 2c) ───────────
+#
+# The rigid filesystem-path guard was replaced by an LLM-driven critic that
+# judges whether a proposal's claims are backed by the evidence the agent
+# gathered. The async path (_arun_decompose_task) runs the critic; the sync
+# path (_run_decompose_task) cannot (LLM calls are async) and fails open.
 
 
-def test_decompose_tool_rejects_unconfirmed_paths(tmp_path) -> None:
-    """A proposal citing non-existent paths is rejected even with evidence."""
-    # Create a real client dir so one subtask is confirmed; the other cites a
-    # fabricated path that does not exist (the d15f Swift hallucination).
-    (tmp_path / "client" / "go").mkdir(parents=True)
+def test_decompose_tool_sync_path_fails_open_without_critic() -> None:
+    """Sync path has no fast_model → critic skipped → proposal queued.
+
+    The sync variant cannot call the async LLM critic, so when no fast_model
+    is bound in the configurable it fails open (queues the proposal). The
+    zero-evidence gate still applies.
+    """
     sink: list[DecompositionProposal] = []
     tokens = bind_decompose_runtime(step_id="INF-01", sink=sink)
     try:
         record_evidence_call()
         tool = build_decompose_task_tool()
         with patch(
-            "soothe.sloop.decompose.runtime.langgraph_configurable",
-            return_value={"workspace": str(tmp_path)},
+            "soothe.sloop.decompose.tool.langgraph_configurable",
+            return_value={},  # no fast_model → critic skipped
         ):
             result = tool.invoke(
+                {
+                    "task": "enhance all clients",
+                    "subtasks": [
+                        {
+                            "description": "Enhance Swift client (client/swift/)",
+                            "full_description": "Review and enhance client/swift/.",
+                        },
+                    ],
+                }
+            )
+        assert "queued" in result.lower()
+        assert len(sink) == 1
+    finally:
+        reset_decompose_runtime(tokens)
+
+
+@pytest.mark.asyncio
+async def test_decompose_tool_async_rejects_ungrounded_claims() -> None:
+    """Async path: critic returns ungrounded → soft-reject, proposal not queued."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from soothe.sloop.decompose.grounding_guard import (
+        GroundingVerdict,
+        UngroundedClaim,
+    )
+
+    sink: list[DecompositionProposal] = []
+    tokens = bind_decompose_runtime(step_id="INF-01", sink=sink)
+    try:
+        record_evidence_call()
+        record_evidence_output("client/go/ exists with 3 files")
+        tool = build_decompose_task_tool()
+        mock_model = MagicMock()
+        verdict = GroundingVerdict(
+            grounded=False,
+            ungrounded_claims=[
+                UngroundedClaim(
+                    subtask=1,
+                    claim="client/swift/",
+                    reason="no swift reference in evidence",
+                )
+            ],
+        )
+        with (
+            patch(
+                "soothe.sloop.decompose.tool.langgraph_configurable",
+                return_value={"fast_model": mock_model},
+            ),
+            patch(
+                "soothe_nano.llm.ainvoke_structured_traced",
+                new_callable=AsyncMock,
+                return_value=verdict.model_dump(),
+            ),
+        ):
+            result = await tool.ainvoke(
                 {
                     "task": "enhance all clients",
                     "subtasks": [
@@ -141,29 +206,43 @@ def test_decompose_tool_rejects_unconfirmed_paths(tmp_path) -> None:
         reset_decompose_runtime(tokens)
 
 
-def test_decompose_tool_fails_open_when_workspace_unset() -> None:
-    """When workspace is unavailable, the path guard is skipped (fail open)."""
+@pytest.mark.asyncio
+async def test_decompose_tool_async_queues_grounded_proposal() -> None:
+    """Async path: critic returns grounded → proposal queued."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from soothe.sloop.decompose.grounding_guard import GroundingVerdict
+
     sink: list[DecompositionProposal] = []
     tokens = bind_decompose_runtime(step_id="INF-01", sink=sink)
     try:
         record_evidence_call()
+        record_evidence_output("client/go/ exists with 3 files")
         tool = build_decompose_task_tool()
-        with patch(
-            "soothe.sloop.decompose.runtime.langgraph_configurable",
-            return_value={},
+        mock_model = MagicMock()
+        verdict = GroundingVerdict(grounded=True, ungrounded_claims=[])
+        with (
+            patch(
+                "soothe.sloop.decompose.tool.langgraph_configurable",
+                return_value={"fast_model": mock_model},
+            ),
+            patch(
+                "soothe_nano.llm.ainvoke_structured_traced",
+                new_callable=AsyncMock,
+                return_value=verdict.model_dump(),
+            ),
         ):
-            result = tool.invoke(
+            result = await tool.ainvoke(
                 {
                     "task": "enhance all clients",
                     "subtasks": [
                         {
-                            "description": "Enhance Swift client (client/swift/)",
-                            "full_description": "Review and enhance client/swift/.",
+                            "description": "Enhance Go client (client/go/)",
+                            "full_description": "Review and enhance client/go/.",
                         },
                     ],
                 }
             )
-        # No workspace → path guard skipped → proposal queued (evidence satisfied).
         assert "queued" in result.lower()
         assert len(sink) == 1
     finally:
