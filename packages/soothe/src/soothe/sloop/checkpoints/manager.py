@@ -160,14 +160,27 @@ class StrangeLoopCheckpointPersistenceManager:
         """
         return await self._backend.get_loop_metadata(loop_id)
 
-    async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
+    async def update_loop_metadata(
+        self, loop_id: str, *, force_status: bool = False, **fields: Any
+    ) -> None:
         """Partially update loop metadata fields.
 
         Args:
             loop_id: Loop identifier.
+            force_status: When True, bypass the RFC-225 goal-count guard so
+                an authoritative caller (stale-loop reconciler) can demote a
+                confirmed-dead zombie loop's ``status`` even when it has goals.
             **fields: Column names and values to update.
         """
-        await self._backend.update_loop_metadata(loop_id, **fields)
+        await self._backend.update_loop_metadata(loop_id, force_status=force_status, **fields)
+
+    async def mark_running_goals_failed(self, loop_id: str) -> int:
+        """Mark a loop's still-``running`` goal_records as ``failed``.
+
+        Returns the count of goal rows updated. Used by the stale-loop
+        reconciler to close goals orphaned by a crashed runner.
+        """
+        return await self._backend.mark_running_goals_failed(loop_id)
 
     async def set_resume_topic_once(self, loop_id: str, topic: str) -> bool:
         """Persist resume topic only when the loop has no stored topic yet.

@@ -73,9 +73,6 @@ CONFUSABLES: dict[str, str] = {
     "\uff4f": "o",  # FULLWIDTH LATIN SMALL LETTER O
 }
 
-URL_ARG_KEYS: frozenset[str] = frozenset({"url", "uri", "href", "link", "base_url", "endpoint"})
-"""Argument key names that likely contain URLs and should be safety-checked."""
-
 _URL_SAFE_LOCAL_HOSTS: frozenset[str] = frozenset({"localhost"})
 
 

@@ -110,10 +110,6 @@ def configure_command_group(
     _register_help_command(nested_app)
 
 
-# Backwards-compatible alias used by older call sites / tests.
-add_help_alias = configure_command_group
-
-
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,

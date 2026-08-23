@@ -14,10 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from datetime import datetime
+from typing import Any
 
 from soothe_sdk.display import card_binder as _binder
 from soothe_sdk.display.transcript_types import MessageData
@@ -53,19 +50,6 @@ class _HistoryMixin:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _is_loop_internal_checkpoint_message(msg: Any) -> bool:
-        """Delegate to ``soothe_sdk.display.card_binder.is_loop_internal_checkpoint_message``."""
-        return _binder.is_loop_internal_checkpoint_message(msg)
-
-    @staticmethod
-    def _merge_visible_messages_with_cognition_cards(
-        visible: list[MessageData],
-        cognition: list[MessageData],
-    ) -> list[MessageData]:
-        """Delegate to ``soothe_sdk.display.card_binder.merge_visible_messages_with_cognition_cards``."""
-        return _binder.merge_visible_messages_with_cognition_cards(visible, cognition)
-
-    @staticmethod
     def _convert_messages_to_data(
         messages: list[Any],
         *,
@@ -78,16 +62,6 @@ class _HistoryMixin:
         )
 
     @staticmethod
-    def _conversation_rows_to_langchain_messages(rows: list[dict[str, Any]]) -> list[Any]:
-        """Delegate to ``soothe_sdk.display.card_binder.conversation_rows_to_langchain_messages``."""
-        return _binder.conversation_rows_to_langchain_messages(rows)
-
-    @staticmethod
-    def _parse_loop_event_timestamp(timestamp: Any) -> datetime | None:
-        """Delegate to ``soothe_sdk.display.card_binder.parse_loop_event_timestamp``."""
-        return _binder.parse_loop_event_timestamp(timestamp)
-
-    @staticmethod
     def _convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
         """Delegate to ``soothe_sdk.display.card_binder.convert_event_to_message_data``."""
         return _binder.convert_event_to_message_data(event)
@@ -96,11 +70,6 @@ class _HistoryMixin:
     def _collect_cognition_card_replay(events: list[dict[str, Any]]) -> list[MessageData]:
         """Delegate to ``soothe_sdk.display.card_binder.collect_cognition_card_replay``."""
         return _binder.collect_cognition_card_replay(events)
-
-    @staticmethod
-    def _merge_step_progress(prior: MessageData, later: MessageData) -> MessageData:
-        """Delegate to ``soothe_sdk.display.card_binder.merge_step_progress``."""
-        return _binder.merge_step_progress(prior, later)
 
     def _convert_loop_events_to_data(self, events: list[dict[str, Any]]) -> list[MessageData]:
         """Delegate to ``soothe_sdk.display.card_binder.convert_loop_events_to_data``."""
@@ -113,10 +82,6 @@ class _HistoryMixin:
     ) -> list[tuple[str, Any]]:
         """Delegate to ``soothe_sdk.display.card_binder.merge_history_sources``."""
         return _binder.merge_history_sources(checkpoint_messages, activity_events)
-
-    def _convert_combined_to_data(self, combined: list[tuple[str, Any]]) -> list[MessageData]:
-        """Delegate to ``soothe_sdk.display.card_binder.convert_combined_to_data``."""
-        return _binder.convert_combined_to_data(combined)
 
     # ------------------------------------------------------------------
     # I/O: resume reads from the daemon's bound card ledger (RFC-631).

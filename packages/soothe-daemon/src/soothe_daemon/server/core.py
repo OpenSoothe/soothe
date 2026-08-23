@@ -1367,14 +1367,26 @@ class SootheDaemon(DaemonHandlersMixin):
             if updated_at >= stale_before:
                 continue
             try:
-                await self._persistence_manager.update_loop_metadata(loop_id, status="idle")
+                await self._persistence_manager.update_loop_metadata(
+                    loop_id, status="idle", force_status=True
+                )
+                # Close goal_records the crashed runner left in ``running`` —
+                # without this, goal_2-style entries linger forever with no
+                # ``completed_at``. force_status=True bypasses the RFC-225
+                # goal-count guard that would otherwise silently drop the
+                # loop-row status demote for any loop with goals.
+                closed_goals = 0
+                mark_fn = getattr(self._persistence_manager, "mark_running_goals_failed", None)
+                if mark_fn is not None:
+                    closed_goals = await mark_fn(loop_id)
                 demoted += 1
                 logger.info(
                     "Reconciled stale loop status: %s running -> idle "
-                    "(last updated %s, threshold %ds, no active runner)",
+                    "(last updated %s, threshold %ds, no active runner%s)",
                     loop_id,
                     updated_at_raw,
                     cfg.stale_running_seconds,
+                    f", closed {closed_goals} orphaned goal(s)" if closed_goals else "",
                 )
                 # Close the autopilot-side gap: the persistence-layer demote
                 # above only flips the loop row. If this is an autopilot

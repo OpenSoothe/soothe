@@ -7,9 +7,13 @@ and only when ``SootheDaemonConfig.distributed.enabled=True``.
 
 from __future__ import annotations
 
+import logging
+
 import ray
 from ray.util.queue import Queue
 from soothe.protocols.runner import LoopRunRequest
+
+logger = logging.getLogger(__name__)
 
 
 @ray.remote
@@ -29,7 +33,10 @@ class LoopRunnerActor:
 
     async def run(self, request: LoopRunRequest, queue: Queue) -> None:
         """Stream chunks from ``SootheRunner.astream()`` into ``queue``."""
-        from soothe.runner.worker_logging import configure_loop_runner_worker_logging
+        from soothe.runner.worker_logging import (
+            configure_loop_runner_worker_logging,
+            release_loop_runner_logging,
+        )
 
         configure_loop_runner_worker_logging(self._runner.config, request.loop_id)
 
@@ -62,6 +69,17 @@ class LoopRunnerActor:
         except Exception as exc:  # noqa: BLE001
             await queue.put_async(("error", exc))
             return
+        finally:
+            # Release the in-flight logging marker so the runner.log handler
+            # can be torn down when the next loop is dispatched on this actor.
+            try:
+                release_loop_runner_logging(request.loop_id)
+            except Exception:
+                logger.debug(
+                    "Ray actor: runner logging release failed loop=%s",
+                    request.loop_id,
+                    exc_info=True,
+                )
         await queue.put_async(("done", None))
 
     async def cancel(self) -> None:

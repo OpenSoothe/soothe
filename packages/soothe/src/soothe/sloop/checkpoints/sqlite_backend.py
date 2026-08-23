@@ -197,12 +197,28 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             "resume_topic": row[20],
         }
 
-    async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
-        """Partially update loop metadata fields."""
-        await self._writer_to_thread(self._update_loop_metadata_sync, loop_id, fields)
+    async def update_loop_metadata(
+        self, loop_id: str, *, force_status: bool = False, **fields: Any
+    ) -> None:
+        """Partially update loop metadata fields.
+
+        Args:
+            loop_id: Loop identifier.
+            force_status: When True, bypass the RFC-225 goal-count guard so a
+                caller with authority (e.g. the stale-loop reconciler demoting a
+                confirmed-dead zombie) can write ``status`` even when the loop
+                already has goals. StrangeLoop remains the authoritative writer
+                for the normal path; this flag is reserved for recovery.
+            **fields: Column names and values to update.
+        """
+        await self._writer_to_thread(self._update_loop_metadata_sync, loop_id, fields, force_status)
 
     def _update_loop_metadata_sync(
-        self, conn: sqlite3.Connection, loop_id: str, fields: dict[str, Any]
+        self,
+        conn: sqlite3.Connection,
+        loop_id: str,
+        fields: dict[str, Any],
+        force_status: bool = False,
     ) -> None:
         """Sync partial update of loop metadata."""
         _allowed = {
@@ -228,8 +244,11 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             return
         # RFC-225: drop ``status`` from external metadata writes when the loop
         # already has goals. StrangeLoop is the authoritative writer then.
+        # ``force_status`` bypasses this for the stale-loop reconciler, which
+        # must demote confirmed-dead zombies (no active runner, past the
+        # staleness threshold) that would otherwise linger as ``running``.
         local_updates = updates.copy()
-        if "status" in local_updates:
+        if "status" in local_updates and not force_status:
             cursor = conn.execute(
                 "SELECT COUNT(*) FROM goal_records WHERE loop_id = ?",
                 (loop_id,),
@@ -251,6 +270,30 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             f"UPDATE agentloop_loops SET {set_clause} WHERE loop_id = ?",  # noqa: S608
             params,
         )
+
+    async def mark_running_goals_failed(self, loop_id: str) -> int:
+        """Mark a loop's still-``running`` goal_records as ``failed``.
+
+        Called by the stale-loop reconciler alongside a force-demote of the
+        loop row to ``idle``. A crashed loop may leave goals stuck in the
+        ``running`` state with no ``completed_at``; this closes them so the
+        goal DAG reflects reality instead of lingering forever.
+
+        Returns the count of goal rows updated.
+        """
+        return await self._writer_to_thread(self._mark_running_goals_failed_sync, loop_id)
+
+    def _mark_running_goals_failed_sync(self, conn: sqlite3.Connection, loop_id: str) -> int:
+        now = datetime.now(UTC).isoformat()
+        cursor = conn.execute(
+            """
+            UPDATE goal_records
+            SET status = 'failed', completed_at = ?
+            WHERE loop_id = ? AND status = 'running'
+            """,  # noqa: S608
+            (now, loop_id),
+        )
+        return int(cursor.rowcount or 0)
 
     async def set_resume_topic_once(self, loop_id: str, topic: str) -> bool:
         """Write resume topic only when the loop row has no topic yet."""

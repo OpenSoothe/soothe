@@ -192,7 +192,10 @@ def _thread_worker_body(
     def _run_single(req: LoopRunRequest, request_id: str, pusher: ResponsePusher | None) -> None:
         """Execute one request, reusing worker runner when configured."""
         from soothe.runner._worker_utils import cancel_orphan_loop_tasks
-        from soothe.runner.worker_logging import configure_loop_runner_worker_logging
+        from soothe.runner.worker_logging import (
+            configure_loop_runner_worker_logging,
+            release_loop_runner_logging,
+        )
 
         from soothe_daemon.runner._worker_runner import acquire_worker_runner
 
@@ -383,6 +386,20 @@ def _thread_worker_body(
                     "Thread worker %s: failed to enqueue ready request_id=%s",
                     worker_id,
                     request_id,
+                )
+            # Release the in-flight logging marker so a later worker on this
+            # pooled process may tear down this loop's runner.log handler.
+            # Without this, configuring the next loop's logging would skip the
+            # teardown (the marker pins the handler) and handlers accumulate.
+            try:
+                release_loop_runner_logging(req.loop_id)
+            except Exception:
+                logger.debug(
+                    "Thread worker %s: runner logging release failed loop=%s request_id=%s",
+                    worker_id,
+                    req.loop_id,
+                    request_id,
+                    exc_info=True,
                 )
 
     try:

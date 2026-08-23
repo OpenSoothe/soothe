@@ -36,12 +36,6 @@ def parse_autopilot_goals(text: str) -> list[str]:
     return [goal.strip() for goal in matches]
 
 
-# Task name regex pattern for plan step matching
-_TASK_NAME_RE = re.compile(r"^\s*(?:Task\s*:\s*|Step\s*:\s*)(.+)$", re.MULTILINE)
-
-"""Regex pattern for matching task/step names in plan text."""
-
-
 def _resolve_env(value: str) -> str:
     """Resolve `${ENV_VAR}` references in config values.
 
@@ -95,7 +89,6 @@ The original name was misleading - this is a pattern, not a function.
 
 __all__ = [
     "parse_autopilot_goals",
-    "_TASK_NAME_RE",
     "resolve_provider_env",
     "PATH_ARG_PATTERN",
 ]

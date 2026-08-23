@@ -466,10 +466,6 @@ class PriorProgressDigest(BaseModel):
     derived_progress_hint: Literal["none", "low", "medium", "high"] = "low"
 
 
-DEFAULT_MAX_PLAN_STEPS_PER_WAVE = 10
-"""Default maximum plan-generate steps per planning wave."""
-
-
 class PlanGeneration(BaseModel):
     """Runtime plan-generate result (RFC-604).
 

@@ -29,7 +29,6 @@ SKILL_CARD_PREVIEW_CHARS: Final[int] = 300
 
 # --- Write / edit / delete file change preview widgets (`file_change_preview`) ---
 TOOL_APPROVAL_PREVIEW_LINES: Final[int] = 8
-TOOL_APPROVAL_VALUE_PREVIEW_CHARS: Final[int] = 200
 TOOL_APPROVAL_BODY_MAX_LINES: Final[int] = 8
 TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES: Final[int] = 8
 
@@ -39,14 +38,6 @@ CLIPBOARD_TOAST_PREVIEW_CHARS: Final[int] = 40
 # --- Chat input: large paste abbreviation (display only; submit uses full text) ---
 CHAT_INPUT_PASTE_ABBREVIATE_LINE_COUNT: Final[int] = 4
 CHAT_INPUT_PASTE_ABBREVIATE_CHAR_COUNT: Final[int] = 240
-CHAT_INPUT_PASTE_PREVIEW_HEAD_LINES: Final[int] = 2
-CHAT_INPUT_PASTE_PREVIEW_TAIL_LINES: Final[int] = 1
-CHAT_INPUT_PASTE_PREVIEW_LINE_MAX_CHARS: Final[int] = 76
-
-# --- Security warnings list on approval flows (`approval`) ---
-APPROVAL_WARNING_PREVIEW_COUNT: Final[int] = 3
-APPROVAL_SHELL_COMMAND_TRUNCATE_CHARS: Final[int] = 120
-APPROVAL_WARNING_TEXT_TRUNCATE_CHARS: Final[int] = 220
 
 # --- Unified diff snippets in chat (`file_ops`, DiffMessage) ---
 APPROVAL_DIFF_MAX_LINES: Final[int] = 15

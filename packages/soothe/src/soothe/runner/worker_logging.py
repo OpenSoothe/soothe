@@ -7,6 +7,7 @@ handlers so diagnostics land under each loop's persistence directory.
 from __future__ import annotations
 
 import logging
+import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -26,6 +27,14 @@ _LOG = logging.getLogger(__name__)
 
 RUNNER_LOG_FILENAME = "runner.log"
 
+# Process-level set of loops with an in-flight worker request. Pooled ThreadPool
+# workers share one process and the same ``soothe.*`` package loggers; without
+# this guard, configuring loop B would tear down loop A's still-active
+# ``runner.log`` handler mid-run (the d15f incident: runner.log went silent
+# 12 min before the crash while the loop kept executing).
+_active_loop_ids: set[str] = set()
+_active_loop_ids_lock = threading.Lock()
+
 
 def configure_loop_runner_worker_logging(config: SootheConfig, loop_id: str) -> Path | None:
     """Attach rotating file logging for this worker process.
@@ -44,6 +53,9 @@ def configure_loop_runner_worker_logging(config: SootheConfig, loop_id: str) -> 
     lid = (loop_id or "").strip()
     if not lid:
         return None
+
+    with _active_loop_ids_lock:
+        _active_loop_ids.add(lid)
 
     loop_dir = PersistenceDirectoryManager.get_loop_directory(lid)
     loop_dir.mkdir(parents=True, exist_ok=True)
@@ -86,9 +98,57 @@ def configure_loop_runner_worker_logging(config: SootheConfig, loop_id: str) -> 
     return log_path
 
 
+def release_loop_runner_logging(loop_id: str) -> None:
+    """Release the in-flight marker for ``loop_id`` and close its ``runner.log`` handler.
+
+    Call from the worker request's ``finally`` block. After release, a later
+    ``configure_loop_runner_worker_logging`` call for a different loop may
+    remove this loop's handler (it is no longer actively writing). Without
+    this teardown, pooled workers accumulate one handler per loop across the
+    process lifetime.
+    """
+    lid = (loop_id or "").strip()
+    if not lid:
+        return
+    with _active_loop_ids_lock:
+        _active_loop_ids.discard(lid)
+    # Close+remove this loop's handler now that it is no longer active —
+    # pooled workers reuse the shared package loggers and stale handlers
+    # would otherwise pin fd's and double-write if the loop is re-dispatched.
+    package_loggers = _package_loggers((HOST_LOGGER_NAME,))
+    loop_dir = PersistenceDirectoryManager.get_loop_directory(lid)
+    log_path = (loop_dir / RUNNER_LOG_FILENAME).resolve()
+    for pkg_logger in package_loggers:
+        _remove_handler_at_path(pkg_logger, log_path)
+
+
+def _remove_handler_at_path(root_logger: logging.Logger, target: Path) -> None:
+    """Remove and close the ``runner.log`` handler at ``target`` if present."""
+    target_resolved = target.resolve()
+    for handler in list(root_logger.handlers):
+        if not isinstance(handler, RotatingFileHandler):
+            continue
+        base = getattr(handler, "baseFilename", None)
+        if base is None:
+            continue
+        try:
+            path = Path(str(base)).resolve()
+        except OSError:
+            continue
+        if path == target_resolved:
+            root_logger.removeHandler(handler)
+            handler.close()
+
+
 def _remove_stale_loop_runner_handlers(root_logger: logging.Logger, *, keep_path: Path) -> None:
-    """Remove loop ``runner.log`` handlers for other loops (pooled workers reuse one process)."""
+    """Remove loop ``runner.log`` handlers for other loops (pooled workers reuse one process).
+
+    Skips handlers whose loop still has an in-flight request — tearing those
+    down mid-run silences the active loop's diagnostics (the d15f incident).
+    """
     keep_resolved = keep_path.resolve()
+    with _active_loop_ids_lock:
+        active = set(_active_loop_ids)
     stale: list[logging.Handler] = []
     for handler in root_logger.handlers:
         if not isinstance(handler, RotatingFileHandler):
@@ -102,10 +162,20 @@ def _remove_stale_loop_runner_handlers(root_logger: logging.Logger, *, keep_path
             continue
         if path.name != RUNNER_LOG_FILENAME or path == keep_resolved:
             continue
+        # The loop directory name is the loop id (data/loops/{loop_id}/runner.log).
+        candidate_loop_id = path.parent.name
+        if candidate_loop_id in active:
+            # Another worker thread still has this loop in-flight; do not
+            # tear down its handler.
+            continue
         stale.append(handler)
     for handler in stale:
         root_logger.removeHandler(handler)
         handler.close()
 
 
-__all__ = ["RUNNER_LOG_FILENAME", "configure_loop_runner_worker_logging"]
+__all__ = [
+    "RUNNER_LOG_FILENAME",
+    "configure_loop_runner_worker_logging",
+    "release_loop_runner_logging",
+]

@@ -74,9 +74,6 @@ class ChannelMessage:
         return self.metadata.get("_stream_id")
 
 
-# Metadata key constants (for channel-agnostic UI payloads)
-OUTBOUND_META_AGENT_UI = "_agent_ui"
-
 # Internal metadata keys
 META_STREAM_DELTA = "_stream_delta"
 META_STREAM_END = "_stream_end"
@@ -87,4 +84,3 @@ META_TOOL_HINT = "_tool_hint"
 META_REASONING = "_reasoning"
 META_REASONING_DELTA = "_reasoning_delta"
 META_REASONING_END = "_reasoning_end"
-META_WANTS_STREAM = "_wants_stream"

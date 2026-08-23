@@ -79,10 +79,6 @@ async def _warmup_worker_core_agent(
         _ = runner._materialized_core_agent().execution_graph
 
 
-# Backward-compatible alias for tests and external patches.
-_materialize_runner_core_agent = _warmup_worker_core_agent
-
-
 def warmup_worker_runner_on_loop(
     loop: asyncio.AbstractEventLoop,
     *,

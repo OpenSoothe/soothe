@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import traceback
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -1697,11 +1698,27 @@ class Executor:
                             result,
                             exc_info=result,
                         )
+                        # Capture the full traceback so the exact crash site
+                        # survives in the step.completed event payload (the
+                        # ``error`` field), not just ``str(exc)``.
+                        parallel_error = self._extract_error_message(
+                            result, "Parallel step execution failed"
+                        )
+                        if not _is_recoverable_tool_network_error(result):
+                            tb = "".join(
+                                traceback.format_exception(
+                                    type(result), result, result.__traceback__
+                                )
+                            ).strip()
+                            if tb:
+                                parallel_error = (
+                                    f"{parallel_error}\n\n{tb}" if parallel_error else tb
+                                )
                         step_result = StepExecutionRecord(
                             step_id=sid,
                             success=False,
-                            outcome={"type": "error", "error": str(result)},  # RFC-211
-                            error=str(result),
+                            outcome={"type": "error", "error": parallel_error},  # RFC-211
+                            error=parallel_error,
                             error_type=self._classify_error_severity(result),
                             duration_ms=0,
                             thread_id=state.thread_id,
@@ -2367,6 +2384,18 @@ class Executor:
                 )
 
             error_msg = self._extract_error_message(e, "Step execution failed")
+            # Persist the full traceback for non-recoverable failures so the
+            # exact crash site survives in the step.completed event payload
+            # (conversation.jsonl) and the daemon event stream. Without this,
+            # the ``error`` field carries only ``str(e)`` (truncated to 50 chars
+            # by the TUI summary builder) and the traceback is lost when the
+            # per-loop runner.log handler is detached mid-run (the d15f
+            # incident: a ``TypeError: '<='`` in the aggregation path left no
+            # recoverable traceback in any durable log).
+            if not _is_recoverable_tool_network_error(e) and not isinstance(e, GraphRecursionError):
+                tb = traceback.format_exc()
+                if tb and tb.strip():
+                    error_msg = f"{error_msg}\n\n{tb}" if error_msg else tb.strip()
 
             return _ExecuteStepResult(
                 events=events,

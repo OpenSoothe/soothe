@@ -148,52 +148,7 @@ class ModelConfig:
         """
         self._cfg = _cfg
         self.default_model: str | None = None
-        self.recent_model: str | None = None
         # TODO: Fetch default model from daemon RPC
-
-    def get_kwargs(self, provider: str, model_name: str | None = None) -> dict[str, Any]:
-        """Return kwargs for ``init_chat_model`` for this provider.
-
-        TODO: Fetch from daemon RPC.
-        Currently returns empty dict during transition.
-        """
-        if not provider:
-            return {}
-        # TODO: Implement daemon RPC fetch
-        logger.debug("get_kwargs returning empty dict during daemon RPC transition")
-        return {}
-
-    def get_base_url(self, provider: str) -> str | None:
-        """Resolved ``api_base_url`` for the named provider.
-
-        TODO: Fetch from daemon RPC.
-        Currently returns None during transition.
-        """
-        if not provider:
-            return None
-        # TODO: Implement daemon RPC fetch
-        logger.debug("get_base_url returning None during daemon RPC transition")
-        return None
-
-    def get_api_key_env(self, provider: str) -> str | None:
-        """Infer env var name from provider ``api_key``.
-
-        TODO: Fetch from daemon RPC.
-        Currently falls back to static map during transition.
-        """
-        if not provider:
-            return None
-        # TODO: Implement daemon RPC fetch
-        # Fallback to static map during transition
-        return PROVIDER_API_KEY_ENV.get(provider)
-
-    def get_class_path(self, provider: str) -> str | None:
-        """Optional custom ``BaseChatModel`` import path (not used in Soothe YAML today)."""
-        return None
-
-    def get_profile_overrides(self, provider: str, model_name: str | None = None) -> dict[str, Any]:
-        """Profile overrides from config for the given provider/model."""
-        return {}
 
 
 def resolve_env_var(var_name: str) -> str:

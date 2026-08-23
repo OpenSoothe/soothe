@@ -25,7 +25,6 @@ from soothe_sdk.utils.logging import (
     setup_logging,
 )
 from soothe_sdk.utils.parsing import (
-    _TASK_NAME_RE,
     PATH_ARG_PATTERN,
     parse_autopilot_goals,
     resolve_provider_env,
@@ -45,7 +44,6 @@ __all__ = [
     "convert_and_abbreviate_path",
     "get_tool_display_name",
     "parse_autopilot_goals",
-    "_TASK_NAME_RE",
     "resolve_provider_env",
     "INVALID_WORKSPACE_DIRS",
     "PATH_ARG_PATTERN",

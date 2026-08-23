@@ -16,19 +16,12 @@ from typing import Any
 
 
 def decision_step_actions(decision: Any | None) -> list[Any]:
-    """Return plan step actions from an ``AgentDecision``-like object.
-
-    Prefer ``steps`` (canonical ``AgentDecision`` field). Accept legacy
-    ``actions`` only for older fixtures / wire payloads.
-    """
+    """Return plan step actions from an ``AgentDecision``-like object."""
     if decision is None:
         return []
     steps = getattr(decision, "steps", None)
     if isinstance(steps, list) and steps:
         return list(steps)
-    actions = getattr(decision, "actions", None)
-    if isinstance(actions, list) and actions:
-        return list(actions)
     return []
 
 

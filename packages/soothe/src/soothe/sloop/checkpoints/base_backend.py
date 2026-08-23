@@ -52,15 +52,29 @@ class StrangeLoopPersistenceBackend(ABC):
         pass
 
     @abstractmethod
-    async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
+    async def update_loop_metadata(
+        self, loop_id: str, *, force_status: bool = False, **fields: Any
+    ) -> None:
         """Partially update loop metadata fields.
 
         Args:
             loop_id: Loop identifier.
+            force_status: When True, bypass the RFC-225 goal-count guard so
+                an authoritative caller (stale-loop reconciler) can demote a
+                confirmed-dead zombie loop's ``status`` even when it has goals.
             **fields: Column names and values to update. Supported keys:
                 status, current_thread_id, thread_ids, client_workspace,
                 detached_at, total_goals_completed, total_thread_switches,
                 total_duration_ms, total_tokens_used, updated_at.
+        """
+        pass
+
+    @abstractmethod
+    async def mark_running_goals_failed(self, loop_id: str) -> int:
+        """Mark a loop's still-``running`` goal_records as ``failed``.
+
+        Returns the count of goal rows updated. Used by the stale-loop
+        reconciler to close goals orphaned by a crashed runner.
         """
         pass
 

@@ -1,7 +1,7 @@
 {
   "scenarios": [
     {
-      "job_id": "f72f2194",
+      "job_id": "ea11c7eb",
       "record_count": 24,
       "fired_builtins": [
         "decompose_parallel",
@@ -20,7 +20,7 @@
       "builtins_match_expected": true,
       "records": [
         {
-          "timestamp": "2026-08-20T10:49:30.641159+00:00",
+          "timestamp": "2026-08-23T01:58:35.630686+00:00",
           "rule_id": "flow[0]",
           "event": "job_start",
           "condition": null,
@@ -35,7 +35,7 @@
           "seq": 0
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641215+00:00",
+          "timestamp": "2026-08-23T01:58:35.630749+00:00",
           "rule_id": "flow[1]",
           "event": "goal_completed",
           "condition": "ready_to_synthesize",
@@ -46,11 +46,11 @@
           },
           "builtin": "plan_and_implement",
           "builtin_result": "success",
-          "goal_id": "191311ab",
+          "goal_id": "6754207b",
           "seq": 1
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641264+00:00",
+          "timestamp": "2026-08-23T01:58:35.630807+00:00",
           "rule_id": "flow[1]",
           "event": "goal_completed",
           "condition": "ready_to_synthesize",
@@ -61,11 +61,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "3fbda430",
+          "goal_id": "79c9cb20",
           "seq": 2
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641276+00:00",
+          "timestamp": "2026-08-23T01:58:35.630823+00:00",
           "rule_id": "flow[2]",
           "event": "goal_completed",
           "condition": "needs_synthesis",
@@ -76,11 +76,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "3fbda430",
+          "goal_id": "79c9cb20",
           "seq": 3
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641286+00:00",
+          "timestamp": "2026-08-23T01:58:35.630837+00:00",
           "rule_id": "flow[3]",
           "event": "goal_completed",
           "condition": "needs_review",
@@ -91,11 +91,11 @@
           },
           "builtin": "review",
           "builtin_result": "success",
-          "goal_id": "3fbda430",
+          "goal_id": "79c9cb20",
           "seq": 4
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641318+00:00",
+          "timestamp": "2026-08-23T01:58:35.630880+00:00",
           "rule_id": "flow[1]",
           "event": "goal_completed",
           "condition": "ready_to_synthesize",
@@ -106,11 +106,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "8fcb6e99",
+          "goal_id": "bec6d18d",
           "seq": 5
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641329+00:00",
+          "timestamp": "2026-08-23T01:58:35.630896+00:00",
           "rule_id": "flow[2]",
           "event": "goal_completed",
           "condition": "needs_synthesis",
@@ -121,11 +121,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "8fcb6e99",
+          "goal_id": "bec6d18d",
           "seq": 6
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641339+00:00",
+          "timestamp": "2026-08-23T01:58:35.630910+00:00",
           "rule_id": "flow[3]",
           "event": "goal_completed",
           "condition": "needs_review",
@@ -136,11 +136,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "8fcb6e99",
+          "goal_id": "bec6d18d",
           "seq": 7
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641349+00:00",
+          "timestamp": "2026-08-23T01:58:35.630924+00:00",
           "rule_id": "flow[4]",
           "event": "goal_completed",
           "condition": "needs_qa",
@@ -151,11 +151,11 @@
           },
           "builtin": "qa_verify",
           "builtin_result": "success",
-          "goal_id": "8fcb6e99",
+          "goal_id": "bec6d18d",
           "seq": 8
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641382+00:00",
+          "timestamp": "2026-08-23T01:58:35.630966+00:00",
           "rule_id": "flow[1]",
           "event": "goal_completed",
           "condition": "ready_to_synthesize",
@@ -166,11 +166,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "00debce2",
+          "goal_id": "3765e04d",
           "seq": 9
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641394+00:00",
+          "timestamp": "2026-08-23T01:58:35.630983+00:00",
           "rule_id": "flow[2]",
           "event": "goal_completed",
           "condition": "needs_synthesis",
@@ -181,11 +181,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "00debce2",
+          "goal_id": "3765e04d",
           "seq": 10
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641404+00:00",
+          "timestamp": "2026-08-23T01:58:35.630998+00:00",
           "rule_id": "flow[3]",
           "event": "goal_completed",
           "condition": "needs_review",
@@ -196,11 +196,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "00debce2",
+          "goal_id": "3765e04d",
           "seq": 11
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641415+00:00",
+          "timestamp": "2026-08-23T01:58:35.631013+00:00",
           "rule_id": "flow[4]",
           "event": "goal_completed",
           "condition": "needs_qa",
@@ -211,11 +211,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "00debce2",
+          "goal_id": "3765e04d",
           "seq": 12
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641425+00:00",
+          "timestamp": "2026-08-23T01:58:35.631029+00:00",
           "rule_id": "flow[5]",
           "event": "goal_completed",
           "condition": "needs_feedback",
@@ -226,11 +226,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "00debce2",
+          "goal_id": "3765e04d",
           "seq": 13
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641435+00:00",
+          "timestamp": "2026-08-23T01:58:35.631044+00:00",
           "rule_id": "flow[8]",
           "event": "goal_completed",
           "condition": "needs_human",
@@ -241,11 +241,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "00debce2",
+          "goal_id": "3765e04d",
           "seq": 14
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641454+00:00",
+          "timestamp": "2026-08-23T01:58:35.631071+00:00",
           "rule_id": "flow[1]",
           "event": "goal_completed",
           "condition": "ready_to_synthesize",
@@ -256,11 +256,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "65e2e841",
+          "goal_id": "e40bab67",
           "seq": 15
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641464+00:00",
+          "timestamp": "2026-08-23T01:58:35.631087+00:00",
           "rule_id": "flow[2]",
           "event": "goal_completed",
           "condition": "needs_synthesis",
@@ -271,11 +271,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "65e2e841",
+          "goal_id": "e40bab67",
           "seq": 16
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641474+00:00",
+          "timestamp": "2026-08-23T01:58:35.631103+00:00",
           "rule_id": "flow[3]",
           "event": "goal_completed",
           "condition": "needs_review",
@@ -286,11 +286,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "65e2e841",
+          "goal_id": "e40bab67",
           "seq": 17
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641485+00:00",
+          "timestamp": "2026-08-23T01:58:35.631118+00:00",
           "rule_id": "flow[4]",
           "event": "goal_completed",
           "condition": "needs_qa",
@@ -301,11 +301,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "65e2e841",
+          "goal_id": "e40bab67",
           "seq": 18
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641495+00:00",
+          "timestamp": "2026-08-23T01:58:35.631133+00:00",
           "rule_id": "flow[5]",
           "event": "goal_completed",
           "condition": "needs_feedback",
@@ -316,11 +316,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "65e2e841",
+          "goal_id": "e40bab67",
           "seq": 19
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641505+00:00",
+          "timestamp": "2026-08-23T01:58:35.631149+00:00",
           "rule_id": "flow[8]",
           "event": "goal_completed",
           "condition": "needs_human",
@@ -331,11 +331,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "65e2e841",
+          "goal_id": "e40bab67",
           "seq": 20
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641519+00:00",
+          "timestamp": "2026-08-23T01:58:35.631170+00:00",
           "rule_id": "flow[9]",
           "event": "dag_idle",
           "condition": "needs_human",
@@ -350,7 +350,7 @@
           "seq": 21
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641529+00:00",
+          "timestamp": "2026-08-23T01:58:35.631185+00:00",
           "rule_id": "flow[10]",
           "event": "dag_idle",
           "condition": "needs_feedback",
@@ -365,7 +365,7 @@
           "seq": 22
         },
         {
-          "timestamp": "2026-08-20T10:49:30.641539+00:00",
+          "timestamp": "2026-08-23T01:58:35.631200+00:00",
           "rule_id": "flow[11]",
           "event": "dag_idle",
           "condition": "job_complete",
@@ -380,11 +380,11 @@
           "seq": 23
         }
       ],
-      "evaluated_at": "2026-08-20T10:49:30.641782+00:00",
+      "evaluated_at": "2026-08-23T01:58:35.631632+00:00",
       "scenario": "autoresearch-happy"
     },
     {
-      "job_id": "5801ef81",
+      "job_id": "1af64956",
       "record_count": 10,
       "fired_builtins": [
         "decompose_parallel",
@@ -399,7 +399,7 @@
       "builtins_match_expected": true,
       "records": [
         {
-          "timestamp": "2026-08-20T10:49:30.644666+00:00",
+          "timestamp": "2026-08-23T01:58:35.635584+00:00",
           "rule_id": "flow[0]",
           "event": "job_start",
           "condition": null,
@@ -414,7 +414,7 @@
           "seq": 0
         },
         {
-          "timestamp": "2026-08-20T10:49:30.644757+00:00",
+          "timestamp": "2026-08-23T01:58:35.635645+00:00",
           "rule_id": "flow[1]",
           "event": "goal_completed",
           "condition": "ready_to_synthesize",
@@ -425,11 +425,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "840917bd",
+          "goal_id": "ba0d1703",
           "seq": 1
         },
         {
-          "timestamp": "2026-08-20T10:49:30.644770+00:00",
+          "timestamp": "2026-08-23T01:58:35.635659+00:00",
           "rule_id": "flow[2]",
           "event": "goal_completed",
           "condition": "needs_synthesis",
@@ -440,11 +440,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "840917bd",
+          "goal_id": "ba0d1703",
           "seq": 2
         },
         {
-          "timestamp": "2026-08-20T10:49:30.644781+00:00",
+          "timestamp": "2026-08-23T01:58:35.635672+00:00",
           "rule_id": "flow[3]",
           "event": "goal_completed",
           "condition": "needs_review",
@@ -455,11 +455,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "840917bd",
+          "goal_id": "ba0d1703",
           "seq": 3
         },
         {
-          "timestamp": "2026-08-20T10:49:30.644790+00:00",
+          "timestamp": "2026-08-23T01:58:35.635684+00:00",
           "rule_id": "flow[4]",
           "event": "goal_completed",
           "condition": "needs_qa",
@@ -470,11 +470,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "840917bd",
+          "goal_id": "ba0d1703",
           "seq": 4
         },
         {
-          "timestamp": "2026-08-20T10:49:30.644799+00:00",
+          "timestamp": "2026-08-23T01:58:35.635695+00:00",
           "rule_id": "flow[5]",
           "event": "goal_completed",
           "condition": "needs_feedback",
@@ -485,11 +485,11 @@
           },
           "builtin": null,
           "builtin_result": null,
-          "goal_id": "840917bd",
+          "goal_id": "ba0d1703",
           "seq": 5
         },
         {
-          "timestamp": "2026-08-20T10:49:30.644807+00:00",
+          "timestamp": "2026-08-23T01:58:35.635706+00:00",
           "rule_id": "flow[8]",
           "event": "goal_completed",
           "condition": "needs_human",
@@ -500,11 +500,11 @@
           },
           "builtin": "pause_for_user",
           "builtin_result": "success",
-          "goal_id": "840917bd",
+          "goal_id": "ba0d1703",
           "seq": 6
         },
         {
-          "timestamp": "2026-08-20T10:49:30.644898+00:00",
+          "timestamp": "2026-08-23T01:58:35.635809+00:00",
           "rule_id": "flow[9]",
           "event": "dag_idle",
           "condition": "needs_human",
@@ -519,7 +519,7 @@
           "seq": 7
         },
         {
-          "timestamp": "2026-08-20T10:49:30.644908+00:00",
+          "timestamp": "2026-08-23T01:58:35.635822+00:00",
           "rule_id": "flow[10]",
           "event": "dag_idle",
           "condition": "needs_feedback",
@@ -534,7 +534,7 @@
           "seq": 8
         },
         {
-          "timestamp": "2026-08-20T10:49:30.644916+00:00",
+          "timestamp": "2026-08-23T01:58:35.635837+00:00",
           "rule_id": "flow[11]",
           "event": "dag_idle",
           "condition": "job_complete",
@@ -549,7 +549,7 @@
           "seq": 9
         }
       ],
-      "evaluated_at": "2026-08-20T10:49:30.644978+00:00",
+      "evaluated_at": "2026-08-23T01:58:35.635935+00:00",
       "scenario": "autoresearch-human-gate"
     }
   ],

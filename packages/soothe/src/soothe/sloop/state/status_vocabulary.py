@@ -15,7 +15,6 @@ from __future__ import annotations
 from typing import Literal
 
 LoopCheckpointStatus = Literal["idle", "running", "interrupted"]
-GoalIndexStatus = Literal["running", "completed", "failed", "cancelled", "interrupted"]
 
 _GOAL_INDEX_IN_FLIGHT: frozenset[str] = frozenset({"running", "interrupted"})
 

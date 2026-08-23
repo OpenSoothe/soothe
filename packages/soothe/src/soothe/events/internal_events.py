@@ -463,26 +463,6 @@ class WorkerUnassignedEvent(SootheEvent):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-# Client-visible event type constants (RFC-228)
-CLIENT_GOAL_STATUS = "soothe.autopilot.goal.status"
-CLIENT_GOAL_PROGRESS = "soothe.autopilot.goal.progress"
-CLIENT_GOAL_CREATED = "soothe.autopilot.goal.created"
-CLIENT_GOAL_COMPLETED = "soothe.autopilot.goal.completed"
-CLIENT_WORKER_ASSIGNED = "soothe.autopilot.worker.assigned"
-CLIENT_WORKER_UNASSIGNED = "soothe.autopilot.worker.unassigned"
-
-CLIENT_AUTOPILOT_EVENT_TYPES: frozenset[str] = frozenset(
-    {
-        CLIENT_GOAL_STATUS,
-        CLIENT_GOAL_PROGRESS,
-        CLIENT_GOAL_CREATED,
-        CLIENT_GOAL_COMPLETED,
-        CLIENT_WORKER_ASSIGNED,
-        CLIENT_WORKER_UNASSIGNED,
-    }
-)
-
-
 def internal_to_client_event(internal_event: SootheEvent) -> SootheEvent | None:
     """Convert internal event to client-visible event (RFC-228).
 

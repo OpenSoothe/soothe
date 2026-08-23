@@ -543,7 +543,9 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     )
                 return data
 
-    async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
+    async def update_loop_metadata(
+        self, loop_id: str, *, force_status: bool = False, **fields: Any
+    ) -> None:
         """Partially update loop metadata fields with retry.
 
         RFC-225: ``status`` is owned by ``StrangeLoop`` once the loop has any
@@ -553,6 +555,13 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         which would cause StrangeLoop to take the invalid-index re-init path
         and lose prior goal context. Status writes are honored only when
         the loop has no goals yet (initial registration / bind).
+
+        Args:
+            loop_id: Loop identifier.
+            force_status: When True, bypass the RFC-225 goal-count guard so
+                the stale-loop reconciler can demote a confirmed-dead zombie
+                loop to ``idle`` even when it already has goals.
+            **fields: Column names and values to update.
         """
         _allowed = {
             "status",
@@ -579,8 +588,10 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         async def _do_update(pool: AsyncConnectionPool) -> None:
             # RFC-225: drop ``status`` from external metadata writes when the loop
             # already has goals. StrangeLoop is the authoritative writer in that case.
+            # ``force_status`` bypasses this for the stale-loop reconciler, which
+            # must demote confirmed-dead zombies that would otherwise linger.
             local_updates = updates.copy()
-            if "status" in local_updates:
+            if "status" in local_updates and not force_status:
                 async with pool.connection() as conn:
                     async with conn.cursor() as cur:
                         await cur.execute(
@@ -631,6 +642,32 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     )
 
         await self._run_with_retry("update_loop_metadata", _do_update)
+
+    async def mark_running_goals_failed(self, loop_id: str) -> int:
+        """Mark a loop's still-``running`` goal_records as ``failed``.
+
+        Called by the stale-loop reconciler alongside a force-demote of the
+        loop row to ``idle``. A crashed loop may leave goals stuck in the
+        ``running`` state with no ``completed_at``; this closes them so the
+        goal DAG reflects reality instead of lingering forever.
+
+        Returns the count of goal rows updated.
+        """
+
+        async def _do_mark(pool: AsyncConnectionPool) -> int:
+            async with pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        """
+                        UPDATE goal_records
+                        SET status = 'failed', completed_at = NOW()
+                        WHERE loop_id = %s AND status = 'running'
+                        """,
+                        (loop_id,),
+                    )
+                    return int(cur.rowcount or 0)
+
+        return await self._run_with_retry("mark_running_goals_failed", _do_mark)
 
     async def set_resume_topic_once(self, loop_id: str, topic: str) -> bool:
         """Write resume topic only when checkpoint_data has no topic yet."""

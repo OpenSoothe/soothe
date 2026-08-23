@@ -933,11 +933,6 @@ class Settings:
         return changes
 
     @property
-    def has_openai(self) -> bool:
-        """Check if OpenAI API key is configured."""
-        return self.openai_api_key is not None
-
-    @property
     def has_anthropic(self) -> bool:
         """Check if Anthropic API key is configured."""
         return self.anthropic_api_key is not None
@@ -946,11 +941,6 @@ class Settings:
     def has_google(self) -> bool:
         """Check if Google API key is configured."""
         return self.google_api_key is not None
-
-    @property
-    def has_nvidia(self) -> bool:
-        """Check if NVIDIA API key is configured."""
-        return self.nvidia_api_key is not None
 
     @property
     def has_vertex_ai(self) -> bool:

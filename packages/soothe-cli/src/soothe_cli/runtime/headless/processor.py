@@ -30,7 +30,6 @@ from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_ou
 from soothe_sdk.ux.task_namespace import resolve_task_scope_for_namespace
 
 from soothe_cli.runtime.headless.processor_state import ProcessorState
-from soothe_cli.runtime.policy.display_policy import DisplayPolicy
 from soothe_cli.runtime.policy.tui_trace_log import log_tui_trace
 from soothe_cli.runtime.presentation.engine import PresentationEngine
 
@@ -100,7 +99,6 @@ class EventProcessor:
         else:
             self._presentation = PresentationEngine()
 
-        self._policy = DisplayPolicy()
         self._state = ProcessorState()
 
     @property
