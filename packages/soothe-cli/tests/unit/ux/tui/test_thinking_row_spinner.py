@@ -290,3 +290,20 @@ async def test_thinking_row_stays_above_input_after_scroll_visible() -> None:
         input_area = app.query_one("#input-area")
         assert widget.region.y + widget.region.height <= input_area.region.y
         assert app.screen.scroll_offset.y == 0
+
+
+def test_plan_approve_follow_on_pending_default_false() -> None:
+    """Adapter starts with the plan-approve follow-on flag cleared."""
+    adapter = TextualUIAdapter(MagicMock(), MagicMock())
+    assert adapter._plan_approve_follow_on_pending is False
+
+
+def test_clear_live_session_ui_resets_plan_approve_follow_on() -> None:
+    """``clear_live_session_ui`` resets the plan-approve follow-on flag."""
+    adapter = TextualUIAdapter(MagicMock(), MagicMock())
+    adapter._plan_approve_follow_on_pending = True
+    adapter.clear_live_session_ui()
+    assert adapter._plan_approve_follow_on_pending is False
+    # Calling again is a no-op (already False).
+    adapter.clear_live_session_ui()
+    assert adapter._plan_approve_follow_on_pending is False

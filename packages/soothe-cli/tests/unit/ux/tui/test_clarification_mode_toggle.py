@@ -240,3 +240,100 @@ def test_plan_approval_sets_submitting_spinner_before_mode_resolution() -> None:
 
     assert call_log[0] == f"spinner:{SPINNER_LABEL_SUBMITTING}"
     assert call_log[1] == "resolve_mode"
+
+
+def test_plan_approval_mounts_confirmation_message() -> None:
+    """Approving a plan mounts an AppMessage confirmation in the chat."""
+    from textual.widgets import Static
+
+    from soothe_cli.tui.widgets.messages import AppMessage
+
+    mounted: list[Static] = []
+
+    class _ConfirmHarness(_ExecutionMixin):
+        def __init__(self) -> None:
+            self._composer_mode = "plan"
+            self._status_bar: Any = _FakeStatusBar()
+            self._daemon_config = object()
+            self._ui_adapter = None
+
+        async def _set_spinner(self, status: Any, **_kwargs: Any) -> None:
+            pass
+
+        async def _resolve_default_clarification_mode(self) -> str:
+            return "auto"
+
+        async def _mount_message(self, widget: Static) -> None:
+            mounted.append(widget)
+
+        async def _send_to_agent(self, message: str, **_kwargs: Any) -> None:
+            pass
+
+    app = _ConfirmHarness()
+
+    # Simulate on_clarification_input_message_submitted for an Approve action.
+    from soothe_cli.tui.widgets.messages.clarification import (
+        ClarificationInputMessage,
+    )
+
+    event = ClarificationInputMessage.Submitted(
+        step_id="plan_mode_review",
+        questions=["Action for this plan: Approve or Reject"],
+        answers=["Approve", ""],
+        widget_id="clarify-approve",
+    )
+
+    asyncio_run(app.on_clarification_input_message_submitted(event))
+
+    confirm_msgs = [w for w in mounted if isinstance(w, AppMessage)]
+    assert len(confirm_msgs) == 1
+    assert "approved" in str(confirm_msgs[0]._content).lower()
+    assert "submitting" in str(confirm_msgs[0]._content).lower()
+
+
+def test_plan_reject_mounts_confirmation_message() -> None:
+    """Rejecting a plan mounts an AppMessage confirmation in the chat."""
+    from textual.widgets import Static
+
+    from soothe_cli.tui.widgets.messages import AppMessage
+    from soothe_cli.tui.widgets.messages.clarification import (
+        ClarificationInputMessage,
+    )
+
+    mounted: list[Static] = []
+
+    class _RejectHarness(_ExecutionMixin):
+        def __init__(self) -> None:
+            self._composer_mode = "plan"
+            self._status_bar: Any = _FakeStatusBar()
+            self._daemon_config = object()
+            self._ui_adapter = None
+
+        async def _set_spinner(self, status: Any, **_kwargs: Any) -> None:
+            pass
+
+        async def _resolve_default_clarification_mode(self) -> str:
+            return "auto"
+
+        async def _mount_message(self, widget: Static) -> None:
+            mounted.append(widget)
+
+        async def _send_to_agent(self, message: str, **_kwargs: Any) -> None:
+            pass
+
+    app = _RejectHarness()
+
+    event = ClarificationInputMessage.Submitted(
+        step_id="plan_mode_review",
+        questions=["Action for this plan: Approve or Reject"],
+        answers=["Reject", "tighten scope to auth"],
+        widget_id="clarify-reject",
+    )
+
+    asyncio_run(app.on_clarification_input_message_submitted(event))
+
+    confirm_msgs = [w for w in mounted if isinstance(w, AppMessage)]
+    assert len(confirm_msgs) == 1
+    content = str(confirm_msgs[0]._content).lower()
+    assert "rejected" in content
+    assert "tighten scope to auth" in content

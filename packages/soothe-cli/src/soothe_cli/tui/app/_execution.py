@@ -239,6 +239,23 @@ class _ExecutionMixin:
         resumes the suspended loop graph rather than starting a new turn.
         """
         event.stop()
+        first_answer = str(event.answers[0]).strip() if event.answers else ""
+
+        # Plan-review actions get a confirmation line in the chat so the user
+        # sees their decision recorded beyond the disabled card. Mirrors the
+        # AppMessage pattern used for other operator actions ("Started new
+        # loop", "Command interrupted"). Runs before the adapter check so the
+        # line is visible even if the adapter was torn down (app closing).
+        if first_answer in _PLAN_REVIEW_ACTIONS:
+            if first_answer == "Approve":
+                confirmation = "Plan approved — submitting for execution…"
+            else:
+                refinement = str(event.answers[1] if len(event.answers) > 1 else "").strip()
+                confirmation = "Plan rejected — returning to plan mode" + (
+                    f" ({refinement})" if refinement else ""
+                )
+            await self._mount_message(AppMessage(confirmation))
+
         adapter = self._ui_adapter
         if adapter is None:
             return
@@ -282,23 +299,6 @@ class _ExecutionMixin:
         non_empty = [a for a in event.answers if a.strip()]
         if not non_empty:
             return
-
-        first_answer = str(event.answers[0]).strip() if event.answers else ""
-
-        # Plan-review actions get a confirmation line in the chat so the user
-        # sees their decision recorded beyond the disabled card. Mirrors the
-        # AppMessage pattern used for other operator actions ("Started new
-        # loop", "Command interrupted"). Must run before the spinner set so
-        # the line is visible the instant the card disables.
-        if first_answer in _PLAN_REVIEW_ACTIONS:
-            if first_answer == "Approve":
-                confirmation = "Plan approved — submitting for execution…"
-            else:
-                refinement = str(event.answers[1] if len(event.answers) > 1 else "").strip()
-                confirmation = "Plan rejected — returning to plan mode" + (
-                    f" ({refinement})" if refinement else ""
-                )
-            await self._mount_message(AppMessage(confirmation))
 
         # Show immediate feedback on the thinking row while the answer is
         # sent to the daemon and the graph resumes. This must run *before*
@@ -1203,7 +1203,9 @@ class _ExecutionMixin:
         # continuous activity through the plan→exec transition; the
         # re-attached turn's stream will replace it with a real phase label.
         adapter = self._ui_adapter
-        plan_approve_follow_on = bool(getattr(adapter, "_plan_approve_follow_on_pending", False))
+        plan_approve_follow_on = bool(
+            adapter is not None and getattr(adapter, "_plan_approve_follow_on_pending", False)
+        )
         if plan_approve_follow_on:
             from soothe_cli.tui.spinner_labels import SPINNER_LABEL_SUBMITTING
 
