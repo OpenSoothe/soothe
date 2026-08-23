@@ -5,7 +5,7 @@ Single import surface for all StrangeLoop host middlewares:
 - ``GoalStepGuardMiddleware`` — read-only policy during goal-completion synthesis.
 - ``IntakeOnlyTaskGuardMiddleware`` — block ``task`` calls to intake-only specialists.
 - ``DecomposeTaskMiddleware`` — inject ``decompose_task`` + THREAD policy on step threads.
-- ``EvalStepMiddleware`` — readonly inspection policy for Eval steps.
+- ``EvalStepMiddleware`` — coverage-audit policy (full tool surface) for Eval steps.
 - ``WestWorldMiddleware`` — fixed directive phrase → fixed agent behavior.
 
 Domain packages (``sloop.decompose``, ``sloop.eval``) remain the canonical
