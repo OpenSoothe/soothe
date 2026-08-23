@@ -157,6 +157,7 @@ from soothe_cli.tui.spinner_labels import (
     SPINNER_LABEL_INPUT,
     SPINNER_LABEL_OFFLOADING,
     SPINNER_LABEL_RETRYING,
+    SPINNER_LABEL_SUBMITTING,
     SPINNER_LABEL_SYNTHESIZING,
     SPINNER_LABEL_THINKING,
     SPINNER_LABEL_TOOLS,
@@ -338,6 +339,17 @@ class TextualUIAdapter:
         turn is dispatched.
         """
 
+        self._plan_approve_follow_on_pending: bool = False
+        """True while a plan-approve follow-on exec goal is in flight.
+
+        Set when ``STRANGE_LOOP_COMPLETED`` arrives carrying ``follow_on_exec``
+        (plan approved). The daemon enqueues a fresh exec goal after the
+        plan-mode goal terminates. Kept True through the stream gap so the
+        thinking row keeps showing "Submitting" instead of going blank during
+        the re-attach round-trip. Cleared when the exec goal's
+        ``STRANGE_LOOP_STARTED`` arrives, or when the re-attach gives up.
+        """
+
         self._execute_wave_total: int = 0
         """Steps in the current execute batch (for thinking-row progress)."""
 
@@ -471,6 +483,7 @@ class TextualUIAdapter:
         self._goal_completion_mounted_this_turn = False
         self._clarification_pending = False
         self._clarification_answers_pending = None
+        self._plan_approve_follow_on_pending = False
         self._clarification_input_by_step.clear()
         self._execute_wave_total = 0
         self._execute_wave_completed = 0
@@ -3086,8 +3099,23 @@ async def execute_task_textual(
             adapter._on_tokens_hide is not None,
         )
 
-    # Show spinner
-    if adapter._set_spinner:
+    # Snapshot the clarification-answer flag *before* showing the spinner so
+    # we can skip the default "Thinking" label when the caller already set
+    # "Submitting" (plan-approve/reject). The stream will replace it with a
+    # real phase label once events arrive. Clearing the persisted flag here
+    # also prevents the next turn from double-sending the answer.
+    sending_clarification_answer = bool(getattr(adapter, "_clarification_pending", False))
+    pending_clarification_answers: list[str] | None = None
+    if sending_clarification_answer:
+        adapter._clarification_pending = False
+        raw_answers = getattr(adapter, "_clarification_answers_pending", None)
+        if isinstance(raw_answers, list) and raw_answers:
+            pending_clarification_answers = list(raw_answers)
+        adapter._clarification_answers_pending = None
+
+    # Show spinner — but don't clobber the "Submitting" label the caller set
+    # when this turn is a clarification answer (plan approve/reject resume).
+    if adapter._set_spinner and not sending_clarification_answer:
         await adapter._set_spinner(SPINNER_LABEL_THINKING)
 
     # Hide token display during streaming (will be shown with accurate count at end)
@@ -3133,24 +3161,13 @@ async def execute_task_textual(
     # ``soothe.loop.clarification.deferred`` arrive and cleared on
     # ``soothe.loop.clarification.answered``. The local copy gates the
     # stream-end safety net; the persisted adapter flag is what the next turn
-    # reads to decide whether to attach ``clarification_answer=True``.
+    # reads to decide whether to attach ``clarification_answer=True``. The
+    # persisted flag was snapshotted to ``sending_clarification_answer``
+    # above (before the spinner show) and cleared there.
     clarification_pending = False
-    # Snapshot of the persisted flag taken when this turn started. If the user
-    # is answering a previously-pending clarification, we attach the wire flag
-    # below and clear ``adapter._clarification_pending`` so the next turn does
-    # not double-send. The new turn's events will re-arm the flag if the
-    # daemon emits another ``clarification_requested``.
     # Store interaction mode on the adapter so step card titles can show [Plan]/[Ask].
     adapter.interaction_mode = interaction_mode
 
-    sending_clarification_answer = bool(getattr(adapter, "_clarification_pending", False))
-    pending_clarification_answers: list[str] | None = None
-    if sending_clarification_answer:
-        adapter._clarification_pending = False
-        raw_answers = getattr(adapter, "_clarification_answers_pending", None)
-        if isinstance(raw_answers, list) and raw_answers:
-            pending_clarification_answers = list(raw_answers)
-        adapter._clarification_answers_pending = None
     try:
         if skip_daemon_send_turn:
             chunk_source = daemon_session.iter_turn_chunks(
@@ -4029,6 +4046,10 @@ async def execute_task_textual(
                             if event_type == STRANGE_LOOP_STARTED:
                                 if not ns_key:
                                     goal_loop_start_monotonic = time.monotonic()
+                                    # The exec goal started — clear the plan-approve
+                                    # follow-on flag so the spinner no longer treats
+                                    # this as a submit gap.
+                                    adapter._plan_approve_follow_on_pending = False
                                     if adapter._set_spinner:
                                         await adapter._set_spinner(
                                             SPINNER_LABEL_THINKING,
@@ -4126,8 +4147,23 @@ async def execute_task_textual(
                                         goal_completed_logged = True
                                     # Loop is done even if the WS turn stream is slow to
                                     # close — do not leave the thinking row spinning.
+                                    # Exception: plan-approve carries ``follow_on_exec``
+                                    # so the daemon is about to enqueue the exec goal.
+                                    # Keep the "Submitting" spinner alive so the thinking
+                                    # row stays active through the plan→exec transition;
+                                    # the exec goal's ``STRANGE_LOOP_STARTED`` will
+                                    # re-anchor and replace it.
+                                    follow_on = (
+                                        data.get("follow_on_exec")
+                                        if isinstance(data, dict)
+                                        else None
+                                    )
                                     if adapter._set_spinner and not clarification_pending:
-                                        await adapter._set_spinner(None)
+                                        if follow_on:
+                                            adapter._plan_approve_follow_on_pending = True
+                                            await adapter._set_spinner(SPINNER_LABEL_SUBMITTING)
+                                        else:
+                                            await adapter._set_spinner(None)
                                 continue
 
                             if event_type in (

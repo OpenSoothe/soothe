@@ -283,6 +283,23 @@ class _ExecutionMixin:
         if not non_empty:
             return
 
+        first_answer = str(event.answers[0]).strip() if event.answers else ""
+
+        # Plan-review actions get a confirmation line in the chat so the user
+        # sees their decision recorded beyond the disabled card. Mirrors the
+        # AppMessage pattern used for other operator actions ("Started new
+        # loop", "Command interrupted"). Must run before the spinner set so
+        # the line is visible the instant the card disables.
+        if first_answer in _PLAN_REVIEW_ACTIONS:
+            if first_answer == "Approve":
+                confirmation = "Plan approved — submitting for execution…"
+            else:
+                refinement = str(event.answers[1] if len(event.answers) > 1 else "").strip()
+                confirmation = "Plan rejected — returning to plan mode" + (
+                    f" ({refinement})" if refinement else ""
+                )
+            await self._mount_message(AppMessage(confirmation))
+
         # Show immediate feedback on the thinking row while the answer is
         # sent to the daemon and the graph resumes. This must run *before*
         # the plan-approval mode resolution (a one-shot daemon config RPC
@@ -302,7 +319,6 @@ class _ExecutionMixin:
         # auto-enqueues the exec goal carrying the approved plan (Bug #3 fix);
         # this composer flip just aligns the badge for the user's next manual
         # input and is not the execution mechanism.
-        first_answer = str(event.answers[0]).strip() if event.answers else ""
         if first_answer == "Approve":
             mode = await self._resolve_default_clarification_mode()
             self._composer_mode = mode
@@ -1178,8 +1194,23 @@ class _ExecutionMixin:
         elif self._chat_input:
             self._chat_input.set_cursor_active(active=True)
 
-        # Remove spinner if present
-        await self._set_spinner(None)
+        # When a plan-approve follow-on exec goal is pending (set by
+        # ``STRANGE_LOOP_COMPLETED`` carrying ``follow_on_exec``), the daemon
+        # is about to enqueue / has already enqueued the exec goal. The
+        # ``_daemon_loop_is_live`` probe + worker startup below takes a
+        # network round-trip during which the thinking row would otherwise
+        # go blank. Keep the "Submitting" spinner alive so the user sees
+        # continuous activity through the plan→exec transition; the
+        # re-attached turn's stream will replace it with a real phase label.
+        adapter = self._ui_adapter
+        plan_approve_follow_on = bool(getattr(adapter, "_plan_approve_follow_on_pending", False))
+        if plan_approve_follow_on:
+            from soothe_cli.tui.spinner_labels import SPINNER_LABEL_SUBMITTING
+
+            await self._set_spinner(SPINNER_LABEL_SUBMITTING)
+        else:
+            # Remove spinner if present
+            await self._set_spinner(None)
 
         # Ensure token display is restored (in case of early cancellation).
         # Pass the cached approximate flag so an interrupted "+" isn't clobbered.
@@ -1201,12 +1232,23 @@ class _ExecutionMixin:
         if (
             not self._exit
             and self._daemon_session is not None
-            and self._ui_adapter is not None
+            and adapter is not None
             and self._runtime_backend_ready()
             and await self._daemon_loop_is_live()
         ):
             await self._attach_to_live_daemon_turn()
             return
+
+        # No live follow-on turn to attach to — if a plan-approve follow-on
+        # was pending, it never materialized (daemon crashed / exec goal
+        # rejected). Clear the flag so the spinner is not stuck on
+        # "Submitting" and drop the spinner to idle.
+        adapter_after = self._ui_adapter
+        if adapter_after is not None and getattr(
+            adapter_after, "_plan_approve_follow_on_pending", False
+        ):
+            adapter_after._plan_approve_follow_on_pending = False
+            await self._set_spinner(None)
 
         # Process next message from queue if any
         await self._process_next_from_queue()
