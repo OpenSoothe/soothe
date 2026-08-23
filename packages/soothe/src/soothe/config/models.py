@@ -1473,13 +1473,6 @@ class StrangeLoopConfig(BaseModel):
         description="Output streaming configuration",
     )
 
-    loop_orchestrator_evidence_validate: bool = Field(
-        default=True,
-        description=(
-            "Enable plan evidence validation node in the loop orchestrator (RFC-220; currently a no-op)."
-        ),
-    )
-
     working_memory: LoopWorkingMemoryConfig = Field(
         default_factory=LoopWorkingMemoryConfig,
         description="Loop working memory",

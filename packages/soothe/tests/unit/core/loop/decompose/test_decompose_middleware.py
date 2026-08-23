@@ -187,3 +187,77 @@ def test_nudge_idempotent_on_repeat_hook() -> None:
         once = _run_through_hook(DecomposeTaskMiddleware(), _request())
         twice = _run_through_hook(DecomposeTaskMiddleware(), once)
     assert twice.system_message.content.count(PARALLEL_NUDGE_ADDENDUM) == 1
+
+
+# ── Evidence capture (grounding critic feed) ────────────────────────────────
+
+
+def _tool_call_request(name: str, **args: object) -> SimpleNamespace:
+    """Build a ToolCallRequest-like object for awrap_tool_call."""
+    return SimpleNamespace(tool_call={"name": name, "id": "c1", "args": args})
+
+
+def _tool_message_result(content: str) -> SimpleNamespace:
+    return SimpleNamespace(content=content)
+
+
+def test_grounding_tool_increments_counter_and_captures_output() -> None:
+    """A grounding tool call must both increment the evidence counter AND
+    append its output to the evidence corpus.
+
+    Regression guard: an earlier refactor inlined the capture but dropped
+    the counter increment, leaving ``current_evidence_calls()`` at 0 and
+    falsely triggering the zero-evidence gate.
+    """
+    from soothe.sloop.decompose.runtime import (
+        current_evidence_calls,
+        current_evidence_corpus,
+    )
+
+    sink: list = []
+    tokens = bind_decompose_runtime(step_id="AAA-01", sink=sink)
+    try:
+        mw = DecomposeTaskMiddleware()
+
+        async def handler(req: SimpleNamespace) -> SimpleNamespace:
+            return _tool_message_result("found 3 files in packages/soothe/src")
+
+        asyncio.run(
+            mw.awrap_tool_call(
+                _tool_call_request("ls", path="/Users/xiaming/Workspace/soothe/packages"),
+                handler,
+            )
+        )
+        assert current_evidence_calls() == 1
+        assert len(current_evidence_corpus()) == 1
+        assert "found 3 files" in current_evidence_corpus()[0]
+    finally:
+        reset_decompose_runtime(tokens)
+
+
+def test_non_grounding_tool_does_not_increment_or_capture() -> None:
+    """A non-grounding tool (e.g. write_todos) must not touch the evidence
+    counter or corpus."""
+    from soothe.sloop.decompose.runtime import (
+        current_evidence_calls,
+        current_evidence_corpus,
+    )
+
+    sink: list = []
+    tokens = bind_decompose_runtime(step_id="AAA-01", sink=sink)
+    try:
+        mw = DecomposeTaskMiddleware()
+
+        async def handler(req: SimpleNamespace) -> SimpleNamespace:
+            return _tool_message_result("todos updated")
+
+        asyncio.run(
+            mw.awrap_tool_call(
+                _tool_call_request("write_todos", todos=[]),
+                handler,
+            )
+        )
+        assert current_evidence_calls() == 0
+        assert current_evidence_corpus() == []
+    finally:
+        reset_decompose_runtime(tokens)

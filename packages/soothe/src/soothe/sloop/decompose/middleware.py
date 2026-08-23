@@ -93,13 +93,6 @@ def _is_grounding_call(tool_name: str, tool_call: dict[str, Any]) -> bool:
     return False
 
 
-def _record_evidence_if_grounding(tool_call: dict[str, Any]) -> None:
-    """Increment the evidence counter when this tool call gathers evidence."""
-    tool_name = str(tool_call.get("name", ""))
-    if _is_grounding_call(tool_name, tool_call):
-        _decompose_runtime.record_evidence_call()
-
-
 def _extract_result_text(result: Any) -> str:
     """Best-effort extraction of a tool result's text for the evidence corpus.
 
@@ -181,8 +174,10 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         tool_name = str(tool_call.get("name", ""))
         if tool_name != "decompose_task":
             result = await handler(request)
-            # Capture grounding-tool outputs for the LLM grounding critic.
+            # Count evidence-gathering calls (zero-evidence gate) and capture
+            # their outputs (LLM grounding critic evidence corpus).
             if _is_grounding_call(tool_name, tool_call):
+                _decompose_runtime.record_evidence_call()
                 text = _extract_result_text(result)
                 if text:
                     _decompose_runtime.record_evidence_output(text)
@@ -227,8 +222,10 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         tool_name = str(tool_call.get("name", ""))
         if tool_name != "decompose_task":
             result = handler(request)
-            # Capture grounding-tool outputs for the LLM grounding critic.
+            # Count evidence-gathering calls (zero-evidence gate) and capture
+            # their outputs (LLM grounding critic evidence corpus).
             if _is_grounding_call(tool_name, tool_call):
+                _decompose_runtime.record_evidence_call()
                 text = _extract_result_text(result)
                 if text:
                     _decompose_runtime.record_evidence_output(text)
