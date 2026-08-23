@@ -151,7 +151,9 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         mode = self._active_mode(conf)
         if mode is None:
             return await handler(request)
-        step_id = _decompose_runtime.current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY, "?")
+        step_id = _decompose_runtime.current_step_id() or conf.get(
+            SOOTHE_DECOMPOSE_STEP_ID_KEY, "?"
+        )
         logger.info(
             "[decompose] blocked decompose_task call in %s mode (step=%s)",
             mode,
@@ -192,7 +194,9 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         mode = self._active_mode(conf)
         if mode is None:
             return handler(request)
-        step_id = _decompose_runtime.current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY, "?")
+        step_id = _decompose_runtime.current_step_id() or conf.get(
+            SOOTHE_DECOMPOSE_STEP_ID_KEY, "?"
+        )
         logger.info(
             "[decompose] blocked decompose_task call in %s mode (step=%s)",
             mode,
@@ -223,7 +227,8 @@ class DecomposeTaskMiddleware(AgentMiddleware):
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         conf = _decompose_runtime.langgraph_configurable()
         if conf.get(SOOTHE_EVAL_STEP_ID_KEY):
-            # EvalStepMiddleware owns the narrower tool/prompt policy.
+            # EvalStepMiddleware owns the Eval tool/prompt policy
+            # (full tool surface + coverage-audit addendum + decompose_task).
             return request
         step_id = _decompose_runtime.current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY)
         if not step_id:
