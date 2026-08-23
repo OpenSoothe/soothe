@@ -13,29 +13,17 @@ from langchain.agents.middleware.types import (
     ModelResponse,
 )
 
+from soothe.sloop.decompose import runtime as _decompose_runtime
 from soothe.sloop.utils.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
 
 logger = logging.getLogger(__name__)
-
-
-def _langgraph_configurable() -> dict[str, Any]:
-    try:
-        from langgraph.config import get_config
-
-        lg_cfg = get_config()
-    except Exception:
-        return {}
-    if not isinstance(lg_cfg, dict):
-        return {}
-    conf = lg_cfg.get("configurable")
-    return conf if isinstance(conf, dict) else {}
 
 
 class GoalStepGuardMiddleware(AgentMiddleware):
     """Host policy from LangGraph ``configurable`` for goal synthesis."""
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
-        conf = _langgraph_configurable()
+        conf = _decompose_runtime.langgraph_configurable()
 
         if not conf.get(SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY):
             return request

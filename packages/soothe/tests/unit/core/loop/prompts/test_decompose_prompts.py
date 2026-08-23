@@ -30,6 +30,13 @@ def test_decompose_tool_description_leads_with_decision() -> None:
     assert "StepDAG" not in DECOMPOSE_TASK_TOOL_DESCRIPTION
 
 
+def test_decompose_tool_description_requires_evidence() -> None:
+    """Tool description must warn against proposing unconfirmed paths (d15f)."""
+    desc = DECOMPOSE_TASK_TOOL_DESCRIPTION.lower()
+    assert "evidence" in desc or "confirm" in desc
+    assert "non-existent" in desc or "do not exist" in desc or "unconfirmed" in desc
+
+
 def test_root_vs_child_instruction_lines() -> None:
     root = user_finish_or_split_hint_lines(is_dag_root=True)
     child = user_finish_or_split_hint_lines(is_dag_root=False)

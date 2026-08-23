@@ -20,7 +20,7 @@ from soothe.sloop.utils.config_keys import (
     SOOTHE_IS_DAG_ROOT_KEY,
 )
 
-_CONFIGURABLE = "soothe.sloop.decompose.middleware._langgraph_configurable"
+_CONFIGURABLE = "soothe.sloop.decompose.runtime.langgraph_configurable"
 
 
 def _request() -> ModelRequest:
@@ -162,7 +162,7 @@ def test_nudge_prefers_fanout_but_allows_finish_exception() -> None:
     pass-through chain; instead it frames fan-out as preferred with an
     explicit cohesion escape hatch."""
     nudge = PARALLEL_NUDGE_ADDENDUM
-    # Dominant signal: fan-out is the preferred first action.
+    # Dominant signal: fan-out is the preferred path.
     assert "prefer" in nudge.lower()
     assert "decompose_task" in nudge
     # Escape hatch: finish-in-thread is allowed for cohesive work.
@@ -173,6 +173,12 @@ def test_nudge_prefers_fanout_but_allows_finish_exception() -> None:
     # unconditional order — verify it sits inside a "when you see" clause.
     if "now" in nudge.lower():
         assert "when" in nudge.lower() or "if" in nudge.lower()
+    # Evidence-first: the nudge must require gathering evidence before fan-out
+    # (d15f hallucination defense — decomposing without grounding fabricated
+    # non-existent client dirs).
+    assert any(word in nudge.lower() for word in ("evidence", "confirm", "ls", "glob", "grep")), (
+        "nudge must require gathering evidence before decompose"
+    )
 
 
 def test_nudge_idempotent_on_repeat_hook() -> None:

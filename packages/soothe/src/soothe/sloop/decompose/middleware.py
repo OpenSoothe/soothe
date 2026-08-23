@@ -28,7 +28,7 @@ from soothe.prompts import (
     THREAD_POLICY_SYSTEM_ADDENDUM,
     WRITE_TODOS_TOOL_DESCRIPTION,
 )
-from soothe.sloop.decompose.runtime import current_step_id
+from soothe.sloop.decompose import runtime as _decompose_runtime
 from soothe.sloop.decompose.tool import build_decompose_task_tool
 from soothe.sloop.utils.config_keys import (
     SOOTHE_DECOMPOSE_STEP_ID_KEY,
@@ -42,19 +42,6 @@ from soothe.sloop.utils.config_keys import (
 logger = logging.getLogger(__name__)
 
 _DECOMPOSE_TOOL = build_decompose_task_tool()
-
-
-def _langgraph_configurable() -> dict[str, Any]:
-    try:
-        from langgraph.config import get_config
-
-        lg_cfg = get_config()
-    except Exception:
-        return {}
-    if not isinstance(lg_cfg, dict):
-        return {}
-    conf = lg_cfg.get("configurable")
-    return conf if isinstance(conf, dict) else {}
 
 
 def _override_write_todos_description(tools: list[Any]) -> list[Any]:
@@ -84,6 +71,33 @@ def _ensure_decompose_tool(tools: list[Any]) -> list[Any]:
 
 def _strip_decompose_tool(tools: list[Any]) -> list[Any]:
     return [t for t in tools if getattr(t, "name", None) != "decompose_task"]
+
+
+# Tools that gather evidence (search / inspection). Counting these per step
+# thread lets the decompose tool handler reject proposals issued with zero
+# prior grounding (d15f hallucination defense, scheme 2d). Mirrors the
+# executor's search-call classification (executor.py search_calls_total).
+_GROUNDING_TOOL_NAMES = frozenset({"ls", "glob", "grep", "read_file", "file_info"})
+
+
+def _is_grounding_call(tool_name: str, tool_call: dict[str, Any]) -> bool:
+    """True when this tool call gathers evidence (search/inspection)."""
+    if tool_name in _GROUNDING_TOOL_NAMES:
+        return True
+    if tool_name == "run_command":
+        command = str((tool_call.get("args") or {}).get("command") or "").lower()
+        return any(
+            marker in command
+            for marker in ("grep", "rg ", "rg\n", "find ", "find\t", "ls ", "ls\n", "ls\t")
+        )
+    return False
+
+
+def _record_evidence_if_grounding(tool_call: dict[str, Any]) -> None:
+    """Increment the evidence counter when this tool call gathers evidence."""
+    tool_name = str(tool_call.get("name", ""))
+    if _is_grounding_call(tool_name, tool_call):
+        _decompose_runtime.record_evidence_call()
 
 
 class DecomposeTaskMiddleware(AgentMiddleware):
@@ -129,12 +143,15 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         tool_call = getattr(request, "tool_call", None) or {}
         tool_name = str(tool_call.get("name", ""))
         if tool_name != "decompose_task":
+            # Count evidence-gathering calls so the decompose tool handler
+            # can reject proposals issued with zero prior grounding.
+            _record_evidence_if_grounding(tool_call)
             return await handler(request)
-        conf = _langgraph_configurable()
+        conf = _decompose_runtime.langgraph_configurable()
         mode = self._active_mode(conf)
         if mode is None:
             return await handler(request)
-        step_id = current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY, "?")
+        step_id = _decompose_runtime.current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY, "?")
         logger.info(
             "[decompose] blocked decompose_task call in %s mode (step=%s)",
             mode,
@@ -167,12 +184,15 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         tool_call = getattr(request, "tool_call", None) or {}
         tool_name = str(tool_call.get("name", ""))
         if tool_name != "decompose_task":
+            # Count evidence-gathering calls so the decompose tool handler
+            # can reject proposals issued with zero prior grounding.
+            _record_evidence_if_grounding(tool_call)
             return handler(request)
-        conf = _langgraph_configurable()
+        conf = _decompose_runtime.langgraph_configurable()
         mode = self._active_mode(conf)
         if mode is None:
             return handler(request)
-        step_id = current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY, "?")
+        step_id = _decompose_runtime.current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY, "?")
         logger.info(
             "[decompose] blocked decompose_task call in %s mode (step=%s)",
             mode,
@@ -201,11 +221,11 @@ class DecomposeTaskMiddleware(AgentMiddleware):
     # ------------------------------------------------------------------
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
-        conf = _langgraph_configurable()
+        conf = _decompose_runtime.langgraph_configurable()
         if conf.get(SOOTHE_EVAL_STEP_ID_KEY):
             # EvalStepMiddleware owns the narrower tool/prompt policy.
             return request
-        step_id = current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY)
+        step_id = _decompose_runtime.current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY)
         if not step_id:
             tools = list(request.tools or [])
             stripped = _strip_decompose_tool(tools)

@@ -15,6 +15,14 @@ Do NOT call when the task is simple or minimal: finish one clear deliverable
 here with tools.
 Do NOT use as a personal checklist — use write_todos for that.
 
+## Ground your subtasks in evidence
+
+Do not propose subtasks that cite files or directories you have not
+confirmed exist. Gather evidence first (ls, glob, grep, or read_file) so
+that every subtask `full_description` references areas your evidence
+supports. Proposals citing non-existent paths are rejected and you must
+re-ground before re-proposing.
+
 ## Subtask count limit
 
 There is a hard cap on the number of child subtasks per call (shown in the

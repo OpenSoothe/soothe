@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
+from typing import Any
 
 from soothe.context.decomposition import DecompositionProposal
 
@@ -15,6 +16,11 @@ _wave_seq: ContextVar[int] = ContextVar("decompose_wave_seq", default=0)
 _proposal_sink: ContextVar[list[DecompositionProposal] | None] = ContextVar(
     "decompose_proposal_sink", default=None
 )
+# Count of evidence-gathering tool calls (ls/glob/grep/read_file/...) made
+# in the current step thread before a decompose_task call. Used by the
+# decompose tool handler's evidence-call gate to reject proposals issued
+# with zero prior grounding (d15f hallucination defense, scheme 2d).
+_evidence_calls: ContextVar[int] = ContextVar("decompose_evidence_calls", default=0)
 
 
 @dataclass
@@ -24,6 +30,7 @@ class DecomposeRuntimeTokens:
     step: Token[str | None]
     wave: Token[int]
     sink: Token[list[DecompositionProposal] | None]
+    evidence: Token[int]
 
 
 def bind_decompose_runtime(
@@ -44,6 +51,7 @@ def bind_decompose_runtime(
         step=_current_step_id.set(step_id),
         wave=_wave_seq.set(wave_seq),
         sink=_proposal_sink.set(sink),
+        evidence=_evidence_calls.set(0),
     )
 
 
@@ -56,6 +64,7 @@ def reset_decompose_runtime(tokens: DecomposeRuntimeTokens) -> None:
     _current_step_id.reset(tokens.step)
     _wave_seq.reset(tokens.wave)
     _proposal_sink.reset(tokens.sink)
+    _evidence_calls.reset(tokens.evidence)
 
 
 def current_step_id() -> str | None:
@@ -68,3 +77,32 @@ def current_wave_seq() -> int:
 
 def current_proposal_sink() -> list[DecompositionProposal] | None:
     return _proposal_sink.get()
+
+
+def current_evidence_calls() -> int:
+    """Return the count of evidence-gathering tool calls in this step thread."""
+    return _evidence_calls.get()
+
+
+def record_evidence_call() -> None:
+    """Increment the evidence-gathering call counter for this step thread."""
+    _evidence_calls.set(_evidence_calls.get() + 1)
+
+
+def langgraph_configurable() -> dict[str, Any]:
+    """Return the LangGraph ``configurable`` dict for the current task context.
+
+    Shared by the decompose middleware and tool handler to read workspace /
+    step-binding keys without duplicating the ``get_config`` boilerplate.
+    Returns ``{}`` when no LangGraph runtime context is active.
+    """
+    try:
+        from langgraph.config import get_config
+
+        lg_cfg = get_config()
+    except Exception:
+        return {}
+    if not isinstance(lg_cfg, dict):
+        return {}
+    conf = lg_cfg.get("configurable")
+    return conf if isinstance(conf, dict) else {}

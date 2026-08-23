@@ -15,23 +15,13 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import ToolMessage
 
 from soothe.prompts import EVAL_POLICY_SYSTEM_ADDENDUM
+from soothe.sloop.decompose import runtime as _decompose_runtime
 from soothe.sloop.decompose.tool import build_decompose_task_tool
 from soothe.sloop.utils.config_keys import SOOTHE_EVAL_STEP_ID_KEY
 
 _DECOMPOSE_TOOL = build_decompose_task_tool()
 # Builtin Eval inspect surface; not operator-configurable.
 EVAL_READONLY_TOOL_NAMES = frozenset({"read_file", "grep", "glob", "ls", "list_files", "file_info"})
-
-
-def _langgraph_configurable() -> dict[str, Any]:
-    try:
-        from langgraph.config import get_config
-
-        config = get_config()
-    except Exception:
-        return {}
-    configurable = config.get("configurable") if isinstance(config, dict) else None
-    return configurable if isinstance(configurable, dict) else {}
 
 
 def _tool_name(tool: Any) -> str:
@@ -72,7 +62,7 @@ class EvalStepMiddleware(AgentMiddleware):
     tools = [_DECOMPOSE_TOOL]
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
-        configurable = _langgraph_configurable()
+        configurable = _decompose_runtime.langgraph_configurable()
         if not configurable.get(SOOTHE_EVAL_STEP_ID_KEY):
             return request
         tools = [
@@ -105,7 +95,7 @@ class EvalStepMiddleware(AgentMiddleware):
         handler: Callable[[ToolCallRequest], Awaitable[Any]],
     ) -> Any:
         """Fail closed if a mutating or unknown tool bypasses model filtering."""
-        configurable = _langgraph_configurable()
+        configurable = _decompose_runtime.langgraph_configurable()
         if not configurable.get(SOOTHE_EVAL_STEP_ID_KEY):
             return await handler(request)
         tool_call = getattr(request, "tool_call", None)

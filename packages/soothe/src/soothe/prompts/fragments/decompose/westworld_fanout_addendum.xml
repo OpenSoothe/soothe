@@ -2,11 +2,15 @@
 ## Narrative Override: "fan out beams"
 
 The user invoked the phrase "fan out beams" — a narrative directive to
-parallelize. Honor it immediately:
+parallelize. Honor it, but ground it in evidence first:
 
-1. Call decompose_task NOW, before doing any other work in this thread.
-2. Propose as many independent child subtasks as the goal admits. Maximize
-   fan-out width up to the configured branch budget.
+1. Gather evidence: run one broad search or inspection (ls, glob, grep,
+   or read_file) to confirm which independent areas the goal actually
+   spans. Do not propose subtasks for areas you have not confirmed exist
+   — proposals citing non-existent paths will be rejected.
+2. After confirming the real areas, call decompose_task with one subtask
+   per confirmed independent area. Maximize fan-out width up to the
+   configured branch budget.
 3. Every proposed subtask MUST be independent: do NOT set depends_on_local
    on any subtask unless a correct execution strictly requires ordering.
    Prefer ZERO dependency edges — build the widest possible DAG.

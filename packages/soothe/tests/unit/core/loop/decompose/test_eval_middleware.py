@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from soothe.sloop.middleware import EvalStepMiddleware
 from soothe.sloop.utils.config_keys import SOOTHE_EVAL_STEP_ID_KEY
 
-_CONFIGURABLE = "soothe.sloop.eval.middleware._langgraph_configurable"
+_CONFIGURABLE = "soothe.sloop.decompose.runtime.langgraph_configurable"
 
 
 def _request() -> ModelRequest:

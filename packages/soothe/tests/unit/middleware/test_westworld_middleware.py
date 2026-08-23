@@ -226,3 +226,17 @@ def test_modify_request_idempotent() -> None:
         # Run again on the already-modified request.
         twice = _run_through_hook(middleware, once)
     assert twice.system_message.content.count(WESTWORLD_FANOUT_ADDENDUM) == 1
+
+
+# ── Evidence-first wording (d15f hallucination defense) ───────────────────
+
+
+def test_fanout_addendum_requires_evidence_before_decompose() -> None:
+    """The fan-out addendum must require gathering evidence before calling
+    decompose_task (d15f: the original ``call decompose_task NOW, before doing
+    any other work`` skipped grounding and fabricated non-existent clients)."""
+    text = WESTWORLD_FANOUT_ADDENDUM.lower()
+    assert "evidence" in text or "confirm" in text
+    assert any(w in text for w in ("ls", "glob", "grep", "read_file", "search"))
+    # Must NOT contain the old unconditional "before doing any other work" order.
+    assert "before doing any other work" not in text

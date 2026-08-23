@@ -38,7 +38,7 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from soothe.prompts import WESTWORLD_FANOUT_ADDENDUM
-from soothe.sloop.decompose.runtime import current_step_id
+from soothe.sloop.decompose import runtime as _decompose_runtime
 from soothe.sloop.utils.config_keys import (
     SOOTHE_DECOMPOSE_STEP_ID_KEY,
     SOOTHE_EVAL_STEP_ID_KEY,
@@ -55,19 +55,6 @@ _WESTWORLD_TRIGGERS: list[tuple[str, str]] = [
     ("fan out beams", WESTWORLD_FANOUT_ADDENDUM),
     ("fan out subagents", WESTWORLD_FANOUT_ADDENDUM),
 ]
-
-
-def _langgraph_configurable() -> dict[str, Any]:
-    try:
-        from langgraph.config import get_config
-
-        lg_cfg = get_config()
-    except Exception:
-        return {}
-    if not isinstance(lg_cfg, dict):
-        return {}
-    conf = lg_cfg.get("configurable")
-    return conf if isinstance(conf, dict) else {}
 
 
 def _last_human_text(request: ModelRequest[ContextT]) -> str:
@@ -143,9 +130,9 @@ class WestWorldMiddleware(AgentMiddleware):
     """
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
-        conf = _langgraph_configurable()
+        conf = _decompose_runtime.langgraph_configurable()
         # Guard: only on a real decompose step thread.
-        step_id = current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY)
+        step_id = _decompose_runtime.current_step_id() or conf.get(SOOTHE_DECOMPOSE_STEP_ID_KEY)
         if not step_id:
             return request
         # Guard: skip modes/policies where decompose_task is unavailable.
