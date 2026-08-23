@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.32] - 2026-08-23
+
+### Fixed
+- Make the decompose evidence-gathering counter survive LangGraph Pregel `copy_context()` snapshots. The counter was a plain `int` `ContextVar`, whose copy-on-write semantics meant increments made inside a ToolNode turn never reached the later `decompose_task` turn — the grounding gate always saw `0` and rejected every `decompose_task` as "no prior evidence" despite dozens of `ls`/`grep`/`read_file` calls. Store the counter as a single-element list (a mutable container referenced, not copied, by `copy_context()`) bound lazily by `_evidence_counter()`, so in-place mutation is visible across every snapshot sharing the reference bound at `bind_decompose_runtime`.
+
+## [v0.10.31] - 2026-08-23
+
 ### Changed
 - `SIMPLE` tasks now use an LLM decision (`decide_eval_required`) at ROOT_EVAL to dynamically determine whether a coverage Eval is warranted, replacing the deterministic skip. `COMPLEX` tasks continue using the structural `eval_required()` predicate; `MINIMAL` tasks still skip Eval without an LLM call. Fail-safe: when the fast model is unavailable or the call errors, Eval is required rather than silently skipped.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.30...v0.10.31
 
 ## [v0.10.30] - 2026-08-22
 
