@@ -228,4 +228,3 @@ def test_evidence_counter_survives_copy_context_snapshots() -> None:
         assert current_evidence_calls() == 3
     finally:
         reset_decompose_runtime(tokens)
-

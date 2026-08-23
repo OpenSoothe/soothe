@@ -30,9 +30,7 @@ _proposal_sink: ContextVar[list[DecompositionProposal] | None] = ContextVar(
 # ls/grep/read_file calls). A mutable container is *referenced* (not copied) by
 # ``copy_context()``, so in-place mutation of the list is visible across every
 # snapshot that shares the reference bound at ``bind_decompose_runtime``.
-_evidence_calls: ContextVar[list[int]] = ContextVar(
-    "decompose_evidence_calls", default=None
-)
+_evidence_calls: ContextVar[list[int]] = ContextVar("decompose_evidence_calls", default=None)
 
 
 def _evidence_counter() -> list[int]:
