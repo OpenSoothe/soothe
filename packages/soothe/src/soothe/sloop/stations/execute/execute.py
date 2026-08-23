@@ -47,12 +47,21 @@ def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
             recent.append(str(getattr(sr, "output", "")))
     plan_summary: str | None = None
     if plan_result is not None:
-        plan_summary = getattr(plan_result, "next_action", None)
+        decision = getattr(plan_result, "decision", None)
+        steps = getattr(decision, "steps", None) if decision else None
+        if steps:
+            plan_summary = "\n".join(f"{i}. {s.description}" for i, s in enumerate(steps, 1))
+        if not plan_summary:
+            plan_summary = getattr(plan_result, "next_action", None)
     # goal_user_submission holds the original user line (set by strange_loop.continue_goal).
     # Fall back to goal when goal_user_submission is None (e.g. autopilot or legacy paths).
     from soothe.sloop.utils.goal_text import resolve_user_request
 
     user_request = resolve_user_request(state)
+
+    # Build prior clarifications from the loop state's clarification history.
+    prior_clarifications = _extract_prior_clarifications(state)
+
     return LoopStateView(
         goal_id=getattr(goal_record, "goal_id", "") or "",
         goal_description=user_request,
@@ -64,7 +73,33 @@ def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
         workspace_summary=getattr(state, "workspace", None),
         active_skills=tuple(getattr(state, "activated_skill_names", []) or []),
         active_mcp_servers=tuple(getattr(state, "active_mcp_servers", []) or []),
+        prior_clarifications=prior_clarifications,
     )
+
+
+def _extract_prior_clarifications(state: Any) -> tuple[str, ...]:
+    """Extract prior Q&A pairs from the loop state's clarification history.
+
+    Reads from ``state.clarification_history`` when present (a list of dicts
+    with ``questions``, ``answers``, ``source``, and ``confidence`` keys).
+    Returns an empty tuple when no history exists.
+    """
+    history = getattr(state, "clarification_history", None)
+    if not history:
+        return ()
+    entries: list[str] = []
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        questions = item.get("questions") or []
+        answers = item.get("answers") or []
+        source = item.get("source", "unknown")
+        confidence = item.get("confidence")
+        for i, q in enumerate(questions):
+            a = answers[i] if i < len(answers) else "(no answer)"
+            conf_str = f", conf={confidence:.2f}" if confidence is not None else ""
+            entries.append(f"Q: {q}\nA: {a} (source={source}{conf_str})")
+    return tuple(entries)
 
 
 def _is_rate_limit_error(error: str | None) -> bool:

@@ -878,6 +878,18 @@ class LoopState(BaseModel):
         description="Maps step_id → thread_id used for execution.",
     )
 
+    # Cross-turn clarification memory (RFC-622 enhancement). Append-only log of
+    # resolved clarifications within this goal run, so veritas can reference
+    # prior Q&A when answering subsequent clarifications for the same goal.
+    clarification_history: list[dict[str, Any]] = Field(
+        default_factory=list,
+        max_length=20,
+        description=(
+            "Append-only log of resolved clarifications. Each entry: "
+            "{questions, answers, source, confidence}. Capped at 20 entries."
+        ),
+    )
+
     def bind_ce(self, ce: Any, goal_id: str) -> None:
         """Bind this LoopState to a ContextEngine instance (RFC-624 Phase 4).
 

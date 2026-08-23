@@ -37,6 +37,11 @@ class LoopStateView:
     workspace_summary: str | None
     active_skills: tuple[str, ...]
     active_mcp_servers: tuple[str, ...]
+    prior_clarifications: tuple[str, ...] = ()
+    """Prior Q&A pairs from earlier clarifications in the same goal run.
+    Format: ``"Q: {question}\\nA: {answer} (source={source}, conf={confidence})"``.
+    Empty tuple when no prior clarifications exist (first clarification in a goal).
+    """
 
 
 @dataclass(frozen=True)
@@ -111,6 +116,7 @@ def _view_to_state(view: LoopStateView) -> dict[str, Any]:
         "workspace_summary": view.workspace_summary,
         "active_skills": list(view.active_skills),
         "active_mcp_servers": list(view.active_mcp_servers),
+        "prior_clarifications": list(view.prior_clarifications),
     }
 
 
@@ -128,6 +134,7 @@ def _view_from_state(d: Mapping[str, Any] | Any) -> LoopStateView:
         workspace_summary=d.get("workspace_summary"),
         active_skills=tuple(d.get("active_skills", []) or []),
         active_mcp_servers=tuple(d.get("active_mcp_servers", []) or []),
+        prior_clarifications=tuple(d.get("prior_clarifications", []) or []),
     )
 
 

@@ -17,6 +17,12 @@ You MUST respond in valid JSON format matching the VeritasAnswerSchema:
 - `confidence`: float between 0.0 and 1.0
 - `defer`: boolean, true if you cannot answer confidently
 - `rationale`: brief explanation of your reasoning
+- `reasoning`: chain-of-thought analysis — briefly analyze the available evidence
+  (user request, plan goal, recent step output, project instructions) BEFORE
+  deciding on your answers. This helps you produce better-grounded answers.
+- `answer_is_question`: list of booleans, one per answer — set `true` for any
+  answer that is itself a question rather than a direct answer. This lets the
+  system detect and suppress question-shaped answers structurally.
 
 Hard rules:
 1. NEVER ask a clarification question back. If you genuinely cannot answer,
@@ -33,7 +39,46 @@ Hard rules:
    that contradict those instructions (e.g. file placement, terminology,
    forbidden heuristics). If the instructions resolve the clarification, answer
    with high confidence; if they are silent or ambiguous, fall back to the
-   other context."""
+   other context.
+7. Self-classify each answer: in `answer_is_question`, set `true` if the
+   corresponding answer is phrased as a question (e.g. ends with "?", starts
+   with "should we", "would you", "can I"). This is a structured signal, not
+   a guess — be honest about whether your answer is actually a question.
+8. Fill `reasoning` first: analyze the evidence, then produce `answers`. This
+   improves answer quality and confidence calibration.
+
+Examples:
+
+Question: "Which package should I modify first, soothe or soothe-daemon?"
+Good answer:
+  {"reasoning": "The user asked to refine the auth module. The auth module lives
+   in soothe/src/soothe/auth/. The clarification asks which package to modify
+   first — soothe contains the auth code, soothe-daemon only wires it.",
+   "answers": ["soothe"], "confidence": 0.9, "defer": false,
+   "rationale": "auth module is in soothe/src/soothe/auth/",
+   "answer_is_question": [false]}
+
+Bad answer (vague, question-shaped):
+  {"answers": ["maybe soothe?"], "confidence": 0.5, "defer": false,
+   "rationale": "not sure", "answer_is_question": [true]}
+  // This would be coerced to defer because answer_is_question[0] is true.
+
+Question: "Should I create an IG for this change?"
+Good answer:
+  {"reasoning": "The change touches one module (auth). AGENTS.md says substantial
+   work requires an IG. One-module refinement is substantial — an IG is needed.",
+   "answers": ["yes, create an IG"], "confidence": 0.8, "defer": false,
+   "rationale": "AGENTS.md requires IG for substantial work",
+   "answer_is_question": [false]}
+
+Question: "What database should I use for the new feature?"
+Good defer:
+  {"reasoning": "No database preference is stated in the user request, goal
+   description, or project instructions. Both postgres and sqlite are valid
+   per the config. I cannot determine the user's intent.",
+   "answers": [], "confidence": 0.0, "defer": true,
+   "rationale": "no evidence to determine database choice",
+   "answer_is_question": []}"""
 
 
 def build_veritas_system_prompt() -> str:
@@ -100,13 +145,21 @@ def build_veritas_user_prompt(
         lines.append("")
         lines.append(f"=== Active MCP servers === {', '.join(view.active_mcp_servers)}")
 
+    if view.prior_clarifications:
+        lines.append("")
+        lines.append("=== Prior clarifications (this goal) ===")
+        for entry in view.prior_clarifications:
+            lines.append(entry.strip())
+
     if view.recent_step_outputs:
         recent = list(view.recent_step_outputs)[-max_context_steps:]
-        lines.append("")
-        lines.append(f"=== Recent step outputs (last {len(recent)}) ===")
-        for i, out in enumerate(recent, 1):
-            lines.append(f"--- step {i} ---")
-            lines.append(out.strip())
+        filtered = [out for out in recent if out.strip() and out.strip() != "(none)"]
+        if filtered:
+            lines.append("")
+            lines.append(f"=== Recent step outputs ({len(filtered)}/{len(recent)} non-trivial) ===")
+            for i, out in enumerate(filtered, 1):
+                lines.append(f"--- step {i} ---")
+                lines.append(out.strip())
 
     lines.append("")
     lines.append(f"=== Iteration === {view.iteration}")

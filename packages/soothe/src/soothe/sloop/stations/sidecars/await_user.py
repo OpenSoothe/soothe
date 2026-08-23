@@ -148,9 +148,29 @@ async def node_await_clarification(
         ctx.clarification_resume_answers = None
         ctx.clarification_resume_text = None
 
+    # Append to clarification history so veritas can reference prior Q&A
+    # in subsequent clarifications for the same goal (RFC-622 enhancement).
+    loop_state = getattr(ctx, "loop_state", None)
+    if loop_state is not None:
+        history = list(getattr(loop_state, "clarification_history", []) or [])
+        history.append(
+            {
+                "questions": list(request.questions),
+                "answers": list(answer.answers),
+                "source": answer.source,
+                "confidence": answer.confidence,
+            }
+        )
+        # Cap at 20 entries to bound memory.
+        if len(history) > 20:
+            history = history[-20:]
+
     # Keep pending alongside the answer so the origin node can pair
     # origin_interrupt_id; that node clears both channels after consume.
-    return {"pending_clarification_answer": answer_to_state(answer)}
+    result: dict[str, Any] = {"pending_clarification_answer": answer_to_state(answer)}
+    if loop_state is not None:
+        result["clarification_history"] = history
+    return result
 
 
 async def _hard_defer(

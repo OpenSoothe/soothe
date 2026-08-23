@@ -96,6 +96,9 @@ def build_clarification_policy_for_runner(
             soothe_config=config,
             thread_id=thread_id,
             loop_id=loop_id,
+            max_retries=veritas_cfg.max_retries,
+            retry_backoff_seconds=veritas_cfg.retry_backoff_seconds,
+            coerced_confidence=veritas_cfg.coerced_confidence,
         )
 
     interactive_fallback: ClarificationPolicy | None = (

@@ -1601,6 +1601,18 @@ class VeritasConfig(BaseModel):
     max_context_steps: int = Field(default=8, ge=0)
     """How many recent step outputs to include in the veritas user prompt."""
 
+    max_retries: int = Field(default=2, ge=0)
+    """Max retry attempts for transient infrastructure failures (rate limit,
+    timeout, connection error). ``StructuredOutputError`` (model output
+    malformed) still defers immediately. Set to ``0`` to disable retries."""
+
+    retry_backoff_seconds: float = Field(default=2.0, ge=0.0)
+    """Base backoff for exponential retry (``backoff * 2**attempt``)."""
+
+    coerced_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    """Confidence value assigned when the model returns answers but omits
+    ``confidence``. Replaces the historical hardcoded ``0.7``."""
+
 
 class SkillifyConfig(BaseModel):
     """Configuration for the daemon-shared Skillify semantic skill search service."""

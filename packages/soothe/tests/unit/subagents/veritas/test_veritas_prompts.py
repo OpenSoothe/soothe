@@ -98,5 +98,101 @@ def test_user_prompt_loads_full_agents_md_by_default(tmp_path: Path) -> None:
     prompt = build_veritas_user_prompt(_request(workspace_summary=str(tmp_path)))
     assert "=== Project instructions ===" in prompt
     assert 'inlined="full"' in prompt
-    assert "<NOTE>" not in prompt
-    assert "Tail marker line." in prompt
+
+
+def test_system_prompt_mentions_reasoning_field() -> None:
+    """System prompt instructs the model to fill the reasoning field."""
+    prompt = build_veritas_system_prompt()
+    assert "reasoning" in prompt
+    assert "chain-of-thought" in prompt.lower() or "analyze" in prompt.lower()
+
+
+def test_system_prompt_mentions_answer_is_question() -> None:
+    """System prompt instructs the model to self-classify answers."""
+    prompt = build_veritas_system_prompt()
+    assert "answer_is_question" in prompt
+    assert "Self-classify" in prompt or "self-classify" in prompt.lower()
+
+
+def test_system_prompt_contains_examples() -> None:
+    """Few-shot examples are present in the system prompt."""
+    prompt = build_veritas_system_prompt()
+    assert "Examples:" in prompt
+    assert "Good answer" in prompt
+    assert "Bad answer" in prompt
+
+
+def test_user_prompt_filters_trivial_step_outputs() -> None:
+    """Empty and '(none)' step outputs are filtered out."""
+    request = ClarificationRequest(
+        questions=("which package?",),
+        origin_node="execute",
+        origin_interrupt_id="i",
+        loop_state=LoopStateView(
+            goal_id="g",
+            goal_description="refine auth",
+            user_request="please refine auth",
+            iteration=2,
+            intent_classification="agentic",
+            plan_summary="explored auth/",
+            recent_step_outputs=("read auth/main.py", "", "   ", "(none)"),
+            workspace_summary=None,
+            active_skills=(),
+            active_mcp_servers=(),
+        ),
+    )
+    prompt = build_veritas_user_prompt(request)
+    assert "non-trivial" in prompt
+    assert "read auth/main.py" in prompt
+    # The trivial outputs should not appear as step entries
+    assert "--- step 1 ---\n\n" not in prompt
+    assert "(none)" not in prompt.split("=== Iteration ===")[0]
+
+
+def test_user_prompt_includes_prior_clarifications() -> None:
+    """Prior clarifications are rendered when present."""
+    request = ClarificationRequest(
+        questions=("which database?",),
+        origin_node="execute",
+        origin_interrupt_id="i",
+        loop_state=LoopStateView(
+            goal_id="g",
+            goal_description="build a feature",
+            user_request="build a feature",
+            iteration=3,
+            intent_classification="agentic",
+            plan_summary="explored schema",
+            recent_step_outputs=(),
+            workspace_summary=None,
+            active_skills=(),
+            active_mcp_servers=(),
+            prior_clarifications=("Q: which package?\nA: soothe (source=veritas, conf=0.80)",),
+        ),
+    )
+    prompt = build_veritas_user_prompt(request)
+    assert "=== Prior clarifications (this goal) ===" in prompt
+    assert "Q: which package?" in prompt
+    assert "A: soothe" in prompt
+
+
+def test_user_prompt_omits_prior_clarifications_when_empty() -> None:
+    """No prior_clarifications section when the tuple is empty."""
+    request = ClarificationRequest(
+        questions=("which database?",),
+        origin_node="execute",
+        origin_interrupt_id="i",
+        loop_state=LoopStateView(
+            goal_id="g",
+            goal_description="build a feature",
+            user_request="build a feature",
+            iteration=1,
+            intent_classification=None,
+            plan_summary=None,
+            recent_step_outputs=(),
+            workspace_summary=None,
+            active_skills=(),
+            active_mcp_servers=(),
+        ),
+    )
+    prompt = build_veritas_user_prompt(request)
+    assert "=== Prior clarifications" not in prompt

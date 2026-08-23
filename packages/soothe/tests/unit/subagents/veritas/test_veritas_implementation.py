@@ -174,3 +174,158 @@ async def test_traced_invoke_config_none_when_config_missing(
 
     await answer(_request(), model=object())
     assert captured["soothe_config"] is None
+
+
+@pytest.mark.asyncio
+async def test_transient_failure_retries_then_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Transient exceptions (non-StructuredOutputError) are retried."""
+    call_count = 0
+
+    async def _fake_sleep(_seconds: float) -> None:
+        pass
+
+    async def _fake(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise ConnectionError("transient")
+        return {
+            "answers": ["ok"],
+            "confidence": 0.8,
+            "defer": False,
+            "rationale": "recovered",
+            "answer_is_question": [False],
+        }
+
+    monkeypatch.setattr(veritas_impl, "ainvoke_structured_traced", _fake)
+    monkeypatch.setattr(veritas_impl.asyncio, "sleep", _fake_sleep)
+    result = await answer(_request(), model=object(), max_retries=3, retry_backoff_seconds=0.0)
+    assert call_count == 3
+    assert result.defer is False
+    assert result.answers == ["ok"]
+
+
+@pytest.mark.asyncio
+async def test_transient_failure_exhausts_retries_to_defer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When retries are exhausted, defer with transient_failure rationale."""
+
+    async def _fake_sleep(_seconds: float) -> None:
+        pass
+
+    async def _fake(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(veritas_impl, "ainvoke_structured_traced", _fake)
+    monkeypatch.setattr(veritas_impl.asyncio, "sleep", _fake_sleep)
+    result = await answer(_request(), model=object(), max_retries=1, retry_backoff_seconds=0.0)
+    assert result.defer is True
+    assert result.rationale.startswith("transient_failure:")
+
+
+@pytest.mark.asyncio
+async def test_structured_output_error_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """StructuredOutputError defers immediately — no retry."""
+
+    async def _fake_sleep(_seconds: float) -> None:
+        pass
+
+    call_count = 0
+
+    async def _fake(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        nonlocal call_count
+        call_count += 1
+        raise StructuredOutputError("malformed")
+
+    monkeypatch.setattr(veritas_impl, "ainvoke_structured_traced", _fake)
+    monkeypatch.setattr(veritas_impl.asyncio, "sleep", _fake_sleep)
+    result = await answer(_request(), model=object(), max_retries=3, retry_backoff_seconds=0.0)
+    assert result.defer is True
+    assert result.rationale.startswith("structured_output_failed:")
+    assert call_count == 1  # no retry
+
+
+@pytest.mark.asyncio
+async def test_answer_is_question_structured_field_coerces_to_defer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When model self-classifies an answer as a question via answer_is_question."""
+    _patch_returns(
+        monkeypatch,
+        {
+            "answers": ["should we use JWT?"],
+            "confidence": 0.9,
+            "defer": False,
+            "rationale": "unclear",
+            "answer_is_question": [True],
+        },
+    )
+    result = await answer(_request(), model=object())
+    assert result.defer is True
+    assert result.rationale == "answer_was_question"
+
+
+@pytest.mark.asyncio
+async def test_answer_is_question_false_not_coerced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When model self-classifies answers as non-questions, no defer."""
+    _patch_returns(
+        monkeypatch,
+        {
+            "answers": ["use JWT"],
+            "confidence": 0.9,
+            "defer": False,
+            "rationale": "user said JWT",
+            "answer_is_question": [False],
+        },
+    )
+    result = await answer(_request(), model=object())
+    assert result.defer is False
+    assert result.answers == ["use JWT"]
+
+
+@pytest.mark.asyncio
+async def test_reasoning_logged_in_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """reasoning field is preserved in the result."""
+    _patch_returns(
+        monkeypatch,
+        {
+            "answers": ["focus on token refresh"],
+            "confidence": 0.85,
+            "defer": False,
+            "rationale": "user mentioned auth",
+            "reasoning": "The user asked about auth, token refresh is the key.",
+            "answer_is_question": [False],
+        },
+    )
+    result = await answer(_request(), model=object())
+    assert result.reasoning == "The user asked about auth, token refresh is the key."
+
+
+@pytest.mark.asyncio
+async def test_coerced_confidence_parameter_forwarded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """coerced_confidence parameter controls the coerce function's confidence."""
+    captured: dict[str, Any] = {}
+
+    async def _fake(*_args: Any, **kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {"answers": ["go"], "confidence": 0.8, "defer": False, "rationale": "ok"}
+
+    monkeypatch.setattr(veritas_impl, "ainvoke_structured_traced", _fake)
+    await answer(_request(), model=object(), coerced_confidence=0.85)
+    # The normalize lambda captured the coerced_confidence; verify it was forwarded.
+    normalize_fn = captured.get("normalize")
+    assert normalize_fn is not None
+    raw = {"answers": ["go"]}
+    normalized = normalize_fn(raw)
+    assert normalized["confidence"] == 0.85
