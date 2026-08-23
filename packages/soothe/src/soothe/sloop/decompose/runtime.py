@@ -20,7 +20,34 @@ _proposal_sink: ContextVar[list[DecompositionProposal] | None] = ContextVar(
 # in the current step thread before a decompose_task call. Used by the
 # decompose tool handler's evidence-call gate to reject proposals issued
 # with zero prior grounding (d15f hallucination defense, scheme 2d).
-_evidence_calls: ContextVar[int] = ContextVar("decompose_evidence_calls", default=0)
+#
+# Stored as a single-element list, not an int: LangGraph's Pregel executor
+# runs each graph node inside a ``copy_context()`` snapshot (pregel/_executor.py).
+# ``ContextVar.set`` writes are copy-on-write — an ``int`` increment made inside
+# the ToolNode's snapshot never reaches the parent context or the snapshot that
+# runs ``decompose_task`` in a later turn, so the gate always sees 0 (loop 7e83 /
+# 48bd: every decompose_task rejected as "no prior evidence" despite dozens of
+# ls/grep/read_file calls). A mutable container is *referenced* (not copied) by
+# ``copy_context()``, so in-place mutation of the list is visible across every
+# snapshot that shares the reference bound at ``bind_decompose_runtime``.
+_evidence_calls: ContextVar[list[int]] = ContextVar(
+    "decompose_evidence_calls", default=None
+)
+
+
+def _evidence_counter() -> list[int]:
+    """Return the bound evidence counter list, binding a fresh one if absent.
+
+    The default ``None`` token means "not yet bound for this step"; the first
+    access (from either the middleware recorder or the gate reader) lazily
+    binds a shared list so the same object reference is seen across
+    ``copy_context()`` snapshots regardless of which side touches it first.
+    """
+    lst = _evidence_calls.get()
+    if lst is None:
+        lst = [0]
+        _evidence_calls.set(lst)
+    return lst
 
 
 @dataclass
@@ -30,7 +57,7 @@ class DecomposeRuntimeTokens:
     step: Token[str | None]
     wave: Token[int]
     sink: Token[list[DecompositionProposal] | None]
-    evidence: Token[int]
+    evidence: Token[list[int] | None]
 
 
 def bind_decompose_runtime(
@@ -51,7 +78,7 @@ def bind_decompose_runtime(
         step=_current_step_id.set(step_id),
         wave=_wave_seq.set(wave_seq),
         sink=_proposal_sink.set(sink),
-        evidence=_evidence_calls.set(0),
+        evidence=_evidence_calls.set([0]),
     )
 
 
@@ -81,12 +108,12 @@ def current_proposal_sink() -> list[DecompositionProposal] | None:
 
 def current_evidence_calls() -> int:
     """Return the count of evidence-gathering tool calls in this step thread."""
-    return _evidence_calls.get()
+    return _evidence_counter()[0]
 
 
 def record_evidence_call() -> None:
     """Increment the evidence-gathering call counter for this step thread."""
-    _evidence_calls.set(_evidence_calls.get() + 1)
+    _evidence_counter()[0] += 1
 
 
 def langgraph_configurable() -> dict[str, Any]:

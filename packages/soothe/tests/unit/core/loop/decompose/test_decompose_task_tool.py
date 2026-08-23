@@ -8,6 +8,7 @@ from soothe.context.decomposition import DecompositionProposal, ProposedSubtask
 from soothe.prompts.user_message import UserMessageBuilder
 from soothe.sloop.decompose.runtime import (
     bind_decompose_runtime,
+    current_evidence_calls,
     current_step_id,
     record_evidence_call,
     reset_decompose_runtime,
@@ -177,3 +178,54 @@ def test_execute_envelope_is_instance_focused() -> None:
     assert "EXECUTION TASK:" in msg
     assert "DECOMPOSITION vs TODOS" not in msg
     assert "FINISH HERE" not in msg
+
+
+# ── Pregel copy_context isolation (loops 7e83 / 48bd regression) ──────────
+
+
+def test_evidence_counter_survives_copy_context_snapshots() -> None:
+    """Evidence increments made inside a ``copy_context()`` snapshot (how
+    LangGraph's Pregel executor runs each ToolNode turn) must be visible to
+    the parent context and to later snapshots that read the count at
+    ``decompose_task`` time.
+
+    Before the mutable-list fix the counter was a plain ``int``; ``ContextVar``
+    writes are copy-on-write, so the increment vanished at the snapshot
+    boundary and every ``decompose_task`` was wrongly rejected as
+    "no prior evidence" despite dozens of ls/grep/read_file calls
+    (loops 7e83, 48bd).
+    """
+    from contextvars import copy_context
+
+    sink: list[DecompositionProposal] = []
+    tokens = bind_decompose_runtime(step_id="NMK-01", sink=sink)
+    try:
+        assert current_evidence_calls() == 0
+
+        # Simulate a grounding tool turn running inside a Pregel context snapshot.
+        def grounding_turn() -> None:
+            assert current_evidence_calls() == 0
+            record_evidence_call()
+            record_evidence_call()
+            assert current_evidence_calls() == 2
+
+        copy_context().run(grounding_turn)
+
+        # Parent must observe the increment (this is what failed pre-fix).
+        assert current_evidence_calls() == 2
+
+        # A *different* snapshot (the decompose_task turn) must also see it.
+        def decompose_turn() -> None:
+            assert current_evidence_calls() == 2
+
+        copy_context().run(decompose_turn)
+
+        # A further grounding turn in another snapshot accumulates on top.
+        def grounding_turn_2() -> None:
+            record_evidence_call()
+
+        copy_context().run(grounding_turn_2)
+        assert current_evidence_calls() == 3
+    finally:
+        reset_decompose_runtime(tokens)
+
