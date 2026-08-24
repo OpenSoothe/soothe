@@ -153,28 +153,7 @@ Screen {
     background: $success-muted;
 }
 
-/* Mode-specific borders for UserMessage */
-UserMessage.-mode-shell {
-    border: solid $mode-bash;
-}
-
-UserMessage.-mode-command {
-    border: solid $mode-command;
-}
-
-/* ASCII border overrides */
-UserMessage.-ascii {
-    border: ascii $primary;
-}
-
-UserMessage.-ascii.-mode-shell {
-    border: ascii $mode-bash;
-}
-
-UserMessage.-ascii.-mode-command {
-    border: ascii $mode-command;
-}
-
+/* QueuedUserMessage keeps a border to distinguish pending messages */
 QueuedUserMessage.-ascii {
     border: ascii $panel;
 }

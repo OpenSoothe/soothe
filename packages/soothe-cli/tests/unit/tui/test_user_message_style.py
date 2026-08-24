@@ -8,21 +8,22 @@ from soothe_cli.display import theme
 from soothe_cli.tui.widgets.messages.user import QueuedUserMessage, UserMessage
 
 
-def test_user_message_echoes_chat_input_surface_card() -> None:
-    """UserMessage uses the same surface fill + solid border as ChatInput."""
+def test_user_message_echoes_chat_input_surface_block() -> None:
+    """UserMessage uses the same surface fill as ChatInput, with no border."""
     css = UserMessage.DEFAULT_CSS
     assert "background: $surface" in css
-    assert "border: solid $primary" in css
+    assert "border: none" in css
+    assert "border: solid" not in css
     assert "border-left:" not in css
 
 
-def test_user_message_mode_borders_use_full_box() -> None:
-    """Shell and command modes swap the full border color."""
+def test_user_message_has_no_mode_border_rules() -> None:
+    """Sent user messages carry no border, so no mode border overrides exist."""
     css = UserMessage.DEFAULT_CSS
-    assert "UserMessage.-mode-shell" in css
-    assert "border: solid $mode-bash" in css
-    assert "UserMessage.-mode-command" in css
-    assert "border: solid $mode-command" in css
+    assert "UserMessage.-mode-shell" not in css
+    assert "UserMessage.-mode-command" not in css
+    assert "border: solid $mode-bash" not in css
+    assert "border: solid $mode-command" not in css
 
 
 def test_queued_user_message_is_muted_surface_card() -> None:

@@ -288,6 +288,9 @@ class ClarificationInputMessage(Vertical):
         self._refine_input: Input | None = None
         # Expand/collapse state for the plan body in the answered view.
         self._body_expanded = False
+        # Handle for the deferred focus timer; cancelled when focus moves
+        # again so a stale callback cannot re-focus the old menu item.
+        self._focus_timer: Timer | None = None
 
     @property
     def _is_plan_review(self) -> bool:
@@ -509,6 +512,12 @@ class ClarificationInputMessage(Vertical):
             body_widget.update(text)
 
     def _schedule_focus(self, widget: Any) -> None:
+        # Cancel any pending focus timer so a stale callback cannot
+        # re-focus the previously-selected menu item (block flash).
+        if self._focus_timer is not None:
+            self._focus_timer.stop()
+            self._focus_timer = None
+
         app = self.app
 
         def _focus() -> None:
@@ -528,7 +537,7 @@ class ClarificationInputMessage(Vertical):
         except Exception:  # noqa: BLE001
             _focus()
         with suppress(Exception):
-            self.set_timer(0.05, _focus)
+            self._focus_timer = self.set_timer(0.05, _focus)
 
     def _set_selected_action(self, action: _PlanReviewAction) -> None:
         self._selected_action = action

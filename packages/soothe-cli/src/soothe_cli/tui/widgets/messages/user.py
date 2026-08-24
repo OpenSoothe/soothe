@@ -32,30 +32,10 @@ class UserMessage(Static):
         padding: 0 1;
         margin: 1 0;
         background: $surface;
-        border: solid $primary;
-    }
-
-    UserMessage.-mode-shell {
-        border: solid $mode-bash;
-    }
-
-    UserMessage.-mode-command {
-        border: solid $mode-command;
-    }
-
-    UserMessage:hover {
-        border: solid $primary-lighten-1;
-    }
-
-    UserMessage.-mode-shell:hover {
-        border: solid $mode-bash;
-    }
-
-    UserMessage.-mode-command:hover {
-        border: solid $mode-command;
+        border: none;
     }
     """
-    """Surface card with full border echoing ChatInput so submitted prompts stand out in the flow."""
+    """Surface block (no border) echoing ChatInput so submitted prompts stand out in the flow."""
 
     def __init__(self, content: str, **kwargs: Any) -> None:
         """Initialize a user message.
@@ -68,10 +48,7 @@ class UserMessage(Static):
         self._content = content
 
     def on_mount(self) -> None:
-        """Add CSS classes for mode-specific border and ASCII border type."""
-        mode = PREFIX_TO_MODE.get(self._content[:1]) if self._content else None
-        if mode:
-            self.add_class(f"-mode-{mode}")
+        """Add CSS class for ASCII rendering."""
         if is_ascii_mode():
             self.add_class("-ascii")
 
