@@ -1232,6 +1232,9 @@ class StrangeLoopConfig(BaseModel):
         max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
         general_purpose_subagent: When false (default), hide/block deepagents ``general-purpose``
             on CoreAgent ``task`` even if nano ``agent.runtime.general_purpose_subagent`` is true.
+        general_purpose_subagent_readonly: When true (default) and GP is enabled, configure
+            the GP subagent as read-only (research-only delegation). Mutations happen via
+            DISPATCH→EXECUTE, not via GP.
         max_tool_calls_per_step: Cap tool results consumed per execute step from the Act stream (0 = unlimited).
         dispatch_idle_seconds: Deadlock detector — max seconds of stream inactivity when no
             root-level tool is pending. Nested subgraph messages do not clear parent activity.
@@ -1289,6 +1292,16 @@ class StrangeLoopConfig(BaseModel):
         description=(
             "When true, allow CoreAgent task→general-purpose when nano runtime also enables it. "
             "When false (default), general-purpose is hidden and blocked for StrangeLoop hosts."
+        ),
+    )
+    general_purpose_subagent_readonly: bool = Field(
+        default=True,
+        description=(
+            "When true (default) and general_purpose_subagent is true, configure the "
+            "general-purpose subagent as read-only (ls, read_file, file_info, glob, grep "
+            "+ write-deny permissions). The host StrangeLoop delegates research/context-gathering "
+            "to GP; mutations happen via the execute phase (DISPATCH→EXECUTE), not via GP. "
+            "Set false only when GP must apply changes directly."
         ),
     )
 

@@ -485,9 +485,18 @@ class SootheConfig(BaseSettings):
         Nano keeps ``agent.runtime.general_purpose_subagent`` defaulting to true.
         Host StrangeLoop defaults ``agent.loop.general_purpose_subagent`` to false and
         AND-gates the runtime flag so GP stays off unless both allow it.
+
+        When the host enables GP, it also propagates the readonly flag so the
+        host's GP subagent is configured as read-only by default (research-only
+        delegation; mutations happen via DISPATCH→EXECUTE, not via GP).
         """
         if not self.agent.loop.general_purpose_subagent:
             self.agent.runtime.general_purpose_subagent = False
+        else:
+            # Host enables GP — propagate the readonly flag to nano runtime.
+            self.agent.runtime.general_purpose_subagent_readonly = (
+                self.agent.loop.general_purpose_subagent_readonly
+            )
         return self
 
     @model_validator(mode="after")
