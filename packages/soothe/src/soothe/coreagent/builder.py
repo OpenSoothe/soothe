@@ -45,12 +45,17 @@ class AgentBuilder(nano_builder.AgentBuilder):
 
     def _host_middleware_suffix(self) -> tuple:
         # Apply after ToolEnforcement so step/synthesis configurables win.
-        from soothe.sloop.middleware import DecomposeTaskMiddleware, EvalStepMiddleware
+        from soothe.sloop.middleware import (
+            DecomposeTaskMiddleware,
+            EvalStepMiddleware,
+            GeneralPurposeVariantGuardMiddleware,
+        )
 
         return (
             GoalStepGuardMiddleware(),
             WestWorldMiddleware(),
             DecomposeTaskMiddleware(),
+            GeneralPurposeVariantGuardMiddleware(),
             EvalStepMiddleware(),
         )
 

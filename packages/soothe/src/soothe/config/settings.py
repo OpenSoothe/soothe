@@ -482,21 +482,12 @@ class SootheConfig(BaseSettings):
     def _apply_sloop_general_purpose_gate(self) -> SootheConfig:
         """StrangeLoop owns general-purpose enablement for host CoreAgent builds.
 
-        Nano keeps ``agent.runtime.general_purpose_subagent`` defaulting to true.
-        Host StrangeLoop defaults ``agent.loop.general_purpose_subagent`` to false and
-        AND-gates the runtime flag so GP stays off unless both allow it.
-
-        When the host enables GP, it also propagates the readonly flag so the
-        host's GP subagent is configured as read-only by default (research-only
-        delegation; mutations happen via DISPATCH→EXECUTE, not via GP).
+        The host ``agent.loop.general_purpose_subagent`` enum (default ``off``)
+        is propagated to nano ``agent.runtime.general_purpose_subagent`` so the
+        host's value wins. When the host sets ``off``, nano runtime is forced
+        ``off`` regardless of its own default (``full``).
         """
-        if not self.agent.loop.general_purpose_subagent:
-            self.agent.runtime.general_purpose_subagent = False
-        else:
-            # Host enables GP — propagate the readonly flag to nano runtime.
-            self.agent.runtime.general_purpose_subagent_readonly = (
-                self.agent.loop.general_purpose_subagent_readonly
-            )
+        self.agent.runtime.general_purpose_subagent = self.agent.loop.general_purpose_subagent
         return self
 
     @model_validator(mode="after")

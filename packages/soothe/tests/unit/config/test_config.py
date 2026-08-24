@@ -221,15 +221,23 @@ class TestSootheConfig:
         cfg = SootheConfig()
         assert cfg.agent.name == "Soothe"
 
-    def test_general_purpose_subagent_disabled_by_sloop_default(self) -> None:
+    def test_general_purpose_subagent_off_by_sloop_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.agent.loop.general_purpose_subagent is False
-        assert cfg.agent.runtime.general_purpose_subagent is False
+        assert cfg.agent.loop.general_purpose_subagent == "off"
+        assert cfg.agent.runtime.general_purpose_subagent == "off"
 
-    def test_general_purpose_subagent_config_override(self) -> None:
-        cfg = SootheConfig(agent={"loop": {"general_purpose_subagent": True}})
-        assert cfg.agent.loop.general_purpose_subagent is True
-        assert cfg.agent.runtime.general_purpose_subagent is True
+    def test_general_purpose_subagent_per_step_override(self) -> None:
+        cfg = SootheConfig(agent={"loop": {"general_purpose_subagent": "per_step"}})
+        assert cfg.agent.loop.general_purpose_subagent == "per_step"
+        assert cfg.agent.runtime.general_purpose_subagent == "per_step"
+
+    def test_general_purpose_subagent_full_override(self) -> None:
+        cfg = SootheConfig(agent={"loop": {"general_purpose_subagent": "full"}})
+        assert cfg.agent.runtime.general_purpose_subagent == "full"
+
+    def test_general_purpose_subagent_readonly_override(self) -> None:
+        cfg = SootheConfig(agent={"loop": {"general_purpose_subagent": "readonly"}})
+        assert cfg.agent.runtime.general_purpose_subagent == "readonly"
 
     def test_core_agent_recursion_limit_default(self) -> None:
         cfg = SootheConfig()

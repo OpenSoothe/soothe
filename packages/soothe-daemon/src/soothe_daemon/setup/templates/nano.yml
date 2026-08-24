@@ -84,8 +84,7 @@ agent:
     snapshot_between_turns: false
   runtime:
     lazy_core_agent: true
-    general_purpose_subagent: true
-    general_purpose_subagent_readonly: false
+    general_purpose_subagent: "full"
     recursion_limit: 9999
     role_routing:
       enabled: true
