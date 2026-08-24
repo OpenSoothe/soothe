@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.33] - 2026-08-24
+
+### Added
+- Veritas clarification answering now retries transient infrastructure failures (rate limit, timeout, connection error) with exponential backoff instead of immediately deferring; `StructuredOutputError` (malformed model output) still defers immediately. Resolved Q&A is appended to `LoopState.clarification_history` so veritas can reference prior answers when answering subsequent clarifications for the same goal run (RFC-622), capped at 20 entries. New `VeritasConfig` fields: `max_retries`, `retry_backoff_seconds`, `coerced_confidence`.
+
+### Fixed
+- Replace the rigid path-existence `decompose_task` grounding guard with an async FAST-model LLM critic (`check_proposal_grounded`) that judges whether the proposal's concrete claims (paths, modules, functions, quantities, behavioral assertions) are supported by the gathered evidence — without touching the filesystem. The old guard spuriously rejected proposals whose cited paths existed under nested monorepo source roots but not at the workspace root, and was unusable in sandboxes with no real project paths. Evidence is accumulated in a new `_evidence_corpus` `ContextVar` (same mutable-list copy_context-safe pattern as `_evidence_calls`), captured by `DecomposeTaskMiddleware.awrap_tool_call` after each grounding tool runs.
+- Restore the evidence-counter increment that was accidentally dropped when the grounding-guard output-capture was inlined during the LLM-critic rewrite; without it `current_evidence_calls()` stayed at `0` and the zero-evidence gate fired falsely. Add regression tests for both counter and corpus capture.
+- Break read-only evidence-gathering loops (loop a85d: 666 read-only tool calls without ever calling `decompose_task` or a mutating tool, then cancelled). Four-direction fix: (1) WestWorld addendum convergence/escalation — after 10 evidence calls with no decompose proposal queued, replace the fan-out addendum with a new `WESTWORLD_ESCALATION_ADDENDUM` that forces a decision (decompose now OR execute directly); (2) executor read-only-streak circuit breaker in `_ActStreamBudget` tracking consecutive read-only tools (grep/glob/read_file/ls/file_info); (3) tool-budget default lowered from 999; (4) no-progress watchdog now also measures decompose-proposal absence, not just chunk-interval inactivity.
+- Keep the TUI "Submitting" spinner alive through the plan→exec re-attach round-trip: track the pending follow-on via `_plan_approve_follow_on_pending` so the thinking row does not go blank while the daemon enqueues the follow-on exec goal after the plan-mode goal terminates; clear it on the exec goal's `STRANGE_LOOP_STARTED` or when re-attach gives up.
+- Mount the plan Approve/Reject confirmation line before the adapter `None` early return so the user's decision is recorded even when the adapter was torn down (app closing); guard the `_plan_approve_follow_on_pending` read in `_cleanup_agent_task` against `AttributeError` on `None`.
+
+### Changed
+- Restructure the `soothe-cli` package and module layout: slim `tui/` to only Textual app/widget code; lift shared modules (`_version`, `_env_vars`, `_cli_context`, `project_utils`, `model_config`, `update_check`, `card_wire`) to package root; split the ~1140-line `tui/config.py` god module into a new `settings/` subpackage (`bootstrap`, `glyphs`, `shell_allow`, `skills_dirs`, `stream_config`, `provider`, `core`, `_console_impl`); create a `display/` subpackage; lift slash-command system to package-level `commands/`; move `sessions.py` to `loops/`. Dependency direction is now one-way: `cli → runtime → settings/display/commands → sdk`.
+- Remove the no-op `loop_orchestrator_evidence_validate` config field (RFC-220; never read in src/tests, only its own `Field()` definition referenced it) and the matching `soothe.yml` template line.
+- Remove the dead `display_policy` module from the CLI (108 lines, zero references).
+- Cleanse five production-dead functions identified in the CFB-01 legacy/dead code scan — all defined in `src/` with zero production callers, referenced only from tests: `soothe/identity/credentials.is_valid_secret_key_format`, `soothe/persistence/checkpoint_split.is_persist_degraded`, `soothe-daemon/event/bus.get_event_bus_drop_counts`, and `soothe-sdk/observability/langfuse/system_hint` outer API wrappers (`publish_/clear_langfuse_system_prompt_hint`, `push_/reset_` helpers). Tests adjusted to read raw state / `_drop_counters` directly.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.31...v0.10.33
+
 ## [v0.10.32] - 2026-08-23
 
 ### Fixed
