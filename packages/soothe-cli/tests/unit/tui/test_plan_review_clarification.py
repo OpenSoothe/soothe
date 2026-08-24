@@ -239,3 +239,98 @@ async def test_plan_review_body_shows_full_content_without_inner_scroll() -> Non
         body = widget.query_one(".plan-review-body")
         rendered = str(getattr(body, "renderable", "") or "")
         assert "step 0" in rendered or "step 59" in rendered or body.display
+
+
+@pytest.mark.asyncio
+async def test_plan_review_answered_tree_expand_via_enter() -> None:
+    """Submitted card: Enter toggles the plan body open, then closed."""
+    from textual.containers import Vertical
+
+    app = _PlanReviewHarnessApp(
+        step_id="plan_mode_review",
+        questions=["Action for this plan: Approve or Reject"],
+        origin_node="plan_mode_review",
+        plan_path="/ws/.soothe/plans/demo.md",
+        plan_markdown="# Plan\n\nDo things.",
+        id="clarify-expand",
+    )
+    async with app.run_test() as pilot:
+        widget = app.query_one(ClarificationInputMessage)
+        widget._finalize_plan_review(action="approve")
+        await pilot.pause()
+        assert widget._submitted is True
+        box = widget.query_one(".plan-review-body-box", Vertical)
+        # Collapsed by default in the answered view.
+        assert widget._body_expanded is False
+        assert not box.has_class("is-expanded")
+        # Focus the card so the Enter binding lands on it.
+        widget.focus()
+        await pilot.pause()
+        await pilot.press("enter")
+        assert widget._body_expanded is True
+        assert box.has_class("is-expanded")
+        await pilot.press("enter")
+        assert widget._body_expanded is False
+        assert not box.has_class("is-expanded")
+
+
+@pytest.mark.asyncio
+async def test_plan_review_answered_tree_expand_via_click() -> None:
+    """Submitted card: a click toggles the plan body open."""
+    from textual.containers import Vertical
+
+    app = _PlanReviewHarnessApp(
+        step_id="plan_mode_review",
+        questions=["Action for this plan: Approve or Reject"],
+        origin_node="plan_mode_review",
+        plan_markdown="# Plan\n\nDo things.",
+        id="clarify-click-expand",
+    )
+    async with app.run_test() as pilot:
+        widget = app.query_one(ClarificationInputMessage)
+        widget._finalize_plan_review(action="approve")
+        await pilot.pause()
+        box = widget.query_one(".plan-review-body-box", Vertical)
+        assert widget._body_expanded is False
+        await pilot.click(ClarificationInputMessage)
+        assert widget._body_expanded is True
+        assert box.has_class("is-expanded")
+
+
+def test_plan_review_answered_summary_renders_single_tree_branch() -> None:
+    """Answered view: no stray empty branch; action + comments + toggle each
+    carry the ``⎿`` tree gutter (parity with the goal→step tree)."""
+    import asyncio
+
+    from textual.widgets import Static
+
+    def _static_text(w: Static) -> str:
+        # Textual's Static stores content in a name-mangled private attr.
+        return str(getattr(w, "_Static__content", "") or "")
+
+    async def _check() -> None:
+        app = _PlanReviewHarnessApp(
+            step_id="plan_mode_review",
+            questions=["Action?"],
+            origin_node="plan_mode_review",
+            plan_markdown="# Plan",
+            id="clarify-tree",
+        )
+        async with app.run_test() as pilot:
+            widget = app.query_one(ClarificationInputMessage)
+            widget._finalize_plan_review(action="reject")
+            await pilot.pause()  # let the answered-summary update() flush
+            # No stray empty .plan-review-answered node (the old first branch).
+            assert list(widget.query(".plan-review-answered")) == []
+            action_w = widget.query_one(".plan-review-answered-action", Static)
+            action_plain = _static_text(action_w)
+            assert action_plain.startswith("⎿")
+            assert "[Reject]" in action_plain
+            # Toggle row carries the same tree gutter + expand glyph.
+            toggle_w = widget.query_one(".plan-review-expand-toggle", Static)
+            toggle_plain = _static_text(toggle_w)
+            assert toggle_plain.startswith("⎿")
+            assert "Plan body" in toggle_plain
+            assert "expand" in toggle_plain
+
+    asyncio.run(_check())

@@ -11,11 +11,14 @@ from textual import on
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.content import Content
+from textual.events import Click
 from textual.message import Message
 from textual.widgets import Button, Input, Static
 
 from soothe_cli.display import theme
 from soothe_cli.display.markdown_theme import ThemedMarkdownRenderer, resolve_markdown_theme_parts
+from soothe_cli.settings import get_glyphs
+from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
 from soothe_cli.tui.widgets.messages._helpers import (
     _assemble_card_header,
     _card_body_gutter,
@@ -58,6 +61,11 @@ class ClarificationInputMessage(Vertical):
     (``origin_node=plan_mode_review``) shows the full draft plan, a
     saved-path footer, and Approve / Reject actions.
     """
+
+    # Focusable so the Enter binding (expand/collapse plan body) lands on the
+    # card in the submitted state, where the Approve/Reject buttons are disabled
+    # and focus would otherwise sit elsewhere.
+    can_focus = True
 
     BINDINGS = [
         Binding("left", "plan_review_prev", "Prev action", show=False),
@@ -227,6 +235,9 @@ class ClarificationInputMessage(Vertical):
         padding: 0;
         margin: 0;
     }
+    ClarificationInputMessage.is-submitted .plan-review-body-box.is-expanded {
+        display: block;
+    }
     """
 
     class Submitted(Message):
@@ -307,6 +318,11 @@ class ClarificationInputMessage(Vertical):
 
         Called after ``_submitted`` is set. Also used on resume to populate the
         answered card from persisted ``MessageData`` fields.
+
+        Each answered-view row carries the ``⎿`` tree gutter (parity with the
+        goal→step tree in ``CognitionGoalTreeMessage``), so the action, the
+        refinement comments, and the plan-body toggle all hang off one aligned
+        branch instead of stacking as disconnected stubs.
         """
         if not self._answers:
             return
@@ -338,30 +354,35 @@ class ClarificationInputMessage(Vertical):
             except Exception:  # noqa: BLE001
                 pass
             return
-        gutter = _card_body_gutter()
+        indent = _card_body_gutter()
+        g = get_glyphs()
         try:
             toggle = self.query_one(".plan-review-expand-toggle", Static)
             if self._body_expanded:
-                toggle.update(f"{gutter}▼ Collapse plan body")
+                toggle.update(f"{indent}{g.collapse} Collapse plan body")
             else:
                 line_count = self._plan_body_text.count("\n") + 1
-                toggle.update(f"{gutter}▶ Plan body ({line_count} lines) — press Enter to expand")
+                toggle.update(
+                    f"{indent}{g.expand} Plan body ({line_count} lines) — click or press Enter to expand"
+                )
         except Exception:  # noqa: BLE001
             pass
 
     def _toggle_body_expanded(self) -> None:
-        """Expand or collapse the plan body in the answered view."""
+        """Expand or collapse the plan body in the answered view.
+
+        Uses an ``is-expanded`` class on the body box so the CSS rule for the
+        submitted state (``display: none``) is overridden only while expanded.
+        This avoids a Python ``display`` assignment fighting the submitted-state
+        CSS, which previously left the branch unexpandable.
+        """
         self._body_expanded = not self._body_expanded
         try:
             body_box = self.query_one(".plan-review-body-box", Vertical)
-            path = self.query_one(".plan-review-path", Static)
-            actions = self.query_one(".plan-review-actions", Horizontal)
-            hint = self.query_one(".plan-review-hint", Static)
-            show = self._body_expanded
-            body_box.display = show
-            path.display = show
-            actions.display = show
-            hint.display = show
+            if self._body_expanded:
+                body_box.add_class("is-expanded")
+            else:
+                body_box.remove_class("is-expanded")
         except Exception:  # noqa: BLE001
             pass
         self._update_expand_toggle()
@@ -397,13 +418,17 @@ class ClarificationInputMessage(Vertical):
         yield Static("←/→ switch · Enter confirm", classes="plan-review-hint", markup=False)
 
     def _compose_answered_summary(self) -> Any:
-        """Collapsed answered view: action + comment branch + expandable plan body.
+        """Collapsed answered view: action + comment leaf + expandable plan body.
 
         Hidden by CSS (``display: none``) until ``is-submitted`` is added; then
         the active review body / buttons / hint are hidden and this is shown.
+
+        Each row carries the ``⎿`` tree gutter (parity with the goal→step tree),
+        so the action, refinement comments, and plan-body toggle all hang off
+        one aligned branch — no stray empty stub, no repeated disconnected
+        connectors.
         """
         gutter = _card_body_gutter()
-        yield Static("", classes="plan-review-answered", markup=False)
         with Vertical(classes="plan-review-answered-box"):
             yield Static(
                 f"{gutter}[Rejected]",
@@ -411,12 +436,12 @@ class ClarificationInputMessage(Vertical):
                 markup=True,
             )
             yield Static(
-                f"{gutter}💬 {''}",
+                f"{gutter}💬",
                 classes="plan-review-answered-comments",
                 markup=True,
             )
             yield Static(
-                f"{gutter}▶ Plan body — press Enter to expand",
+                f"{gutter}{get_glyphs().expand} Plan body — click or press Enter to expand",
                 classes="plan-review-expand-toggle",
                 markup=True,
             )
@@ -582,6 +607,21 @@ class ClarificationInputMessage(Vertical):
             hint.update("Type your refinement in the input box below, then press Enter")
         except Exception:  # noqa: BLE001
             pass
+
+    def on_click(self, event: Click) -> None:
+        """Toggle plan body expand/collapse in the answered (submitted) view.
+
+        Before submission, clicks are left for the Approve/Reject buttons. After
+        submission the active review elements are hidden, so a click anywhere on
+        the card flips the plan body open/closed — the same action Enter performs
+        via ``action_plan_review_confirm``.
+        """
+        if not self._is_plan_review or not self._submitted:
+            return
+        if screen_has_text_selection(self.screen):
+            return
+        event.stop()
+        self._toggle_body_expanded()
 
     def action_plan_review_prev(self) -> None:
         """Select the previous plan-review action (←)."""
