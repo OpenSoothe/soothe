@@ -117,9 +117,7 @@ def test_reject_terminates_without_follow_on_exec() -> None:
 def test_reject_leaves_no_plan_result_to_report() -> None:
     """Reject must not build a terminal PlanResult — there is nothing to summarize."""
     ctx = _build_ctx()
-    handle_plan_mode_review_answer(
-        ctx, {"pending_clarification_answer": _reject_answer_state()}
-    )
+    handle_plan_mode_review_answer(ctx, {"pending_clarification_answer": _reject_answer_state()})
 
     assert ctx.scratch.plan_rejected is True
     assert ctx.scratch.plan_result is None
