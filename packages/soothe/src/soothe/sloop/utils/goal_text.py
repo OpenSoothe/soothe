@@ -78,9 +78,16 @@ def _resolve_resumable_ce_goal(
     if not candidates:
         return None
 
-    # Prefer active, then pending/suspended, then cancelled (legacy interrupt).
-    # Among the same rank, pick the most recently updated.
-    _status_rank = {"active": 0, "pending": 1, "suspended": 2, "cancelled": 3}
+    # Prefer active, then awaiting_clarification, then pending/suspended,
+    # then cancelled (legacy interrupt). Among the same rank, pick the most
+    # recently updated.
+    _status_rank = {
+        "active": 0,
+        "awaiting_clarification": 1,
+        "pending": 2,
+        "suspended": 3,
+        "cancelled": 4,
+    }
 
     def _sort_key(goal: Any) -> tuple[int, Any]:
         status = str(getattr(goal, "status", "") or "")

@@ -44,12 +44,6 @@ from soothe.sloop.intention.models import (
     parse_intake_scope,
 )
 from soothe.sloop.utils.events import LoopAgentReasonEvent
-from soothe.sloop.utils.loop_reason_display import (
-    is_displayable_assessment_reasoning as _is_displayable_assessment_reasoning,
-)
-from soothe.sloop.utils.loop_reason_display import (
-    should_emit_loop_reason_event as _should_emit_loop_reason_event,
-)
 from soothe.sloop.utils.messages import (
     loop_assistant_messages_chunk,
     loop_message_assistant_output_phase,
@@ -887,34 +881,6 @@ class StrangeLoopMixin:
                     yield custom_event(
                         StrangeLoopPlanPhaseStatusEvent(label="Refinement failed").to_dict()
                     )
-
-                elif event_type == "assess":
-                    reasoning = str(event_data.get("assessment_reasoning", "")).strip()
-                    if _is_displayable_assessment_reasoning(reasoning):
-                        yield custom_event(
-                            LoopAgentReasonEvent(
-                                status="",
-                                progress="",
-                                assessment_reasoning=reasoning,
-                                iteration=int(event_data.get("iteration", 0)),
-                                plan_action="",
-                            ).to_dict()
-                        )
-
-                elif event_type == "plan":
-                    assessment_reasoning = str(event_data.get("assessment_reasoning", "")).strip()
-                    if _should_emit_loop_reason_event(
-                        assessment_reasoning=assessment_reasoning,
-                    ):
-                        yield custom_event(
-                            LoopAgentReasonEvent(
-                                status=str(event_data.get("status", "")),
-                                progress=event_data["progress"],
-                                assessment_reasoning=assessment_reasoning,
-                                plan_action=event_data.get("plan_action", "new"),
-                                iteration=event_data["iteration"],
-                            ).to_dict()
-                        )
 
                 elif event_type == "iteration_completed":
                     # Internal - used for debugging only
