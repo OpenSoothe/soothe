@@ -7077,7 +7077,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-deepagents"
-version = "0.8.5"
+version = "0.8.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain" },
@@ -7087,9 +7087,9 @@ dependencies = [
     { name = "langsmith" },
     { name = "wcmatch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e0/3c/7eb6d26d3c2abcf34da7a31102d26e84fc4a5c93f60db34e5457f9ee754c/soothe_deepagents-0.8.5.tar.gz", hash = "sha256:29d60da8db34058c4b9e3f7efd5923b634eb157bec9c43b148fe07da00d90a14" }
+sdist = { url = "https://files.pythonhosted.org/packages/7c/1f/282e88a4b229130f458ac4ec2078f370993782e1664f00d1e84cda71c518/soothe_deepagents-0.8.6.tar.gz", hash = "sha256:9d04b55fb402a050a49e12c01a70cea153073ed1ccbf37a05f188a35d7773d12" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/65/39/e8c4110e370d25613e4c4e53b6bf28f871115688508a13977fd4ec62bd3f/soothe_deepagents-0.8.5-py3-none-any.whl", hash = "sha256:3f2700cec26042c5b4481a6a15d9ec339d2ab0e11543a74494a7df3ca8dd3c58" },
+    { url = "https://files.pythonhosted.org/packages/f7/6a/57b1402356206751043c417377358ff4bc567de76c44c237d984ae9495dd/soothe_deepagents-0.8.6-py3-none-any.whl", hash = "sha256:4f917bd4bc636c0392a386e65189d39836054ed21787cb9ab10ce2d37c435096" },
 ]
 
 [[package]]
@@ -7135,6 +7135,7 @@ dependencies = [
     { name = "soothe-sdk" },
     { name = "sqlite-vec" },
     { name = "tarzi" },
+    { name = "tiktoken" },
     { name = "wcmatch" },
 ]
 
@@ -7189,10 +7190,11 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
     { name = "requests", specifier = ">=2.32.3,<3.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
-    { name = "soothe-deepagents", specifier = ">=0.8.5,<1.0.0" },
+    { name = "soothe-deepagents", specifier = ">=0.8.6,<1.0.0" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "tarzi", specifier = ">=0.2.3,<0.3.0" },
+    { name = "tiktoken", specifier = ">=0.7.0" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "wcmatch", specifier = ">=10.1" },
 ]

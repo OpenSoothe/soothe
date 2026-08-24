@@ -85,6 +85,7 @@ agent:
   runtime:
     lazy_core_agent: true
     general_purpose_subagent: true
+    general_purpose_subagent_readonly: false
     recursion_limit: 9999
     role_routing:
       enabled: true
