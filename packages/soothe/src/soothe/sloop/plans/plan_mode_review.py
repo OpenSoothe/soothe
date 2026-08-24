@@ -25,7 +25,9 @@ On approve:
 On reject:
     - Mark the plan artifact rejected and terminate the current goal without
       creating a follow-on execution goal.
-    - Record "Plan rejected by operator." as a ``goal_completion`` AI message.
+    - Set ``ctx.scratch.plan_rejected`` so finalize skips completion synthesis,
+      the ``goal_completion`` ledger pair, and any user-facing report. A
+      discarded plan has nothing to summarize.
 
 On refine:
     - Store the user's comments as ``plan_review_comments`` feedback.

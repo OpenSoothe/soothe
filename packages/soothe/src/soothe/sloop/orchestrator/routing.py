@@ -127,9 +127,10 @@ def route_after_plan_review(state: dict[str, Any]) -> str:
     plan-mode goal finalizes (its root already completed during exploration);
     the finalize node attaches the follow-on signal to the ``completed`` event
     so the daemon enqueues a fresh exec goal carrying the approved plan.
-    Reject finalizes the current goal without a follow-on. Refine re-emits the
-    pending clarification so the user can provide more instruction. On a fresh
-    plan review the pending clarification is still set → AWAIT_USER.
+    Reject ends the current goal with no follow-on and no completion report
+    (finalize short-circuits on ``ctx.scratch.plan_rejected``). Refine re-emits
+    the pending clarification so the user can provide more instruction. On a
+    fresh plan review the pending clarification is still set → AWAIT_USER.
     """
     if state.get("plan_approved_follow_on"):
         logger.debug(
