@@ -4448,6 +4448,8 @@ async def execute_task_textual(
                                                 duration_ms,
                                                 tool_call_count,
                                                 summary,
+                                                input_tokens=widget._input_tokens,
+                                                output_tokens=widget._output_tokens,
                                             )
                                         clarification = data.get("clarification")
                                         if isinstance(clarification, dict) and success:

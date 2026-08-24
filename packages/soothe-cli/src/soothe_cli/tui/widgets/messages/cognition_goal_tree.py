@@ -104,6 +104,8 @@ class _StepLineState:
         "summary",
         "dependencies",
         "started_at",
+        "input_tokens",
+        "output_tokens",
     )
 
     def __init__(
@@ -118,6 +120,8 @@ class _StepLineState:
         summary: str = "",
         dependencies: tuple[str, ...] = (),
         started_at: float | None = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
     ) -> None:
         self.step_id = step_id
         self.description = description
@@ -128,6 +132,8 @@ class _StepLineState:
         self.summary = summary
         self.dependencies = dependencies
         self.started_at = started_at
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
 
 
 class CognitionGoalTreeMessage(Vertical):
@@ -289,6 +295,27 @@ class CognitionGoalTreeMessage(Vertical):
         started = self._loop_started_at or time()
         return format_running_elapsed(time() - started)
 
+    def goal_token_totals(self) -> tuple[int, int]:
+        """Cumulative ``(input_tokens, output_tokens)`` across all step rows."""
+        total_in = 0
+        total_out = 0
+        for st in self._steps.values():
+            total_in += max(0, int(st.input_tokens))
+            total_out += max(0, int(st.output_tokens))
+        return total_in, total_out
+
+    def goal_token_suffix(self) -> str:
+        """Compact ``in:1.2K out:345`` suffix for the plan panel title.
+
+        Returns an empty string when no step has recorded any tokens.
+        """
+        total_in, total_out = self.goal_token_totals()
+        if not (total_in or total_out):
+            return ""
+        from soothe_cli.runtime.state.session_stats import format_token_count
+
+        return f"in:{format_token_count(total_in)} out:{format_token_count(total_out)}"
+
     def mark_loop_started(self, started_at: float | None = None) -> None:
         """Anchor plan-level elapsed time (matches thinking-row turn start)."""
         if self._loop_started_at is None:
@@ -313,7 +340,8 @@ class CognitionGoalTreeMessage(Vertical):
         return g.checkmark if st.success else g.error
 
     def _step_stats_suffix(self, st: _StepLineState) -> str:
-        """Duration and tool-count suffix for running or completed rows."""
+        """Duration, tool-count, and token suffix for running or completed rows."""
+        token_parts = self._step_token_parts(st)
         if st.phase == "running":
             parts: list[str] = []
             if st.started_at is not None:
@@ -321,6 +349,7 @@ class CognitionGoalTreeMessage(Vertical):
                 parts.append(format_running_elapsed(time() - st.started_at))
             if st.tool_call_count > 0:
                 parts.append(f"{st.tool_call_count} tools")
+            parts.extend(token_parts)
             if not parts:
                 return ""
             return " · " + " · ".join(parts)
@@ -330,7 +359,20 @@ class CognitionGoalTreeMessage(Vertical):
         parts = [format_duration(dur_s)]
         if st.tool_call_count > 0:
             parts.append(f"{st.tool_call_count} tools")
+        parts.extend(token_parts)
         return " · " + " · ".join(parts)
+
+    @staticmethod
+    def _step_token_parts(st: _StepLineState) -> list[str]:
+        """In/out token labels for a step row, e.g. ``in:1.2K out:345``."""
+        if not (st.input_tokens or st.output_tokens):
+            return []
+        from soothe_cli.runtime.state.session_stats import format_token_count
+
+        return [
+            f"in:{format_token_count(st.input_tokens)}",
+            f"out:{format_token_count(st.output_tokens)}",
+        ]
 
     def _step_summary_suffix(self, st: _StepLineState) -> str:
         if st.phase not in ("done", "error"):
@@ -466,16 +508,21 @@ class CognitionGoalTreeMessage(Vertical):
 
     def sync_running_live_stats(
         self,
-        stats: dict[str, tuple[int, float | None]],
+        stats: dict[str, tuple[int, float | None, int, int]],
     ) -> None:
-        """Update in-flight tool counts and started_at from step cards."""
-        for sid, (tool_count, started_at) in stats.items():
+        """Update in-flight tool counts, start times, and token counts from step cards.
+
+        Each value is ``(tool_count, started_at, input_tokens, output_tokens)``.
+        """
+        for sid, (tool_count, started_at, input_tokens, output_tokens) in stats.items():
             st = self._steps.get(sid)
             if st is None or st.phase != "running":
                 continue
             st.tool_call_count = max(0, int(tool_count))
             if started_at is not None:
                 st.started_at = started_at
+            st.input_tokens = max(0, int(input_tokens))
+            st.output_tokens = max(0, int(output_tokens))
 
     def tick_running_spinner(self) -> None:
         """Advance spinner frames for goal-header and running step icons.
@@ -537,6 +584,8 @@ class CognitionGoalTreeMessage(Vertical):
                     "summary": st.summary,
                     "dependencies": list(st.dependencies),
                     "started_at": st.started_at,
+                    "input_tokens": st.input_tokens,
+                    "output_tokens": st.output_tokens,
                 }
             )
         return {
@@ -581,6 +630,8 @@ class CognitionGoalTreeMessage(Vertical):
                 summary=str(row.get("summary", "")),
                 dependencies=_normalize_step_dependencies(row.get("dependencies")),
                 started_at=started_at,
+                input_tokens=int(row.get("input_tokens", 0)),
+                output_tokens=int(row.get("output_tokens", 0)),
             )
             self._step_order.append(sid)
             self._steps[sid] = st
@@ -668,6 +719,9 @@ class CognitionGoalTreeMessage(Vertical):
         duration_ms: int,
         tool_call_count: int,
         summary: str,
+        *,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
     ) -> None:
         """Update a step row to its final state."""
         sid = step_id.strip()
@@ -684,6 +738,8 @@ class CognitionGoalTreeMessage(Vertical):
         st.tool_call_count = tool_call_count
         st.summary = summary or ""
         st.started_at = None
+        st.input_tokens = max(0, int(input_tokens))
+        st.output_tokens = max(0, int(output_tokens))
         self._refresh_steps_display()
 
     def _total_step_duration_ms(self) -> int:

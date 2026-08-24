@@ -12,6 +12,7 @@ from soothe.sloop.utils.token_usage import (
     accumulate_loop_tokens_from_llm_result,
     coerce_total_tokens_used,
     direct_llm_token_call_scope,
+    estimate_token_usage,
     extract_token_usage_from_messages,
     loop_token_accumulation_scope,
     merge_direct_llm_tokens_into_state,
@@ -63,3 +64,38 @@ def test_extract_token_usage_sums_all_ai_turns() -> None:
     ]
     usage = extract_token_usage_from_messages(messages)
     assert usage == {"prompt": 300, "completion": 30, "total": 330}
+
+
+def test_estimate_token_usage_host_alias_actual_first() -> None:
+    """IG-761: host re-export of the unified estimate_token_usage API (actual-first)."""
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    messages = [
+        HumanMessage(content="x" * 100_000),
+        AIMessage(
+            content="done",
+            usage_metadata={"input_tokens": 1000, "output_tokens": 50, "total_tokens": 1050},
+        ),
+    ]
+    usage = estimate_token_usage(messages)
+    assert usage == {
+        "input_tokens": 1000,
+        "output_tokens": 50,
+        "total_tokens": 1050,
+        "source": "actual",
+    }
+
+
+def test_estimate_token_usage_host_alias_estimates_on_fallback() -> None:
+    """IG-761: host re-export estimates input + output when no usage_metadata."""
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    messages = [
+        HumanMessage(content="prompt " * 200),
+        AIMessage(content="response " * 200),
+    ]
+    usage = estimate_token_usage(messages)
+    assert usage["input_tokens"] > 0
+    assert usage["output_tokens"] > 0
+    assert usage["total_tokens"] == usage["input_tokens"] + usage["output_tokens"]
+    assert usage["source"] == "estimated"

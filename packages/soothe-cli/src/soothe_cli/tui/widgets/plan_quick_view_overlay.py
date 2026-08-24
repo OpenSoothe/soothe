@@ -35,8 +35,9 @@ def _plan_quick_view_title(
     *,
     intake: str | None = None,
     elapsed: str | None = None,
+    tokens: str | None = None,
 ) -> str:
-    """Compose the panel title: ``Orchestrating [8d26] · complex · 37s``."""
+    """Compose the panel title: ``Orchestrating [8d26] · complex · 37s · in:1.2K out:345``."""
     title = "Orchestrating"
     short_id = compact_id_suffix(loop_id or "")
     if short_id:
@@ -46,6 +47,8 @@ def _plan_quick_view_title(
         title = f"{title} · {label}"
     if elapsed:
         title = f"{title} · {elapsed}"
+    if tokens:
+        title = f"{title} · {tokens}"
     return title
 
 
@@ -56,6 +59,7 @@ def _plan_quick_view_header(
     intake: str | None = None,
     show_enter_hint: bool = False,
     elapsed: str | None = None,
+    tokens: str | None = None,
     max_cols: int | None = None,
 ) -> Content:
     """Build the quick-view title row: status glyph, bold title, dim hints.
@@ -72,7 +76,7 @@ def _plan_quick_view_header(
     title exceeds the budget it is ellipsized.
     """
     dim_style = theme.SECONDARY_TEXT_STYLE
-    title = _plan_quick_view_title(loop_id, intake=intake, elapsed=elapsed)
+    title = _plan_quick_view_title(loop_id, intake=intake, elapsed=elapsed, tokens=tokens)
     hints: list[str] = []
     if show_enter_hint:
         hints.append("Enter runs queued goal")
@@ -108,14 +112,21 @@ def get_live_goal_tree(app: Any) -> CognitionGoalTreeMessage | None:
     return tree
 
 
-def _goal_tree_running_live_stats(adapter: Any) -> dict[str, tuple[int, float | None]]:
-    """Collect live tool counts and start times from running step cards."""
-    stats: dict[str, tuple[int, float | None]] = {}
+def _goal_tree_running_live_stats(
+    adapter: Any,
+) -> dict[str, tuple[int, float | None, int, int]]:
+    """Collect live tool counts, start times, and token counts from running step cards."""
+    stats: dict[str, tuple[int, float | None, int, int]] = {}
     for sid, card in getattr(adapter, "_current_step_messages", {}).items():
         if card._status != "running":
             continue
         idx = card._build_row_index()
-        stats[sid] = (idx.main_tool_count, card._start_time)
+        stats[sid] = (
+            idx.main_tool_count,
+            card._start_time,
+            card._input_tokens,
+            card._output_tokens,
+        )
     return stats
 
 
@@ -305,11 +316,14 @@ class PlanQuickViewOverlay(Vertical):
             elapsed: str | None = None
             prefix: Content | None = None
             intake: str | None = None
+            tokens: str | None = None
             with suppress(Exception):
                 elapsed = tree.loop_elapsed_label()
             with suppress(Exception):
                 prefix = tree.plan_panel_prefix_content()
                 intake = tree.intake_label()
+            with suppress(Exception):
+                tokens = tree.goal_token_suffix()
             self._header.update(
                 _plan_quick_view_header(
                     getattr(self.app, "_lc_loop_id", None),
@@ -317,6 +331,7 @@ class PlanQuickViewOverlay(Vertical):
                     intake=intake,
                     show_enter_hint=show_enter_hint,
                     elapsed=elapsed,
+                    tokens=tokens,
                     max_cols=self._panel_content_width(),
                 )
             )

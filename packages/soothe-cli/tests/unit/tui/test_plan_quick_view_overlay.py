@@ -671,3 +671,125 @@ def test_overlay_disabled_config_does_not_auto_show() -> None:
         overlay.refresh_content()
 
     assert not overlay.is_expanded
+
+
+# ---------------------------------------------------------------------------
+# Token display in plan panel
+# ---------------------------------------------------------------------------
+
+
+def test_plan_quick_view_completed_step_shows_in_out_tokens() -> None:
+    """Completed step rows display ``in:`` and ``out:`` token counts."""
+    tree = CognitionGoalTreeMessage(goal="Ship", id="gt-tok-done")
+    tree.complete_step(
+        "STEP-1",
+        True,
+        5_000,
+        3,
+        "ok",
+        input_tokens=1500,
+        output_tokens=300,
+    )
+
+    content = tree.plan_quick_view_content()
+
+    assert "in:1.5K" in content.plain
+    assert "out:300" in content.plain
+
+
+def test_plan_quick_view_running_step_shows_in_out_tokens() -> None:
+    """Running step rows display live token counts synced from step cards."""
+    tree = CognitionGoalTreeMessage(goal="Ship", id="gt-tok-run")
+    tree.sync_plan_steps([{"id": "STEP-1", "description": "Work"}])
+    tree.set_step_phase("STEP-1", "running", description="Work")
+
+    tree.sync_running_live_stats({"STEP-1": (3, None, 800, 120)})
+
+    content = tree.plan_quick_view_content()
+
+    assert "in:800" in content.plain
+    assert "out:120" in content.plain
+
+
+def test_plan_quick_view_step_hides_tokens_when_zero() -> None:
+    """Step rows omit token suffix when no tokens have been recorded."""
+    tree = CognitionGoalTreeMessage(goal="Ship", id="gt-tok-zero")
+    tree.complete_step("STEP-1", True, 5_000, 3, "ok")
+
+    content = tree.plan_quick_view_content()
+
+    assert "in:" not in content.plain
+    assert "out:" not in content.plain
+
+
+def test_plan_panel_header_includes_goal_token_totals() -> None:
+    """Panel title shows cumulative ``in:`` / ``out:`` across all steps."""
+    tree = CognitionGoalTreeMessage(goal="Ship", id="gt-tok-header")
+    tree.complete_step(
+        "STEP-1",
+        True,
+        5_000,
+        2,
+        "ok",
+        input_tokens=1000,
+        output_tokens=200,
+    )
+    tree.complete_step(
+        "STEP-2",
+        True,
+        3_000,
+        1,
+        "ok",
+        input_tokens=500,
+        output_tokens=100,
+    )
+
+    suffix = tree.goal_token_suffix()
+    assert "in:1.5K" in suffix
+    assert "out:300" in suffix
+
+    header = _plan_quick_view_header(
+        "019f17e6-1234-5678-9abc-def012346543",
+        tokens=suffix,
+    )
+    assert "in:1.5K" in header.plain
+    assert "out:300" in header.plain
+
+
+def test_plan_panel_header_omits_tokens_when_empty() -> None:
+    """Panel title has no token suffix when no steps have recorded tokens."""
+    tree = CognitionGoalTreeMessage(goal="Ship", id="gt-tok-empty")
+    assert tree.goal_token_suffix() == ""
+
+    header = _plan_quick_view_header(
+        "019f17e6-1234-5678-9abc-def012346543",
+        tokens=tree.goal_token_suffix(),
+    )
+    assert "in:" not in header.plain
+    assert "out:" not in header.plain
+
+
+def test_goal_tree_snapshot_round_trips_token_fields() -> None:
+    """Snapshot and restore preserve per-step token counts."""
+    tree = CognitionGoalTreeMessage(goal="Ship", id="gt-tok-snap")
+    tree.complete_step(
+        "STEP-1",
+        True,
+        5_000,
+        2,
+        "ok",
+        input_tokens=1200,
+        output_tokens=340,
+    )
+
+    snap = tree.snapshot_dict()
+    assert snap["steps"][0]["input_tokens"] == 1200
+    assert snap["steps"][0]["output_tokens"] == 340
+
+    restored = CognitionGoalTreeMessage(goal="Restore", id="gt-tok-restore")
+    restored._apply_snapshot(snap)
+
+    st = restored._steps["STEP-1"]
+    assert st.input_tokens == 1200
+    assert st.output_tokens == 340
+    assert restored.goal_token_suffix() == tree.goal_token_suffix()

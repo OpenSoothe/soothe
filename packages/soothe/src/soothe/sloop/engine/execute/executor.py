@@ -1114,26 +1114,28 @@ class Executor:
         state.last_wave_error_count = error_count
 
         # Context window metrics with actual token usage
-        from soothe.sloop.utils.token_usage import extract_token_usage_from_messages
+        from soothe.sloop.utils.token_usage import estimate_token_usage
 
-        token_usage = extract_token_usage_from_messages(messages)
+        # IG-761: unified actual-first, estimate-on-demand API. When the
+        # provider returned ``usage_metadata`` we use the real counts;
+        # otherwise we estimate BOTH input (prompt messages) and output
+        # (response content) via model-aware ``count_tokens`` — never output
+        # alone, which undercounted total consumption.
+        model_hint = None
+        if self._config is not None:
+            model_hint = getattr(self._config.router, "default", None)
 
-        if token_usage and "total" in token_usage:
-            # Use actual token count from LLM response
-            actual_tokens = token_usage["total"]
-            state.total_tokens_used += actual_tokens
+        usage = estimate_token_usage(messages, model=model_hint)
+
+        if usage["total_tokens"] > 0:
+            state.total_tokens_used += usage["total_tokens"]
             logger.debug(
-                "tokens: actual=%d prompt=%d completion=%d",
-                actual_tokens,
-                token_usage.get("prompt", 0),
-                token_usage.get("completion", 0),
+                "tokens: input=%d output=%d total=%d (actual=%s)",
+                usage["input_tokens"],
+                usage["output_tokens"],
+                usage["total_tokens"],
+                "yes" if usage.get("source") == "actual" else "estimated",
             )
-        elif output:
-            # Fallback: use tiktoken for accurate estimation
-            from soothe_nano.utils.token_counting import count_tokens
-
-            estimated_tokens = count_tokens(output)
-            state.total_tokens_used += estimated_tokens
 
         # Use configurable context limit
         if self._config is not None:

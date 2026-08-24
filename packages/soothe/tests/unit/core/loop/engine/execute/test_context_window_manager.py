@@ -317,3 +317,71 @@ class TestContextCompactionResult:
 
         with pytest.raises(Exception):  # FrozenInstanceError
             result.tokens_after = 100_000  # type: ignore[misc]
+
+
+class TestEstimateCheckpointTokensUnifiedAPI:
+    """IG-761: estimate_checkpoint_tokens_sync uses the unified estimate_token_usage API."""
+
+    def test_uses_actual_usage_metadata_when_present(self) -> None:
+        """When AI messages carry usage_metadata, the real total is used (no estimation)."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        manager = ContextWindowManager(None, None)
+        messages = [
+            HumanMessage(content="x" * 100_000),
+            AIMessage(
+                content="done",
+                usage_metadata={"input_tokens": 1000, "output_tokens": 50, "total_tokens": 1050},
+            ),
+        ]
+        checkpoint = MockCheckpoint(messages=messages)
+
+        result = manager.estimate_checkpoint_tokens_sync(checkpoint)
+        # Actual-first: 1050, not the much larger estimated prompt.
+        assert result == 1050
+
+    def test_estimates_prompt_tokens_on_fallback(self) -> None:
+        """Without usage_metadata, prompt tokens are estimated (not just output)."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        manager = ContextWindowManager(None, None)
+        messages = [
+            HumanMessage(content="prompt " * 200),
+            AIMessage(content="response " * 200),
+        ]
+        checkpoint = MockCheckpoint(messages=messages)
+
+        result = manager.estimate_checkpoint_tokens_sync(checkpoint)
+        # Must exceed an output-only estimate, proving input is counted.
+        from soothe_nano.utils.token_counting import count_tokens
+
+        output_only = count_tokens("response " * 200)
+        assert result > output_only
+        assert result > 0
+
+    def test_passes_model_hint_from_config(self) -> None:
+        """When config is present, the model hint is threaded to the estimator."""
+        from unittest.mock import patch
+
+        from langchain_core.messages import HumanMessage
+
+        config = MockConfig()
+        # MockConfig.agent is a MagicMock; attach a router with a default model.
+        config.router = MagicMock()
+        config.router.default = "gpt-4o"
+
+        manager = ContextWindowManager(None, config)
+        messages = [HumanMessage(content="hello world")]
+        checkpoint = MockCheckpoint(messages=messages)
+
+        with patch(
+            "soothe_nano.utils.token_usage.estimate_token_usage",
+            wraps=__import__(
+                "soothe_nano.utils.token_usage", fromlist=["estimate_token_usage"]
+            ).estimate_token_usage,
+        ) as spy:
+            result = manager.estimate_checkpoint_tokens_sync(checkpoint)
+            assert spy.called
+            _, kwargs = spy.call_args
+            assert kwargs.get("model") == "gpt-4o"
+        assert result > 0

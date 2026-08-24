@@ -159,13 +159,22 @@ class ContextWindowManager:
         Used internally when checkpoint is already loaded, avoiding
         redundant async call.
 
+        IG-761: delegates to the unified ``estimate_token_usage`` API so
+        context-window estimation stays consistent with the executor's token
+        accounting. The unified API prefers real ``usage_metadata`` on AI
+        messages (no double-estimation of turns the provider already
+        counted) and estimates the remaining prompt tokens with the
+        model-aware tokenizer, including per-message structural overhead
+        (role tags + separators) so the estimate reflects real context
+        consumption rather than raw text length alone.
+
         Args:
             checkpoint: Pre-loaded checkpoint with channel_values.
 
         Returns:
             Estimated token count in checkpoint messages.
         """
-        from soothe_nano.utils.token_counting import count_tokens
+        from soothe_nano.utils.token_usage import estimate_token_usage
 
         # Get messages from checkpoint channel_values
         channel_values = getattr(checkpoint, "channel_values", None)
@@ -176,19 +185,13 @@ class ContextWindowManager:
         if not messages:
             return 0
 
-        total = 0
-        for msg in messages:
-            content = getattr(msg, "content", "")
-            if isinstance(content, str):
-                total += count_tokens(content)
-            elif isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict) and "text" in block:
-                        total += count_tokens(block["text"])
-                    elif isinstance(block, str):
-                        total += count_tokens(block)
-                    # Skip non-text blocks (images, etc.)
-        return total
+        # Model hint from config for model-aware tokenizer selection.
+        model_hint = None
+        if self._config is not None:
+            model_hint = getattr(getattr(self._config, "router", None), "default", None)
+
+        usage = estimate_token_usage(messages, model=model_hint)
+        return usage["total_tokens"]
 
     def should_compact(self, estimated_tokens: int) -> bool:
         """Check if estimated tokens exceed threshold percentage.
