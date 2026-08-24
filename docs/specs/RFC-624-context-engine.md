@@ -6,9 +6,10 @@
 **Kind**: Architecture Design
 **Created**: 2026-06-12
 **Authors**: Soothe Team
-**Updated**: 2026-08-19 (RFC-904 StepDAG reconcile / status extensions)
+**Updated**: 2026-08-24 (reentrant state — awaiting_clarification matching, IG-760)
 **Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (StrangeLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-803 (Persistence Backend)
-**Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture), RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification — `commit_goal_report`), RFC-626 (Entity Model and State Management Consolidation), RFC-904 (recursive step decomposition), design draft `docs/archive/drafts/2026-08-08-autopilot-report-commit-judgment-design.md`, [IG-680](../archive/impl/IG-680-autopilot-dag-health-evidence-deps.md)
+**Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture), RFC-204 §1.3 (report-commit judgment), RFC-625 (AutopilotMonitor and ContextEngine Unification — `commit_goal_report`), RFC-626 (Entity Model and State Management Consolidation), RFC-904 (recursive step decomposition), [IG-760](../impl/IG-760-reentrant-loop-state-management.md) (reentrant loop state)
+**Amended by**: RFC-904 (§StepDAG statuses/fields, proposal reconcile, Step Context Registry)
 **Amended by**: RFC-904 (§StepDAG statuses/fields, proposal reconcile, Step Context Registry)
 
 ---
@@ -252,6 +253,13 @@ ContextEngine composes GoalStepDAG, LedgerManager, SemanticLoader, ProjectionEng
 **Persistence**: `save`, `load`.
 
 **Recovery**: `recover` — resets goals stuck in `active` to `pending`.
+Goals in `awaiting_clarification` are **not** reset by recovery — they are
+intentionally parked for user input (plan-mode review, ask_user). The
+clarification-resume path (`resolve_clarification_resume_ce_goal`) matches
+both `"active"` and `"awaiting_clarification"` so a worker crash during a
+parked state doesn't lose the goal. When resuming an
+`awaiting_clarification` goal, `answer_clarification()` transitions it to
+`pending` before `activate_goal()` re-activates it. See IG-760.
 
 ### §8 Module Structure
 

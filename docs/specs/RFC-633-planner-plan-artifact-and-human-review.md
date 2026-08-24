@@ -2,13 +2,13 @@
 
 **RFC**: 633
 **Title**: Planner Plan Artifact and Human Review
-**Status**: Draft
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-07-28
 **Authors**: Soothe Team
-**Updated**: 2026-07-28
+**Updated**: 2026-08-24
 **Depends on**: RFC-618, RFC-622, RFC-630
-**Related**: RFC-621 (workspace host convention), RFC-628 (step/orphan cards), IG-656 (intake-only planner)
+**Related**: RFC-621 (workspace host convention), RFC-628 (step/orphan cards), IG-656 (intake-only planner), IG-760 (reentrant state)
 
 ## Abstract
 
@@ -77,7 +77,9 @@ host        → write `.soothe/plans/...md`
 TUI         → plan body + path footer + Approve/Reject/More comments
 resume      → Approve → DISPATCH (root grounded with approved plan) →
               THREAD do-or-decompose → … → goal_completion
-              Reject  → goal_completion (rejected status text)
+              Reject (no comments) → re-emit review (same plan, AWAIT_USER)
+              Reject (with comments) → refinement re-synthesis with comments
+                → revised plan → review again (AWAIT_USER)
               Comments→ re-invoke planner with prior plan + comments → review again
 ```
 
@@ -152,7 +154,8 @@ handoff cleared on first DISPATCH);
 | Parsed action | Behavior |
 |---------------|----------|
 | Approve | Mark plan frontmatter `status: approved`; clear clarification and planner wire; short ledger note; set `planner_implement_handoff`; route to StrangeLoop `DISPATCH` with the approved artifact grounding the root THREAD (same CE goal) |
-| Reject | Mark `status: rejected`; `goal_completion` with short rejection note |
+| Reject (no comments) | Mark `status: rejected`; re-emit plan review clarification (same plan, AWAIT_USER) so the user can provide refinement comments or approve |
+| Reject (with comments) | Mark `status: rejected`; store comments as `plan_review_comments` on scratch + in `pending_clarification` channel; trigger `synthesize_plan(refinement_comments=…, prior_plan=…)` → overwrite plan draft → re-emit review with revised plan (AWAIT_USER) |
 | More comments | Append comments to planner input; re-run planner; rewrite plan file; re-enter review |
 
 Parsing uses case-insensitive prefixes on Q1 (`approve`, `reject`,
@@ -172,16 +175,26 @@ Parsing uses case-insensitive prefixes on Q1 (`approve`, `reject`,
 1. Wired `planner` intake with `enable_recon` may emit ≥1 tool update on the orphan card when recon runs.
 2. Successful planner invoke writes a file under `{workspace}/.soothe/plans/`.
 3. Loop pauses on clarification; TUI shows the full draft plan body, a saved-path
-   footer, then Approve / Reject / More comments controls (comments field only
-   for More comments). Origin `planner_subagent_review` is in
+   footer, then Approve / Reject action buttons. When the user selects Reject,
+   the chat input is focused with a placeholder ("Enter refinement comments…")
+   so the user can type comments before the reject is submitted. Reject without
+   comments re-emits the same plan; Reject with comments triggers a refinement
+   re-synthesis. Origin `plan_mode_review` is in
    `agent.clarification.force_manual_origins` by default so veritas does not
-   auto-Approve/Reject even when clarification mode is `auto`. This does not
-   force-manual StrangeLoop `plan_generate` / `plan_assess` clarifications
-   or other wired subagents.
-4. Reject completes the goal; Approve hands off to StrangeLoop `DISPATCH`
-   (does not complete yet; approved plan grounds the root THREAD); More
-   comments revises the plan and asks again.
+   auto-Approve/Reject even when clarification mode is `auto`.
+4. Reject without comments re-emits the plan review (AWAIT_USER);
+   Reject with comments triggers `synthesize_plan(refinement_comments=…,
+   prior_plan=…)` → revised plan → re-emit review (AWAIT_USER).
+   Approve hands off to StrangeLoop `DISPATCH` (does not complete yet;
+   approved plan grounds the root THREAD via a follow-on exec goal).
+   More comments revises the plan and asks again.
 5. Non-planner intake wires still route directly to `goal_completion` (no review gate).
+6. **Reentrant state (IG-760):** `plan_review_comments` MUST be persisted in
+   the `pending_clarification` channel (not just scratch) so a worker crash
+   during refinement synthesis doesn't lose the user's comments. A cancel
+   during synthesis cancels the in-flight LLM call, not the goal's
+   `awaiting_clarification` status — the user's next input resumes from the
+   parked state.
 
 ## 7. References
 

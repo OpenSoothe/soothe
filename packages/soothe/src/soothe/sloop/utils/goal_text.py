@@ -8,7 +8,9 @@ if TYPE_CHECKING:
     from soothe.sloop.state.schemas import LoopState
 
 # CE goal statuses that still hold a resumable step DAG after interrupt.
-_RESUMABLE_CE_STATUSES = frozenset({"active", "pending", "suspended", "cancelled"})
+_RESUMABLE_CE_STATUSES = frozenset(
+    {"active", "pending", "suspended", "cancelled", "awaiting_clarification"}
+)
 
 
 def resolve_user_request(state: LoopState) -> str:
@@ -34,7 +36,9 @@ def resolve_clarification_resume_ce_goal(ce: Any, *, loop_id: str) -> Any | None
     Returns:
         Matching active ``GoalNode``, or ``None`` when no reusable goal exists.
     """
-    return _resolve_resumable_ce_goal(ce, loop_id=loop_id, statuses=frozenset({"active"}))
+    return _resolve_resumable_ce_goal(
+        ce, loop_id=loop_id, statuses=frozenset({"active", "awaiting_clarification"})
+    )
 
 
 def resolve_interrupt_resume_ce_goal(ce: Any, *, loop_id: str) -> Any | None:

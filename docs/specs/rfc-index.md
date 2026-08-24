@@ -539,7 +539,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Depends on: RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)
   - Supersedes: Empty-answer auto-resume behavior currently encoded in `sloop/engine/graph_interrupt.py::build_auto_resume_payload` for `type=="ask_user"` interrupts.
   - Authors: Soothe Team
-  - Updated: 2026-08-19
+  - Updated: 2026-08-24 (reentrant state — IG-760)
 - **RFC-623**: [Veritas Auto-Mode Robustness](RFC-623-veritas-auto-mode-robustness.md)
   - Kind: Implementation Interface Design
   - Status: Implemented
@@ -553,7 +553,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Implemented (partial)
   - Created: 2026-06-12
   - Depends on: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (StrangeLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-803 (Persistence Backend)
-  - Updated: 2026-08-19 (RFC-904 StepDAG reconcile / status extensions)
+  - Updated: 2026-08-24 (reentrant state — awaiting_clarification matching, IG-760)
 - **RFC-625**: [AutopilotMonitor and ContextEngine Unification](RFC-625-autopilot-monitor-context-engine-unification.md)
   - Kind: Architecture Design
   - Status: Implemented
@@ -610,8 +610,9 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Authors: xiaming (with Cursor)
 - **RFC-633**: [Planner Plan Artifact and Human Review](RFC-633-planner-plan-artifact-and-human-review.md)
   - Kind: Architecture Design
-  - Status: Draft
+  - Status: Implemented
   - Created: 2026-07-28
+  - Updated: 2026-08-24 (reject→refine flow, reentrant state IG-760)
   - Depends on: RFC-618, RFC-622, RFC-630, RFC-656 (IG-656 intake-only planner)
   - Authors: Soothe Team
 

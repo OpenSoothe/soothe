@@ -168,6 +168,20 @@ A **release** = publishing a new version of a Soothe package on PyPI via the Git
 3. **Release = PyPI via GitHub workflow** — publishing happens through `.github/workflows/`, not a manual `twine upload` or local build. Tag the release and let CI publish.
 4. **Verify before release** — `./scripts/verify_finally.sh` MUST pass (zero lint errors, all tests green) on the commit being tagged. Pre-release CI MUST also pass before the publish job runs. Do not tag or release off a red build.
 
+### 15. Reentrant Loop State (MUST)
+
+Loop state is **independent of runtime workers** — pauseable and resumable across arbitrary time intervals. Workers are stateless conduits; state lives in storage, not in process. (IG-760)
+
+1. **State is in storage, not in process.** Three persistent layers hold loop state: LangGraph checkpointer (graph channel values), Context Engine (goal DAG + ledger), and disk artifacts (`.soothe/plans/*.md`). A worker crash loses nothing that isn't already on disk. Never add a new in-memory-only state layer for data that must survive worker exit.
+
+2. **The `pending_clarification` channel is the re-entry contract.** When a loop parks for user input (plan review, ask_user), everything needed to resume — plan draft, plan path, refinement comments, clarification origin — MUST be serialized into the `pending_clarification` graph channel. A fresh worker reads this channel via `aget_state` and reconstructs the context. Do not store resumption-critical data only on `LoopPhaseScratch` (in-memory) without projecting it into a graph channel.
+
+3. **CE goal status is the source of truth for parking.** A goal in `awaiting_clarification` is intentionally parked — not crashed, not stale. The stale-loop reconciler, auto-resume, and clarification-resume paths all check this status before acting. Never demote a loop with a pending clarification to `idle` (that kills the clarification flow). Never mark a parked goal as `interrupted` on cancel — cancel the in-flight operation, not the parking state.
+
+4. **Scratch is ephemeral; channels are durable.** `LoopPhaseScratch` is deliberately not serialized by LangGraph (it carries rich non-primitive models). Fields that must survive a worker exit are projected into graph channels before parking (`build_plan_mode_review_pending`). `hydrate_scratch_from_pending` is the inverse projection on resume. New scratch fields that need persistence MUST follow this project→persist→hydrate pattern.
+
+5. **Cancel ≠ terminal.** A cancel during a long-running LLM call (synthesis, refinement, execute) cancels the in-flight operation, not the goal's clarification status. The goal's `awaiting_clarification` status is preserved so the user's next input resumes from the same parked state, not from a new goal. `resolve_clarification_resume_ce_goal` matches both `"active"` and `"awaiting_clarification"` goals.
+
 ---
 
 ## 📁 Structure

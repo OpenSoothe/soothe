@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-06-02
 **Authors**: Soothe Team
-**Updated**: 2026-08-19
+**Updated**: 2026-08-24
 **Depends on**: RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)
 **Supersedes**: Empty-answer auto-resume behavior currently encoded in `sloop/engine/graph_interrupt.py::build_auto_resume_payload` for `type=="ask_user"` interrupts.
 
@@ -241,6 +241,7 @@ GoalStatus = Enum(
 3. **Veritas never asks back.** Its system prompt forbids emitting clarifications; any clarification-shaped output is coerced to `defer=True`. No recursive clarification.
 4. **Confidence floor is a safety net.** Even if veritas omits `defer`, `AutoClarificationPolicy` enforces `auto_min_confidence` and defers on low-confidence answers.
 5. **Auto-approve preserved.** Action-approval interrupts (`type=="review"`) keep their current auto-approve path; this RFC does not touch them.
+6. **Reentrant state (IG-760).** The `pending_clarification` channel is the re-entry contract: everything needed to resume (plan draft, path, refinement comments, origin) MUST be serialized into this graph channel before parking, so a fresh worker can reconstruct context via `aget_state`. The CE goal status `awaiting_clarification` is the source of truth for parking — `resolve_clarification_resume_ce_goal` matches both `"active"` and `"awaiting_clarification"` goals so a worker crash during plan-mode review doesn't lose the parked state. Cancel ≠ terminal: a cancel during a long-running operation (synthesis, refinement) cancels the in-flight LLM call, not the goal's clarification status. See IG-760 for the full design.
 6. **Detection is structured-only.** Only `ask_user` LangGraph interrupts are detected. Plain-text questions in assistant messages are not treated as clarifications, eliminating heuristic false positives.
 7. **Mode toggle is hot-swappable.** Changing Manual ↔ Auto in the TUI replaces the policy for *future* requests; in-flight requests complete under the previous policy.
 

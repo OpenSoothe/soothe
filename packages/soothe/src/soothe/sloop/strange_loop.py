@@ -651,7 +651,20 @@ class StrangeLoop:
                 )
                 if ce_goal is not None:
                     original = apply_clarification_resume_goal_text(state, ce_goal)
-                    if getattr(ce_goal, "status", None) == "pending":
+                    goal_status = getattr(ce_goal, "status", None)
+                    if goal_status == "awaiting_clarification":
+                        # The goal was parked for user input (plan-mode review /
+                        # ask_user). Transition it back to ``pending`` so the
+                        # graph can re-activate it via ``activate_goal``. This
+                        # happens when a worker crashed/restarted while the
+                        # goal was parked — the CE persisted the
+                        # ``awaiting_clarification`` status, and the
+                        # clarification-resume turn must unpark it.
+                        await ce_instance.answer_clarification(
+                            ce_goal.id, answers=tuple(clarification_answers or [])
+                        )
+                        await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
+                    elif goal_status == "pending":
                         await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
                     elif getattr(ce_goal, "assigned_loop_id", None) != state_manager.loop_id:
                         ce_goal.assigned_loop_id = state_manager.loop_id

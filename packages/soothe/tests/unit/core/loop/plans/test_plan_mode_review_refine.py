@@ -208,3 +208,43 @@ def test_build_refinement_trigger_truncates_large_prior_plan() -> None:
     msg = _build_refinement_trigger("fix it", huge)
     assert "[truncated]" in msg
     assert len(msg) < 20_000
+
+
+# ---------------------------------------------------------------------------
+# plan_review_comments persistence across worker restart
+# ---------------------------------------------------------------------------
+
+
+def test_build_plan_mode_review_pending_persists_comments() -> None:
+    """build_plan_mode_review_pending stores plan_review_comments in the pending dict."""
+    ctx = _build_ctx(plan_markdown="# Plan\n\nDraft plan.")
+    ctx.scratch.plan_review_comments = "reuse deepagents tokens"
+    pending = plan_mode_review.build_plan_mode_review_pending(ctx)
+    assert pending["pending_clarification"]["plan_review_comments"] == "reuse deepagents tokens"
+
+
+def test_hydrate_scratch_restores_comments_from_pending() -> None:
+    """hydrate_scratch_from_pending restores plan_review_comments from the pending channel."""
+    ctx = _build_ctx(plan_markdown="# Plan\n\nDraft.")
+    state = {
+        "pending_clarification": {
+            "plan_path": "/ws/.soothe/plans/p.md",
+            "plan_markdown": "# Plan\n\nDraft.",
+            "plan_review_comments": "fix the token counting",
+        }
+    }
+    plan_mode_review.hydrate_scratch_from_pending(ctx, state)
+    assert ctx.scratch.plan_review_comments == "fix the token counting"
+
+
+def test_hydrate_scratch_does_not_overwrite_existing_comments() -> None:
+    """hydrate_scratch_from_pending does not clobber comments already on scratch."""
+    ctx = _build_ctx()
+    ctx.scratch.plan_review_comments = "already here"
+    state = {
+        "pending_clarification": {
+            "plan_review_comments": "from channel",
+        }
+    }
+    plan_mode_review.hydrate_scratch_from_pending(ctx, state)
+    assert ctx.scratch.plan_review_comments == "already here"

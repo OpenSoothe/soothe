@@ -158,8 +158,10 @@ def save_plan_draft(ctx: LoopRuntimeContext, report: str) -> str | None:
 def build_plan_mode_review_pending(ctx: LoopRuntimeContext) -> dict[str, Any]:
     """Build the pending clarification payload for plan-mode review.
 
-    Persist ``plan_path`` / ``plan_markdown`` on the pending channel so a
-    clarification-resume turn (fresh scratch) can still hydrate the plan body.
+    Persist ``plan_path`` / ``plan_markdown`` / ``plan_review_comments`` on the
+    pending channel so a clarification-resume turn (fresh scratch) can still
+    hydrate the plan body and any pending refinement comments after a worker
+    crash/restart.
     """
     req = ClarificationRequest(
         questions=_PLAN_MODE_REVIEW_QUESTIONS,
@@ -170,10 +172,13 @@ def build_plan_mode_review_pending(ctx: LoopRuntimeContext) -> dict[str, Any]:
     pending = request_to_state(req)
     path = (getattr(ctx.scratch, "plan_draft_path", None) or "").strip()
     markdown = (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip()
+    comments = (getattr(ctx.scratch, "plan_review_comments", None) or "").strip()
     if path:
         pending["plan_path"] = path
     if markdown:
         pending["plan_markdown"] = markdown
+    if comments:
+        pending["plan_review_comments"] = comments
     return {
         "pending_clarification": pending,
         "last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW,
@@ -182,12 +187,13 @@ def build_plan_mode_review_pending(ctx: LoopRuntimeContext) -> dict[str, Any]:
 
 
 def hydrate_scratch_from_pending(ctx: LoopRuntimeContext, state: dict[str, Any]) -> None:
-    """Restore plan draft onto scratch after a clarification-resume turn."""
+    """Restore plan draft and refinement comments onto scratch after a clarification-resume turn."""
     pending = state.get("pending_clarification")
     if not isinstance(pending, dict):
         return
     path = str(pending.get("plan_path") or "").strip()
     markdown = str(pending.get("plan_markdown") or "").strip()
+    comments = str(pending.get("plan_review_comments") or "").strip()
     if path and not (getattr(ctx.scratch, "plan_draft_path", None) or "").strip():
         ctx.scratch.plan_draft_path = path
     if markdown and not (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip():
@@ -202,6 +208,10 @@ def hydrate_scratch_from_pending(ctx: LoopRuntimeContext, state: dict[str, Any])
         else:
             ctx.scratch.plan_draft_markdown = text
             ctx.scratch.plan_draft_path = path
+    # Restore refinement comments so _refine_plan can re-run after a worker
+    # crash/restart if the refinement synthesis was interrupted mid-flight.
+    if comments and not (getattr(ctx.scratch, "plan_review_comments", None) or "").strip():
+        ctx.scratch.plan_review_comments = comments
 
 
 def _record_plan_completion_ledger(
