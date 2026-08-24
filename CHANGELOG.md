@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.35] - 2026-08-24
+
+### Fixed
+- Drop the stale 50 ms `set_timer` fallback in `ClarificationInputMessage._schedule_focus`. The timer was added to win a focus race against `ChatInput`'s app-level `on_click` / `on_app_focus` handlers, but those handlers now guard against stealing focus from focusable widgets (`_click_landed_on_focusable` and the `focused is not None` check in `on_app_focus`), so the race no longer exists. Removing the timer also eliminates stale callbacks that re-focused the previously-selected menu item (block flash). Focus now relies on `call_after_refresh` alone, which Textual fires exactly once after the next render cycle when layout has settled.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.34...v0.10.35
+
 ## [v0.10.34] - 2026-08-24
 
 ### Added
