@@ -53,15 +53,15 @@ InputMode = Literal["normal", "shell", "command"]
 
 logger = logging.getLogger(__name__)
 
-_PLAN_REVIEW_ACTIONS = frozenset({"Approve", "Reject"})
+_PLAN_REVIEW_ACTIONS = frozenset({"Approve", "Reject", "Refine"})
 
 
 def clarification_wire_content(answers: list[str]) -> str:
     """Human-readable turn content for a clarification submit (not a new goal).
 
     Plan-review actions use a stable ``Plan review: …`` prefix so a dropped
-    ``clarification_answer`` flag cannot turn bare ``Reject`` into Pass1 TASK.
-    ``Reject`` may carry refinement text in ``answers[1]``.
+    ``clarification_answer`` flag cannot turn a bare action into Pass1 TASK.
+    ``Refine`` carries refinement text in ``answers[1]``.
     """
     non_empty = [a for a in answers if str(a).strip()]
     if not non_empty:
@@ -171,24 +171,6 @@ class _ExecutionMixin:
         value = event.value
         mode: InputMode = event.mode  # type: ignore[assignment]  # Textual event mode is str at type level but InputMode at runtime
 
-        # If a plan-review Reject is awaiting refinement comments, route the
-        # submitted text as the reject answer (with comments) instead of a new
-        # goal. This lets the user type refinement feedback after selecting
-        # Reject; empty text is a bare reject (no comments).
-        reject_widget = self._find_pending_reject_clarification()
-        if reject_widget is not None:
-            event.stop()
-            comments = value.strip()
-            reject_widget._reject_awaiting_comments = False
-            # Restore the chat input placeholder.
-            chat_input = getattr(self, "_chat_input", None)
-            if chat_input is not None and chat_input.input_widget is not None:
-                from soothe_cli.settings.glyphs import newline_shortcut
-
-                chat_input.input_widget.placeholder = f"{newline_shortcut()} for new line"
-            reject_widget._finalize_plan_review_with_comments(comments)
-            return
-
         # /quit, /q, /exit, and bare exit/quit always execute immediately,
         # even mid-loop-switch or while the agent is busy.
         from soothe_cli.commands.command_registry import (
@@ -238,18 +220,6 @@ class _ExecutionMixin:
 
         await self._process_message(value, mode)
 
-    def _find_pending_reject_clarification(self) -> ClarificationInputMessage | None:
-        """Return the plan-review widget awaiting reject comments, if any."""
-        adapter = getattr(self, "_ui_adapter", None)
-        if adapter is None:
-            return None
-        for widget in adapter._clarification_input_by_step.values():
-            if getattr(widget, "_reject_awaiting_comments", False) and not getattr(
-                widget, "_submitted", False
-            ):
-                return widget
-        return None
-
     def on_chat_input_mode_changed(self, event: ChatInput.ModeChanged) -> None:
         """Update status bar when input mode changes."""
         if self._status_bar:
@@ -270,21 +240,6 @@ class _ExecutionMixin:
         """
         event.stop()
         first_answer = str(event.answers[0]).strip() if event.answers else ""
-
-        # Plan-review actions get a confirmation line in the chat so the user
-        # sees their decision recorded beyond the disabled card. Mirrors the
-        # AppMessage pattern used for other operator actions ("Started new
-        # loop", "Command interrupted"). Runs before the adapter check so the
-        # line is visible even if the adapter was torn down (app closing).
-        if first_answer in _PLAN_REVIEW_ACTIONS:
-            if first_answer == "Approve":
-                confirmation = "Plan approved — submitting for execution…"
-            else:
-                refinement = str(event.answers[1] if len(event.answers) > 1 else "").strip()
-                confirmation = "Plan rejected — returning to plan mode" + (
-                    f" ({refinement})" if refinement else ""
-                )
-            await self._mount_message(AppMessage(confirmation))
 
         adapter = self._ui_adapter
         if adapter is None:
@@ -311,7 +266,7 @@ class _ExecutionMixin:
 
         # A stale empty remount (resume re-emit) can leave another interactive
         # plan-review card. Disable extras so a second click cannot fire a
-        # "Reject" turn after clarification_answered cleared the pending flag.
+        # second plan-review turn after clarification_answered cleared the pending flag.
         for sid, other in list(adapter._clarification_input_by_step.items()):
             if sid == event.step_id:
                 continue
@@ -334,7 +289,7 @@ class _ExecutionMixin:
         # sent to the daemon and the graph resumes. This must run *before*
         # the plan-approval mode resolution (a one-shot daemon config RPC
         # that can take up to 5 s) so the user sees "Submitting" activity the
-        # instant they click Approve/Reject — otherwise the row stays blank
+        # instant they click a plan-review action — otherwise the row stays blank
         # during the config fetch. The stream-driven spinner is suppressed
         # while ``_clarification_pending`` is True, so without this the user
         # gets no signal that their answer was received. The stream will
@@ -364,7 +319,7 @@ class _ExecutionMixin:
         adapter._clarification_answers_pending = list(event.answers)
         # Always resume clarification from a widget submit — even if a prior
         # clarification_answered cleared ``_clarification_pending`` (empty
-        # remount / race). Without this, "Reject" is treated as a new goal.
+        # remount / race). Without this, the action is treated as a new goal.
         adapter._clarification_pending = True
 
         # Hand off to the standard turn pipeline. ``execute_task_textual``

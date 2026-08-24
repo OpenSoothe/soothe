@@ -20,6 +20,11 @@ from soothe.sloop.utils.goal_text import resolve_user_request
 
 logger = logging.getLogger(__name__)
 
+# Read-only interaction modes never run the coverage Eval: no Eval StepNode
+# insertion and no eval-decision LLM call. `route_after_root_eval` still sends
+# plan mode to PLAN_REVIEW and ask mode to FINALIZE.
+_READONLY_MODES = frozenset({"plan", "ask"})
+
 
 def _eval_envelope(goal_text: str, nodes: list[Any]) -> str:
     rows: list[str] = []
@@ -58,6 +63,12 @@ class RootEvalNode(LoopNode):
         state: dict[str, Any],
         messages: list,
     ) -> NodeResult:
+        if getattr(ctx, "interaction_mode", None) in _READONLY_MODES:
+            logger.info(
+                "[root_eval] %s interaction mode; skip Eval; finalize",
+                ctx.interaction_mode,
+            )
+            return NodeResult(payload={"root_eval_route": "finalize"})
         if ctx.ce is not None and ctx.ce_goal_id:
             goal = await _maybe_await(ctx.ce.get_goal(ctx.ce_goal_id))
             if goal is not None:

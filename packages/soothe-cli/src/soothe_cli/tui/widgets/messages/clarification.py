@@ -29,17 +29,16 @@ logger = logging.getLogger(__name__)
 # Wire origin id for plan-mode review (mirrors host ORIGIN_PLAN_MODE_REVIEW).
 # CLI must not import soothe host packages; keep the wire string local.
 _ORIGIN_PLAN_MODE_REVIEW = "plan_mode_review"
-# Accept persisted interrupts from older planner_subagent_review origin (checkpoint resume).
-_ORIGIN_PLANNER_SUBAGENT_REVIEW_LEGACY = "planner_subagent_review"
 
 
-_PlanReviewAction = Literal["approve", "reject"]
+_PlanReviewAction = Literal["approve", "reject", "refine"]
 
-_ACTION_ORDER: tuple[_PlanReviewAction, ...] = ("approve", "reject")
+_ACTION_ORDER: tuple[_PlanReviewAction, ...] = ("approve", "refine", "reject")
 
 _ACTION_LABELS: dict[_PlanReviewAction, str] = {
     "approve": "Approve",
     "reject": "Reject",
+    "refine": "Refine",
 }
 
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n?", re.DOTALL)
@@ -59,17 +58,19 @@ class ClarificationInputMessage(Vertical):
     Mounted when ``soothe.loop.clarification.requested`` arrives. Generic
     clarifications show one ``Input`` per question. Planner-subagent review
     (``origin_node=plan_mode_review``) shows the full draft plan, a
-    saved-path footer, and Approve / Reject actions.
+    saved-path footer, and Approve / Refine / Reject actions.
     """
 
     # Focusable so the Enter binding (expand/collapse plan body) lands on the
-    # card in the submitted state, where the Approve/Reject buttons are disabled
+    # card in the submitted state, where the plan-review buttons are disabled
     # and focus would otherwise sit elsewhere.
     can_focus = True
 
     BINDINGS = [
         Binding("left", "plan_review_prev", "Prev action", show=False),
         Binding("right", "plan_review_next", "Next action", show=False),
+        Binding("up", "plan_review_prev", "Prev action", show=False),
+        Binding("down", "plan_review_next", "Next action", show=False),
         Binding("enter", "plan_review_confirm", "Confirm action", show=False),
     ]
 
@@ -126,16 +127,22 @@ class ClarificationInputMessage(Vertical):
     }
 
     ClarificationInputMessage .plan-review-actions {
-        height: 1;
-        width: auto;
+        height: auto;
+        width: 1fr;
+        margin: 0;
+    }
+
+    ClarificationInputMessage .plan-review-action-row {
+        height: 3;
+        width: 1fr;
         margin: 0;
     }
 
     ClarificationInputMessage .plan-review-actions Button {
-        margin: 0 1 0 0;
+        margin: 0;
         min-width: 0;
         width: auto;
-        height: 1;
+        height: 3;
         padding: 0 1;
         border: none;
         background: transparent;
@@ -182,6 +189,10 @@ class ClarificationInputMessage(Vertical):
         border: solid $primary;
     }
 
+    ClarificationInputMessage .plan-review-refine-input {
+        margin: 0 0 0 1;
+    }
+
     ClarificationInputMessage.is-submitted Input {
         border: solid $success;
     }
@@ -219,12 +230,6 @@ class ClarificationInputMessage(Vertical):
         height: auto;
         color: $text;
         text-style: bold;
-        padding: 0;
-        margin: 0;
-    }
-    ClarificationInputMessage .plan-review-answered-comments {
-        height: auto;
-        color: $text-muted;
         padding: 0;
         margin: 0;
     }
@@ -280,19 +285,13 @@ class ClarificationInputMessage(Vertical):
         self._widget_id = widget_id or self.id or ""
         self._selected_action: _PlanReviewAction = "approve"
         self._action_buttons: dict[_PlanReviewAction, Button] = {}
-        # When True, the next chat-input submission is the reject refinement
-        # comment (not a new goal). Set when the user selects Reject but hasn't
-        # typed comments yet.
-        self._reject_awaiting_comments = False
+        self._refine_input: Input | None = None
         # Expand/collapse state for the plan body in the answered view.
         self._body_expanded = False
 
     @property
     def _is_plan_review(self) -> bool:
-        return self._origin_node in (
-            _ORIGIN_PLAN_MODE_REVIEW,
-            _ORIGIN_PLANNER_SUBAGENT_REVIEW_LEGACY,
-        )
+        return self._origin_node == _ORIGIN_PLAN_MODE_REVIEW
 
     def _title_content(self) -> Content:
         title = "Review this plan" if self._is_plan_review else "Awaiting your answer"
@@ -314,33 +313,25 @@ class ClarificationInputMessage(Vertical):
             pass
 
     def _refresh_answered_summary(self) -> None:
-        """Update the collapsed answered view with the actual action + comments.
+        """Update the collapsed answered view with the actual action label.
 
         Called after ``_submitted`` is set. Also used on resume to populate the
         answered card from persisted ``MessageData`` fields.
 
         Each answered-view row carries the ``⎿`` tree gutter (parity with the
-        goal→step tree in ``CognitionGoalTreeMessage``), so the action, the
-        refinement comments, and the plan-body toggle all hang off one aligned
-        branch instead of stacking as disconnected stubs.
+        goal→step tree in ``CognitionGoalTreeMessage``), so the action and the
+        plan-body toggle hang off one aligned branch instead of stacking as
+        disconnected stubs. Refine keeps its comment beside the action label.
         """
         if not self._answers:
             return
         gutter = _card_body_gutter()
         action = self._answers[0] if self._answers else ""
         comments = self._answers[1] if len(self._answers) > 1 else ""
+        summary = f"{action}: {comments}" if action == "Refine" and comments else action
         try:
             action_w = self.query_one(".plan-review-answered-action", Static)
-            action_w.update(f"{gutter}[{action}]")
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            comments_w = self.query_one(".plan-review-answered-comments", Static)
-            if comments.strip():
-                comments_w.update(f"{gutter}💬 {comments}")
-                comments_w.display = True
-            else:
-                comments_w.display = False
+            action_w.update(f"{gutter}[{summary}]")
         except Exception:  # noqa: BLE001
             pass
         self._update_expand_toggle()
@@ -405,40 +396,48 @@ class ClarificationInputMessage(Vertical):
             self._plan_body_widget = body_widget
             self._plan_body_text = body
         yield Static(self._path_footer_text(), classes="plan-review-path", markup=False)
-        with Horizontal(classes="plan-review-actions"):
-            for action in _ACTION_ORDER:
-                btn = Button(
-                    _ACTION_LABELS[action],
-                    id=f"plan-review-btn-{action}",
-                    variant="default",
-                    compact=True,
-                )
-                self._action_buttons[action] = btn
-                yield btn
-        yield Static("←/→ switch · Enter confirm", classes="plan-review-hint", markup=False)
+        with Vertical(classes="plan-review-actions"):
+            for index, action in enumerate(_ACTION_ORDER, start=1):
+                with Horizontal(classes="plan-review-action-row"):
+                    suffix = ":" if action == "refine" else ""
+                    btn = Button(
+                        f"{index}. {_ACTION_LABELS[action]}{suffix}",
+                        id=f"plan-review-btn-{action}",
+                        variant="default",
+                        compact=True,
+                    )
+                    self._action_buttons[action] = btn
+                    yield btn
+                    if action == "refine":
+                        refine_input = Input(
+                            placeholder="Comments…",
+                            id="plan-review-refine-comments",
+                            classes="plan-review-refine-input",
+                        )
+                        self._refine_input = refine_input
+                        yield refine_input
+        yield Static("↑/↓ switch · Enter confirm", classes="plan-review-hint", markup=False)
 
     def _compose_answered_summary(self) -> Any:
-        """Collapsed answered view: action + comment leaf + expandable plan body.
+        """Collapsed answered view: action row + expandable plan body.
 
         Hidden by CSS (``display: none``) until ``is-submitted`` is added; then
         the active review body / buttons / hint are hidden and this is shown.
 
         Each row carries the ``⎿`` tree gutter (parity with the goal→step tree),
-        so the action, refinement comments, and plan-body toggle all hang off
-        one aligned branch — no stray empty stub, no repeated disconnected
-        connectors.
+        so the action and the plan-body toggle hang off one aligned branch — no
+        stray empty stub, no repeated disconnected connectors.
         """
         gutter = _card_body_gutter()
         with Vertical(classes="plan-review-answered-box"):
+            # markup=False: literal bracketed action labels would
+            # otherwise be parsed by Rich as a style tag and stripped from the
+            # rendered output, leaving the gutter prefix dangling on an empty
+            # row.
             yield Static(
                 f"{gutter}[Rejected]",
                 classes="plan-review-answered-action",
-                markup=True,
-            )
-            yield Static(
-                f"{gutter}💬",
-                classes="plan-review-answered-comments",
-                markup=True,
+                markup=False,
             )
             yield Static(
                 f"{gutter}{get_glyphs().expand} Plan body — click or press Enter to expand",
@@ -533,21 +532,6 @@ class ClarificationInputMessage(Vertical):
 
     def _set_selected_action(self, action: _PlanReviewAction) -> None:
         self._selected_action = action
-        # If the user moved away from Reject, clear the awaiting-comments flag
-        # and restore the input placeholder.
-        if action != "reject" and self._reject_awaiting_comments:
-            self._reject_awaiting_comments = False
-            app = self.app
-            chat_input = getattr(app, "_chat_input", None)
-            if chat_input is not None and chat_input.input_widget is not None:
-                from soothe_cli.settings.glyphs import newline_shortcut
-
-                chat_input.input_widget.placeholder = f"{newline_shortcut()} for new line"
-            try:
-                hint = self.query_one(".plan-review-hint", Static)
-                hint.update("←/→ switch · Enter confirm")
-            except Exception:  # noqa: BLE001
-                pass
         for key, btn in self._action_buttons.items():
             if key == action:
                 btn.add_class("plan-review-selected")
@@ -564,54 +548,19 @@ class ClarificationInputMessage(Vertical):
     def _apply_plan_review_selection(self, action: _PlanReviewAction, *, activate: bool) -> None:
         self._set_selected_action(action)
         btn = self._action_buttons.get(action)
-        if activate and action == "reject":
-            # Reject needs refinement comments — don't submit immediately, and
-            # don't focus the button (its 0.05s timer would steal focus back from
-            # the chat input). Focus the chat input with a placeholder so the user
-            # can type their feedback before the reject is sent.
-            self._prepare_reject_input()
+        if activate and action == "refine":
+            # Keep comments inline with the Refine row.
+            self._schedule_focus(self._refine_input)
         else:
             if btn is not None:
                 self._schedule_focus(btn)
             if activate:
                 self._finalize_plan_review(action=action)
 
-    def _prepare_reject_input(self) -> None:
-        """Focus the chat input for reject refinement comments.
-
-        When the user selects Reject, don't submit immediately — focus the
-        chat input with a placeholder so they can type refinement comments.
-        The next submitted message becomes the reject answer (with comments).
-        If the user submits empty text, it's a bare reject (no comments).
-        """
-        self._reject_awaiting_comments = True
-        # Visually mark the Reject button as selected-but-waiting.
-        reject_btn = self._action_buttons.get("reject")
-        if reject_btn is not None:
-            reject_btn.disabled = False  # keep interactive (user can re-select Approve)
-        # Focus the chat input and set a guiding placeholder. Use a deferred
-        # focus (call_after_refresh + a short timer) so it wins over any pending
-        # button-focus timer from the selection gesture that triggered this.
-        app = self.app
-        chat_input = getattr(app, "_chat_input", None)
-        if chat_input is not None:
-            ta = chat_input.input_widget
-            if ta is not None:
-                ta.placeholder = (
-                    "Enter refinement comments for the plan, then press Enter to reject…"
-                )
-            self._schedule_focus(chat_input)
-        # Update the hint line.
-        try:
-            hint = self.query_one(".plan-review-hint", Static)
-            hint.update("Type your refinement in the input box below, then press Enter")
-        except Exception:  # noqa: BLE001
-            pass
-
     def on_click(self, event: Click) -> None:
         """Toggle plan body expand/collapse in the answered (submitted) view.
 
-        Before submission, clicks are left for the Approve/Reject buttons. After
+        Before submission, clicks are left for the plan-review buttons. After
         submission the active review elements are hidden, so a click anywhere on
         the card flips the plan body open/closed — the same action Enter performs
         via ``action_plan_review_confirm``.
@@ -654,10 +603,12 @@ class ClarificationInputMessage(Vertical):
             action = "approve"
         elif btn_id == "plan-review-btn-reject":
             action = "reject"
+        elif btn_id == "plan-review-btn-refine":
+            action = "refine"
         if action is None:
             return
         event.stop()
-        # Click selects and activates (Approve/Reject submit).
+        # Click selects and activates the action.
         self._apply_plan_review_selection(action, activate=True)
 
     @on(Input.Submitted)
@@ -666,6 +617,11 @@ class ClarificationInputMessage(Vertical):
             event.stop()
             return
         if self._is_plan_review:
+            if event.input is self._refine_input:
+                comments = str(event.input.value or "").strip()
+                if comments:
+                    self._finalize_plan_review_with_comments(comments)
+                event.stop()
             return
         idx = self._inputs.index(event.input) if event.input in self._inputs else -1
         if idx < 0:
@@ -698,6 +654,8 @@ class ClarificationInputMessage(Vertical):
         self._answers = answers
         for btn in self._action_buttons.values():
             btn.disabled = True
+        if self._refine_input is not None:
+            self._refine_input.disabled = True
         self.add_class("is-submitted")
         self._refresh_title()
         self._refresh_answered_summary()
@@ -711,19 +669,21 @@ class ClarificationInputMessage(Vertical):
         )
 
     def _finalize_plan_review_with_comments(self, comments: str) -> None:
-        """Finalize a reject with the user's refinement comments.
+        """Finalize a refinement request with the user's comments.
 
-        Called when the user types text after selecting Reject. The comments
+        Called when the user types text after selecting Refine. The comments
         become the second answer so the daemon's refinement re-synthesis
         picks them up.
         """
         if self._submitted:
             return
-        answers = ["Reject", comments]
+        answers = ["Refine", comments]
         self._submitted = True
         self._answers = answers
         for btn in self._action_buttons.values():
             btn.disabled = True
+        if self._refine_input is not None:
+            self._refine_input.disabled = True
         self.add_class("is-submitted")
         self._refresh_title()
         self._refresh_answered_summary()

@@ -93,7 +93,10 @@ class LoopGraphState(TypedDict, total=False):
     # exec signal from ctx.scratch and attaches it to the ``completed`` event;
     # the daemon enqueues the exec goal. Survives the AWAIT_USER round-trip.
     plan_approved_follow_on: bool | None
-    # Plan-mode reject with comments: set True by ``handle_plan_mode_review_answer``
+    # Plan-mode reject: set True to finalize the current goal without a
+    # follow-on execution goal.
+    plan_rejected_terminal: bool | None
+    # Plan-mode Refine with comments: set True by ``handle_plan_mode_review_answer``
     # so ``node_plan_review`` (async) runs a refinement re-synthesis before
     # re-emitting the review. Ephemeral — consumed within the same node turn.
     plan_refinement_requested: bool | None

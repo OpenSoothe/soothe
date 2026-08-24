@@ -1,4 +1,4 @@
-"""Plan-mode review host module: approve / reject for plan mode.
+"""Plan-mode review host module: approve / reject / refine for plan mode.
 
 When ``interaction_mode == "plan"`` and a plan draft is ready, this module
 builds a clarification request (origin ``ORIGIN_PLAN_MODE_REVIEW``) that
@@ -9,7 +9,7 @@ On fresh plan review:
     - Write the plan to ``.soothe/plans/`` via ``save_plan_draft``.
     - Record a ``goal_completion`` ledger pair: Human = goal text,
       AI = plan body (the synthesized plan, not intermediate step messages).
-    - Emit the approve/reject clarification.
+    - Emit the approve/reject/refine clarification.
 
 On approve:
     - Stash a follow-on exec signal on ``ctx.scratch.follow_on_exec`` (goal
@@ -23,10 +23,13 @@ On approve:
       the ledger).
 
 On reject:
-    - Store the user's rejection text as ``plan_review_comments`` refinement
-      feedback for the next plan-mode iteration.
-    - Record "Plan rejected; refinement requested: <text>" as a
-      ``goal_completion`` AI message.
+    - Mark the plan artifact rejected and terminate the current goal without
+      creating a follow-on execution goal.
+    - Record "Plan rejected by operator." as a ``goal_completion`` AI message.
+
+On refine:
+    - Store the user's comments as ``plan_review_comments`` feedback.
+    - Record the refinement request as a ``goal_completion`` AI message.
     - Re-emit the plan review clarification so the goal stays in plan mode
       (``AWAIT_USER``) and the user can provide further refinement.
 """
@@ -62,8 +65,8 @@ from soothe.sloop.utils.messages import last_ledger_ai_content
 logger = logging.getLogger(__name__)
 
 _PLAN_MODE_REVIEW_QUESTIONS: tuple[str, ...] = (
-    "Action for this plan: Approve or Reject",
-    "Refinement instructions (when choosing Reject)",
+    "Action for this plan: Approve, Refine, or Reject",
+    "Refinement instructions (when choosing Refine)",
 )
 
 # Matches the ``## Plan: <title>`` marker that the plan-mode addendum
@@ -268,7 +271,7 @@ def _record_plan_action_ledger(
 ) -> None:
     """Record the user's plan review action as a new ``goal_completion`` AI message.
 
-    Called on approve / reject so the ledger has a terminal record
+    Called on approve / reject / refine so the ledger has a record
     of the user's decision. Subsequent goals (e.g. the implementation goal
     after approve) will see this in the ledger projection.
     """
@@ -297,7 +300,7 @@ def handle_plan_mode_review_answer(
     ctx: LoopRuntimeContext,
     state: dict[str, Any],
 ) -> dict[str, Any]:
-    """Handle approve / reject after plan-mode review.
+    """Handle approve / reject / refine after plan-mode review.
 
     On approve: stash a follow-on exec signal on ``ctx.scratch.follow_on_exec``
     and set ``plan_approved_follow_on`` so routers finalize the plan-mode goal
@@ -305,9 +308,11 @@ def handle_plan_mode_review_answer(
     fresh exec goal carrying the approved plan path. Record the action in the
     ledger.
 
-    On reject: store the user's rejection text as ``plan_review_comments``
-    refinement feedback and re-emit the plan review clarification so the
-    goal stays in plan mode (``AWAIT_USER``) for further refinement.
+    On reject: terminate the current goal without creating a follow-on goal.
+
+    On refine: store the user's comments as ``plan_review_comments`` feedback
+    and re-emit the plan review clarification so the goal stays in plan mode
+    (``AWAIT_USER``) for further refinement.
     """
     from soothe.sloop.clarification.protocol import answer_from_state
 
@@ -386,17 +391,39 @@ def handle_plan_mode_review_answer(
     if action == "reject":
         if path:
             update_plan_artifact_status(path, "rejected")
-        # Store the user's rejection text as refinement feedback for the
-        # next plan-mode iteration, then re-emit the plan review
-        # clarification so the goal stays in plan mode (AWAIT_USER).
+        terminal_output = "Plan rejected by operator."
+        ctx.scratch.plan_result = PlanResult(
+            status="done",
+            goal_progress="complete",
+            assessment_reasoning=terminal_output,
+            plan_action="new",
+            decision=None,
+            next_action="Submit a new goal when ready.",
+            full_output=terminal_output,
+            evidence_summary=terminal_output,
+            require_goal_completion=False,
+        )
+        ctx.scratch.plan_review_comments = None
+        _record_plan_action_ledger(ctx, terminal_output)
+        logger.info("[PlanModeReview] Plan rejected; terminating current goal")
+        return {
+            "pending_clarification": None,
+            "pending_clarification_answer": None,
+            "last_clarification_origin": None,
+            "intent_route": None,
+            "plan_rejected_terminal": True,
+        }
+
+    if action == "refine":
+        # Store the user's comments as refinement feedback for the next
+        # plan-mode iteration, then re-emit the review so the goal stays in
+        # plan mode (AWAIT_USER).
         ctx.scratch.plan_review_comments = comments
         action_text = (
-            f"Plan rejected; refinement requested: {comments}"
-            if comments
-            else "Plan rejected; refinement requested."
+            f"Plan refinement requested: {comments}" if comments else "Plan refinement requested."
         )
         _record_plan_action_ledger(ctx, action_text)
-        logger.info("[PlanModeReview] Plan rejected; refinement requested; re-emitting review")
+        logger.info("[PlanModeReview] Plan refinement requested; re-emitting review")
         out = build_plan_mode_review_pending(ctx)
         # Signal ``node_plan_review`` that a refinement re-synthesis is
         # needed. ``handle_plan_mode_review_answer`` is sync, so it cannot
@@ -409,7 +436,7 @@ def handle_plan_mode_review_answer(
 
 
 async def _refine_plan(ctx: LoopRuntimeContext) -> str:
-    """Run a refinement re-synthesis using the operator's reject comments.
+    """Run a refinement re-synthesis using the operator's comments.
 
     Reads ``ctx.scratch.plan_review_comments`` and the current draft, calls
     ``synthesize_plan`` with both so the LLM revises the plan to address the
@@ -454,18 +481,18 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
        plan body as the AI message (so subsequent goals see a clean terminal
        report, not intermediate ``execute_step`` messages).
     5. Returns a pending clarification (``ORIGIN_PLAN_MODE_REVIEW``) so the
-       graph routes to ``AWAIT_USER`` for the approve/reject popup.
+       graph routes to ``AWAIT_USER`` for the approve/reject/refine popup.
 
-    On clarification resume (approve/reject), ``route_after_clarification``
+    On clarification resume (approve/reject/refine), ``route_after_clarification``
     routes back here; ``handle_plan_mode_review_answer`` processes the answer and
-    records the user's action in the ledger. On reject with refinement comments,
+    records the user's action in the ledger. On Refine with comments,
     the node runs an async refinement re-synthesis (``synthesize_plan`` with the
     comments + prior plan) so the user sees a *revised* plan, not the same draft.
     """
     # If this is a clarification-resume turn, handle the answer first.
     if state.get("pending_clarification_answer"):
         out = handle_plan_mode_review_answer(ctx, state)
-        # Reject with comments: re-synthesize the plan with the user's
+        # Refine with comments: re-synthesize the plan with the user's
         # feedback before re-emitting the review. ``handle_plan_mode_review_answer``
         # is sync (it stored the comments on scratch + flagged the return);
         # the async synthesis happens here.
@@ -536,7 +563,7 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
             "The step execution evidence is available in the ledger.\n\n"
             "### Changes\n"
             "1. **Retry plan synthesis**\n"
-            "   - Select 'Reject' below and type 'retry' to regenerate the plan.\n"
+            "   - Select 'Refine' below and type 'retry' to regenerate the plan.\n"
         )
         logger.warning("[PlanModeReview] Plan synthesis failed; emitting placeholder")
 
@@ -555,7 +582,7 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
     # the canonical terminal report for this goal.
     _record_plan_completion_ledger(ctx, plan_draft)
 
-    # Emit the approve/reject clarification.
+    # Emit the approve/reject/refine clarification.
     return build_plan_mode_review_pending(ctx)
 
 

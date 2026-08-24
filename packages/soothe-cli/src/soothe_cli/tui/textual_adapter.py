@@ -3101,7 +3101,7 @@ async def execute_task_textual(
 
     # Snapshot the clarification-answer flag *before* showing the spinner so
     # we can skip the default "Thinking" label when the caller already set
-    # "Submitting" (plan-approve/reject). The stream will replace it with a
+    # "Submitting" (plan-review action). The stream will replace it with a
     # real phase label once events arrive. Clearing the persisted flag here
     # also prevents the next turn from double-sending the answer.
     sending_clarification_answer = bool(getattr(adapter, "_clarification_pending", False))
@@ -3114,7 +3114,7 @@ async def execute_task_textual(
         adapter._clarification_answers_pending = None
 
     # Show spinner — but don't clobber the "Submitting" label the caller set
-    # when this turn is a clarification answer (plan approve/reject resume).
+    # when this turn is a clarification answer (plan-review resume).
     if adapter._set_spinner and not sending_clarification_answer:
         await adapter._set_spinner(SPINNER_LABEL_THINKING)
 
@@ -4189,8 +4189,7 @@ async def execute_task_textual(
                                 # (resume re-emit with fresh scratch / no plan body).
                                 if (
                                     event_type == LOOP_CLARIFICATION_REQUESTED
-                                    and origin_node
-                                    in {"plan_mode_review", "planner_subagent_review"}
+                                    and origin_node == "plan_mode_review"
                                     and not plan_path.strip()
                                     and not plan_markdown.strip()
                                 ):

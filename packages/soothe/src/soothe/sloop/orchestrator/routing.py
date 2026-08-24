@@ -120,21 +120,24 @@ def route_after_record_iteration(state: dict[str, Any]) -> str:
 
 
 def route_after_plan_review(state: dict[str, Any]) -> str:
-    """Plan review → FINALIZE (approve) or AWAIT_USER (pending/reject).
+    """Plan review → FINALIZE (approve/reject) or AWAIT_USER (pending/refine).
 
     On approve, ``handle_plan_mode_review_answer`` set ``plan_approved_follow_on``
     and stashed a follow-on exec signal on ``ctx.scratch.follow_on_exec``. The
     plan-mode goal finalizes (its root already completed during exploration);
     the finalize node attaches the follow-on signal to the ``completed`` event
-    so the daemon enqueues a fresh exec goal carrying the approved plan. On
-    reject the pending clarification is re-emitted (storing refinement text)
-    → AWAIT_USER so the user can provide more instruction. On a fresh plan
-    review the pending clarification is still set → AWAIT_USER.
+    so the daemon enqueues a fresh exec goal carrying the approved plan.
+    Reject finalizes the current goal without a follow-on. Refine re-emits the
+    pending clarification so the user can provide more instruction. On a fresh
+    plan review the pending clarification is still set → AWAIT_USER.
     """
     if state.get("plan_approved_follow_on"):
         logger.debug(
             "[routing] route_after_plan_review → finalize (plan approved; exec goal follows)"
         )
+        return FINALIZE
+    if state.get("plan_rejected_terminal"):
+        logger.debug("[routing] route_after_plan_review → finalize (plan rejected)")
         return FINALIZE
     if _pending_clarification(state):
         logger.debug("[routing] route_after_plan_review → await_user")
@@ -153,26 +156,19 @@ def route_after_clarification(state: dict[str, Any]) -> str:
     )
 
     origin = state.get("last_clarification_origin")
-    # Plan-mode review: approve → FINALIZE (follow-on exec goal enqueued on
-    # completion). Reject routes to PLAN_REVIEW so ``node_plan_review`` can
-    # process the answer (store refinement text, re-emit the pending
-    # clarification); ``route_after_plan_review`` then routes the re-emitted
-    # pending to AWAIT_USER so the user can provide more instruction.
+    # Plan-mode review answers route to PLAN_REVIEW for action-specific
+    # processing. Approve and Reject then finalize; Refine re-emits the pending
+    # clarification and routes back to AWAIT_USER.
     if origin == ORIGIN_PLAN_MODE_REVIEW:
         if state.get("plan_approved_follow_on"):
             logger.debug(
                 "[routing] route_after_clarification → finalize (plan approved; exec goal follows)"
             )
             return FINALIZE
-        # No approved plan = reject. Route to PLAN_REVIEW so the answer is
-        # processed (refinement text stored, pending re-emitted). After
-        # processing, route_after_plan_review routes the re-emitted pending to
-        # AWAIT_USER. Reject no longer terminates the goal.
+        # Route to PLAN_REVIEW so the action can be processed.
         pending = state.get("pending_clarification")
         if pending is not None:
-            logger.debug(
-                "[routing] route_after_clarification → plan_review (plan reject; process answer)"
-            )
+            logger.debug("[routing] route_after_clarification → plan_review (process plan action)")
             return PLAN_REVIEW
         logger.debug("[routing] route_after_clarification → END (no pending, no approve)")
         return END

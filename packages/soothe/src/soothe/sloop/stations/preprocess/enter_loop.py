@@ -36,6 +36,7 @@ def _graph_flags(
         "reconcile_route": None,
         "root_eval_route": None,
         "interaction_mode": interaction_mode,
+        "plan_rejected_terminal": None,
     }
 
 

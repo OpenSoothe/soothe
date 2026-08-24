@@ -428,6 +428,44 @@ async def test_root_eval_complex_inserts_eval_step() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["plan", "ask"])
+async def test_root_eval_readonly_mode_skips_eval(mode: str) -> None:
+    """Plan/ask interaction modes never run the coverage Eval — no Eval
+    StepNode insertion and no eval-decision LLM call, even when the action
+    tree would otherwise require one."""
+    from soothe_sdk.intention.models import TaskComplexity
+
+    from soothe.sloop.intention.models import IntakeLabel, IntentClassification
+
+    ce = ContextEngine()
+    goal = await ce.create_goal("do work", loop_id="L1")
+    await ce.add_steps(
+        goal.id,
+        [
+            StepNode(id="ROOT", description="root", status="decomposed"),
+            StepNode(
+                id="CHILD",
+                description="child",
+                status="completed",
+                parent_step_id="ROOT",
+            ),
+        ],
+    )
+    ctx = _ctx_with_ce(ce, goal.id)
+    ctx.interaction_mode = mode
+    ctx.loop_state.intent = IntentClassification(
+        intake_label=IntakeLabel.COMPLEX,
+        task_complexity=TaskComplexity.COMPLEX,
+    )
+    result = await RootEvalNode()(ctx, {})
+    assert result["root_eval_route"] == "finalize"
+    refreshed = await ce.get_goal(goal.id)
+    assert refreshed is not None
+    eval_nodes = [step for step in refreshed.steps.nodes.values() if step.kind == "eval"]
+    assert not eval_nodes
+
+
+@pytest.mark.asyncio
 async def test_dispatch_claims_pending_eval_after_max_waves() -> None:
     ce = ContextEngine()
     goal = await ce.create_goal("do work", loop_id="L1")

@@ -48,9 +48,13 @@ def test_parse_plan_review_answers() -> None:
         "looks good",
     )
     assert parse_plan_review_answers(("reject", "nope")) == ("reject", "nope")
-    # Free-text body (no Approve/Reject prefix) → reject with that text.
+    assert parse_plan_review_answers(("Refine", "tighten scope")) == (
+        "refine",
+        "tighten scope",
+    )
+    # Free-text body (no action prefix) → refine with that text.
     assert parse_plan_review_answers(("Please add error handling", "")) == (
-        "reject",
+        "refine",
         "Please add error handling",
     )
     assert parse_plan_review_answers(("Reject", "tighten scope")) == ("reject", "tighten scope")

@@ -59,7 +59,7 @@ async def synthesize_plan(
         ctx: Loop runtime context with ``loop_state`` containing the ledger.
         llm: Chat model for the synthesis call.
         config: Optional SootheConfig for ledger projection caps.
-        refinement_comments: User feedback from a plan rejection. When
+        refinement_comments: User-requested plan refinement. When
             provided (with ``prior_plan``), the LLM is asked to *revise*
             the prior plan per the comments rather than synthesize from
             scratch.
@@ -181,7 +181,7 @@ def _extract_text(response: Any) -> str:
 def _build_refinement_trigger(comments: str | None, prior_plan: str | None) -> str:
     """Build the human message that drives a refinement re-synthesis.
 
-    The operator rejected the prior plan with feedback. Instruct the LLM to
+    The operator requested changes to the prior plan. Instruct the LLM to
     revise the prior plan per the comments, preserving what worked and only
     changing what the feedback calls out.
     """
@@ -190,8 +190,8 @@ def _build_refinement_trigger(comments: str | None, prior_plan: str | None) -> s
     if len(prior) > _PRIOR_PLAN_MAX_CHARS:
         prior = prior[:_PRIOR_PLAN_MAX_CHARS] + "\n…[truncated]"
     return (
-        "The operator REJECTED the previous plan draft below and requested "
-        "the following refinement. Revise the plan to address the feedback — "
+        "The operator requested the following refinement to the previous plan "
+        "draft. Revise the plan to address the feedback — "
         "keep what was correct and change only what the comments call out. "
         "Output the full revised plan document following the template.\n\n"
         f"## Refinement feedback\n{feedback}\n\n"

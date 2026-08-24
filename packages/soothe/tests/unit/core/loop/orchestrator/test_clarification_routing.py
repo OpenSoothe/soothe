@@ -57,11 +57,10 @@ def test_route_after_clarification_returns_to_origin_node() -> None:
         route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_EVALUATE}) == "dispatch"
     )
     assert route_after_clarification({"last_clarification_origin": "assess"}) == "dispatch"
-    # Plan-mode review without approved plan or pending clarification → END
-    # (fallback; reject re-emits pending so this path is not normally hit).
+    # Plan-mode review without an action or pending clarification → END.
     assert route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW}) == END
-    # Plan-mode review with pending clarification → PLAN_REVIEW (process the
-    # reject answer: store refinement text, re-emit pending → AWAIT_USER).
+    # Plan-mode review with pending clarification → PLAN_REVIEW to process the
+    # selected action.
     assert (
         route_after_clarification(
             {
@@ -103,6 +102,13 @@ def test_route_after_plan_review_routes_to_finalize_on_follow_on() -> None:
     )
 
 
+def test_route_after_plan_review_routes_to_finalize_on_reject() -> None:
+    assert (
+        route_after_plan_review({"plan_rejected_terminal": True, "pending_clarification": None})
+        == "finalize"
+    )
+
+
 def test_route_after_clarification_finalizes_on_plan_mode_follow_on() -> None:
     """Plan-mode approve via clarification resume → FINALIZE (exec goal follows)."""
     from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
@@ -129,20 +135,20 @@ def test_route_after_plan_review_routes_to_end_on_no_pending_no_approve() -> Non
     assert route_after_plan_review({"pending_clarification": None, "last_outcome": None}) == END
 
 
-def test_route_after_clarification_reject_re_emits_to_await_user() -> None:
-    """Reject re-emits pending → route_after_plan_review → AWAIT_USER (not END).
+def test_route_after_clarification_refine_re_emits_to_await_user() -> None:
+    """Refine re-emits pending → route_after_plan_review → AWAIT_USER.
 
-    The full reject flow:
-    1. ``route_after_clarification`` sees pending (reject answer) → PLAN_REVIEW
+    The full Refine flow:
+    1. ``route_after_clarification`` sees pending (Refine answer) → PLAN_REVIEW
     2. ``handle_plan_mode_review_answer`` stores refinement text, re-emits
        pending (clearing the answer) via ``build_plan_mode_review_pending``.
     3. ``route_after_plan_review`` sees re-emitted pending → AWAIT_USER.
 
-    The goal stays in plan mode for further refinement; reject never terminates.
+    The goal stays in plan mode for further refinement.
     """
     from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
 
-    # Step 1: reject answer routes to PLAN_REVIEW for processing.
+    # Step 1: Refine answer routes to PLAN_REVIEW for processing.
     assert (
         route_after_clarification(
             {

@@ -191,8 +191,8 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             END: END,
         },
     )
-    # Plan review → FINALIZE (approve; follow-on exec goal enqueued on
-    # completion), AWAIT_USER (pending clarification), or END (reject).
+    # Plan review → FINALIZE (approve/reject), AWAIT_USER (fresh review or
+    # refinement), or END (defensive fallback).
     graph.add_conditional_edges(
         PLAN_REVIEW,
         route_after_plan_review,

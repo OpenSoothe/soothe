@@ -45,6 +45,15 @@ def _approve_answer_state() -> dict:
     }
 
 
+def _reject_answer_state() -> dict:
+    return {
+        "source": "human",
+        "answers": ["Reject", ""],
+        "defer": False,
+        "audit": {},
+    }
+
+
 def test_approve_sets_terminal_plan_result_on_scratch() -> None:
     """Bug #4: approve must populate ctx.scratch.plan_result so finalize does not fatal."""
     ctx = _build_ctx()
@@ -89,3 +98,19 @@ def test_approve_clears_clarification_channels() -> None:
     assert out["pending_clarification"] is None
     assert out["pending_clarification_answer"] is None
     assert out["last_clarification_origin"] is None
+
+
+def test_reject_terminates_without_follow_on_exec() -> None:
+    """Reject finalizes the current goal and does not execute the plan."""
+    ctx = _build_ctx()
+    out = handle_plan_mode_review_answer(
+        ctx, {"pending_clarification_answer": _reject_answer_state()}
+    )
+
+    assert out["plan_rejected_terminal"] is True
+    assert out["pending_clarification"] is None
+    assert out["pending_clarification_answer"] is None
+    assert ctx.scratch.follow_on_exec is None
+    assert ctx.scratch.plan_result is not None
+    assert ctx.scratch.plan_result.status == "done"
+    assert ctx.scratch.plan_result.require_goal_completion is False

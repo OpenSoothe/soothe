@@ -242,11 +242,20 @@ def test_plan_approval_sets_submitting_spinner_before_mode_resolution() -> None:
     assert call_log[1] == "resolve_mode"
 
 
-def test_plan_approval_mounts_confirmation_message() -> None:
-    """Approving a plan mounts an AppMessage confirmation in the chat."""
+def test_plan_approval_does_not_mount_confirmation_message() -> None:
+    """Approving a plan leaves the card itself as the user-visible record.
+
+    The card's answered summary shows ``[Approve]`` plus the plan-body toggle,
+    so no separate ``AppMessage`` footer is mounted. Regression guard against
+    re-introducing the duplicated "Plan approved — submitting for execution…"
+    line below the card.
+    """
     from textual.widgets import Static
 
     from soothe_cli.tui.widgets.messages import AppMessage
+    from soothe_cli.tui.widgets.messages.clarification import (
+        ClarificationInputMessage,
+    )
 
     mounted: list[Static] = []
 
@@ -271,14 +280,9 @@ def test_plan_approval_mounts_confirmation_message() -> None:
 
     app = _ConfirmHarness()
 
-    # Simulate on_clarification_input_message_submitted for an Approve action.
-    from soothe_cli.tui.widgets.messages.clarification import (
-        ClarificationInputMessage,
-    )
-
     event = ClarificationInputMessage.Submitted(
         step_id="plan_mode_review",
-        questions=["Action for this plan: Approve or Reject"],
+        questions=["Action for this plan: Approve, Refine, or Reject"],
         answers=["Approve", ""],
         widget_id="clarify-approve",
     )
@@ -286,13 +290,17 @@ def test_plan_approval_mounts_confirmation_message() -> None:
     asyncio_run(app.on_clarification_input_message_submitted(event))
 
     confirm_msgs = [w for w in mounted if isinstance(w, AppMessage)]
-    assert len(confirm_msgs) == 1
-    assert "approved" in str(confirm_msgs[0]._content).lower()
-    assert "submitting" in str(confirm_msgs[0]._content).lower()
+    assert confirm_msgs == []
 
 
-def test_plan_reject_mounts_confirmation_message() -> None:
-    """Rejecting a plan mounts an AppMessage confirmation in the chat."""
+def test_plan_refine_does_not_mount_confirmation_message() -> None:
+    """Refining a plan leaves the card itself as the user-visible record.
+
+    The comment is forwarded to the daemon via ``event.answers`` (host stores
+    it on ``ctx.scratch.plan_review_comments``); the card shows ``[Refine]``
+    plus the plan-body toggle. Regression guard against re-introducing the
+    duplicated "Plan refinement requested (...)" footer.
+    """
     from textual.widgets import Static
 
     from soothe_cli.tui.widgets.messages import AppMessage
@@ -302,7 +310,7 @@ def test_plan_reject_mounts_confirmation_message() -> None:
 
     mounted: list[Static] = []
 
-    class _RejectHarness(_ExecutionMixin):
+    class _RefineHarness(_ExecutionMixin):
         def __init__(self) -> None:
             self._composer_mode = "plan"
             self._status_bar: Any = _FakeStatusBar()
@@ -321,19 +329,16 @@ def test_plan_reject_mounts_confirmation_message() -> None:
         async def _send_to_agent(self, message: str, **_kwargs: Any) -> None:
             pass
 
-    app = _RejectHarness()
+    app = _RefineHarness()
 
     event = ClarificationInputMessage.Submitted(
         step_id="plan_mode_review",
-        questions=["Action for this plan: Approve or Reject"],
-        answers=["Reject", "tighten scope to auth"],
-        widget_id="clarify-reject",
+        questions=["Action for this plan: Approve, Refine, or Reject"],
+        answers=["Refine", "tighten scope to auth"],
+        widget_id="clarify-refine",
     )
 
     asyncio_run(app.on_clarification_input_message_submitted(event))
 
     confirm_msgs = [w for w in mounted if isinstance(w, AppMessage)]
-    assert len(confirm_msgs) == 1
-    content = str(confirm_msgs[0]._content).lower()
-    assert "rejected" in content
-    assert "tighten scope to auth" in content
+    assert confirm_msgs == []

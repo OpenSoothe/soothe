@@ -328,7 +328,7 @@ def _plan_review_pending(
 
 
 async def test_resume_turn_skips_clarification_requested_reemit() -> None:
-    """Reject/Approve resume must not remount an empty plan-review widget."""
+    """A plan-review resume must not remount an empty widget."""
     policy = _InteractivePolicyStub(ClarificationAnswer(answers=("Reject", ""), source="human"))
     ctx = _StubCtx(policy=policy, clarification_resume_answers=["Reject", ""])
     await node_await_clarification(ctx, {"pending_clarification": _plan_review_pending()})
@@ -340,14 +340,14 @@ async def test_resume_turn_skips_clarification_requested_reemit() -> None:
 
 
 async def test_second_park_after_resume_reemits_clarification_requested() -> None:
-    """Planner rewrite after 'Reject' must remount plan review (loop 6580)."""
+    """Planner rewrite after Refine must remount plan review (loop 6580)."""
     first_policy = _InteractivePolicyStub(
-        ClarificationAnswer(answers=("Reject", "Show unified mental model"), source="human")
+        ClarificationAnswer(answers=("Refine", "Show unified mental model"), source="human")
     )
     ctx = _StubCtx(
         policy=first_policy,
-        clarification_resume_answers=["Reject", "Show unified mental model"],
-        clarification_resume_text="Plan review: Reject",
+        clarification_resume_answers=["Refine", "Show unified mental model"],
+        clarification_resume_text="Plan review: Refine",
     )
     ctx.scratch = type(  # type: ignore[attr-defined]
         "Scratch",

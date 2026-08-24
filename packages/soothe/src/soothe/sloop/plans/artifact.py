@@ -164,12 +164,12 @@ def parse_plan_review_answers(
 ) -> tuple[str, str]:
     """Parse plan-review answers into ``(action, text)``.
 
-    Actions: ``approve`` | ``reject``.
+    Actions: ``approve`` | ``reject`` | ``refine``.
 
     Expects the plan-review widget (or equivalent) to send the action label
     in answers[0] and optional refinement text in answers[1]. Free-text
-    input that does not start with ``Approve`` or ``Reject`` is treated as
-    a reject carrying that text as refinement feedback, so a typed
+    input that does not start with a known action is treated as
+    a refinement carrying that text as feedback, so a typed
     refinement still works.
     """
     vals = [str(a or "").strip() for a in answers]
@@ -180,6 +180,8 @@ def parse_plan_review_answers(
         return "approve", q2
     if low.startswith("reject"):
         return "reject", q2
-    # Untagged free-text body (single answer) → reject with that text as
+    if low.startswith("refine"):
+        return "refine", q2
+    # Untagged free-text body (single answer) → refine with that text as
     # refinement feedback.
-    return "reject", q2 or q1
+    return "refine", q2 or q1

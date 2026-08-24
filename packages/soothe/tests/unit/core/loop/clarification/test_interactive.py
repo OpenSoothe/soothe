@@ -108,7 +108,7 @@ async def test_plan_mode_review_approve_tolerates_blank_refinement(
     assert ans.answers == ("Approve", "")
 
 
-async def test_plan_mode_review_reject_tolerates_blank_refinement(
+async def test_plan_mode_review_reject_tolerates_blank_second_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _stub_interrupt(monkeypatch, {"answers": ["Reject", ""]})
@@ -117,14 +117,14 @@ async def test_plan_mode_review_reject_tolerates_blank_refinement(
     assert ans.answers == ("Reject", "")
 
 
-async def test_plan_mode_review_reject_carries_refinement_text(
+async def test_plan_mode_review_refine_carries_refinement_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Reject with refinement text in answers[1] is passed through intact."""
-    _stub_interrupt(monkeypatch, {"answers": ["Reject", "narrow scope to auth"]})
+    """Refine with refinement text in answers[1] is passed through intact."""
+    _stub_interrupt(monkeypatch, {"answers": ["Refine", "narrow scope to auth"]})
     policy = InteractiveClarificationPolicy()
     ans = await policy.answer(_request(num_questions=2, origin_node="plan_mode_review"))
-    assert ans.answers == ("Reject", "narrow scope to auth")
+    assert ans.answers == ("Refine", "narrow scope to auth")
 
 
 async def test_plan_mode_review_defers_on_blank_action(

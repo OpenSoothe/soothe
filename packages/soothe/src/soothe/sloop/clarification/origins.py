@@ -20,7 +20,7 @@ ORIGIN_EXECUTE: Final = EXECUTE
 """CoreAgent execute-step ``ask_user`` clarification."""
 
 ORIGIN_PLAN_MODE_REVIEW: Final = "plan_mode_review"
-"""Human review gate after plan-mode draft (approve / reject / more comments)."""
+"""Human review gate after plan-mode draft (approve / reject / refine)."""
 
 ORIGIN_RAIL_PAUSE: Final = "rail_pause"
 """LoopRail ``pause_for_user`` human gate (IG-737); host-side Veritas only."""

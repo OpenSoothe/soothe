@@ -1,11 +1,11 @@
-"""Regression tests for plan-mode reject → refinement re-synthesis (a3d1).
+"""Regression tests for plan-mode Refine → refinement re-synthesis.
 
-When the operator rejects a plan with refinement comments,
+When the operator requests plan refinement,
 ``handle_plan_mode_review_answer`` stores the comments on
 ``ctx.scratch.plan_review_comments`` and flags ``plan_refinement_requested``.
 ``node_plan_review`` (async) then calls ``synthesize_plan`` with the comments +
 prior plan, overwrites the draft, clears the comments, and re-emits the
-review. This closes the reject→refine loop that was previously broken: the
+review. This closes the refinement loop that was previously broken: the
 comments were stored but never consumed, so the user kept seeing the same plan.
 """
 
@@ -49,20 +49,20 @@ def _build_ctx(
     return ctx
 
 
-def _reject_answer_state(comments: str) -> dict:
+def _refine_answer_state(comments: str) -> dict:
     return {
         "source": "human",
-        "answers": ["Reject", comments],
+        "answers": ["Refine", comments],
         "defer": False,
         "audit": {},
     }
 
 
-def test_reject_with_comments_sets_refinement_flag() -> None:
-    """reject with comments flags ``plan_refinement_requested`` for the node."""
+def test_refine_with_comments_sets_refinement_flag() -> None:
+    """Refine with comments flags ``plan_refinement_requested`` for the node."""
     ctx = _build_ctx()
     state = {
-        "pending_clarification_answer": _reject_answer_state("reuse deepagents tokens"),
+        "pending_clarification_answer": _refine_answer_state("reuse deepagents tokens"),
         "pending_clarification": {
             "plan_path": ctx.scratch.plan_draft_path,
             "plan_markdown": ctx.scratch.plan_draft_markdown,
@@ -74,11 +74,11 @@ def test_reject_with_comments_sets_refinement_flag() -> None:
     assert ctx.scratch.plan_review_comments == "reuse deepagents tokens"
 
 
-def test_reject_without_comments_does_not_flag_refinement() -> None:
-    """reject with no comments just re-emits the same plan (nothing to refine)."""
+def test_refine_without_comments_does_not_flag_refinement() -> None:
+    """Refine with no comments re-emits the same plan."""
     ctx = _build_ctx()
     state = {
-        "pending_clarification_answer": _reject_answer_state(""),
+        "pending_clarification_answer": _refine_answer_state(""),
         "pending_clarification": {
             "plan_path": ctx.scratch.plan_draft_path,
             "plan_markdown": ctx.scratch.plan_draft_markdown,
@@ -90,7 +90,7 @@ def test_reject_without_comments_does_not_flag_refinement() -> None:
     assert ctx.scratch.plan_review_comments == ""
 
 
-def test_node_plan_review_refines_on_reject_resume() -> None:
+def test_node_plan_review_refines_on_refine_resume() -> None:
     """node_plan_review re-synthesizes the plan after a reject-with-comments.
 
     The async node calls ``synthesize_plan`` with ``refinement_comments`` +
@@ -100,7 +100,7 @@ def test_node_plan_review_refines_on_reject_resume() -> None:
     ctx = _build_ctx(plan_markdown="# Plan\n\nOriginal plan.")
     ctx.scratch.plan_review_comments = "reuse deepagents tokens"
     state = {
-        "pending_clarification_answer": _reject_answer_state("reuse deepagents tokens"),
+        "pending_clarification_answer": _refine_answer_state("reuse deepagents tokens"),
         "pending_clarification": {
             "plan_path": ctx.scratch.plan_draft_path,
             "plan_markdown": ctx.scratch.plan_draft_markdown,
@@ -160,7 +160,7 @@ def test_node_plan_review_keeps_old_draft_when_refinement_fails() -> None:
     ctx = _build_ctx(plan_markdown="# Plan\n\nOriginal plan.")
     ctx.scratch.plan_review_comments = "reuse deepagents tokens"
     state = {
-        "pending_clarification_answer": _reject_answer_state("reuse deepagents tokens"),
+        "pending_clarification_answer": _refine_answer_state("reuse deepagents tokens"),
         "pending_clarification": {
             "plan_path": ctx.scratch.plan_draft_path,
             "plan_markdown": ctx.scratch.plan_draft_markdown,
@@ -197,7 +197,7 @@ def test_build_refinement_trigger_includes_comments_and_prior_plan() -> None:
     msg = _build_refinement_trigger("reuse deepagents tokens", "# Plan\n\nOriginal.")
     assert "reuse deepagents tokens" in msg
     assert "# Plan\n\nOriginal." in msg
-    assert "REJECTED" in msg
+    assert "requested" in msg
     assert "Refinement feedback" in msg
     assert "Previous plan draft" in msg
 

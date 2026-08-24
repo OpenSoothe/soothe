@@ -202,18 +202,20 @@ def message_from_widget(widget: Widget) -> MessageData:
     widget_id = widget.id or f"msg-{uuid.uuid4().hex[:8]}"
 
     if isinstance(widget, ClarificationInputMessage):
-        is_plan_review = widget._origin_node in {  # noqa: SLF001
-            "plan_mode_review",
-            "planner_subagent_review",
-        }
+        is_plan_review = widget._origin_node == "plan_mode_review"  # noqa: SLF001
         if widget._submitted and widget._answers and is_plan_review:  # noqa: SLF001
             action = widget._answers[0] if widget._answers else ""  # noqa: SLF001
             comments = widget._answers[1] if len(widget._answers) > 1 else ""  # noqa: SLF001
-            content = (
-                (f"Plan rejected: {comments}" if comments else "Plan rejected")
-                if action == "Reject"
-                else "Plan approved"
-            )
+            if action == "Reject":
+                content = "Plan rejected"
+            elif action == "Refine":
+                content = (
+                    f"Plan refinement requested: {comments}"
+                    if comments
+                    else "Plan refinement requested"
+                )
+            else:
+                content = "Plan approved"
             return MessageData(
                 type=MessageType.PLAN_REVIEW,
                 content=content,
@@ -229,7 +231,7 @@ def message_from_widget(widget: Widget) -> MessageData:
             prefix = "Plan review" if is_plan_review else "Clarification"
             content = f"{prefix}: {summary}" if summary else f"{prefix} answered"
         elif is_plan_review:
-            content = "Plan review: awaiting Approve / Reject"
+            content = "Plan review: awaiting Approve / Refine / Reject"
         else:
             content = "Clarification: awaiting answer"
         return MessageData(type=MessageType.APP, content=content, id=widget_id)

@@ -41,19 +41,19 @@ def test_clarification_wire_content_plan_review() -> None:
     assert clarification_wire_content(["Reject", ""]) == "Plan review: Reject"
     assert clarification_wire_content(["Approve", ""]) == "Plan review: Approve"
     assert (
-        clarification_wire_content(["Reject", "narrow scope"])
-        == "Plan review: Reject — narrow scope"
+        clarification_wire_content(["Refine", "narrow scope"])
+        == "Plan review: Refine — narrow scope"
     )
     assert clarification_wire_content(["auth flows"]) == "auth flows"
     assert clarification_wire_content(["a", "b"]) == "A1: a | A2: b"
 
 
-def test_plan_review_reject_wire_content_with_refinement() -> None:
-    """Reject carries optional refinement text in answers[1]; wire formats it."""
+def test_plan_review_refine_wire_content_with_comments() -> None:
+    """Refine carries refinement text in answers[1]; wire formats it."""
     from soothe_cli.tui.app._execution import clarification_wire_content
 
-    assert clarification_wire_content(["Reject", "tighten scope to auth"]) == (
-        "Plan review: Reject — tighten scope to auth"
+    assert clarification_wire_content(["Refine", "tighten scope to auth"]) == (
+        "Plan review: Refine — tighten scope to auth"
     )
     assert clarification_wire_content(["Reject", ""]) == "Plan review: Reject"
 
@@ -61,7 +61,7 @@ def test_plan_review_reject_wire_content_with_refinement() -> None:
 def test_path_footer_text() -> None:
     with_path = ClarificationInputMessage(
         step_id="s1",
-        questions=["Action?", "Refinement instructions (when choosing Reject)"],
+        questions=["Action?", "Refinement instructions (when choosing Refine)"],
         origin_node="plan_mode_review",
         plan_path="/tmp/plans/x.md",
         plan_markdown="# Plan",
@@ -69,7 +69,7 @@ def test_path_footer_text() -> None:
     assert with_path._path_footer_text() == "Plan saved to: /tmp/plans/x.md"
     memory = ClarificationInputMessage(
         step_id="s1",
-        questions=["Action?", "Refinement instructions (when choosing Reject)"],
+        questions=["Action?", "Refinement instructions (when choosing Refine)"],
         origin_node="plan_mode_review",
     )
     assert memory._path_footer_text() == "Plan held in memory only"
@@ -80,7 +80,7 @@ def test_widget_to_message_serializes_plan_review() -> None:
 
     widget = ClarificationInputMessage(
         step_id="s1",
-        questions=["Action?", "Refinement instructions (when choosing Reject)"],
+        questions=["Action?", "Refinement instructions (when choosing Refine)"],
         origin_node="plan_mode_review",
         plan_path="/tmp/x.md",
         plan_markdown="# Plan",
@@ -92,7 +92,7 @@ def test_widget_to_message_serializes_plan_review() -> None:
     assert "awaiting" in data.content.lower()
 
 
-def test_widget_to_message_serializes_answered_plan_review_reject() -> None:
+def test_widget_to_message_serializes_answered_plan_review_refine() -> None:
     """Answered (submitted) plan-review serializes to PLAN_REVIEW with full fidelity."""
     from soothe_sdk.display.transcript_types import MessageType
 
@@ -100,17 +100,17 @@ def test_widget_to_message_serializes_answered_plan_review_reject() -> None:
 
     widget = ClarificationInputMessage(
         step_id="s1",
-        questions=["Action?", "Refinement instructions (when choosing Reject)"],
+        questions=["Action?", "Refinement instructions (when choosing Refine)"],
         origin_node="plan_mode_review",
         plan_path="/tmp/x.md",
         plan_markdown="# Plan\n\nDo things.",
         id="clarify-answered",
     )
     widget._submitted = True
-    widget._answers = ["Reject", "将plan翻译成中文"]
+    widget._answers = ["Refine", "将plan翻译成中文"]
     data = message_from_widget(widget)
     assert data.type == MessageType.PLAN_REVIEW
-    assert data.plan_review_action == "Reject"
+    assert data.plan_review_action == "Refine"
     assert data.plan_review_comments == "将plan翻译成中文"
     assert data.plan_markdown == "# Plan\n\nDo things."
     assert data.plan_path == "/tmp/x.md"
@@ -120,7 +120,7 @@ def test_widget_to_message_serializes_answered_plan_review_reject() -> None:
     restored = message_to_widget(data)
     assert isinstance(restored, ClarificationInputMessage)
     assert restored._submitted is True
-    assert restored._answers == ["Reject", "将plan翻译成中文"]
+    assert restored._answers == ["Refine", "将plan翻译成中文"]
     assert restored._plan_markdown == "# Plan\n\nDo things."
 
 
@@ -164,7 +164,7 @@ async def test_plan_review_approve_submits_immediately() -> None:
     app = _PlanReviewHarnessApp(
         step_id="plan_mode_review",
         questions=[
-            "Action for this plan: Approve or Reject",
+            "Action for this plan: Approve, Refine, or Reject",
         ],
         origin_node="plan_mode_review",
         plan_path="/ws/.soothe/plans/demo.md",
@@ -184,7 +184,7 @@ async def test_plan_review_arrow_keys_cycle_actions() -> None:
     app = _PlanReviewHarnessApp(
         step_id="plan_mode_review",
         questions=[
-            "Action for this plan: Approve or Reject",
+            "Action for this plan: Approve, Refine, or Reject",
         ],
         origin_node="plan_mode_review",
         plan_path="/ws/.soothe/plans/demo.md",
@@ -196,20 +196,59 @@ async def test_plan_review_arrow_keys_cycle_actions() -> None:
         assert widget._plan_path.endswith("demo.md")
         assert widget._plan_markdown.startswith("# Plan")
         assert widget._selected_action == "approve"
-        await pilot.press("right")
+        await pilot.press("down")
+        assert widget._selected_action == "refine"
+        await pilot.press("down")
         assert widget._selected_action == "reject"
-        await pilot.press("right")
+        await pilot.press("down")
         assert widget._selected_action == "approve"
-        await pilot.press("left")
+        await pilot.press("up")
         assert widget._selected_action == "reject"
-        # Reject now prepares the chat input for refinement comments instead
-        # of submitting immediately. Verify the awaiting-comments state.
+        await pilot.press("up")
+        assert widget._selected_action == "refine"
+        # Refine focuses the comments field within the second action row.
         await pilot.press("enter")
-        assert widget._reject_awaiting_comments is True
         assert len(app.submitted) == 0
-        # Simulate empty chat-input submission (bare reject, no comments).
-        widget._finalize_plan_review_with_comments("")
-        await pilot.pause()  # let the Submitted message pump
+        refine_input = widget.query_one("#plan-review-refine-comments")
+        refine_input.value = "narrow scope to auth"
+        refine_input.focus()
+        await pilot.press("enter")
+        assert len(app.submitted) == 1
+        assert app.submitted[0].answers == ["Refine", "narrow scope to auth"]
+
+
+@pytest.mark.asyncio
+async def test_plan_review_actions_render_as_numbered_rows() -> None:
+    from textual.widgets import Button, Input
+
+    app = _PlanReviewHarnessApp(
+        step_id="plan_mode_review",
+        questions=["Action for this plan: Approve, Refine, or Reject"],
+        origin_node="plan_mode_review",
+        plan_markdown="# Plan",
+    )
+    async with app.run_test():
+        widget = app.query_one(ClarificationInputMessage)
+        labels = [str(button.label) for button in widget.query(".plan-review-actions Button")]
+        assert labels == ["1. Approve", "2. Refine:", "3. Reject"]
+        refine_row = widget.query_one("#plan-review-btn-refine").parent
+        assert refine_row is not None
+        assert len(list(refine_row.query(Input))) == 1
+        assert len(list(widget.query(".plan-review-action-row"))) == 3
+        assert len(list(widget.query(Button))) == 3
+
+
+@pytest.mark.asyncio
+async def test_plan_review_reject_submits_immediately() -> None:
+    app = _PlanReviewHarnessApp(
+        step_id="plan_mode_review",
+        questions=["Action for this plan: Approve, Refine, or Reject"],
+        origin_node="plan_mode_review",
+        plan_markdown="# Plan\n\nBody.\n",
+        id="clarify-reject",
+    )
+    async with app.run_test() as pilot:
+        await pilot.click("#plan-review-btn-reject")
         assert len(app.submitted) == 1
         assert app.submitted[0].answers == ["Reject", ""]
 
@@ -223,7 +262,7 @@ async def test_plan_review_body_shows_full_content_without_inner_scroll() -> Non
     app = _PlanReviewHarnessApp(
         step_id="plan_mode_review",
         questions=[
-            "Action for this plan: Approve or Reject",
+            "Action for this plan: Approve, Refine, or Reject",
         ],
         origin_node="plan_mode_review",
         plan_path="/ws/.soothe/plans/demo.md",
@@ -248,7 +287,7 @@ async def test_plan_review_answered_tree_expand_via_enter() -> None:
 
     app = _PlanReviewHarnessApp(
         step_id="plan_mode_review",
-        questions=["Action for this plan: Approve or Reject"],
+        questions=["Action for this plan: Approve, Refine, or Reject"],
         origin_node="plan_mode_review",
         plan_path="/ws/.soothe/plans/demo.md",
         plan_markdown="# Plan\n\nDo things.",
@@ -281,7 +320,7 @@ async def test_plan_review_answered_tree_expand_via_click() -> None:
 
     app = _PlanReviewHarnessApp(
         step_id="plan_mode_review",
-        questions=["Action for this plan: Approve or Reject"],
+        questions=["Action for this plan: Approve, Refine, or Reject"],
         origin_node="plan_mode_review",
         plan_markdown="# Plan\n\nDo things.",
         id="clarify-click-expand",
@@ -298,15 +337,17 @@ async def test_plan_review_answered_tree_expand_via_click() -> None:
 
 
 def test_plan_review_answered_summary_renders_single_tree_branch() -> None:
-    """Answered view: no stray empty branch; action + comments + toggle each
-    carry the ``⎿`` tree gutter (parity with the goal→step tree)."""
+    """Answered view: no stray empty branch; action + plan-body toggle each
+    carry the ``⎿`` tree gutter (parity with the goal→step tree).
+
+    Asserts the actual rendered output (not the pre-render private text), so
+    a regression that turns the action label into Rich markup (e.g. ``[Reject]``
+    parsed as a style tag with ``markup=True``) leaves the row visibly empty
+    would be caught here.
+    """
     import asyncio
 
     from textual.widgets import Static
-
-    def _static_text(w: Static) -> str:
-        # Textual's Static stores content in a name-mangled private attr.
-        return str(getattr(w, "_Static__content", "") or "")
 
     async def _check() -> None:
         app = _PlanReviewHarnessApp(
@@ -322,15 +363,20 @@ def test_plan_review_answered_summary_renders_single_tree_branch() -> None:
             await pilot.pause()  # let the answered-summary update() flush
             # No stray empty .plan-review-answered node (the old first branch).
             assert list(widget.query(".plan-review-answered")) == []
+            # Action row must render its literal label — not just the gutter.
             action_w = widget.query_one(".plan-review-answered-action", Static)
-            action_plain = _static_text(action_w)
-            assert action_plain.startswith("⎿")
-            assert "[Reject]" in action_plain
+            action_rendered = str(action_w.render())
+            assert action_rendered.startswith("⎿")
+            assert "[Reject]" in action_rendered
+            assert action_rendered.strip() != "⎿".strip(), (
+                "Action row collapsed to gutter only — Rich markup is stripping "
+                "the literal ``[Reject]`` label."
+            )
             # Toggle row carries the same tree gutter + expand glyph.
             toggle_w = widget.query_one(".plan-review-expand-toggle", Static)
-            toggle_plain = _static_text(toggle_w)
-            assert toggle_plain.startswith("⎿")
-            assert "Plan body" in toggle_plain
-            assert "expand" in toggle_plain
+            toggle_rendered = str(toggle_w.render())
+            assert toggle_rendered.startswith("⎿")
+            assert "Plan body" in toggle_rendered
+            assert "expand" in toggle_rendered
 
     asyncio.run(_check())
