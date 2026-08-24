@@ -171,6 +171,24 @@ class _ExecutionMixin:
         value = event.value
         mode: InputMode = event.mode  # type: ignore[assignment]  # Textual event mode is str at type level but InputMode at runtime
 
+        # If a plan-review Reject is awaiting refinement comments, route the
+        # submitted text as the reject answer (with comments) instead of a new
+        # goal. This lets the user type refinement feedback after selecting
+        # Reject; empty text is a bare reject (no comments).
+        reject_widget = self._find_pending_reject_clarification()
+        if reject_widget is not None:
+            event.stop()
+            comments = value.strip()
+            reject_widget._reject_awaiting_comments = False
+            # Restore the chat input placeholder.
+            chat_input = getattr(self, "_chat_input", None)
+            if chat_input is not None and chat_input.input_widget is not None:
+                from soothe_cli.settings.glyphs import newline_shortcut
+
+                chat_input.input_widget.placeholder = f"{newline_shortcut()} for new line"
+            await reject_widget._finalize_plan_review_with_comments(comments)
+            return
+
         # /quit, /q, /exit, and bare exit/quit always execute immediately,
         # even mid-loop-switch or while the agent is busy.
         from soothe_cli.commands.command_registry import (
@@ -219,6 +237,18 @@ class _ExecutionMixin:
             return
 
         await self._process_message(value, mode)
+
+    def _find_pending_reject_clarification(self) -> ClarificationInputMessage | None:
+        """Return the plan-review widget awaiting reject comments, if any."""
+        adapter = getattr(self, "_ui_adapter", None)
+        if adapter is None:
+            return None
+        for widget in adapter._clarification_input_by_step.values():
+            if getattr(widget, "_reject_awaiting_comments", False) and not getattr(
+                widget, "_submitted", False
+            ):
+                return widget
+        return None
 
     def on_chat_input_mode_changed(self, event: ChatInput.ModeChanged) -> None:
         """Update status bar when input mode changes."""

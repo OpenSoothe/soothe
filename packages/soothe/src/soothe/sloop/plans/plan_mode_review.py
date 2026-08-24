@@ -460,6 +460,11 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
         # is sync (it stored the comments on scratch + flagged the return);
         # the async synthesis happens here.
         if out.get("plan_refinement_requested"):
+            comments = (getattr(ctx.scratch, "plan_review_comments", None) or "").strip()
+            await ctx.emit(
+                "plan_refinement_started",
+                {"comments": comments[:200] if comments else ""},
+            )
             refined = await _refine_plan(ctx)
             if refined:
                 # Overwrite the draft + artifact; the pending payload built by
@@ -470,6 +475,7 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
                     _record_plan_completion_ledger(ctx, refined)
                     out = build_plan_mode_review_pending(ctx)
                 ctx.scratch.plan_review_comments = None
+                await ctx.emit("plan_refinement_completed", {"plan_chars": len(refined)})
             else:
                 # Synthesis failed — keep the old draft pending and clear the
                 # stale comments so a subsequent approve does not re-trigger.
@@ -477,6 +483,7 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
                     "[PlanModeReview] Refinement synthesis failed; re-emitting prior draft"
                 )
                 ctx.scratch.plan_review_comments = None
+                await ctx.emit("plan_refinement_failed", {})
         return out
 
     # Fresh plan review: prefer extracting the plan from the step's final AI
@@ -499,7 +506,12 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
             logger.warning("[PlanModeReview] No synthesis model available")
             plan_draft = ""
         else:
+            await ctx.emit("plan_synthesis_started", {})
             plan_draft = await synthesize_plan(ctx, llm=synth_llm, config=strange_loop.config)
+            await ctx.emit(
+                "plan_synthesis_completed",
+                {"plan_chars": len(plan_draft)},
+            )
 
     if not plan_draft:
         # Synthesis failed (rate limit, error, no model). Do NOT fall back to

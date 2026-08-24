@@ -41,9 +41,12 @@ def _build_ctx(
         goal_synthesis_model=lambda: None,
         _fast_llm=None,
     )
-    return types.SimpleNamespace(
+    ctx = types.SimpleNamespace(
         scratch=scratch, loop_state=loop_state, ce=None, strange_loop=strange_loop
     )
+    # node_plan_review emits telemetry via ctx.emit (see plan_mode_review.py).
+    ctx.emit = AsyncMock()
+    return ctx
 
 
 def _reject_answer_state(comments: str) -> dict:

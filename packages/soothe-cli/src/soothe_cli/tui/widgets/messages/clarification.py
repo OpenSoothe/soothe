@@ -227,6 +227,10 @@ class ClarificationInputMessage(Vertical):
         self._widget_id = widget_id or self.id or ""
         self._selected_action: _PlanReviewAction = "approve"
         self._action_buttons: dict[_PlanReviewAction, Button] = {}
+        # When True, the next chat-input submission is the reject refinement
+        # comment (not a new goal). Set when the user selects Reject but hasn't
+        # typed comments yet.
+        self._reject_awaiting_comments = False
 
     @property
     def _is_plan_review(self) -> bool:
@@ -364,6 +368,21 @@ class ClarificationInputMessage(Vertical):
 
     def _set_selected_action(self, action: _PlanReviewAction) -> None:
         self._selected_action = action
+        # If the user moved away from Reject, clear the awaiting-comments flag
+        # and restore the input placeholder.
+        if action != "reject" and self._reject_awaiting_comments:
+            self._reject_awaiting_comments = False
+            app = self.app
+            chat_input = getattr(app, "_chat_input", None)
+            if chat_input is not None and chat_input.input_widget is not None:
+                from soothe_cli.settings.glyphs import newline_shortcut
+
+                chat_input.input_widget.placeholder = f"{newline_shortcut()} for new line"
+            try:
+                hint = self.query_one(".plan-review-hint", Static)
+                hint.update("←/→ switch · Enter confirm")
+            except Exception:  # noqa: BLE001
+                pass
         for key, btn in self._action_buttons.items():
             if key == action:
                 btn.add_class("plan-review-selected")
@@ -383,7 +402,43 @@ class ClarificationInputMessage(Vertical):
         if btn is not None:
             self._schedule_focus(btn)
         if activate:
-            self._finalize_plan_review(action=action)
+            if action == "reject":
+                # Reject needs refinement comments — don't submit immediately.
+                # Focus the chat input with a placeholder so the user can type
+                # their feedback before the reject is sent.
+                self._prepare_reject_input()
+            else:
+                self._finalize_plan_review(action=action)
+
+    def _prepare_reject_input(self) -> None:
+        """Focus the chat input for reject refinement comments.
+
+        When the user selects Reject, don't submit immediately — focus the
+        chat input with a placeholder so they can type refinement comments.
+        The next submitted message becomes the reject answer (with comments).
+        If the user submits empty text, it's a bare reject (no comments).
+        """
+        self._reject_awaiting_comments = True
+        # Visually mark the Reject button as selected-but-waiting.
+        reject_btn = self._action_buttons.get("reject")
+        if reject_btn is not None:
+            reject_btn.disabled = False  # keep interactive (user can re-select Approve)
+        # Focus the chat input and set a guiding placeholder.
+        app = self.app
+        chat_input = getattr(app, "_chat_input", None)
+        if chat_input is not None:
+            ta = chat_input.input_widget
+            if ta is not None:
+                ta.placeholder = (
+                    "Enter refinement comments for the plan, then press Enter to reject…"
+                )
+            chat_input.focus_input()
+        # Update the hint line.
+        try:
+            hint = self.query_one(".plan-review-hint", Static)
+            hint.update("Type your refinement in the input box below, then press Enter")
+        except Exception:  # noqa: BLE001
+            pass
 
     def action_plan_review_prev(self) -> None:
         """Select the previous plan-review action (←)."""
@@ -397,7 +452,7 @@ class ClarificationInputMessage(Vertical):
         """Confirm the selected plan-review action (Enter)."""
         if self._submitted or not self._is_plan_review:
             return
-        self._finalize_plan_review(action=self._selected_action)
+        self._apply_plan_review_selection(self._selected_action, activate=True)
 
     @on(Button.Pressed)
     def _on_plan_review_button(self, event: Button.Pressed) -> None:
@@ -449,6 +504,31 @@ class ClarificationInputMessage(Vertical):
             return
         label = _ACTION_LABELS[action]
         answers = [label, ""]
+        self._submitted = True
+        self._answers = answers
+        for btn in self._action_buttons.values():
+            btn.disabled = True
+        self.add_class("is-submitted")
+        self._refresh_title()
+        self.post_message(
+            self.Submitted(
+                step_id=self._step_id,
+                questions=list(self._questions),
+                answers=answers,
+                widget_id=self._widget_id,
+            )
+        )
+
+    def _finalize_plan_review_with_comments(self, comments: str) -> None:
+        """Finalize a reject with the user's refinement comments.
+
+        Called when the user types text after selecting Reject. The comments
+        become the second answer so the daemon's refinement re-synthesis
+        picks them up.
+        """
+        if self._submitted:
+            return
+        answers = ["Reject", comments]
         self._submitted = True
         self._answers = answers
         for btn in self._action_buttons.values():

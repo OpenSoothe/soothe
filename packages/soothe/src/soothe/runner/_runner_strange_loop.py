@@ -863,6 +863,31 @@ class StrangeLoopMixin:
                         ).to_dict()
                     )
 
+                elif event_type == "plan_synthesis_started":
+                    yield custom_event(
+                        StrangeLoopPlanPhaseStatusEvent(label="Synthesizing plan").to_dict()
+                    )
+
+                elif event_type == "plan_synthesis_completed":
+                    yield custom_event(
+                        StrangeLoopPlanPhaseStatusEvent(label="Plan ready").to_dict()
+                    )
+
+                elif event_type == "plan_refinement_started":
+                    yield custom_event(
+                        StrangeLoopPlanPhaseStatusEvent(label="Refining plan").to_dict()
+                    )
+
+                elif event_type == "plan_refinement_completed":
+                    yield custom_event(
+                        StrangeLoopPlanPhaseStatusEvent(label="Refined plan ready").to_dict()
+                    )
+
+                elif event_type == "plan_refinement_failed":
+                    yield custom_event(
+                        StrangeLoopPlanPhaseStatusEvent(label="Refinement failed").to_dict()
+                    )
+
                 elif event_type == "assess":
                     reasoning = str(event_data.get("assessment_reasoning", "")).strip()
                     if _is_displayable_assessment_reasoning(reasoning):

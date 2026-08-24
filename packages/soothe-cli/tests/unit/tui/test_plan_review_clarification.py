@@ -150,7 +150,14 @@ async def test_plan_review_arrow_keys_cycle_actions() -> None:
         assert widget._selected_action == "approve"
         await pilot.press("left")
         assert widget._selected_action == "reject"
+        # Reject now prepares the chat input for refinement comments instead
+        # of submitting immediately. Verify the awaiting-comments state.
         await pilot.press("enter")
+        assert widget._reject_awaiting_comments is True
+        assert len(app.submitted) == 0
+        # Simulate empty chat-input submission (bare reject, no comments).
+        widget._finalize_plan_review_with_comments("")
+        await pilot.pause()  # let the Submitted message pump
         assert len(app.submitted) == 1
         assert app.submitted[0].answers == ["Reject", ""]
 
