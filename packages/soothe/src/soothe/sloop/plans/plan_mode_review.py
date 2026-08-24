@@ -387,7 +387,42 @@ def handle_plan_mode_review_answer(
         )
         _record_plan_action_ledger(ctx, action_text)
         logger.info("[PlanModeReview] Plan rejected; refinement requested; re-emitting review")
-        return build_plan_mode_review_pending(ctx)
+        out = build_plan_mode_review_pending(ctx)
+        # Signal ``node_plan_review`` that a refinement re-synthesis is
+        # needed. ``handle_plan_mode_review_answer`` is sync, so it cannot
+        # run the async LLM synthesis itself; the node (async) consumes
+        # ``ctx.scratch.plan_review_comments`` and performs the re-synthesis
+        # after this function returns, then overwrites the draft.
+        if (comments or "").strip():
+            out["plan_refinement_requested"] = True
+        return out
+
+
+async def _refine_plan(ctx: LoopRuntimeContext) -> str:
+    """Run a refinement re-synthesis using the operator's reject comments.
+
+    Reads ``ctx.scratch.plan_review_comments`` and the current draft, calls
+    ``synthesize_plan`` with both so the LLM revises the plan to address the
+    feedback. Returns the revised plan text (empty on failure). Does NOT
+    clear ``plan_review_comments`` — the caller owns lifecycle so the
+    comments survive a synthesis failure for the next attempt.
+    """
+    comments = (getattr(ctx.scratch, "plan_review_comments", None) or "").strip()
+    prior = (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip()
+    if not comments or not prior:
+        return ""
+    strange_loop = ctx.strange_loop
+    synth_llm = strange_loop.goal_synthesis_model() or strange_loop._fast_llm
+    if synth_llm is None:
+        logger.warning("[PlanModeReview] No synthesis model for refinement")
+        return ""
+    return await synthesize_plan(
+        ctx,
+        llm=synth_llm,
+        config=strange_loop.config,
+        refinement_comments=comments,
+        prior_plan=prior,
+    )
 
 
 async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> dict[str, Any]:
@@ -413,11 +448,36 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
 
     On clarification resume (approve/reject), ``route_after_clarification``
     routes back here; ``handle_plan_mode_review_answer`` processes the answer and
-    records the user's action in the ledger.
+    records the user's action in the ledger. On reject with refinement comments,
+    the node runs an async refinement re-synthesis (``synthesize_plan`` with the
+    comments + prior plan) so the user sees a *revised* plan, not the same draft.
     """
     # If this is a clarification-resume turn, handle the answer first.
     if state.get("pending_clarification_answer"):
-        return handle_plan_mode_review_answer(ctx, state)
+        out = handle_plan_mode_review_answer(ctx, state)
+        # Reject with comments: re-synthesize the plan with the user's
+        # feedback before re-emitting the review. ``handle_plan_mode_review_answer``
+        # is sync (it stored the comments on scratch + flagged the return);
+        # the async synthesis happens here.
+        if out.get("plan_refinement_requested"):
+            refined = await _refine_plan(ctx)
+            if refined:
+                # Overwrite the draft + artifact; the pending payload built by
+                # ``handle_plan_mode_review_answer`` still references the *old*
+                # draft, so rebuild it from the revised plan.
+                path = save_plan_draft(ctx, refined)
+                if path:
+                    _record_plan_completion_ledger(ctx, refined)
+                    out = build_plan_mode_review_pending(ctx)
+                ctx.scratch.plan_review_comments = None
+            else:
+                # Synthesis failed — keep the old draft pending and clear the
+                # stale comments so a subsequent approve does not re-trigger.
+                logger.warning(
+                    "[PlanModeReview] Refinement synthesis failed; re-emitting prior draft"
+                )
+                ctx.scratch.plan_review_comments = None
+        return out
 
     # Fresh plan review: prefer extracting the plan from the step's final AI
     # message (the plan-mode addendum tells the agent to output the plan as its

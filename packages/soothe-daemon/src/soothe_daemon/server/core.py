@@ -1331,7 +1331,10 @@ class SootheDaemon(DaemonHandlersMixin):
         """
         from datetime import UTC, datetime, timedelta
 
-        from soothe_daemon.runtime.auto_resume import _loop_has_active_runner
+        from soothe_daemon.runtime.auto_resume import (
+            _loop_has_active_runner,
+            peek_clarification_pending,
+        )
 
         cfg = self._daemon_config.loop_status_reconciliation
         stale_before = datetime.now(UTC) - timedelta(seconds=cfg.stale_running_seconds)
@@ -1365,6 +1368,22 @@ class SootheDaemon(DaemonHandlersMixin):
             if updated_at.tzinfo is None:
                 updated_at = updated_at.replace(tzinfo=UTC)
             if updated_at >= stale_before:
+                continue
+            # Skip loops parked on a pending clarification (AWAIT_USER /
+            # plan-mode review). These have no active runner by design — the
+            # runner exited after parking, waiting for user input to resume.
+            # Demoting them kills the clarification flow and orphans goals.
+            try:
+                clar_pending = await peek_clarification_pending(self, loop_id)
+            except Exception:
+                clar_pending = None
+            if clar_pending:
+                logger.debug(
+                    "Reconcile: skipping loop %s (pending clarification; "
+                    "updated %s, no active runner but parked for user input)",
+                    loop_id,
+                    updated_at_raw,
+                )
                 continue
             try:
                 await self._persistence_manager.update_loop_metadata(

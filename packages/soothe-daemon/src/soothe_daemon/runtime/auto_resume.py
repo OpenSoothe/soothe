@@ -163,15 +163,59 @@ async def peek_strange_loop_checkpoint(daemon: Any, loop_id: str) -> Any | None:
                     )
 
 
-async def peek_clarification_pending(_daemon: Any, _loop_id: str) -> bool | None:
-    """Best-effort clarification pending probe.
+async def peek_clarification_pending(daemon: Any, loop_id: str) -> bool | None:
+    """Best-effort probe: does this loop's graph state have a pending clarification?
 
-    Returns ``None`` when the StrangeLoop graph checkpoint cannot be inspected
-    cheaply at startup. Callers treat ``None`` as not pending so mid-execute
-    recovery is not blocked; parked clarifications that are resumed re-emit at
-    ``await_clarification``.
+    Loads the last LangGraph checkpoint tuple for the loop's thread and checks
+    the channel values for ``pending_clarification`` (without a matching
+    ``pending_clarification_answer``). Returns ``None`` when the checkpointer
+    or checkpoint tuple is unavailable.
     """
-    return None
+    runner = getattr(daemon, "_runner", None)
+    if runner is None:
+        return None
+    checkpointer = getattr(runner, "_checkpointer", None)
+    if checkpointer is None:
+        return None
+    # Determine thread_id: the loop's thread_id is the same as loop_id
+    # (1:1 mapping in StrangeLoop — see checkpoint.py StrangeLoopCheckpoint).
+    config = {"configurable": {"thread_id": str(loop_id)}}
+    try:
+        # ``aget_tuple`` is async on AsyncSqliteSaver / AsyncPostgresSaver.
+        get_tuple = getattr(checkpointer, "aget_tuple", None)
+        if get_tuple is None:
+            # Sync checkpointer — wrap the sync call.
+            get_tuple = getattr(checkpointer, "get_tuple", None)
+            if get_tuple is None:
+                return None
+            import asyncio
+
+            tup = await asyncio.to_thread(get_tuple, config)
+        else:
+            tup = await get_tuple(config)
+    except Exception:
+        logger.debug(
+            "peek_clarification_pending: checkpoint load failed loop=%s",
+            loop_id,
+            exc_info=True,
+        )
+        return None
+    if tup is None:
+        return None
+    # Channel values are a dict; pending_clarification is a graph state key.
+    values = getattr(tup, "checkpoint", None)
+    if values is None:
+        return None
+    channel_values = (
+        values.get("channel_values", {})
+        if isinstance(values, dict)
+        else getattr(values, "channel_values", {})
+    )
+    if not isinstance(channel_values, dict):
+        return None
+    pending = channel_values.get("pending_clarification")
+    answered = channel_values.get("pending_clarification_answer")
+    return bool(pending) and not answered
 
 
 def _loop_has_active_runner(daemon: Any, loop_id: str) -> bool:

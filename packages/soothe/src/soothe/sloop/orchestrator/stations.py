@@ -85,7 +85,6 @@ class LoopGraphState(TypedDict, total=False):
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None
     last_clarification_origin: str | None  # ClarificationOrigin at runtime
-    resume_synth: bool | None
     after_record_route: Literal["finalize", "goal_completion", ""] | None
     interaction_mode: str | None  # "agent" | "ask" | "plan" — set by enter_loop
     # Plan-mode approve (Bug #3 fix): set True by ``handle_plan_mode_review_answer``
@@ -94,6 +93,10 @@ class LoopGraphState(TypedDict, total=False):
     # exec signal from ctx.scratch and attaches it to the ``completed`` event;
     # the daemon enqueues the exec goal. Survives the AWAIT_USER round-trip.
     plan_approved_follow_on: bool | None
+    # Plan-mode reject with comments: set True by ``handle_plan_mode_review_answer``
+    # so ``node_plan_review`` (async) runs a refinement re-synthesis before
+    # re-emitting the review. Ephemeral — consumed within the same node turn.
+    plan_refinement_requested: bool | None
 
 
 __all__ = [

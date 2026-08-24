@@ -610,8 +610,9 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
         },
     )
 
-    # Synth path was taken.
-    assert result.get("resume_synth") is True
+    # Synth path was taken (ask_user answer consumed, pending cleared).
+    assert result.get("pending_clarification") is None
+    assert result.get("last_outcome") == "continue"
     # State got the new Q&A pair appended (2 prior + 2 new = 4).
     msgs = ce.ledger.get_messages()
     assert len(msgs) == 4

@@ -19,7 +19,7 @@ from soothe.sloop.orchestrator.runner import (
     _clarification_resume_command,
     build_loop_graph_invoke_config,
 )
-from soothe.sloop.orchestrator.stations import DELEGATE
+from soothe.sloop.orchestrator.stations import PLAN_REVIEW
 
 
 def test_strange_loop_configurable_sets_isolated_thread() -> None:
@@ -99,7 +99,7 @@ def test_clarification_resume_command_goto_recovery_when_interrupt_orphaned() ->
     )
     assert isinstance(cmd, Command)
     assert cmd.resume is None
-    assert cmd.goto == DELEGATE
+    assert cmd.goto == PLAN_REVIEW
     update = cmd.update
     assert isinstance(update, dict)
     answer = update.get("pending_clarification_answer")

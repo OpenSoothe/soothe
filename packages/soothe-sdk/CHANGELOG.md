@@ -5,6 +5,16 @@ All notable changes to soothe-sdk are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.11] - 2026-08-24
+
+### Fixed
+- Restore `push_/reset_/publish_/clear_langfuse_system_prompt_hint` in `observability.langfuse.system_hint` — these were wrongly removed as "dead code" in 1.0.10 by the CFB-01 scan (which only checked monorepo `src/` for callers), but `soothe-nano` imports `publish_` and `clear_` at runtime in its `system_prompt` middleware. The removal caused an `ImportError` that crashed every loop's first execute step.
+
+### Changed
+- Add `soothe-nano` as a workspace member (submodule at `packages/soothe-nano`) with `workspace = true` source in the root `pyproject.toml`; update Makefile `PACKAGES` to format/lint/test nano alongside the other monorepo packages.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v1.0.10...v1.0.11
+
 ## [1.0.10] - 2026-08-21
 
 ### Changed

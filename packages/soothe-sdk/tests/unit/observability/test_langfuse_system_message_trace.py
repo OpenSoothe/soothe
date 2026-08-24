@@ -12,6 +12,13 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from soothe_sdk.observability.langfuse.callback_handler import (
     _apply_effective_system_prompt_to_batches,
 )
+from soothe_sdk.observability.langfuse.system_hint import (
+    clear_langfuse_system_prompt_hint,
+    get_langfuse_system_prompt_hint,
+    publish_langfuse_system_prompt_hint,
+    push_langfuse_system_prompt_hint,
+    reset_langfuse_system_prompt_hint,
+)
 
 
 def _make_soothe_config(**langfuse_kwargs: Any) -> SimpleNamespace:
@@ -30,6 +37,15 @@ def _make_soothe_config(**langfuse_kwargs: Any) -> SimpleNamespace:
     }
     lf.update(langfuse_kwargs)
     return SimpleNamespace(observability=SimpleNamespace(langfuse=SimpleNamespace(**lf)))
+
+
+def test_context_hint_roundtrip() -> None:
+    tok = push_langfuse_system_prompt_hint("SYS-A")
+    try:
+        assert get_langfuse_system_prompt_hint() == "SYS-A"
+    finally:
+        reset_langfuse_system_prompt_hint(tok)
+    assert get_langfuse_system_prompt_hint() is None
 
 
 def test_ensure_system_prepends_when_missing() -> None:
@@ -257,3 +273,34 @@ def test_on_llm_error_sanitizes_cancelled_error() -> None:
         forwarded_error = parent.call_args[0][0]
         assert isinstance(forwarded_error, asyncio.CancelledError)
         assert str(forwarded_error) == "Cancelled"
+
+
+def test_publish_langfuse_system_prompt_hint_registers_on_handler() -> None:
+    pytest.importorskip("langfuse")
+    import soothe_sdk.observability.langfuse._handlers as handlers_mod
+    from soothe_sdk.observability.langfuse import merge_langfuse_runnable_config
+    from soothe_sdk.observability.langfuse.callback_handler import (
+        SootheLangfuseCallbackHandler,
+    )
+
+    handlers_mod._HANDLERS.clear()
+    cfg = _make_soothe_config(enabled=True)
+    runnable = merge_langfuse_runnable_config(
+        {"configurable": {"thread_id": "exec-1"}},
+        cfg,
+    )
+    handler = runnable["callbacks"][-1]
+    assert isinstance(handler, SootheLangfuseCallbackHandler)
+
+    tok = publish_langfuse_system_prompt_hint(
+        "<WORKSPACE_RULES>trace</WORKSPACE_RULES>",
+        runnable_config=runnable,
+    )
+    try:
+        assert get_langfuse_system_prompt_hint() == "<WORKSPACE_RULES>trace</WORKSPACE_RULES>"
+        assert (
+            handler._system_hint_by_thread["exec-1"] == "<WORKSPACE_RULES>trace</WORKSPACE_RULES>"
+        )
+    finally:
+        clear_langfuse_system_prompt_hint(tok, runnable_config=runnable)
+        assert "exec-1" not in handler._system_hint_by_thread

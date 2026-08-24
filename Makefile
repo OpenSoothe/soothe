@@ -2,14 +2,15 @@
 #
 # Monorepo-owned packages (format / lint / test / publish here):
 # 1. soothe-sdk        - Shared contracts (events, wire, display, protocols)
-# 2. soothe-cli        - CLI client (Typer CLI + Textual TUI)
-# 3. soothe            - StrangeLoop / host composition
-# 4. soothe-autopilot  - Goal orchestration (Autopilot, rails, verify)
-# 5. soothe-daemon     - Daemon server (WebSocket/HTTP transports, cron)
+# 2. soothe-nano       - SootheNanoAgent on deepagents (submodule at packages/soothe-nano)
+# 3. soothe-cli        - CLI client (Typer CLI + Textual TUI)
+# 4. soothe            - StrangeLoop / host composition
+# 5. soothe-autopilot  - Goal orchestration (Autopilot, rails, verify)
+# 6. soothe-daemon     - Daemon server (WebSocket/HTTP transports, cron)
 #
 # Submodules (consume code only — do not format, lint, test, or release here):
 #   client/* (python/go/ts/rust)
-# PyPI-only first-party deps (not in this tree): soothe-nano, soothe-deepagents
+# PyPI-only first-party deps (not in this tree): soothe-deepagents
 #
 # Uses .venv managed by uv for development.
 
@@ -30,7 +31,7 @@ DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml --env-file de
 # Configuration
 # ============================================================================
 
-PACKAGES = soothe-sdk soothe-cli soothe soothe-autopilot soothe-daemon
+PACKAGES = soothe-sdk soothe-nano soothe-cli soothe soothe-autopilot soothe-daemon
 
 # Root-level directories to lint (outside packages)
 ROOT_LINT_DIRS = examples scripts
@@ -351,7 +352,7 @@ clean:
 	@echo "Done"
 
 # ============================================================================
-# Publish (monorepo packages — sdk now hosted here; nano releases from its own repo)
+# Publish (monorepo packages — nano submodule releases from its own repo via its own CI)
 # ============================================================================
 
 sdk-publish:

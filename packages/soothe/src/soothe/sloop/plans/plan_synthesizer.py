@@ -36,12 +36,18 @@ _PLAN_SYNTHESIS_HUMAN_TRIGGER = (
     "Output only the plan document following the template."
 )
 
+# Cap the prior plan body fed back during a refinement pass to avoid
+# blowing up the input-token budget on large plans.
+_PRIOR_PLAN_MAX_CHARS = 8000
+
 
 async def synthesize_plan(
     ctx: LoopRuntimeContext,
     *,
     llm: BaseChatModel,
     config: SootheConfig | None = None,
+    refinement_comments: str | None = None,
+    prior_plan: str | None = None,
 ) -> str:
     """Generate a plan document from step execution evidence via LLM.
 
@@ -53,6 +59,12 @@ async def synthesize_plan(
         ctx: Loop runtime context with ``loop_state`` containing the ledger.
         llm: Chat model for the synthesis call.
         config: Optional SootheConfig for ledger projection caps.
+        refinement_comments: User feedback from a plan rejection. When
+            provided (with ``prior_plan``), the LLM is asked to *revise*
+            the prior plan per the comments rather than synthesize from
+            scratch.
+        prior_plan: The previous plan draft being refined. Required when
+            ``refinement_comments`` is set.
 
     Returns:
         Generated plan document text (may be empty on failure).
@@ -82,13 +94,21 @@ async def synthesize_plan(
     # Assemble the message list: system + ledger evidence + human trigger.
     messages: list[Any] = [SystemMessage(content=system_text)]
     messages.extend(ledger_msgs)
-    messages.append(HumanMessage(content=_PLAN_SYNTHESIS_HUMAN_TRIGGER))
+
+    is_refinement = bool((refinement_comments or "").strip()) and bool((prior_plan or "").strip())
+    if is_refinement:
+        messages.append(
+            HumanMessage(content=_build_refinement_trigger(refinement_comments, prior_plan))
+        )
+    else:
+        messages.append(HumanMessage(content=_PLAN_SYNTHESIS_HUMAN_TRIGGER))
 
     approx_chars = sum(len(str(getattr(m, "content", ""))) for m in messages)
     logger.info(
-        "[PlanSynthesis] LLM call starting: evidence_msgs=%d approx_chars=%d",
+        "[PlanSynthesis] LLM call starting: evidence_msgs=%d approx_chars=%d refinement=%s",
         len(ledger_msgs),
         approx_chars,
+        is_refinement,
     )
 
     start = time.perf_counter()
@@ -156,6 +176,27 @@ def _extract_text(response: Any) -> str:
                 texts.append(block)
         return "\n".join(texts)
     return str(content)
+
+
+def _build_refinement_trigger(comments: str | None, prior_plan: str | None) -> str:
+    """Build the human message that drives a refinement re-synthesis.
+
+    The operator rejected the prior plan with feedback. Instruct the LLM to
+    revise the prior plan per the comments, preserving what worked and only
+    changing what the feedback calls out.
+    """
+    feedback = (comments or "").strip()
+    prior = (prior_plan or "").strip()
+    if len(prior) > _PRIOR_PLAN_MAX_CHARS:
+        prior = prior[:_PRIOR_PLAN_MAX_CHARS] + "\n…[truncated]"
+    return (
+        "The operator REJECTED the previous plan draft below and requested "
+        "the following refinement. Revise the plan to address the feedback — "
+        "keep what was correct and change only what the comments call out. "
+        "Output the full revised plan document following the template.\n\n"
+        f"## Refinement feedback\n{feedback}\n\n"
+        f"## Previous plan draft\n{prior}"
+    )
 
 
 __all__ = ["synthesize_plan"]

@@ -1,14 +1,9 @@
 """LLM-callable ``request_plan_mode`` tool.
 
-When the model invokes this tool, it emits a user-confirmation event. On
-confirmation, ``LoopState.pending_plan_mode`` is set so the *next* goal
-dispatch runs in plan mode (``interaction_mode=plan``). The current
-goal's graph is already selected and cannot swap mid-run, so the flag
-takes effect on the next goal via ``enter_loop``.
-
-Renamed from ``require_plan`` to avoid collision with the autopilot-rails
-builtin (``builtins_exec.py``, ``catalog.py``, ``guards.py``,
-``interpreter.py``, ``wave_plan.py``, ``service.py``).
+When the model invokes this tool, it returns a message telling the model the
+operator will be asked to confirm. The actual plan-mode switch is driven by
+the TUI / daemon via ``GoalRequest.interaction_mode``, not by this tool — it
+is a signal only (the model cannot switch interaction mode mid-goal).
 """
 
 from __future__ import annotations
@@ -29,13 +24,7 @@ class _RequestPlanModeArgs(BaseModel):
 
 
 def _run_request_plan_mode(reason: str = "") -> str:
-    """Set the pending plan-mode flag and return a confirmation message.
-
-    The actual user-confirmation flow is handled by the clarification /
-    TUI event channel. This tool's return tells the model the request
-    was registered and the next goal will enter plan mode pending user
-    confirmation.
-    """
+    """Log the request and return a confirmation message to the model."""
     reason_text = (reason or "").strip()
     log_reason = reason_text[:200] if reason_text else "(no reason given)"
     logger.info("[request_plan_mode] LLM requested plan mode: %s", log_reason)

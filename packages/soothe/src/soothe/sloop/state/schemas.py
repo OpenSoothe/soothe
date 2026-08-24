@@ -724,14 +724,6 @@ class LoopState(BaseModel):
             "(cleared after first consume)."
         ),
     )
-    pending_plan_mode: bool = Field(
-        default=False,
-        description=(
-            "Set by the request_plan_mode tool on user confirmation so the "
-            "next goal dispatch runs in plan mode (interaction_mode=plan). "
-            "enter_loop reads and clears this flag."
-        ),
-    )
     thread_id: str
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
     iteration: int = 0

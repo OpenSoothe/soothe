@@ -396,7 +396,6 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 "pending_clarification": None,
                 "pending_clarification_answer": None,
                 "last_outcome": "continue",
-                "resume_synth": True,
             }
         logger.error("[execute] missing decision or plan_result on scratch")
         await ctx.emit(

@@ -197,7 +197,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         PLAN_REVIEW,
         route_after_plan_review,
         {
-            DISPATCH: DISPATCH,
             FINALIZE: FINALIZE,
             AWAIT_USER: AWAIT_USER,
             END: END,

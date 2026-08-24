@@ -11,6 +11,7 @@ from soothe_daemon.runtime.auto_resume import (
     AutoResumeDecision,
     checkpoint_supports_valid_resume,
     classify_incomplete_loop,
+    peek_clarification_pending,
 )
 
 
@@ -309,3 +310,95 @@ async def test_recover_does_not_enqueue_when_disabled(monkeypatch: pytest.Monkey
     results = await mod.recover_incomplete_loops(daemon)
     assert results[0].decision == AutoResumeDecision.RESUME
     assert enqueued == []
+
+
+# ---------------------------------------------------------------------------
+# peek_clarification_pending — graph-state probe for AWAIT_USER protection
+# ---------------------------------------------------------------------------
+
+
+class _FakeCheckpointTuple:
+    """Mimics the LangGraph checkpoint tuple returned by aget_tuple."""
+
+    def __init__(self, channel_values: dict | None) -> None:
+        cp = {"channel_values": channel_values} if channel_values is not None else None
+        self.checkpoint = cp
+
+
+class _FakeCheckpointer:
+    """Minimal async checkpointer stub for peek_clarification_pending tests."""
+
+    def __init__(self, checkpoint_tuple: _FakeCheckpointTuple | None) -> None:
+        self._tup = checkpoint_tuple
+
+    async def aget_tuple(self, config: dict) -> _FakeCheckpointTuple | None:
+        return self._tup
+
+
+def _make_daemon_with_checkpointer(checkpointer: object | None) -> SimpleNamespace:
+    runner = SimpleNamespace(_checkpointer=checkpointer)
+    return SimpleNamespace(_runner=runner)
+
+
+@pytest.mark.asyncio
+async def test_peek_clarification_pending_returns_true_for_pending() -> None:
+    """A graph state with pending_clarification and no answer → True."""
+    ckpt = _FakeCheckpointTuple(
+        {"pending_clarification": {"q": "a"}, "pending_clarification_answer": None}
+    )
+    daemon = _make_daemon_with_checkpointer(_FakeCheckpointer(ckpt))
+    assert await peek_clarification_pending(daemon, "loop-1") is True
+
+
+@pytest.mark.asyncio
+async def test_peek_clarification_pending_returns_false_when_answered() -> None:
+    """A graph state with pending_clarification AND an answer → False (resolved)."""
+    ckpt = _FakeCheckpointTuple(
+        {
+            "pending_clarification": {"q": "a"},
+            "pending_clarification_answer": {"answers": ["Approve"]},
+        }
+    )
+    daemon = _make_daemon_with_checkpointer(_FakeCheckpointer(ckpt))
+    assert await peek_clarification_pending(daemon, "loop-1") is False
+
+
+@pytest.mark.asyncio
+async def test_peek_clarification_pending_returns_false_when_no_pending() -> None:
+    """A graph state without pending_clarification → False."""
+    ckpt = _FakeCheckpointTuple({"last_outcome": "continue"})
+    daemon = _make_daemon_with_checkpointer(_FakeCheckpointer(ckpt))
+    assert await peek_clarification_pending(daemon, "loop-1") is False
+
+
+@pytest.mark.asyncio
+async def test_peek_clarification_pending_returns_none_when_no_runner() -> None:
+    """No runner → None (cannot inspect)."""
+    daemon = SimpleNamespace(_runner=None)
+    assert await peek_clarification_pending(daemon, "loop-1") is None
+
+
+@pytest.mark.asyncio
+async def test_peek_clarification_pending_returns_none_when_no_checkpointer() -> None:
+    """Runner exists but checkpointer is None → None."""
+    daemon = SimpleNamespace(_runner=SimpleNamespace(_checkpointer=None))
+    assert await peek_clarification_pending(daemon, "loop-1") is None
+
+
+@pytest.mark.asyncio
+async def test_peek_clarification_pending_returns_none_when_no_checkpoint_tuple() -> None:
+    """Checkpointer has no saved checkpoint for this thread → None."""
+    daemon = _make_daemon_with_checkpointer(_FakeCheckpointer(None))
+    assert await peek_clarification_pending(daemon, "loop-1") is None
+
+
+@pytest.mark.asyncio
+async def test_peek_clarification_pending_swallows_checkpointer_errors() -> None:
+    """A broken checkpointer must not crash — returns None."""
+
+    class _Boom:
+        async def aget_tuple(self, config: dict) -> None:
+            raise RuntimeError("db gone")
+
+    daemon = _make_daemon_with_checkpointer(_Boom())
+    assert await peek_clarification_pending(daemon, "loop-1") is None

@@ -76,9 +76,9 @@ class TestGuardOutcomeStatePatch:
         assert g.as_state_patch() == {}
 
     def test_skip_merges_explicit_patch(self) -> None:
-        """Skip can still clear channels (e.g. resume_synth=None)."""
-        g = GuardOutcome(kind="skip", state_patch={"resume_synth": None})
-        assert g.as_state_patch() == {"resume_synth": None}
+        """Skip can still clear channels (e.g. last_outcome=None)."""
+        g = GuardOutcome(kind="skip", state_patch={"last_outcome": None})
+        assert g.as_state_patch() == {"last_outcome": None}
 
 
 # --------------------------------------------------------------------------- #

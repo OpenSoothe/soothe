@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Final, Literal
 
-from soothe.sloop.orchestrator.stations import DELEGATE, DISPATCH, EXECUTE
+from soothe.sloop.orchestrator.stations import DELEGATE, DISPATCH, EXECUTE, PLAN_REVIEW
 
 # --- Live StrangeLoop / host origins ----------------------------------------
 
@@ -81,7 +81,7 @@ ACCEPTED_CLARIFICATION_ORIGINS: frozenset[str] = _ACCEPTED_CLARIFICATION_ORIGINS
 STRANGELOOP_PLANNING_ORIGINS: frozenset[str] = _LEGACY_CLARIFICATION_ORIGINS
 
 CLARIFICATION_ORIGIN_RESUME_NODE: dict[str, str] = {
-    ORIGIN_PLAN_MODE_REVIEW: DELEGATE,
+    ORIGIN_PLAN_MODE_REVIEW: PLAN_REVIEW,
     ORIGIN_EXECUTE: EXECUTE,
     # Plan-spine stations removed from the live graph; land on DISPATCH.
     ORIGIN_PLAN_GENERATE: DISPATCH,

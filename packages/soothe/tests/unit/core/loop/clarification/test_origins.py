@@ -52,7 +52,7 @@ def test_resume_node_mapping() -> None:
     assert resume_node_for_clarification_origin("analyze_gaps") == "dispatch"
     assert resume_node_for_clarification_origin("plan_assess") == "dispatch"
     assert resume_node_for_clarification_origin("plan_gap_analysis") == "dispatch"
-    assert resume_node_for_clarification_origin(ORIGIN_PLAN_MODE_REVIEW) == "delegate"
+    assert resume_node_for_clarification_origin(ORIGIN_PLAN_MODE_REVIEW) == "plan_review"
     assert resume_node_for_clarification_origin(ORIGIN_RAIL_PAUSE) is None
     assert resume_node_for_clarification_origin("not_a_stage") is None
     assert resume_node_for_clarification_origin(None) is None
