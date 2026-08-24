@@ -35,6 +35,20 @@ def test_plan_review_actions_use_primary_text_highlight() -> None:
     assert "color: $text-muted" in base_block
 
 
+def test_plan_review_action_rows_are_single_line_and_borderless() -> None:
+    """Each action occupies one row; the inline Refine entry carries no input chrome."""
+    css = ClarificationInputMessage.DEFAULT_CSS
+    row_block = css.split(".plan-review-action-row {", 1)[1].split("}", 1)[0]
+    assert "height: 1;" in row_block
+    button_block = css.split(".plan-review-actions Button {", 1)[1].split("}", 1)[0]
+    assert "height: 1;" in button_block
+    assert "border: none;" in button_block
+    refine_block = css.split("Input.plan-review-refine-input {", 1)[1].split("}", 1)[0]
+    assert "height: 1;" in refine_block
+    assert "border: none;" in refine_block
+    assert "background: transparent;" in refine_block
+
+
 def test_clarification_wire_content_plan_review() -> None:
     from soothe_cli.tui.app._execution import clarification_wire_content
 

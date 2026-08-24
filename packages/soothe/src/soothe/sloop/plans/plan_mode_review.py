@@ -308,7 +308,9 @@ def handle_plan_mode_review_answer(
     fresh exec goal carrying the approved plan path. Record the action in the
     ledger.
 
-    On reject: terminate the current goal without creating a follow-on goal.
+    On reject: terminate the current goal outright — no follow-on goal, no plan
+    result, no ledger action entry, and no completion report. ``plan_rejected``
+    on scratch tells the finalize node to skip completion work entirely.
 
     On refine: store the user's comments as ``plan_review_comments`` feedback
     and re-emit the plan review clarification so the goal stays in plan mode
@@ -391,21 +393,12 @@ def handle_plan_mode_review_answer(
     if action == "reject":
         if path:
             update_plan_artifact_status(path, "rejected")
-        terminal_output = "Plan rejected by operator."
-        ctx.scratch.plan_result = PlanResult(
-            status="done",
-            goal_progress="complete",
-            assessment_reasoning=terminal_output,
-            plan_action="new",
-            decision=None,
-            next_action="Submit a new goal when ready.",
-            full_output=terminal_output,
-            evidence_summary=terminal_output,
-            require_goal_completion=False,
-        )
+        # Reject ends the goal outright: no plan result, no goal-completion
+        # ledger pair, no synthesis. The finalize node reads ``plan_rejected``
+        # and terminates without producing a report the user did not ask for.
         ctx.scratch.plan_review_comments = None
-        _record_plan_action_ledger(ctx, terminal_output)
-        logger.info("[PlanModeReview] Plan rejected; terminating current goal")
+        ctx.scratch.plan_rejected = True
+        logger.info("[PlanModeReview] Plan rejected; terminating current goal without report")
         return {
             "pending_clarification": None,
             "pending_clarification_answer": None,

@@ -133,7 +133,7 @@ class ClarificationInputMessage(Vertical):
     }
 
     ClarificationInputMessage .plan-review-action-row {
-        height: 3;
+        height: 1;
         width: 1fr;
         margin: 0;
     }
@@ -142,8 +142,8 @@ class ClarificationInputMessage(Vertical):
         margin: 0;
         min-width: 0;
         width: auto;
-        height: 3;
-        padding: 0 1;
+        height: 1;
+        padding: 0;
         border: none;
         background: transparent;
         /* Dim grey for the non-selected option. */
@@ -152,7 +152,6 @@ class ClarificationInputMessage(Vertical):
 
     ClarificationInputMessage .plan-review-actions Button:focus {
         background: transparent;
-        text-style: underline;
     }
 
     ClarificationInputMessage .plan-review-actions Button.plan-review-selected {
@@ -160,11 +159,6 @@ class ClarificationInputMessage(Vertical):
         color: $success;
         text-style: bold;
         background: transparent;
-    }
-
-    ClarificationInputMessage .plan-review-actions Button.plan-review-selected:focus {
-        background: transparent;
-        text-style: bold underline;
     }
 
     ClarificationInputMessage .plan-review-hint {
@@ -189,8 +183,14 @@ class ClarificationInputMessage(Vertical):
         border: solid $primary;
     }
 
-    ClarificationInputMessage .plan-review-refine-input {
+    /* Inline single-line entry so the Refine row stays one row tall. */
+    ClarificationInputMessage Input.plan-review-refine-input {
         margin: 0 0 0 1;
+        width: 1fr;
+        height: 1;
+        padding: 0;
+        border: none;
+        background: transparent;
     }
 
     ClarificationInputMessage.is-submitted Input {

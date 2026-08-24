@@ -380,6 +380,61 @@ async def _finalize_plan_mode_approve(
     return {"last_outcome": "completed"}
 
 
+async def _finalize_plan_mode_reject(
+    ctx: LoopRuntimeContext,
+    *,
+    goal_record: Any,
+) -> dict[str, Any]:
+    """Terminal path for a rejected plan: end the goal with no report.
+
+    The operator discarded the plan, so there is nothing to summarize: no
+    completion synthesis, no ``goal_completion`` ledger pair, and no
+    user-facing output. Only the bookkeeping that returns the loop to idle
+    runs — CE goal termination, the terminal wire event, and tail persistence.
+    """
+    from soothe.sloop.state.schemas import PlanResult
+
+    state = ctx.loop_state
+    logger.info(
+        "[finalize] plan rejected (no report) loop_id=%s iteration=%s",
+        ctx.state_manager.loop_id,
+        state.iteration,
+    )
+
+    state.clear_goal_state()
+    ctx.scratch.decision = None
+    ctx.scratch.step_results = []
+    ctx.scratch.plan_result = None
+    ctx.scratch.plan_rejected = False
+
+    if ctx.ce is not None:
+        try:
+            await ctx.ce.finalize_goal(ctx.ce_goal_id, status="cancelled")
+        except Exception:
+            logger.warning("[goal_completion] CE goal cancel failed", exc_info=True)
+
+    # Empty ``full_output`` plus the skip flag keeps the wire silent; the event
+    # itself is what ends the turn and releases the loop. ``next_action`` is the
+    # terminal card's one-line label, not a report.
+    await ctx.emit(
+        "completed",
+        {
+            "result": PlanResult(
+                status="done",
+                goal_progress="none",
+                next_action="Plan rejected.",
+                full_output="",
+            ),
+            "step_results_count": 0,
+            "skip_goal_completion_wire_duplicate": True,
+        },
+    )
+
+    _start_goal_completion_tail_persistence(ctx, goal_record=goal_record)
+    gc.collect()
+    return {"last_outcome": "completed"}
+
+
 async def node_goal_completion(
     ctx: LoopRuntimeContext, graph_state: dict[str, Any]
 ) -> dict[str, Any]:
@@ -400,6 +455,11 @@ async def node_goal_completion(
         state_manager.loop_id,
         state.iteration,
     )
+
+    # A rejected plan terminates before any completion work: there is no plan
+    # result to report on and the user asked for none.
+    if getattr(ctx.scratch, "plan_rejected", False):
+        return await _finalize_plan_mode_reject(ctx, goal_record=goal_record)
 
     plan_result = ctx.scratch.plan_result
     if plan_result is None:

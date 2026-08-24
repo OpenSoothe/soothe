@@ -53,6 +53,9 @@ class LoopPhaseScratch:
     # ``handle_plan_mode_review_answer`` on approve; the finalize node attaches
     # it to the ``completed`` event so the daemon enqueues the exec goal.
     follow_on_exec: dict[str, str | None] | None = None
+    # Plan-mode reject: terminate the goal with no completion synthesis and no
+    # user-facing report. Set by ``handle_plan_mode_review_answer`` on reject.
+    plan_rejected: bool = False
 
 
 @dataclass

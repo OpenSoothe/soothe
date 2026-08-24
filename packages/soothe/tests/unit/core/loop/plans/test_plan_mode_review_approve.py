@@ -25,6 +25,7 @@ def _build_ctx(
         plan_review_comments=None,
         follow_on_exec=None,
         plan_result=None,
+        plan_rejected=False,
     )
     loop_state = types.SimpleNamespace(
         goal="count one to five",
@@ -111,6 +112,33 @@ def test_reject_terminates_without_follow_on_exec() -> None:
     assert out["pending_clarification"] is None
     assert out["pending_clarification_answer"] is None
     assert ctx.scratch.follow_on_exec is None
-    assert ctx.scratch.plan_result is not None
-    assert ctx.scratch.plan_result.status == "done"
-    assert ctx.scratch.plan_result.require_goal_completion is False
+
+
+def test_reject_leaves_no_plan_result_to_report() -> None:
+    """Reject must not build a terminal PlanResult — there is nothing to summarize."""
+    ctx = _build_ctx()
+    handle_plan_mode_review_answer(
+        ctx, {"pending_clarification_answer": _reject_answer_state()}
+    )
+
+    assert ctx.scratch.plan_rejected is True
+    assert ctx.scratch.plan_result is None
+
+
+def test_reject_records_no_goal_completion_ledger_entry() -> None:
+    """Reject writes no ledger message: no plan completion, no goal completion."""
+    from unittest.mock import patch
+
+    from soothe.sloop.plans import plan_mode_review
+
+    ctx = _build_ctx()
+    with (
+        patch.object(plan_mode_review, "_record_plan_action_ledger") as action_ledger,
+        patch.object(plan_mode_review, "_record_plan_completion_ledger") as completion_ledger,
+    ):
+        plan_mode_review.handle_plan_mode_review_answer(
+            ctx, {"pending_clarification_answer": _reject_answer_state()}
+        )
+
+    action_ledger.assert_not_called()
+    completion_ledger.assert_not_called()
