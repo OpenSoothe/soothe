@@ -23,7 +23,7 @@ classifiers = [
 ]
 dependencies = [
     # First-party: sdk is a workspace member (own VERSION 1.x); nano is PyPI-only.
-    "soothe-sdk>=1.0.11,<2.0.0",
+    "soothe-sdk>=1.0.12,<2.0.0",
     "soothe-nano>=1.2.8,<2.0.0",
     # Host-owned runtime (StrangeLoop / config / identity / checkpointers)
     "aiosqlite>=0.22.1,<1.0.0",

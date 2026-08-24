@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.34] - 2026-08-24
+
+### Added
+- Split plan-mode review into a three-way action: Approve (stash follow-on exec signal, finalize plan-mode goal, daemon enqueues the approved plan as a fresh exec goal), Reject (mark the plan artifact rejected, record a terminal goal completion, finalize the current goal without creating a follow-on execution goal), and Refine (store comments as plan review feedback, re-emit the review clarification so the goal stays in plan mode for the operator to iterate). Previously Reject served two roles — terminate and refine — which conflated intent. Untagged free-text answers now default to Refine instead of Reject.
+- Skip Eval StepNode insertion and the eval-decision LLM call for read-only interaction modes (plan, ask) at ROOT_EVAL; routing still sends plan mode to PLAN_REVIEW and ask mode to FINALIZE.
+
+### Fixed
+- Rejecting a plan now ends the goal outright with no synthesis, no goal-completion ledger pair, and no user-facing output — `handle_plan_mode_review_answer` sets a `plan_rejected` scratch flag and `node_goal_completion` branches to a reject finalize path that runs only Context Engine goal cancellation and the terminal wire event.
+- Toggle the plan-review answered card expand/collapse via an `is-expanded` class (Enter and click) instead of fighting submitted-state CSS with display assignments; give the answered view a single aligned tree branch (action, comments, expand toggle) matching the goal→step tree; make `ClarificationInputMessage` focusable so the Enter binding lands on the submitted card where Approve/Reject are disabled.
+
+### Changed
+- Align the `soothe-sdk` floor pin to `>=1.0.12` across `soothe`, `soothe-cli`, `soothe-autopilot`, and `soothe-daemon` (was inconsistent `>=1.0.8`/`>=1.0.11`). Bump the `soothe-client-python` floor to `>=1.0.18` in CLI and daemon dev deps, and the daemon `soothe-cli` dev pin to `>=0.10.33`.
+- Drop legacy `planner_subagent_review` origin handling from the host routing and the CLI textual adapter.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.33...v0.10.34
+
 ## [v0.10.33] - 2026-08-24
 
 ### Added
