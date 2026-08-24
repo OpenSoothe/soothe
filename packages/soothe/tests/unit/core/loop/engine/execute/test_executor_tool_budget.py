@@ -277,4 +277,3 @@ async def test_mutating_call_resets_read_only_streak() -> None:
 
 def test_default_read_only_streak_limit_is_50() -> None:
     assert DEFAULT_READ_ONLY_STREAK_LIMIT == 50
-

@@ -322,4 +322,3 @@ def test_no_escalation_when_proposal_queued() -> None:
         modified = _run_through_hook(middleware, request)
     assert WESTWORLD_FANOUT_ADDENDUM in modified.system_message.content
     assert WESTWORLD_ESCALATION_ADDENDUM not in modified.system_message.content
-

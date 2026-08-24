@@ -163,10 +163,7 @@ class WestWorldMiddleware(AgentMiddleware):
         evidence_calls = _decompose_runtime.current_evidence_calls()
         proposal_sink = _decompose_runtime.current_proposal_sink()
         proposals_queued = len(proposal_sink) if proposal_sink else 0
-        if (
-            evidence_calls >= _WESTWORLD_ESCALATION_EVIDENCE_THRESHOLD
-            and proposals_queued == 0
-        ):
+        if evidence_calls >= _WESTWORLD_ESCALATION_EVIDENCE_THRESHOLD and proposals_queued == 0:
             logger.info(
                 "[westworld] escalation on step %s (mode=%s evidence_calls=%d "
                 "proposals_queued=0) — switching to escalation addendum",
@@ -177,8 +174,7 @@ class WestWorldMiddleware(AgentMiddleware):
             return _append_addenda(request, [WESTWORLD_ESCALATION_ADDENDUM])
 
         logger.info(
-            "[westworld] phrase trigger fired on step %s (mode=%s addenda=%d "
-            "evidence_calls=%d)",
+            "[westworld] phrase trigger fired on step %s (mode=%s addenda=%d evidence_calls=%d)",
             step_id,
             mode or "agent",
             len(addenda),
