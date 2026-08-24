@@ -47,6 +47,12 @@ UPDATABLE_FIELDS: frozenset[str] = frozenset(
         "skill_description",
         "skill_body",
         "skill_args",
+        # Plan-review answered-card fields.
+        "plan_review_action",
+        "plan_review_comments",
+        "plan_markdown",
+        "plan_path",
+        "plan_origin_node",
     }
 )
 
@@ -66,6 +72,7 @@ class MessageType(StrEnum):
     COGNITION_REASON = "cognition_reason"
     COGNITION_GOAL_TREE = "cognition_goal_tree"
     DIFF = "diff"
+    PLAN_REVIEW = "plan_review"
 
 
 class ToolStatus(StrEnum):
@@ -211,6 +218,22 @@ class MessageData:
 
     Not yet populated — see `_hydrate_messages_above` in `app.py`.
     """
+
+    # PLAN_REVIEW message fields — only populated for plan-review answered cards.
+    plan_review_action: str | None = None
+    """User's action on the plan: ``"Approve"`` or ``"Reject"`` (PLAN_REVIEW only)."""
+
+    plan_review_comments: str | None = None
+    """Refinement comments the user typed after Reject (PLAN_REVIEW only)."""
+
+    plan_markdown: str | None = None
+    """Original plan body markdown, preserved for expand-on-demand (PLAN_REVIEW only)."""
+
+    plan_path: str | None = None
+    """Saved plan file path (PLAN_REVIEW only)."""
+
+    plan_origin_node: str | None = None
+    """Origin node: ``plan_mode_review`` / ``planner_subagent_review`` (PLAN_REVIEW only)."""
 
     def __post_init__(self) -> None:
         """Validate type-field coherence after construction.

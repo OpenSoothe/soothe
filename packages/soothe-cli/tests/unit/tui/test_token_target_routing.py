@@ -98,6 +98,41 @@ def test_resolve_token_target_card_falls_back_to_single_active_step() -> None:
     assert target is step
 
 
+def test_resolve_token_target_card_returns_none_for_unbound_parallel_wave() -> None:
+    """Parallel wave with multiple active steps and no binding resolves to None.
+
+    This is the orphan-usage fallback path: the caller must route the usage
+    chunk to the goal tree's ``record_goal_token_usage`` accumulator so no
+    chunk is silently dropped (see textual_adapter stream handler).
+    """
+    from soothe_cli.tui.widgets.messages.cognition_goal_tree import (
+        CognitionGoalTreeMessage,
+    )
+
+    adapter = _make_adapter()
+    router = StepTaskRouter()
+    # Two active steps => single-active fallback cannot disambiguate.
+    step_a = CognitionStepMessage("ABC-01", "Step A", id="step-a")
+    step_b = CognitionStepMessage("ABC-02", "Step B", id="step-b")
+    adapter._current_step_messages["ABC-01"] = step_a
+    adapter._current_step_messages["ABC-02"] = step_b
+    router.on_step_started("ABC-01")
+    router.on_step_started("ABC-02")
+    # Unbound parallel branch namespace; no tool_calls on the message to infer.
+    ns_key = ("execute:run-1", "1")
+    tree = CognitionGoalTreeMessage(goal="Ship", id="gt-orphan")
+    adapter._goal_tree_message = tree
+
+    target = _resolve_token_target_card(adapter, router, ns_key)
+    assert target is None
+
+    # Simulate the adapter fallback: orphan chunk routed to the goal tree.
+    tree.record_goal_token_usage(2200, 450)
+    assert tree.goal_token_totals() == (2200, 450)
+    assert "in:2.2K" in tree.goal_token_suffix()
+    assert "out:450" in tree.goal_token_suffix()
+
+
 def test_resolve_token_target_card_extracts_step_id_from_message_tool_calls() -> None:
     """When multiple steps are active, resolve via tool_call_id in the message."""
     adapter = _make_adapter()

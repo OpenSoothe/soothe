@@ -198,6 +198,11 @@ class CognitionGoalTreeMessage(Vertical):
         self._spinner_position: int = 0
         self._loop_started_at: float | None = None
         self._steps_static: Static | None = None
+        # Goal-level accumulator for orphan usage chunks that arrive before any
+        # step card is bound (parallel waves). ``goal_token_totals`` sums these
+        # with per-step tokens so no usage chunk is silently dropped.
+        self._goal_in_tokens: int = 0
+        self._goal_out_tokens: int = 0
 
     @staticmethod
     def _clip(text: str, max_len: int) -> str:
@@ -296,13 +301,34 @@ class CognitionGoalTreeMessage(Vertical):
         return format_running_elapsed(time() - started)
 
     def goal_token_totals(self) -> tuple[int, int]:
-        """Cumulative ``(input_tokens, output_tokens)`` across all step rows."""
-        total_in = 0
-        total_out = 0
+        """Cumulative ``(input_tokens, output_tokens)`` across all step rows.
+
+        Includes goal-level orphan usage (parallel-wave ``usage_metadata``
+        chunks that arrived before any step card was bound) so no usage chunk
+        is silently dropped from the totals.
+        """
+        total_in = self._goal_in_tokens
+        total_out = self._goal_out_tokens
         for st in self._steps.values():
             total_in += max(0, int(st.input_tokens))
             total_out += max(0, int(st.output_tokens))
         return total_in, total_out
+
+    def record_goal_token_usage(self, input_tokens: int, output_tokens: int) -> None:
+        """Accumulate orphan LLM token usage at the goal level.
+
+        Used by the adapter fallback path in ``_resolve_token_target_card``
+        when a ``usage_metadata`` chunk arrives under a namespace that cannot
+        be bound to a step card (parallel waves where usage precedes any tool
+        call). Routes the chunk to the goal-level accumulator instead of
+        dropping it, so it surfaces in ``goal_token_totals`` / the done footer.
+        """
+        in_t = max(0, int(input_tokens))
+        out_t = max(0, int(output_tokens))
+        if not in_t and not out_t:
+            return
+        self._goal_in_tokens += in_t
+        self._goal_out_tokens += out_t
 
     def goal_token_suffix(self) -> str:
         """Compact ``in:1.2K out:345`` suffix for the plan panel title.
@@ -597,6 +623,8 @@ class CognitionGoalTreeMessage(Vertical):
             "footer_text": self._footer_plain,
             "footer_tone": self._footer_tone,
             "loop_started_at": self._loop_started_at,
+            "goal_in_tokens": self._goal_in_tokens,
+            "goal_out_tokens": self._goal_out_tokens,
         }
 
     def _apply_snapshot(self, snap: dict[str, Any]) -> None:
@@ -612,6 +640,8 @@ class CognitionGoalTreeMessage(Vertical):
         self._footer_tone = tone if tone in ("success", "error", "muted") else "muted"
         loop_started_raw = snap.get("loop_started_at")
         self._loop_started_at = float(loop_started_raw) if loop_started_raw is not None else None
+        self._goal_in_tokens = max(0, int(snap.get("goal_in_tokens", 0)))
+        self._goal_out_tokens = max(0, int(snap.get("goal_out_tokens", 0)))
         self._step_order = []
         self._steps.clear()
         for row in snap.get("steps", []) or []:
@@ -792,6 +822,12 @@ class CognitionGoalTreeMessage(Vertical):
         cs = (completion_summary or "").strip()
         if cs:
             parts.append(self._clip(cs, 100))
+        # Append cumulative token suffix (parity with step rows / panel header).
+        # ``goal_token_suffix`` returns "" when no tokens recorded, so the footer
+        # stays clean for token-less runs.
+        token_suffix = self.goal_token_suffix()
+        if token_suffix:
+            parts.append(token_suffix)
         self._footer_plain = " · ".join(parts)
         self._footer_visible = True
         status_l = str(status or "").strip().lower()

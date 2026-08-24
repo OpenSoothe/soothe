@@ -305,6 +305,67 @@ def test_goal_tree_done_footer_includes_total_duration() -> None:
     assert "2m 5s" in content.plain
 
 
+def test_goal_tree_done_footer_includes_token_suffix() -> None:
+    """Done footer appends ``in:`` / ``out:`` totals when tokens were recorded."""
+    tree = CognitionGoalTreeMessage(goal="Ship", id="gt-dur-tok")
+    tree.complete_step(
+        "STEP-1",
+        True,
+        1_200,
+        2,
+        "ok",
+        input_tokens=1500,
+        output_tokens=300,
+    )
+
+    tree.set_loop_finished(
+        status="done",
+        goal_progress="complete",
+        completion_summary="All good",
+        total_steps=1,
+    )
+    assert "in:1.5K" in tree._footer_plain
+    assert "out:300" in tree._footer_plain
+    # Token suffix sits after the summary, joined by the middot separator.
+    assert "All good · in:1.5K out:300" in tree._footer_plain
+
+    content = tree.plan_quick_view_content()
+    assert "in:1.5K" in content.plain
+    assert "out:300" in content.plain
+
+
+def test_goal_tree_done_footer_omits_tokens_when_zero() -> None:
+    """Done footer omits the token suffix when no tokens were recorded."""
+    tree = CognitionGoalTreeMessage(goal="Ship", id="gt-dur-notok")
+    tree.complete_step("STEP-1", True, 1_200, 2, "ok")
+
+    tree.set_loop_finished(
+        status="done",
+        goal_progress="complete",
+        completion_summary="All good",
+        total_steps=1,
+    )
+    assert "in:" not in tree._footer_plain
+    assert "out:" not in tree._footer_plain
+
+
+def test_goal_tree_done_footer_includes_goal_level_orphan_tokens() -> None:
+    """Orphan usage routed to the goal accumulator surfaces in the done footer."""
+    tree = CognitionGoalTreeMessage(goal="Ship", id="gt-dur-orphan")
+    # No step card bound — simulates a parallel-wave usage chunk that arrived
+    # before any tool call bound the namespace.
+    tree.record_goal_token_usage(2200, 450)
+
+    tree.set_loop_finished(
+        status="done",
+        goal_progress="complete",
+        completion_summary="All good",
+        total_steps=0,
+    )
+    assert "in:2.2K" in tree._footer_plain
+    assert "out:450" in tree._footer_plain
+
+
 def test_overlay_toggle_expands_and_collapses() -> None:
     """Ctrl+t target toggles expanded state and refresh timer."""
     tree = CognitionGoalTreeMessage(goal="Ship it", id="gt-toggle")

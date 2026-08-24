@@ -92,6 +92,58 @@ def test_widget_to_message_serializes_plan_review() -> None:
     assert "awaiting" in data.content.lower()
 
 
+def test_widget_to_message_serializes_answered_plan_review_reject() -> None:
+    """Answered (submitted) plan-review serializes to PLAN_REVIEW with full fidelity."""
+    from soothe_sdk.display.transcript_types import MessageType
+
+    from soothe_cli.commands.binding import message_to_widget
+
+    widget = ClarificationInputMessage(
+        step_id="s1",
+        questions=["Action?", "Refinement instructions (when choosing Reject)"],
+        origin_node="plan_mode_review",
+        plan_path="/tmp/x.md",
+        plan_markdown="# Plan\n\nDo things.",
+        id="clarify-answered",
+    )
+    widget._submitted = True
+    widget._answers = ["Reject", "将plan翻译成中文"]
+    data = message_from_widget(widget)
+    assert data.type == MessageType.PLAN_REVIEW
+    assert data.plan_review_action == "Reject"
+    assert data.plan_review_comments == "将plan翻译成中文"
+    assert data.plan_markdown == "# Plan\n\nDo things."
+    assert data.plan_path == "/tmp/x.md"
+    assert data.plan_origin_node == "plan_mode_review"
+
+    # Round-trip: deserialize back to a widget in answered state.
+    restored = message_to_widget(data)
+    assert isinstance(restored, ClarificationInputMessage)
+    assert restored._submitted is True
+    assert restored._answers == ["Reject", "将plan翻译成中文"]
+    assert restored._plan_markdown == "# Plan\n\nDo things."
+
+
+def test_widget_to_message_serializes_answered_plan_review_approve() -> None:
+    """Approved plan-review serializes with no comments."""
+    from soothe_sdk.display.transcript_types import MessageType
+
+    widget = ClarificationInputMessage(
+        step_id="s1",
+        questions=["Action?"],
+        origin_node="plan_mode_review",
+        plan_markdown="# Plan",
+        id="clarify-approved",
+    )
+    widget._submitted = True
+    widget._answers = ["Approve", ""]
+    data = message_from_widget(widget)
+    assert data.type == MessageType.PLAN_REVIEW
+    assert data.plan_review_action == "Approve"
+    assert data.plan_review_comments is None
+    assert "approved" in data.content.lower()
+
+
 class _PlanReviewHarnessApp(App[None]):
     def __init__(self, **kwargs) -> None:  # noqa: ANN003
         super().__init__()

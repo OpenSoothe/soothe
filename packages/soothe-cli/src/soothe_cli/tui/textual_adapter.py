@@ -3403,6 +3403,18 @@ async def execute_task_textual(
                                     token_card.record_token_usage(input_toks, output_toks)
                                 elif total_toks:
                                     token_card.record_token_usage(total_toks, 0)
+                            else:
+                                # Orphan usage chunk (parallel wave: usage_metadata
+                                # arrives before any tool call binds a namespace to a
+                                # step card). Route to the goal-level accumulator so no
+                                # usage chunk is silently dropped; it surfaces in the
+                                # done footer and ``goal_token_totals``.
+                                goal_tree = adapter._goal_tree_message
+                                if goal_tree is not None:
+                                    if input_toks or output_toks:
+                                        goal_tree.record_goal_token_usage(input_toks, output_toks)
+                                    elif total_toks:
+                                        goal_tree.record_goal_token_usage(total_toks, 0)
 
                         touched_tool_ids = tool_ids_touched_by_stream_message(message)
                         if touched_tool_ids:

@@ -16,7 +16,10 @@ from textual.widgets import Button, Input, Static
 
 from soothe_cli.display import theme
 from soothe_cli.display.markdown_theme import ThemedMarkdownRenderer, resolve_markdown_theme_parts
-from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
+from soothe_cli.tui.widgets.messages._helpers import (
+    _assemble_card_header,
+    _card_body_gutter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +188,45 @@ class ClarificationInputMessage(Vertical):
         color: $success;
         text-style: bold;
     }
+
+    /* ── Answered (collapsed) view ────────────────────────────────────── */
+    /* Hide the answered summary until submitted. */
+    ClarificationInputMessage .plan-review-answered-box {
+        display: none;
+        height: auto;
+        padding: 0;
+        margin: 0 0 1 0;
+    }
+    /* When submitted, hide the active review elements and show the answered summary. */
+    ClarificationInputMessage.is-submitted .plan-review-body-box,
+    ClarificationInputMessage.is-submitted .plan-review-path,
+    ClarificationInputMessage.is-submitted .plan-review-actions,
+    ClarificationInputMessage.is-submitted .plan-review-hint {
+        display: none;
+    }
+    ClarificationInputMessage.is-submitted .plan-review-answered-box {
+        display: block;
+    }
+    ClarificationInputMessage .plan-review-answered-action {
+        height: auto;
+        color: $text;
+        text-style: bold;
+        padding: 0;
+        margin: 0;
+    }
+    ClarificationInputMessage .plan-review-answered-comments {
+        height: auto;
+        color: $text-muted;
+        padding: 0;
+        margin: 0;
+    }
+    ClarificationInputMessage .plan-review-expand-toggle {
+        height: auto;
+        color: $primary;
+        text-style: italic;
+        padding: 0;
+        margin: 0;
+    }
     """
 
     class Submitted(Message):
@@ -231,6 +273,8 @@ class ClarificationInputMessage(Vertical):
         # comment (not a new goal). Set when the user selects Reject but hasn't
         # typed comments yet.
         self._reject_awaiting_comments = False
+        # Expand/collapse state for the plan body in the answered view.
+        self._body_expanded = False
 
     @property
     def _is_plan_review(self) -> bool:
@@ -258,6 +302,70 @@ class ClarificationInputMessage(Vertical):
         except Exception:  # noqa: BLE001
             pass
 
+    def _refresh_answered_summary(self) -> None:
+        """Update the collapsed answered view with the actual action + comments.
+
+        Called after ``_submitted`` is set. Also used on resume to populate the
+        answered card from persisted ``MessageData`` fields.
+        """
+        if not self._answers:
+            return
+        gutter = _card_body_gutter()
+        action = self._answers[0] if self._answers else ""
+        comments = self._answers[1] if len(self._answers) > 1 else ""
+        try:
+            action_w = self.query_one(".plan-review-answered-action", Static)
+            action_w.update(f"{gutter}[{action}]")
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            comments_w = self.query_one(".plan-review-answered-comments", Static)
+            if comments.strip():
+                comments_w.update(f"{gutter}💬 {comments}")
+                comments_w.display = True
+            else:
+                comments_w.display = False
+        except Exception:  # noqa: BLE001
+            pass
+        self._update_expand_toggle()
+
+    def _update_expand_toggle(self) -> None:
+        """Refresh the expand/collapse hint for the plan body."""
+        if not self._plan_markdown.strip():
+            try:
+                toggle = self.query_one(".plan-review-expand-toggle", Static)
+                toggle.display = False
+            except Exception:  # noqa: BLE001
+                pass
+            return
+        gutter = _card_body_gutter()
+        try:
+            toggle = self.query_one(".plan-review-expand-toggle", Static)
+            if self._body_expanded:
+                toggle.update(f"{gutter}▼ Collapse plan body")
+            else:
+                line_count = self._plan_body_text.count("\n") + 1
+                toggle.update(f"{gutter}▶ Plan body ({line_count} lines) — press Enter to expand")
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _toggle_body_expanded(self) -> None:
+        """Expand or collapse the plan body in the answered view."""
+        self._body_expanded = not self._body_expanded
+        try:
+            body_box = self.query_one(".plan-review-body-box", Vertical)
+            path = self.query_one(".plan-review-path", Static)
+            actions = self.query_one(".plan-review-actions", Horizontal)
+            hint = self.query_one(".plan-review-hint", Static)
+            show = self._body_expanded
+            body_box.display = show
+            path.display = show
+            actions.display = show
+            hint.display = show
+        except Exception:  # noqa: BLE001
+            pass
+        self._update_expand_toggle()
+
     def _path_footer_text(self) -> str:
         if self._plan_path:
             return f"Plan saved to: {self._plan_path}"
@@ -265,6 +373,8 @@ class ClarificationInputMessage(Vertical):
 
     def _compose_plan_review(self) -> Any:
         yield Static(self._title_content(), classes="clarification-title")
+        # Answered summary — visible only when ``is-submitted`` (CSS toggles).
+        yield from self._compose_answered_summary()
         body = _strip_plan_frontmatter(self._plan_markdown)
         # Expand to full plan height — no inner scroll; the chat list scrolls.
         with Vertical(classes="plan-review-body-box"):
@@ -286,6 +396,31 @@ class ClarificationInputMessage(Vertical):
                 yield btn
         yield Static("←/→ switch · Enter confirm", classes="plan-review-hint", markup=False)
 
+    def _compose_answered_summary(self) -> Any:
+        """Collapsed answered view: action + comment branch + expandable plan body.
+
+        Hidden by CSS (``display: none``) until ``is-submitted`` is added; then
+        the active review body / buttons / hint are hidden and this is shown.
+        """
+        gutter = _card_body_gutter()
+        yield Static("", classes="plan-review-answered", markup=False)
+        with Vertical(classes="plan-review-answered-box"):
+            yield Static(
+                f"{gutter}[Rejected]",
+                classes="plan-review-answered-action",
+                markup=True,
+            )
+            yield Static(
+                f"{gutter}💬 {''}",
+                classes="plan-review-answered-comments",
+                markup=True,
+            )
+            yield Static(
+                f"{gutter}▶ Plan body — press Enter to expand",
+                classes="plan-review-expand-toggle",
+                markup=True,
+            )
+
     def _compose_generic(self) -> Any:
         yield Static(self._title_content(), classes="clarification-title")
         for i, q in enumerate(self._questions):
@@ -306,10 +441,15 @@ class ClarificationInputMessage(Vertical):
     def on_mount(self) -> None:
         if self._is_plan_review:
             self._render_plan_body()
-            self._set_selected_action("approve")
-            approve = self._action_buttons.get("approve")
-            if approve is not None:
-                self._schedule_focus(approve)
+            if self._submitted:
+                # Restored from transcript in answered state — collapse the body
+                # and populate the answered summary.
+                self._refresh_answered_summary()
+            else:
+                self._set_selected_action("approve")
+                approve = self._action_buttons.get("approve")
+                if approve is not None:
+                    self._schedule_focus(approve)
             return
         if not self._inputs:
             return
@@ -399,15 +539,16 @@ class ClarificationInputMessage(Vertical):
     def _apply_plan_review_selection(self, action: _PlanReviewAction, *, activate: bool) -> None:
         self._set_selected_action(action)
         btn = self._action_buttons.get(action)
-        if btn is not None:
-            self._schedule_focus(btn)
-        if activate:
-            if action == "reject":
-                # Reject needs refinement comments — don't submit immediately.
-                # Focus the chat input with a placeholder so the user can type
-                # their feedback before the reject is sent.
-                self._prepare_reject_input()
-            else:
+        if activate and action == "reject":
+            # Reject needs refinement comments — don't submit immediately, and
+            # don't focus the button (its 0.05s timer would steal focus back from
+            # the chat input). Focus the chat input with a placeholder so the user
+            # can type their feedback before the reject is sent.
+            self._prepare_reject_input()
+        else:
+            if btn is not None:
+                self._schedule_focus(btn)
+            if activate:
                 self._finalize_plan_review(action=action)
 
     def _prepare_reject_input(self) -> None:
@@ -423,7 +564,9 @@ class ClarificationInputMessage(Vertical):
         reject_btn = self._action_buttons.get("reject")
         if reject_btn is not None:
             reject_btn.disabled = False  # keep interactive (user can re-select Approve)
-        # Focus the chat input and set a guiding placeholder.
+        # Focus the chat input and set a guiding placeholder. Use a deferred
+        # focus (call_after_refresh + a short timer) so it wins over any pending
+        # button-focus timer from the selection gesture that triggered this.
         app = self.app
         chat_input = getattr(app, "_chat_input", None)
         if chat_input is not None:
@@ -432,7 +575,7 @@ class ClarificationInputMessage(Vertical):
                 ta.placeholder = (
                     "Enter refinement comments for the plan, then press Enter to reject…"
                 )
-            chat_input.focus_input()
+            self._schedule_focus(chat_input)
         # Update the hint line.
         try:
             hint = self.query_one(".plan-review-hint", Static)
@@ -449,8 +592,15 @@ class ClarificationInputMessage(Vertical):
         self._cycle_plan_review_action(1)
 
     def action_plan_review_confirm(self) -> None:
-        """Confirm the selected plan-review action (Enter)."""
-        if self._submitted or not self._is_plan_review:
+        """Confirm the selected plan-review action (Enter).
+
+        After submission, Enter toggles plan body expand/collapse in the
+        answered view.
+        """
+        if not self._is_plan_review:
+            return
+        if self._submitted:
+            self._toggle_body_expanded()
             return
         self._apply_plan_review_selection(self._selected_action, activate=True)
 
@@ -510,6 +660,7 @@ class ClarificationInputMessage(Vertical):
             btn.disabled = True
         self.add_class("is-submitted")
         self._refresh_title()
+        self._refresh_answered_summary()
         self.post_message(
             self.Submitted(
                 step_id=self._step_id,
@@ -535,6 +686,7 @@ class ClarificationInputMessage(Vertical):
             btn.disabled = True
         self.add_class("is-submitted")
         self._refresh_title()
+        self._refresh_answered_summary()
         self.post_message(
             self.Submitted(
                 step_id=self._step_id,

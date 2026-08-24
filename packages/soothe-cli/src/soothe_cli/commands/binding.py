@@ -142,6 +142,28 @@ def message_to_widget(data: MessageData) -> Widget:
                 w._apply_snapshot(snap)
             return w
 
+        case MessageType.PLAN_REVIEW:
+            from soothe_cli.tui.widgets.messages.clarification import (
+                ClarificationInputMessage,
+            )
+
+            action = data.plan_review_action or ""
+            comments = data.plan_review_comments or ""
+            answers = [action, comments] if comments else [action, ""]
+            w = ClarificationInputMessage(
+                step_id="",
+                questions=[],
+                widget_id=data.id,
+                origin_node=data.plan_origin_node,
+                plan_path=data.plan_path,
+                plan_markdown=data.plan_markdown,
+                id=data.id,
+            )
+            w._submitted = True  # noqa: SLF001
+            w._answers = answers  # noqa: SLF001
+            w.add_class("is-submitted")
+            return w
+
         case _:
             logger.warning(
                 "Unknown MessageType %r for message %s, falling back to AppMessage",
@@ -180,15 +202,33 @@ def message_from_widget(widget: Widget) -> MessageData:
     widget_id = widget.id or f"msg-{uuid.uuid4().hex[:8]}"
 
     if isinstance(widget, ClarificationInputMessage):
+        is_plan_review = widget._origin_node in {  # noqa: SLF001
+            "plan_mode_review",
+            "planner_subagent_review",
+        }
+        if widget._submitted and widget._answers and is_plan_review:  # noqa: SLF001
+            action = widget._answers[0] if widget._answers else ""  # noqa: SLF001
+            comments = widget._answers[1] if len(widget._answers) > 1 else ""  # noqa: SLF001
+            content = (
+                (f"Plan rejected: {comments}" if comments else "Plan rejected")
+                if action == "Reject"
+                else "Plan approved"
+            )
+            return MessageData(
+                type=MessageType.PLAN_REVIEW,
+                content=content,
+                id=widget_id,
+                plan_review_action=action,
+                plan_review_comments=comments or None,
+                plan_markdown=widget._plan_markdown or None,  # noqa: SLF001
+                plan_path=widget._plan_path or None,  # noqa: SLF001
+                plan_origin_node=widget._origin_node or None,  # noqa: SLF001
+            )
         if widget._submitted and widget._answers:  # noqa: SLF001
             summary = " | ".join(a for a in widget._answers if a)  # noqa: SLF001
-            prefix = (
-                "Plan review"
-                if widget._origin_node in {"plan_mode_review", "planner_subagent_review"}  # noqa: SLF001
-                else "Clarification"
-            )
+            prefix = "Plan review" if is_plan_review else "Clarification"
             content = f"{prefix}: {summary}" if summary else f"{prefix} answered"
-        elif widget._origin_node in {"plan_mode_review", "planner_subagent_review"}:  # noqa: SLF001
+        elif is_plan_review:
             content = "Plan review: awaiting Approve / Reject"
         else:
             content = "Clarification: awaiting answer"

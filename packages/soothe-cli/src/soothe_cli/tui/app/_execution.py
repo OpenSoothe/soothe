@@ -186,7 +186,7 @@ class _ExecutionMixin:
                 from soothe_cli.settings.glyphs import newline_shortcut
 
                 chat_input.input_widget.placeholder = f"{newline_shortcut()} for new line"
-            await reject_widget._finalize_plan_review_with_comments(comments)
+            reject_widget._finalize_plan_review_with_comments(comments)
             return
 
         # /quit, /q, /exit, and bare exit/quit always execute immediately,

@@ -5,6 +5,13 @@ All notable changes to soothe-sdk are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.12] - 2026-08-24
+
+### Added
+- Add `PLAN_REVIEW` to the `MessageType` enum and the corresponding plan-review answered-card fields on `MessageData`: `plan_review_action` (`"Approve"`/`"Reject"`), `plan_review_comments`, `plan_markdown`, `plan_path`, and `plan_origin_node` (`plan_mode_review` / `planner_subagent_review`). These fields are registered in `UPDATABLE_FIELDS` so the display-card ledger can update plan-review cards in place.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v1.0.11...v1.0.12
+
 ## [1.0.11] - 2026-08-24
 
 ### Fixed
