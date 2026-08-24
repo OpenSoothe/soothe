@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from soothe.persistence.checkpoint_split import (
+    _PERSIST_STATUS_KEY,
     clear_persist_degraded,
     extract_cold_blob,
     extract_hot_index,
-    is_persist_degraded,
     mark_persist_degraded,
     merge_hot_into_checkpoint,
 )
@@ -60,8 +60,8 @@ def test_merge_hot_into_checkpoint_overlays_index() -> None:
 
 def test_persist_degraded_markers() -> None:
     cp = _sample_checkpoint()
-    assert not is_persist_degraded(cp)
+    assert (cp.execution_checkpoint or {}).get(_PERSIST_STATUS_KEY) != "degraded"
     mark_persist_degraded(cp)
-    assert is_persist_degraded(cp)
+    assert (cp.execution_checkpoint or {}).get(_PERSIST_STATUS_KEY) == "degraded"
     clear_persist_degraded(cp)
-    assert not is_persist_degraded(cp)
+    assert (cp.execution_checkpoint or {}).get(_PERSIST_STATUS_KEY) != "degraded"

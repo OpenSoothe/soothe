@@ -134,7 +134,8 @@ agent:
     # Fresh readonly coverage-audit thread (RFC-905); runs only when required.
     eval:
       max_eval_rounds: 10
-    max_tool_calls_per_step: 100
+    max_tool_calls_per_step: 500
+    read_only_streak_limit: 50
     dispatch_idle_seconds: 300
     dispatch_tool_timeout_seconds: 0
     execute_action_retry_max: 1
@@ -221,6 +222,7 @@ agent:
         flush_interval: 5.0
         close_timeout_seconds: 30
         durable_flush_timeout: 10
+    loop_orchestrator_evidence_validate: true
 
   clarification:
     auto_policy: veritas

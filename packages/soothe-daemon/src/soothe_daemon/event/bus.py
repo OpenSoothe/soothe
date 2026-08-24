@@ -42,15 +42,6 @@ def _increment_drop_counter(priority: str, topic: str) -> int:
         return _drop_counters[key]
 
 
-def get_event_bus_drop_counts() -> dict[str, int]:
-    """Return snapshot of drop counters for daemon_status (Phase 0).
-
-    Returns dict mapping ``priority|topic`` to cumulative drop count.
-    """
-    with _drop_counters_lock:
-        return dict(_drop_counters)
-
-
 def _effective_queue_max(queue: asyncio.Queue[Any]) -> int:
     """Bounded queue max size for capacity math (0 = unlimited → treat as large cap)."""
     m = queue.maxsize

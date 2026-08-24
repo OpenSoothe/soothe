@@ -24,7 +24,7 @@ from typing import Any
 import pytest
 from soothe.events import EventPriority
 
-from soothe_daemon.event.bus import EventBus, get_event_bus_drop_counts
+from soothe_daemon.event.bus import EventBus, _drop_counters
 
 # ============================================================================
 # CI Mode Configuration
@@ -247,7 +247,7 @@ async def test_multi_loop_goal_completion_delivery() -> None:
     # Wait for consumers to finish
     await asyncio.gather(*consumer_tasks)
     metrics.test_duration_sec = time.monotonic() - start_time
-    metrics.event_bus_drops = get_event_bus_drop_counts()
+    metrics.event_bus_drops = dict(_drop_counters)
 
     summary = metrics.get_summary()
 
@@ -600,7 +600,7 @@ async def test_event_bus_drop_counter_observable() -> None:
         await bus.publish("loop:counter-test", {"type": "drop-test"}, event_meta=meta)
 
     # Query counters
-    counts = get_event_bus_drop_counts()
+    counts = dict(_drop_counters)
     key = "NORMAL|loop:counter-test"
     assert key in counts, f"Drop counter missing for {key}"
     assert counts[key] >= 1, "Drop counter should record NORMAL drops"

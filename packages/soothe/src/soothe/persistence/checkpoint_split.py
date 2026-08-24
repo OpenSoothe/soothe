@@ -78,9 +78,3 @@ def clear_persist_degraded(checkpoint: StrangeLoopCheckpoint) -> None:
     exec_cp = dict(checkpoint.execution_checkpoint or {})
     exec_cp.pop(_PERSIST_STATUS_KEY, None)
     checkpoint.execution_checkpoint = exec_cp
-
-
-def is_persist_degraded(checkpoint: StrangeLoopCheckpoint) -> bool:
-    """Return True when checkpoint index marks a failed durable persist."""
-    exec_cp = checkpoint.execution_checkpoint or {}
-    return exec_cp.get(_PERSIST_STATUS_KEY) == "degraded"

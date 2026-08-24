@@ -19,7 +19,6 @@ from soothe.identity.credentials import (
     generate_secret_key,
     hash_secret_key,
     is_valid_access_key_format,
-    is_valid_secret_key_format,
     verify_secret_key,
 )
 
@@ -86,11 +85,6 @@ class TestGenerateSecretKey:
         """Two calls should produce different keys (probabilistic)."""
         keys = {generate_secret_key() for _ in range(100)}
         assert len(keys) == 100
-
-    def test_generated_key_passes_format_validation(self) -> None:
-        """Generated key must pass is_valid_secret_key_format()."""
-        key = generate_secret_key()
-        assert is_valid_secret_key_format(key)
 
 
 # ---------------------------------------------------------------------------
@@ -224,45 +218,3 @@ class TestIsValidAccessKeyFormat:
     def test_no_dash_returns_false(self) -> None:
         """Key without dash separator must be invalid."""
         assert is_valid_access_key_format("AKabcdefghijklmno0") is False
-
-
-# ---------------------------------------------------------------------------
-# is_valid_secret_key_format
-# ---------------------------------------------------------------------------
-
-
-class TestIsValidSecretKeyFormat:
-    """Tests for is_valid_secret_key_format()."""
-
-    def test_valid_key_returns_true(self) -> None:
-        """A properly formatted secret key must be valid."""
-        key = "SK-abcdefghijklmnopqrstuvwxyz012345"
-        assert is_valid_secret_key_format(key) is True
-
-    def test_generated_key_is_valid(self) -> None:
-        """A generated key must pass validation."""
-        assert is_valid_secret_key_format(generate_secret_key()) is True
-
-    def test_empty_string_returns_false(self) -> None:
-        """Empty string must be invalid."""
-        assert is_valid_secret_key_format("") is False
-
-    def test_wrong_prefix_returns_false(self) -> None:
-        """Key without 'SK-' prefix must be invalid."""
-        assert is_valid_secret_key_format("AK-abcdefghijklmnopqrstuvwxyz012345") is False
-
-    def test_too_short_returns_false(self) -> None:
-        """Key shorter than expected must be invalid."""
-        assert is_valid_secret_key_format("SK-short") is False
-
-    def test_too_long_returns_false(self) -> None:
-        """Key longer than expected must be invalid."""
-        assert is_valid_secret_key_format("SK-abcdefghijklmnopqrstuvwxyz0123456789") is False
-
-    def test_invalid_chars_returns_false(self) -> None:
-        """Key with non-URL-safe characters must be invalid."""
-        assert is_valid_secret_key_format("SK-abcdefghijklmnopqrstuvwxyz0!2345") is False
-
-    def test_no_dash_returns_false(self) -> None:
-        """Key without dash separator must be invalid."""
-        assert is_valid_secret_key_format("SKabcdefghijklmnopqrstuvwxyz012345") is False

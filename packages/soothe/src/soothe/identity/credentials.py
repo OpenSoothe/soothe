@@ -122,28 +122,3 @@ def is_valid_access_key_format(access_key: str) -> bool:
         if not (c.isalnum() or c in ("-", "_")):
             return False
     return True
-
-
-def is_valid_secret_key_format(secret_key: str) -> bool:
-    """
-    Validate secret key format.
-
-    Args:
-        secret_key: Secret key to validate
-
-    Returns:
-        True if format is valid (SK-{32 chars}), False otherwise
-    """
-    if not secret_key:
-        return False
-    if not secret_key.startswith(f"{SECRET_KEY_PREFIX}-"):
-        return False
-    # Check length: SK- (3 chars) + 32 chars = 35 total
-    if len(secret_key) != len(SECRET_KEY_PREFIX) + 1 + SECRET_KEY_LENGTH:
-        return False
-    # Validate characters after prefix are URL-safe base64 chars
-    chars = secret_key[len(SECRET_KEY_PREFIX) + 1 :]
-    for c in chars:
-        if not (c.isalnum() or c in ("-", "_")):
-            return False
-    return True
