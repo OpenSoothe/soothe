@@ -288,9 +288,6 @@ class ClarificationInputMessage(Vertical):
         self._refine_input: Input | None = None
         # Expand/collapse state for the plan body in the answered view.
         self._body_expanded = False
-        # Handle for the deferred focus timer; cancelled when focus moves
-        # again so a stale callback cannot re-focus the old menu item.
-        self._focus_timer: Timer | None = None
 
     @property
     def _is_plan_review(self) -> bool:
@@ -512,12 +509,18 @@ class ClarificationInputMessage(Vertical):
             body_widget.update(text)
 
     def _schedule_focus(self, widget: Any) -> None:
-        # Cancel any pending focus timer so a stale callback cannot
-        # re-focus the previously-selected menu item (block flash).
-        if self._focus_timer is not None:
-            self._focus_timer.stop()
-            self._focus_timer = None
+        """Focus ``widget`` after layout settles.
 
+        Uses ``call_after_refresh`` alone — Textual fires it exactly once
+        after the next render cycle, after layout has settled. The previous
+        implementation added a 50 ms ``set_timer`` fallback to win a focus
+        race against ChatInput's app-level ``on_click`` / ``on_app_focus``
+        handlers, but those handlers now guard against stealing focus from
+        focusable widgets (``_click_landed_on_focusable`` and the
+        ``focused is not None`` check in ``on_app_focus``), so the race no
+        longer exists. Removing the timer also eliminates stale callbacks
+        that re-focused the previously-selected menu item (block flash).
+        """
         app = self.app
 
         def _focus() -> None:
@@ -536,8 +539,6 @@ class ClarificationInputMessage(Vertical):
             self.call_after_refresh(_focus)
         except Exception:  # noqa: BLE001
             _focus()
-        with suppress(Exception):
-            self._focus_timer = self.set_timer(0.05, _focus)
 
     def _set_selected_action(self, action: _PlanReviewAction) -> None:
         self._selected_action = action
