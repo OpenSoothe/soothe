@@ -13,7 +13,7 @@ the fully-built system prompt and can append to it.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.types import ContextT, ModelRequest, ModelResponse
@@ -42,32 +42,49 @@ Rules:
 - This applies to ALL modes (brainstorm, implementation, review, workflow).
 </ASK_USER_GATE_DIRECTIVE>"""
 
+_DIRECTIVE_TAG = "<ASK_USER_GATE_DIRECTIVE>"
+
 
 class AskUserPromptMiddleware(AgentMiddleware):
     """Append the ``ask_user`` gate directive to the system prompt."""
 
-    def wrap_model_call(
-        self,
-        request: ModelRequest[ContextT],
-        handler: Callable[[ModelRequest[ContextT]], ModelResponse[ContextT]],
-    ) -> ModelResponse[ContextT]:
-        """Append the directive to the system message before the model call.
+    def _augment(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
+        """Return ``request`` with the directive appended to the system message.
 
-        Uses ``wrap_model_call`` (not ``modify_request``) because the host
-        suffix runs after ``SystemPromptMiddleware.modify_request`` which
-        already set the system message. ``wrap_model_call`` sees the final
-        request and can augment the system message inline.
+        Idempotent — skips if the tag is already present (e.g. the system
+        prompt was rebuilt on a later hop).
         """
         sm = getattr(request, "system_message", None)
         if sm is not None and isinstance(sm, SystemMessage):
             content = sm.content
             if isinstance(content, str) and _DIRECTIVE_TAG not in content:
                 new_content = content.rstrip() + _ASK_USER_DIRECTIVE
-                new_request = request.override(system_message=SystemMessage(content=new_content))
-                return handler(new_request)
-        return handler(request)
+                return request.override(system_message=SystemMessage(content=new_content))
+        return request
 
+    def wrap_model_call(
+        self,
+        request: ModelRequest[ContextT],
+        handler: Callable[[ModelRequest[ContextT]], ModelResponse[ContextT]],
+    ) -> ModelResponse[ContextT]:
+        """Sync path — delegates to the async implementation.
 
-_DIRECTIVE_TAG = "<ASK_USER_GATE_DIRECTIVE>"
+        soothe always runs the agent in an async context (``astream``), so the
+        async ``awrap_model_call`` below is the one that actually fires. This
+        sync shim exists for API completeness and synchronous test paths.
+        """
+        return handler(self._augment(request))
+
+    async def awrap_model_call(
+        self,
+        request: ModelRequest[ContextT],
+        handler: Callable[[ModelRequest[ContextT]], Awaitable[ModelResponse[ContextT]]],
+    ) -> ModelResponse[ContextT]:
+        """Append the directive to the system message before the model call.
+
+        This is the path that fires in production (``astream`` / ``ainvoke``).
+        """
+        return await handler(self._augment(request))
+
 
 __all__ = ["AskUserPromptMiddleware"]
