@@ -1587,17 +1587,9 @@ class ClarificationConfig(BaseModel):
     force_manual_origins: list[
         Literal[
             "execute",
-            "generate_plan",
-            "evaluate",
             "plan_mode_review",
-            "planner_subagent_review",  # persisted interrupt origin
             "rail_pause",
-            # dual-read persisted / pre-origin strings
-            "plan_generate",
-            "plan_assess",
-            "plan_gap_analysis",
-            "assess",
-            "analyze_gaps",
+            "tool_approval",
         ]
     ] = Field(
         default_factory=lambda: list(DEFAULT_FORCE_MANUAL_ORIGINS),
@@ -1605,9 +1597,7 @@ class ClarificationConfig(BaseModel):
             "Clarification origins that never use veritas auto-answer, even when "
             "``default_mode`` / wire ``clarification_mode`` is ``auto``. "
             "With a human attached, the interactive TUI relay is used; otherwise "
-            "the loop defers. Default is ``plan_mode_review`` only — the "
-            "plan-mode Approve/Reject/Comments gate. This is "
-            "not a legacy StrangeLoop plan-spine origin."
+            "the loop defers. Default is ``plan_mode_review`` and ``tool_approval``."
         ),
     )
 

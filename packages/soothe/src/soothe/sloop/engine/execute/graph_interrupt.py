@@ -376,23 +376,47 @@ def is_ask_user_interrupt(value: Any) -> bool:
     return isinstance(value, Mapping) and value.get("type") == "ask_user"
 
 
+def is_tool_approval_interrupt(value: Any) -> bool:
+    """Return True if ``value`` is a deepagents ``action_requests`` interrupt.
+
+    The ``HumanInTheLoopMiddleware`` emits this shape when a tool call matches
+    an ``interrupt_on`` rule. When the tool-approval relay is active
+    (``ToolApprovalConfig.mode != "off"``), these are captured into the
+    clarification relay instead of being auto-approved.
+    """
+    return isinstance(value, Mapping) and "action_requests" in value
+
+
 def build_auto_resume_payload(pending_interrupts: Mapping[str, Any]) -> dict[str, Any]:
     """Build a LangGraph ``Command(resume=...)`` payload that auto-approves tool interrupts.
 
-    ``ask_user`` interrupts are intentionally skipped — those flow through the
-    clarification relay (RFC-622) and must be answered by the policy layer,
-    not auto-resumed here.
+    ``ask_user`` and ``action_requests`` (tool-approval) interrupts are
+    intentionally skipped — those flow through the clarification relay
+    (RFC-622) and must be answered by the policy layer, not auto-resumed here.
     """
     payload: dict[str, Any] = {}
     for iid, value in pending_interrupts.items():
         if is_ask_user_interrupt(value):
             continue
-        action_requests = []
-        if isinstance(value, dict):
-            action_requests = value.get("action_requests", [])
-        decisions = [{"type": "approve"} for _ in (action_requests or [value])]
+        if is_tool_approval_interrupt(value):
+            continue
+        decisions = [{"type": "approve"}]
         payload[iid] = {"decisions": decisions}
     return payload
+
+
+def build_tool_approval_resume_payload(
+    interrupt_id: str,
+    *,
+    decisions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build the resume payload for a tool-approval interrupt.
+
+    Translates the clarification relay's answer (approve/reject/edit per
+    action request) into the ``{"decisions": [...]}`` shape the deepagents
+    ``HumanInTheLoopMiddleware`` expects on ``Command(resume=...)``.
+    """
+    return {interrupt_id: {"decisions": decisions}}
 
 
 __all__ = [
@@ -404,6 +428,8 @@ __all__ = [
     "_classify_stream_chunk",
     "GraphStreamChunkReader",
     "build_auto_resume_payload",
+    "build_tool_approval_resume_payload",
     "DispatchTimeoutError",
     "is_ask_user_interrupt",
+    "is_tool_approval_interrupt",
 ]

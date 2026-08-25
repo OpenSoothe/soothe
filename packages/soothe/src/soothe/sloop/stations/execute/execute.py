@@ -9,6 +9,7 @@ from typing import Any
 from soothe.events import STRANGE_LOOP_CONTEXT_COMPACTED
 from soothe.sloop.clarification import (
     ORIGIN_EXECUTE,
+    ORIGIN_TOOL_APPROVAL,
     ClarificationCapture,
     ClarificationDetector,
     ClarificationRequest,
@@ -18,6 +19,7 @@ from soothe.sloop.clarification import (
 )
 from soothe.sloop.engine.execute.context_window_manager import ContextWindowManager
 from soothe.sloop.engine.execute.executor import Executor, StepWaveQueued, StepWaveStart
+from soothe.sloop.engine.execute.graph_interrupt import build_tool_approval_resume_payload
 from soothe.sloop.engine.execute.step_wave_types import StepCompletionReport
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.state.schemas import LoopState, StepAction, StepExecutionRecord
@@ -33,6 +35,28 @@ PLANNER_ASK_INTERRUPT_PREFIX = "planner-ask:"
 ``kind="ask_user"`` step rather than a real CoreAgent ``ask_user`` interrupt.
 On answer arrival, ``node_execute`` synthesizes a ``StepExecutionRecord`` for the matching
 step id instead of trying to resume a CoreAgent interrupt that never existed."""
+
+# Mapping from a veritas/TUI tool-approval answer to the deepagents HITL
+# decision type the ``HumanInTheLoopMiddleware`` expects on resume.
+_APPROVE_TOKENS = frozenset({"approve", "yes", "ok", "allow", "accept", "proceed", "y"})
+_REJECT_TOKENS = frozenset({"reject", "no", "deny", "block", "cancel", "n"})
+_EDIT_TOKENS = frozenset({"edit", "modify", "change", "revise"})
+
+
+def _answer_to_decision(answer: str) -> str:
+    """Map a tool-approval answer string to a HITL ``DecisionType``.
+
+    The clarification relay answers with a free-form string (from veritas or
+    the TUI input). The deepagents middleware expects ``"approve"`` /
+    ``"edit"`` / ``"reject"``. Defaults to ``"approve"`` for unrecognized
+    positive-ish answers and ``"reject"`` only on an explicit reject token.
+    """
+    token = (answer or "").strip().lower()
+    if token in _REJECT_TOKENS:
+        return "reject"
+    if token in _EDIT_TOKENS:
+        return "edit"
+    return "approve"
 
 
 def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
@@ -314,6 +338,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         try:
             ans = answer_from_state(pending_answer_state)
             origin_iid = str(pending_request_state.get("origin_interrupt_id", ""))
+            origin_node = str(pending_request_state.get("origin_node", ""))
             if origin_iid.startswith(PLANNER_ASK_INTERRUPT_PREFIX):
                 # Branch 1: planner-emitted ask_user step. No CoreAgent
                 # interrupt to resume — instead synthesize a StepExecutionRecord below
@@ -325,6 +350,15 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                     str(q) for q in (pending_request_state.get("questions") or ())
                 )
                 planner_ask_confidence = ans.confidence
+            elif origin_node == ORIGIN_TOOL_APPROVAL:
+                # Branch 2: tool-approval. Translate the relay's answer into
+                # the ``decisions`` shape the HumanInTheLoopMiddleware expects
+                # (one decision per action_request in the original interrupt).
+                decision_type = _answer_to_decision(ans.answers[0] if ans.answers else "approve")
+                resume_answer_payload = build_tool_approval_resume_payload(
+                    origin_iid,
+                    decisions=[{"type": decision_type}],
+                )
             elif origin_iid:
                 resume_answer_payload = {origin_iid: {"answers": list(ans.answers)}}
         except (ValueError, TypeError):

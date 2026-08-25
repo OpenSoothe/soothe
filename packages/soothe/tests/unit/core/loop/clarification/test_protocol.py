@@ -99,7 +99,7 @@ def test_clarification_deferred_carries_request() -> None:
 def test_view_roundtrip_preserves_empty_collections() -> None:
     req = ClarificationRequest(
         questions=("q",),
-        origin_node="plan_assess",
+        origin_node="tool_approval",
         origin_interrupt_id="i",
         loop_state=LoopStateView(
             goal_id="g",

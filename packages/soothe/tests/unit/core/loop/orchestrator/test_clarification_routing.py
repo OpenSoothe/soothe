@@ -39,24 +39,17 @@ def test_route_after_execute_preserved_when_no_pending() -> None:
 def test_route_after_clarification_returns_to_origin_node() -> None:
     from soothe.sloop.clarification.origins import (
         ORIGIN_EXECUTE,
-        ORIGIN_PLAN_EVALUATE,
-        ORIGIN_PLAN_GENERATE,
         ORIGIN_PLAN_MODE_REVIEW,
-        resume_node_for_clarification_origin,
+        ORIGIN_TOOL_APPROVAL,
     )
 
     assert (
         route_after_clarification({"last_clarification_origin": ORIGIN_EXECUTE}) == ORIGIN_EXECUTE
     )
-    # Legacy plan origins resume at DISPATCH under the RFC-904 topology.
-    assert resume_node_for_clarification_origin(ORIGIN_PLAN_GENERATE) == "dispatch"
     assert (
-        route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_GENERATE}) == "dispatch"
+        route_after_clarification({"last_clarification_origin": ORIGIN_TOOL_APPROVAL})
+        == ORIGIN_EXECUTE
     )
-    assert (
-        route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_EVALUATE}) == "dispatch"
-    )
-    assert route_after_clarification({"last_clarification_origin": "assess"}) == "dispatch"
     # Plan-mode review without an action or pending clarification → END.
     assert route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW}) == END
     # Plan-mode review with pending clarification → PLAN_REVIEW to process the

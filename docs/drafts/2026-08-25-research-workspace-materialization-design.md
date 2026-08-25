@@ -5,7 +5,7 @@
 **Date:** 2026-08-25
 **Scope:** Filesystem-native agent runtime, S3-compatible object store (MinIO) as durable backing, local filesystem workspace
 
-> This is a **workspace subsystem** design, not an agent-identity design. The original draft referenced "`deep.research`" as the agent; in Soothe, `deep_research` (RFC-619) is a **web-only** subagent that explicitly does **not** touch the local filesystem. The workspace abstraction here serves any **filesystem-native** agent (e.g. a research/analysis agent that reads uploaded PDFs and writes reports), not the `deep_research` web subagent. The agent identity that consumes this workspace is left to a separate RFC.
+> This is a **workspace subsystem** design, not an agent-identity design. It serves any **filesystem-native** agent (e.g. a research/analysis agent that reads uploaded PDFs and writes reports). The agent identity that consumes this workspace is left to a separate RFC.
 
 ---
 
@@ -177,7 +177,7 @@ artifacts = await workspace.publish()
 await workspace.close()
 ```
 
-> **API consistency note:** all lifecycle methods are `async` (network and disk I/O). The original draft mixed sync and async signatures; this version unifies on async.
+> **API consistency note:** all lifecycle methods are `async` (network and disk I/O).
 
 ---
 
@@ -230,7 +230,7 @@ A resource is a logical input supplied to the agent. The model is **purely conte
 }
 ```
 
-> **Design decision (Discussion 2):** The original draft carried a `uri` field (`s3://uploads/user-123/paper.pdf`). This was **dropped** from the SDK model. Rationale: the SDK `Resource` is content-addressed (`sha256` is the canonical identity). The physical location is resolved internally by the `WorkspaceSyncBackend` implementation (see §6b). The `Resource` is just "I want content X at logical path Y." This makes CAS deduplication automatic — the backend resolves `sha256 → blob path` internally, and the same content used by 1,000 runs references one blob.
+> **Design decision:** The SDK `Resource` is content-addressed (`sha256` is the canonical identity); no `uri` field is carried. The physical location is resolved internally by the `WorkspaceSyncBackend` implementation (see §6b). The `Resource` is just "I want content X at logical path Y." This makes CAS deduplication automatic — the backend resolves `sha256 → blob path` internally, and the same content used by 1,000 runs references one blob.
 
 The canonical model is defined as a Pydantic `BaseModel` in `soothe-sdk` (see §6b for the protocol).
 
@@ -238,7 +238,7 @@ The canonical model is defined as a Pydantic `BaseModel` in `soothe-sdk` (see §
 
 ## 6b. Storage-backend protocol (`WorkspaceSyncBackend`)
 
-> **Design decision (Discussion 1):** The original draft hardcoded the Workspace Manager to MinIO. This section introduces a **protocol boundary** so the storage backend is pluggable. The CAS, dirty tracking, checkpointing, and workspace lifecycle stay as concrete host code; only the object-store operations are abstracted. This matches Soothe's existing pattern (`VectorStoreProtocol` + `VectorRecord` both live in `soothe-sdk`, with concrete implementations in the host).
+> **Design decision:** The Workspace Manager depends on a **protocol boundary** so the storage backend is pluggable. The CAS, dirty tracking, checkpointing, and workspace lifecycle stay as concrete host code; only the object-store operations are abstracted. This matches Soothe's existing pattern (`VectorStoreProtocol` + `VectorRecord` both live in `soothe-sdk`, with concrete implementations in the host).
 
 ### Protocol boundary (Option C)
 
@@ -1511,7 +1511,7 @@ This architecture keeps filesystem-native agents completely filesystem-native wh
 
 ## 47. Non-goals
 
-- **Agent identity.** This design does not define which agent consumes the workspace. The `deep_research` subagent (RFC-619) is web-only and explicitly out of scope; a separate filesystem-native research agent RFC would reference this workspace subsystem.
+- **Agent identity.** This design does not define which agent consumes the workspace; a separate filesystem-native research agent RFC would reference this workspace subsystem.
 - **Continuous bidirectional sync.** Materialization is one-way (store → FS); persistence is one-way (FS → store). No live conflict resolution.
 - **Lazy materialization in MVP.** Eager materialization with CAS caching is the MVP; lazy/on-access materialization is Phase 4.
 - **Chunking in MVP.** File-level CAS is sufficient for the initial implementation; chunking is Phase 3.
@@ -1526,10 +1526,10 @@ This design touches several existing subsystems. Reconciliation summary:
 
 | Existing RFC | Relationship |
 |--------------|--------------|
-| **RFC-619** (`deep_research`) | The `deep_research` subagent is **web-only** and does not use this workspace. This workspace subsystem serves a **filesystem-native** agent (a separate concern). The original draft's use of "deep.research" as the agent name was a naming collision and is corrected here. |
+| **RFC-619** (`deep_research`) | Out of scope. This workspace subsystem serves a **filesystem-native** agent (a separate concern); `deep_research` is web-only and does not use this workspace. |
 | **RFC-621** (Workspace Host Convention) | Workspace placement follows the daemon-generated convention: `$SOOTHE_HOME/data/workspaces/<run-id>/`, distinct from the Docker volume mount at `$SOOTHE_HOME/workspaces/`. Container path translation applies to the agent-facing root. |
 | **RFC-102** (Security Filesystem Policy) | Path traversal protection, workspace boundary enforcement, and `.workspace/` hiding compose the existing `SecureFilesystemBackend` rather than reimplementing it. |
-| **RFC-801 / RFC-802** (Persistence Architecture) | The workspace `WorkspaceStateStore` follows `persistence.default_backend` — SQLite in SQLite mode, PostgreSQL tables (`ws_files`, `ws_blobs`, `ws_checkpoints`, `ws_artifacts` in `soothe_metadata`) in PostgreSQL mode. This is a **process-owned durable store** (not ephemeral), unlike the prior draft's "runtime cache" framing. The factory pattern mirrors `create_cron_job_store()` and the StrangeLoop `SQLitePersistenceBackend`/`PostgreSQLPersistenceBackend` pair. |
+| **RFC-801 / RFC-802** (Persistence Architecture) | The workspace `WorkspaceStateStore` follows `persistence.default_backend` — SQLite in SQLite mode, PostgreSQL tables (`ws_files`, `ws_blobs`, `ws_checkpoints`, `ws_artifacts` in `soothe_metadata`) in PostgreSQL mode. This is a **process-owned durable store** (not ephemeral). The factory pattern mirrors `create_cron_job_store()` and the StrangeLoop `SQLitePersistenceBackend`/`PostgreSQLPersistenceBackend` pair. |
 | **RFC-803** (StrangeLoop Checkpoint Backend) | Workspace checkpoints (file/blob state) are a distinct layer from StrangeLoop loop checkpoints (execution-graph state). A loop checkpoint may *reference* a workspace checkpoint, but they do not share storage. |
 | **RFC-306** (DurabilityProtocol) | Workspace run lifecycle (create/resume/suspend/cleanup) is conceptually adjacent to thread lifecycle but operates at the workspace-run granularity, not the thread granularity. Integration point, not overlap. |
 

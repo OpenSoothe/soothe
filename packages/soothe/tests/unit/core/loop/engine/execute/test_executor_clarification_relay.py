@@ -185,10 +185,12 @@ async def test_resume_answer_payload_cleared_after_use() -> None:
 
 
 @pytest.mark.asyncio
-async def test_action_approval_still_auto_resumed_when_relay_active() -> None:
+@pytest.mark.asyncio
+async def test_action_requests_captured_as_tool_approval_when_relay_active() -> None:
+    """action_requests interrupts are captured into the relay (tool_approval),
+    not auto-resumed. The relay owns the pause."""
     core = _StubCoreAgent()
     core.queue([], state_interrupts=(_action_approval_interrupt("iA"),))
-    core.queue([])
     capture = ClarificationCapture()
 
     executor = _make_executor(
@@ -207,9 +209,9 @@ async def test_action_approval_still_auto_resumed_when_relay_active() -> None:
     )
     _ = [c async for c in stream]
 
-    assert capture.pending_request is None
-    assert len(core.calls) == 2
-    assert isinstance(core.calls[1], Command)
+    assert capture.pending_request is not None
+    assert capture.pending_request.origin_node == "tool_approval"
+    assert len(core.calls) == 1  # no auto-resume
 
 
 @pytest.mark.asyncio

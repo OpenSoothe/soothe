@@ -1,25 +1,49 @@
-"""Recognize structured ``ask_user`` interrupts emitted by CoreAgent."""
+"""Recognize structured clarifications emitted by CoreAgent / deepagents.
+
+Two interrupt shapes are detected:
+
+1. ``ask_user`` interrupts (RFC-622) — emitted by the ``ask_user`` host tool
+   or planner-emitted ``kind="ask_user"`` steps. The payload is
+   ``{"type": "ask_user", "questions": [...]}``.
+
+2. ``action_requests`` interrupts (tool-approval) — emitted by the deepagents
+   ``HumanInTheLoopMiddleware`` when a tool call matches an ``interrupt_on``
+   rule or a ``FilesystemPermission(mode="interrupt")`` rule. The payload is
+   ``{"action_requests": [{"name": "edit_file", "args": {...}}], ...}``.
+
+Plain-text questions in assistant messages are intentionally *not* detected.
+Code paths that want a clarification must emit a structured interrupt;
+otherwise the relay does not engage and the model's text is treated as a
+normal turn.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from soothe.sloop.clarification.origins import ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import (
     ClarificationOrigin,
     ClarificationRequest,
     LoopStateView,
 )
 
+# Tool-call arg keys whose values are most informative for surfacing an
+# approval prompt (path, command). Ordered by priority.
+_INFORMATIVE_ARG_KEYS: tuple[str, ...] = (
+    "file_path",
+    "path",
+    "directory",
+    "command",
+    "pattern",
+    "target_path",
+    "url",
+)
+
 
 class ClarificationDetector:
-    """Detect structured ``ask_user`` interrupts from a LangGraph stream.
-
-    Plain-text questions in assistant messages are intentionally *not* detected.
-    Code paths that want a clarification must emit a structured
-    ``interrupt({"type": "ask_user", "questions": [...]})``; otherwise the
-    relay does not engage and the model's text is treated as a normal turn.
-    """
+    """Detect structured clarifications from a LangGraph stream."""
 
     def from_interrupt(
         self,
@@ -44,6 +68,40 @@ class ClarificationDetector:
             loop_state=loop_state,
         )
 
+    def from_tool_approval_interrupt(
+        self,
+        value: Any,
+        *,
+        interrupt_id: str,
+        loop_state: LoopStateView,
+    ) -> ClarificationRequest | None:
+        """Return a request if ``value`` is a deepagents ``action_requests`` interrupt.
+
+        Builds an approval question per pending tool call so the TUI can render
+        an Approve / Reject prompt. The origin is always ``tool_approval``
+        and the request resumes at ``EXECUTE`` (the step that issued the call).
+        """
+        if not isinstance(value, Mapping):
+            return None
+        action_requests = value.get("action_requests")
+        if not isinstance(action_requests, list) or not action_requests:
+            return None
+        questions = tuple(
+            q
+            for q in (
+                self._format_action_request(ar) for ar in action_requests if isinstance(ar, Mapping)
+            )
+            if q
+        )
+        if not questions:
+            return None
+        return ClarificationRequest(
+            questions=questions,
+            origin_node=ORIGIN_TOOL_APPROVAL,
+            origin_interrupt_id=interrupt_id,
+            loop_state=loop_state,
+        )
+
     @staticmethod
     def _extract_questions(value: Mapping[str, Any]) -> tuple[str, ...]:
         raw = value.get("questions")
@@ -55,3 +113,29 @@ class ClarificationDetector:
         if isinstance(single, str) and single.strip():
             return (single.strip(),)
         return ()
+
+    @staticmethod
+    def _format_action_request(ar: Mapping[str, Any]) -> str | None:
+        """Render one pending tool call as an approval question.
+
+        Surfaces the tool name plus its most informative argument (the file
+        path, command, etc.) so the user can see what is about to execute
+        without inspecting the full args blob.
+        """
+        name = str(ar.get("name") or "").strip()
+        if not name:
+            return None
+        args = ar.get("args")
+        detail = ""
+        if isinstance(args, Mapping):
+            for key in _INFORMATIVE_ARG_KEYS:
+                val = args.get(key)
+                if isinstance(val, str) and val.strip():
+                    detail = f" ({key}={val.strip()})"
+                    break
+            if not detail and args:
+                # Fall back to the first arg value for non-path tools
+                first_val = next(iter(args.values()), None)
+                if isinstance(first_val, str) and first_val.strip():
+                    detail = f" ({first_val.strip()[:80]})"
+        return f"Approve {name}{detail}? [approve / edit / reject]"

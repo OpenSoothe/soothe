@@ -1,18 +1,15 @@
-"""Clarification verification-stage origin constants (RFC-622, RFC-904).
+"""Clarification origin constants (RFC-622, RFC-904).
 
 Live origins: ``execute`` (step ``ask_user``), ``plan_mode_review``
-(plan draft approve/reject gate), ``rail_pause`` (host gate).
-
-Legacy plan-spine origins (``generate_plan``, ``evaluate``, and ledger
-aliases) are still accepted for resume of persisted interrupts from
-pre-RFC-904 runs; they resume at ``DISPATCH``.
+(plan draft approve/reject gate), ``rail_pause`` (host gate),
+``tool_approval`` (deepagents HITL tool-action approval gate).
 """
 
 from __future__ import annotations
 
 from typing import Final, Literal
 
-from soothe.sloop.orchestrator.stations import DELEGATE, DISPATCH, EXECUTE, PLAN_REVIEW
+from soothe.sloop.orchestrator.stations import EXECUTE, PLAN_REVIEW
 
 # --- Live StrangeLoop / host origins ----------------------------------------
 
@@ -25,27 +22,18 @@ ORIGIN_PLAN_MODE_REVIEW: Final = "plan_mode_review"
 ORIGIN_RAIL_PAUSE: Final = "rail_pause"
 """LoopRail ``pause_for_user`` human gate (IG-737); host-side Veritas only."""
 
-# --- Legacy plan-spine origins (resume → DISPATCH; dual-read only) --------
+ORIGIN_TOOL_APPROVAL: Final = "tool_approval"
+"""Deepagents ``HumanInTheLoopMiddleware`` tool-action approval gate.
 
-ORIGIN_PLAN_GENERATE: Final = "generate_plan"
-"""Legacy StrangeLoop ``generate_plan`` clarification origin."""
-
-ORIGIN_PLAN_EVALUATE: Final = "evaluate"
-"""Legacy StrangeLoop ``evaluate`` clarification origin."""
+The executor captures ``action_requests`` interrupts here instead of
+auto-approving them. The request resumes at ``EXECUTE`` (the step
+containing the tool call)."""
 
 ClarificationOrigin = Literal[
     "execute",
     "plan_mode_review",
     "rail_pause",
-    # persisted interrupt origins accepted for checkpoint resume
-    "planner_subagent_review",
-    "generate_plan",
-    "evaluate",
-    "assess",
-    "analyze_gaps",
-    "plan_generate",
-    "plan_assess",
-    "plan_gap_analysis",
+    "tool_approval",
 ]
 
 CLARIFICATION_ORIGINS: frozenset[str] = frozenset(
@@ -53,48 +41,27 @@ CLARIFICATION_ORIGINS: frozenset[str] = frozenset(
         ORIGIN_EXECUTE,
         ORIGIN_PLAN_MODE_REVIEW,
         ORIGIN_RAIL_PAUSE,
+        ORIGIN_TOOL_APPROVAL,
     }
 )
-
-# Persisted interrupt origins from pre-RFC-904 plan-spine runs.
-_LEGACY_CLARIFICATION_ORIGINS: frozenset[str] = frozenset(
-    {
-        ORIGIN_PLAN_GENERATE,
-        ORIGIN_PLAN_EVALUATE,
-        "planner_subagent_review",
-        "plan_generate",
-        "plan_assess",
-        "plan_gap_analysis",
-        "assess",
-        "analyze_gaps",
-    }
-)
-
-_ACCEPTED_CLARIFICATION_ORIGINS: frozenset[str] = (
-    CLARIFICATION_ORIGINS | _LEGACY_CLARIFICATION_ORIGINS
-)
-
-# Public alias for (de)serializers that must accept persisted interrupt origins.
-ACCEPTED_CLARIFICATION_ORIGINS: frozenset[str] = _ACCEPTED_CLARIFICATION_ORIGINS
-
-# All persisted plan-spine origins that resume at DISPATCH (incl. ledger aliases).
-STRANGELOOP_PLANNING_ORIGINS: frozenset[str] = _LEGACY_CLARIFICATION_ORIGINS
 
 CLARIFICATION_ORIGIN_RESUME_NODE: dict[str, str] = {
     ORIGIN_PLAN_MODE_REVIEW: PLAN_REVIEW,
     ORIGIN_EXECUTE: EXECUTE,
-    # Plan-spine stations removed from the live graph; land on DISPATCH.
-    ORIGIN_PLAN_GENERATE: DISPATCH,
-    ORIGIN_PLAN_EVALUATE: DISPATCH,
-    "planner_subagent_review": DELEGATE,  # persisted checkpoint resume
-    "plan_generate": DISPATCH,
-    "plan_assess": DISPATCH,
-    "plan_gap_analysis": DISPATCH,
-    "assess": DISPATCH,
-    "analyze_gaps": DISPATCH,
+    ORIGIN_TOOL_APPROVAL: EXECUTE,  # resume the step that issued the tool call
 }
 
-DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = (ORIGIN_PLAN_MODE_REVIEW,)
+DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = (
+    ORIGIN_PLAN_MODE_REVIEW,
+    ORIGIN_TOOL_APPROVAL,
+)
+"""Origins that never use veritas auto-answer, even in auto mode.
+
+``plan_mode_review`` — the plan approve/reject/refine gate is a human call.
+``tool_approval`` — approving a tool action (edit_file, run_command) is a
+human-judgment / security call by default. Users who want veritas to
+auto-approve non-destructive tools can remove ``tool_approval`` from
+``ClarificationConfig.force_manual_origins`` in config."""
 
 PLAN_MODE_REVIEW_INTERRUPT_PREFIX: Final = "plan-mode-review:"
 """Interrupt prefix for plan-mode review clarifications."""
@@ -103,14 +70,11 @@ PLAN_MODE_REVIEW_INTERRUPT_PREFIX: Final = "plan-mode-review:"
 def resume_node_for_clarification_origin(origin: str | None) -> str | None:
     """Map a clarification origin to the StrangeLoop graph station that should resume.
 
-    Accepts persisted origin ids (``generate_plan``, ``plan_assess``, …) and maps
-    them to a live graph station (``DISPATCH`` for former plan-spine origins).
-
     Returns:
         Canonical graph station name, or ``None`` when the origin is unknown
         or host-only (``rail_pause`` — not a StrangeLoop interrupt).
     """
-    if not origin or origin not in _ACCEPTED_CLARIFICATION_ORIGINS:
+    if not origin or origin not in CLARIFICATION_ORIGINS:
         return None
     if origin == ORIGIN_RAIL_PAUSE:
         return None
@@ -118,17 +82,14 @@ def resume_node_for_clarification_origin(origin: str | None) -> str | None:
 
 
 __all__ = [
-    "ACCEPTED_CLARIFICATION_ORIGINS",
     "CLARIFICATION_ORIGINS",
     "CLARIFICATION_ORIGIN_RESUME_NODE",
     "ClarificationOrigin",
     "DEFAULT_FORCE_MANUAL_ORIGINS",
     "ORIGIN_EXECUTE",
-    "ORIGIN_PLAN_EVALUATE",
-    "ORIGIN_PLAN_GENERATE",
     "ORIGIN_PLAN_MODE_REVIEW",
     "ORIGIN_RAIL_PAUSE",
+    "ORIGIN_TOOL_APPROVAL",
     "PLAN_MODE_REVIEW_INTERRUPT_PREFIX",
-    "STRANGELOOP_PLANNING_ORIGINS",
     "resume_node_for_clarification_origin",
 ]

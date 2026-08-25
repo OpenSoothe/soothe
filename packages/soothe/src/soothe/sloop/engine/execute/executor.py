@@ -75,6 +75,7 @@ from soothe.sloop.engine.execute.graph_interrupt import (
     GraphStreamChunkReader,
     build_auto_resume_payload,
     is_ask_user_interrupt,
+    is_tool_approval_interrupt,
 )
 from soothe.sloop.engine.execute.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
@@ -689,6 +690,29 @@ class Executor:
                 )
                 uncapturable_ask_user = True
                 continue
+            if clarification_enabled and is_tool_approval_interrupt(interrupt_obj.value):
+                request = detector.from_tool_approval_interrupt(  # type: ignore[union-attr]
+                    interrupt_obj.value,
+                    interrupt_id=interrupt_obj.id,
+                    loop_state=loop_state_view,  # type: ignore[arg-type]
+                )
+                if request is not None:
+                    capture.set(request)  # type: ignore[union-attr]
+                    captured_clarification = True
+                    logger.info(
+                        "[executor] captured tool_approval interrupt id=%s; "
+                        "routing to await_clarification",
+                        interrupt_obj.id,
+                    )
+                    continue
+                # Malformed action_requests — do not auto-resume-spin.
+                logger.warning(
+                    "[executor] uncapturable tool_approval interrupt id=%s; "
+                    "stopping without auto-resume",
+                    interrupt_obj.id,
+                )
+                uncapturable_ask_user = True
+                continue
             pending_interrupts[interrupt_obj.id] = interrupt_obj.value
             interrupt_occurred = True
         return _PendingInterruptFetch(
@@ -714,10 +738,10 @@ class Executor:
 
         Behavior:
 
-        - Action-approval interrupts are auto-approved (unchanged).
-        - ``ask_user`` interrupts, when ``detector``/``capture`` are provided,
-          are written to ``capture`` and the stream returns early so the
-          StrangeLoop can route to ``await_clarification`` (RFC-622).
+        - ``ask_user`` and ``action_requests`` (tool-approval) interrupts,
+          when ``detector``/``capture`` are provided, are written to
+          ``capture`` and the stream returns early so the StrangeLoop can route
+          to ``await_clarification`` (RFC-622).
         - When ``resume_answer_payload`` is set, the first CoreAgent call
           uses it as the initial ``Command(resume=...)`` (re-entry after the
           policy answered a prior clarification).

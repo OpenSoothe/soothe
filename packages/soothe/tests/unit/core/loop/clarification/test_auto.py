@@ -7,8 +7,6 @@ import pytest
 from soothe.sloop.clarification.auto import AutoClarificationPolicy
 from soothe.sloop.clarification.origins import (
     ORIGIN_EXECUTE,
-    ORIGIN_PLAN_EVALUATE,
-    ORIGIN_PLAN_GENERATE,
     ORIGIN_PLAN_MODE_REVIEW,
 )
 from soothe.sloop.clarification.protocol import (
@@ -300,20 +298,6 @@ async def test_force_manual_does_not_affect_other_origins() -> None:
     ans = await policy.answer(_request(origin_node=ORIGIN_EXECUTE))
     assert ans.source == "veritas"
     assert ans.answers == ("auth",)
-
-
-@pytest.mark.asyncio
-async def test_force_manual_does_not_apply_to_legacy_plan_origins() -> None:
-    """Legacy plan-spine origins stay eligible for veritas auto-answer."""
-    policy = AutoClarificationPolicy(
-        _veritas_returning(
-            VeritasAnswerSchema(answers=["ok"], confidence=0.9, defer=False, rationale="ok")
-        ),
-        force_manual_origins=(ORIGIN_PLAN_MODE_REVIEW,),
-    )
-    for origin in (ORIGIN_PLAN_GENERATE, ORIGIN_PLAN_EVALUATE):
-        ans = await policy.answer(_request(origin_node=origin))
-        assert ans.source == "veritas"
 
 
 # ---- degrade_low_confidence (auto→manual upgrade on low confidence) ----

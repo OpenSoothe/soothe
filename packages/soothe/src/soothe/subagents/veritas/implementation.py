@@ -12,7 +12,7 @@ from soothe_nano.llm import StructuredOutputError, ainvoke_structured_traced
 
 from soothe.sloop.clarification.protocol import ClarificationRequest
 from soothe.subagents.veritas.prompts import (
-    build_veritas_system_prompt,
+    build_veritas_system_prompt_for_origin,
     build_veritas_user_prompt,
 )
 from soothe.subagents.veritas.schemas import (
@@ -104,7 +104,7 @@ async def answer(
     logger.debug("[veritas] questions: %s", _preview_questions(request.questions))
 
     json_schema = build_veritas_response_schema(n)
-    system_prompt = build_veritas_system_prompt()
+    system_prompt = build_veritas_system_prompt_for_origin(request.origin_node)
     user_prompt = build_veritas_user_prompt(request, max_context_steps=max_context_steps)
     messages = [
         SystemMessage(content=system_prompt),

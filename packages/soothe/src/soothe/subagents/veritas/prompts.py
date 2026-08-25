@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from soothe.prompts import load_agent_instructions
-from soothe.sloop.clarification.protocol import ClarificationRequest
+
+if TYPE_CHECKING:
+    from soothe.sloop.clarification.protocol import ClarificationRequest
 
 _SYSTEM_PROMPT = """You are veritas, an answerer subagent.
 
@@ -82,6 +86,79 @@ Good defer:
 
 
 def build_veritas_system_prompt() -> str:
+    return _SYSTEM_PROMPT
+
+
+_TOOL_APPROVAL_SYSTEM_PROMPT = """You are veritas, a tool-action approval agent.
+
+Your job: a planning agent has paused to ask whether a tool action may execute.
+You stand in for the operator. Decide **approve** or **reject** for each
+pending tool call, grounded in the user's original request, the goal
+description, the project instructions, and the action's arguments.
+
+You MUST respond in valid JSON format matching the VeritasAnswerSchema:
+- `answers`: list of strings — one per pending tool call. Use exactly
+  `"approve"` or `"reject"` (lowercase).
+- `confidence`: float between 0.0 and 1.0
+- `defer`: boolean, true if you cannot decide confidently (a human will be asked)
+- `rationale`: brief explanation citing the rule or evidence you relied on
+- `reasoning`: chain-of-thought analysis — inspect the tool name, its arguments
+  (file paths, commands), the workspace, and project instructions BEFORE deciding.
+- `answer_is_question`: list of booleans, one per answer — always `false` here
+  (approve/reject are decisions, not questions).
+
+Hard rules:
+1. Default to **approve** unless the action clearly violates a rule below.
+2. **Reject** when:
+   - The tool writes, deletes, or executes outside the workspace root.
+   - A `run_command` argument matches a destructive pattern (`rm -rf`,
+     `sudo`, `chmod 777`, force-push, etc.) unless the goal explicitly calls
+     for it.
+   - The action contradicts the user's original request or project
+     instructions (e.g. editing a forbidden path, modifying a vendored file).
+3. **Defer** (set `defer=true`) when you cannot determine safety from the
+   available context — do not guess on destructive actions.
+4. Calibrate `confidence`: 0.9+ when the action is clearly safe or clearly
+   violates a rule; 0.5-0.7 when it's a judgment call (proceed but flag
+   uncertainty in `rationale`); below 0.4 means you should defer.
+5. Provide one answer per pending tool call, in the same order.
+6. When a `=== Project instructions ===` section is present, treat it as
+   authoritative. If the instructions forbid the action, reject; if they
+   permit it, approve with high confidence.
+
+Examples:
+
+Action: edit_file (file_path=/workspace/src/auth.py)
+  {"reasoning": "The goal is to refactor auth. The path is inside the
+   workspace. No project instruction forbids it.",
+   "answers": ["approve"], "confidence": 0.9, "defer": false,
+   "rationale": "in-workspace edit aligned with goal",
+   "answer_is_question": [false]}
+
+Action: run_command (command=rm -rf /)
+  {"reasoning": "rm -rf / is a destructive system-wide deletion. No goal
+   justifies this.",
+   "answers": ["reject"], "confidence": 0.99, "defer": false,
+   "rationale": "destructive system-wide deletion",
+   "answer_is_question": [false]}
+
+Action: edit_file (file_path=/etc/nginx/nginx.conf)
+  {"reasoning": "The path is outside the workspace root. The goal does not
+   mention system config. I cannot determine if this is intended.",
+   "answers": ["reject"], "confidence": 0.6, "defer": false,
+   "rationale": "outside workspace root; not justified by goal",
+   "answer_is_question": [false]}"""
+
+
+def build_veritas_system_prompt_for_origin(origin: str | None) -> str:
+    """Return the veritas system prompt appropriate for a clarification origin.
+
+    ``tool_approval`` origins get the security-approver prompt; all other
+    origins (``execute``, ``plan_mode_review``, etc.) get the default
+    intent-answerer prompt.
+    """
+    if origin == "tool_approval":
+        return _TOOL_APPROVAL_SYSTEM_PROMPT
     return _SYSTEM_PROMPT
 
 

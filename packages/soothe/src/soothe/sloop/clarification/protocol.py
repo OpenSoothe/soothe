@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
 from soothe.sloop.clarification.origins import (
-    ACCEPTED_CLARIFICATION_ORIGINS,
+    CLARIFICATION_ORIGINS,
     ClarificationOrigin,
 )
 
@@ -151,7 +151,7 @@ def request_to_state(req: ClarificationRequest) -> dict[str, Any]:
 def request_from_state(d: Mapping[str, Any]) -> ClarificationRequest:
     """Inverse of :func:`request_to_state`."""
     origin = d.get("origin_node")
-    if origin not in ACCEPTED_CLARIFICATION_ORIGINS:
+    if origin not in CLARIFICATION_ORIGINS:
         msg = f"invalid origin_node: {origin!r}"
         raise ValueError(msg)
     raw_questions = d.get("questions", []) or []

@@ -89,9 +89,8 @@ class TestBuildClarificationPolicyForRunner:
     def test_auto_policy_receives_force_manual_origins(self) -> None:
         from soothe.sloop.clarification.origins import (
             ORIGIN_EXECUTE,
-            ORIGIN_PLAN_EVALUATE,
-            ORIGIN_PLAN_GENERATE,
             ORIGIN_PLAN_MODE_REVIEW,
+            ORIGIN_TOOL_APPROVAL,
         )
 
         config = _make_config()
@@ -104,8 +103,7 @@ class TestBuildClarificationPolicyForRunner:
         assert policy.force_manual_origins == frozenset({ORIGIN_PLAN_MODE_REVIEW, ORIGIN_EXECUTE})
         assert policy.requires_manual(ORIGIN_PLAN_MODE_REVIEW)
         assert policy.requires_manual(ORIGIN_EXECUTE)
-        assert not policy.requires_manual(ORIGIN_PLAN_GENERATE)
-        assert not policy.requires_manual(ORIGIN_PLAN_EVALUATE)
+        assert not policy.requires_manual(ORIGIN_TOOL_APPROVAL)
 
     def test_auto_without_human_attached_has_no_fallback(self) -> None:
         """RFC-623: autopilot path keeps the hard-defer behavior."""
