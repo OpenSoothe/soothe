@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.37] - 2026-08-26
+
+### Added
+- Add `ask_user` LLM-callable tool (RFC-622 relay) that emits a structured `ask_user` LangGraph interrupt; wire into `AgentBuilder`. Add `WorkspaceSyncBackend` protocol with `Resource`, `Manifest`, `Artifact`, `CheckpointPayload` wire contracts for workspace-to-storage sync in `soothe-sdk`.
+- Route `deepagents` `HumanInTheLoopMiddleware` `action_requests` interrupts through the clarification relay instead of auto-approving them. The executor detects both `ask_user` and `action_requests` shapes and routes either to `await_clarification`. Add veritas tool-approval system prompt (approve/reject/defer decisions) and `build_tool_approval_resume_payload` for `Command(resume=...)` shape. Default `force_manual_origins` now includes `tool_approval`.
+- Add `AskUserPromptMiddleware` that appends an `<ASK_USER_GATE_DIRECTIVE>` to the system prompt so the LLM calls the `ask_user` tool (not plain prose) at every clarification/approval gate. Wire `interrupt_on` (approve/reject) for write/exec tools in agent mode so their `action_requests` interrupts surface to the clarification relay (`tool_approval` origin) instead of being silently auto-approved. Read-only plan/ask modes keep deny-based permissions.
+
+### Changed
+- Decouple `thread_id` from `step_id` in thread selection: random 5-hex `thread_id`, linear reuse (single parent + single child), and interrupt resume reusing `loop_state.resume_thread_id`. Remove the `EXECUTE->DISPATCH` edge (no longer needed) from routing and builder. Resume path rebuilds `AgentDecision` from CE root step and falls through to `Executor` with `Command(resume=...)` on the original thread; no `DISPATCH`, no synthesis workaround.
+- Bump `soothe-nano` to v1.2.11.
+- Add §14.5 to `AGENTS.md`: before tagging any owned package release, verify that `soothe-nano` and `soothe-deepagents` have their latest versions published on PyPI and that monorepo pinned floors do not exceed the live PyPI version.
+
+### Fixed
+- Add async `awrap_model_call` to `AskUserPromptMiddleware`; the sync `wrap_model_call` never fires in production (`astream`/`ainvoke` dispatches the async override), so the directive was silently dropped on every hop.
+- Catch `GraphInterrupt` during stream to avoid step crash; `HumanInTheLoopMiddleware` raises it mid-stream when a tool call matches an `interrupt_on` rule. Now caught and routed into the clarification relay instead of propagating.
+- Extract interrupts from the `GraphInterrupt` exception (`exc.args[0]`) instead of re-reading from graph state, which could miss the clarification capture.
+- Persist `resume_thread_id` through the graph checkpoint so the `ask_user` clarification resume path survives the pause/resume round-trip; previously it was only on the in-memory `LoopState` and the loop fell through to a fatal error after the user answered. Handle CE step loss on resume by synthesizing a minimal `StepAction` and creating a root `StepNode` in the CE so `record_progress` can complete it.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.36...v0.10.37
+
 ## [v0.10.36] - 2026-08-25
 
 ### Changed

@@ -231,9 +231,12 @@ agent:
     max_defer_age_hours: 168
     default_mode: manual
     # StrangeLoop plan_generate/plan_assess are *not* listed here.
-    # Default: planner *subagent* human review only.
+    # plan_mode_review — plan approve/reject/refine gate is a human call.
+    # tool_approval — approving a tool action (edit_file, run_command) is a
+    # human-judgment / security call by default.
     force_manual_origins:
-      - planner_subagent_review
+      - plan_mode_review
+      - tool_approval
 
   veritas:
     model_role: think
