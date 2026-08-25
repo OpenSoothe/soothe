@@ -26,7 +26,7 @@ from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
-from langgraph.errors import GraphRecursionError
+from langgraph.errors import GraphInterrupt, GraphRecursionError
 from langgraph.types import Command, Interrupt
 
 # Import registry directly (removed ToolConcurrencyMiddleware from stack)
@@ -798,6 +798,19 @@ class Executor:
                     yield chunk
             except asyncio.CancelledError:
                 raise
+            except GraphInterrupt:
+                # ``HumanInTheLoopMiddleware`` raises ``GraphInterrupt``
+                # mid-stream when a tool call matches an ``interrupt_on``
+                # rule. The interrupt is also recorded in the graph state;
+                # fall through to ``_fetch_pending_interrupts_from_state``
+                # below, which captures it into the clarification relay
+                # (``ask_user`` or ``tool_approval`` origin) instead of
+                # crashing the step.
+                logger.info(
+                    "[executor] GraphInterrupt during stream (step=%s); "
+                    "capturing pending interrupt from state",
+                    step_id,
+                )
             finally:
                 await chunk_reader.cancel()
 
