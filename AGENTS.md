@@ -167,6 +167,7 @@ A **release** = publishing a new version of a Soothe package on PyPI via the Git
 2. **Default to patch** — release a **patch** bump (e.g. `0.x.y → 0.x.y+1`). Do **not** cut minor/major unless explicitly approved; those require a documented breaking change and sign-off.
 3. **Release = PyPI via GitHub workflow** — publishing happens through `.github/workflows/`, not a manual `twine upload` or local build. Tag the release and let CI publish.
 4. **Verify before release** — `./scripts/verify_finally.sh` MUST pass (zero lint errors, all tests green) on the commit being tagged. Pre-release CI MUST also pass before the publish job runs. Do not tag or release off a red build.
+5. **PyPI-only deps must be live before releasing owned packages** — before tagging any owned package release (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`, `soothe-sdk`), verify that the PyPI-only dependencies (`soothe-nano`, `soothe-deepagents`) have their latest versions already published on PyPI **and** that the monorepo's pinned floors (`packages/*/pyproject.toml`) match or are below the latest PyPI version. Query `https://pypi.org/pypi/<pkg>/json` for each. If a pinned floor exceeds what is live on PyPI, the release will be uninstallable — release the upstream package from its own repo first, then proceed.
 
 ### 15. Reentrant Loop State (MUST)
 
