@@ -110,11 +110,16 @@ def test_run_ask_user_all_empty_returns_error() -> None:
     assert "Error" in result
 
 
-def test_run_ask_user_falls_back_when_no_checkpointer() -> None:
-    """When interrupt() raises (no checkpointer), degrade gracefully."""
-    with patch("langgraph.types.interrupt", side_effect=RuntimeError("no checkpointer")):
-        result = _run(["Approve the plan?"])
-    assert "unavailable" in result.lower() or "plain text" in result.lower()
+def test_run_ask_user_propagates_graph_interrupt() -> None:
+    """GraphInterrupt must propagate — it's the normal pause mechanism,
+    not an error. Swallowing it causes the loop to finalize without pausing."""
+    from langgraph.errors import GraphInterrupt
+    from langgraph.types import Interrupt
+
+    exc = GraphInterrupt((Interrupt(value={"type": "ask_user", "questions": ["q"]}, id="i1"),))
+    with patch("langgraph.types.interrupt", side_effect=exc):
+        with pytest.raises(GraphInterrupt):
+            _run(["Approve the plan?"])
 
 
 # ---------------------------------------------------------------------------

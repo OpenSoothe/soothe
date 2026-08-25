@@ -517,13 +517,6 @@ class TestAskUserToolHandlerCase:
             result = _run_ask_user(["Approve?"])
         assert "dismissed" in result.lower()
 
-    def test_tool_falls_back_when_no_checkpointer(self) -> None:
-        from soothe.coreagent.tools.ask_user import _run_ask_user
-
-        with patch("langgraph.types.interrupt", side_effect=RuntimeError("no checkpointer")):
-            result = _run_ask_user(["Approve?"])
-        assert "unavailable" in result.lower() or "plain text" in result.lower()
-
     @pytest.mark.asyncio
     async def test_tool_async_path(self) -> None:
         from soothe.coreagent.tools.ask_user import build_ask_user_tool

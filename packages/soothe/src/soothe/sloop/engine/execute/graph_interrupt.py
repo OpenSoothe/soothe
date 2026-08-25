@@ -391,14 +391,14 @@ def build_auto_resume_payload(pending_interrupts: Mapping[str, Any]) -> dict[str
     """Build a LangGraph ``Command(resume=...)`` payload that auto-approves tool interrupts.
 
     ``ask_user`` and ``action_requests`` (tool-approval) interrupts are
-    intentionally skipped — those flow through the clarification relay
-    (RFC-622) and must be answered by the policy layer, not auto-resumed here.
+    captured from the ``GraphInterrupt`` exception before this function
+    runs; they never reach ``pending_interrupts``. This function handles
+    only residual action-approval interrupts (e.g. deepagents tool-approval
+    interrupts that were not surfaced to the relay).
     """
     payload: dict[str, Any] = {}
     for iid, value in pending_interrupts.items():
-        if is_ask_user_interrupt(value):
-            continue
-        if is_tool_approval_interrupt(value):
+        if is_ask_user_interrupt(value) or is_tool_approval_interrupt(value):
             continue
         decisions = [{"type": "approve"}]
         payload[iid] = {"decisions": decisions}

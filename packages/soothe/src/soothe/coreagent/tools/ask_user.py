@@ -74,11 +74,12 @@ def _format_answers(questions: list[str], payload: Any) -> str:
 def _run_ask_user(questions: list[str]) -> str:
     """Emit an ``ask_user`` interrupt and return the answers on resume.
 
-    ``interrupt()`` only works inside a LangGraph node/tool context with a
-    checkpointer. When that is the case the call pauses execution here and
-    resumes once the user (or veritas) answers. When no checkpointer is
-    configured the call raises — degrade to a plain-text fallback so the
-    model can still proceed in environments without the relay.
+    ``interrupt()`` raises ``GraphInterrupt`` to pause the graph for human
+    input. The executor's stream loop catches that exception and routes
+    to the clarification relay (``AWAIT_USER``). When the user answers via
+    ``Command(resume=...)``, the graph re-enters here, ``interrupt()``
+    returns the resume payload, and this function renders the answers for
+    the model.
     """
     from langgraph.types import interrupt
 
@@ -86,18 +87,7 @@ def _run_ask_user(questions: list[str]) -> str:
     if not cleaned:
         return "Error: ask_user requires at least one non-empty question."
     logger.info("[ask_user] LLM asked %d question(s): %s", len(cleaned), cleaned[0][:120])
-    try:
-        payload = interrupt({"type": "ask_user", "questions": cleaned})
-    except Exception:  # pragma: no cover — no-checkpointer environments
-        logger.warning(
-            "[ask_user] interrupt unavailable (no checkpointer?); falling back",
-            exc_info=True,
-        )
-        return (
-            "Clarification relay unavailable in this environment. "
-            "State the question in plain text and proceed with the best "
-            "assumption, or ask the user to answer directly."
-        )
+    payload = interrupt({"type": "ask_user", "questions": cleaned})
     return _format_answers(cleaned, payload)
 
 

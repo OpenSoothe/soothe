@@ -220,6 +220,26 @@ def _merge_int_metrics(
     return merged
 
 
+def _extract_interrupts_from_graph_interrupt(exc: GraphInterrupt) -> tuple[Interrupt, ...]:
+    """Extract ``Interrupt`` objects from a ``GraphInterrupt`` exception.
+
+    LangGraph raises ``GraphInterrupt(tuple_of_interrupts)`` when the
+    ``HumanInTheLoopMiddleware`` pauses a tool call. The interrupt objects
+    are carried on ``exc.args[0]`` as a tuple — they are NOT reliably in the
+    graph state afterward (the exception path consumes them). This helper
+    extracts them so the executor can capture them into the clarification
+    relay directly from the exception.
+    """
+    if not exc.args:
+        return ()
+    raw = exc.args[0]
+    if isinstance(raw, Interrupt):
+        return (raw,)
+    if isinstance(raw, (list, tuple)):
+        return tuple(i for i in raw if isinstance(i, Interrupt))
+    return ()
+
+
 class Executor:
     """Execute phase: Execute steps via Layer 1 CoreAgent.
 
@@ -758,6 +778,9 @@ class Executor:
         if resume_answer_payload is not None:
             # One-shot: do not reuse across later steps sharing this Executor.
             self._clarification_resume_answer_payload = None
+        clarification_enabled = (
+            detector is not None and capture is not None and loop_state_view is not None
+        )
         while True:
             chunk_iter = self._execute_stream(
                 current_input,
@@ -798,19 +821,51 @@ class Executor:
                     yield chunk
             except asyncio.CancelledError:
                 raise
-            except GraphInterrupt:
+            except GraphInterrupt as exc:
                 # ``HumanInTheLoopMiddleware`` raises ``GraphInterrupt``
                 # mid-stream when a tool call matches an ``interrupt_on``
-                # rule. The interrupt is also recorded in the graph state;
-                # fall through to ``_fetch_pending_interrupts_from_state``
-                # below, which captures it into the clarification relay
-                # (``ask_user`` or ``tool_approval`` origin) instead of
-                # crashing the step.
+                # rule. The interrupt objects are carried on the exception
+                # (``exc.args[0]`` is a tuple of ``Interrupt``), and they
+                # are NOT reliably in the graph state afterward (the
+                # interrupt is "consumed" by the exception path). Process
+                # them directly here instead of re-reading from state.
                 logger.info(
                     "[executor] GraphInterrupt during stream (step=%s); "
-                    "capturing pending interrupt from state",
+                    "extracting interrupts from exception",
                     step_id,
                 )
+                exc_interrupts = _extract_interrupts_from_graph_interrupt(exc)
+                for interrupt_obj in exc_interrupts:
+                    value = interrupt_obj.value
+                    iid = getattr(interrupt_obj, "id", None) or str(id(interrupt_obj))
+                    if clarification_enabled and is_ask_user_interrupt(value):
+                        request = detector.from_interrupt(  # type: ignore[union-attr]
+                            value,
+                            interrupt_id=iid,
+                            origin_node=origin_node,
+                            loop_state=loop_state_view,  # type: ignore[arg-type]
+                        )
+                        if request is not None:
+                            capture.set(request)  # type: ignore[union-attr]
+                    elif clarification_enabled and is_tool_approval_interrupt(value):
+                        request = detector.from_tool_approval_interrupt(  # type: ignore[union-attr]
+                            value,
+                            interrupt_id=iid,
+                            loop_state=loop_state_view,  # type: ignore[arg-type]
+                        )
+                        if request is not None:
+                            capture.set(request)  # type: ignore[union-attr]
+                            logger.info(
+                                "[executor] captured tool_approval interrupt "
+                                "id=%s from GraphInterrupt",
+                                iid,
+                            )
+                # If the GraphInterrupt extraction already captured a
+                # clarification, return immediately — no need to
+                # re-read graph state (the interrupt was on the exception,
+                # not in state).
+                if capture.pending_request is not None:
+                    return
             finally:
                 await chunk_reader.cancel()
 
