@@ -85,6 +85,9 @@ class LoopGraphState(TypedDict, total=False):
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None
     last_clarification_origin: str | None  # ClarificationOrigin at runtime
+    # Thread_id of the interrupted CoreAgent step, for Command(resume=...).
+    # Survives the AWAIT_USER round-trip via graph checkpoint.
+    resume_thread_id: str | None
     after_record_route: Literal["finalize", "goal_completion", ""] | None
     interaction_mode: str | None  # "agent" | "ask" | "plan" — set by enter_loop
     # Plan-mode approve (Bug #3 fix): set True by ``handle_plan_mode_review_answer``

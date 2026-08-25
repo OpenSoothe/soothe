@@ -120,7 +120,9 @@ def _select_thread_for_step(
         if parent_thread and _is_only_child(parent_id, decision):
             logger.info(
                 "[thread] linear reuse: step %s inherits parent %s thread %s",
-                step.id, parent_id, parent_thread[:24],
+                step.id,
+                parent_id,
+                parent_thread[:24],
             )
             return parent_thread
 

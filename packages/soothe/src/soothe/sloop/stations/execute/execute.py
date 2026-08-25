@@ -386,54 +386,92 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # Rebuild a decision from the CE root step and fall through to
             # the normal Executor path — it will use the resume thread_id
             # and pass ``Command(resume=...)`` to the CoreAgent.
-            resume_tid = getattr(state, "resume_thread_id", None)
-            if resume_tid and ctx.ce is not None and ctx.ce_goal_id:
-                goal = await _maybe_await(ctx.ce.get_goal(ctx.ce_goal_id))
-                if goal is not None:
-                    root_node = next(
-                        (n for n in goal.steps.nodes.values()
-                         if n.parent_step_id is None and n.status in ("active", "completed", "pending")),
-                        None,
+            # Read resume_thread_id from graph state (survives checkpoint).
+            resume_tid = state_dict.get("resume_thread_id") or getattr(
+                state, "resume_thread_id", None
+            )
+            if resume_tid:
+                # Try to rebuild from CE root step; if CE lost the step
+                # (not persisted), synthesize a minimal StepAction from
+                # the goal text. The Executor only needs a step to run
+                # — the actual resume is via Command(resume=...) on the
+                # stored resume_thread_id.
+                root_step: StepAction | None = None
+                if ctx.ce is not None and ctx.ce_goal_id:
+                    goal = await _maybe_await(ctx.ce.get_goal(ctx.ce_goal_id))
+                    if goal is not None:
+                        root_node = next(
+                            (
+                                n
+                                for n in goal.steps.nodes.values()
+                                if n.parent_step_id is None
+                                and n.status in ("active", "completed", "pending")
+                            ),
+                            None,
+                        )
+                        if root_node is not None:
+                            from soothe.sloop.stations.decompose.dispatch import (
+                                _step_action_from_node,
+                            )
+
+                            root_step = _step_action_from_node(root_node)
+                if root_step is None:
+                    # CE lost the step — create a root step in the CE so
+                    # record_progress can complete it after execution.
+                    goal_text = state.goal or "ask_user resume"
+                    root_step = StepAction(
+                        id="ask_user_resume",
+                        description=goal_text[:80],
+                        full_description=goal_text,
+                        is_dag_root=True,
                     )
-                    if root_node is not None:
-                        from soothe.sloop.stations.decompose.dispatch import _step_action_from_node
-                        root_step = _step_action_from_node(root_node)
-                        decision = AgentDecision(
-                            type="execute_steps",
-                            execution_mode="parallel",
-                            reasoning="ask_user interrupt resume",
-                            steps=[root_step],
+                    if ctx.ce is not None and ctx.ce_goal_id:
+                        from soothe.context.models import StepNode
+
+                        root_node = StepNode(
+                            id="ask_user_resume",
+                            description=goal_text[:80],
+                            full_description=goal_text,
+                            status="pending",
+                            parent_step_id=None,
+                            plan_iteration=0,
                         )
-                        plan_result = PlanResult(
-                            status="continue",
-                            goal_progress="none",
-                            assessment_reasoning="",
-                            plan_action="keep",
-                            require_goal_completion=False,
-                            terminal_after_execute=False,
-                            decision=decision,
-                            next_action=root_step.description[:300],
-                        )
-                        ctx.scratch.decision = decision
-                        ctx.scratch.plan_result = plan_result
-                        state.current_decision = decision
-                        # Clear clarification channels so route_after_execute
-                        # doesn't re-route to AWAIT_USER.
-                        logger.info(
-                            "[execute] ask_user resume: rebuilt decision from "
-                            "CE root step %s, resuming on thread %s",
-                            root_node.id, resume_tid[:24],
-                        )
-                        # Fall through to normal Executor path below.
-                        # The Executor will pass resume_answer_payload as
-                        # Command(resume=...) on the resume_thread_id.
-                    else:
-                        logger.warning("[execute] ask_user resume: no root step in CE")
-                else:
-                    logger.warning("[execute] ask_user resume: CE goal not found")
+                        await _maybe_await(ctx.ce.add_step(ctx.ce_goal_id, root_node))
+                        await _maybe_await(ctx.ce.activate_step(ctx.ce_goal_id, "ask_user_resume"))
+                    logger.info(
+                        "[execute] ask_user resume: CE step lost, "
+                        "created root step in CE, thread %s",
+                        resume_tid[:24],
+                    )
+                decision = AgentDecision(
+                    type="execute_steps",
+                    execution_mode="parallel",
+                    reasoning="ask_user interrupt resume",
+                    steps=[root_step],
+                )
+                plan_result = PlanResult(
+                    status="continue",
+                    goal_progress="none",
+                    assessment_reasoning="",
+                    plan_action="keep",
+                    require_goal_completion=False,
+                    terminal_after_execute=False,
+                    decision=decision,
+                    next_action=root_step.description[:300],
+                )
+                ctx.scratch.decision = decision
+                ctx.scratch.plan_result = plan_result
+                state.current_decision = decision
+                logger.info(
+                    "[execute] ask_user resume: rebuilt decision (step %s), resuming on thread %s",
+                    root_step.id,
+                    resume_tid[:24],
+                )
+                # Decision rebuilt — jump past the `decision is None` block
+                # to the normal Executor path below.
             else:
                 logger.warning("[execute] ask_user resume: no resume_thread_id on state")
-        if planner_ask_answered_step_id is not None:
+        elif planner_ask_answered_step_id is not None:
             outcome_payload: dict[str, Any] = {
                 "kind": "ask_user",
                 "answers": list(planner_ask_answers),
@@ -494,12 +532,13 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 "pending_clarification_answer": None,
                 "last_outcome": "continue",
             }
-        logger.error("[execute] missing decision or plan_result on scratch")
-        await ctx.emit(
-            "fatal_error",
-            {"error": "Execute without decision", "step_id": ""},
-        )
-        return {"last_outcome": "fatal"}
+        else:
+            logger.error("[execute] missing decision or plan_result on scratch")
+            await ctx.emit(
+                "fatal_error",
+                {"error": "Execute without decision", "step_id": ""},
+            )
+            return {"last_outcome": "fatal"}
 
     started_step_ids: set[str] = set()
     queued_step_ids: set[str] = set()
@@ -788,13 +827,20 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     # RFC-622: surface a captured clarification so the graph routes to
     # ``await_clarification`` instead of ``record_iteration``.
     if clarification_capture.pending_request is not None:
-        logger.info("[execute] clarification captured; routing to await_clarification")
-        return {
+        # Store the resume thread_id on both LoopState and graph state
+        # so it survives the checkpoint save/restore between the two
+        # ainvoke calls (pause → user answers → resume).
+        result: dict[str, Any] = {
             "pending_clarification": request_to_state(clarification_capture.pending_request),
             "last_clarification_origin": ORIGIN_EXECUTE,
             # Clear any prior answer so re-entry only consumes it once.
             "pending_clarification_answer": None,
         }
+        if clarification_capture.resume_thread_id:
+            state.resume_thread_id = clarification_capture.resume_thread_id
+            result["resume_thread_id"] = clarification_capture.resume_thread_id
+        logger.info("[execute] clarification captured; routing to await_clarification")
+        return result
 
     if resume_answer_payload is not None or planner_ask_answered_step_id is not None:
         # Successfully resumed from a prior clarification (CoreAgent interrupt

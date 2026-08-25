@@ -167,20 +167,20 @@ class ClarificationInputMessage(Vertical):
         color: $text-muted;
     }
 
-    /* Match the main ChatInput visual: solid primary border on a $surface
-       fill, transparent inner padding so the cursor sits where the user
-       expects. */
+    /* Borderless answer input on a $surface block fill, so the input
+       reads as a solid block of background color rather than a boxed
+       field. */
     ClarificationInputMessage Input {
         margin: 0;
         width: 1fr;
-        height: 3;
+        height: 1;
         padding: 0 1;
         background: $surface;
-        border: solid $primary;
+        border: none;
     }
 
     ClarificationInputMessage Input:focus {
-        border: solid $primary;
+        border: none;
     }
 
     /* Inline single-line entry so the Refine row stays one row tall. */
@@ -194,7 +194,7 @@ class ClarificationInputMessage(Vertical):
     }
 
     ClarificationInputMessage.is-submitted Input {
-        border: solid $success;
+        border: none;
     }
 
     ClarificationInputMessage.is-submitted .plan-review-actions Button {

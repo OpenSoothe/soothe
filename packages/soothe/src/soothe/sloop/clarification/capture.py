@@ -19,9 +19,16 @@ class ClarificationCapture:
     request after the stream ends and threads it into
     ``pending_clarification`` so the graph router dispatches to
     ``await_clarification``.
+
+    Attributes:
+        pending_request: The first captured clarification request (None until set).
+        resume_thread_id: The CoreAgent thread_id that was active when the
+            interrupt fired. Set by the executor so the resume path can
+            reuse it (``Command(resume=...)`` targets this thread).
     """
 
     pending_request: ClarificationRequest | None = None
+    resume_thread_id: str | None = None
 
     def set(self, request: ClarificationRequest) -> None:
         if self.pending_request is None:

@@ -845,12 +845,19 @@ class Executor:
                         origin_node,
                     )
                 # Store the thread_id so the resume path can reuse it.
-                if capture.pending_request is not None and loop_state is not None:
-                    loop_state.resume_thread_id = fork_thread_id  # type: ignore[attr-defined]
-                    logger.info(
-                        "[executor] stored resume thread_id=%s for step %s",
-                        fork_thread_id[:24], step_id,
-                    )
+                if capture.pending_request is not None:
+                    # Read the thread_id from the graph config (it's the
+                    # fork_thread_id set by _execute_step_collecting_events).
+                    cfg_tid = graph_config.get("configurable", {}).get("thread_id", "")
+                    if cfg_tid:
+                        # Store on the capture object so node_execute can
+                        # propagate it to LoopState.resume_thread_id.
+                        capture.resume_thread_id = cfg_tid  # type: ignore[attr-defined]
+                        logger.info(
+                            "[executor] stored resume thread_id=%s for step %s",
+                            cfg_tid[:24],
+                            step_id,
+                        )
                 if capture.pending_request is not None:
                     return
             finally:
