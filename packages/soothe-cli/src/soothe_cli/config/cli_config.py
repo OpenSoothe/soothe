@@ -47,7 +47,7 @@ class CLIConfig:
     # Composer mode (Auto / Manual / Plan). Auto/Manual map to RFC-622
     # clarification_mode; Plan sets interaction_mode=plan (read-only plan graph).
     clarification_mode: str | None = None
-    """'manual', 'auto', or 'plan'. None = Auto (TUI default)."""
+    """'manual', 'auto', or 'plan'. None = Manual (TUI default)."""
 
     # Resume behavior: when the launcher finds an active loop on startup,
     # auto-resume it (True) or prompt the user (False, default).

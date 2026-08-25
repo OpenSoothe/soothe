@@ -338,7 +338,7 @@ class _ExecutionMixin:
         """Fetch the daemon's default clarification mode for plan approval.
 
         Reads ``agent.clarification.default_mode`` from the daemon config via
-        a one-shot WebSocket RPC. Falls back to ``"auto"`` (the default)
+        a one-shot WebSocket RPC. Falls back to ``"manual"`` (the default)
         when the daemon is unreachable, the section is missing, or
         the value is not ``auto``/``manual``.
 
@@ -998,7 +998,7 @@ class _ExecutionMixin:
         turn_stats = SessionStats()
         self._inflight_turn_stats = turn_stats
         self._inflight_turn_start = time.monotonic()
-        wire = resolve_composer_wire_fields(getattr(self, "_composer_mode", "auto"))
+        wire = resolve_composer_wire_fields(getattr(self, "_composer_mode", "manual"))
         wire_clar = wire.clarification_mode
         sticky_subagent = wire.preferred_subagent
         wire_interaction = wire.interaction_mode

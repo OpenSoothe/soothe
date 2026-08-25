@@ -87,13 +87,13 @@ def test_cycle_tolerates_missing_status_bar() -> None:
     assert app._composer_mode == "manual"
 
 
-def test_cycle_treats_unknown_initial_value_as_auto() -> None:
-    """A garbage starting value normalises to Auto on the first cycle."""
+def test_cycle_treats_unknown_initial_value_as_manual() -> None:
+    """A garbage starting value normalises to Manual on the first cycle."""
     app = _AppHarness(initial="garbage")
     app.cycle_composer_mode()
-    assert app._composer_mode == "auto"
-    app.cycle_composer_mode()
     assert app._composer_mode == "manual"
+    app.cycle_composer_mode()
+    assert app._composer_mode == "plan"
 
 
 def test_shift_tab_action_cycles_mode() -> None:
@@ -151,8 +151,8 @@ def test_plan_approval_uses_daemon_default_auto() -> None:
     assert mode == "auto"
 
 
-def test_plan_approval_falls_back_to_auto_on_fetch_error() -> None:
-    """When the daemon config fetch raises, fall back to ``auto``."""
+def test_plan_approval_falls_back_to_manual_on_fetch_error() -> None:
+    """When the daemon config fetch raises, fall back to ``manual``."""
     app = _ExecutionHarness()
 
     fake_fetch = AsyncMock(side_effect=ConnectionError("daemon down"))
@@ -166,11 +166,11 @@ def test_plan_approval_falls_back_to_auto_on_fetch_error() -> None:
     ):
         mode = asyncio_run(app._resolve_default_clarification_mode())
 
-    assert mode == "auto"
+    assert mode == "manual"
 
 
-def test_plan_approval_falls_back_to_auto_on_missing_section() -> None:
-    """When the clarification section is missing, fall back to ``auto``."""
+def test_plan_approval_falls_back_to_manual_on_missing_section() -> None:
+    """When the clarification section is missing, fall back to ``manual``."""
     app = _ExecutionHarness()
 
     fake_fetch = AsyncMock(return_value={})
@@ -184,7 +184,7 @@ def test_plan_approval_falls_back_to_auto_on_missing_section() -> None:
     ):
         mode = asyncio_run(app._resolve_default_clarification_mode())
 
-    assert mode == "auto"
+    assert mode == "manual"
 
 
 def _make_cmgr() -> Any:

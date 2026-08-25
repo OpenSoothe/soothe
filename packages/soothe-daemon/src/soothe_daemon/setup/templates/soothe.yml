@@ -191,8 +191,8 @@ agent:
       enabled: true
     plan_prompt_ledger:
       plan_ledger_max_messages: 40
-      plan_ledger_max_total_chars: 24000
-      plan_ledger_max_message_chars: 3000
+      plan_ledger_max_total_chars: 200000
+      plan_ledger_max_message_chars: 200000
       preamble_max_turns: 12
       prior_goal_tail: 3
     execute_prompt_ledger:

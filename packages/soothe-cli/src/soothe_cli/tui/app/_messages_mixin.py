@@ -996,7 +996,7 @@ class _MessagesMixin:
         """
         from soothe_cli.tui.composer_mode import next_composer_mode
 
-        current = getattr(self, "_composer_mode", "auto")
+        current = getattr(self, "_composer_mode", "manual")
         new_mode = next_composer_mode(current)
         self._composer_mode = new_mode
         if self._status_bar is not None:

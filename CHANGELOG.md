@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Default `agent.clarification.default_mode` to `manual` so unqualified clarification turns route through the TUI relay instead of veritas auto-answer; autopilot still forces `auto`.
+
 ## [v0.10.35] - 2026-08-24
 
 ### Fixed

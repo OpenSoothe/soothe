@@ -193,7 +193,7 @@ def main(
             help=(
                 "Composer mode: 'auto' (veritas auto-answers), "
                 "'manual' (relay AI questions to you), or 'plan' (read-only "
-                "plan mode without typing /plan). Default: 'auto'."
+                "plan mode without typing /plan). Default: 'manual'."
             ),
         ),
     ] = None,

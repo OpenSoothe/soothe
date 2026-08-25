@@ -381,7 +381,7 @@ class _StartupMixin:
         try:
             from soothe_cli.tui.composer_mode import resolve_composer_wire_fields
 
-            wire = resolve_composer_wire_fields(getattr(self, "_composer_mode", "auto"))
+            wire = resolve_composer_wire_fields(getattr(self, "_composer_mode", "manual"))
             resp = await self._daemon_session.invoke_skill(
                 skill_name,
                 args,

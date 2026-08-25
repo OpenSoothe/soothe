@@ -5,9 +5,9 @@
 plan graph) so operators need not type ``/plan`` on every turn.
 ``ask`` is a read-only mode enforced via ``interaction_mode=ask``.
 
-Default composer mode is ``auto`` so interactive TUI sessions route
-clarification questions through the veritas auto-answerer unless the operator
-opts into Manual, Plan, or Ask.
+Default composer mode is ``manual`` so interactive TUI sessions relay
+clarification questions to the operator unless they opt into Auto, Plan, or
+Ask.
 """
 
 from __future__ import annotations
@@ -38,20 +38,20 @@ class ComposerWireFields:
 
 
 def normalize_composer_mode(mode: str | None) -> str:
-    """Clamp an arbitrary value to a valid composer mode (default ``auto``)."""
+    """Clamp an arbitrary value to a valid composer mode (default ``manual``)."""
     if mode in VALID_COMPOSER_MODES:
         return mode
-    return COMPOSER_MODE_AUTO
+    return COMPOSER_MODE_MANUAL
 
 
 def next_composer_mode(current: str) -> str:
     """Advance Auto → Manual → Plan → Ask → Auto.
 
-    Unknown values normalize to ``auto`` (same as a first Shift+Tab from a
-    garbage seed), without advancing past Auto in that step.
+    Unknown values normalize to ``manual`` (the default, same as a first
+    Shift+Tab from a garbage seed), without advancing past Manual in that step.
     """
     if current not in VALID_COMPOSER_MODES:
-        return COMPOSER_MODE_AUTO
+        return COMPOSER_MODE_MANUAL
     idx = COMPOSER_MODE_ORDER.index(current)
     return COMPOSER_MODE_ORDER[(idx + 1) % len(COMPOSER_MODE_ORDER)]
 

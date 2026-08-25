@@ -1576,11 +1576,11 @@ class ClarificationConfig(BaseModel):
     max_defer_age_hours: int = Field(default=168, ge=1)
     """Autopilot scrubs goals stuck in ``awaiting_clarification`` past this age."""
 
-    default_mode: Literal["auto", "manual"] = "auto"
+    default_mode: Literal["auto", "manual"] = "manual"
     """Mode used when a request payload does not specify ``clarification_mode``.
 
-    ``auto`` routes clarifications through the veritas auto-answerer.
-    ``manual`` routes them through the TUI relay (interactive policy).
+    ``manual`` routes clarifications through the TUI relay (interactive policy)
+    and is the default. ``auto`` routes them through the veritas auto-answerer.
     Autopilot always forces ``auto`` regardless of this setting.
     """
 

@@ -228,7 +228,7 @@ class SootheApp(
         self._router_profile_override: str | None = None
 
         # Composer mode (Auto / Manual / Plan / Ask). Seeded from --mode (CLIConfig);
-        # default Auto so TUI sessions route clarifications through veritas unless opted out.
+        # default Manual so TUI sessions relay clarifications to the operator.
         self._composer_mode: str = normalize_composer_mode(
             getattr(daemon_config, "clarification_mode", None)
         )

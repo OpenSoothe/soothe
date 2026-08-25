@@ -1082,8 +1082,10 @@ class ChatInput(Vertical):
         # immediately recurse into the same replacement path.
         self._applying_inline_path_replacement = False
 
-        # Full submit payload when the input shows an abbreviated paste preview.
-        self._pending_submit_text: str | None = None
+        # Abbreviated paste tokens -> full payloads. Display shows the token;
+        # submit substitutes the full text. A map (not a single buffer) so
+        # edits around the token don't lose the payload.
+        self._pending_paste_texts: dict[str, str] = {}
         self._setting_abbreviated_display = False
         self._paste_abbrev_counter = 0
 
@@ -1182,9 +1184,6 @@ class ChatInput(Vertical):
             self._setting_abbreviated_display = False
             self.scroll_visible()
             return
-
-        if self._pending_submit_text is not None:
-            self._pending_submit_text = None
 
         # Checked after the guards above so we skip the (potentially slow)
         # filesystem lookup when the text change came from history navigation
@@ -1411,47 +1410,23 @@ class ChatInput(Vertical):
         return max(0, min(mapped, text_len))
 
     def _resolve_submit_text(self, display_value: str) -> str:
-        """Return text to submit, using the full paste when display is abbreviated.
+        """Return text to submit, expanding abbreviated paste tokens to full text.
 
         Args:
             display_value: Stripped text currently shown in the input widget.
 
         Returns:
-            Full pasted payload when an abbreviation is active, else ``display_value``.
+            Text with each intact ``[Pasted text #N]`` token replaced by its
+            full payload. Edits around the tokens are preserved; a token that
+            the user modified or removed no longer expands.
         """
-        if self._pending_submit_text is not None:
-            full = self._pending_submit_text.strip()
-            self._pending_submit_text = None
-            return full
+        if self._pending_paste_texts:
+            resolved = display_value
+            for token, full_text in self._pending_paste_texts.items():
+                resolved = resolved.replace(token, full_text)
+            self._pending_paste_texts = {}
+            return resolved.strip()
         return display_value
-
-    def _compose_full_paste_text(
-        self,
-        display_text: str,
-        pasted_text: str,
-        *,
-        replace_start: int,
-        replace_end: int,
-    ) -> str:
-        """Compose full submit text after a paste, honoring pending full payloads."""
-        if self._pending_submit_text is None:
-            return compose_paste_into_input(
-                display_text,
-                pasted_text,
-                replace_start=replace_start,
-                replace_end=replace_end,
-            )
-
-        full_base = self._pending_submit_text
-        if replace_start == replace_end == len(display_text):
-            return f"{full_base}{pasted_text}"
-
-        return compose_paste_into_input(
-            full_base,
-            pasted_text,
-            replace_start=replace_start,
-            replace_end=replace_end,
-        )
 
     def _apply_abbreviated_paste_display(self, pasted_text: str) -> None:
         """Show abbreviated preview while retaining full post-paste text for submit."""
@@ -1476,20 +1451,13 @@ class ChatInput(Vertical):
                     exc_info=True,
                 )
 
-        base_for_full = text_area.text
-        full_text = self._compose_full_paste_text(
-            base_for_full,
-            pasted_text,
-            replace_start=replace_start,
-            replace_end=replace_end,
-        )
-        self._pending_submit_text = full_text
         self._paste_abbrev_counter += 1
-        self._setting_abbreviated_display = True
         preview_token = abbreviate_pasted_input_display(
             pasted_text,
             paste_index=self._paste_abbrev_counter,
         )
+        self._pending_paste_texts[preview_token] = pasted_text
+        self._setting_abbreviated_display = True
         preview = compose_paste_into_input(
             text_area.text,
             preview_token,
@@ -1532,7 +1500,7 @@ class ChatInput(Vertical):
         if self._text_area:
             # Preserve submission-time attachments until adapter consumes them.
             self._skip_media_sync_events += 1
-            self._pending_submit_text = None
+            self._pending_paste_texts = {}
             self._paste_abbrev_counter = 0
             self._text_area.clear_text()
         self.mode = "normal"
@@ -2043,7 +2011,7 @@ class ChatInput(Vertical):
         """Clear pending text, completion UI, and input mode without submitting."""
         self.dismiss_completion()
         self.exit_mode()
-        self._pending_submit_text = None
+        self._pending_paste_texts = {}
         self._paste_abbrev_counter = 0
         if self._text_area:
             self._text_area.clear_text()
