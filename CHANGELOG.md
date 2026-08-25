@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.36] - 2026-08-25
+
 ### Changed
 - Default `agent.clarification.default_mode` to `manual` so unqualified clarification turns route through the TUI relay instead of veritas auto-answer; autopilot still forces `auto`.
+
+### Fixed
+- Replace the single-buffer `_pending_submit_text` with a token→payload map in `ChatInput` so edits around `[Pasted text #N]` tokens preserve the full paste; modified or removed tokens no longer expand to stale payloads.
+- Raise `plan_prompt_ledger` char limits (24000/3000 → 200000/200000) so large plan artifacts are not truncated before review.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.35...v0.10.36
 
 ## [v0.10.35] - 2026-08-24
 
