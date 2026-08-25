@@ -68,10 +68,14 @@ class AgentBuilder(nano_builder.AgentBuilder):
         self._identity_runtime = kwargs.pop("identity_runtime", None)
 
         # Inject host-only tools not resolved from config.
-        from soothe.coreagent.tools import build_request_plan_mode_tool
+        from soothe.coreagent.tools import (
+            build_ask_user_tool,
+            build_request_plan_mode_tool,
+        )
 
         extra_tools = list(kwargs.get("tools") or [])
         extra_tools.append(build_request_plan_mode_tool())
+        extra_tools.append(build_ask_user_tool())
         kwargs["tools"] = extra_tools
         try:
             agent = super().build(*args, **kwargs)

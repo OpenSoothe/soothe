@@ -45,3 +45,7 @@ payloads  # noqa: F841
 vector  # noqa: F841
 filters  # noqa: F841
 record_id  # noqa: F841
+
+# workspace_sync.py — WorkspaceSync protocol parameters (abstract bodies are `...`)
+if_match  # noqa: F841
+artifact_path  # noqa: F841

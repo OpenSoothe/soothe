@@ -235,5 +235,3 @@ __MACOSX
 
 # Accidental MemU test persist_dir artifacts
 packages/soothe/MagicMock/
-docs/drafts
-docs/archive/drafts

@@ -54,6 +54,16 @@ from soothe_sdk.protocols.policy import (
     PolicyProtocol,
 )
 from soothe_sdk.protocols.vector_store import VectorRecord, VectorStoreProtocol
+from soothe_sdk.protocols.workspace_sync import (
+    Artifact,
+    ArtifactSpec,
+    CheckpointPayload,
+    CheckpointType,
+    Manifest,
+    ManifestEntry,
+    Resource,
+    WorkspaceSyncBackend,
+)
 
 __all__ = [
     # CoreAgent
@@ -82,6 +92,15 @@ __all__ = [
     # Vector store
     "VectorRecord",
     "VectorStoreProtocol",
+    # Workspace sync
+    "Artifact",
+    "ArtifactSpec",
+    "CheckpointPayload",
+    "CheckpointType",
+    "Manifest",
+    "ManifestEntry",
+    "Resource",
+    "WorkspaceSyncBackend",
     # Concurrency / planner
     "ConcurrencyPolicy",
     "GoalDirective",
