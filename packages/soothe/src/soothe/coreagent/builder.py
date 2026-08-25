@@ -46,6 +46,7 @@ class AgentBuilder(nano_builder.AgentBuilder):
     def _host_middleware_suffix(self) -> tuple:
         # Apply after ToolEnforcement so step/synthesis configurables win.
         from soothe.sloop.middleware import (
+            AskUserPromptMiddleware,
             DecomposeTaskMiddleware,
             EvalStepMiddleware,
             GeneralPurposeVariantGuardMiddleware,
@@ -57,6 +58,7 @@ class AgentBuilder(nano_builder.AgentBuilder):
             DecomposeTaskMiddleware(),
             GeneralPurposeVariantGuardMiddleware(),
             EvalStepMiddleware(),
+            AskUserPromptMiddleware(),
         )
 
     def build(self, *args: Any, **kwargs: Any):  # type: ignore[override]
@@ -77,6 +79,26 @@ class AgentBuilder(nano_builder.AgentBuilder):
         extra_tools.append(build_request_plan_mode_tool())
         extra_tools.append(build_ask_user_tool())
         kwargs["tools"] = extra_tools
+
+        # Wire interrupt_on for mutating tools so their action_requests
+        # interrupts surface to the clarification relay (tool_approval origin)
+        # instead of being silently auto-approved.
+        # Read-only interaction modes (plan/ask) keep their own deny-based
+        # permissions; agent mode gets interrupt_on for write/exec tools.
+        if kwargs.get("interaction_mode") not in ("plan", "ask"):
+            from langchain.agents.middleware import InterruptOnConfig
+
+            _approve_reject = InterruptOnConfig(allowed_decisions=["approve", "reject"])
+            kwargs.setdefault(
+                "interrupt_on",
+                {
+                    "edit_file": _approve_reject,
+                    "write_file": _approve_reject,
+                    "delete": _approve_reject,
+                    "run_command": _approve_reject,
+                },
+            )
+
         try:
             agent = super().build(*args, **kwargs)
         finally:
