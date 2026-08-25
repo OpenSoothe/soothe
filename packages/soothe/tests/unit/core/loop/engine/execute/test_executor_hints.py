@@ -159,7 +159,7 @@ class TestExecutorHints:
 
     @pytest.mark.asyncio
     async def test_executor_thread_creates_isolated_thread(self) -> None:
-        """A no-deps step gets a fresh isolated ``__step_<id>`` thread.
+        """A no-deps step gets a fresh isolated random thread.
 
         No checkpoint fork — thread isolation for parallel safety, predecessor
         context arrives via message injection.
@@ -192,10 +192,11 @@ class TestExecutorHints:
 
         call_args = mock_agent.execution_astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
-        # creates __step_ prefixed thread for isolation
-        assert configurable["thread_id"] == "logical-thread__step_a1b2c3d4"
+        # creates an isolated thread (random, not main, not step-derived)
+        assert configurable["thread_id"].startswith("logical-thread__")
+        assert configurable["thread_id"] != "logical-thread"
         assert result.step_result.thread_id == "logical-thread"
-        assert state.step_thread_ids["a1b2c3d4"] == "logical-thread__step_a1b2c3d4"
+        assert state.step_thread_ids["a1b2c3d4"] == configurable["thread_id"]
 
     @pytest.mark.asyncio
     async def test_executor_step_cancelled_error_propagates(self) -> None:

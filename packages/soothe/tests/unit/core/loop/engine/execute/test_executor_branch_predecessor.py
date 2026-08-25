@@ -117,7 +117,9 @@ async def test_multi_dep_step_uses_ledger_projection() -> None:
     assert "third" in envelope
 
     cfg = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
-    assert cfg["thread_id"] == "logical-t__step_C"
+    # Multi-dep step: new isolated thread (not main, not step-derived)
+    assert cfg["thread_id"].startswith("logical-t__")
+    assert cfg["thread_id"] != "logical-t"
 
 
 @pytest.mark.asyncio
@@ -169,8 +171,9 @@ async def test_singleton_dependent_step_uses_fresh_thread_and_ledger_projection(
     )
 
     cfg = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
-    assert cfg["thread_id"] == "logical-t__step_B"
-    assert state.step_thread_ids.get("B") == "logical-t__step_B"
+    # Singleton dependency with only-child: linear reuse of parent's thread
+    assert cfg["thread_id"] == "logical-t__step_A"
+    assert state.step_thread_ids.get("B") == "logical-t__step_A"
 
     messages = _astream_messages(mock_agent)
     assert len(messages) == 3
@@ -210,8 +213,10 @@ async def test_no_dep_step_forks_from_main_thread() -> None:
     )
 
     cfg = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
-    assert cfg["thread_id"] == "logical-t__step_solo"
-    assert state.step_thread_ids.get("solo") == "logical-t__step_solo"
+    # No-dep step: new isolated random thread (not main)
+    assert cfg["thread_id"].startswith("logical-t__")
+    assert cfg["thread_id"] != "logical-t"
+    assert state.step_thread_ids.get("solo") == cfg["thread_id"]
 
 
 @pytest.mark.asyncio

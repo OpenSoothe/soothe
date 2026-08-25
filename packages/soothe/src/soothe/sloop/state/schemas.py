@@ -869,6 +869,13 @@ class LoopState(BaseModel):
         default_factory=dict,
         description="Maps step_id → thread_id used for execution.",
     )
+    # Thread_id to resume after an ask_user / action_requests interrupt.
+    # Set by the executor when capturing GraphInterrupt; read by the resume
+    # path to re-enter the CoreAgent on the same thread (Command(resume=...)).
+    resume_thread_id: str | None = Field(
+        default=None,
+        description="Thread_id of the interrupted CoreAgent step, for resume.",
+    )
 
     # Cross-turn clarification memory (RFC-622 enhancement). Append-only log of
     # resolved clarifications within this goal run, so veritas can reference

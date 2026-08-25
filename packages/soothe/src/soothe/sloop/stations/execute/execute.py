@@ -21,8 +21,15 @@ from soothe.sloop.engine.execute.context_window_manager import ContextWindowMana
 from soothe.sloop.engine.execute.executor import Executor, StepWaveQueued, StepWaveStart
 from soothe.sloop.engine.execute.graph_interrupt import build_tool_approval_resume_payload
 from soothe.sloop.engine.execute.step_wave_types import StepCompletionReport
+from soothe.sloop.orchestrator.node_base import _maybe_await
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.state.schemas import LoopState, StepAction, StepExecutionRecord
+from soothe.sloop.state.schemas import (
+    AgentDecision,
+    LoopState,
+    PlanResult,
+    StepAction,
+    StepExecutionRecord,
+)
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 logger = logging.getLogger(__name__)
@@ -368,8 +375,64 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         # RFC-622 resume path: when ``Command(resume=...)`` re-enters the
         # graph after a clarification interrupt, ``ctx.scratch`` is freshly
         # initialized for the new ``ainvoke`` call so the prior decision is
-        # gone. We can still synthesize the answered step's result from state
-        # alone — DISPATCH rebuilds a decision before any new execution.
+        # gone. Rebuild a minimal decision from the CE root step so the
+        # Executor can resume the CoreAgent on the original thread (stored
+        # in ``loop_state.resume_thread_id``).
+        if resume_answer_payload is not None:
+            # CoreAgent ``ask_user`` / ``action_requests`` interrupt resume.
+            # The original thread_id is in ``loop_state.resume_thread_id``
+            # (stored by the executor when capturing GraphInterrupt). The
+            # checkpointer has the pending interrupt on that thread.
+            # Rebuild a decision from the CE root step and fall through to
+            # the normal Executor path — it will use the resume thread_id
+            # and pass ``Command(resume=...)`` to the CoreAgent.
+            resume_tid = getattr(state, "resume_thread_id", None)
+            if resume_tid and ctx.ce is not None and ctx.ce_goal_id:
+                goal = await _maybe_await(ctx.ce.get_goal(ctx.ce_goal_id))
+                if goal is not None:
+                    root_node = next(
+                        (n for n in goal.steps.nodes.values()
+                         if n.parent_step_id is None and n.status in ("active", "completed", "pending")),
+                        None,
+                    )
+                    if root_node is not None:
+                        from soothe.sloop.stations.decompose.dispatch import _step_action_from_node
+                        root_step = _step_action_from_node(root_node)
+                        decision = AgentDecision(
+                            type="execute_steps",
+                            execution_mode="parallel",
+                            reasoning="ask_user interrupt resume",
+                            steps=[root_step],
+                        )
+                        plan_result = PlanResult(
+                            status="continue",
+                            goal_progress="none",
+                            assessment_reasoning="",
+                            plan_action="keep",
+                            require_goal_completion=False,
+                            terminal_after_execute=False,
+                            decision=decision,
+                            next_action=root_step.description[:300],
+                        )
+                        ctx.scratch.decision = decision
+                        ctx.scratch.plan_result = plan_result
+                        state.current_decision = decision
+                        # Clear clarification channels so route_after_execute
+                        # doesn't re-route to AWAIT_USER.
+                        logger.info(
+                            "[execute] ask_user resume: rebuilt decision from "
+                            "CE root step %s, resuming on thread %s",
+                            root_node.id, resume_tid[:24],
+                        )
+                        # Fall through to normal Executor path below.
+                        # The Executor will pass resume_answer_payload as
+                        # Command(resume=...) on the resume_thread_id.
+                    else:
+                        logger.warning("[execute] ask_user resume: no root step in CE")
+                else:
+                    logger.warning("[execute] ask_user resume: CE goal not found")
+            else:
+                logger.warning("[execute] ask_user resume: no resume_thread_id on state")
         if planner_ask_answered_step_id is not None:
             outcome_payload: dict[str, Any] = {
                 "kind": "ask_user",

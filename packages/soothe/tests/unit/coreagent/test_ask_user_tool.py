@@ -23,13 +23,18 @@ def test_tool_name_and_schema() -> None:
     assert tool.name == "ask_user"
     schema = tool.args_schema.model_json_schema()
     assert "questions" in schema["properties"]
-    # min_length=1 enforced by pydantic
-    assert schema["required"] == ["questions"]
+    assert "query" in schema["properties"]
 
 
-def test_args_schema_rejects_empty_questions() -> None:
+def test_args_schema_rejects_empty() -> None:
     with pytest.raises(Exception):  # noqa: PT011
-        _AskUserArgs(questions=[])
+        _AskUserArgs()
+
+
+def test_args_schema_query_alias() -> None:
+    """`query` (single string) is accepted as an alias for `questions`."""
+    args = _AskUserArgs(query="Which option?")
+    assert args.questions == ["Which option?"]
 
 
 # ---------------------------------------------------------------------------
@@ -76,17 +81,33 @@ def test_run_ask_user_emits_interrupt_and_returns_answers() -> None:
 
     def fake_interrupt(value: Any) -> Any:
         captured.append(value)
-        # Simulate the relay resume payload
         return {"answers": ["Option C"]}
 
     with patch("langgraph.types.interrupt", fake_interrupt):
-        result = _run(["Which design option: A, B, or C?"])
+        result = _run(questions=["Which design option: A, B, or C?"])
 
     assert len(captured) == 1
     payload = captured[0]
     assert payload["type"] == "ask_user"
     assert payload["questions"] == ["Which design option: A, B, or C?"]
     assert "A: Option C" in result
+
+
+def test_run_ask_user_with_query_alias() -> None:
+    """`query=` (single string) works the same as `questions=[...]`."""
+    captured: list[dict[str, Any]] = []
+
+    def fake_interrupt(value: Any) -> Any:
+        captured.append(value)
+        return {"answers": ["yes"]}
+
+    with patch("langgraph.types.interrupt", fake_interrupt):
+        from soothe.coreagent.tools.ask_user import _run_ask_user
+
+        result = _run_ask_user(query="Approve?")
+
+    assert captured[0]["questions"] == ["Approve?"]
+    assert "A: yes" in result
 
 
 def test_run_ask_user_strips_empty_questions() -> None:
@@ -97,29 +118,27 @@ def test_run_ask_user_strips_empty_questions() -> None:
         return {"answers": ["go"]}
 
     with patch("langgraph.types.interrupt", fake_interrupt):
-        result = _run(["  ", "real question?", ""])
+        result = _run(questions=["  ", "real question?", ""])
 
-    # Only the non-empty question survives
     assert captured[0]["questions"] == ["real question?"]
     assert "A: go" in result
 
 
 def test_run_ask_user_all_empty_returns_error() -> None:
     with patch("langgraph.types.interrupt", side_effect=AssertionError("must not call")):
-        result = _run(["", "  "])
+        result = _run(questions=["", "  "])
     assert "Error" in result
 
 
 def test_run_ask_user_propagates_graph_interrupt() -> None:
-    """GraphInterrupt must propagate — it's the normal pause mechanism,
-    not an error. Swallowing it causes the loop to finalize without pausing."""
+    """GraphInterrupt must propagate — it's the normal pause mechanism."""
     from langgraph.errors import GraphInterrupt
     from langgraph.types import Interrupt
 
     exc = GraphInterrupt((Interrupt(value={"type": "ask_user", "questions": ["q"]}, id="i1"),))
     with patch("langgraph.types.interrupt", side_effect=exc):
         with pytest.raises(GraphInterrupt):
-            _run(["Approve the plan?"])
+            _run(questions=["Approve the plan?"])
 
 
 # ---------------------------------------------------------------------------
@@ -143,13 +162,30 @@ async def test_arun_ask_user_matches_sync() -> None:
     assert "A: yes" in result
 
 
+@pytest.mark.asyncio
+async def test_arun_ask_user_with_query_field() -> None:
+    """The LLM frequently sends {'query': '...'} — verify it works."""
+    captured: list[dict[str, Any]] = []
+
+    def fake_interrupt(value: Any) -> Any:
+        captured.append(value)
+        return {"answers": ["do it"]}
+
+    with patch("langgraph.types.interrupt", fake_interrupt):
+        tool = build_ask_user_tool()
+        result = await tool.ainvoke({"query": "Should I proceed?"})
+
+    assert captured[0]["questions"] == ["Should I proceed?"]
+    assert "A: do it" in result
+
+
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
 
 
-def _run(questions: list[str]) -> str:
+def _run(*, questions: list[str] | None = None, query: str | None = None) -> str:
     """Invoke the sync tool handler (bypass StructuredTool dispatch)."""
     from soothe.coreagent.tools.ask_user import _run_ask_user
 
-    return _run_ask_user(questions)
+    return _run_ask_user(questions, query=query)
