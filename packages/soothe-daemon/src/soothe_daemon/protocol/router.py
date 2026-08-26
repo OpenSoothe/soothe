@@ -1510,10 +1510,6 @@ class MessageRouter:
             )
             return
 
-        # Get failed branches and checkpoint anchors
-        branches = await d._persistence_manager.get_failed_branches_for_loop(loop_id)
-        anchors = await d._persistence_manager.get_checkpoint_anchors_for_range(loop_id, 0, 1000)
-
         loop_data = {
             "loop_id": metadata.get("loop_id", loop_id),
             "status": metadata.get("status", "unknown"),
@@ -1531,161 +1527,12 @@ class MessageRouter:
             "detached_at": metadata.get("detached_at"),
             "is_ephemeral": bool(metadata.get("is_ephemeral", False)),
             "last_message_at": metadata.get("last_message_at"),
-            "failed_branches": branches,
-            "checkpoint_anchors": anchors,
         }
 
         await self._send_response(
             client_id,
             request_id,
             {"loop": loop_data},
-        )
-
-    async def _handle_loop_tree(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle loop_tree RPC request (RFC-504).
-
-        Args:
-            client_id: Client connection identifier.
-            msg: Request message with loop_id and format.
-        """
-        d = self._daemon
-        request_id = msg.get("request_id")
-        loop_id = msg.get("loop_id")
-
-        if not loop_id:
-            await d._send_client_message(
-                client_id,
-                build_error_response(
-                    ErrorCode.INVALID_REQUEST,
-                    "loop_id required",
-                    request_id=request_id,
-                ),
-            )
-            return
-
-        # Check loop exists in DB
-        if not await self._ensure_loop_exists(loop_id):
-            await d._send_client_message(
-                client_id,
-                build_error_response(
-                    ErrorCode.LOOP_NOT_FOUND,
-                    f"Loop {loop_id} not found",
-                    request_id=request_id,
-                ),
-            )
-            return
-
-        persistence_manager = d._persistence_manager
-
-        # Get checkpoint anchors (main line)
-        anchors = await persistence_manager.get_checkpoint_anchors_for_range(loop_id, 0, 1000)
-
-        # Get failed branches
-        branches = await persistence_manager.get_failed_branches_for_loop(loop_id)
-
-        # Build tree structure
-        tree_data = {
-            "main_line": [],
-            "failed_branches": [],
-        }
-
-        # Group anchors by iteration
-        iterations = {}
-        for anchor in anchors:
-            iter_num = anchor["iteration"]
-            if iter_num not in iterations:
-                iterations[iter_num] = {}
-            iterations[iter_num][anchor["anchor_type"]] = anchor
-
-        for iter_num in sorted(iterations.keys()):
-            iter_data = iterations[iter_num]
-            start_anchor = iter_data.get("iteration_start", {})
-            end_anchor = iter_data.get("iteration_end", {})
-
-            tree_data["main_line"].append(
-                {
-                    "iteration": iter_num,
-                    "thread_id": start_anchor.get("thread_id", "unknown"),
-                    "start_checkpoint": start_anchor.get("checkpoint_id", ""),
-                    "end_checkpoint": end_anchor.get("checkpoint_id", ""),
-                    "status": end_anchor.get("iteration_status", "unknown"),
-                    "tools_executed": end_anchor.get("tools_executed", []),
-                }
-            )
-
-        for branch in branches:
-            tree_data["failed_branches"].append(
-                {
-                    "branch_id": branch["branch_id"],
-                    "iteration": branch["iteration"],
-                    "thread_id": branch["thread_id"],
-                    "root_checkpoint": branch["root_checkpoint_id"],
-                    "failure_checkpoint": branch["failure_checkpoint_id"],
-                    "failure_reason": branch["failure_reason"],
-                    "execution_path": branch.get("execution_path", []),
-                    "avoid_patterns": branch.get("avoid_patterns", []),
-                    "suggested_adjustments": branch.get("suggested_adjustments", []),
-                }
-            )
-
-        await self._send_response(
-            client_id,
-            request_id,
-            {"tree": tree_data},
-        )
-
-    async def _handle_loop_prune(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle loop_prune RPC request (RFC-504).
-
-        Args:
-            client_id: Client connection identifier.
-            msg: Request message with loop_id, retention_days, and dry_run.
-        """
-        d = self._daemon
-        request_id = msg.get("request_id")
-        loop_id = msg.get("loop_id")
-        retention_days = msg.get("retention_days", 30)
-        dry_run = msg.get("dry_run", False)
-
-        if not loop_id:
-            await d._send_client_message(
-                client_id,
-                build_error_response(
-                    ErrorCode.INVALID_REQUEST,
-                    "loop_id required",
-                    request_id=request_id,
-                ),
-            )
-            return
-
-        # Check loop exists in DB
-        if not await self._ensure_loop_exists(loop_id):
-            await d._send_client_message(
-                client_id,
-                build_error_response(
-                    ErrorCode.LOOP_NOT_FOUND,
-                    f"Loop {loop_id} not found",
-                    request_id=request_id,
-                ),
-            )
-            return
-
-        persistence_manager = d._persistence_manager
-
-        if dry_run:
-            # Get branches but don't delete
-            branches = await persistence_manager.get_failed_branches_for_loop(loop_id)
-            remaining = len(branches)
-            pruned = 0
-        else:
-            # Prune old branches
-            pruned = await persistence_manager.prune_old_branches(loop_id, retention_days)
-            remaining = len(await persistence_manager.get_failed_branches_for_loop(loop_id))
-
-        await self._send_response(
-            client_id,
-            request_id,
-            {"pruned": pruned, "remaining": remaining, "dry_run": dry_run},
         )
 
     async def _handle_loop_delete(self, client_id: Any, msg: dict[str, Any]) -> None:
@@ -2440,6 +2287,67 @@ class MessageRouter:
             request_id,
             {"success": True},
         )
+
+    async def _handle_loop_set_clarification_mode(
+        self,
+        client_id: Any,
+        msg: dict[str, Any],
+    ) -> None:
+        """Hot-swap the RFC-622 clarification mode on a running goal.
+
+        Forwards ``mode`` to the active loop runner's ``set_clarification_mode``
+        so the next ``await_clarification`` node entry uses the new policy
+        without waiting for a new turn. Returns ``{"applied": False}`` when no
+        goal is running or the runner backend doesn't support hot-swap yet
+        (worker_pool / distributed); the caller may retry on the next turn.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+        raw_mode = msg.get("mode")
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INVALID_REQUEST,
+                    "loop_id is required",
+                    request_id=request_id,
+                ),
+            )
+            return
+        if isinstance(raw_mode, str):
+            mode = raw_mode.strip().lower()
+        else:
+            mode = ""
+        if mode not in ("auto", "manual"):
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INVALID_PARAMS,
+                    f"mode must be 'auto' or 'manual', got: {raw_mode!r}",
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        qe = d._query_engine
+        active = qe._active_runners.get(loop_id) if qe is not None else None
+        if active is None:
+            await self._send_response(client_id, request_id, {"applied": False})
+            return
+
+        try:
+            applied = active.runner.set_clarification_mode(mode)
+        except Exception as exc:
+            logger.warning(
+                "[loop_set_clarification_mode] runner call failed for loop=%s: %s",
+                loop_id,
+                exc,
+            )
+            await self._send_response(client_id, request_id, {"applied": False})
+            return
+
+        await self._send_response(client_id, request_id, {"applied": applied})
 
     async def _handle_loop_history_fetch(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Return goal display snapshots plus live card tail (RFC-631)."""

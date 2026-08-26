@@ -31,8 +31,6 @@ __all__ = [
     "LoopNewParams",
     "LoopGetParams",
     "LoopListParams",
-    "LoopTreeParams",
-    "LoopPruneParams",
     "LoopDeleteParams",
     "LoopReattachParams",
     "LoopInputParams",
@@ -40,6 +38,7 @@ __all__ = [
     "LoopStateGetParams",
     "LoopStateUpdateParams",
     "LoopExecutionStateFetchParams",
+    "LoopSetClarificationModeParams",
     "LoopDetachParams",
     # Job RPC
     "JobCreateParams",
@@ -135,7 +134,6 @@ class LoopGetParams(ParamsBase):
 
     loop_id: str = Field(..., min_length=1, description="Loop identifier")
     verbose: bool = Field(default=False, description="Include verbose details")
-    tree: bool = Field(default=False, description="Include checkpoint tree")
 
 
 class LoopListParams(ParamsBase):
@@ -147,19 +145,6 @@ class LoopListParams(ParamsBase):
         default=None,
         description="Optional filters: status, exclude_empty, workspace.",
     )
-
-
-class LoopTreeParams(ParamsBase):
-    """Params for method=loop_tree, type=request."""
-
-    loop_id: str = Field(..., min_length=1)
-
-
-class LoopPruneParams(ParamsBase):
-    """Params for method=loop_prune, type=request."""
-
-    loop_id: str = Field(..., min_length=1)
-    keep_latest: int = Field(default=1, ge=1)
 
 
 class LoopDeleteParams(ParamsBase):
@@ -227,6 +212,19 @@ class LoopExecutionStateFetchParams(ParamsBase):
     """
 
     loop_id: str = Field(..., min_length=1)
+
+
+class LoopSetClarificationModeParams(ParamsBase):
+    """Params for method=loop_set_clarification_mode, type=request.
+
+    Hot-swap the RFC-622 clarification mode on a running goal so the next
+    ``await_clarification`` node entry uses the new policy without waiting
+    for a new turn. Returns ``{"applied": bool}`` — ``False`` when no goal is
+    currently running (the caller may retry on the next turn).
+    """
+
+    loop_id: str = Field(..., min_length=1)
+    mode: str = Field(..., description="auto or manual")
 
 
 class LoopHistoryFetchParams(ParamsBase):
@@ -585,8 +583,6 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("request", "loop_new"): LoopNewParams,
     ("request", "loop_get"): LoopGetParams,
     ("request", "loop_list"): LoopListParams,
-    ("request", "loop_tree"): LoopTreeParams,
-    ("request", "loop_prune"): LoopPruneParams,
     ("request", "loop_delete"): LoopDeleteParams,
     ("request", "loop_reattach"): LoopReattachParams,
     ("request", "loop_detach"): LoopDetachParams,
@@ -596,6 +592,7 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("request", "loop_state_get"): LoopStateGetParams,
     ("request", "loop_state_update"): LoopStateUpdateParams,
     ("request", "loop_execution_state_fetch"): LoopExecutionStateFetchParams,
+    ("request", "loop_set_clarification_mode"): LoopSetClarificationModeParams,
     ("request", "loop_history_fetch"): LoopHistoryFetchParams,
     ("request", "job_create"): JobCreateParams,
     ("request", "job_status"): JobStatusParams,

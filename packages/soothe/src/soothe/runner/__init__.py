@@ -205,6 +205,8 @@ class SootheRunner(
         self._current_plan: Plan | None = None
         # Client-visible loop id for the active ``astream`` (daemon loop scope / logging).
         self._client_loop_id_for_stream: str | None = None
+        # Live StrangeLoop instance for the active goal (hot-swap target).
+        self._live_loop_agent: Any = None
 
         # Shared PostgreSQL pool for StrangeLoop state persistence
         # Initialized lazily in async context for high-concurrency support
@@ -628,6 +630,25 @@ class SootheRunner(
             logger.debug("Failed to close resource %s", type(obj).__name__, exc_info=True)
 
     # -- main stream --------------------------------------------------------
+
+    def set_clarification_mode(self, mode: str) -> bool:
+        """Hot-swap the clarification mode on the running goal (RFC-622).
+
+        Forwards to the live ``StrangeLoop`` instance, which rebuilds the
+        ``ClarificationPolicy`` and swaps it on the active ``LoopRuntimeContext``.
+        The next ``await_clarification`` node entry uses the new mode.
+
+        Args:
+            mode: ``"auto"`` or ``"manual"``.
+
+        Returns:
+            ``True`` when the swap landed on a live goal; ``False`` when no
+            goal is running (the caller may retry on the next turn).
+        """
+        agent = self._live_loop_agent
+        if agent is None:
+            return False
+        return agent.set_clarification_mode(mode)
 
     async def astream(
         self,

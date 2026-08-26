@@ -180,6 +180,16 @@ class LoopRunnerProtocol(Protocol):
         """
         ...
 
+    def set_clarification_mode(self, mode: str) -> bool:
+        """Hot-swap the clarification mode on the running goal (RFC-622).
+
+        Rebuilds the ``ClarificationPolicy`` on the live ``LoopRuntimeContext``
+        so the next ``await_clarification`` node entry uses the new mode without
+        waiting for a new turn. Returns ``True`` when the swap landed on a live
+        goal; ``False`` when no goal is currently running.
+        """
+        ...
+
 
 __all__ = [
     "GoalDispatchEnvelope",

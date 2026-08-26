@@ -1010,7 +1010,7 @@ class _ExecutionMixin:
         turn_stats = SessionStats()
         self._inflight_turn_stats = turn_stats
         self._inflight_turn_start = time.monotonic()
-        wire = resolve_composer_wire_fields(getattr(self, "_composer_mode", "manual"))
+        wire = resolve_composer_wire_fields(getattr(self, "_composer_mode", "auto"))
         wire_clar = wire.clarification_mode
         sticky_subagent = wire.preferred_subagent
         wire_interaction = wire.interaction_mode

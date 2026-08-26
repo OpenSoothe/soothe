@@ -515,6 +515,7 @@ class StrangeLoopMixin:
             core_agent=core_agent,
             config=self._config,
         )
+        self._live_loop_agent = loop_agent
 
         # Get shared PostgreSQL pool for high-concurrency support
         shared_pool = await self.get_sloop_shared_pool()
@@ -1025,6 +1026,7 @@ class StrangeLoopMixin:
             if increment_ai_message_count:
                 await _increment_loop_ai_message_count(self._config, strange_loop_id)
             await heartbeat_handle.stop()
+            self._live_loop_agent = None
 
 
 async def _increment_loop_ai_message_count(config: Any, loop_id: str) -> None:

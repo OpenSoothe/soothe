@@ -993,14 +993,52 @@ class _MessagesMixin:
         to the ``clarification_mode`` wire field; Plan sets
         ``interaction_mode=plan`` on subsequent turns. The badge updates
         immediately; no toast is emitted because the badge is the feedback.
+
+        When a goal is running and the new mode is Auto or Manual, the mode is
+        also hot-swapped on the daemon's live ``LoopRuntimeContext`` via the
+        ``loop_set_clarification_mode`` RPC so the next clarification uses the
+        new policy without waiting for the next turn.
         """
         from soothe_cli.tui.composer_mode import next_composer_mode
 
-        current = getattr(self, "_composer_mode", "manual")
+        current = getattr(self, "_composer_mode", "auto")
         new_mode = next_composer_mode(current)
         self._composer_mode = new_mode
         if self._status_bar is not None:
             self._status_bar.set_clarification_mode(new_mode)
+
+        # Hot-swap the running goal's clarification policy when applicable.
+        # Plan/Ask modes don't carry a clarification_mode wire field, so skip
+        # them — they only take effect on the next turn dispatch.
+        if new_mode in ("auto", "manual"):
+            self._push_clarification_mode_to_running_loop(new_mode)
+
+    def _push_clarification_mode_to_running_loop(self, mode: str) -> None:
+        """Best-effort hot-swap RPC; failures are silent (next turn still works)."""
+        import asyncio
+
+        session = getattr(self, "_daemon_session", None)
+        if session is None:
+            return
+        loop_id = str(getattr(self, "_session_state", None) and self._session_state.loop_id or "")
+        if not loop_id:
+            return
+
+        async def _push() -> None:
+            try:
+                await session.set_clarification_mode(mode)
+            except Exception:
+                logger.debug(
+                    "set_clarification_mode RPC failed (mode=%s); will apply on next turn",
+                    mode,
+                    exc_info=True,
+                )
+
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            return
+        loop.create_task(_push())
 
     def action_toggle_tool_output(self) -> None:
         """Toggle expand/collapse of the most recent skill or tool card."""

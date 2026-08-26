@@ -95,6 +95,12 @@ class StrangeLoop:
         # RFC-624 Phase 4: Loop-scoped CE instance (created on first run_with_progress)
         self._ce: Any | None = None
 
+        # Hot-swap target: the live LoopRuntimeContext, set inside
+        # ``run_with_progress`` so external callers (daemon RPC) can reach in
+        # and swap the clarification policy mid-goal without waiting for the
+        # next turn.
+        self._live_runtime_ctx: Any | None = None
+
         # Eagerly resolve the fast model for scenario classification / step briefs.
         self._fast_llm: Any | None = None
         if config.router.fast:
@@ -116,6 +122,46 @@ class StrangeLoop:
         if self._goal_synthesis_llm is not None:
             return self._goal_synthesis_llm
         return self._fast_llm
+
+    def set_clarification_mode(self, mode: str) -> bool:
+        """Hot-swap the clarification policy on the live runtime context.
+
+        Rebuilds the policy via ``build_clarification_policy_for_runner`` and
+        atomically swaps ``ctx.clarification_policy``. The ``await_clarification``
+        graph node reads ``ctx.clarification_policy`` on each entry, so the next
+        clarification inside this goal uses the new mode without waiting for a
+        new turn.
+
+        Args:
+            mode: ``"auto"`` or ``"manual"``.
+
+        Returns:
+            ``True`` when the swap landed on a live context, ``False`` when no
+            goal is currently running (caller may retry on the next turn).
+        """
+        ctx = self._live_runtime_ctx
+        if ctx is None:
+            return False
+        from soothe.sloop.clarification import build_clarification_policy_for_runner
+
+        try:
+            new_policy = build_clarification_policy_for_runner(
+                self.config,
+                mode=mode,
+                emit=ctx.emit,
+                human_attached=True,
+                thread_id=str(getattr(ctx.strange_loop, "_thread_id", "") or ""),
+                loop_id=str(getattr(ctx.state_manager, "loop_id", "") or ""),
+            )
+        except Exception:
+            logger.exception(
+                "[StrangeLoop] set_clarification_mode: failed to build policy; "
+                "keeping existing policy"
+            )
+            return False
+        ctx.clarification_policy = new_policy
+        logger.info("[StrangeLoop] clarification mode hot-swapped to %s", mode)
+        return True
 
     async def run(
         self,
@@ -812,6 +858,7 @@ class StrangeLoop:
                 goal_trace=active_goal_trace,
             )
             runtime_ctx = ctx
+            self._live_runtime_ctx = ctx
 
             async def pump_graph() -> None:
                 try:
@@ -909,3 +956,5 @@ class StrangeLoop:
             # Always stop async checkpoint worker even when setup fails before graph start.
             await state_manager.close()
             await anchor_manager.close()
+            # Clear the hot-swap target so a stale RPC cannot reach a finished context.
+            self._live_runtime_ctx = None

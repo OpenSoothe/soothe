@@ -143,6 +143,7 @@ def _thread_worker_body(
     warmup_runner: bool = True,
     warmup_core_agent: bool = True,
     warmup_done_event: threading.Event | None = None,
+    live_runners: dict[str, Any] | None = None,
 ) -> None:
     """Thread worker body: maintains event loop, executes requests.
 
@@ -228,6 +229,10 @@ def _thread_worker_body(
                     warmup_runner=False,
                     identity_runtime=identity_runtime,
                 )
+                # Register the live runner so the pool can forward
+                # hot-swap RPCs (set_clarification_mode) to it.
+                if live_runners is not None:
+                    live_runners[req.loop_id] = runner
 
                 timeout_ctx = asyncio.timeout(timeout_seconds) if timeout_enabled else None
 
@@ -313,6 +318,8 @@ def _thread_worker_body(
                 _record_worker_last_error(worker_id, exc)
                 _emit("error", exc)
             finally:
+                if live_runners is not None and req is not None:
+                    live_runners.pop(req.loop_id, None)
                 if runner is not None:
                     try:
                         if reuse_runner:
@@ -529,6 +536,10 @@ class ThreadPool:
 
         self._workers: dict[str, WorkerThreadState] = {}
         self._workers_by_loop_id: dict[str, str] = {}
+        # Live SootheRunner per loop_id (populated by worker during astream).
+        # Used for hot-swap RPCs (set_clarification_mode) that must reach the
+        # runner inside the worker thread without a round-trip request queue.
+        self._live_runners: dict[str, Any] = {}
         self._dispatch_semaphore: asyncio.Semaphore | None = None
         self._worker_available: asyncio.Condition | None = None
         self._waiting_for_worker_slot: int = 0
@@ -689,6 +700,7 @@ class ThreadPool:
                 "warmup_runner": self._warmup_runner,
                 "warmup_core_agent": self._warmup_core_agent,
                 "warmup_done_event": warmup_done_event,
+                "live_runners": self._live_runners,
             },
             daemon=True,
             name=worker_id,
@@ -1520,6 +1532,22 @@ class ThreadLoopRunner:
         """Request cooperative cancellation."""
         pool = await self._resolve_pool()
         await pool.cancel_request(self._loop_id)
+
+    def set_clarification_mode(self, mode: str) -> bool:
+        """Hot-swap clarification mode on the running goal (RFC-622).
+
+        Reaches the live ``SootheRunner`` inside the worker thread via the
+        pool's ``_live_runners`` registry and calls ``set_clarification_mode``
+        on it. Returns ``False`` when no goal is currently running for this
+        loop — the caller may retry on the next turn.
+        """
+        pool = self._pool
+        if pool is None:
+            return False
+        runner = pool._live_runners.get(self._loop_id)  # noqa: SLF001
+        if runner is None:
+            return False
+        return runner.set_clarification_mode(mode)
 
     async def is_idle(self) -> bool:
         """True when no busy worker is mapped to this loop's request."""
