@@ -564,3 +564,103 @@ class TestMultiActionInterruptCase:
         assert len(payload["iMulti"]["decisions"]) == 2
         assert payload["iMulti"]["decisions"][0]["type"] == "approve"
         assert payload["iMulti"]["decisions"][1]["type"] == "reject"
+
+
+# ===========================================================================
+# CASE 6: step identity capture — resume_step_id / resume_step_description
+# ===========================================================================
+
+
+class TestStepIdentityCaptureCase:
+    """The executor records the originating step id + description on the capture
+    so the resume path can re-emit ``step_started`` with the same identity the
+    TUI already has a card for (not the CE root node)."""
+
+    @pytest.mark.asyncio
+    async def test_ask_user_capture_records_step_identity(self) -> None:
+        """A GraphInterrupt during a step's stream captures step_id + description."""
+        core = _StubCoreAgent()
+        core.queue([], state_interrupts=(_ask_user_interrupt(["Approve design?"]),))
+        capture = ClarificationCapture()
+        executor = _make_executor(
+            core,
+            clarification_detector=ClarificationDetector(),
+            clarification_capture=capture,
+            clarification_loop_state_view=_view(),
+        )
+        stream = executor._core_agent_astream_with_interrupt_resume(
+            {"messages": []},
+            {"configurable": {"thread_id": "loop-1__abc"}},
+            detector=executor._clarification_detector,
+            capture=executor._clarification_capture,
+            loop_state_view=executor._clarification_loop_state_view,
+            origin_node=ORIGIN_EXECUTE,
+            step_id="step-42",
+            step_description="Refactor auth module",
+        )
+        _ = [c async for c in stream]
+
+        assert capture.pending_request is not None
+        assert capture.resume_thread_id == "loop-1__abc"
+        assert capture.resume_step_id == "step-42"
+        assert capture.resume_step_description == "Refactor auth module"
+
+    @pytest.mark.asyncio
+    async def test_tool_approval_capture_records_step_identity(self) -> None:
+        """A tool_approval interrupt also captures the originating step identity."""
+        core = _StubCoreAgent()
+        core.queue(
+            [],
+            state_interrupts=(_action_approval_interrupt("edit_file", interrupt_id="iTA"),),
+        )
+        capture = ClarificationCapture()
+        executor = _make_executor(
+            core,
+            clarification_detector=ClarificationDetector(),
+            clarification_capture=capture,
+            clarification_loop_state_view=_view(),
+        )
+        stream = executor._core_agent_astream_with_interrupt_resume(
+            {"messages": []},
+            {"configurable": {"thread_id": "loop-1__def"}},
+            detector=executor._clarification_detector,
+            capture=executor._clarification_capture,
+            loop_state_view=executor._clarification_loop_state_view,
+            origin_node=ORIGIN_EXECUTE,
+            step_id="step-7",
+            step_description="Write the migration script",
+        )
+        _ = [c async for c in stream]
+
+        assert capture.pending_request is not None
+        assert capture.pending_request.origin_node == ORIGIN_TOOL_APPROVAL
+        assert capture.resume_thread_id == "loop-1__def"
+        assert capture.resume_step_id == "step-7"
+        assert capture.resume_step_description == "Write the migration script"
+
+    @pytest.mark.asyncio
+    async def test_no_step_id_leaves_resume_step_fields_none(self) -> None:
+        """When step_id/step_description are not passed (legacy callers), the
+        capture fields stay None — the resume path falls back to the CE root."""
+        core = _StubCoreAgent()
+        core.queue([], state_interrupts=(_ask_user_interrupt(["q?"]),))
+        capture = ClarificationCapture()
+        executor = _make_executor(
+            core,
+            clarification_detector=ClarificationDetector(),
+            clarification_capture=capture,
+            clarification_loop_state_view=_view(),
+        )
+        stream = executor._core_agent_astream_with_interrupt_resume(
+            {"messages": []},
+            {"configurable": {"thread_id": "t"}},
+            detector=executor._clarification_detector,
+            capture=executor._clarification_capture,
+            loop_state_view=executor._clarification_loop_state_view,
+            origin_node=ORIGIN_EXECUTE,
+        )
+        _ = [c async for c in stream]
+
+        assert capture.resume_thread_id == "t"
+        assert capture.resume_step_id is None
+        assert capture.resume_step_description is None

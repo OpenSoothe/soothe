@@ -876,6 +876,17 @@ class LoopState(BaseModel):
         default=None,
         description="Thread_id of the interrupted CoreAgent step, for resume.",
     )
+    # Step id + description captured alongside resume_thread_id so the resume
+    # path rebuilds the decision with the original step identity (not the CE
+    # root node), keeping the TUI step card stable across the interrupt.
+    resume_step_id: str | None = Field(
+        default=None,
+        description="Step id of the interrupted CoreAgent step, for resume.",
+    )
+    resume_step_description: str | None = Field(
+        default=None,
+        description="Description/title of the interrupted CoreAgent step.",
+    )
 
     # Cross-turn clarification memory (RFC-622 enhancement). Append-only log of
     # resolved clarifications within this goal run, so veritas can reference

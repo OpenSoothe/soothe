@@ -394,3 +394,125 @@ def test_plan_review_answered_summary_renders_single_tree_branch() -> None:
             assert "expand" in toggle_rendered
 
     asyncio.run(_check())
+
+
+# ===========================================================================
+# tool_approval (interrupt_on) — option selector, not Input box
+# ===========================================================================
+
+
+def test_tool_approval_uses_option_selector_not_input() -> None:
+    """A tool_approval card renders Approve / Edit / Reject buttons, no Input."""
+    widget = ClarificationInputMessage(
+        step_id="s1",
+        questions=["Approve edit_file (file_path=/w/x.py)? [approve / edit / reject]"],
+        origin_node="tool_approval",
+        id="clarify-tool",
+    )
+    assert widget._is_option_selector is True
+    assert widget._is_tool_approval is True
+    assert widget._is_plan_review is False
+
+
+def test_tool_approval_wire_content() -> None:
+    """Tool-approval actions get a ``Tool approval:`` prefix on the wire."""
+    from soothe_cli.tui.app._execution import clarification_wire_content
+
+    assert clarification_wire_content(["Approve"], origin_node="tool_approval") == (
+        "Tool approval: Approve"
+    )
+    assert clarification_wire_content(["Edit", "rename to y"], origin_node="tool_approval") == (
+        "Tool approval: Edit — rename to y"
+    )
+    assert clarification_wire_content(["Reject"], origin_node="tool_approval") == (
+        "Tool approval: Reject"
+    )
+
+
+def test_tool_approval_answered_serialization() -> None:
+    """Answered tool_approval serializes with origin + Edit action."""
+    from soothe_sdk.display.transcript_types import MessageType
+
+    widget = ClarificationInputMessage(
+        step_id="s1",
+        questions=["Approve edit_file (file_path=/w/x.py)?"],
+        origin_node="tool_approval",
+        id="clarify-edit",
+    )
+    widget._submitted = True
+    widget._answers = ["Edit", "rename to y.py"]
+    data = message_from_widget(widget)
+    assert data.type == MessageType.PLAN_REVIEW
+    assert data.plan_review_action == "Edit"
+    assert data.plan_review_comments == "rename to y.py"
+    assert data.plan_origin_node == "tool_approval"
+    assert "Tool edit requested" in data.content
+
+    # Round-trip: deserialize back to a widget in answered state.
+    from soothe_cli.commands.binding import message_to_widget
+
+    restored = message_to_widget(data)
+    assert isinstance(restored, ClarificationInputMessage)
+    assert restored._submitted is True
+    assert restored._answers == ["Edit", "rename to y.py"]
+    assert restored._origin_node == "tool_approval"
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_renders_approve_edit_reject_buttons() -> None:
+    from textual.widgets import Button, Input
+
+    app = _PlanReviewHarnessApp(
+        step_id="tool_approval",
+        questions=["Approve edit_file (file_path=/w/x.py)?"],
+        origin_node="tool_approval",
+        id="clarify-tool-buttons",
+    )
+    async with app.run_test():
+        widget = app.query_one(ClarificationInputMessage)
+        labels = [str(button.label) for button in widget.query(".plan-review-actions Button")]
+        # ``Edit`` label (not ``Refine``) for tool_approval.
+        assert labels == ["1. Approve", "2. Edit:", "3. Reject"]
+        assert len(list(widget.query(Button))) == 3
+        # No free-text answer Input — only the inline Refine/Edit comments Input.
+        inputs = list(widget.query(Input))
+        assert len(inputs) == 1
+        assert inputs[0].id == "plan-review-refine-comments"
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_approve_submits_immediately() -> None:
+    app = _PlanReviewHarnessApp(
+        step_id="tool_approval",
+        questions=["Approve edit_file (file_path=/w/x.py)?"],
+        origin_node="tool_approval",
+        id="clarify-tool-approve",
+    )
+    async with app.run_test() as pilot:
+        await pilot.click("#plan-review-btn-approve")
+        assert len(app.submitted) == 1
+        assert app.submitted[0].answers == ["Approve", ""]
+        assert app.submitted[0].origin_node == "tool_approval"
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_edit_with_comments_submits() -> None:
+    app = _PlanReviewHarnessApp(
+        step_id="tool_approval",
+        questions=["Approve edit_file (file_path=/w/x.py)?"],
+        origin_node="tool_approval",
+        id="clarify-tool-edit",
+    )
+    async with app.run_test() as pilot:
+        widget = app.query_one(ClarificationInputMessage)
+        await pilot.press("down")  # approve → edit
+        assert widget._selected_action == "refine"
+        await pilot.press("enter")  # focus the Edit comments input
+        assert len(app.submitted) == 0
+        edit_input = widget.query_one("#plan-review-refine-comments")
+        edit_input.value = "rename to y.py"
+        edit_input.focus()
+        await pilot.press("enter")
+        assert len(app.submitted) == 1
+        assert app.submitted[0].answers == ["Edit", "rename to y.py"]
+        assert app.submitted[0].origin_node == "tool_approval"

@@ -88,6 +88,13 @@ class LoopGraphState(TypedDict, total=False):
     # Thread_id of the interrupted CoreAgent step, for Command(resume=...).
     # Survives the AWAIT_USER round-trip via graph checkpoint.
     resume_thread_id: str | None
+    # Step id + description that was executing when an ask_user / tool_approval
+    # interrupt fired. Paired with ``resume_thread_id`` so the resume path can
+    # re-emit ``step_started`` with the same step identity+title the TUI already
+    # has a card for, instead of the CE root node. Survive the AWAIT_USER
+    # round-trip via graph checkpoint.
+    resume_step_id: str | None
+    resume_step_description: str | None
     after_record_route: Literal["finalize", "goal_completion", ""] | None
     interaction_mode: str | None  # "agent" | "ask" | "plan" — set by enter_loop
     # Plan-mode approve (Bug #3 fix): set True by ``handle_plan_mode_review_answer``

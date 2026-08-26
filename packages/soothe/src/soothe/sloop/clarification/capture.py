@@ -25,10 +25,19 @@ class ClarificationCapture:
         resume_thread_id: The CoreAgent thread_id that was active when the
             interrupt fired. Set by the executor so the resume path can
             reuse it (``Command(resume=...)`` targets this thread).
+        resume_step_id: The id of the step that was executing when the
+            interrupt fired. Set by the executor so the resume path can
+            re-emit ``step_started`` with the same step identity the TUI
+            already has a card for (instead of the CE root node).
+        resume_step_description: The description/title of the interrupted step,
+            paired with ``resume_step_id`` so the resumed card keeps the same
+            title the user saw before the interrupt.
     """
 
     pending_request: ClarificationRequest | None = None
     resume_thread_id: str | None = None
+    resume_step_id: str | None = None
+    resume_step_description: str | None = None
 
     def set(self, request: ClarificationRequest) -> None:
         if self.pending_request is None:

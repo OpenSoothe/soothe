@@ -391,58 +391,94 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 state, "resume_thread_id", None
             )
             if resume_tid:
-                # Try to rebuild from CE root step; if CE lost the step
-                # (not persisted), synthesize a minimal StepAction from
-                # the goal text. The Executor only needs a step to run
-                # — the actual resume is via Command(resume=...) on the
-                # stored resume_thread_id.
+                # Rebuild a decision for the step that was executing when the
+                # interrupt fired. Prefer the captured step identity
+                # (``resume_step_id`` / ``resume_step_description``, set by the
+                # executor alongside ``resume_thread_id``) so the resumed
+                # ``step_started`` carries the same step id + title the TUI
+                # already has a card for — the card updates in place instead
+                # of a fresh root card appearing. Fall back to the CE root
+                # node lookup only for older checkpoints that predate the
+                # capture fields (or planner-emitted ask_user, which has no
+                # executor capture).
+                resume_sid = state_dict.get("resume_step_id") or getattr(
+                    state, "resume_step_id", None
+                )
+                resume_desc = state_dict.get("resume_step_description") or getattr(
+                    state, "resume_step_description", None
+                )
                 root_step: StepAction | None = None
-                if ctx.ce is not None and ctx.ce_goal_id:
-                    goal = await _maybe_await(ctx.ce.get_goal(ctx.ce_goal_id))
-                    if goal is not None:
-                        root_node = next(
-                            (
-                                n
-                                for n in goal.steps.nodes.values()
-                                if n.parent_step_id is None
-                                and n.status in ("active", "completed", "pending")
-                            ),
-                            None,
-                        )
-                        if root_node is not None:
-                            from soothe.sloop.stations.decompose.dispatch import (
-                                _step_action_from_node,
-                            )
-
-                            root_step = _step_action_from_node(root_node)
-                if root_step is None:
-                    # CE lost the step — create a root step in the CE so
-                    # record_progress can complete it after execution.
+                if resume_sid:
                     goal_text = state.goal or "ask_user resume"
+                    desc = (resume_desc or goal_text)[:80]
+                    full_desc = resume_desc or goal_text
                     root_step = StepAction(
-                        id="ask_user_resume",
-                        description=goal_text[:80],
-                        full_description=goal_text,
+                        id=resume_sid,
+                        description=desc,
+                        full_description=full_desc,
                         is_dag_root=True,
                     )
+                    logger.info(
+                        "[execute] ask_user resume: rebuilt step %s from captured identity, "
+                        "thread %s",
+                        resume_sid,
+                        resume_tid[:24],
+                    )
+                else:
+                    # Legacy / planner-emitted ask_user: no captured step id.
+                    # Rebuild from the CE root step; if CE lost the step
+                    # (not persisted), synthesize a minimal StepAction from
+                    # the goal text. The Executor only needs a step to run
+                    # — the actual resume is via Command(resume=...) on the
+                    # stored resume_thread_id.
                     if ctx.ce is not None and ctx.ce_goal_id:
-                        from soothe.context.models import StepNode
+                        goal = await _maybe_await(ctx.ce.get_goal(ctx.ce_goal_id))
+                        if goal is not None:
+                            root_node = next(
+                                (
+                                    n
+                                    for n in goal.steps.nodes.values()
+                                    if n.parent_step_id is None
+                                    and n.status in ("active", "completed", "pending")
+                                ),
+                                None,
+                            )
+                            if root_node is not None:
+                                from soothe.sloop.stations.decompose.dispatch import (
+                                    _step_action_from_node,
+                                )
 
-                        root_node = StepNode(
+                                root_step = _step_action_from_node(root_node)
+                    if root_step is None:
+                        # CE lost the step — create a root step in the CE so
+                        # record_progress can complete it after execution.
+                        goal_text = state.goal or "ask_user resume"
+                        root_step = StepAction(
                             id="ask_user_resume",
                             description=goal_text[:80],
                             full_description=goal_text,
-                            status="pending",
-                            parent_step_id=None,
-                            plan_iteration=0,
+                            is_dag_root=True,
                         )
-                        await _maybe_await(ctx.ce.add_step(ctx.ce_goal_id, root_node))
-                        await _maybe_await(ctx.ce.activate_step(ctx.ce_goal_id, "ask_user_resume"))
-                    logger.info(
-                        "[execute] ask_user resume: CE step lost, "
-                        "created root step in CE, thread %s",
-                        resume_tid[:24],
-                    )
+                        if ctx.ce is not None and ctx.ce_goal_id:
+                            from soothe.context.models import StepNode
+
+                            root_node = StepNode(
+                                id="ask_user_resume",
+                                description=goal_text[:80],
+                                full_description=goal_text,
+                                status="pending",
+                                parent_step_id=None,
+                                plan_iteration=0,
+                            )
+                            await _maybe_await(ctx.ce.add_step(ctx.ce_goal_id, root_node))
+                            await _maybe_await(
+                                ctx.ce.activate_step(ctx.ce_goal_id, "ask_user_resume")
+                            )
+                        logger.info(
+                            "[execute] ask_user resume: CE step lost, "
+                            "created root step in CE, thread %s",
+                            resume_tid[:24],
+                        )
                 decision = AgentDecision(
                     type="execute_steps",
                     execution_mode="parallel",
@@ -839,6 +875,12 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         if clarification_capture.resume_thread_id:
             state.resume_thread_id = clarification_capture.resume_thread_id
             result["resume_thread_id"] = clarification_capture.resume_thread_id
+        if clarification_capture.resume_step_id:
+            state.resume_step_id = clarification_capture.resume_step_id
+            result["resume_step_id"] = clarification_capture.resume_step_id
+        if clarification_capture.resume_step_description:
+            state.resume_step_description = clarification_capture.resume_step_description
+            result["resume_step_description"] = clarification_capture.resume_step_description
         logger.info("[execute] clarification captured; routing to await_clarification")
         return result
 

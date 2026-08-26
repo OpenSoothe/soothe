@@ -683,6 +683,8 @@ class Executor:
         capture: ClarificationCapture | None,
         loop_state_view: LoopStateView | None,
         origin_node: ClarificationOrigin,
+        step_id: str | None = None,
+        step_description: str | None = None,
     ) -> _PendingInterruptFetch:
         """Read pending LangGraph interrupts from ``aget_state`` after a stream ends.
 
@@ -740,6 +742,16 @@ class Executor:
                 )
                 if capture.pending_request is not None:
                     captured_clarification = True
+                    # Record the originating step identity alongside the
+                    # thread_id so the resume path re-emits step_started
+                    # with the same step the TUI already has a card for.
+                    cfg_tid = graph_config.get("configurable", {}).get("thread_id", "")
+                    if cfg_tid and not capture.resume_thread_id:
+                        capture.resume_thread_id = cfg_tid
+                    if step_id and not capture.resume_step_id:
+                        capture.resume_step_id = step_id
+                    if step_description and not capture.resume_step_description:
+                        capture.resume_step_description = step_description
                 else:
                     uncapturable_ask_user = True
                 continue
@@ -762,7 +774,8 @@ class Executor:
         loop_state_view: LoopStateView | None = None,
         origin_node: ClarificationOrigin = ORIGIN_EXECUTE,
         resume_answer_payload: dict[str, Any] | None = None,
-        step_id: str | None = None,  # for heartbeat correlation
+        step_id: str | None = None,  # for heartbeat correlation + capture
+        step_description: str | None = None,  # captured for resume identity
     ) -> AsyncGenerator[Any, None]:
         """Run ``CoreAgent.astream`` with interrupt handling.
 
@@ -771,7 +784,10 @@ class Executor:
         - ``ask_user`` and ``action_requests`` (tool-approval) interrupts,
           when ``detector``/``capture`` are provided, are written to
           ``capture`` and the stream returns early so the StrangeLoop can route
-          to ``await_clarification`` (RFC-622).
+          to ``await_clarification`` (RFC-622). The originating step's id and
+          description (``step_id`` / ``step_description``) are recorded on
+          ``capture`` alongside the thread_id so the resume path can re-emit
+          ``step_started`` with the same step identity the TUI already shows.
         - When ``resume_answer_payload`` is set, the first CoreAgent call
           uses it as the initial ``Command(resume=...)`` (re-entry after the
           policy answered a prior clarification).
@@ -853,6 +869,16 @@ class Executor:
                         # Store on the capture object so node_execute can
                         # propagate it to LoopState.resume_thread_id.
                         capture.resume_thread_id = cfg_tid  # type: ignore[attr-defined]
+                        # Record the originating step identity so the resume
+                        # path rebuilds the decision with the same step id +
+                        # title the TUI already has a card for (not the CE
+                        # root node). Planner-emitted ask_user steps carry
+                        # their own id on the interrupt prefix and do not
+                        # flow through here.
+                        if step_id:
+                            capture.resume_step_id = step_id
+                        if step_description:
+                            capture.resume_step_description = step_description
                         logger.info(
                             "[executor] stored resume thread_id=%s for step %s",
                             cfg_tid[:24],
@@ -869,6 +895,8 @@ class Executor:
                 capture=capture,
                 loop_state_view=loop_state_view,
                 origin_node=origin_node,
+                step_id=step_id,
+                step_description=step_description,
             )
             if fetch.captured_clarification:
                 return
@@ -2167,7 +2195,8 @@ class Executor:
                     loop_state_view=self._clarification_loop_state_view,
                     origin_node=ORIGIN_EXECUTE,
                     resume_answer_payload=self._clarification_resume_answer_payload,
-                    step_id=step.id,  # for heartbeat correlation
+                    step_id=step.id,  # for heartbeat correlation + capture
+                    step_description=step.full_description or step.description,
                 )
 
                 pass_output = ""

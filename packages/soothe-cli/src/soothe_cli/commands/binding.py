@@ -202,20 +202,33 @@ def message_from_widget(widget: Widget) -> MessageData:
     widget_id = widget.id or f"msg-{uuid.uuid4().hex[:8]}"
 
     if isinstance(widget, ClarificationInputMessage):
-        is_plan_review = widget._origin_node == "plan_mode_review"  # noqa: SLF001
-        if widget._submitted and widget._answers and is_plan_review:  # noqa: SLF001
+        origin = widget._origin_node or ""  # noqa: SLF001
+        is_plan_review = origin == "plan_mode_review"
+        is_tool_approval = origin == "tool_approval"
+        is_option_selector = is_plan_review or is_tool_approval
+        if widget._submitted and widget._answers and is_option_selector:  # noqa: SLF001
             action = widget._answers[0] if widget._answers else ""  # noqa: SLF001
             comments = widget._answers[1] if len(widget._answers) > 1 else ""  # noqa: SLF001
-            if action == "Reject":
-                content = "Plan rejected"
-            elif action == "Refine":
-                content = (
-                    f"Plan refinement requested: {comments}"
-                    if comments
-                    else "Plan refinement requested"
-                )
+            if is_tool_approval:
+                if action == "Reject":
+                    content = "Tool action rejected"
+                elif action == "Edit":
+                    content = (
+                        f"Tool edit requested: {comments}" if comments else "Tool edit requested"
+                    )
+                else:
+                    content = "Tool action approved"
             else:
-                content = "Plan approved"
+                if action == "Reject":
+                    content = "Plan rejected"
+                elif action == "Refine":
+                    content = (
+                        f"Plan refinement requested: {comments}"
+                        if comments
+                        else "Plan refinement requested"
+                    )
+                else:
+                    content = "Plan approved"
             return MessageData(
                 type=MessageType.PLAN_REVIEW,
                 content=content,
@@ -228,10 +241,17 @@ def message_from_widget(widget: Widget) -> MessageData:
             )
         if widget._submitted and widget._answers:  # noqa: SLF001
             summary = " | ".join(a for a in widget._answers if a)  # noqa: SLF001
-            prefix = "Plan review" if is_plan_review else "Clarification"
+            if is_plan_review:
+                prefix = "Plan review"
+            elif is_tool_approval:
+                prefix = "Tool approval"
+            else:
+                prefix = "Clarification"
             content = f"{prefix}: {summary}" if summary else f"{prefix} answered"
         elif is_plan_review:
             content = "Plan review: awaiting Approve / Refine / Reject"
+        elif is_tool_approval:
+            content = "Tool approval: awaiting Approve / Edit / Reject"
         else:
             content = "Clarification: awaiting answer"
         return MessageData(type=MessageType.APP, content=content, id=widget_id)

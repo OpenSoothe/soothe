@@ -26,9 +26,27 @@ from soothe_cli.tui.widgets.messages._helpers import (
 
 logger = logging.getLogger(__name__)
 
-# Wire origin id for plan-mode review (mirrors host ORIGIN_PLAN_MODE_REVIEW).
-# CLI must not import soothe host packages; keep the wire string local.
+# Wire origin ids (mirror host ORIGIN_* constants). CLI must not import
+# soothe host packages; keep the wire strings local.
 _ORIGIN_PLAN_MODE_REVIEW = "plan_mode_review"
+_ORIGIN_TOOL_APPROVAL = "tool_approval"
+
+# Origins that render as a 3-button option selector (Approve / Edit / Reject)
+# instead of a free-text Input box. The answer is always one of the three
+# HITL decision types the host decodes via ``_answer_to_decision``.
+_OPTION_SELECTOR_ORIGINS: frozenset[str] = frozenset(
+    {_ORIGIN_PLAN_MODE_REVIEW, _ORIGIN_TOOL_APPROVAL}
+)
+
+# For ``tool_approval`` the "Refine" action maps to the HITL ``edit`` decision
+# (the deepagents middleware re-invokes the tool with revised args on resume).
+# Keep the wire label stable so ``clarification_wire_content`` and the host
+# decoder both recognize it.
+_TOOL_APPROVAL_ACTION_LABELS: dict[_PlanReviewAction, str] = {
+    "approve": "Approve",
+    "reject": "Reject",
+    "refine": "Edit",
+}
 
 
 _PlanReviewAction = Literal["approve", "reject", "refine"]
@@ -55,10 +73,17 @@ def _strip_plan_frontmatter(markdown: str) -> str:
 class ClarificationInputMessage(Vertical):
     """Inline answer-collection widget for a pending ``ask_user`` step (RFC-622).
 
-    Mounted when ``soothe.loop.clarification.requested`` arrives. Generic
-    clarifications show one ``Input`` per question. Planner-subagent review
-    (``origin_node=plan_mode_review``) shows the full draft plan, a
-    saved-path footer, and Approve / Refine / Reject actions.
+    Mounted when ``soothe.loop.clarification.requested`` arrives. Three
+    render modes, keyed on ``origin_node``:
+
+    - **Generic** (``execute`` ask_user): one free-text ``Input`` per question.
+    - **Plan review** (``plan_mode_review``): full draft plan, saved-path
+      footer, and Approve / Refine / Reject action buttons.
+    - **Tool approval** (``tool_approval``): the question already carries the
+      pending tool call (name + args); render an Approve / Edit / Reject
+      option selector — no free-text Input for the answer itself. The ``Edit``
+      row keeps an inline comments Input (the host maps it to the HITL
+      ``edit`` decision, which re-invokes the tool with revised args).
     """
 
     # Focusable so the Enter binding (expand/collapse plan body) lands on the
@@ -255,12 +280,14 @@ class ClarificationInputMessage(Vertical):
             questions: list[str],
             answers: list[str],
             widget_id: str,
+            origin_node: str = "",
         ) -> None:
             super().__init__()
             self.step_id = step_id
             self.questions = questions
             self.answers = answers
             self.widget_id = widget_id
+            self.origin_node = origin_node
 
     def __init__(
         self,
@@ -293,8 +320,32 @@ class ClarificationInputMessage(Vertical):
     def _is_plan_review(self) -> bool:
         return self._origin_node == _ORIGIN_PLAN_MODE_REVIEW
 
+    @property
+    def _is_tool_approval(self) -> bool:
+        return self._origin_node == _ORIGIN_TOOL_APPROVAL
+
+    @property
+    def _is_option_selector(self) -> bool:
+        """Whether this card renders the 3-button action selector."""
+        return self._origin_node in _OPTION_SELECTOR_ORIGINS
+
+    def _action_label(self, action: _PlanReviewAction) -> str:
+        """Display label for an action button, origin-aware.
+
+        Plan review uses ``Refine``; tool approval uses ``Edit`` (maps to the
+        HITL ``edit`` decision). Both share the same wire action key.
+        """
+        if self._is_tool_approval:
+            return _TOOL_APPROVAL_ACTION_LABELS.get(action, _ACTION_LABELS[action])
+        return _ACTION_LABELS[action]
+
     def _title_content(self) -> Content:
-        title = "Review this plan" if self._is_plan_review else "Awaiting your answer"
+        if self._is_plan_review:
+            title = "Review this plan"
+        elif self._is_tool_approval:
+            title = "Approve tool action"
+        else:
+            title = "Awaiting your answer"
         if self._submitted:
             return _assemble_card_header(self, title, status="success")
         colors = theme.get_theme_colors(self)
@@ -321,14 +372,16 @@ class ClarificationInputMessage(Vertical):
         Each answered-view row carries the ``⎿`` tree gutter (parity with the
         goal→step tree in ``CognitionGoalTreeMessage``), so the action and the
         plan-body toggle hang off one aligned branch instead of stacking as
-        disconnected stubs. Refine keeps its comment beside the action label.
+        disconnected stubs. Refine/Edit keeps its comment beside the action label.
         """
         if not self._answers:
             return
         gutter = _card_body_gutter()
         action = self._answers[0] if self._answers else ""
         comments = self._answers[1] if len(self._answers) > 1 else ""
-        summary = f"{action}: {comments}" if action == "Refine" and comments else action
+        # "Refine" (plan review) and "Edit" (tool approval) both carry comments.
+        shows_comments = action in ("Refine", "Edit") and comments
+        summary = f"{action}: {comments}" if shows_comments else action
         try:
             action_w = self.query_one(".plan-review-answered-action", Static)
             action_w.update(f"{gutter}[{summary}]")
@@ -383,25 +436,41 @@ class ClarificationInputMessage(Vertical):
             return f"Plan saved to: {self._plan_path}"
         return "Plan held in memory only"
 
-    def _compose_plan_review(self) -> Any:
+    def _compose_option_selector(self) -> Any:
+        """Render the 3-button Approve / Edit(Refine) / Reject selector.
+
+        Shared by ``plan_mode_review`` and ``tool_approval``. Plan review adds
+        the draft plan body, saved-path footer, and an expand/collapse toggle in
+        the answered view; tool approval shows only the question(s) + buttons.
+        """
         yield Static(self._title_content(), classes="clarification-title")
         # Answered summary — visible only when ``is-submitted`` (CSS toggles).
         yield from self._compose_answered_summary()
-        body = _strip_plan_frontmatter(self._plan_markdown)
-        # Expand to full plan height — no inner scroll; the chat list scrolls.
-        with Vertical(classes="plan-review-body-box"):
-            body_widget = Static("", classes="plan-review-body", markup=False)
-            yield body_widget
-            # Stash for on_mount markdown render (widget not yet mounted here).
-            self._plan_body_widget = body_widget
-            self._plan_body_text = body
-        yield Static(self._path_footer_text(), classes="plan-review-path", markup=False)
+        if self._is_plan_review:
+            body = _strip_plan_frontmatter(self._plan_markdown)
+            # Expand to full plan height — no inner scroll; the chat list scrolls.
+            with Vertical(classes="plan-review-body-box"):
+                body_widget = Static("", classes="plan-review-body", markup=False)
+                yield body_widget
+                # Stash for on_mount markdown render (widget not yet mounted here).
+                self._plan_body_widget = body_widget
+                self._plan_body_text = body
+            yield Static(self._path_footer_text(), classes="plan-review-path", markup=False)
+        else:
+            # tool_approval: surface each pending tool-call question so the
+            # user can see what is about to execute before approving.
+            for i, q in enumerate(self._questions):
+                q_classes = "clarification-question"
+                if i > 0:
+                    q_classes += " has-separator"
+                yield Static(f"Q{i + 1}: {q}", classes=q_classes, markup=False)
         with Vertical(classes="plan-review-actions"):
             for index, action in enumerate(_ACTION_ORDER, start=1):
                 with Horizontal(classes="plan-review-action-row"):
                     suffix = ":" if action == "refine" else ""
+                    label = self._action_label(action)
                     btn = Button(
-                        f"{index}. {_ACTION_LABELS[action]}{suffix}",
+                        f"{index}. {label}{suffix}",
                         id=f"plan-review-btn-{action}",
                         variant="default",
                         compact=True,
@@ -409,8 +478,9 @@ class ClarificationInputMessage(Vertical):
                     self._action_buttons[action] = btn
                     yield btn
                     if action == "refine":
+                        placeholder = "Revised args…" if self._is_tool_approval else "Comments…"
                         refine_input = Input(
-                            placeholder="Comments…",
+                            placeholder=placeholder,
                             id="plan-review-refine-comments",
                             classes="plan-review-refine-input",
                         )
@@ -419,14 +489,15 @@ class ClarificationInputMessage(Vertical):
         yield Static("↑/↓ switch · Enter confirm", classes="plan-review-hint", markup=False)
 
     def _compose_answered_summary(self) -> Any:
-        """Collapsed answered view: action row + expandable plan body.
+        """Collapsed answered view: action row + (plan review only) body toggle.
 
         Hidden by CSS (``display: none``) until ``is-submitted`` is added; then
         the active review body / buttons / hint are hidden and this is shown.
 
         Each row carries the ``⎿`` tree gutter (parity with the goal→step tree),
         so the action and the plan-body toggle hang off one aligned branch — no
-        stray empty stub, no repeated disconnected connectors.
+        stray empty stub, no repeated disconnected connectors. Tool-approval
+        cards have no plan body, so the toggle is omitted there.
         """
         gutter = _card_body_gutter()
         with Vertical(classes="plan-review-answered-box"):
@@ -439,11 +510,12 @@ class ClarificationInputMessage(Vertical):
                 classes="plan-review-answered-action",
                 markup=False,
             )
-            yield Static(
-                f"{gutter}{get_glyphs().expand} Plan body — click or press Enter to expand",
-                classes="plan-review-expand-toggle",
-                markup=True,
-            )
+            if self._is_plan_review:
+                yield Static(
+                    f"{gutter}{get_glyphs().expand} Plan body — click or press Enter to expand",
+                    classes="plan-review-expand-toggle",
+                    markup=True,
+                )
 
     def _compose_generic(self) -> Any:
         yield Static(self._title_content(), classes="clarification-title")
@@ -457,14 +529,15 @@ class ClarificationInputMessage(Vertical):
             yield inp
 
     def compose(self) -> Any:
-        if self._is_plan_review:
-            yield from self._compose_plan_review()
+        if self._is_option_selector:
+            yield from self._compose_option_selector()
         else:
             yield from self._compose_generic()
 
     def on_mount(self) -> None:
-        if self._is_plan_review:
-            self._render_plan_body()
+        if self._is_option_selector:
+            if self._is_plan_review:
+                self._render_plan_body()
             if self._submitted:
                 # Restored from transcript in answered state — collapse the body
                 # and populate the answered summary.
@@ -549,7 +622,7 @@ class ClarificationInputMessage(Vertical):
                 btn.remove_class("plan-review-selected")
 
     def _cycle_plan_review_action(self, delta: int) -> None:
-        if self._submitted or not self._is_plan_review:
+        if self._submitted or not self._is_option_selector:
             return
         idx = _ACTION_ORDER.index(self._selected_action)
         action = _ACTION_ORDER[(idx + delta) % len(_ACTION_ORDER)]
@@ -570,10 +643,11 @@ class ClarificationInputMessage(Vertical):
     def on_click(self, event: Click) -> None:
         """Toggle plan body expand/collapse in the answered (submitted) view.
 
-        Before submission, clicks are left for the plan-review buttons. After
+        Before submission, clicks are left for the action buttons. After
         submission the active review elements are hidden, so a click anywhere on
-        the card flips the plan body open/closed — the same action Enter performs
-        via ``action_plan_review_confirm``.
+        the card flips the plan body open/closed — the same action Enter
+        performs via ``action_plan_review_confirm``. Only plan-review cards have
+        a body to toggle; tool-approval cards have nothing to expand.
         """
         if not self._is_plan_review or not self._submitted:
             return
@@ -583,29 +657,30 @@ class ClarificationInputMessage(Vertical):
         self._toggle_body_expanded()
 
     def action_plan_review_prev(self) -> None:
-        """Select the previous plan-review action (←)."""
+        """Select the previous action (←)."""
         self._cycle_plan_review_action(-1)
 
     def action_plan_review_next(self) -> None:
-        """Select the next plan-review action (→)."""
+        """Select the next action (→)."""
         self._cycle_plan_review_action(1)
 
     def action_plan_review_confirm(self) -> None:
-        """Confirm the selected plan-review action (Enter).
+        """Confirm the selected action (Enter).
 
         After submission, Enter toggles plan body expand/collapse in the
-        answered view.
+        answered view (plan review only; tool approval has no body).
         """
-        if not self._is_plan_review:
+        if not self._is_option_selector:
             return
         if self._submitted:
-            self._toggle_body_expanded()
+            if self._is_plan_review:
+                self._toggle_body_expanded()
             return
         self._apply_plan_review_selection(self._selected_action, activate=True)
 
     @on(Button.Pressed)
     def _on_plan_review_button(self, event: Button.Pressed) -> None:
-        if self._submitted or not self._is_plan_review:
+        if self._submitted or not self._is_option_selector:
             return
         btn_id = event.button.id or ""
         action: _PlanReviewAction | None = None
@@ -626,7 +701,7 @@ class ClarificationInputMessage(Vertical):
         if self._submitted:
             event.stop()
             return
-        if self._is_plan_review:
+        if self._is_option_selector:
             if event.input is self._refine_input:
                 comments = str(event.input.value or "").strip()
                 if comments:
@@ -658,7 +733,7 @@ class ClarificationInputMessage(Vertical):
     def _finalize_plan_review(self, *, action: _PlanReviewAction) -> None:
         if self._submitted:
             return
-        label = _ACTION_LABELS[action]
+        label = self._action_label(action)
         answers = [label, ""]
         self._submitted = True
         self._answers = answers
@@ -675,19 +750,22 @@ class ClarificationInputMessage(Vertical):
                 questions=list(self._questions),
                 answers=answers,
                 widget_id=self._widget_id,
+                origin_node=self._origin_node,
             )
         )
 
     def _finalize_plan_review_with_comments(self, comments: str) -> None:
-        """Finalize a refinement request with the user's comments.
+        """Finalize a refinement / edit request with the user's comments.
 
-        Called when the user types text after selecting Refine. The comments
-        become the second answer so the daemon's refinement re-synthesis
-        picks them up.
+        Called when the user types text after selecting Refine (plan review) or
+        Edit (tool approval). The comments become the second answer so the
+        daemon's refinement re-synthesis (plan) or HITL ``edit`` decision
+        (tool approval) picks them up.
         """
         if self._submitted:
             return
-        answers = ["Refine", comments]
+        refine_label = self._action_label("refine")
+        answers = [refine_label, comments]
         self._submitted = True
         self._answers = answers
         for btn in self._action_buttons.values():
@@ -703,6 +781,7 @@ class ClarificationInputMessage(Vertical):
                 questions=list(self._questions),
                 answers=answers,
                 widget_id=self._widget_id,
+                origin_node=self._origin_node,
             )
         )
 
@@ -731,5 +810,6 @@ class ClarificationInputMessage(Vertical):
                 questions=list(self._questions),
                 answers=answers,
                 widget_id=self._widget_id,
+                origin_node=self._origin_node,
             )
         )

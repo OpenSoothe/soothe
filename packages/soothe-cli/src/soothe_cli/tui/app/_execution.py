@@ -54,24 +54,35 @@ InputMode = Literal["normal", "shell", "command"]
 logger = logging.getLogger(__name__)
 
 _PLAN_REVIEW_ACTIONS = frozenset({"Approve", "Reject", "Refine"})
+_TOOL_APPROVAL_ACTIONS = frozenset({"Approve", "Reject", "Edit"})
 
 
-def clarification_wire_content(answers: list[str]) -> str:
+def clarification_wire_content(answers: list[str], *, origin_node: str = "") -> str:
     """Human-readable turn content for a clarification submit (not a new goal).
 
-    Plan-review actions use a stable ``Plan review: …`` prefix so a dropped
+    Option-selector actions use a stable ``<prefix>: …`` header so a dropped
     ``clarification_answer`` flag cannot turn a bare action into Pass1 TASK.
-    ``Refine`` carries refinement text in ``answers[1]``.
+    Plan review → ``Plan review:`` (Refine carries refinement text in
+    ``answers[1]``). Tool approval → ``Tool approval:`` (Edit carries revised
+    instructions in ``answers[1]``). When ``origin_node`` is empty (legacy
+    callers) the action label alone selects the prefix, preserving the safety
+    net for any selector-origin submit.
     """
     non_empty = [a for a in answers if str(a).strip()]
     if not non_empty:
         return ""
     first = str(answers[0]).strip() if answers else ""
-    if first in _PLAN_REVIEW_ACTIONS:
+    is_tool_approval = origin_node == "tool_approval"
+    is_selector_action = first in _PLAN_REVIEW_ACTIONS or first in _TOOL_APPROVAL_ACTIONS
+    if is_selector_action:
         refinement = str(answers[1]).strip() if len(answers) > 1 else ""
+        # Origin-aware prefix; when origin is unknown (legacy caller), default
+        # to "Plan review" to preserve the pre-RFC behavior where the action
+        # label alone selected the plan-review prefix.
+        prefix = "Tool approval" if is_tool_approval else "Plan review"
         if refinement:
-            return f"Plan review: {first} — {refinement}"
-        return f"Plan review: {first}"
+            return f"{prefix}: {first} — {refinement}"
+        return f"{prefix}: {first}"
     if len(non_empty) == 1:
         return non_empty[0]
     return " | ".join(f"A{i + 1}: {a}" for i, a in enumerate(answers) if str(a).strip())
@@ -304,7 +315,8 @@ class _ExecutionMixin:
         # auto-enqueues the exec goal carrying the approved plan (Bug #3 fix);
         # this composer flip just aligns the badge for the user's next manual
         # input and is not the execution mechanism.
-        if first_answer == "Approve":
+        origin_node = getattr(event, "origin_node", "") or ""
+        if origin_node == "plan_mode_review" and first_answer == "Approve":
             mode = await self._resolve_default_clarification_mode()
             self._composer_mode = mode
             if self._status_bar is not None:
@@ -315,7 +327,7 @@ class _ExecutionMixin:
         # concatenated string. ``content`` carries a human-readable summary
         # for clients that look at it; the authoritative payload is the
         # ``clarification_answers`` wire field.
-        payload_text = clarification_wire_content(list(event.answers))
+        payload_text = clarification_wire_content(list(event.answers), origin_node=origin_node)
         adapter._clarification_answers_pending = list(event.answers)
         # Always resume clarification from a widget submit — even if a prior
         # clarification_answered cleared ``_clarification_pending`` (empty
