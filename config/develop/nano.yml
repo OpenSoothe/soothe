@@ -12,26 +12,14 @@ providers:
     models:
       - glm-5.2
       - qwen3.7-plus
+      - qwen3.6-flash
       - kimi-k2.5
-      - kimi-k2.7-code
       - MiniMax-M3
-      - deepseek-v4-pro
-      - deepseek-v4-flash
       - text-embedding-v4
-
-  - name: agnes
-    provider_type: openai
-    api_base_url: "https://apihub.agnes-ai.com/v1"
-    api_key: "${AGNESAI_API_KEY}"
-    models:
-      - agnes-2.0-flash
-      - agnes-2.5-flash
-      - agnes-image-2.0-flash
-      - agnes-image-2.1-flash
 
   - name: omlx
     provider_type: openai
-    api_base_url: "http://100.75.70.86:9642/v1"
+    api_base_url: "http://localhost:9642/v1"
     api_key: "mirasoth"
     models:
       - Qwen3.6-27B-OptiQ-4bit
@@ -44,9 +32,6 @@ providers:
     provider_type: openai
     api_base_url: "http://localhost:9543/v1"
     api_key: "mirasoth"
-    # vLLM-Metal 0.1.0 ignores `stream: true` and returns a single non-SSE JSON
-    # body, which makes LangChain's streaming path fail. Disable streaming so
-    # nano routes through the non-streaming _generate path instead.
     streaming: false
     models:
       - mlx-community/Muse-Glimmer-30B-4bit
@@ -66,12 +51,6 @@ router_profiles:
       fast: "dashscope:qwen3.6-flash"
       think: "dashscope:MiniMax-M3"
       image: "dashscope:MiniMax-M3"
-      ocr: "omlx:DeepSeek-OCR-4bit"
-
-  - name: agnes
-    router:
-      default: "agnes:agnes-2.0-flash"
-      image: "agnes:agnes-image-2.0-flash"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
   - name: qwen
