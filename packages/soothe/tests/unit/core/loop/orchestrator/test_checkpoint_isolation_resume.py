@@ -10,10 +10,14 @@ from langgraph.types import Command
 
 from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
 from soothe.sloop.orchestrator.checkpoint import (
+    execute_step_thread_id,
     intake_only_invoke_config,
+    intake_thread_id,
     snapshot_has_resumable_interrupt,
     strange_loop_configurable,
     strange_loop_thread_id,
+    synthesis_thread_id,
+    thread_kind,
 )
 from soothe.sloop.orchestrator.runner import (
     _clarification_resume_command,
@@ -32,9 +36,37 @@ def test_strange_loop_configurable_sets_isolated_thread() -> None:
 def test_intake_only_invoke_config_isolates_thread() -> None:
     cfg = intake_only_invoke_config("loop-1", "planner", workspace="/ws")
     conf = cfg["configurable"]
+    assert conf["thread_id"] == intake_thread_id("loop-1", "planner")
     assert conf["thread_id"] == "loop-1__intake__planner"
     assert "checkpoint_ns" not in conf
     assert conf["workspace"] == "/ws"
+
+
+def test_intake_thread_id_defaults_blank_wire_to_specialist() -> None:
+    assert intake_thread_id("loop-1", "  ") == "loop-1__intake__specialist"
+
+
+def test_execute_step_thread_id_is_random_and_opaque() -> None:
+    """Execute-step ids encode no step id (CE is the step→thread registry)."""
+    first = execute_step_thread_id("loop-1")
+    second = execute_step_thread_id("loop-1")
+    assert first != second
+    for tid in (first, second):
+        assert tid.startswith("loop-1__")
+        suffix = tid.removeprefix("loop-1__")
+        assert len(suffix) == 5
+        assert all(c in "0123456789abcdef" for c in suffix)
+
+
+def test_thread_kind_classifies_every_grammar() -> None:
+    assert thread_kind(strange_loop_thread_id("loop-1")) == "loop"
+    assert thread_kind(intake_thread_id("loop-1", "planner")) == "intake"
+    assert thread_kind(execute_step_thread_id("loop-1")) == "execute_step"
+    assert thread_kind(synthesis_thread_id("loop-1")) == "synthesis"
+    # Synthesis may fork off an execute-step thread; the synth marker still wins.
+    assert thread_kind(synthesis_thread_id(execute_step_thread_id("loop-1"))) == "synthesis"
+    # Main thread id == loop_id (the only registry invariant).
+    assert thread_kind("loop-1") == "loop"
 
 
 def test_build_loop_graph_invoke_config_sets_strange_loop_thread() -> None:

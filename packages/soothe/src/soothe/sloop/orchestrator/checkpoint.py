@@ -1,4 +1,4 @@
-"""LangGraph checkpoint helpers for StrangeLoop vs CoreAgent isolation.
+"""LangGraph checkpoint helpers and thread-id grammar for StrangeLoop.
 
 CoreAgent execute streams default to ``thread_id=loop_id`` with ``checkpoint_ns=""``.
 StrangeLoop parks ``await_user`` interrupts on the same checkpointer; without a
@@ -9,21 +9,119 @@ looks set.
 Do **not** use a custom ``checkpoint_ns`` for isolation: LangGraph treats
 non-empty ``checkpoint_ns`` as a subgraph path. Isolation is via dedicated
 ``thread_id`` values with empty ``checkpoint_ns``.
+
+This module is the **single home of the thread-id grammar** (IG-764). Every
+thread id is built here; no caller composes one inline:
+
+- ``loop`` — ``{loop_id}__strange_loop`` via `strange_loop_thread_id`
+- ``intake`` — ``{loop_id}__intake__{wire}`` via `intake_thread_id`
+- ``execute_step`` — ``{main_thread_id}__{hex5}`` via `execute_step_thread_id`
+- ``synthesis`` — ``{parent_thread_id}__synth_gc__{uuid}`` via `synthesis_thread_id`
+
+`thread_kind` is the inverse: it classifies an id back to its kind.
+Execute-step and synthesis ids are **random and opaque**: they encode no step id.
+The Context Engine is the registry that maps step to thread; `thread_kind` only
+classifies an id, it never decodes identity out of one.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Final
+import secrets
+import uuid
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 if TYPE_CHECKING:
     from soothe.sloop.strange_loop import StrangeLoop
 
 _STRANGE_LOOP_THREAD_SUFFIX: Final = "__strange_loop"
+_INTAKE_THREAD_MARKER: Final = "__intake__"
+_SYNTHESIS_THREAD_MARKER: Final = "__synth_gc__"
+_THREAD_TOKEN_SEP: Final = "__"
+
+ThreadKind = Literal["loop", "intake", "execute_step", "synthesis"]
 
 
 def strange_loop_thread_id(loop_id: str) -> str:
     """Checkpoint ``thread_id`` for the StrangeLoop graph (isolated from CoreAgent)."""
     return f"{loop_id}{_STRANGE_LOOP_THREAD_SUFFIX}"
+
+
+def intake_thread_id(loop_id: str, wire: str) -> str:
+    """Checkpoint ``thread_id`` for an intake-only subagent delegation.
+
+    Args:
+        loop_id: Owning loop identifier.
+        wire: Wire / subagent name; blank falls back to ``specialist``.
+
+    Returns:
+        ``{loop_id}__intake__{wire}``.
+    """
+    safe_wire = (wire or "specialist").strip() or "specialist"
+    return f"{loop_id}{_INTAKE_THREAD_MARKER}{safe_wire}"
+
+
+def execute_step_thread_id(main_thread_id: str) -> str:
+    """Fresh random ``thread_id`` for an execute step, decoupled from the step id.
+
+    Args:
+        main_thread_id: Loop main thread id to prefix.
+
+    Returns:
+        ``{main_thread_id}__{hex5}`` with 5 random hex chars.
+    """
+    return f"{main_thread_id}{_THREAD_TOKEN_SEP}{secrets.token_hex(3)[:5]}"
+
+
+def synthesis_thread_id(parent_thread_id: str) -> str:
+    """Ephemeral ``thread_id`` for goal-completion synthesis.
+
+    A dedicated id keeps the checkpointer from loading the parent thread's full
+    conversation into the synthesis model call.
+
+    Args:
+        parent_thread_id: StrangeLoop / user thread identifier.
+
+    Returns:
+        ``{parent_thread_id}__synth_gc__{uuid}`` (stable prefix for log grep).
+    """
+    return f"{parent_thread_id}{_SYNTHESIS_THREAD_MARKER}{uuid.uuid4().hex}"
+
+
+def thread_kind(thread_id: str) -> ThreadKind:
+    """Classify a thread id by its ``__`` markers and suffixes.
+
+    Synthesis and intake markers are checked first because either may be appended
+    to any parent thread. A bare id with no ``__`` token is the loop main thread
+    (main thread id == loop_id).
+
+    Examples:
+        >>> thread_kind("loop-1__strange_loop")
+        'loop'
+        >>> thread_kind("loop-1__intake__planner")
+        'intake'
+        >>> thread_kind("loop-1__a3f7c")
+        'execute_step'
+        >>> thread_kind("loop-1__a3f7c__synth_gc__0badc0de")
+        'synthesis'
+        >>> thread_kind("loop-1")
+        'loop'
+
+    Args:
+        thread_id: Checkpoint thread id built by one of this module's constructors.
+
+    Returns:
+        The thread kind.
+    """
+    tid = thread_id or ""
+    if _SYNTHESIS_THREAD_MARKER in tid:
+        return "synthesis"
+    if _INTAKE_THREAD_MARKER in tid:
+        return "intake"
+    if tid.endswith(_STRANGE_LOOP_THREAD_SUFFIX):
+        return "loop"
+    if _THREAD_TOKEN_SEP in tid:
+        return "execute_step"
+    return "loop"
 
 
 def strange_loop_configurable(loop_id: str, **extra: Any) -> dict[str, Any]:
@@ -46,9 +144,8 @@ def intake_only_invoke_config(
     Uses a dedicated thread so nested graphs that inherit the parent checkpointer
     cannot write into the StrangeLoop interrupt lineage.
     """
-    safe_wire = (wire or "specialist").strip() or "specialist"
     conf: dict[str, Any] = {
-        "thread_id": f"{loop_id}__intake__{safe_wire}",
+        "thread_id": intake_thread_id(loop_id, wire),
     }
     if workspace and str(workspace).strip():
         conf["workspace"] = str(workspace).strip()

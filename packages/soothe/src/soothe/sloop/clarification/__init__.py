@@ -11,7 +11,7 @@ treated as clarifications.
 from __future__ import annotations
 
 from soothe.sloop.clarification.auto import AutoClarificationPolicy
-from soothe.sloop.clarification.capture import ClarificationCapture
+from soothe.sloop.clarification.capture import ClarificationCapture, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.interactive import InteractiveClarificationPolicy
 from soothe.sloop.clarification.origins import (
@@ -51,6 +51,7 @@ __all__ = [
     "CLARIFICATION_ORIGIN_RESUME_NODE",
     "ClarificationAnswer",
     "ClarificationCapture",
+    "ResumeTicket",
     "ClarificationDeferredError",
     "ClarificationDetector",
     "ClarificationOrigin",

@@ -49,10 +49,12 @@ from soothe.config.constants import (
 )
 from soothe.sloop.clarification import (
     ORIGIN_EXECUTE,
+    ORIGIN_TOOL_APPROVAL,
     ClarificationCapture,
     ClarificationDetector,
     ClarificationOrigin,
     LoopStateView,
+    ResumeTicket,
 )
 from soothe.sloop.engine.completion.continuation_context import (
     build_continuation_execution_hints,
@@ -251,27 +253,20 @@ def _capture_interrupts(
     for interrupt_obj in interrupts:
         value = interrupt_obj.value
         iid = getattr(interrupt_obj, "id", None) or str(id(interrupt_obj))
-        if is_ask_user_interrupt(value):
-            request = detector.from_interrupt(
-                value,
-                interrupt_id=iid,
-                origin_node=origin_node,
-                loop_state=loop_state_view,
-            )
-        elif is_tool_approval_interrupt(value):
-            request = detector.from_tool_approval_interrupt(
-                value,
-                interrupt_id=iid,
-                loop_state=loop_state_view,
-            )
-            if request is not None:
-                logger.info("[executor] captured tool_approval interrupt id=%s", iid)
-        else:
-            continue
+        request = detector.detect(
+            value,
+            interrupt_id=iid,
+            loop_state=loop_state_view,
+            origin_node=origin_node,
+        )
         if request is not None:
+            if request.origin_node == ORIGIN_TOOL_APPROVAL:
+                logger.info("[executor] captured tool_approval interrupt id=%s", iid)
             capture.set(request)
             captured = True
-        else:
+        elif is_ask_user_interrupt(value) or is_tool_approval_interrupt(value):
+            # A recognized shape that failed to parse (e.g. empty questions) —
+            # surface it the same way the prior per-shape branching did.
             logger.warning("[executor] uncapturable interrupt id=%s; stopping", iid)
     return captured
 
@@ -758,12 +753,15 @@ class Executor:
                     # thread_id so the resume path re-emits step_started
                     # with the same step the TUI already has a card for.
                     cfg_tid = graph_config.get("configurable", {}).get("thread_id", "")
-                    if cfg_tid and not capture.resume_thread_id:
-                        capture.resume_thread_id = cfg_tid
-                    if step_id and not capture.resume_step_id:
-                        capture.resume_step_id = step_id
-                    if step_description and not capture.resume_step_description:
-                        capture.resume_step_description = step_description
+                    if cfg_tid or step_id or step_description:
+                        ticket = capture.resume_ticket or ResumeTicket()
+                        if cfg_tid and not ticket.thread_id:
+                            ticket.thread_id = cfg_tid
+                        if step_id and not ticket.step_id:
+                            ticket.step_id = step_id
+                        if step_description and not ticket.step_description:
+                            ticket.step_description = step_description
+                        capture.resume_ticket = ticket
                 else:
                     uncapturable_ask_user = True
                 continue
@@ -879,8 +877,9 @@ class Executor:
                     cfg_tid = graph_config.get("configurable", {}).get("thread_id", "")
                     if cfg_tid:
                         # Store on the capture object so node_execute can
-                        # propagate it to LoopState.resume_thread_id.
-                        capture.resume_thread_id = cfg_tid  # type: ignore[attr-defined]
+                        # propagate it to LoopState.resume_ticket.
+                        ticket = capture.resume_ticket or ResumeTicket()
+                        ticket.thread_id = cfg_tid
                         # Record the originating step identity so the resume
                         # path rebuilds the decision with the same step id +
                         # title the TUI already has a card for (not the CE
@@ -888,9 +887,10 @@ class Executor:
                         # their own id on the interrupt prefix and do not
                         # flow through here.
                         if step_id:
-                            capture.resume_step_id = step_id
+                            ticket.step_id = step_id
                         if step_description:
-                            capture.resume_step_description = step_description
+                            ticket.step_description = step_description
+                        capture.resume_ticket = ticket
                         logger.info(
                             "[executor] stored resume thread_id=%s for step %s",
                             cfg_tid[:24],

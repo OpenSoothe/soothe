@@ -11,19 +11,20 @@ from soothe.sloop.engine.completion.scenario_classifier import ScenarioClassific
 from soothe.sloop.engine.completion.synthesis import (
     SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY,
     SynthesisGenerator,
-    synthesis_checkpoint_thread_id,
 )
+from soothe.sloop.orchestrator.checkpoint import synthesis_thread_id, thread_kind
 from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
-def test_synthesis_checkpoint_thread_id_is_unique_and_prefixed() -> None:
+def test_synthesis_thread_id_is_unique_and_prefixed() -> None:
     parent = "thread-abc"
-    a = synthesis_checkpoint_thread_id(parent)
-    b = synthesis_checkpoint_thread_id(parent)
+    a = synthesis_thread_id(parent)
+    b = synthesis_thread_id(parent)
     assert a != b
     assert a.startswith(f"{parent}__synth_gc__")
     assert b.startswith(f"{parent}__synth_gc__")
+    assert thread_kind(a) == "synthesis"
 
 
 class _RecordingLlm:

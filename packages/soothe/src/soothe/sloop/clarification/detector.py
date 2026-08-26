@@ -102,6 +102,44 @@ class ClarificationDetector:
             loop_state=loop_state,
         )
 
+    def detect(
+        self,
+        value: Any,
+        *,
+        interrupt_id: str,
+        loop_state: LoopStateView,
+        origin_node: ClarificationOrigin = "execute",
+    ) -> ClarificationRequest | None:
+        """Route an interrupt payload to the right request constructor.
+
+        Single entry point replacing the per-shape ``is_*`` + ``from_*``
+        branching in the executor. Selection is by payload key:
+
+        - ``"action_requests"`` → tool-approval (origin forced to
+          ``ORIGIN_TOOL_APPROVAL``).
+        - ``type == "ask_user"`` → execute-origin question (origin from caller).
+        - anything else → ``None`` (not a structured clarification).
+
+        ``from_interrupt`` / ``from_tool_approval_interrupt`` remain as public
+        delegating constructors; this method just picks between them.
+        """
+        if not isinstance(value, Mapping):
+            return None
+        if "action_requests" in value:
+            return self.from_tool_approval_interrupt(
+                value,
+                interrupt_id=interrupt_id,
+                loop_state=loop_state,
+            )
+        if value.get("type") == "ask_user":
+            return self.from_interrupt(
+                value,
+                interrupt_id=interrupt_id,
+                origin_node=origin_node,
+                loop_state=loop_state,
+            )
+        return None
+
     @staticmethod
     def _extract_questions(value: Mapping[str, Any]) -> tuple[str, ...]:
         raw = value.get("questions")

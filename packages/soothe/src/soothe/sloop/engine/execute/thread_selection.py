@@ -1,7 +1,8 @@
 """Thread selection logic for execute steps (RFC-223).
 
 Thread IDs are **decoupled from step IDs**: each new step gets a random
-5-hex thread_id (e.g. ``{loop_id}__a3f7c``), stored in
+5-hex thread_id from `execute_step_thread_id` (the id grammar lives in
+`soothe.sloop.orchestrator.checkpoint`), cached in
 ``LoopState.step_thread_ids[step.id]``. Thread reuse happens only in two
 cases:
 
@@ -12,7 +13,7 @@ cases:
 
 2. **Interrupt resume**: the step is being resumed after an
    ``ask_user`` / ``action_requests`` interrupt. The original thread_id
-   (stored in ``LoopState.resume_thread_id``) is reused so
+   (stored in ``LoopState.resume_ticket.thread_id``) is reused so
    ``Command(resume=...)`` finds the pending interrupt in the checkpointer.
 
 All other cases (parallel siblings, fan-in, root step) get a new random
@@ -22,8 +23,9 @@ thread_id.
 from __future__ import annotations
 
 import logging
-import secrets
 from typing import TYPE_CHECKING, Any
+
+from soothe.sloop.orchestrator.checkpoint import execute_step_thread_id
 
 if TYPE_CHECKING:
     from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction
@@ -67,12 +69,6 @@ def resolve_user_requested_wire_subagent(
     return None
 
 
-def _generate_thread_id(main_thread_id: str) -> str:
-    """Generate a random thread_id decoupled from step_id."""
-    suffix = secrets.token_hex(3)[:5]  # 5 hex chars
-    return f"{main_thread_id}__{suffix}"
-
-
 def _is_only_child(parent_id: str, decision: AgentDecision) -> bool:
     """True when ``parent_id`` has exactly one child in the decision's step list."""
     children = [s for s in decision.steps if parent_id in (s.dependencies or [])]
@@ -92,7 +88,7 @@ def _select_thread_for_step(
     Reuse rules (only one must hold to reuse a parent thread):
 
     - **Interrupt resume** (``is_clarification_resume=True``): reuse the
-      thread_id stored in ``loop_state.resume_thread_id`` so
+      thread_id stored in ``loop_state.resume_ticket.thread_id`` so
       ``Command(resume=...)`` finds the pending interrupt.
     - **Strict linear chain**: step has exactly 1 dependency AND the parent
       has exactly 1 child (no fan-out). Reuse the parent's thread_id.
@@ -103,7 +99,8 @@ def _select_thread_for_step(
 
     # Condition B: interrupt resume — must reuse the original thread.
     if is_clarification_resume:
-        resume_tid = getattr(loop_state, "resume_thread_id", None) if loop_state else None
+        resume_ticket = getattr(loop_state, "resume_ticket", None) if loop_state else None
+        resume_tid = resume_ticket.thread_id if resume_ticket else None
         if resume_tid:
             logger.info("[thread] resume: reusing interrupted thread %s", resume_tid[:24])
             return resume_tid
@@ -127,11 +124,10 @@ def _select_thread_for_step(
             return parent_thread
 
     # Default: new isolated thread.
-    return _generate_thread_id(main_thread_id)
+    return execute_step_thread_id(main_thread_id)
 
 
 __all__ = [
-    "_generate_thread_id",
     "_is_only_child",
     "_select_thread_for_step",
     "_wire_subagent_from_routing",

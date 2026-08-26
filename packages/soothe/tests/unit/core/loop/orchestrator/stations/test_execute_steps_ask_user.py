@@ -13,6 +13,7 @@ from soothe.context.models import GoalNode
 from soothe.context.store_sqlite import SqliteContextPersistence
 from soothe.sloop.clarification import (
     ClarificationAnswer,
+    ResumeTicket,
     answer_to_state,
     request_from_state,
 )
@@ -764,9 +765,11 @@ async def test_ask_user_answer_resume_uses_command_resume(
         {
             "pending_clarification": pending_clar,
             "pending_clarification_answer": pending_ans,
-            "resume_thread_id": "thread-1__step_aaa",
-            "resume_step_id": "PPX-01",
-            "resume_step_description": "Propose a question using ask_user",
+            "resume_ticket": ResumeTicket(
+                thread_id="thread-1__step_aaa",
+                step_id="PPX-01",
+                step_description="Propose a question using ask_user",
+            ),
         },
     )
 

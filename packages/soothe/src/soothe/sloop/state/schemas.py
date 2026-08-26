@@ -15,6 +15,7 @@ from soothe_sdk.protocols.planner import planner_outcome_text_preview
 
 from soothe.config.constants import DEFAULT_MAX_ITERATIONS
 from soothe.goal_contracts import GoalEffect
+from soothe.sloop.clarification.capture import ResumeTicket
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.sloop.utils.subagent_catalog import (  # noqa: F401
     INTAKE_ONLY_WIRE_SUBAGENTS,
@@ -864,28 +865,27 @@ class LoopState(BaseModel):
         description="RoutingClassification for Plan + Execute.",
     )
 
-    # Thread tracking for step isolation (message injection, no checkpoint fork)
+    # Runtime cache for step thread isolation (message injection, no checkpoint fork).
+    # NOT a source of truth: the Context Engine is the registry for step→thread
+    # mapping (StepExecution.thread_id, goal_records.thread_id, ledger execute_step
+    # rows). This dict only serves in-loop thread reuse and may be empty on resume.
     step_thread_ids: dict[str, str] = Field(
         default_factory=dict,
-        description="Maps step_id → thread_id used for execution.",
+        description=(
+            "Runtime cache of step_id → thread_id for thread reuse. "
+            "Not a registry — the Context Engine owns step→thread mapping."
+        ),
     )
-    # Thread_id to resume after an ask_user / action_requests interrupt.
-    # Set by the executor when capturing GraphInterrupt; read by the resume
-    # path to re-enter the CoreAgent on the same thread (Command(resume=...)).
-    resume_thread_id: str | None = Field(
+    # Interrupt-resume identity (thread + step) for an ask_user /
+    # action_requests interrupt. Set by the executor when capturing
+    # GraphInterrupt; read by the resume path to re-enter the CoreAgent on the
+    # same thread (Command(resume=...)) and re-emit step_started with the
+    # original step identity, keeping the TUI step card stable across the
+    # interrupt. Carried on a single channel (consolidates the former three
+    # separate scalar fields).
+    resume_ticket: ResumeTicket | None = Field(
         default=None,
-        description="Thread_id of the interrupted CoreAgent step, for resume.",
-    )
-    # Step id + description captured alongside resume_thread_id so the resume
-    # path rebuilds the decision with the original step identity (not the CE
-    # root node), keeping the TUI step card stable across the interrupt.
-    resume_step_id: str | None = Field(
-        default=None,
-        description="Step id of the interrupted CoreAgent step, for resume.",
-    )
-    resume_step_description: str | None = Field(
-        default=None,
-        description="Description/title of the interrupted CoreAgent step.",
+        description="Interrupt-resume identity (thread_id + step_id + step_description).",
     )
 
     # Cross-turn clarification memory (RFC-622 enhancement). Append-only log of

@@ -4,10 +4,37 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from soothe.sloop.clarification.protocol import ClarificationRequest
+if TYPE_CHECKING:
+    from soothe.sloop.clarification.protocol import ClarificationRequest
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ResumeTicket:
+    """Interrupt-resume identity carried on one graph channel.
+
+    Consolidates the three former separate scalar fields so the serialize →
+    channel → rebuild data flow for ``Command(resume=...)`` lives on a single
+    channel. No information is lost relative to the prior separate fields.
+
+    Attributes:
+        thread_id: The CoreAgent thread_id active when the interrupt fired.
+            The resume path reuses it (``Command(resume=...)`` targets this
+            thread).
+        step_id: The id of the step executing when the interrupt fired, so the
+            resume path re-emits ``step_started`` with the same step identity
+            the TUI already has a card for (instead of the CE root node).
+        step_description: The description/title of the interrupted step, paired
+            with ``step_id`` so the resumed card keeps the same title the user
+            saw before the interrupt.
+    """
+
+    thread_id: str | None = None
+    step_id: str | None = None
+    step_description: str | None = None
 
 
 @dataclass
@@ -22,22 +49,15 @@ class ClarificationCapture:
 
     Attributes:
         pending_request: The first captured clarification request (None until set).
-        resume_thread_id: The CoreAgent thread_id that was active when the
-            interrupt fired. Set by the executor so the resume path can
-            reuse it (``Command(resume=...)`` targets this thread).
-        resume_step_id: The id of the step that was executing when the
-            interrupt fired. Set by the executor so the resume path can
-            re-emit ``step_started`` with the same step identity the TUI
-            already has a card for (instead of the CE root node).
-        resume_step_description: The description/title of the interrupted step,
-            paired with ``resume_step_id`` so the resumed card keeps the same
-            title the user saw before the interrupt.
+        resume_ticket: The interrupt-resume identity (thread + step) captured
+            by the executor when a ``GraphInterrupt`` fires, so the resume path
+            can re-enter the CoreAgent on the same thread and re-emit
+            ``step_started`` with the same step the TUI already has a card for.
+            See :class:`ResumeTicket`.
     """
 
     pending_request: ClarificationRequest | None = None
-    resume_thread_id: str | None = None
-    resume_step_id: str | None = None
-    resume_step_description: str | None = None
+    resume_ticket: ResumeTicket | None = None
 
     def set(self, request: ClarificationRequest) -> None:
         if self.pending_request is None:
@@ -51,4 +71,4 @@ class ClarificationCapture:
         )
 
 
-__all__ = ["ClarificationCapture"]
+__all__ = ["ClarificationCapture", "ResumeTicket"]

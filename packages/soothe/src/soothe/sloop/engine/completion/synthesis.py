@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import logging
 import time
-import uuid
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.observability.langfuse import merge_langfuse_runnable_config
@@ -30,6 +29,7 @@ from soothe.sloop.engine.completion.scenario_classifier import (
     classify_synthesis_scenario,
 )
 from soothe.sloop.engine.completion.synthesis_projection import build_synthesis_messages
+from soothe.sloop.orchestrator.checkpoint import synthesis_thread_id
 from soothe.sloop.state.schemas import LoopState
 from soothe.sloop.utils.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
 from soothe.sloop.utils.messages import tag_messages_stream_chunk_for_goal_completion
@@ -48,23 +48,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _DEFAULT_SYNTHESIS_EVIDENCE_MAX = GOAL_COMPLETION_REPORT_MAX_CHARS
-
-_SYNTH_GC_MARKER = "__synth_gc__"
-
-
-def synthesis_checkpoint_thread_id(parent_thread_id: str) -> str:
-    """Return an ephemeral LangGraph thread id for goal-completion synthesis.
-
-    Using a dedicated id prevents the SQLite checkpointer from loading the parent
-    thread's full conversation into the synthesis model call.
-
-    Args:
-        parent_thread_id: StrangeLoop / user thread identifier.
-
-    Returns:
-        Unique checkpoint thread key (stable prefix for log grep).
-    """
-    return f"{parent_thread_id}{_SYNTH_GC_MARKER}{uuid.uuid4().hex}"
 
 
 class SynthesisGenerator:
@@ -182,7 +165,7 @@ class SynthesisGenerator:
             approx_chars,
         )
 
-        checkpoint_thread_id = synthesis_checkpoint_thread_id(state.thread_id)
+        checkpoint_thread_id = synthesis_thread_id(state.thread_id)
         configurable: dict[str, Any] = {
             "thread_id": checkpoint_thread_id,
             SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY: True,

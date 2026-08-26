@@ -15,11 +15,12 @@ from soothe.sloop.clarification import (
     ClarificationRequest,
     LoopStateView,
     answer_from_state,
+    request_from_state,
     request_to_state,
 )
 from soothe.sloop.engine.execute.context_window_manager import ContextWindowManager
 from soothe.sloop.engine.execute.executor import Executor, StepWaveQueued, StepWaveStart
-from soothe.sloop.engine.execute.graph_interrupt import build_tool_approval_resume_payload
+from soothe.sloop.engine.execute.graph_interrupt import build_clarification_resume_payload
 from soothe.sloop.engine.execute.step_wave_types import StepCompletionReport
 from soothe.sloop.orchestrator.node_base import _maybe_await
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
@@ -42,28 +43,6 @@ PLANNER_ASK_INTERRUPT_PREFIX = "planner-ask:"
 ``kind="ask_user"`` step rather than a real CoreAgent ``ask_user`` interrupt.
 On answer arrival, ``node_execute`` synthesizes a ``StepExecutionRecord`` for the matching
 step id instead of trying to resume a CoreAgent interrupt that never existed."""
-
-# Mapping from a veritas/TUI tool-approval answer to the deepagents HITL
-# decision type the ``HumanInTheLoopMiddleware`` expects on resume.
-_APPROVE_TOKENS = frozenset({"approve", "yes", "ok", "allow", "accept", "proceed", "y"})
-_REJECT_TOKENS = frozenset({"reject", "no", "deny", "block", "cancel", "n"})
-_EDIT_TOKENS = frozenset({"edit", "modify", "change", "revise"})
-
-
-def _answer_to_decision(answer: str) -> str:
-    """Map a tool-approval answer string to a HITL ``DecisionType``.
-
-    The clarification relay answers with a free-form string (from veritas or
-    the TUI input). The deepagents middleware expects ``"approve"`` /
-    ``"edit"`` / ``"reject"``. Defaults to ``"approve"`` for unrecognized
-    positive-ish answers and ``"reject"`` only on an explicit reject token.
-    """
-    token = (answer or "").strip().lower()
-    if token in _REJECT_TOKENS:
-        return "reject"
-    if token in _EDIT_TOKENS:
-        return "edit"
-    return "approve"
 
 
 def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
@@ -389,34 +368,34 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                     str(q) for q in (pending_request_state.get("questions") or ())
                 )
                 planner_ask_confidence = ans.confidence
-            elif origin_node == ORIGIN_TOOL_APPROVAL:
-                # Branch 2: tool-approval. Translate the relay's answer into
-                # the ``decisions`` shape the HumanInTheLoopMiddleware expects
-                # (one decision per action_request in the original interrupt).
-                decision_type = _answer_to_decision(ans.answers[0] if ans.answers else "approve")
-                resume_answer_payload = build_tool_approval_resume_payload(
-                    origin_iid,
-                    decisions=[{"type": decision_type}],
-                )
             elif origin_iid:
-                # Branch 3: CoreAgent ``ask_user`` interrupt resume. The
-                # executor's stream config no longer inherits the parent
-                # graph's checkpoint namespace (IG-763), so the suspended
-                # interrupt is reachable at the fork thread root:
-                # ``Command(resume)`` delivers the answers in-thread — the
-                # ask_user tool returns the Q&A and the agent continues its
-                # turn on the original step thread.
-                resume_answer_payload = {origin_iid: {"answers": list(ans.answers)}}
-                _append_ask_user_loop_messages(
-                    state,
-                    step_id=state_dict.get("resume_step_id") or "ask_user_resume",
-                    description="Ask user clarifying question",
-                    questions=tuple(str(q) for q in (pending_request_state.get("questions") or ())),
-                    answers=tuple(ans.answers),
-                    source=ans.source,
-                    confidence=ans.confidence,
-                    context_engine=ctx.ce,
-                )
+                # Branch 2/3 unified: tool_approval maps the relay's answer to a
+                # HITL ``decisions`` payload; ask_user (execute) delivers the
+                # answers verbatim so the tool returns the Q&A and the agent
+                # continues its turn on the original step thread (IG-763). The
+                # ask_user-only ledger side effect is applied below.
+                req = request_from_state(pending_request_state)
+                resume_answer_payload = build_clarification_resume_payload(req, ans)
+                if origin_node != ORIGIN_TOOL_APPROVAL:
+                    _append_ask_user_loop_messages(
+                        state,
+                        step_id=(
+                            (
+                                state_dict.get("resume_ticket").step_id
+                                if state_dict.get("resume_ticket")
+                                else None
+                            )
+                            or "ask_user_resume"
+                        ),
+                        description="Ask user clarifying question",
+                        questions=tuple(
+                            str(q) for q in (pending_request_state.get("questions") or ())
+                        ),
+                        answers=tuple(ans.answers),
+                        source=ans.source,
+                        confidence=ans.confidence,
+                        context_engine=ctx.ce,
+                    )
         except (ValueError, TypeError):
             logger.exception("[execute] malformed pending_clarification_answer; ignoring")
 
@@ -426,47 +405,40 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         # initialized for the new ``ainvoke`` call so the prior decision is
         # gone. Rebuild a minimal decision from the CE root step so the
         # Executor can resume the CoreAgent on the original thread (stored
-        # in ``loop_state.resume_thread_id``).
+        # in ``loop_state.resume_ticket``).
         if resume_answer_payload is not None:
             # CoreAgent ``ask_user`` / ``action_requests`` interrupt resume.
-            # The original thread_id is in ``loop_state.resume_thread_id``
-            # (stored by the executor when capturing GraphInterrupt). The
-            # checkpointer has the pending interrupt on that thread.
-            # Rebuild a decision from the CE root step and fall through to
-            # the normal Executor path — it will use the resume thread_id
-            # and deliver the answer via ``Command(resume=...)``.
-            # Read resume_thread_id from graph state (survives checkpoint).
-            resume_tid = state_dict.get("resume_thread_id") or getattr(
-                state, "resume_thread_id", None
-            )
+            # The resume ticket is in ``loop_state.resume_ticket`` (stored by
+            # the executor when capturing GraphInterrupt). The checkpointer has
+            # the pending interrupt on that thread. Rebuild a decision from the
+            # CE root step and fall through to the normal Executor path — it
+            # will use the resume thread_id and deliver the answer via
+            # ``Command(resume=...)``.
+            # Read resume_ticket from graph state (survives checkpoint).
+            resume_ticket = state_dict.get("resume_ticket") or getattr(state, "resume_ticket", None)
+            resume_tid = resume_ticket.thread_id if resume_ticket else None
             if resume_tid:
                 # Rebuild a decision for the step that was executing when the
                 # interrupt fired. Prefer the captured step identity
-                # (``resume_step_id`` / ``resume_step_description``, set by the
-                # executor alongside ``resume_thread_id``) so the resumed
+                # (``resume_ticket.step_id`` / ``resume_ticket.step_description``,
+                # set by the executor alongside the thread_id) so the resumed
                 # ``step_started`` carries the same step id + title the TUI
                 # already has a card for — the card updates in place instead
                 # of a fresh root card appearing. Fall back to the CE root
                 # node lookup only for older checkpoints that predate the
                 # capture fields (or planner-emitted ask_user, which has no
                 # executor capture).
-                resume_sid = state_dict.get("resume_step_id") or getattr(
-                    state, "resume_step_id", None
-                )
-                resume_desc = state_dict.get("resume_step_description") or getattr(
-                    state, "resume_step_description", None
-                )
+                resume_sid = resume_ticket.step_id if resume_ticket else None
+                resume_desc = resume_ticket.step_description if resume_ticket else None
                 # The graph-state dict survives the checkpoint round-trip
                 # but ``LoopState`` is freshly constructed for this ainvoke,
-                # so ``state.resume_*`` fields are still their defaults. Sync
-                # them onto the live object now — ``_select_thread_for_step``
-                # reads ``loop_state.resume_thread_id`` (the live object, not
+                # so ``state.resume_ticket`` is still its default. Sync it
+                # onto the live object now — ``_select_thread_for_step``
+                # reads ``loop_state.resume_ticket`` (the live object, not
                 # the dict) to reuse the interrupted thread so
                 # ``Command(resume=...)`` finds the suspended ask_user
                 # interrupt instead of landing on a fresh random thread.
-                state.resume_thread_id = resume_tid
-                state.resume_step_id = resume_sid
-                state.resume_step_description = resume_desc
+                state.resume_ticket = resume_ticket
                 root_step: StepAction | None = None
                 if resume_sid:
                     goal_text = state.goal or "ask_user resume"
@@ -490,7 +462,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                     # (not persisted), synthesize a minimal StepAction from
                     # the goal text. The Executor only needs a step to run
                     # — the actual resume is via Command(resume=...) on the
-                    # stored resume_thread_id.
+                    # stored resume_ticket.
                     if ctx.ce is not None and ctx.ce_goal_id:
                         goal = await _maybe_await(ctx.ce.get_goal(ctx.ce_goal_id))
                         if goal is not None:
@@ -566,7 +538,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 # Decision rebuilt — jump past the `decision is None` block
                 # to the normal Executor path below.
             else:
-                logger.warning("[execute] ask_user resume: no resume_thread_id on state")
+                logger.warning("[execute] ask_user resume: no resume_ticket on state")
         elif planner_ask_answered_step_id is not None:
             outcome_payload: dict[str, Any] = {
                 "kind": "ask_user",
@@ -941,7 +913,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     # RFC-622: surface a captured clarification so the graph routes to
     # ``await_clarification`` instead of ``record_iteration``.
     if clarification_capture.pending_request is not None:
-        # Store the resume thread_id on both LoopState and graph state
+        # Store the resume ticket on both LoopState and graph state
         # so it survives the checkpoint save/restore between the two
         # ainvoke calls (pause → user answers → resume).
         result: dict[str, Any] = {
@@ -950,15 +922,9 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # Clear any prior answer so re-entry only consumes it once.
             "pending_clarification_answer": None,
         }
-        if clarification_capture.resume_thread_id:
-            state.resume_thread_id = clarification_capture.resume_thread_id
-            result["resume_thread_id"] = clarification_capture.resume_thread_id
-        if clarification_capture.resume_step_id:
-            state.resume_step_id = clarification_capture.resume_step_id
-            result["resume_step_id"] = clarification_capture.resume_step_id
-        if clarification_capture.resume_step_description:
-            state.resume_step_description = clarification_capture.resume_step_description
-            result["resume_step_description"] = clarification_capture.resume_step_description
+        if clarification_capture.resume_ticket:
+            state.resume_ticket = clarification_capture.resume_ticket
+            result["resume_ticket"] = clarification_capture.resume_ticket
         logger.info("[execute] clarification captured; routing to await_clarification")
         return result
 

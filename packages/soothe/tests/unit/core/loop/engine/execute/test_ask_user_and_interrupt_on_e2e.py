@@ -299,21 +299,21 @@ class TestInterruptOnCase:
 
     def test_answer_to_decision_approve(self) -> None:
         """Veritas/TUI answer 'approve' → HITL decision type 'approve'."""
-        from soothe.sloop.stations.execute.execute import _answer_to_decision
+        from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
 
         assert _answer_to_decision("approve") == "approve"
         assert _answer_to_decision("yes") == "approve"
         assert _answer_to_decision("ok") == "approve"
 
     def test_answer_to_decision_reject(self) -> None:
-        from soothe.sloop.stations.execute.execute import _answer_to_decision
+        from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
 
         assert _answer_to_decision("reject") == "reject"
         assert _answer_to_decision("no") == "reject"
         assert _answer_to_decision("deny") == "reject"
 
     def test_answer_to_decision_edit(self) -> None:
-        from soothe.sloop.stations.execute.execute import _answer_to_decision
+        from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
 
         assert _answer_to_decision("edit") == "edit"
         assert _answer_to_decision("modify") == "edit"
@@ -567,7 +567,7 @@ class TestMultiActionInterruptCase:
 
 
 # ===========================================================================
-# CASE 6: step identity capture — resume_step_id / resume_step_description
+# CASE 6: step identity capture — ResumeTicket thread_id / step_id / step_description
 # ===========================================================================
 
 
@@ -601,9 +601,10 @@ class TestStepIdentityCaptureCase:
         _ = [c async for c in stream]
 
         assert capture.pending_request is not None
-        assert capture.resume_thread_id == "loop-1__abc"
-        assert capture.resume_step_id == "step-42"
-        assert capture.resume_step_description == "Refactor auth module"
+        assert capture.resume_ticket is not None
+        assert capture.resume_ticket.thread_id == "loop-1__abc"
+        assert capture.resume_ticket.step_id == "step-42"
+        assert capture.resume_ticket.step_description == "Refactor auth module"
 
     @pytest.mark.asyncio
     async def test_tool_approval_capture_records_step_identity(self) -> None:
@@ -634,14 +635,16 @@ class TestStepIdentityCaptureCase:
 
         assert capture.pending_request is not None
         assert capture.pending_request.origin_node == ORIGIN_TOOL_APPROVAL
-        assert capture.resume_thread_id == "loop-1__def"
-        assert capture.resume_step_id == "step-7"
-        assert capture.resume_step_description == "Write the migration script"
+        assert capture.resume_ticket is not None
+        assert capture.resume_ticket.thread_id == "loop-1__def"
+        assert capture.resume_ticket.step_id == "step-7"
+        assert capture.resume_ticket.step_description == "Write the migration script"
 
     @pytest.mark.asyncio
     async def test_no_step_id_leaves_resume_step_fields_none(self) -> None:
         """When step_id/step_description are not passed (legacy callers), the
-        capture fields stay None — the resume path falls back to the CE root."""
+        ticket keeps only thread_id — step_id/description stay None so the
+        resume path falls back to the CE root."""
         core = _StubCoreAgent()
         core.queue([], state_interrupts=(_ask_user_interrupt(["q?"]),))
         capture = ClarificationCapture()
@@ -661,9 +664,10 @@ class TestStepIdentityCaptureCase:
         )
         _ = [c async for c in stream]
 
-        assert capture.resume_thread_id == "t"
-        assert capture.resume_step_id is None
-        assert capture.resume_step_description is None
+        assert capture.resume_ticket is not None
+        assert capture.resume_ticket.thread_id == "t"
+        assert capture.resume_ticket.step_id is None
+        assert capture.resume_ticket.step_description is None
 
 
 # ===========================================================================

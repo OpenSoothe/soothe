@@ -11,9 +11,14 @@ import pytest
 
 from soothe.sloop.clarification.origins import (
     DEFAULT_FORCE_MANUAL_ORIGINS,
+    ORIGIN_EXECUTE,
     ORIGIN_TOOL_APPROVAL,
 )
-from soothe.sloop.engine.execute.graph_interrupt import build_tool_approval_resume_payload
+from soothe.sloop.clarification.protocol import answer_from_state, request_from_state
+from soothe.sloop.engine.execute.graph_interrupt import (
+    build_clarification_resume_payload,
+    build_tool_approval_resume_payload,
+)
 from soothe.subagents.veritas.prompts import build_veritas_system_prompt_for_origin
 
 # ---------------------------------------------------------------------------
@@ -81,7 +86,7 @@ def test_veritas_prompt_for_none_origin_is_default() -> None:
     ],
 )
 def test_answer_to_decision_mapping(answer: str, expected: str) -> None:
-    from soothe.sloop.stations.execute.execute import _answer_to_decision
+    from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
 
     assert _answer_to_decision(answer) == expected
 
@@ -93,7 +98,7 @@ def test_answer_to_decision_mapping(answer: str, expected: str) -> None:
 
 def test_tool_approval_resume_payload_from_approve_answer() -> None:
     """A relay 'approve' answer produces the HITL decisions shape."""
-    from soothe.sloop.stations.execute.execute import _answer_to_decision
+    from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
 
     decision_type = _answer_to_decision("approve")
     payload = build_tool_approval_resume_payload("iTA", decisions=[{"type": decision_type}])
@@ -101,7 +106,7 @@ def test_tool_approval_resume_payload_from_approve_answer() -> None:
 
 
 def test_tool_approval_resume_payload_from_reject_answer() -> None:
-    from soothe.sloop.stations.execute.execute import _answer_to_decision
+    from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
 
     decision_type = _answer_to_decision("no")
     payload = build_tool_approval_resume_payload("iTA", decisions=[{"type": decision_type}])
@@ -109,11 +114,61 @@ def test_tool_approval_resume_payload_from_reject_answer() -> None:
 
 
 def test_tool_approval_resume_payload_from_edit_answer() -> None:
-    from soothe.sloop.stations.execute.execute import _answer_to_decision
+    from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
 
     decision_type = _answer_to_decision("edit")
     payload = build_tool_approval_resume_payload("iTA", decisions=[{"type": decision_type}])
     assert payload == {"iTA": {"decisions": [{"type": "edit"}]}}
+
+
+def _bridge_request(origin_node: str) -> object:
+    return request_from_state(
+        {
+            "questions": ["q"],
+            "origin_node": origin_node,
+            "origin_interrupt_id": "i1",
+            "loop_state": {
+                "goal_id": "g",
+                "goal_description": "",
+                "user_request": "",
+                "iteration": 0,
+                "intent_classification": None,
+                "plan_summary": None,
+                "recent_step_outputs": [],
+                "workspace_summary": None,
+                "active_skills": [],
+                "active_mcp_servers": [],
+            },
+        }
+    )
+
+
+def _bridge_answer(answers: tuple[str, ...]) -> object:
+    return answer_from_state(
+        {
+            "answers": list(answers),
+            "source": "human",
+            "confidence": None,
+            "defer": False,
+            "audit": {},
+        }
+    )
+
+
+def test_build_clarification_resume_payload_tool_approval() -> None:
+    """Unified translator emits the HITL decisions shape for tool_approval."""
+    req = _bridge_request(ORIGIN_TOOL_APPROVAL)
+    ans = _bridge_answer(("approve",))
+    payload = build_clarification_resume_payload(req, ans)  # type: ignore[arg-type]
+    assert payload == {"i1": {"decisions": [{"type": "approve"}]}}
+
+
+def test_build_clarification_resume_payload_ask_user() -> None:
+    """Unified translator delivers answers verbatim for ask_user (execute)."""
+    req = _bridge_request(ORIGIN_EXECUTE)
+    ans = _bridge_answer(("run the tests",))
+    payload = build_clarification_resume_payload(req, ans)  # type: ignore[arg-type]
+    assert payload == {"i1": {"answers": ["run the tests"]}}
 
 
 # ---------------------------------------------------------------------------

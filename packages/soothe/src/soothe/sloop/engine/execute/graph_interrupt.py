@@ -1,9 +1,10 @@
 """LangGraph interrupt detection and auto-resume for CoreAgent streams.
 
-Action-approval interrupts (soothe_deepagents tool review) are auto-approved here.
-``ask_user`` interrupts are no longer handled in this module — they bubble up
-through :class:`ClarificationCapture` to the ``await_clarification`` loop node
-(RFC-622).
+Action-approval interrupts (soothe_deepagents tool review) and ``ask_user``
+interrupts both bubble up through :class:`ClarificationCapture` to the
+``await_clarification`` loop node (RFC-622). This module owns the resume-payload
+translators that turn a clarified answer back into the ``Command(resume=...)``
+shape each origin's middleware expects.
 """
 
 from __future__ import annotations
@@ -16,6 +17,12 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from soothe_sdk.ux.execute_namespace import is_step_level_execute_namespace_key
+
+from soothe.sloop.clarification.origins import ORIGIN_TOOL_APPROVAL
+from soothe.sloop.clarification.protocol import (
+    ClarificationAnswer,
+    ClarificationRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -419,6 +426,50 @@ def build_tool_approval_resume_payload(
     return {interrupt_id: {"decisions": decisions}}
 
 
+# Mapping from a veritas/TUI tool-approval answer to the deepagents HITL
+# decision type the ``HumanInTheLoopMiddleware`` expects on resume.
+_APPROVE_TOKENS = frozenset({"approve", "yes", "ok", "allow", "accept", "proceed", "y"})
+_REJECT_TOKENS = frozenset({"reject", "no", "deny", "block", "cancel", "n"})
+_EDIT_TOKENS = frozenset({"edit", "modify", "change", "revise"})
+
+
+def _answer_to_decision(answer: str) -> str:
+    """Map a tool-approval answer string to a HITL ``DecisionType``.
+
+    The clarification relay answers with a free-form string (from veritas or
+    the TUI input). The deepagents middleware expects ``"approve"`` /
+    ``"edit"`` / ``"reject"``. Defaults to ``"approve"`` for unrecognized
+    positive-ish answers and ``"reject"`` only on an explicit reject token.
+    """
+    token = (answer or "").strip().lower()
+    if token in _REJECT_TOKENS:
+        return "reject"
+    if token in _EDIT_TOKENS:
+        return "edit"
+    return "approve"
+
+
+def build_clarification_resume_payload(
+    request: ClarificationRequest,
+    answer: ClarificationAnswer,
+) -> dict[str, Any]:
+    """Build the ``Command(resume=...)`` payload for a clarified interrupt.
+
+    Single resume translator for every clarification origin:
+
+    - ``tool_approval`` — map the relay's answer to a HITL ``decisions`` shape.
+    - otherwise (``ask_user`` / execute) — deliver the answers verbatim so the
+      ``ask_user`` tool returns the Q&A and the agent continues its turn.
+    """
+    if request.origin_node == ORIGIN_TOOL_APPROVAL:
+        decision = _answer_to_decision(answer.answers[0] if answer.answers else "approve")
+        return build_tool_approval_resume_payload(
+            request.origin_interrupt_id,
+            decisions=[{"type": decision}],
+        )
+    return {request.origin_interrupt_id: {"answers": list(answer.answers)}}
+
+
 __all__ = [
     "StreamChunkClass",
     "_MAX_HEARTBEAT_SENTINELS",
@@ -427,7 +478,9 @@ __all__ = [
     "_STREAM_HEARTBEAT_SENTINEL",
     "_classify_stream_chunk",
     "GraphStreamChunkReader",
+    "_answer_to_decision",
     "build_auto_resume_payload",
+    "build_clarification_resume_payload",
     "build_tool_approval_resume_payload",
     "DispatchTimeoutError",
     "is_ask_user_interrupt",
