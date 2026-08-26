@@ -367,7 +367,33 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                     decisions=[{"type": decision_type}],
                 )
             elif origin_iid:
-                resume_answer_payload = {origin_iid: {"answers": list(ans.answers)}}
+                # Branch 3: CoreAgent ``ask_user`` interrupt resume.
+                #
+                # The CoreAgent's ``ask_user`` tool calls ``interrupt()`` inside
+                # the deepagents graph, which checkpoints the suspended interrupt
+                # under a Pregel sub-branch namespace ``execute:{task_id}``. That
+                # namespace is deterministic per ``(checkpoint_id, step, node)`` and
+                # therefore changes on every fresh ``astream`` invocation — so
+                # ``Command(resume={iid: {"answers": [...]}})`` cannot reach the
+                # suspended interrupt on the new sub-branch (verified in loop 27d8:
+                # the ``__interrupt__`` write lives on namespace
+                # ``execute:ae31473f`` but the resume run created namespace
+                # ``execute:d3524391``). The resume value is silently dropped and
+                # the agent starts a fresh turn, ignoring the user's answer.
+                #
+                # Instead of re-running the CoreAgent (which would discard the
+                # answer), synthesize a StepExecutionRecord carrying the Q&A pair
+                # and append it to the CE ledger so the next plan iteration re-
+                # reasons with the user's answer available. This mirrors the
+                # planner-ask synth path (Branch 1) above and is the only resume
+                # strategy that works across the namespace mismatch.
+                planner_ask_answered_step_id = state_dict.get("resume_step_id") or "ask_user_resume"
+                planner_ask_answers = tuple(ans.answers)
+                planner_ask_source = ans.source
+                planner_ask_questions = tuple(
+                    str(q) for q in (pending_request_state.get("questions") or ())
+                )
+                planner_ask_confidence = ans.confidence
         except (ValueError, TypeError):
             logger.exception("[execute] malformed pending_clarification_answer; ignoring")
 

@@ -16,7 +16,6 @@ from soothe.sloop.clarification import (
     answer_to_state,
     request_from_state,
 )
-from soothe.sloop.engine.execute.executor import StepWaveStart
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord
 from soothe.sloop.stations.execute.execute import (
@@ -436,18 +435,48 @@ async def test_branch2_picks_first_ask_user_in_mixed_wave(
 
 
 @pytest.mark.asyncio
-async def test_real_coreagent_resume_payload_passes_through(
+async def test_real_coreagent_ask_user_resume_synthesizes_step_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A regular CoreAgent ask_user interrupt (no ``planner-ask:`` prefix)
-    should still build ``resume_answer_payload`` for the executor."""
+    synthesizes a StepExecutionRecord with the Q&A pair instead of building a
+    ``resume_answer_payload``.
+
+    The CoreAgent ``ask_user`` interrupt lives on a Pregel sub-branch namespace
+    ``execute:{task_id}`` that changes per ``astream`` invocation, so
+    ``Command(resume=...)`` cannot reach it on resume. The fix synthesizes the
+    step result (like the planner-ask path) so the next plan iteration re-reasons
+    with the user's answer in the CE ledger."""
+    from soothe.sloop.state.schemas import LoopState
+
     decision = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="ACT-01", description="do thing")],
         execution_mode="parallel",
     )
     emitted: list[tuple[str, Any]] = []
-    ctx = _make_ctx(decision, emitted, clarification_policy=None)
+
+    loop_state = LoopState(
+        goal="do thing",
+        thread_id="thread-1",
+        workspace=None,
+        iteration=0,
+        max_iterations=10,
+    )
+    ce = _make_ce()
+    goal = GoalNode(description="do thing")
+    ce._dag.add_goal(goal)
+    loop_state.bind_ce(ce, goal.id)
+
+    plan_manager = MagicMock()
+    ctx = _make_ctx(
+        decision, emitted, clarification_policy=None, loop_state=loop_state, ce=ce, goal=goal
+    )
+    ctx.plan_manager = plan_manager
+    # Resume path: scratch.decision must be None so the synth block runs
+    # (it lives inside `if decision is None`).
+    ctx.scratch.decision = None
+    ctx.scratch.plan_result = None
 
     pending_clar = {
         "questions": ["Real ask?"],
@@ -469,56 +498,60 @@ async def test_real_coreagent_resume_payload_passes_through(
     answer = ClarificationAnswer(answers=("ok",), source="human", confidence=1.0)
     pending_ans = answer_to_state(answer)
 
-    async def _yield_wave(*_a: Any, **_k: Any):
-        yield StepWaveStart(steps=(StepAction(id="ACT-01", description="do thing"),))
-        yield StepExecutionRecord(
-            step_id="ACT-01",
-            success=True,
-            duration_ms=1,
-            thread_id="thread-1",
-            tool_call_count=0,
-        )
+    executor_called = False
 
-    captured: dict[str, Any] = {}
+    async def _empty_stream(*_a: Any, **_k: Any):
+        nonlocal executor_called
+        executor_called = True
+        if False:
+            yield None
 
-    def _factory(*args: Any, **kwargs: Any) -> Any:
-        captured.update(kwargs)
-        mock_ex = MagicMock()
-        mock_ex.execute = _yield_wave
-        return mock_ex
+    mock_executor = MagicMock()
+    mock_executor.execute = _empty_stream
 
     import soothe.sloop.stations.execute.execute as mod
 
-    monkeypatch.setattr(mod, "Executor", _factory)
+    monkeypatch.setattr(mod, "Executor", MagicMock(return_value=mock_executor))
 
-    await node_execute(
+    result = await node_execute(
         ctx,
         {
             "pending_clarification": pending_clar,
             "pending_clarification_answer": pending_ans,
+            "resume_step_id": "ACT-01",
         },
     )
 
-    # Real CoreAgent interrupt id → resume_answer_payload keyed by that id.
-    payload = captured.get("clarification_resume_answer_payload")
-    assert payload == {"real-interrupt-xyz": {"answers": ["ok"]}}
+    # The Executor must NOT be called — the step is synthesized, not re-run.
+    assert executor_called is False
+    # Must not re-route to await_clarification.
+    assert not result.get("pending_clarification")
+    assert result.get("last_outcome") == "continue"
+    # The Q&A pair is appended to the CE ledger so the next iteration sees it.
+    msgs = ce.ledger.get_messages()
+    assert len(msgs) == 2
+    human_msg, ai_msg = msgs
+    assert "Real ask?" in human_msg.content
+    assert "ok" in ai_msg.content
+    # plan_manager recorded the synthesized step outcome.
+    plan_manager.record_step_outcomes.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_branch1_syncs_resume_thread_id_onto_live_loop_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """On a CoreAgent ask_user interrupt resume (Branch 1), the graph-state dict
-    carries ``resume_thread_id`` / ``resume_step_id`` / ``resume_step_description``
+    """On a CoreAgent ask_user interrupt resume, the graph-state dict carries
+    ``resume_thread_id`` / ``resume_step_id`` / ``resume_step_description``
     across the checkpoint round-trip, but the live ``LoopState`` is freshly
     constructed for this ``ainvoke`` so those fields are still their defaults.
 
-    ``node_execute`` must sync them onto ``loop_state`` so
-    ``_select_thread_for_step`` reuses the interrupted thread (where the
-    ``ask_user`` ``interrupt()`` is actually suspended). Without this sync the
-    executor issues ``Command(resume=...)`` against a fresh random thread that
-    has no suspended interrupt — the user's answer is silently dropped and the
-    CoreAgent starts over from scratch (regression seen in loop 5e5e)."""
+    The resume path now synthesizes a step result (the CoreAgent sub-namespace
+    changes per ``astream`` so ``Command(resume=...)`` cannot reach the
+    suspended interrupt — see [[execute-namespace-interrupt-resume-broken]]).
+    This test verifies the synth path is taken and the Q&A reaches the CE
+    ledger, and that the ``resume_step_id`` from the graph-state dict is used
+    as the synthesized step's id so the TUI card stays stable."""
     from soothe.sloop.state.schemas import LoopState
 
     emitted: list[tuple[str, Any]] = []
@@ -530,6 +563,11 @@ async def test_branch1_syncs_resume_thread_id_onto_live_loop_state(
         iteration=0,
         max_iterations=99,
     )
+    ce = _make_ce()
+    goal = GoalNode(description="propose a question and use ask_user")
+    ce._dag.add_goal(goal)
+    loop_state.bind_ce(ce, goal.id)
+
     # Freshly-constructed LoopState has no resume fields populated (mirrors
     # the real resume path, where the graph-state dict — not the live object
     # — carries the captured identity across the checkpoint round-trip).
@@ -550,11 +588,12 @@ async def test_branch1_syncs_resume_thread_id_onto_live_loop_state(
     strange_loop.config.agent.loop.concurrency.max_parallel_steps = 4
     strange_loop.core_agent.graph.checkpointer = None
 
+    plan_manager = MagicMock()
     ctx = LoopRuntimeContext(
         strange_loop=strange_loop,
         state_manager=MagicMock(loop_id="loop-1"),
         anchor_manager=MagicMock(),
-        plan_manager=MagicMock(),
+        plan_manager=plan_manager,
         checkpoint=MagicMock(),
         goal_record=None,
         continue_loop_mode=False,
@@ -563,6 +602,8 @@ async def test_branch1_syncs_resume_thread_id_onto_live_loop_state(
         emit=emit,
         scratch=scratch,
         clarification_policy=None,
+        ce=ce,
+        ce_goal_id=goal.id,
     )
 
     pending_clar = {
@@ -585,31 +626,22 @@ async def test_branch1_syncs_resume_thread_id_onto_live_loop_state(
     answer = ClarificationAnswer(answers=("test",), source="human", confidence=1.0)
     pending_ans = answer_to_state(answer)
 
-    async def _yield_wave(*_a: Any, **_k: Any):
-        yield StepWaveStart(
-            steps=(StepAction(id="PPX-01", description="propose a question and use ask_user"),)
-        )
-        yield StepExecutionRecord(
-            step_id="PPX-01",
-            success=True,
-            duration_ms=1,
-            thread_id="01a03baf-97b6-7d12-aa11-c8dce2805e5e__step",
-            tool_call_count=0,
-        )
+    executor_called = False
 
-    captured: dict[str, Any] = {}
+    async def _empty_stream(*_a: Any, **_k: Any):
+        nonlocal executor_called
+        executor_called = True
+        if False:
+            yield None
 
-    def _factory(*args: Any, **kwargs: Any) -> Any:
-        captured.update(kwargs)
-        mock_ex = MagicMock()
-        mock_ex.execute = _yield_wave
-        return mock_ex
+    mock_executor = MagicMock()
+    mock_executor.execute = _empty_stream
 
     import soothe.sloop.stations.execute.execute as mod
 
-    monkeypatch.setattr(mod, "Executor", _factory)
+    monkeypatch.setattr(mod, "Executor", MagicMock(return_value=mock_executor))
 
-    await node_execute(
+    result = await node_execute(
         ctx,
         {
             "pending_clarification": pending_clar,
@@ -621,16 +653,21 @@ async def test_branch1_syncs_resume_thread_id_onto_live_loop_state(
         },
     )
 
-    # The live LoopState now carries the captured identity so
-    # _select_thread_for_step reuses the interrupted thread instead of
-    # generating a fresh random one (the root cause of loop 5e5e's failure).
-    assert loop_state.resume_thread_id == "01a03baf-97b6-7d12-aa11-c8dce2805e5e__step"
-    assert loop_state.resume_step_id == "PPX-01"
-    assert loop_state.resume_step_description == "Propose a question using ask_user"
-
-    # The executor received the resume payload keyed by the interrupt id.
-    payload = captured.get("clarification_resume_answer_payload")
-    assert payload == {"01a03baf-a658-7273": {"answers": ["test"]}}
+    # The Executor must NOT be called — the step is synthesized, not re-run.
+    assert executor_called is False
+    assert not result.get("pending_clarification")
+    assert result.get("last_outcome") == "continue"
+    # The Q&A pair reaches the CE ledger so the next iteration sees the answer.
+    msgs = ce.ledger.get_messages()
+    assert len(msgs) == 2
+    human_msg, ai_msg = msgs
+    assert "What would you like to work on today?" in human_msg.content
+    assert "test" in ai_msg.content
+    # The synthesized step used the captured step id (from resume_step_id)
+    # so the TUI card stays stable, and the plan_manager recorded the outcome.
+    plan_manager.record_step_outcomes.assert_called_once()
+    recorded = plan_manager.record_step_outcomes.call_args.args[0][0]
+    assert recorded.step_id == "PPX-01"
 
 
 @pytest.mark.asyncio

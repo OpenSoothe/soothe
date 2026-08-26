@@ -1,11 +1,4 @@
-"""LLM-callable ``ask_user`` tool (RFC-622 clarification relay).
-
-When the model invokes this tool, ``interrupt()`` raises ``GraphInterrupt``
-to pause the graph. The executor's stream loop catches it and routes to
-``AWAIT_USER``. When the user answers via ``Command(resume=...)``, the graph
-re-enters here, ``interrupt()`` returns the resume payload, and this function
-renders the answers for the model.
-"""
+"""``ask_user`` tool — pauses the loop for a human answer (RFC-622)."""
 
 from __future__ import annotations
 
@@ -18,33 +11,28 @@ logger = logging.getLogger(__name__)
 
 
 class _AskUserArgs(BaseModel):
-    """Arguments for ``ask_user``.
-
-    ``questions`` is the primary field (list of strings). ``query`` is a
-    convenience alias — models frequently send a single string as ``query``
-    on the first call instead of a list as ``questions``.
-    """
+    """``questions`` (list) is primary; ``question`` (str) is a singular alias."""
 
     questions: list[str] = Field(
         default_factory=list,
-        description="The question(s) to ask the user. List of strings.",
+        description="The question(s) to ask the user.",
     )
-    query: str | None = Field(
+    question: str | None = Field(
         default=None,
-        description="Alternative to 'questions': a single question as a string.",
+        description="Single-question shorthand for 'questions'.",
     )
 
     @model_validator(mode="after")
     def _normalize(self) -> _AskUserArgs:
-        if not self.questions and self.query:
-            self.questions = [self.query]
+        if not self.questions and self.question:
+            self.questions = [self.question]
         if not self.questions:
-            raise ValueError("ask_user requires at least one question (use 'questions' or 'query')")
+            raise ValueError("ask_user requires 'questions' or 'question'")
         return self
 
 
 def _format_answers(questions: list[str], payload: object) -> str:
-    """Render the resume payload as a model-readable answer block."""
+    """Render the resume payload as a model-readable Q&A block."""
     raw = payload.get("answers", payload) if isinstance(payload, dict) else payload
     answers = (
         [raw] if isinstance(raw, str) else [str(a) for a in raw] if isinstance(raw, list) else []
@@ -58,13 +46,17 @@ def _format_answers(questions: list[str], payload: object) -> str:
     return "User answered:\n" + "\n".join(pairs)
 
 
-def _run_ask_user(questions: list[str] | None = None, *, query: str | None = None) -> str:
-    """Emit an ``ask_user`` interrupt and return the answers on resume."""
+def _run_ask_user(
+    questions: list[str] | None = None,
+    *,
+    question: str | None = None,
+) -> str:
+    """Pause the graph via ``interrupt()``; return formatted answers on resume."""
     from langgraph.types import interrupt
 
     qs = list(questions or [])
-    if not qs and query:
-        qs = [query]
+    if not qs and question:
+        qs = [question]
     cleaned = [str(q).strip() for q in qs if str(q).strip()]
     if not cleaned:
         return "Error: ask_user requires at least one non-empty question."
@@ -73,21 +65,23 @@ def _run_ask_user(questions: list[str] | None = None, *, query: str | None = Non
     return _format_answers(cleaned, payload)
 
 
-async def _arun_ask_user(questions: list[str] | None = None, *, query: str | None = None) -> str:
-    return _run_ask_user(questions, query=query)
+async def _arun_ask_user(
+    questions: list[str] | None = None,
+    *,
+    question: str | None = None,
+) -> str:
+    return _run_ask_user(questions, question=question)
 
 
 def build_ask_user_tool() -> StructuredTool:
-    """Build the ``ask_user`` LLM-callable clarification tool."""
+    """Build the ``ask_user`` StructuredTool."""
     return StructuredTool.from_function(
         name="ask_user",
         description=(
             "Ask the user a question and pause the loop until they answer. "
-            "Pass your question as a string in the 'query' field, or as a list "
-            "of strings in the 'questions' field. "
-            "Use this at decision gates: design approval, confirmation gates, "
-            "routing menus, or when ambiguity blocks progress. Do NOT write "
-            "questions as plain text — plain text does not pause the loop."
+            "Use 'question' (string) or 'questions' (list). For decision gates: "
+            "approval, confirmation, routing, or resolving ambiguity. "
+            "Plain-text questions do not pause the loop."
         ),
         func=_run_ask_user,
         coroutine=_arun_ask_user,

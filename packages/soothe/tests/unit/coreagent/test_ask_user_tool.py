@@ -23,7 +23,7 @@ def test_tool_name_and_schema() -> None:
     assert tool.name == "ask_user"
     schema = tool.args_schema.model_json_schema()
     assert "questions" in schema["properties"]
-    assert "query" in schema["properties"]
+    assert "question" in schema["properties"]
 
 
 def test_args_schema_rejects_empty() -> None:
@@ -31,9 +31,9 @@ def test_args_schema_rejects_empty() -> None:
         _AskUserArgs()
 
 
-def test_args_schema_query_alias() -> None:
-    """`query` (single string) is accepted as an alias for `questions`."""
-    args = _AskUserArgs(query="Which option?")
+def test_args_schema_question_alias() -> None:
+    """`question` (single string) is accepted as an alias for `questions`."""
+    args = _AskUserArgs(question="Which option?")
     assert args.questions == ["Which option?"]
 
 
@@ -93,8 +93,8 @@ def test_run_ask_user_emits_interrupt_and_returns_answers() -> None:
     assert "A: Option C" in result
 
 
-def test_run_ask_user_with_query_alias() -> None:
-    """`query=` (single string) works the same as `questions=[...]`."""
+def test_run_ask_user_with_question_alias() -> None:
+    """`question=` (single string) works the same as `questions=[...]`."""
     captured: list[dict[str, Any]] = []
 
     def fake_interrupt(value: Any) -> Any:
@@ -104,7 +104,7 @@ def test_run_ask_user_with_query_alias() -> None:
     with patch("langgraph.types.interrupt", fake_interrupt):
         from soothe.coreagent.tools.ask_user import _run_ask_user
 
-        result = _run_ask_user(query="Approve?")
+        result = _run_ask_user(question="Approve?")
 
     assert captured[0]["questions"] == ["Approve?"]
     assert "A: yes" in result
@@ -163,8 +163,8 @@ async def test_arun_ask_user_matches_sync() -> None:
 
 
 @pytest.mark.asyncio
-async def test_arun_ask_user_with_query_field() -> None:
-    """The LLM frequently sends {'query': '...'} — verify it works."""
+async def test_arun_ask_user_with_question_field() -> None:
+    """The LLM frequently sends {'question': '...'} — verify it works."""
     captured: list[dict[str, Any]] = []
 
     def fake_interrupt(value: Any) -> Any:
@@ -173,7 +173,7 @@ async def test_arun_ask_user_with_query_field() -> None:
 
     with patch("langgraph.types.interrupt", fake_interrupt):
         tool = build_ask_user_tool()
-        result = await tool.ainvoke({"query": "Should I proceed?"})
+        result = await tool.ainvoke({"question": "Should I proceed?"})
 
     assert captured[0]["questions"] == ["Should I proceed?"]
     assert "A: do it" in result
@@ -184,8 +184,8 @@ async def test_arun_ask_user_with_query_field() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _run(*, questions: list[str] | None = None, query: str | None = None) -> str:
+def _run(*, questions: list[str] | None = None, question: str | None = None) -> str:
     """Invoke the sync tool handler (bypass StructuredTool dispatch)."""
     from soothe.coreagent.tools.ask_user import _run_ask_user
 
-    return _run_ask_user(questions, query=query)
+    return _run_ask_user(questions, question=question)
