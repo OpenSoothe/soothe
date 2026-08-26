@@ -71,7 +71,26 @@ def friendly_daemon_execution_error(exc: BaseException | str) -> str:
         return _FRIENDLY_WORKER_SUBPROCESS_LOST
     if DAEMON_WORKER_THREAD_LOST in text:
         return _FRIENDLY_WORKER_THREAD_LOST
-    return text if isinstance(exc, str) else str(exc)
+    # For unknown errors, reduce multi-line / stack-trace-laden errors to a
+    # single actionable line and cap the length so the TUI doesn't show a raw
+    # multi-paragraph traceback. Full details remain in daemon logs.
+    return _simplify_for_tui(text)
+
+
+def _simplify_for_tui(text: str, *, max_chars: int = 200) -> str:
+    """Extract the most useful line from a possibly multi-line error string.
+
+    Single-line errors are returned as-is. Multi-line errors (stack traces,
+    embedded JSON) return the last non-empty line — that's where the
+    exception cause sits at the bottom of a Python traceback.
+    """
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return text[:max_chars] if text else text
+    if len(lines) == 1:
+        return lines[0][:max_chars] if len(lines[0]) > max_chars else lines[0]
+    result = lines[-1]
+    return result[:max_chars] if len(result) > max_chars else result
 
 
 def is_daemon_worker_subprocess_lost(exc: BaseException | str) -> bool:

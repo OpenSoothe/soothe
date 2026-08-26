@@ -12,7 +12,7 @@ from soothe_nano.utils.text_preview import log_preview
 
 logger = logging.getLogger(__name__)
 
-_MAX_ERROR_MSG_LENGTH = 100
+_MAX_ERROR_MSG_LENGTH = 200
 
 
 def format_cli_error(
@@ -53,11 +53,32 @@ def format_cli_error(
     return error_str
 
 
+def _first_meaningful_line(text: str) -> str:
+    """Extract the most useful line from a possibly multi-line error string.
+
+    For single-line errors, returns the line as-is. For multi-line errors
+    (stack traces, embedded JSON), returns the **last** non-empty line —
+    that's where the exception cause sits at the bottom of a Python traceback.
+    """
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return text
+    if len(lines) == 1:
+        return lines[0]
+    return lines[-1]
+
+
 def _simplify_error_message(error_type: str, error_msg: str) -> str:
     """Simplify verbose error messages for CLI display.
 
-    Enhanced timeout errors provide actionable suggestions.
+    Multi-line / stack-trace-laden errors are reduced to their first
+    meaningful line, capped at ``_MAX_ERROR_MSG_LENGTH`` chars. Known
+    error types with actionable suggestions are mapped explicitly.
     """
+    if not error_msg:
+        return error_msg
+
+    # Known error types with actionable suggestions.
     if error_type == "EnhancedTimeoutError":
         if "large prompt" in error_msg:
             return "Timeout (large prompt) - try simplifying or splitting request"
@@ -95,10 +116,12 @@ def _simplify_error_message(error_type: str, error_msg: str) -> str:
             return "Permission denied"
         return "System error"
 
-    if len(error_msg) <= _MAX_ERROR_MSG_LENGTH:
-        return error_msg
-
-    return log_preview(error_msg, _MAX_ERROR_MSG_LENGTH)
+    # General case: reduce multi-line / stack-trace-laden errors to a single
+    # actionable line, then cap the length.
+    first = _first_meaningful_line(error_msg)
+    if len(first) <= _MAX_ERROR_MSG_LENGTH:
+        return first
+    return log_preview(first, _MAX_ERROR_MSG_LENGTH)
 
 
 def emit_error_event(

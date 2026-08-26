@@ -14,6 +14,7 @@ from soothe.sloop.clarification import (
     ClarificationDetector,
     ClarificationRequest,
     LoopStateView,
+    ResumeTicket,
     answer_from_state,
     request_from_state,
     request_to_state,
@@ -43,6 +44,28 @@ PLANNER_ASK_INTERRUPT_PREFIX = "planner-ask:"
 ``kind="ask_user"`` step rather than a real CoreAgent ``ask_user`` interrupt.
 On answer arrival, ``node_execute`` synthesizes a ``StepExecutionRecord`` for the matching
 step id instead of trying to resume a CoreAgent interrupt that never existed."""
+
+
+def _coerce_resume_ticket(raw: Any) -> ResumeTicket | None:
+    """Normalize a ``resume_ticket`` value read from the graph-state dict.
+
+    LangGraph passes nodes the raw checkpoint dict, not a reconstructed
+    ``LoopState``. A ``ResumeTicket`` (plain dataclass) stored on the graph
+    channel therefore comes back as a plain ``dict`` after the checkpoint
+    round-trip. Attribute access (``.thread_id`` etc.) on the dict raises
+    ``AttributeError``; this helper coerces it back to a ``ResumeTicket``
+    so the resume path can use attribute access uniformly. ``None`` and
+    already-typed values pass through unchanged.
+    """
+    if raw is None or isinstance(raw, ResumeTicket):
+        return raw
+    if isinstance(raw, dict):
+        return ResumeTicket(
+            thread_id=raw.get("thread_id"),
+            step_id=raw.get("step_id"),
+            step_description=raw.get("step_description"),
+        )
+    return None
 
 
 def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
@@ -381,7 +404,9 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                         state,
                         step_id=(
                             (
-                                state_dict.get("resume_ticket").step_id
+                                _coerce_resume_ticket(
+                                    state_dict.get("resume_ticket")
+                                ).step_id
                                 if state_dict.get("resume_ticket")
                                 else None
                             )
@@ -415,7 +440,12 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # will use the resume thread_id and deliver the answer via
             # ``Command(resume=...)``.
             # Read resume_ticket from graph state (survives checkpoint).
-            resume_ticket = state_dict.get("resume_ticket") or getattr(state, "resume_ticket", None)
+            # LangGraph passes the raw checkpoint dict, so the stored
+            # ``ResumeTicket`` (a dataclass) comes back as a plain dict —
+            # coerce it before attribute access.
+            resume_ticket = _coerce_resume_ticket(
+                state_dict.get("resume_ticket")
+            ) or getattr(state, "resume_ticket", None)
             resume_tid = resume_ticket.thread_id if resume_ticket else None
             if resume_tid:
                 # Rebuild a decision for the step that was executing when the
