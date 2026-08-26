@@ -406,7 +406,19 @@ class Executor:
         if parent_runnable_config is not None:
             from langchain_core.runnables.config import merge_configs
 
-            return merge_configs(parent_runnable_config, graph_config)
+            from soothe.sloop.utils.graph_config import strip_parent_checkpoint_coordinates
+
+            # The parent is the StrangeLoop graph's execute-node config, which
+            # carries its own checkpoint coordinates (``checkpoint_ns`` =
+            # ``execute:{task_id}``). Inheriting them makes the CoreAgent run
+            # as a parent subgraph: its checkpoints — including interrupts —
+            # land under the parent's task namespace instead of the fork
+            # thread root, so ``Command(resume=...)`` cannot reach them and
+            # approved tool calls never execute (IG-763). Keep the tracing
+            # callbacks; drop the checkpoint coordinates.
+            return strip_parent_checkpoint_coordinates(
+                merge_configs(parent_runnable_config, graph_config)
+            )
         return graph_config
 
     async def _checkpoint_message_ids_for_thread(self, fork_thread_id: str) -> frozenset[str]:
@@ -2370,18 +2382,30 @@ class Executor:
                 primary_outcome["step_close_report"] = close_report.model_dump()
 
             # Step success: fail only when every tool call errored; otherwise a step
-            # may recover from individual tool failures and still finish.
+            # may recover from individual tool failures and still finish. A captured
+            # ask_user interrupt means the step is awaiting the user, not failed.
+            captured_clarification = (
+                self._clarification_capture is not None
+                and self._clarification_capture.pending_request is not None
+            )
             all_tools_failed = all_tool_outcomes_failed(stream_outcomes)
-            step_success = not all_tools_failed
+            step_success = not all_tools_failed or captured_clarification
             step_error: str | None = None
             step_error_type: (
                 Literal["execution", "tool", "timeout", "policy", "unknown", "fatal"] | None
             ) = None
-            if all_tools_failed:
+            if all_tools_failed and not captured_clarification:
                 step_error = _first_tool_error_message(stream_outcomes) or "All tool calls failed"
                 step_error_type = "tool"
                 logger.warning(
                     "Step %s failed: all %d tool call(s) returned errors in %dms",
+                    step.id,
+                    len(stream_outcomes),
+                    duration_ms,
+                )
+            elif all_tools_failed and captured_clarification:
+                logger.info(
+                    "Step %s awaiting user clarification after %d tool error(s) in %dms",
                     step.id,
                     len(stream_outcomes),
                     duration_ms,

@@ -37,6 +37,12 @@ def test_args_schema_question_alias() -> None:
     assert args.questions == ["Which option?"]
 
 
+def test_args_schema_query_alias() -> None:
+    """`query` is accepted as an alias — models sometimes emit it."""
+    args = _AskUserArgs(query="Which option?")
+    assert args.questions == ["Which option?"]
+
+
 # ---------------------------------------------------------------------------
 # _format_answers — resume payload rendering
 # ---------------------------------------------------------------------------
@@ -110,6 +116,23 @@ def test_run_ask_user_with_question_alias() -> None:
     assert "A: yes" in result
 
 
+def test_run_ask_user_with_query_alias() -> None:
+    """`query=` works the same as `question=`."""
+    captured: list[dict[str, Any]] = []
+
+    def fake_interrupt(value: Any) -> Any:
+        captured.append(value)
+        return {"answers": ["yes"]}
+
+    with patch("langgraph.types.interrupt", fake_interrupt):
+        from soothe.coreagent.tools.ask_user import _run_ask_user
+
+        result = _run_ask_user(query="Approve?")
+
+    assert captured[0]["questions"] == ["Approve?"]
+    assert "A: yes" in result
+
+
 def test_run_ask_user_strips_empty_questions() -> None:
     captured: list[dict[str, Any]] = []
 
@@ -124,10 +147,20 @@ def test_run_ask_user_strips_empty_questions() -> None:
     assert "A: go" in result
 
 
-def test_run_ask_user_all_empty_returns_error() -> None:
+def test_run_ask_user_all_empty_raises_value_error() -> None:
     with patch("langgraph.types.interrupt", side_effect=AssertionError("must not call")):
-        result = _run(questions=["", "  "])
-    assert "Error" in result
+        with pytest.raises(ValueError, match="non-empty"):
+            _run(questions=["", "  "])
+
+
+def test_args_schema_rejects_whitespace_only() -> None:
+    with pytest.raises(Exception, match="non-empty"):  # noqa: PT011
+        _AskUserArgs(questions=["  ", "\t", "\n"])
+
+
+def test_args_schema_strips_whitespace_entries() -> None:
+    args = _AskUserArgs(questions=["  ", "real question?"])
+    assert args.questions == ["real question?"]
 
 
 def test_run_ask_user_propagates_graph_interrupt() -> None:

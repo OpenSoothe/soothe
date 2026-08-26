@@ -266,6 +266,38 @@ async def _record_and_emit_step_completed(
     await ctx.emit("step_completed", payload)
 
 
+async def _ensure_ce_step_for_resume(
+    ctx: LoopRuntimeContext,
+    step_id: str,
+    *,
+    description: str,
+) -> None:
+    """Create the CE root step for a resume synth when the DAG lost it."""
+    if ctx.ce is None or not ctx.ce_goal_id:
+        return
+    try:
+        goal = await ctx.ce.get_goal(ctx.ce_goal_id)
+        if goal is None or step_id in goal.steps.nodes:
+            return
+        from soothe.context.models import StepNode
+
+        node = StepNode(
+            id=step_id,
+            description=description[:80],
+            full_description=description,
+            status="pending",
+            parent_step_id=None,
+            plan_iteration=0,
+        )
+        await ctx.ce.add_step(ctx.ce_goal_id, node)
+        await ctx.ce.activate_step(ctx.ce_goal_id, step_id)
+        logger.info("[execute] resume synth: CE step %s was missing; recreated", step_id)
+    except Exception:
+        logger.warning(
+            "[execute] resume synth: failed to ensure CE step %s", step_id, exc_info=True
+        )
+
+
 async def _persist_planner_ask_step_outcome(
     ctx: LoopRuntimeContext,
     result: StepExecutionRecord,
@@ -367,33 +399,24 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                     decisions=[{"type": decision_type}],
                 )
             elif origin_iid:
-                # Branch 3: CoreAgent ``ask_user`` interrupt resume.
-                #
-                # The CoreAgent's ``ask_user`` tool calls ``interrupt()`` inside
-                # the deepagents graph, which checkpoints the suspended interrupt
-                # under a Pregel sub-branch namespace ``execute:{task_id}``. That
-                # namespace is deterministic per ``(checkpoint_id, step, node)`` and
-                # therefore changes on every fresh ``astream`` invocation — so
-                # ``Command(resume={iid: {"answers": [...]}})`` cannot reach the
-                # suspended interrupt on the new sub-branch (verified in loop 27d8:
-                # the ``__interrupt__`` write lives on namespace
-                # ``execute:ae31473f`` but the resume run created namespace
-                # ``execute:d3524391``). The resume value is silently dropped and
-                # the agent starts a fresh turn, ignoring the user's answer.
-                #
-                # Instead of re-running the CoreAgent (which would discard the
-                # answer), synthesize a StepExecutionRecord carrying the Q&A pair
-                # and append it to the CE ledger so the next plan iteration re-
-                # reasons with the user's answer available. This mirrors the
-                # planner-ask synth path (Branch 1) above and is the only resume
-                # strategy that works across the namespace mismatch.
-                planner_ask_answered_step_id = state_dict.get("resume_step_id") or "ask_user_resume"
-                planner_ask_answers = tuple(ans.answers)
-                planner_ask_source = ans.source
-                planner_ask_questions = tuple(
-                    str(q) for q in (pending_request_state.get("questions") or ())
+                # Branch 3: CoreAgent ``ask_user`` interrupt resume. The
+                # executor's stream config no longer inherits the parent
+                # graph's checkpoint namespace (IG-763), so the suspended
+                # interrupt is reachable at the fork thread root:
+                # ``Command(resume)`` delivers the answers in-thread — the
+                # ask_user tool returns the Q&A and the agent continues its
+                # turn on the original step thread.
+                resume_answer_payload = {origin_iid: {"answers": list(ans.answers)}}
+                _append_ask_user_loop_messages(
+                    state,
+                    step_id=state_dict.get("resume_step_id") or "ask_user_resume",
+                    description="Ask user clarifying question",
+                    questions=tuple(str(q) for q in (pending_request_state.get("questions") or ())),
+                    answers=tuple(ans.answers),
+                    source=ans.source,
+                    confidence=ans.confidence,
+                    context_engine=ctx.ce,
                 )
-                planner_ask_confidence = ans.confidence
         except (ValueError, TypeError):
             logger.exception("[execute] malformed pending_clarification_answer; ignoring")
 
@@ -411,7 +434,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # checkpointer has the pending interrupt on that thread.
             # Rebuild a decision from the CE root step and fall through to
             # the normal Executor path — it will use the resume thread_id
-            # and pass ``Command(resume=...)`` to the CoreAgent.
+            # and deliver the answer via ``Command(resume=...)``.
             # Read resume_thread_id from graph state (survives checkpoint).
             resume_tid = state_dict.get("resume_thread_id") or getattr(
                 state, "resume_thread_id", None
@@ -576,34 +599,52 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             await _record_and_emit_step_completed(
                 ctx, result=synth_result, step_desc=step_desc_local
             )
-            # Resume synth skips record_iteration, where plan_manager normally
-            # records step outcomes into the DAG. Without this call the
-            # ask_user step would remain PENDING in the plan DAG forever and
-            # surface in the goal_completion report even though the user
-            # already answered.
-            await _persist_planner_ask_step_outcome(ctx, synth_result)
+            # Recreate the CE step when the parked checkpoint predates the
+            # park-time CE save (stale DAG with empty nodes): record_iteration
+            # completes this id, and a missing node makes that a no-op —
+            # root_eval then fatals on a not-green action tree. Mirrors the
+            # Branch 1 CE-step-loss fallback below.
+            await _ensure_ce_step_for_resume(
+                ctx, planner_ask_answered_step_id, description=ask_description
+            )
+            # Synthesize a minimal decision/plan_result so node_record_iteration
+            # runs its normal path (plan-DAG recording, CE persistence, iteration
+            # advance) instead of fatally erroring on empty scratch. Mirrors the
+            # resume-rebuild above (IG-762).
+            root_step = StepAction(
+                id=planner_ask_answered_step_id,
+                description=ask_description,
+                full_description=ask_description,
+                is_dag_root=True,
+            )
+            decision = AgentDecision(
+                type="execute_steps",
+                execution_mode="parallel",
+                reasoning="ask_user answer resume",
+                steps=[root_step],
+            )
+            plan_result = PlanResult(
+                status="continue",
+                goal_progress="none",
+                assessment_reasoning="",
+                plan_action="keep",
+                require_goal_completion=False,
+                terminal_after_execute=False,
+                decision=decision,
+                next_action=ask_description[:300],
+            )
+            ctx.scratch.decision = decision
+            ctx.scratch.plan_result = plan_result
+            ctx.scratch.step_results = list(ctx.scratch.step_results or []) + [synth_result]
+            state.current_decision = decision
             logger.info(
                 "[execute] resumed clarification answer (no scratch decision); "
-                "synthesized step_completed for %s, deferring further execution to next iteration",
+                "synthesized step_completed for %s, routing through record_iteration",
                 planner_ask_answered_step_id,
             )
-            # Advance the iteration counter inline since we are skipping
-            # record_iteration on this resume path. Without this, iteration_gate
-            # would loop (or never terminate via max_iterations) because no
-            # iteration was recorded as complete during this graph invocation.
-            state.iteration += 1
-            if goal_record is not None:
-                try:
-                    await state_manager.save(checkpoint)
-                except Exception:
-                    logger.exception(
-                        "[execute] failed to persist synth-path iteration for step %s",
-                        planner_ask_answered_step_id,
-                    )
             return {
                 "pending_clarification": None,
                 "pending_clarification_answer": None,
-                "last_outcome": "continue",
             }
         else:
             logger.error("[execute] missing decision or plan_result on scratch")

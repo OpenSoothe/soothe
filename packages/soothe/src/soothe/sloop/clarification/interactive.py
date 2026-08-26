@@ -19,7 +19,10 @@ from typing import Any
 
 from langgraph.types import interrupt
 
-from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
+from soothe.sloop.clarification.origins import (
+    ORIGIN_PLAN_MODE_REVIEW,
+    ORIGIN_TOOL_APPROVAL,
+)
 from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,
@@ -117,20 +120,21 @@ class InteractiveClarificationPolicy:
 
         stripped = [a.strip() for a in answers]
 
-        # Plan-mode review asks two questions (action + refinement text), but
-        # only the action field is required — the refinement-text field is
-        # only meaningful for the "reject" action and is legitimately blank
-        # for approve. Treat it as answered when the action field (index
-        # 0) is non-empty; pad the optional trailing field instead of
-        # dismissing the whole answer as "no answer" (RFC-904 plan-mode review).
-        if origin == ORIGIN_PLAN_MODE_REVIEW and expected == 2:
-            if stripped and stripped[0]:
-                # Pad / truncate to the expected length so downstream parsers
-                # that index answers[1] always see a string.
-                if len(stripped) == 1:
-                    stripped.append("")
-                return stripped[:expected]
-            return None
+        # Action-selector origins (plan-mode review, tool approval) send
+        # [action, optional-comment]; only the action field (index 0) is
+        # required — the trailing comment is legitimately blank (approve) or
+        # carries edit args. Treat a non-empty action as answered and pad /
+        # truncate to the expected length instead of dismissing the whole
+        # answer (the TUI always submits both slots).
+        if (
+            origin in (ORIGIN_PLAN_MODE_REVIEW, ORIGIN_TOOL_APPROVAL)
+            and expected in (1, 2)
+            and stripped
+            and stripped[0]
+        ):
+            if len(stripped) == 1:
+                stripped.append("")
+            return stripped[:expected]
 
         if any(not a for a in stripped):
             return None

@@ -37,6 +37,8 @@ class _StubCtx:
     scratch: Any = None
     clarification_resume_text: str | None = None
     clarification_resume_answers: list[str] | None = None
+    ce: Any = None
+    ce_goal_id: str | None = None
 
     @property
     def clarification_policy(self) -> Any:
@@ -177,6 +179,77 @@ async def test_answer_defer_true_parks() -> None:
     assert result["pending_clarification_answer"] is None
     assert len(ctx.parks) == 1
     assert any(n == "clarification_deferred" for n, _ in ctx.emitted)
+
+
+async def test_defer_persists_ce_before_graph_ends() -> None:
+    """The park path must save the CE: execute→await_user skips
+    record_iteration, the only other CE save. Without the save the step DAG
+    is lost and the resume turn fatals in root_eval (IG-762)."""
+
+    class _SaveTrackingCE:
+        def __init__(self) -> None:
+            self.saves = 0
+
+        async def save(self) -> None:
+            self.saves += 1
+
+    ce = _SaveTrackingCE()
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human", defer=True))
+    ctx = _StubCtx(policy=policy, ce=ce, ce_goal_id="g1")
+
+    await node_await_clarification(ctx, _pending_state())
+
+    # Once before the interrupt pause, once on the defer park.
+    assert ce.saves == 2
+
+
+async def test_interactive_pause_persists_ce_before_interrupt() -> None:
+    """The interactive policy pauses on a LangGraph interrupt inside
+    ``policy.answer`` — the CE (dispatch's step DAG) must be saved before
+    that pause or the resume loads an empty DAG (IG-762)."""
+
+    class _SaveTrackingCE:
+        def __init__(self) -> None:
+            self.saves = 0
+
+        async def save(self) -> None:
+            self.saves += 1
+
+    ce = _SaveTrackingCE()
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("auth flows",), source="human"))
+    ctx = _StubCtx(policy=policy, ce=ce, ce_goal_id="g1")
+
+    result = await node_await_clarification(ctx, _pending_state())
+
+    assert ce.saves == 1
+    assert result["pending_clarification_answer"] is not None
+
+
+async def test_resume_turn_skips_pre_pause_ce_save() -> None:
+    """On the resume turn the interrupt returns immediately; the CE was
+    saved at the pause and again after goal re-activation, so no extra
+    pre-pause save is needed."""
+
+    class _SaveTrackingCE:
+        def __init__(self) -> None:
+            self.saves = 0
+
+        async def save(self) -> None:
+            self.saves += 1
+
+    ce = _SaveTrackingCE()
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
+    ctx = _StubCtx(
+        policy=policy,
+        ce=ce,
+        ce_goal_id="g1",
+        clarification_resume_answers=["x"],
+    )
+
+    result = await node_await_clarification(ctx, _pending_state())
+
+    assert ce.saves == 0
+    assert result["pending_clarification_answer"] is not None
 
 
 @pytest.mark.parametrize(

@@ -21,13 +21,19 @@ class _AskUserArgs(BaseModel):
         default=None,
         description="Single-question shorthand for 'questions'.",
     )
+    query: str | None = Field(
+        default=None,
+        description="Alias for 'question' (some models emit 'query').",
+    )
 
     @model_validator(mode="after")
     def _normalize(self) -> _AskUserArgs:
-        if not self.questions and self.question:
-            self.questions = [self.question]
+        if not self.questions and (self.question or self.query):
+            self.questions = [self.question or self.query]
+        # Reject empty and whitespace-only question lists.
+        self.questions = [str(q).strip() for q in self.questions if str(q).strip()]
         if not self.questions:
-            raise ValueError("ask_user requires 'questions' or 'question'")
+            raise ValueError("ask_user requires at least one non-empty question")
         return self
 
 
@@ -50,16 +56,17 @@ def _run_ask_user(
     questions: list[str] | None = None,
     *,
     question: str | None = None,
+    query: str | None = None,
 ) -> str:
     """Pause the graph via ``interrupt()``; return formatted answers on resume."""
     from langgraph.types import interrupt
 
     qs = list(questions or [])
-    if not qs and question:
-        qs = [question]
+    if not qs and (question or query):
+        qs = [question or query]
     cleaned = [str(q).strip() for q in qs if str(q).strip()]
     if not cleaned:
-        return "Error: ask_user requires at least one non-empty question."
+        raise ValueError("ask_user requires at least one non-empty question")
     logger.info("[ask_user] LLM asked %d question(s): %s", len(cleaned), cleaned[0][:120])
     payload = interrupt({"type": "ask_user", "questions": cleaned})
     return _format_answers(cleaned, payload)
@@ -69,8 +76,9 @@ async def _arun_ask_user(
     questions: list[str] | None = None,
     *,
     question: str | None = None,
+    query: str | None = None,
 ) -> str:
-    return _run_ask_user(questions, question=question)
+    return _run_ask_user(questions, question=question, query=query)
 
 
 def build_ask_user_tool() -> StructuredTool:

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fix fatal "Record iteration without plan/decision" after an `ask_user` answer resume: the synth path now populates scratch and routes through `record_iteration`. Steps that captured an ask_user interrupt score as awaiting-user instead of failed, and `ask_user` raises structured errors for whitespace-only questions.
+- Fix silent dead-end after submitting a clarification answer: save the Context Engine (step DAG) both before the interactive clarification pause and on the defer park — the resume previously loaded an empty DAG and root_eval killed the goal. The resume synth also recreates a lost CE step, and `ask_user` accepts a `query` alias.
+- Deliver clarification answers in-thread: both `ask_user` answers and tool approvals resume the interrupted agent via `Command(resume=...)` on the original step thread — the ask_user tool returns the Q&A (or the approved tool executes) and the agent continues its turn with full context. The execute stream config no longer inherits the parent graph's checkpoint namespace (which made interrupts unreachable); the config-injected checkpointer is preserved.
+
 ## [v0.10.37] - 2026-08-26
 
 ### Added

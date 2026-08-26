@@ -664,3 +664,162 @@ class TestStepIdentityCaptureCase:
         assert capture.resume_thread_id == "t"
         assert capture.resume_step_id is None
         assert capture.resume_step_description is None
+
+
+# ===========================================================================
+# CASE 7: step scoring — a captured ask_user interrupt is not a step failure
+# ===========================================================================
+
+
+class TestCapturedClarificationScoringCase:
+    """A step whose stream ended in a captured ask_user interrupt scores as
+    awaiting-user, not failed — even when earlier tool calls errored before
+    the interrupt fired (e.g. ask_user with empty questions, then a retry
+    with valid questions)."""
+
+    @staticmethod
+    def _executor_with_capture(
+        capture: ClarificationCapture,
+    ) -> tuple[Executor, ClarificationCapture]:
+        executor = _make_executor(
+            _StubCoreAgent(),
+            clarification_detector=ClarificationDetector(),
+            clarification_capture=capture,
+            clarification_loop_state_view=_view(),
+        )
+        return executor, capture
+
+    @pytest.mark.asyncio
+    async def test_captured_clarification_scores_step_success(self) -> None:
+        """All tool outcomes errored + captured ask_user → step success."""
+        from collections.abc import AsyncIterator
+        from unittest.mock import MagicMock, patch
+
+        from langchain_core.messages import AIMessage
+
+        from soothe.sloop.clarification.protocol import ClarificationRequest
+        from soothe.sloop.engine.execute.step_wave_types import _StreamCollectChunk
+        from soothe.sloop.state.schemas import StepAction
+
+        capture = ClarificationCapture()
+        executor, capture = self._executor_with_capture(capture)
+        executor.core_agent = MagicMock()
+        executor.core_agent.can_read_graph_state = False
+
+        async def fake_stream_and_collect(
+            _stream: Any, **_kwargs: Any
+        ) -> AsyncIterator[_StreamCollectChunk]:
+            # Simulate the interrupt capture happening mid-stream.
+            capture.set(
+                ClarificationRequest(
+                    questions=("What next?",),
+                    origin_node=ORIGIN_EXECUTE,
+                    origin_interrupt_id="iAU",
+                    loop_state=_view(),
+                )
+            )
+            yield _StreamCollectChunk.finalized(
+                output="I attempted to ask the user a follow-up question.",
+                main_tool_count=1,
+                messages=[AIMessage(content="I attempted to ask the user a follow-up question.")],
+                delegate_final="",
+                outcomes=[
+                    {
+                        "type": "tool",
+                        "tool_name": "ask_user",
+                        "has_error": True,
+                        "error_preview": "ask_user requires at least one non-empty question",
+                    }
+                ],
+                has_error=True,
+                subgraph_tool_count=0,
+            )
+
+        step = StepAction(id="step-ask", description="Propose a question using ask_user")
+
+        with patch.object(executor, "_stream_and_collect", side_effect=fake_stream_and_collect):
+            result = await executor._execute_step_collecting_events(step, "thread-1")
+
+        assert result.step_result is not None
+        assert result.step_result.success is True
+        assert result.step_result.error is None
+
+    @pytest.mark.asyncio
+    async def test_tool_errors_without_capture_still_fail_step(self) -> None:
+        """Without a captured clarification, all-errored outcomes still fail."""
+        from collections.abc import AsyncIterator
+        from unittest.mock import MagicMock, patch
+
+        from langchain_core.messages import AIMessage
+
+        from soothe.sloop.engine.execute.step_wave_types import _StreamCollectChunk
+        from soothe.sloop.state.schemas import StepAction
+
+        executor = _make_executor(_StubCoreAgent())
+        executor.core_agent = MagicMock()
+        executor.core_agent.can_read_graph_state = False
+
+        async def fake_stream_and_collect(
+            _stream: Any, **_kwargs: Any
+        ) -> AsyncIterator[_StreamCollectChunk]:
+            yield _StreamCollectChunk.finalized(
+                output="tool blew up",
+                main_tool_count=1,
+                messages=[AIMessage(content="tool blew up")],
+                delegate_final="",
+                outcomes=[
+                    {
+                        "type": "tool",
+                        "tool_name": "run_command",
+                        "has_error": True,
+                        "error_preview": "boom",
+                    }
+                ],
+                has_error=True,
+                subgraph_tool_count=0,
+            )
+
+        step = StepAction(id="step-1", description="run the thing")
+
+        with patch.object(executor, "_stream_and_collect", side_effect=fake_stream_and_collect):
+            result = await executor._execute_step_collecting_events(step, "thread-1")
+
+        assert result.step_result is not None
+        assert result.step_result.success is False
+        assert result.step_result.error_type == "tool"
+
+
+# ===========================================================================
+# CASE 8: clarification answer resume — stream config checkpoint hygiene (IG-763)
+# ===========================================================================
+
+
+class TestResumeStreamConfigCase:
+    """Clarification answer resumes deliver ``Command(resume=...)`` on the
+    interrupted thread; the stream config must not inherit the parent graph's
+    checkpoint namespace (covered by test_stream_config_checkpoint_ns.py at
+    the merge level). Here: the resume payload reaches the CoreAgent as the
+    first stream input and is consumed one-shot."""
+
+    @pytest.mark.asyncio
+    async def test_ask_user_resume_payload_shape_forwarded(self) -> None:
+        """The ask_user answer payload ({iid: {"answers": [...]}}) is forwarded
+        as the first CoreAgent input (Command resume)."""
+        core = _StubCoreAgent()
+        core.queue([])
+        executor = _make_executor(core)
+        executor._clarification_resume_answer_payload = {"i1": {"answers": ["run tests"]}}
+
+        stream = executor._core_agent_astream_with_interrupt_resume(
+            {"messages": ["EXECUTION TASK envelope"]},
+            {},
+            resume_answer_payload=executor._clarification_resume_answer_payload,
+        )
+        _ = [c async for c in stream]
+
+        assert len(core.calls) == 1
+        first_input = core.calls[0]
+        assert isinstance(first_input, Command)
+        assert first_input.resume == {"i1": {"answers": ["run tests"]}}
+        # One-shot: consumed, not reused by later steps sharing the Executor.
+        assert executor._clarification_resume_answer_payload is None

@@ -191,3 +191,51 @@ async def test_bind_emit_attaches_runtime_callback() -> None:
 
     policy.bind_emit(_emit)
     assert policy._emit is _emit  # noqa: SLF001
+
+
+# ---------------------------------------------------------------------------
+# Tool-approval answers (action + optional-comment shape from the TUI)
+# ---------------------------------------------------------------------------
+
+
+async def test_tool_approval_tolerates_blank_comment_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The TUI submits [action, ""] for tool approvals — the blank comment
+    slot must not dismiss the answer as "no answer" (loop 573f)."""
+    _stub_interrupt(monkeypatch, {"answers": ["Approve", ""]})
+    policy = InteractiveClarificationPolicy()
+    ans = await policy.answer(_request(1, origin_node="tool_approval"))
+    assert ans.answers == ("Approve",)
+    assert ans.source == "human"
+
+
+async def test_tool_approval_edit_carries_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Edit with revised args: the action decides the HITL decision; extra
+    slots are tolerated."""
+    _stub_interrupt(monkeypatch, {"answers": ["Edit", "new args"]})
+    policy = InteractiveClarificationPolicy()
+    ans = await policy.answer(_request(1, origin_node="tool_approval"))
+    assert ans.answers[0] == "Edit"
+
+
+async def test_tool_approval_single_action_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bare action answer works unchanged."""
+    _stub_interrupt(monkeypatch, {"answers": ["reject"]})
+    policy = InteractiveClarificationPolicy()
+    ans = await policy.answer(_request(1, origin_node="tool_approval"))
+    assert ans.answers == ("reject",)
+
+
+async def test_tool_approval_defers_on_blank_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty action slot is still a dismissal."""
+    _stub_interrupt(monkeypatch, {"answers": ["", ""]})
+    policy = InteractiveClarificationPolicy()
+    with pytest.raises(ClarificationDeferredError):
+        await policy.answer(_request(1, origin_node="tool_approval"))

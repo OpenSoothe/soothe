@@ -221,7 +221,15 @@ class SynthesisGenerator:
         if parent_runnable_config is not None:
             from langchain_core.runnables.config import merge_configs
 
-            graph_config = merge_configs(parent_runnable_config, graph_config)
+            from soothe.sloop.utils.graph_config import strip_parent_checkpoint_coordinates
+
+            # Drop the parent graph's checkpoint coordinates (see the executor's
+            # ``_executor_langfuse_merge_for_stream``): inheriting
+            # ``checkpoint_ns`` nests this stream under the parent's task
+            # namespace instead of its own thread root (IG-763).
+            graph_config = strip_parent_checkpoint_coordinates(
+                merge_configs(parent_runnable_config, graph_config)
+            )
 
         # Stream via LLM directly — avoids CoreAgent graph checkpointer
         # during goal-completion synthesis (same class of leak as execute streaming).

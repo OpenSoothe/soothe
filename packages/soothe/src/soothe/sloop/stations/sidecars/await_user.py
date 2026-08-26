@@ -82,6 +82,15 @@ async def node_await_clarification(
     )
     if not resume_turn:
         await ctx.emit(_EVT_CLARIFICATION_REQUESTED, requested_payload)
+        # The interactive policy pauses on a LangGraph ``interrupt`` below —
+        # the graph channels survive via the checkpointer, but dispatch's CE
+        # step DAG is in-memory only. Save now or the resume loads an empty
+        # DAG and root_eval fatals on a not-green action tree.
+        if ctx.ce is not None:
+            try:
+                await ctx.ce.save()
+            except Exception:
+                logger.warning("[await_clarification] CE save before pause failed", exc_info=True)
     else:
         logger.info(
             "[await_clarification] resume turn; skipping clarification_requested re-emit "
@@ -191,6 +200,15 @@ async def _hard_defer(
         },
     )
     await ctx.park_for_clarification(pending, reason=reason)
+    # The execute→await_user path skips record_iteration, the only other CE
+    # save after graph start. Without this save the step DAG (and the parked
+    # status) stay in-memory; the resume turn loads an empty DAG, the synth
+    # completes a missing step, and root_eval fatals on a not-green tree.
+    if ctx.ce is not None:
+        try:
+            await ctx.ce.save()
+        except Exception:
+            logger.warning("[await_clarification] CE save on park failed", exc_info=True)
     return {
         "pending_clarification_answer": None,
         "last_outcome": "deferred",
