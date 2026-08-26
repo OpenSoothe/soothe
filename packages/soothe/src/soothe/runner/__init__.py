@@ -408,6 +408,127 @@ class SootheRunner(
         """Delete a thread."""
         await self.thread_context_manager().delete_thread(thread_id)
 
+    async def delete_checkpoint_thread(self, thread_id: str) -> None:
+        """Delete LangGraph checkpoint rows for ``thread_id``.
+
+        Delegates to the LangGraph saver's ``adelete_thread`` to remove
+        rows from the ``checkpoints`` / ``writes`` / ``checkpoint_blobs``
+        tables. When the checkpointer is not materialized (lazy init), opens
+        a temporary connection to the checkpointer pool to run the deletes
+        directly — the daemon's utility runner may never materialize the
+        checkpointer since queries run in subprocesses.
+        """
+        checkpointer = self._checkpointer
+        if checkpointer is not None:
+            try:
+                await checkpointer.adelete_thread(thread_id)
+                logger.debug("Deleted LangGraph checkpoint thread %s", thread_id)
+                return
+            except Exception:
+                logger.debug(
+                    "Failed to delete LangGraph checkpoint thread %s", thread_id, exc_info=True
+                )
+                return
+        # Checkpointer not materialized — open a temporary connection to the
+        # shared pool and delete directly.
+        await self._delete_checkpoint_thread_via_pool(thread_id)
+
+    async def _delete_checkpoint_thread_via_pool(self, thread_id: str) -> None:
+        """Delete checkpoint rows via a temporary connection to the pool."""
+        pool = self._checkpointer_pool
+        if pool is None:
+            return
+        try:
+            if isinstance(pool, str):
+                # SQLite path.
+                import aiosqlite
+
+                async with aiosqlite.connect(pool) as conn:
+                    await conn.execute("DELETE FROM checkpoints WHERE thread_id = ?", (thread_id,))
+                    await conn.execute("DELETE FROM writes WHERE thread_id = ?", (thread_id,))
+                    await conn.commit()
+            else:
+                # Postgres pool.
+                async with pool.connection() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            "DELETE FROM checkpoints WHERE thread_id = %s", (thread_id,)
+                        )
+                        await cur.execute(
+                            "DELETE FROM checkpoint_writes WHERE thread_id = %s", (thread_id,)
+                        )
+                        await cur.execute(
+                            "DELETE FROM checkpoint_blobs WHERE thread_id = %s", (thread_id,)
+                        )
+            logger.debug("Deleted LangGraph checkpoint thread %s (via pool)", thread_id)
+        except Exception:
+            logger.debug("Failed to delete checkpoint thread %s via pool", thread_id, exc_info=True)
+
+    async def list_checkpoint_thread_ids(self, prefix: str) -> list[str]:
+        """Return distinct LangGraph checkpoint thread ids matching ``prefix``.
+
+        Queries the ``checkpoints`` table directly (bypasses the durability
+        index, which does not register fork threads). Used by GC to find
+        execute-step / synth / intake threads that share the
+        ``{loop_id}__`` prefix. Opens a temporary connection to the
+        checkpointer pool when the checkpointer is not materialized.
+        """
+        # Try the materialized checkpointer first.
+        checkpointer = self._checkpointer
+        conn = getattr(checkpointer, "conn", None) if checkpointer else None
+        if conn is not None:
+            result = await self._query_checkpoint_thread_ids(conn, prefix)
+            if result is not None:
+                return result
+        # Fall back to a temporary connection via the pool.
+        pool = self._checkpointer_pool
+        if pool is None:
+            return []
+        try:
+            if isinstance(pool, str):
+                import aiosqlite
+
+                async with aiosqlite.connect(pool) as conn:
+                    return await self._query_checkpoint_thread_ids(conn, prefix) or []
+            else:
+                async with pool.connection() as conn:
+                    return await self._query_checkpoint_thread_ids(conn, prefix) or []
+        except Exception:
+            logger.debug(
+                "Failed to list checkpoint thread ids for prefix %s", prefix, exc_info=True
+            )
+            return []
+
+    async def _query_checkpoint_thread_ids(self, conn: Any, prefix: str) -> list[str] | None:
+        """Query distinct thread_ids matching prefix. Returns None on failure."""
+        pattern = f"{prefix}%"
+        try:
+            # Postgres pools expose ``connection()`` but not ``cursor()``;
+            # SQLite connections expose ``cursor()``.
+            if hasattr(conn, "connection") and not hasattr(conn, "cursor"):
+                # Already a Postgres pool — get a connection from it.
+                async with conn.connection() as pg_conn:
+                    async with pg_conn.cursor() as cur:
+                        await cur.execute(
+                            "SELECT DISTINCT thread_id FROM checkpoints WHERE thread_id LIKE %s",
+                            (pattern,),
+                        )
+                        rows = await cur.fetchall()
+                return [r[0] for r in rows if r and r[0]]
+            # SQLite connection.
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT DISTINCT thread_id FROM checkpoints WHERE thread_id LIKE ?",
+                    (pattern,),
+                )
+                rows = await cur.fetchall()
+            return [r[0] for r in rows if r and r[0]]
+        except Exception:
+            logger.debug(
+                "Failed to query checkpoint thread ids for prefix %s", prefix, exc_info=True
+            )
+            return None
+
     async def get_persisted_thread_messages(
         self,
         thread_id: str,

@@ -67,3 +67,49 @@ async def test_purge_ephemeral_loop_calls_cleanup() -> None:
     ok = await purge_loop_execution_data(daemon, "loop-ephem", metadata)
     assert ok is True
     daemon._persistence_manager.purge_loop_execution_data.assert_awaited_once_with("loop-ephem")
+
+
+@pytest.mark.asyncio
+async def test_collect_loop_thread_ids_uses_checkpoint_scan() -> None:
+    """GC discovers fork threads via the LangGraph checkpoint prefix scan."""
+    from soothe_daemon.runtime.loop_gc import _collect_loop_thread_ids
+
+    daemon = MagicMock()
+    daemon._runner = MagicMock()
+    daemon._runner.list_checkpoint_thread_ids = AsyncMock(
+        return_value=["loop-1__a3f7c", "loop-1__b2e1d", "loop-1__synth_gc__abc"]
+    )
+    result = await _collect_loop_thread_ids(daemon, "loop-1")
+    assert result == ["loop-1", "loop-1__a3f7c", "loop-1__b2e1d", "loop-1__synth_gc__abc"]
+    daemon._runner.list_checkpoint_thread_ids.assert_awaited_once_with("loop-1__")
+
+
+@pytest.mark.asyncio
+async def test_collect_loop_thread_ids_falls_back_when_no_runner() -> None:
+    """Without a runner, GC collects only the bare loop_id."""
+    from soothe_daemon.runtime.loop_gc import _collect_loop_thread_ids
+
+    daemon = MagicMock()
+    daemon._runner = None
+    result = await _collect_loop_thread_ids(daemon, "loop-1")
+    assert result == ["loop-1"]
+
+
+@pytest.mark.asyncio
+async def test_delete_loop_threads_calls_both_durability_and_checkpoint() -> None:
+    """_delete_loop_threads deletes durability metadata + LangGraph checkpoint rows."""
+    from soothe_daemon.runtime.loop_gc import _delete_loop_threads
+
+    daemon = MagicMock()
+    daemon._runner = MagicMock()
+    daemon._runner.delete_persisted_thread = AsyncMock()
+    daemon._runner.delete_checkpoint_thread = AsyncMock()
+
+    await _delete_loop_threads(daemon, ["loop-1", "loop-1__a3f7c"])
+
+    assert daemon._runner.delete_persisted_thread.await_count == 2
+    assert daemon._runner.delete_checkpoint_thread.await_count == 2
+    daemon._runner.delete_persisted_thread.assert_any_await("loop-1")
+    daemon._runner.delete_persisted_thread.assert_any_await("loop-1__a3f7c")
+    daemon._runner.delete_checkpoint_thread.assert_any_await("loop-1")
+    daemon._runner.delete_checkpoint_thread.assert_any_await("loop-1__a3f7c")

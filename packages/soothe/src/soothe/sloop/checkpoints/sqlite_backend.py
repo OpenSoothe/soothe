@@ -124,9 +124,10 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     ) -> None:
         """Sync register loop."""
         now = datetime.now(UTC).isoformat()
-        # ``thread_ids`` column is a vestige (IG-764: loop registry no longer
-        # indexes threads). Set '[]' to satisfy legacy NOT NULL constraints on
-        # pre-IG-764 databases; the column is never read back.
+        # Seed '[]' — the column persists StrangeLoopCheckpoint.thread_ids (the
+        # checkpoint model field, written by sloop_manager on first save). Loop
+        # metadata no longer indexes threads (IG-764); the '[]' placeholder
+        # satisfies legacy NOT NULL constraints until sloop_manager overwrites it.
         conn.execute(
             """
             INSERT INTO agentloop_loops

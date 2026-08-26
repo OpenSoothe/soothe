@@ -45,6 +45,7 @@ dev = [
 
 [project.scripts]
 soothe = "soothe_cli.cli.main:app"
+soothecli = "soothe_cli.cli.soothecli:main"
 
 [project.urls]
 Homepage = "https://github.com/mirasoth/soothe"

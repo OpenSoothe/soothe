@@ -139,7 +139,6 @@ def list_loops(
     table = Table(title="StrangeLoops")
     table.add_column("Loop ID", style="cyan")
     table.add_column("Status", style="green")
-    table.add_column("Contexts", justify="right")
     table.add_column("Goals", justify="right")
     table.add_column("Switches", justify="right")
     table.add_column("Created", style="dim")
@@ -148,7 +147,6 @@ def list_loops(
         table.add_row(
             loop.get("loop_id", ""),
             loop.get("status", "unknown"),
-            str(loop.get("threads", 0)),
             str(loop.get("goals", 0)),
             str(loop.get("switches", 0)),
             loop.get("created", "")[:16],

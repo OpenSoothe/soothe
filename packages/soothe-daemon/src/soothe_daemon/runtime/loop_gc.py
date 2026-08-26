@@ -31,36 +31,30 @@ async def _cancel_and_detach_loop(daemon: Any, loop_id: str) -> None:
 
 
 async def _collect_loop_thread_ids(daemon: Any, loop_id: str) -> list[str]:
-    """Find all persisted thread ids belonging to ``loop_id``.
+    """Find all thread ids belonging to ``loop_id`` for GC deletion.
 
     Per IG-764, loop metadata no longer indexes fork threads. The main thread
     is the bare ``loop_id``; every fork (execute-step, synth, intake) shares
-    the ``{loop_id}__`` prefix. Scan the durability layer to find them so GC
-    can delete the full set. Falls back to ``[loop_id]`` when the runner or
-    scan is unavailable.
+    the ``{loop_id}__`` prefix. Query the LangGraph checkpoint tables directly
+    (the durability index does not register fork threads). Falls back to
+    ``[loop_id]`` when the runner or checkpoint scan is unavailable.
     """
     runner = getattr(daemon, "_runner", None)
     if runner is None:
         return [loop_id]
-    try:
-        threads = await runner.list_threads()
-    except Exception:
-        logger.debug("list_threads unavailable during GC; falling back to loop_id", exc_info=True)
-        return [loop_id]
     prefix = f"{loop_id}__"
-    fork_ids = [
-        t["thread_id"]
-        for t in threads
-        if isinstance(t, dict)
-        and isinstance(t.get("thread_id"), str)
-        and t["thread_id"].startswith(prefix)
-        and t["thread_id"] != loop_id
-    ]
+    try:
+        fork_ids = await runner.list_checkpoint_thread_ids(prefix)
+    except Exception:
+        logger.debug(
+            "checkpoint thread scan failed during GC; falling back to loop_id", exc_info=True
+        )
+        return [loop_id]
     return [loop_id, *fork_ids]
 
 
 async def _delete_loop_threads(daemon: Any, thread_ids: list[str]) -> None:
-    """Delete LangGraph thread persistence for each thread id."""
+    """Delete both durability metadata and LangGraph checkpoint rows."""
     runner = getattr(daemon, "_runner", None)
     if runner is None:
         return
@@ -68,11 +62,21 @@ async def _delete_loop_threads(daemon: Any, thread_ids: list[str]) -> None:
         tid_str = str(tid).strip()
         if not tid_str:
             continue
+        # Delete durability metadata + run directory.
         try:
             await runner.delete_persisted_thread(tid_str)
         except Exception:
             logger.warning(
                 "Failed to delete persisted thread %s during loop cleanup",
+                tid_str,
+                exc_info=True,
+            )
+        # Delete LangGraph checkpoint rows (checkpoints / writes / blobs).
+        try:
+            await runner.delete_checkpoint_thread(tid_str)
+        except Exception:
+            logger.warning(
+                "Failed to delete LangGraph checkpoint thread %s during loop cleanup",
                 tid_str,
                 exc_info=True,
             )

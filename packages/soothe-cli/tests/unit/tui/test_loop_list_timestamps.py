@@ -129,7 +129,6 @@ async def test_list_loops_derives_duration_from_created_and_updated() -> None:
                         {
                             "loop_id": "loop_a",
                             "status": "idle",
-                            "threads": 1,
                             "goals": 0,
                             "switches": 0,
                             "created": "2026-06-30T09:00:00+00:00",
@@ -161,7 +160,6 @@ async def test_list_loops_includes_topic_label() -> None:
                         {
                             "loop_id": "loop_a",
                             "status": "idle",
-                            "threads": 1,
                             "goals": 1,
                             "switches": 0,
                             "created": "2026-06-30T09:00:00+00:00",
@@ -194,7 +192,6 @@ async def test_list_loops_includes_latest_ai_response_preview() -> None:
                         {
                             "loop_id": "loop_a",
                             "status": "idle",
-                            "threads": 1,
                             "goals": 0,
                             "switches": 0,
                             "created": "2026-06-30T09:00:00+00:00",

@@ -21,9 +21,6 @@ class LoopInfo(TypedDict, total=False):
     status: str
     """Loop status (running, paused, completed, etc.)."""
 
-    threads: int
-    """Number of checkpoint contexts reported by the daemon for this loop."""
-
     goals: int
     """Total goals completed in the loop."""
 
@@ -249,7 +246,6 @@ async def list_loops_via_daemon_rpc(
         loop_info: LoopInfo = {
             "loop_id": str(loop_data.get("loop_id", "")),
             "status": str(loop_data.get("status", "unknown")),
-            "threads": int(loop_data.get("threads", 0)),
             "goals": int(loop_data.get("goals", 0)),
             "switches": int(loop_data.get("switches", 0)),
             "created": str(loop_data.get("created", "")),

@@ -113,7 +113,6 @@ async def test_list_loops_via_daemon_rpc_forwards_workspace(tmp_path: Path) -> N
                         {
                             "loop_id": "loop_a",
                             "status": "idle",
-                            "threads": 1,
                             "goals": 0,
                             "switches": 0,
                             "created": "2026-06-30T09:00:00+00:00",

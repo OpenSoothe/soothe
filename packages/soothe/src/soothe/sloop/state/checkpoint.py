@@ -93,8 +93,10 @@ class StrangeLoopCheckpoint(BaseModel):
 
     # Identity (RFC-216: loop_id independent of thread)
     loop_id: str  # UUID
-    thread_ids: list[str] = Field(default_factory=list)  # All threads loop operated on
-    current_thread_id: str  # Active thread
+    # IG-764: no longer a fork-thread history. Holds [main_thread_id] (== loop_id)
+    # from initialize(); fork threads are reachable via the checkpointer, not here.
+    thread_ids: list[str] = Field(default_factory=list)
+    current_thread_id: str  # Active thread (== loop_id per RFC-223)
 
     # Status (RFC-216: loop-scoped)
     status: Literal["running", "idle", "finalized", "cancelled", "interrupted"]
@@ -228,6 +230,8 @@ def normalize_checkpoint_data(
         out.setdefault("loop_id", resolved_loop_id)
 
     current_thread_id = out.get("current_thread_id") or ""
+    # IG-764: thread_ids holds [main_thread_id] only. Backfill from
+    # current_thread_id for legacy blobs that predate the field.
     if not out.get("thread_ids"):
         out["thread_ids"] = [current_thread_id] if current_thread_id else []
 

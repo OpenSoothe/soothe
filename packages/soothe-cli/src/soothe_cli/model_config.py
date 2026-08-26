@@ -247,7 +247,6 @@ _DEFAULT_LOOP_COLUMNS = {
     "updated_at": True,
     "topic": True,
     "status": False,
-    "threads": False,
     "goals": False,
     "duration": False,
     "created_at": False,
