@@ -407,6 +407,17 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 resume_desc = state_dict.get("resume_step_description") or getattr(
                     state, "resume_step_description", None
                 )
+                # The graph-state dict survives the checkpoint round-trip
+                # but ``LoopState`` is freshly constructed for this ainvoke,
+                # so ``state.resume_*`` fields are still their defaults. Sync
+                # them onto the live object now — ``_select_thread_for_step``
+                # reads ``loop_state.resume_thread_id`` (the live object, not
+                # the dict) to reuse the interrupted thread so
+                # ``Command(resume=...)`` finds the suspended ask_user
+                # interrupt instead of landing on a fresh random thread.
+                state.resume_thread_id = resume_tid
+                state.resume_step_id = resume_sid
+                state.resume_step_description = resume_desc
                 root_step: StepAction | None = None
                 if resume_sid:
                     goal_text = state.goal or "ask_user resume"

@@ -505,6 +505,135 @@ async def test_real_coreagent_resume_payload_passes_through(
 
 
 @pytest.mark.asyncio
+async def test_branch1_syncs_resume_thread_id_onto_live_loop_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On a CoreAgent ask_user interrupt resume (Branch 1), the graph-state dict
+    carries ``resume_thread_id`` / ``resume_step_id`` / ``resume_step_description``
+    across the checkpoint round-trip, but the live ``LoopState`` is freshly
+    constructed for this ``ainvoke`` so those fields are still their defaults.
+
+    ``node_execute`` must sync them onto ``loop_state`` so
+    ``_select_thread_for_step`` reuses the interrupted thread (where the
+    ``ask_user`` ``interrupt()`` is actually suspended). Without this sync the
+    executor issues ``Command(resume=...)`` against a fresh random thread that
+    has no suspended interrupt — the user's answer is silently dropped and the
+    CoreAgent starts over from scratch (regression seen in loop 5e5e)."""
+    from soothe.sloop.state.schemas import LoopState
+
+    emitted: list[tuple[str, Any]] = []
+
+    loop_state = LoopState(
+        goal="propose a question and use ask_user",
+        thread_id="01a03baf-97b6-7d12-aa11-c8dce2805e5e",
+        workspace=None,
+        iteration=0,
+        max_iterations=99,
+    )
+    # Freshly-constructed LoopState has no resume fields populated (mirrors
+    # the real resume path, where the graph-state dict — not the live object
+    # — carries the captured identity across the checkpoint round-trip).
+    assert loop_state.resume_thread_id is None
+    assert loop_state.resume_step_id is None
+    assert loop_state.resume_step_description is None
+
+    # Resume path: scratch is freshly initialized for the new ainvoke, so
+    # decision and plan_result are None (the rebuild block's entry condition).
+    scratch = MagicMock()
+    scratch.decision = None
+    scratch.plan_result = None
+
+    async def emit(event_type: str, event_data: Any) -> None:
+        emitted.append((event_type, event_data))
+
+    strange_loop = MagicMock()
+    strange_loop.config.agent.loop.concurrency.max_parallel_steps = 4
+    strange_loop.core_agent.graph.checkpointer = None
+
+    ctx = LoopRuntimeContext(
+        strange_loop=strange_loop,
+        state_manager=MagicMock(loop_id="loop-1"),
+        anchor_manager=MagicMock(),
+        plan_manager=MagicMock(),
+        checkpoint=MagicMock(),
+        goal_record=None,
+        continue_loop_mode=False,
+        recovery_valid_resume=False,
+        loop_state=loop_state,
+        emit=emit,
+        scratch=scratch,
+        clarification_policy=None,
+    )
+
+    pending_clar = {
+        "questions": ["What would you like to work on today?"],
+        "origin_node": "execute",
+        "origin_interrupt_id": "01a03baf-a658-7273",
+        "loop_state": {
+            "goal_id": "",
+            "goal_description": "",
+            "user_request": "",
+            "iteration": 0,
+            "intent_classification": None,
+            "plan_summary": None,
+            "recent_step_outputs": [],
+            "workspace_summary": None,
+            "active_skills": [],
+            "active_mcp_servers": [],
+        },
+    }
+    answer = ClarificationAnswer(answers=("test",), source="human", confidence=1.0)
+    pending_ans = answer_to_state(answer)
+
+    async def _yield_wave(*_a: Any, **_k: Any):
+        yield StepWaveStart(
+            steps=(StepAction(id="PPX-01", description="propose a question and use ask_user"),)
+        )
+        yield StepExecutionRecord(
+            step_id="PPX-01",
+            success=True,
+            duration_ms=1,
+            thread_id="01a03baf-97b6-7d12-aa11-c8dce2805e5e__step",
+            tool_call_count=0,
+        )
+
+    captured: dict[str, Any] = {}
+
+    def _factory(*args: Any, **kwargs: Any) -> Any:
+        captured.update(kwargs)
+        mock_ex = MagicMock()
+        mock_ex.execute = _yield_wave
+        return mock_ex
+
+    import soothe.sloop.stations.execute.execute as mod
+
+    monkeypatch.setattr(mod, "Executor", _factory)
+
+    await node_execute(
+        ctx,
+        {
+            "pending_clarification": pending_clar,
+            "pending_clarification_answer": pending_ans,
+            # Graph-state dict carries the captured identity (survives checkpoint).
+            "resume_thread_id": "01a03baf-97b6-7d12-aa11-c8dce2805e5e__step",
+            "resume_step_id": "PPX-01",
+            "resume_step_description": "Propose a question using ask_user",
+        },
+    )
+
+    # The live LoopState now carries the captured identity so
+    # _select_thread_for_step reuses the interrupted thread instead of
+    # generating a fresh random one (the root cause of loop 5e5e's failure).
+    assert loop_state.resume_thread_id == "01a03baf-97b6-7d12-aa11-c8dce2805e5e__step"
+    assert loop_state.resume_step_id == "PPX-01"
+    assert loop_state.resume_step_description == "Propose a question using ask_user"
+
+    # The executor received the resume payload keyed by the interrupt id.
+    payload = captured.get("clarification_resume_answer_payload")
+    assert payload == {"01a03baf-a658-7273": {"answers": ["test"]}}
+
+
+@pytest.mark.asyncio
 async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
     """When the resume path synthesizes a step result without a scratch decision,
     the appended Q&A pair must be mirrored onto ``goal_record.loop_messages`` and
