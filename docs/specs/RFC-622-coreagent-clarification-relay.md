@@ -338,7 +338,7 @@ agent:
     auto_policy: veritas              # only built-in for now
     auto_min_confidence: 0.4          # below this, treat as defer
     max_defer_age_hours: 168          # autopilot: scrub stale awaiting_clarification goals
-    default_mode: manual              # wire may override per turn (auto|manual)
+    default_mode: auto                # wire may override per turn (auto|manual)
     force_manual_origins:             # never veritas-auto these origins
       - planner_subagent_review       # planner *subagent* gate only (RFC-633)
                                       # NOT StrangeLoop plan_generate/plan_assess

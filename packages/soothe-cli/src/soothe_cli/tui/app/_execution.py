@@ -350,7 +350,7 @@ class _ExecutionMixin:
         """Fetch the daemon's default clarification mode for plan approval.
 
         Reads ``agent.clarification.default_mode`` from the daemon config via
-        a one-shot WebSocket RPC. Falls back to ``"manual"`` (the default)
+        a one-shot WebSocket RPC. Falls back to ``"auto"`` (the default)
         when the daemon is unreachable, the section is missing, or
         the value is not ``auto``/``manual``.
 

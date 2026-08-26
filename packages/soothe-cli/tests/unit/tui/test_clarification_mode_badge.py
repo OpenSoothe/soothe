@@ -95,14 +95,14 @@ async def test_badge_flips_to_ask_when_mode_assigned() -> None:
 
 
 @pytest.mark.asyncio
-async def test_badge_rejects_unknown_mode_falls_back_to_manual() -> None:
-    """Unknown values do not crash; the badge clamps to Manual."""
+async def test_badge_rejects_unknown_mode_falls_back_to_auto() -> None:
+    """Unknown values do not crash; the badge clamps to Auto."""
     async with _BadgeOnlyApp().run_test() as pilot:
         badge = pilot.app.query_one("#badge", ClarificationModeBadge)
         badge.mode = "nonsense"
         await pilot.pause()
-        assert badge.has_class("manual")
-        assert _read_static_content(badge) == "⏵⏵ manual clarification (shift+Tab to cycle)"
+        assert badge.has_class("auto")
+        assert _read_static_content(badge) == "⏵⏵ auto clarification (shift+Tab to cycle)"
 
 
 def test_badge_has_initial_content_before_mount() -> None:

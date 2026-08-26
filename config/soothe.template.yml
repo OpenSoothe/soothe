@@ -229,7 +229,7 @@ agent:
     auto_min_confidence: 0.4
     degrade_to_manual_on_low_confidence: true
     max_defer_age_hours: 168
-    default_mode: manual
+    default_mode: auto
     # StrangeLoop plan_generate/plan_assess are *not* listed here.
     # plan_mode_review — plan approve/reject/refine gate is a human call.
     # tool_approval — approving a tool action (edit_file, run_command) is a
