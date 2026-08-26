@@ -404,9 +404,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                         state,
                         step_id=(
                             (
-                                _coerce_resume_ticket(
-                                    state_dict.get("resume_ticket")
-                                ).step_id
+                                _coerce_resume_ticket(state_dict.get("resume_ticket")).step_id
                                 if state_dict.get("resume_ticket")
                                 else None
                             )
@@ -443,9 +441,9 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # LangGraph passes the raw checkpoint dict, so the stored
             # ``ResumeTicket`` (a dataclass) comes back as a plain dict —
             # coerce it before attribute access.
-            resume_ticket = _coerce_resume_ticket(
-                state_dict.get("resume_ticket")
-            ) or getattr(state, "resume_ticket", None)
+            resume_ticket = _coerce_resume_ticket(state_dict.get("resume_ticket")) or getattr(
+                state, "resume_ticket", None
+            )
             resume_tid = resume_ticket.thread_id if resume_ticket else None
             if resume_tid:
                 # Rebuild a decision for the step that was executing when the
