@@ -9,7 +9,6 @@ Supports shared pool for high-concurrency (200+ threads) support.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -449,7 +448,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
     async def register_loop(
         self,
         loop_id: str,
-        thread_ids: list[str],
         current_thread_id: str,
         status: str = "running",
     ) -> None:
@@ -457,13 +455,11 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
 
         Args:
             loop_id: StrangeLoop identifier.
-            thread_ids: List of thread IDs associated with this loop.
-            current_thread_id: Current active thread ID.
+            current_thread_id: Current active thread ID (== loop_id per RFC-223).
             status: Loop status (default: "running").
         """
         checkpoint_data = {
             "loop_id": loop_id,
-            "thread_ids": thread_ids,
             "current_thread_id": current_thread_id,
             "status": status,
             "created_at": datetime.now(UTC).isoformat(),
@@ -487,7 +483,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     """,
                         (loop_id, current_thread_id, status, data_json),
                     )
-                    logger.debug("Registered loop: loop=%s threads=%s", loop_id, thread_ids)
+                    logger.debug("Registered loop: loop=%s thread=%s", loop_id, current_thread_id)
 
         await self._run_with_retry("register_loop", _do_register)
 
@@ -565,7 +561,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         _allowed = {
             "status",
             "current_thread_id",
-            "thread_ids",
             "client_workspace",
             "client_workspace_id",
             "user_id",
@@ -725,7 +720,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
 
         sql = f"""
             SELECT loop_id, status,
-                   checkpoint_data->>'thread_ids' AS thread_ids_json,
                    thread_id AS current_thread_id,
                    COALESCE((checkpoint_data->>'total_goals_completed')::int, 0)
                        AS total_goals_completed,
@@ -751,11 +745,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
 
         result = []
         for row in rows:
-            raw_tids = row.get("thread_ids_json")
-            try:
-                thread_ids = json.loads(raw_tids) if raw_tids else []
-            except (ValueError, TypeError):
-                thread_ids = []
             created = row.get("created_at")
             updated = row.get("updated_at")
             detached = row.get("detached_at")
@@ -763,7 +752,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                 {
                     "loop_id": row["loop_id"],
                     "status": row["status"],
-                    "thread_ids": thread_ids,
                     "current_thread_id": row["current_thread_id"],
                     "total_goals_completed": row["total_goals_completed"],
                     "total_thread_switches": row["total_thread_switches"],
@@ -878,15 +866,9 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         result: list[dict] = []
         for row in rows:
             data = dict(row["checkpoint_data"]) if row.get("checkpoint_data") else {}
-            raw_tids = data.get("thread_ids")
-            thread_ids = raw_tids if isinstance(raw_tids, list) else []
-            if isinstance(raw_tids, str):
-                with contextlib.suppress(ValueError, TypeError):
-                    thread_ids = json.loads(raw_tids)
             result.append(
                 {
                     "loop_id": row["loop_id"],
-                    "thread_ids": thread_ids,
                     "current_thread_id": row.get("current_thread_id")
                     or data.get("current_thread_id"),
                     "status": row["status"],
@@ -943,15 +925,9 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         result: list[dict] = []
         for row in rows:
             data = dict(row["checkpoint_data"]) if row.get("checkpoint_data") else {}
-            raw_tids = data.get("thread_ids")
-            thread_ids = raw_tids if isinstance(raw_tids, list) else []
-            if isinstance(raw_tids, str):
-                with contextlib.suppress(ValueError, TypeError):
-                    thread_ids = json.loads(raw_tids)
             result.append(
                 {
                     "loop_id": row["loop_id"],
-                    "thread_ids": thread_ids,
                     "current_thread_id": row.get("current_thread_id")
                     or data.get("current_thread_id"),
                     "status": row["status"],

@@ -22,7 +22,7 @@ async def test_heartbeat_loop_bumps_updated_at(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     loop_id = "loop-heartbeat-1"
-    await sqlite_backend.register_loop(loop_id, [], "", status="running")
+    await sqlite_backend.register_loop(loop_id, "", status="running")
 
     meta_before = await sqlite_backend.get_loop_metadata(loop_id)
     assert meta_before is not None
@@ -43,7 +43,7 @@ async def test_heartbeat_loop_does_not_touch_last_message_at(
 ) -> None:
     """Heartbeat must not move the activity timestamp used by empty-loop GC."""
     loop_id = "loop-heartbeat-isolation"
-    await sqlite_backend.register_loop(loop_id, [], "", status="running")
+    await sqlite_backend.register_loop(loop_id, "", status="running")
     # No counter bump → last_message_at remains NULL.
     meta_before = await sqlite_backend.get_loop_metadata(loop_id)
     assert meta_before is not None

@@ -23,7 +23,7 @@ async def test_register_loop_initial_counters_are_zero(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     loop_id = "loop-counters-init"
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
 
     meta = await sqlite_backend.get_loop_metadata(loop_id)
     assert meta is not None
@@ -36,7 +36,7 @@ async def test_increment_human_counter_updates_metadata(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     loop_id = "loop-human-bump"
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
 
     await sqlite_backend.increment_loop_message_count(loop_id, human=1)
 
@@ -52,7 +52,7 @@ async def test_increment_ai_counter_updates_metadata(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     loop_id = "loop-ai-bump"
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
 
     await sqlite_backend.increment_loop_message_count(loop_id, ai=1)
 
@@ -68,7 +68,7 @@ async def test_set_resume_topic_once_writes_only_first_value(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     loop_id = "loop-resume-topic-once"
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
 
     first = await sqlite_backend.set_resume_topic_once(loop_id, "Auth module refactor")
     second = await sqlite_backend.set_resume_topic_once(loop_id, "Different topic")
@@ -86,7 +86,7 @@ async def test_concurrent_increments_both_land(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     loop_id = "loop-concurrent"
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
 
     await asyncio.gather(
         sqlite_backend.increment_loop_message_count(loop_id, human=1),
@@ -105,7 +105,7 @@ async def test_increment_zero_zero_is_noop(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     loop_id = "loop-noop"
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
     meta_before = await sqlite_backend.get_loop_metadata(loop_id)
     assert meta_before is not None
     last_before = meta_before["last_message_at"]
@@ -134,7 +134,7 @@ async def test_list_empty_loops_includes_zero_counters_past_threshold(
 ) -> None:
     loop_id = "loop-empty-idle"
     old = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
     # Force activity timestamp into the past; counters stay at zero.
     await sqlite_backend.update_loop_metadata(loop_id, last_message_at=old)
 
@@ -148,7 +148,7 @@ async def test_list_empty_loops_excludes_loop_with_human_counter(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     loop_id = "loop-has-human"
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
     await sqlite_backend.increment_loop_message_count(loop_id, human=1)
     old = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
     await sqlite_backend.update_loop_metadata(loop_id, last_message_at=old)
@@ -163,7 +163,7 @@ async def test_list_empty_loops_excludes_loop_with_ai_counter(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     loop_id = "loop-has-ai"
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
     await sqlite_backend.increment_loop_message_count(loop_id, ai=1)
     old = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
     await sqlite_backend.update_loop_metadata(loop_id, last_message_at=old)
@@ -184,7 +184,7 @@ async def test_list_empty_loops_includes_running_zombie(
     """
     loop_id = "loop-running-empty"
     old = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
-    await sqlite_backend.register_loop(loop_id, [], "", status="running")
+    await sqlite_backend.register_loop(loop_id, "", status="running")
     await sqlite_backend.update_loop_metadata(loop_id, last_message_at=old)
 
     idle_before = datetime.now(UTC) - timedelta(hours=24)
@@ -198,7 +198,7 @@ async def test_list_empty_loops_respects_idle_threshold(
 ) -> None:
     # Recent activity — counter still zero but last_message_at is now → excluded.
     loop_id = "loop-recent-empty"
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
     await sqlite_backend.update_loop_metadata(
         loop_id, last_message_at=datetime.now(UTC).isoformat()
     )
@@ -215,7 +215,7 @@ async def test_list_empty_loops_uses_created_at_when_last_message_null(
     # Bootstrap-only: register_loop sets created_at=now; last_message_at left NULL.
     # We force created_at into the past via SQL directly to simulate aging.
     loop_id = "loop-coalesce-fallback"
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
     old = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
 
     def _backdate_created_at(conn, lid: str, ts: str) -> None:
@@ -236,7 +236,7 @@ async def test_list_empty_loops_honors_limit(
     old = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
     for i in range(5):
         lid = f"loop-bulk-{i}"
-        await sqlite_backend.register_loop(lid, [], "", status="created")
+        await sqlite_backend.register_loop(lid, "", status="created")
         await sqlite_backend.update_loop_metadata(lid, last_message_at=old)
 
     idle_before = datetime.now(UTC) - timedelta(hours=24)
@@ -249,8 +249,8 @@ async def test_list_loops_default_includes_empty(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     """Default list_loops behavior preserves the unfiltered view."""
-    await sqlite_backend.register_loop("loop-empty", [], "", status="created")
-    await sqlite_backend.register_loop("loop-non-empty", [], "", status="created")
+    await sqlite_backend.register_loop("loop-empty", "", status="created")
+    await sqlite_backend.register_loop("loop-non-empty", "", status="created")
     await sqlite_backend.increment_loop_message_count("loop-non-empty", human=1)
 
     rows = await sqlite_backend.list_loops()
@@ -263,10 +263,10 @@ async def test_list_loops_exclude_empty_filters_zero_counters(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     """exclude_empty=True hides loops with zero human and zero AI messages."""
-    await sqlite_backend.register_loop("loop-empty", [], "", status="created")
-    await sqlite_backend.register_loop("loop-with-human", [], "", status="created")
+    await sqlite_backend.register_loop("loop-empty", "", status="created")
+    await sqlite_backend.register_loop("loop-with-human", "", status="created")
     await sqlite_backend.increment_loop_message_count("loop-with-human", human=1)
-    await sqlite_backend.register_loop("loop-with-ai", [], "", status="created")
+    await sqlite_backend.register_loop("loop-with-ai", "", status="created")
     await sqlite_backend.increment_loop_message_count("loop-with-ai", ai=1)
 
     rows = await sqlite_backend.list_loops(exclude_empty=True)
@@ -283,10 +283,10 @@ async def test_list_loops_combines_status_and_exclude_empty(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:
     """Both filters apply together (AND)."""
-    await sqlite_backend.register_loop("loop-created-empty", [], "", status="created")
-    await sqlite_backend.register_loop("loop-created-with-msg", [], "", status="created")
+    await sqlite_backend.register_loop("loop-created-empty", "", status="created")
+    await sqlite_backend.register_loop("loop-created-with-msg", "", status="created")
     await sqlite_backend.increment_loop_message_count("loop-created-with-msg", human=1)
-    await sqlite_backend.register_loop("loop-running-with-msg", [], "", status="running")
+    await sqlite_backend.register_loop("loop-running-with-msg", "", status="running")
     await sqlite_backend.increment_loop_message_count("loop-running-with-msg", human=1)
 
     rows = await sqlite_backend.list_loops(status_filter="created", exclude_empty=True)

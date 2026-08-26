@@ -132,7 +132,6 @@ class StrangeLoopCheckpointPersistenceManager:
     async def register_loop(
         self,
         loop_id: str,
-        thread_ids: list[str],
         current_thread_id: str,
         status: str = "running",
     ) -> None:
@@ -140,14 +139,11 @@ class StrangeLoopCheckpointPersistenceManager:
 
         Args:
             loop_id: StrangeLoop identifier.
-            thread_ids: List of thread IDs associated with this loop.
-            current_thread_id: Current active thread ID.
+            current_thread_id: Current active thread ID (== loop_id per RFC-223).
             status: Loop status (default: "running").
         """
-        await self._backend.register_loop(loop_id, thread_ids, current_thread_id, status)
-        logger.debug(
-            "Registered loop: loop=%s threads=%s current=%s", loop_id, thread_ids, current_thread_id
-        )
+        await self._backend.register_loop(loop_id, current_thread_id, status)
+        logger.debug("Registered loop: loop=%s current=%s", loop_id, current_thread_id)
 
     async def get_loop_metadata(self, loop_id: str) -> dict | None:
         """Get loop metadata from database.

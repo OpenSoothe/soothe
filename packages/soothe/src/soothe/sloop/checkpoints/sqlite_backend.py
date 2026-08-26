@@ -104,7 +104,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     async def register_loop(
         self,
         loop_id: str,
-        thread_ids: list[str],
         current_thread_id: str,
         status: str = "running",
     ) -> None:
@@ -112,7 +111,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         await self._writer_to_thread(
             self._register_loop_sync,
             loop_id,
-            thread_ids,
             current_thread_id,
             status,
         )
@@ -121,33 +119,34 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         self,
         conn: sqlite3.Connection,
         loop_id: str,
-        thread_ids: list[str],
         current_thread_id: str,
         status: str,
     ) -> None:
         """Sync register loop."""
         now = datetime.now(UTC).isoformat()
+        # ``thread_ids`` column is a vestige (IG-764: loop registry no longer
+        # indexes threads). Set '[]' to satisfy legacy NOT NULL constraints on
+        # pre-IG-764 databases; the column is never read back.
         conn.execute(
             """
             INSERT INTO agentloop_loops
             (loop_id, thread_ids, current_thread_id, status, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (loop_id) DO UPDATE SET
-                thread_ids = excluded.thread_ids,
                 current_thread_id = excluded.current_thread_id,
                 status = excluded.status,
                 updated_at = excluded.updated_at
         """,
             (
                 loop_id,
-                json.dumps(thread_ids),
+                "[]",
                 current_thread_id,
                 status,
                 now,
                 now,
             ),
         )
-        logger.debug("Registered loop: loop=%s threads=%s", loop_id, thread_ids)
+        logger.debug("Registered loop: loop=%s thread=%s", loop_id, current_thread_id)
 
     async def get_loop_metadata(self, loop_id: str) -> dict | None:
         """Get loop metadata for daemon reconstruction."""
@@ -157,7 +156,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         """Sync get loop metadata."""
         cursor = conn.execute(
             """
-            SELECT thread_ids, current_thread_id, status, created_at, updated_at,
+            SELECT current_thread_id, status, created_at, updated_at,
                    total_goals_completed, total_thread_switches,
                    total_duration_ms, total_tokens_used, schema_version,
                    client_workspace, detached_at, user_id, client_workspace_id,
@@ -174,27 +173,26 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
 
         return {
             "loop_id": loop_id,
-            "thread_ids": json.loads(row[0]) if row[0] else [],
-            "current_thread_id": row[1],
-            "status": row[2],
-            "created_at": row[3],
-            "updated_at": row[4],
-            "total_goals_completed": row[5],
-            "total_thread_switches": row[6],
-            "total_duration_ms": row[7],
-            "total_tokens_used": row[8],
-            "schema_version": row[9],
-            "client_workspace": row[10],
-            "detached_at": row[11],
-            "user_id": row[12],
-            "client_workspace_id": row[13],
-            "is_ephemeral": bool(row[14]) if row[14] is not None else False,
-            "last_message_at": row[15],
-            "current_workspace": row[16],
-            "human_message_count": row[17] or 0,
-            "ai_message_count": row[18] or 0,
-            "execution_checkpoint": json.loads(row[19]) if row[19] else None,
-            "resume_topic": row[20],
+            "current_thread_id": row[0],
+            "status": row[1],
+            "created_at": row[2],
+            "updated_at": row[3],
+            "total_goals_completed": row[4],
+            "total_thread_switches": row[5],
+            "total_duration_ms": row[6],
+            "total_tokens_used": row[7],
+            "schema_version": row[8],
+            "client_workspace": row[9],
+            "detached_at": row[10],
+            "user_id": row[11],
+            "client_workspace_id": row[12],
+            "is_ephemeral": bool(row[13]) if row[13] is not None else False,
+            "last_message_at": row[14],
+            "current_workspace": row[15],
+            "human_message_count": row[16] or 0,
+            "ai_message_count": row[17] or 0,
+            "execution_checkpoint": json.loads(row[18]) if row[18] else None,
+            "resume_topic": row[19],
         }
 
     async def update_loop_metadata(
@@ -224,7 +222,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         _allowed = {
             "status",
             "current_thread_id",
-            "thread_ids",
             "client_workspace",
             "client_workspace_id",
             "user_id",
@@ -261,8 +258,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                     return
         if "is_ephemeral" in local_updates:
             local_updates["is_ephemeral"] = 1 if local_updates["is_ephemeral"] else 0
-        if "thread_ids" in local_updates and isinstance(local_updates["thread_ids"], list):
-            local_updates["thread_ids"] = json.dumps(local_updates["thread_ids"])
         local_updates.setdefault("updated_at", datetime.now(UTC).isoformat())
         set_clause = ", ".join(f"{k} = ?" for k in local_updates)
         params = list(local_updates.values()) + [loop_id]
@@ -361,7 +356,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             params.append(workspace_filter)
         where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         sql = f"""
-            SELECT loop_id, status, thread_ids, current_thread_id,
+            SELECT loop_id, status, current_thread_id,
                    total_goals_completed, total_thread_switches,
                    created_at, updated_at, client_workspace, detached_at,
                    human_message_count, ai_message_count, last_message_at,
@@ -379,18 +374,17 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             d = {
                 "loop_id": row[0],
                 "status": row[1],
-                "thread_ids": json.loads(row[2]) if row[2] else [],
-                "current_thread_id": row[3],
-                "total_goals_completed": row[4],
-                "total_thread_switches": row[5],
-                "created_at": row[6],
-                "updated_at": row[7],
-                "client_workspace": row[8],
-                "detached_at": row[9],
-                "human_message_count": row[10] or 0,
-                "ai_message_count": row[11] or 0,
-                "last_message_at": row[12],
-                "resume_topic": row[13],
+                "current_thread_id": row[2],
+                "total_goals_completed": row[3],
+                "total_thread_switches": row[4],
+                "created_at": row[5],
+                "updated_at": row[6],
+                "client_workspace": row[7],
+                "detached_at": row[8],
+                "human_message_count": row[9] or 0,
+                "ai_message_count": row[10] or 0,
+                "last_message_at": row[11],
+                "resume_topic": row[12],
             }
             result.append(d)
         return result
@@ -480,7 +474,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         """
         cursor = conn.execute(
             """
-            SELECT loop_id, thread_ids, current_thread_id, status,
+            SELECT loop_id, current_thread_id, status,
                    client_workspace, current_workspace, user_id, client_workspace_id,
                    last_message_at, created_at, is_ephemeral
             FROM agentloop_loops
@@ -498,16 +492,15 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             result.append(
                 {
                     "loop_id": row[0],
-                    "thread_ids": json.loads(row[1]) if row[1] else [],
-                    "current_thread_id": row[2],
-                    "status": row[3],
-                    "client_workspace": row[4],
-                    "current_workspace": row[5],
-                    "user_id": row[6],
-                    "client_workspace_id": row[7],
-                    "last_message_at": row[8],
-                    "created_at": row[9],
-                    "is_ephemeral": bool(row[10]) if row[10] is not None else False,
+                    "current_thread_id": row[1],
+                    "status": row[2],
+                    "client_workspace": row[3],
+                    "current_workspace": row[4],
+                    "user_id": row[5],
+                    "client_workspace_id": row[6],
+                    "last_message_at": row[7],
+                    "created_at": row[8],
+                    "is_ephemeral": bool(row[9]) if row[9] is not None else False,
                 }
             )
         return result
@@ -539,7 +532,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         """
         cursor = conn.execute(
             """
-            SELECT loop_id, thread_ids, current_thread_id, status,
+            SELECT loop_id, current_thread_id, status,
                    client_workspace, current_workspace, user_id, client_workspace_id,
                    last_message_at, created_at
             FROM agentloop_loops
@@ -556,15 +549,14 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             result.append(
                 {
                     "loop_id": row[0],
-                    "thread_ids": json.loads(row[1]) if row[1] else [],
-                    "current_thread_id": row[2],
-                    "status": row[3],
-                    "client_workspace": row[4],
-                    "current_workspace": row[5],
-                    "user_id": row[6],
-                    "client_workspace_id": row[7],
-                    "last_message_at": row[8],
-                    "created_at": row[9],
+                    "current_thread_id": row[1],
+                    "status": row[2],
+                    "client_workspace": row[3],
+                    "current_workspace": row[4],
+                    "user_id": row[5],
+                    "client_workspace_id": row[6],
+                    "last_message_at": row[7],
+                    "created_at": row[8],
                     "is_ephemeral": True,
                 }
             )
@@ -773,7 +765,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             db.execute("""
                 CREATE TABLE IF NOT EXISTS agentloop_loops (
                     loop_id TEXT PRIMARY KEY,
-                    thread_ids TEXT NOT NULL,
+                    thread_ids TEXT NOT NULL DEFAULT '[]',
                     current_thread_id TEXT NOT NULL,
                     status TEXT NOT NULL,
                     current_goal_index INTEGER DEFAULT -1,

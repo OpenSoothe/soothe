@@ -52,21 +52,17 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
         msg = f"Loop {loop_id} not found"
         raise RuntimeError(msg)
 
-    # RFC-223: main thread id == loop id. Keep ``thread_ids`` history intact
-    # (fork threads use the ``{loop_id}__step_<id>`` naming scheme and stay
-    # listed) but ensure the main id is recorded and is the current one.
+    # RFC-223 / IG-764: main thread id == loop id. No ``thread_ids`` history is
+    # maintained — fork threads (execute-step, synth, intake) use random opaque
+    # ids built by ``orchestrator/checkpoint.py`` and are reachable via the
+    # shared checkpointer, not indexed in loop metadata. Only normalize the
+    # ``current_thread_id`` here.
     thread_id = loop_id
-    thread_ids = [str(t) for t in (metadata.get("thread_ids") or []) if str(t).strip()]
-    if thread_id not in thread_ids:
-        thread_ids.append(thread_id)
-    if str(metadata.get("current_thread_id") or "").strip() != thread_id or thread_ids != list(
-        metadata.get("thread_ids") or []
-    ):
+    if str(metadata.get("current_thread_id") or "").strip() != thread_id:
         try:
             await daemon._persistence_manager.update_loop_metadata(
                 loop_id,
                 current_thread_id=thread_id,
-                thread_ids=thread_ids,
                 status="running",
             )
         except Exception as e:

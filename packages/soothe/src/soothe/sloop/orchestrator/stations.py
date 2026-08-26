@@ -16,10 +16,11 @@ are typed as ``str`` so this module stays import-safe from
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Final, Literal, TypedDict
+from typing import Any, Final, Literal, TypedDict
 
-if TYPE_CHECKING:
-    from soothe.sloop.clarification.capture import ResumeTicket
+from soothe.sloop.clarification.capture import (
+    ResumeTicket,  # noqa: F401 — resolved by get_type_hints() at runtime
+)
 
 # --- Preprocess ---
 INTAKE: Final = "intake"

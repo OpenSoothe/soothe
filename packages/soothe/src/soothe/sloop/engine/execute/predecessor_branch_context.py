@@ -1,6 +1,6 @@
 """Predecessor execute-step ledger slices for parallel branch threads.
 
-When the executor uses a branched LangGraph ``thread_id`` (``{logical}__step_{step_id}``), the
+When the executor uses a branched LangGraph ``thread_id`` (``{main_thread_id}__{hex5}``), the
 checkpoint namespace starts empty. This module provides helpers for:
 
 - **Transitive dependency closure** (``transitive_dependency_step_ids``): used by

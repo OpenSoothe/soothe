@@ -54,7 +54,6 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
     mock_state_manager = MagicMock()
     mock_state_manager.loop_id = "test_loop"
 
-    mock_anchor_manager = MagicMock()
     mock_goal_context_manager = MagicMock()
     mock_plan_manager = MagicMock()
 
@@ -90,7 +89,6 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
     ctx = LoopRuntimeContext(
         strange_loop=mock_strange_loop,
         state_manager=mock_state_manager,
-        anchor_manager=mock_anchor_manager,
         goal_context_manager=mock_goal_context_manager,
         plan_manager=mock_plan_manager,
         checkpoint=checkpoint,

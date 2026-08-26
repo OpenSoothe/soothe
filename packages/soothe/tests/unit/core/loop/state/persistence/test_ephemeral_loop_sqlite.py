@@ -23,7 +23,7 @@ async def test_ephemeral_metadata_touch_and_list_expired(
 ) -> None:
     loop_id = "loop-ephemeral-1"
     now = datetime.now(UTC).isoformat()
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
     await sqlite_backend.update_loop_metadata(
         loop_id,
         is_ephemeral=True,
@@ -58,7 +58,7 @@ async def test_persistent_loop_not_listed_as_expired(
 ) -> None:
     loop_id = "loop-persistent-1"
     old = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
-    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+    await sqlite_backend.register_loop(loop_id, "", status="created")
     await sqlite_backend.update_loop_metadata(
         loop_id,
         is_ephemeral=False,

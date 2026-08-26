@@ -30,6 +30,35 @@ async def _cancel_and_detach_loop(daemon: Any, loop_id: str) -> None:
     daemon._thread_registry.cleanup_loop(loop_id)
 
 
+async def _collect_loop_thread_ids(daemon: Any, loop_id: str) -> list[str]:
+    """Find all persisted thread ids belonging to ``loop_id``.
+
+    Per IG-764, loop metadata no longer indexes fork threads. The main thread
+    is the bare ``loop_id``; every fork (execute-step, synth, intake) shares
+    the ``{loop_id}__`` prefix. Scan the durability layer to find them so GC
+    can delete the full set. Falls back to ``[loop_id]`` when the runner or
+    scan is unavailable.
+    """
+    runner = getattr(daemon, "_runner", None)
+    if runner is None:
+        return [loop_id]
+    try:
+        threads = await runner.list_threads()
+    except Exception:
+        logger.debug("list_threads unavailable during GC; falling back to loop_id", exc_info=True)
+        return [loop_id]
+    prefix = f"{loop_id}__"
+    fork_ids = [
+        t["thread_id"]
+        for t in threads
+        if isinstance(t, dict)
+        and isinstance(t.get("thread_id"), str)
+        and t["thread_id"].startswith(prefix)
+        and t["thread_id"] != loop_id
+    ]
+    return [loop_id, *fork_ids]
+
+
 async def _delete_loop_threads(daemon: Any, thread_ids: list[str]) -> None:
     """Delete LangGraph thread persistence for each thread id."""
     runner = getattr(daemon, "_runner", None)
@@ -80,12 +109,8 @@ async def purge_loop_execution_data(daemon: Any, loop_id: str, metadata: dict[st
         logger.debug("Skipping ephemeral GC for loop with active runner: %s", loop_id)
         return False
 
-    thread_ids = list(metadata.get("thread_ids") or [])
-    current_tid = str(metadata.get("current_thread_id") or "").strip()
-    if current_tid and current_tid not in thread_ids:
-        thread_ids.append(current_tid)
-
     await _cancel_and_detach_loop(daemon, loop_id)
+    thread_ids = await _collect_loop_thread_ids(daemon, loop_id)
     await _delete_loop_threads(daemon, thread_ids)
     await _delete_loop_filesystem(loop_id)
     await daemon._persistence_manager.purge_loop_execution_data(loop_id)
@@ -95,12 +120,6 @@ async def purge_loop_execution_data(daemon: Any, loop_id: str, metadata: dict[st
 
 async def purge_loop_fully(daemon: Any, loop_id: str, metadata: dict[str, Any] | None) -> None:
     """Full loop deletion (same persistence teardown as ``loop_delete`` RPC)."""
-    meta = metadata or await daemon._persistence_manager.get_loop_metadata(loop_id) or {}
-    thread_ids = list(meta.get("thread_ids") or [])
-    current_tid = str(meta.get("current_thread_id") or "").strip()
-    if current_tid and current_tid not in thread_ids:
-        thread_ids.append(current_tid)
-
     try:
         await daemon._query_engine.cancel_loop(loop_id)
     except Exception:
@@ -122,6 +141,7 @@ async def purge_loop_fully(daemon: Any, loop_id: str, metadata: dict[str, Any] |
             logger.warning("Failed to release card ledger for loop %s", loop_id, exc_info=True)
     daemon._thread_registry.cleanup_loop(loop_id)
 
+    thread_ids = await _collect_loop_thread_ids(daemon, loop_id)
     await _delete_loop_threads(daemon, thread_ids)
     await _delete_loop_filesystem(loop_id)
 

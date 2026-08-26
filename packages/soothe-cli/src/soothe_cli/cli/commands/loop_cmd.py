@@ -203,16 +203,6 @@ def describe_loop(
         )
     )
 
-    # Internal checkpoint context counts from loop metadata
-    console.print(
-        Panel(
-            f"Internal contexts: {len(loop.get('thread_ids', []))}\n"
-            f"Context switches: {loop.get('total_thread_switches', 0)}",
-            title="Checkpoint contexts (internal)",
-            border_style="dim",
-        )
-    )
-
     # Execution summary
     console.print(
         Panel(
@@ -278,7 +268,6 @@ def delete_loop(
         console.print(
             f"[warning]Warning: This will permanently delete {loop_id} and all associated data:[/warning]"
         )
-        console.print(f"  - {len(loop.get('thread_ids', []))} internal checkpoint contexts")
         console.print(f"  - {loop.get('total_goals_completed', 0)} goal execution records")
         console.print("  - Working memory spills")
 
@@ -476,8 +465,7 @@ def attach_loop(
     console.print(
         Panel(
             f"Status: {loop.get('status', 'unknown')}\n"
-            f"Goals: {loop.get('total_goals_completed', 0)} completed\n"
-            f"Internal contexts: {len(loop.get('thread_ids', []))}",
+            f"Goals: {loop.get('total_goals_completed', 0)} completed",
             title=f"Loop: {loop_id} (Reattached)",
         )
     )

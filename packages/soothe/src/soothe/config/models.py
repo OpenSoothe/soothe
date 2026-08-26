@@ -1482,7 +1482,7 @@ class StrangeLoopConfig(BaseModel):
     step_context_check_enabled: bool = Field(
         default=False,
         description=(
-            "Check context on step threads (loop_id__step_{step_id}). "
+            "Check context on step threads ({main_thread_id}__{hex5}). "
             "Usually unnecessary; step threads are short-lived."
         ),
     )

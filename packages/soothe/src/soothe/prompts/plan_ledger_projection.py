@@ -925,7 +925,7 @@ def project_predecessor_execute_ledger_for_step(
 ) -> list[BaseMessage]:
     """Project transitive-predecessor execute_step ledger rows for branched CoreAgent input.
 
-    Branched step threads (``{logical}__step_{step_id}``) start with empty checkpoints.
+    Branched step threads (``{main_thread_id}__{hex5}``) start with empty checkpoints.
     Dependent steps receive predecessor Human/AI pairs from the orchestration ledger
     instead of an inline ``PRIOR STEP EVIDENCE`` block in the current envelope.
 

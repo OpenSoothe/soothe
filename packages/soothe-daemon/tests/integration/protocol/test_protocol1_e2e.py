@@ -209,7 +209,7 @@ class _MockDaemon:
                     {
                         "loop_id": lid,
                         "status": meta.get("status", "created"),
-                        "thread_ids": meta.get("thread_ids", []),
+                        "current_thread_id": meta.get("current_thread_id", ""),
                         "total_goals_completed": 0,
                         "total_thread_switches": 0,
                         "human_message_count": len(self._loop_messages.get(lid, [])),
@@ -230,7 +230,6 @@ class _MockDaemon:
             lid = kwargs.get("loop_id", "")
             self._loops[lid] = {
                 "status": kwargs.get("status", "created"),
-                "thread_ids": kwargs.get("thread_ids", []),
                 "current_thread_id": kwargs.get("current_thread_id", ""),
                 "created": "",
                 "client_workspace": kwargs.get("client_workspace"),
@@ -552,7 +551,7 @@ def _install_rpc_stubs(server: _MockDaemonServer) -> None:
         daemon._loop_counter += 1
         loop_id = f"test-loop-{daemon._loop_counter}"
         await daemon._persistence_manager.register_loop(
-            loop_id=loop_id, thread_ids=[], current_thread_id="", status="created"
+            loop_id=loop_id, current_thread_id="", status="created"
         )
         await daemon._send_client_message(
             client_id,

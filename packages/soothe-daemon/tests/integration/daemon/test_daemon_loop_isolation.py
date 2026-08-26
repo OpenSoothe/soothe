@@ -538,10 +538,6 @@ class TestLoopIsolation:
             assert metadata2.get("loop_id") == loop2
             assert metadata1.get("loop_id") != metadata2.get("loop_id")
 
-            # Verify thread_ids lists start empty
-            assert metadata1.get("thread_ids", []) == []
-            assert metadata2.get("thread_ids", []) == []
-
             await client.close()
         finally:
             await stop_daemon_safely(daemon)

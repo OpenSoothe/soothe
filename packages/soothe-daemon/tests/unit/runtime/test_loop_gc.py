@@ -20,7 +20,7 @@ async def test_purge_skips_loop_with_active_runner() -> None:
     """
     daemon = MagicMock()
     daemon._active_stream_loop_ids = {"loop-1"}
-    metadata = {"status": "running", "thread_ids": []}
+    metadata = {"status": "running"}
     ok = await purge_loop_execution_data(daemon, "loop-1", metadata)
     assert ok is False
     daemon._query_engine.cancel_loop.assert_not_called()
@@ -44,7 +44,6 @@ async def test_purge_reclaims_running_zombie() -> None:
 
     metadata: dict[str, Any] = {
         "status": "running",
-        "thread_ids": [],
     }
     ok = await purge_loop_execution_data(daemon, "loop-zombie", metadata)
     assert ok is True
@@ -63,7 +62,6 @@ async def test_purge_ephemeral_loop_calls_cleanup() -> None:
 
     metadata: dict[str, Any] = {
         "status": "created",
-        "thread_ids": ["thr-1"],
         "current_thread_id": "thr-1",
     }
     ok = await purge_loop_execution_data(daemon, "loop-ephem", metadata)

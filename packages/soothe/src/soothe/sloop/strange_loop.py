@@ -364,9 +364,6 @@ class StrangeLoop:
                 if checkpoint.current_thread_id != main_thread_id:
                     checkpoint.current_thread_id = main_thread_id
                     checkpoint_normalized = True
-                if main_thread_id not in checkpoint.thread_ids:
-                    checkpoint.thread_ids.append(main_thread_id)
-                    checkpoint_normalized = True
                 if checkpoint_normalized:
                     await state_manager.save(checkpoint)
                     logger.info(
@@ -411,8 +408,6 @@ class StrangeLoop:
                     # (which refuses to start a goal when status=="running").
                     checkpoint.status = "idle"
                     checkpoint.current_thread_id = main_thread_id
-                    if main_thread_id not in checkpoint.thread_ids:
-                        checkpoint.thread_ids.append(main_thread_id)
                     goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
                     checkpoint.goal_history.append(goal_record)
                     checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
@@ -438,8 +433,6 @@ class StrangeLoop:
 
             elif checkpoint and checkpoint.status == "idle":
                 checkpoint.current_thread_id = main_thread_id
-                if main_thread_id not in checkpoint.thread_ids:
-                    checkpoint.thread_ids.append(main_thread_id)
                 user_line_early = (goal_user_submission or goal or "").strip()
                 # After cancel, interrupt touch may leave status=idle while the
                 # StrangeLoop goal index entry is still running. Resume that goal in place

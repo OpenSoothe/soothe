@@ -25,7 +25,6 @@ class StrangeLoopPersistenceBackend(ABC):
     async def register_loop(
         self,
         loop_id: str,
-        thread_ids: list[str],
         current_thread_id: str,
         status: str = "running",
     ) -> None:
@@ -33,8 +32,7 @@ class StrangeLoopPersistenceBackend(ABC):
 
         Args:
             loop_id: StrangeLoop identifier.
-            thread_ids: List of thread IDs associated with this loop.
-            current_thread_id: Current active thread ID.
+            current_thread_id: Current active thread ID (== loop_id per RFC-223).
             status: Loop status (default: "running").
         """
         pass
@@ -63,7 +61,7 @@ class StrangeLoopPersistenceBackend(ABC):
                 an authoritative caller (stale-loop reconciler) can demote a
                 confirmed-dead zombie loop's ``status`` even when it has goals.
             **fields: Column names and values to update. Supported keys:
-                status, current_thread_id, thread_ids, client_workspace,
+                status, current_thread_id, client_workspace,
                 detached_at, total_goals_completed, total_thread_switches,
                 total_duration_ms, total_tokens_used, updated_at.
         """
@@ -93,7 +91,7 @@ class StrangeLoopPersistenceBackend(ABC):
             workspace_filter: Optional client_workspace path to filter by.
 
         Returns:
-            List of dicts with keys: loop_id, status, thread_ids, current_thread_id,
+            List of dicts with keys: loop_id, status, current_thread_id,
             total_goals_completed, total_thread_switches, created_at, updated_at,
             client_workspace, detached_at.
         """

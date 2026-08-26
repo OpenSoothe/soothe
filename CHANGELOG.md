@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.38] - 2026-08-26
+
 ### Changed
 - Auto clarification now auto-approves safe tool actions: remove `tool_approval` from the default `force_manual_origins` so veritas's security-approver prompt evaluates each `edit_file`/`run_command` call. Risky or low-confidence calls still degrade to a manual prompt (interactive) or park (headless). Re-add `tool_approval` to `agent.clarification.force_manual_origins` to force a human on every tool action.
+- Remove `thread_ids` from loop metadata (IG-764): the loop registry no longer indexes fork threads. The main thread id equals the loop id (RFC-223); fork threads (execute-step, synth, intake) use random opaque ids and are reachable via the shared checkpointer, not indexed in loop metadata. GC now scans the durability layer (`runner.list_threads()`) to find fork threads for deletion instead of reading a stale `thread_ids` list. The vestigial SQLite `thread_ids` column stays as `NOT NULL DEFAULT '[]'` for legacy compatibility but is never read back.
+- Bump client submodules: go v0.4.16, rust v0.3.9, typescript v0.5.10, python v1.0.19.
 
 ### Fixed
 - Fix clarification focus bug: the tool-approval/plan-review comments input can no longer steal cursor focus — it is enabled only while the Refine/Edit action is selected, so the cursor stays on the selected action button by default.

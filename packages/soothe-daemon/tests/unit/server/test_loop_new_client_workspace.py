@@ -363,7 +363,6 @@ async def test_bind_execution_thread_uses_loop_id_as_checkpoint_thread(
         metadata = await daemon._persistence_manager.get_loop_metadata(loop_id)
         assert metadata is not None
         assert metadata.get("current_thread_id") == loop_id
-        assert loop_id in (metadata.get("thread_ids") or [])
     finally:
         await daemon.close()
 
@@ -395,7 +394,6 @@ async def test_bind_execution_thread_preserves_existing_loop_id_binding(
         await daemon._persistence_manager.update_loop_metadata(
             loop_id,
             current_thread_id=loop_id,
-            thread_ids=[loop_id],
             status="running",
         )
 
@@ -415,7 +413,6 @@ async def test_bind_execution_thread_preserves_existing_loop_id_binding(
         metadata = await daemon._persistence_manager.get_loop_metadata(loop_id)
         assert metadata is not None
         assert metadata.get("current_thread_id") == loop_id
-        assert metadata.get("thread_ids") == [loop_id]
     finally:
         await daemon.close()
 

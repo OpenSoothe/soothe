@@ -1441,7 +1441,6 @@ class MessageRouter:
                 "loop_id": loop_id,
                 "status": row.get("status", "unknown"),
                 "live": loop_id in active_loop_ids,
-                "threads": len(row.get("thread_ids") or []),
                 "goals": row.get("total_goals_completed", 0),
                 "switches": row.get("total_thread_switches", 0),
                 "human_messages": row.get("human_message_count", 0),
@@ -1515,7 +1514,6 @@ class MessageRouter:
             "status": metadata.get("status", "unknown"),
             "schema_version": metadata.get("schema_version", "unknown"),
             "current_thread_id": metadata.get("current_thread_id", "unknown"),
-            "thread_ids": metadata.get("thread_ids", []),
             "total_goals_completed": metadata.get("total_goals_completed", 0),
             "total_thread_switches": metadata.get("total_thread_switches", 0),
             "total_duration_ms": metadata.get("total_duration_ms", 0),
@@ -1906,7 +1904,6 @@ class MessageRouter:
         # Register loop in database
         await d._persistence_manager.register_loop(
             loop_id=loop_id,
-            thread_ids=[],
             current_thread_id="",
             status="created",
         )

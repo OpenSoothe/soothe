@@ -2009,7 +2009,7 @@ class Executor:
 
         RFC-211: Collects outcome metadata instead of full output string.
         Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
-        Thread isolation via __step_<id> namespace; predecessor context via ledger
+        Thread isolation via random ``{main}__{hex5}`` thread ids; predecessor context via ledger
         projection into graph input (no checkpoint fork).
 
         Args:
