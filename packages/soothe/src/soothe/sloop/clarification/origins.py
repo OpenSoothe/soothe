@@ -51,16 +51,17 @@ CLARIFICATION_ORIGIN_RESUME_NODE: dict[str, str] = {
     ORIGIN_TOOL_APPROVAL: EXECUTE,  # resume the step that issued the tool call
 }
 
-DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = (
-    ORIGIN_PLAN_MODE_REVIEW,
-    ORIGIN_TOOL_APPROVAL,
-)
+DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = (ORIGIN_PLAN_MODE_REVIEW,)
 """Origins that never use veritas auto-answer, even in auto mode.
 
 ``plan_mode_review`` — the plan approve/reject/refine gate is a human call.
-``tool_approval`` — approving a tool action (edit_file, run_command) is a
-human-judgment / security call by default. Users who want veritas to
-auto-approve non-destructive tools can remove ``tool_approval`` from
+
+``tool_approval`` is intentionally NOT in this list: in auto mode the
+``tool_approval`` origin is routed through veritas's dedicated security-approver
+prompt (see ``build_veritas_system_prompt_for_origin``), which approves
+non-destructive tool actions and rejects / defers risky or unjustified ones.
+This lets auto clarification actually auto-approve safe tool calls. Operators
+who want every tool action to require a human can re-add ``tool_approval`` to
 ``ClarificationConfig.force_manual_origins`` in config."""
 
 PLAN_MODE_REVIEW_INTERRUPT_PREFIX: Final = "plan-mode-review:"

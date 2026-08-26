@@ -95,8 +95,6 @@ def test_handler_registry_covers_all_legacy_message_types() -> None:
         "auth_refresh",
         "loop_list",
         "loop_get",
-        "loop_tree",
-        "loop_prune",
         "loop_delete",
         "loop_reattach",
         "loop_events",
@@ -614,8 +612,6 @@ async def test_valid_params_passes_validation_and_reaches_handler() -> None:
 
     daemon._persistence_manager = SimpleNamespace(
         get_loop_metadata=AsyncMock(return_value=None),
-        get_failed_branches_for_loop=AsyncMock(return_value=[]),
-        get_checkpoint_anchors_for_range=AsyncMock(return_value=[]),
     )
 
     await router.dispatch(

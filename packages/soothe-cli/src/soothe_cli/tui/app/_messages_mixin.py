@@ -1069,16 +1069,17 @@ class _MessagesMixin:
         return inputs
 
     def _active_plan_review_action_focus(self) -> Widget | None:
-        """Prefer the Approve button when a plan-review card is active."""
+        """Prefer the Approve button when a plan-review or tool-approval card is active."""
         adapter = getattr(self, "_ui_adapter", None)
         if adapter is None:
             return None
         by_step = getattr(adapter, "_clarification_input_by_step", None) or {}
+        # Both option-selector origins render Approve / Refine(Edit) / Reject buttons.
         for message in by_step.values():
             if getattr(message, "_submitted", False):
                 continue
             # String compare — avoid MagicMock truthiness on property access in tests.
-            if getattr(message, "_origin_node", None) != "plan_mode_review":
+            if getattr(message, "_origin_node", None) not in ("plan_mode_review", "tool_approval"):
                 continue
             buttons = getattr(message, "_action_buttons", None) or {}
             if not isinstance(buttons, dict):

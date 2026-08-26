@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from typing import Annotated, Any
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -225,39 +225,6 @@ def describe_loop(
         )
     )
 
-    # Failed branches
-    branches = loop.get("failed_branches", [])
-    if branches:
-        console.print(
-            Panel(
-                f"Failed Branches: {len(branches)}\n" + format_branch_summary(branches),
-                title="Failed Branches",
-                border_style="red",
-            )
-        )
-
-        if verbose:
-            # Detailed branch analysis
-            for branch in branches:
-                console.print(
-                    Panel(
-                        format_branch_details(branch),
-                        title=f"Branch: {branch['branch_id']}",
-                        border_style="error",
-                    )
-                )
-
-    # Checkpoint anchors
-    anchors = loop.get("checkpoint_anchors", [])
-    if anchors:
-        console.print(
-            Panel(
-                f"Checkpoint Anchors: {len(anchors)}\n" + format_anchor_summary(anchors),
-                title="Checkpoint Anchors",
-                border_style="blue",
-            )
-        )
-
     # Timeline
     console.print(
         Panel(
@@ -267,104 +234,6 @@ def describe_loop(
             border_style="dim",
         )
     )
-
-
-@loop_app.command("tree")
-def visualize_loop_tree(
-    loop_id: Annotated[str, typer.Argument(help="Loop identifier.")],
-    format: Annotated[
-        str,
-        typer.Option("--format", "-f", help="Visualization format (ascii, json, dot)."),
-    ] = "ascii",
-) -> None:
-    """Visualize checkpoint tree structure.
-
-    Shows main execution line + failed branches with learning insights.
-
-    Example:
-        soothe loop tree loop_abc123
-        soothe loop tree loop_abc123 --format json
-        soothe loop tree loop_abc123 --format dot
-    """
-    config = load_config()
-    ws_url = websocket_url_from_config(config)
-    _require_daemon(ws_url)
-
-    response = asyncio.run(
-        protocol1_rpc(
-            ws_url,
-            "loop_tree",
-            {"loop_id": loop_id, "format": format},
-        )
-    )
-
-    if "error" in response:
-        typer.echo(f"Error: {response['error']}", err=True)
-        sys.exit(1)
-
-    tree = response.get("tree", {})
-    if not tree:
-        typer.echo(f"Error: No checkpoint tree for loop {loop_id}", err=True)
-        sys.exit(1)
-
-    # Render tree based on format
-    if format == "ascii":
-        render_ascii_tree(tree)
-    elif format == "json":
-        import json
-
-        console.print_json(json.dumps(tree, indent=2))
-    elif format == "dot":
-        render_dot_tree(tree)
-    else:
-        typer.echo(f"Error: Unknown format: {format}", err=True)
-        sys.exit(1)
-
-
-@loop_app.command("prune")
-def prune_loop_branches(
-    loop_id: Annotated[str, typer.Argument(help="Loop identifier.")],
-    retention_days: Annotated[
-        int,
-        typer.Option("--retention-days", "-r", help="Retention period in days."),
-    ] = 30,
-    dry_run: Annotated[
-        bool,
-        typer.Option("--dry-run", help="Show what would be pruned."),
-    ] = False,
-) -> None:
-    """Prune old failed branches.
-
-    Soft delete branches older than retention period.
-
-    Example:
-        soothe loop prune loop_abc123
-        soothe loop prune loop_abc123 --retention-days 7
-        soothe loop prune loop_abc123 --dry-run
-    """
-    config = load_config()
-    ws_url = websocket_url_from_config(config)
-    _require_daemon(ws_url)
-
-    response = asyncio.run(
-        protocol1_rpc(
-            ws_url,
-            "loop_prune",
-            {"loop_id": loop_id, "retention_days": retention_days, "dry_run": dry_run},
-        )
-    )
-
-    if "error" in response:
-        typer.echo(f"Error: {response['error']}", err=True)
-        sys.exit(1)
-
-    # Protocol-1: request() returns the result dict directly (e.g.
-    # {"pruned": N, "remaining": N, "dry_run": bool}), not wrapped in {"result": ...}.
-    pruned = response.get("pruned", 0)
-    remaining = response.get("remaining", 0)
-    console.print("[green]Summary:[/green]")
-    console.print(f"  Branches pruned: {pruned}")
-    console.print(f"  Remaining: {remaining}")
 
 
 @loop_app.command("delete")
@@ -465,170 +334,6 @@ def format_tokens(tokens: int) -> str:
         return f"{tokens // 1000}K"
     else:
         return f"{tokens // 1000000}M"
-
-
-def format_branch_summary(branches: list[dict[str, Any]]) -> str:
-    """Format failed branches summary."""
-    lines = []
-    for branch in branches:
-        line = f"  [dim]{branch['branch_id']}[/dim] (iteration {branch['iteration']})\n"
-        line += f"    Failure: [red]{branch['failure_reason']}[/red]\n"
-        if branch.get("analyzed_at"):
-            line += f"    Analyzed: [dim]{branch['analyzed_at']}[/dim]\n"
-        lines.append(line)
-    return "\n".join(lines)
-
-
-def format_branch_details(branch: dict[str, Any]) -> str:
-    """Format detailed branch analysis."""
-    details = []
-
-    details.append(
-        f"Root Checkpoint: [dim]{branch['root_checkpoint_id']}[/dim] (iteration {branch['iteration'] - 1})"
-    )
-    details.append(
-        f"Failure Checkpoint: [dim]{branch['failure_checkpoint_id']}[/dim] (iteration {branch['iteration']})"
-    )
-
-    if branch.get("execution_path"):
-        details.append(f"Execution Path: [dim]{' → '.join(branch['execution_path'])}[/dim]")
-
-    if branch.get("failure_insights"):
-        insights = branch["failure_insights"]
-        details.append("\n[bold]Failure Insights:[/bold]")
-        if insights.get("root_cause"):
-            details.append(f"  - Root cause: [yellow]{insights['root_cause']}[/yellow]")
-        if insights.get("context"):
-            details.append(f"  - Context: [dim]{insights['context']}[/dim]")
-
-    if branch.get("avoid_patterns"):
-        details.append("\n[bold]Avoid Patterns:[/bold]")
-        for pattern in branch["avoid_patterns"]:
-            details.append(f"  - [red]{pattern}[/red]")
-
-    if branch.get("suggested_adjustments"):
-        details.append("\n[bold]Suggested Adjustments:[/bold]")
-        for adjustment in branch["suggested_adjustments"]:
-            details.append(f"  - [green]{adjustment}[/green]")
-
-    return "\n".join(details)
-
-
-def format_anchor_summary(anchors: list[dict[str, Any]]) -> str:
-    """Format checkpoint anchors summary."""
-    lines = []
-    for anchor in anchors:
-        line = f"  iteration {anchor['iteration']}: [dim]{anchor['checkpoint_id']}[/dim] "
-        line += f"({anchor['anchor_type']})"
-
-        # Context refresh when loop scope (LangGraph thread_id) changes between anchors
-        if anchor["iteration"] > 0:
-            prev_anchors = [a for a in anchors if a["iteration"] == anchor["iteration"] - 1]
-            if prev_anchors and prev_anchors[0]["thread_id"] != anchor["thread_id"]:
-                line += " [cyan][context refreshed][/cyan]"
-
-        lines.append(line)
-    return "\n".join(lines)
-
-
-def render_ascii_tree(tree: dict[str, Any]) -> None:
-    """Render ASCII tree visualization."""
-    console.print("\n[bold cyan]Main Execution Line:[/bold cyan]")
-
-    main_line = tree.get("main_line", [])
-    for iteration in main_line:
-        iter_num = iteration["iteration"]
-
-        # Iteration marker (IDs omitted in UI)
-        console.print(f"  iteration {iter_num}")
-
-        # Context refresh when the tree marks a switch
-        if iteration.get("thread_switch"):
-            console.print("    [cyan][context refreshed][/cyan]")
-
-        if iteration.get("start_checkpoint"):
-            console.print(f"    ├─ [dim]{iteration['start_checkpoint']}[/dim] [start]")
-
-        # Tools executed (if available)
-        if iteration.get("tools_executed"):
-            for tool in iteration["tools_executed"]:
-                console.print(f"    ├─ Tool: [green]{tool}[/green]")
-
-        if iteration.get("end_checkpoint"):
-            console.print(f"    └─ [dim]{iteration['end_checkpoint']}[/dim] [end] ✓")
-
-    branches = tree.get("failed_branches", [])
-    if branches:
-        console.print("\n[bold red]Failed Branches:[/bold red]")
-
-        for branch in branches:
-            # Branch identity only (no per-anchor checkpoint id in UI)
-            console.print(f"  [dim]{branch['branch_id']}[/dim] (iteration {branch['iteration']})")
-            console.print(f"    ├─ [dim]{branch['root_checkpoint']}[/dim] [root] ← Rewind point")
-
-            if branch.get("execution_path") and len(branch["execution_path"]) > 2:
-                for checkpoint in branch["execution_path"][1:-1]:
-                    console.print(f"    ├─ [dim]{checkpoint}[/dim]")
-
-            console.print(f"    └─ [dim]{branch['failure_checkpoint']}[/dim] [failure]FAILED")
-
-
-def render_dot_tree(tree: dict[str, Any]) -> None:
-    """Render DOT (Graphviz) tree visualization."""
-    dot_content = ["digraph checkpoint_tree {", "  rankdir=TB;"]
-
-    # Main execution line
-    dot_content.append("  subgraph main_line {")
-
-    main_line = tree.get("main_line", [])
-    for iteration in main_line:
-        iter_num = iteration["iteration"]
-        start_node = f"iter{iter_num}_start"
-        end_node = f"iter{iter_num}_end"
-
-        dot_content.append(f'    {start_node} [label="iteration {iter_num}\\nstart" shape=box];')
-        dot_content.append(
-            f'    {end_node} [label="iteration {iter_num}\\nend ✓" shape=box style=filled fillcolor=lightgreen];'
-        )
-        dot_content.append(f"    {start_node} -> {end_node};")
-
-        if iter_num > 0:
-            prev_end_node = f"iter{iter_num - 1}_end"
-            dot_content.append(f"    {prev_end_node} -> {start_node};")
-
-    dot_content.append("  }")
-
-    # Failed branches
-    branches = tree.get("failed_branches", [])
-    if branches:
-        dot_content.append("  subgraph failed_branches {")
-
-        for branch in branches:
-            branch_node = f"branch_{branch['branch_id'].replace('branch_', '')}"
-            dot_content.append(
-                f'    {branch_node}_root [label="{branch["branch_id"]}\\nroot" shape=diamond style=filled fillcolor=red];'
-            )
-            dot_content.append(
-                f'    {branch_node}_failure [label="FAILURE\\n{branch["failure_reason"]}" shape=diamond style=filled fillcolor=red];'
-            )
-            dot_content.append(f"    {branch_node}_root -> {branch_node}_failure;")
-
-        dot_content.append("  }")
-
-    # Connections
-    if branches:
-        for branch in branches:
-            iter_num = branch["iteration"] - 1
-            root_node = f"branch_{branch['branch_id'].replace('branch_', '')}_root"
-            dot_content.append(
-                f'  iter{iter_num}_end -> {root_node} [style=dashed label="failure"];'
-            )
-
-    dot_content.append("}")
-
-    console.print("\n[bold]DOT Format (Graphviz):[/bold]")
-    console.print("[dim]" + "\n".join(dot_content) + "[/dim]")
-    console.print("\n[cyan]To render: save to file and run `dot -Tpng tree.dot -o tree.png`[/cyan]")
 
 
 @loop_app.command("continue")
@@ -831,8 +536,6 @@ __all__ = [
     "loop_app",
     "list_loops",
     "describe_loop",
-    "visualize_loop_tree",
-    "prune_loop_branches",
     "delete_loop",
     "continue_loop",
     "resume_loop",

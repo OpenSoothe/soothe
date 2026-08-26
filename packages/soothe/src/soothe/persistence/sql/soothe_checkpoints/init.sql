@@ -36,53 +36,6 @@ CREATE TABLE IF NOT EXISTS agentloop_checkpoint_blobs (
 CREATE INDEX IF NOT EXISTS idx_agentloop_checkpoint_blobs_updated_at
     ON agentloop_checkpoint_blobs(updated_at DESC);
 
-CREATE TABLE IF NOT EXISTS checkpoint_anchors (
-    anchor_id SERIAL PRIMARY KEY,
-    loop_id TEXT NOT NULL,
-    iteration INTEGER NOT NULL,
-    thread_id TEXT NOT NULL,
-    checkpoint_id TEXT NOT NULL,
-    checkpoint_ns TEXT DEFAULT '',
-    anchor_type TEXT NOT NULL,
-    timestamp TIMESTAMPTZ NOT NULL,
-    iteration_status TEXT,
-    next_action_summary TEXT,
-    tools_executed JSONB,
-    reasoning_decision TEXT,
-    FOREIGN KEY (loop_id) REFERENCES agentloop_checkpoints(loop_id),
-    UNIQUE(loop_id, iteration, anchor_type)
-);
-
-CREATE INDEX IF NOT EXISTS idx_anchors_loop_iteration
-    ON checkpoint_anchors(loop_id, iteration);
-CREATE INDEX IF NOT EXISTS idx_anchors_thread
-    ON checkpoint_anchors(thread_id);
-CREATE INDEX IF NOT EXISTS idx_anchors_loop_thread
-    ON checkpoint_anchors(loop_id, thread_id);
-
-CREATE TABLE IF NOT EXISTS failed_branches (
-    branch_id TEXT PRIMARY KEY,
-    loop_id TEXT NOT NULL,
-    iteration INTEGER NOT NULL,
-    thread_id TEXT NOT NULL,
-    root_checkpoint_id TEXT NOT NULL,
-    failure_checkpoint_id TEXT NOT NULL,
-    failure_reason TEXT NOT NULL,
-    execution_path JSONB NOT NULL,
-    failure_insights JSONB,
-    avoid_patterns JSONB,
-    suggested_adjustments JSONB,
-    created_at TIMESTAMPTZ NOT NULL,
-    analyzed_at TIMESTAMPTZ,
-    pruned_at TIMESTAMPTZ,
-    FOREIGN KEY (loop_id) REFERENCES agentloop_checkpoints(loop_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_branches_loop ON failed_branches(loop_id);
-CREATE INDEX IF NOT EXISTS idx_branches_thread ON failed_branches(thread_id);
-CREATE INDEX IF NOT EXISTS idx_branches_iteration
-    ON failed_branches(loop_id, iteration);
-
 CREATE TABLE IF NOT EXISTS goal_records (
     goal_id TEXT PRIMARY KEY,
     loop_id TEXT NOT NULL,

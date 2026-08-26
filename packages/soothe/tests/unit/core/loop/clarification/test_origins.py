@@ -23,9 +23,9 @@ def test_clarification_origins_are_live_only() -> None:
     }
 
 
-def test_default_force_manual_includes_plan_review_and_tool_approval() -> None:
+def test_default_force_manual_includes_plan_review_only() -> None:
     assert ORIGIN_PLAN_MODE_REVIEW in DEFAULT_FORCE_MANUAL_ORIGINS
-    assert ORIGIN_TOOL_APPROVAL in DEFAULT_FORCE_MANUAL_ORIGINS
+    assert ORIGIN_TOOL_APPROVAL not in DEFAULT_FORCE_MANUAL_ORIGINS
 
 
 def test_resume_node_mapping() -> None:
@@ -41,8 +41,9 @@ def test_rail_pause_not_force_manual_by_default() -> None:
     assert ORIGIN_RAIL_PAUSE not in DEFAULT_FORCE_MANUAL_ORIGINS
 
 
-def test_tool_approval_is_force_manual_by_default() -> None:
-    assert ORIGIN_TOOL_APPROVAL in DEFAULT_FORCE_MANUAL_ORIGINS
+def test_tool_approval_not_force_manual_by_default() -> None:
+    """tool_approval is auto-evaluated by veritas in auto mode by default."""
+    assert ORIGIN_TOOL_APPROVAL not in DEFAULT_FORCE_MANUAL_ORIGINS
 
 
 def test_resume_node_dict_keys_match_origins() -> None:

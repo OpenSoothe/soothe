@@ -135,3 +135,41 @@ def test_is_input_focused_includes_clarification_field() -> None:
     app.focused = clar_input
 
     assert app._is_input_focused() is True
+
+
+def test_primary_text_input_targets_approve_for_tool_approval() -> None:
+    """A tool-approval (option-selector) card focuses the Approve action, not chat."""
+    approve = MagicMock()
+    approve.disabled = False
+    tool_message = MagicMock()
+    tool_message._submitted = False
+    tool_message._origin_node = "tool_approval"
+    tool_message._inputs = []
+    tool_message._action_buttons = {"approve": approve, "reject": MagicMock()}
+
+    app = _FocusAppStub()
+    app._ui_adapter = MagicMock()
+    app._ui_adapter._clarification_input_by_step = {"step-1": tool_message}
+
+    assert app._primary_text_input() is approve
+
+
+def test_focus_primary_input_targets_approve_for_tool_approval() -> None:
+    """Tool-approval popups schedule focus on Approve instead of the chat prompt."""
+    approve = MagicMock()
+    approve.disabled = False
+    approve.focus = MagicMock()
+    tool_message = MagicMock()
+    tool_message._submitted = False
+    tool_message._origin_node = "tool_approval"
+    tool_message._inputs = []
+    tool_message._action_buttons = {"approve": approve, "reject": MagicMock()}
+
+    app = _FocusAppStub()
+    app._ui_adapter = MagicMock()
+    app._ui_adapter._clarification_input_by_step = {"step-1": tool_message}
+
+    app.focus_primary_input()
+
+    app.set_focus.assert_called_once_with(approve)
+    app._chat_input.focus_input.assert_not_called()

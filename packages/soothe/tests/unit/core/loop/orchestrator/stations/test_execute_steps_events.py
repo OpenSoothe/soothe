@@ -66,7 +66,6 @@ async def test_execute_emits_step_completed_per_result() -> None:
     ctx = LoopRuntimeContext(
         strange_loop=strange_loop,
         state_manager=MagicMock(loop_id="loop-1"),
-        anchor_manager=MagicMock(),
         plan_manager=MagicMock(),
         checkpoint=MagicMock(),
         goal_record=None,
@@ -152,7 +151,6 @@ async def test_execute_emits_step_started_when_dependency_unlocks() -> None:
     ctx = LoopRuntimeContext(
         strange_loop=strange_loop,
         state_manager=MagicMock(loop_id="loop-1"),
-        anchor_manager=MagicMock(),
         plan_manager=MagicMock(),
         checkpoint=MagicMock(),
         goal_record=None,

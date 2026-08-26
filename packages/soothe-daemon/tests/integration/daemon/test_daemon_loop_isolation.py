@@ -285,27 +285,6 @@ class TestLoopIsolation:
             await client2.send_input(loop2, "Create checkpoint in loop2")
             await asyncio.wait_for(client2.read_event(), timeout=2.0)
 
-            # Get loop_tree for each loop
-            tree1_resp = await client1.request("loop_tree", {"loop_id": loop1}, timeout=5.0)
-
-            tree2_resp = await client2.request("loop_tree", {"loop_id": loop2}, timeout=5.0)
-
-            # Verify loop1 tree contains only loop1 threads
-            tree1_threads = tree1_resp.get("threads", [])
-            for thread in tree1_threads:
-                thread_loop = daemon._thread_registry.get_thread_loop(thread.get("thread_id"))
-                # Thread should be associated with loop1
-                # Note: If thread_id not in registry, check metadata
-                if thread_loop:
-                    assert thread_loop == loop1, "Thread in loop1 tree belongs to wrong loop"
-
-            # Verify loop2 tree contains only loop2 threads
-            tree2_threads = tree2_resp.get("threads", [])
-            for thread in tree2_threads:
-                thread_loop = daemon._thread_registry.get_thread_loop(thread.get("thread_id"))
-                if thread_loop:
-                    assert thread_loop == loop2, "Thread in loop2 tree belongs to wrong loop"
-
             # Verify metadata files in loop directories are separate
             loop1_dir = PersistenceDirectoryManager.get_loop_directory(loop1)
             loop2_dir = PersistenceDirectoryManager.get_loop_directory(loop2)

@@ -1597,7 +1597,10 @@ class ClarificationConfig(BaseModel):
             "Clarification origins that never use veritas auto-answer, even when "
             "``default_mode`` / wire ``clarification_mode`` is ``auto``. "
             "With a human attached, the interactive TUI relay is used; otherwise "
-            "the loop defers. Default is ``plan_mode_review`` and ``tool_approval``."
+            "the loop defers. Default is ``plan_mode_review`` only — ``tool_approval`` "
+            "is evaluated by veritas's security-approver prompt in auto mode so safe "
+            "tool calls auto-approve. Re-add ``tool_approval`` to force a human on "
+            "every tool action."
         ),
     )
 

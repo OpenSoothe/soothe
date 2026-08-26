@@ -138,4 +138,4 @@ class ClarificationDetector:
                 first_val = next(iter(args.values()), None)
                 if isinstance(first_val, str) and first_val.strip():
                     detail = f" ({first_val.strip()[:80]})"
-        return f"Approve {name}{detail}? [approve / edit / reject]"
+        return f"Approve {name}{detail}?"

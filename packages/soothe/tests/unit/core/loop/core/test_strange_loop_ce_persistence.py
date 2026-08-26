@@ -36,7 +36,6 @@ async def test_postgresql_backend_selects_pgsql_persistence() -> None:
         patch("soothe.context.engine.ContextEngine") as ce_cls,
         patch("soothe.context.StepPlanManagerAdapter"),
         patch("soothe.sloop.strange_loop.StrangeLoopStateManager") as sm_cls,
-        patch("soothe.sloop.strange_loop.CheckpointAnchorManager") as am_cls,
         patch("soothe.sloop.strange_loop.LoopRuntimeContext"),
         patch("soothe.sloop.strange_loop.asyncio.Queue"),
         patch("soothe.sloop.orchestrator.runner.invoke_strange_loop_graph", new_callable=AsyncMock),
@@ -67,8 +66,6 @@ async def test_postgresql_backend_selects_pgsql_persistence() -> None:
         sm.save = AsyncMock()
         sm.close = AsyncMock()
         sm_cls.return_value = sm
-        am_cls.return_value = MagicMock(close=AsyncMock())
-        am_cls.create = AsyncMock(return_value=am_cls.return_value)
 
         gen = sl.run_with_progress(
             goal="test goal",

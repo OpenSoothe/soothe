@@ -32,8 +32,6 @@ from soothe.sloop.utils.structural_continuation import (
 )
 from soothe.utils.observability.langfuse import SootheLangfuse
 
-from .checkpoints.anchor_manager import CheckpointAnchorManager
-
 logger = logging.getLogger(__name__)
 
 
@@ -333,11 +331,8 @@ class StrangeLoop:
                 main_thread_id,
             )
 
-        # Initialize checkpoint anchor manager (shared checkpoint pool in daemon/thread_pool mode)
-        anchor_manager = await CheckpointAnchorManager.create(
-            state_manager.loop_id,
-            config=self.config,
-        )
+        # RFC-223: Main StrangeLoop thread id aligns to loop_id; persistence is
+        # handled by the manager/backends (goal_records + agentloop_loops only).
 
         runtime_ctx: LoopRuntimeContext | None = None
         try:
@@ -835,7 +830,6 @@ class StrangeLoop:
             ctx = LoopRuntimeContext(
                 strange_loop=self,
                 state_manager=state_manager,
-                anchor_manager=anchor_manager,
                 plan_manager=plan_manager,
                 checkpoint=checkpoint,
                 goal_record=goal_record,
@@ -955,6 +949,5 @@ class StrangeLoop:
             await await_goal_completion_tail_persistence(runtime_ctx)
             # Always stop async checkpoint worker even when setup fails before graph start.
             await state_manager.close()
-            await anchor_manager.close()
             # Clear the hot-swap target so a stale RPC cannot reach a finished context.
             self._live_runtime_ctx = None

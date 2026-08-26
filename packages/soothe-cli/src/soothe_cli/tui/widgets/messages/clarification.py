@@ -11,7 +11,7 @@ from textual import on
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.content import Content
-from textual.events import Click
+from textual.events import Click, DescendantFocus
 from textual.message import Message
 from textual.widgets import Button, Input, Static
 
@@ -170,17 +170,24 @@ class ClarificationInputMessage(Vertical):
         height: 1;
         padding: 0;
         border: none;
+        outline: none;
         background: transparent;
-        /* Dim grey for the non-selected option. */
-        color: $text-muted 60%;
+        /* Dim grey, normal weight for non-selected options. The selection is
+           conveyed by text only (bold + accent color on the chosen action),
+           never by a block fill — so no theme Button:focus background leaks. */
+        color: $text-muted;
+        text-style: none;
     }
 
     ClarificationInputMessage .plan-review-actions Button:focus {
         background: transparent;
+        outline: none;
+        color: $success;
+        text-style: bold;
     }
 
     ClarificationInputMessage .plan-review-actions Button.plan-review-selected {
-        /* Bold green to make the selection obvious. */
+        /* Selection is text-only: bold accent color, no block background. */
         color: $success;
         text-style: bold;
         background: transparent;
@@ -541,6 +548,8 @@ class ClarificationInputMessage(Vertical):
             if self._submitted:
                 # Restored from transcript in answered state — collapse the body
                 # and populate the answered summary.
+                if self._refine_input is not None:
+                    self._refine_input.disabled = True
                 self._refresh_answered_summary()
             else:
                 self._set_selected_action("approve")
@@ -620,6 +629,26 @@ class ClarificationInputMessage(Vertical):
                 btn.add_class("plan-review-selected")
             else:
                 btn.remove_class("plan-review-selected")
+        # The Refine/Edit comments input is only actionable when that action is
+        # selected. Keep it disabled otherwise so it can never hold focus — the
+        # cursor must stay on the selected action button, not in the input box.
+        if self._refine_input is not None:
+            self._refine_input.disabled = action != "refine"
+
+    def on_descendant_focus(self, event: DescendantFocus) -> None:
+        """Defensive guard: the Refine/Edit comments input may only hold focus
+        when Refine/Edit is the selected action.
+
+        Even though the input is disabled unless selected (see
+        ``_set_selected_action``), an external focus handler (e.g. an app-level
+        focus routine) could still try to land on it. Redirect that focus back
+        to the selected action button so the cursor never sits in the input box
+        while Approve (or Reject) is the active choice.
+        """
+        if event.widget is self._refine_input and self._selected_action != "refine":
+            btn = self._action_buttons.get(self._selected_action)
+            if btn is not None:
+                self.screen.set_focus(btn)
 
     def _cycle_plan_review_action(self, delta: int) -> None:
         if self._submitted or not self._is_option_selector:

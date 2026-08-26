@@ -32,7 +32,7 @@ def _make_done_plan_result() -> PlanResult:
     )
 
 
-def _wire_mocks() -> tuple[Mock, Mock, Mock, Mock]:
+def _wire_mocks() -> tuple[Mock, Mock, Mock]:
     """Common mock harness shared by tests below."""
     mock_gr = Mock()
     mock_gr.loop_messages = []
@@ -52,10 +52,7 @@ def _wire_mocks() -> tuple[Mock, Mock, Mock, Mock]:
 
     mock_gcm = Mock()
 
-    mock_anchor_mgr = Mock()
-    mock_anchor_mgr.close = AsyncMock()
-
-    return mock_sm, mock_ckpt, mock_gcm, mock_anchor_mgr
+    return mock_sm, mock_ckpt, mock_gcm
 
 
 def _make_mock_ce() -> Mock:
@@ -124,7 +121,7 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
 
     mock_core.astream = noop_astream
 
-    mock_sm, _ckpt, mock_gcm, mock_anchor_mgr = _wire_mocks()
+    mock_sm, _ckpt, mock_gcm = _wire_mocks()
     mock_ce = _make_mock_ce()
 
     with (
@@ -137,9 +134,6 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
             return_value=mock_ce,
         ),
         patch(
-            "soothe.sloop.strange_loop.CheckpointAnchorManager",
-        ) as am_cls,
-        patch(
             "soothe.sloop.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
@@ -148,7 +142,6 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
             new_callable=AsyncMock,
         ),
     ):
-        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, SootheConfig())
 
         _ = [
@@ -185,7 +178,7 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
 
     mock_core.astream = noop_astream
 
-    mock_sm, _ckpt, mock_gcm, mock_anchor_mgr = _wire_mocks()
+    mock_sm, _ckpt, mock_gcm = _wire_mocks()
     mock_ce = _make_mock_ce()
 
     with (
@@ -198,9 +191,6 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
             return_value=mock_ce,
         ),
         patch(
-            "soothe.sloop.strange_loop.CheckpointAnchorManager",
-        ) as am_cls,
-        patch(
             "soothe.sloop.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
@@ -209,7 +199,6 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
             new_callable=AsyncMock,
         ),
     ):
-        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, SootheConfig())
 
         _ = [

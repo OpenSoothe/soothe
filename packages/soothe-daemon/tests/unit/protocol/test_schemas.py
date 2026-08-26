@@ -45,11 +45,9 @@ from soothe_daemon.protocol.schemas import (
     LoopMessagesParams,
     # Loop RPC
     LoopNewParams,
-    LoopPruneParams,
     LoopReattachParams,
     LoopStateGetParams,
     LoopStateUpdateParams,
-    LoopTreeParams,
     McpStatusParams,
     ModelsListParams,
     # Base
@@ -79,8 +77,6 @@ class TestParamsRegistryCompleteness:
         "auth_refresh",
         "loop_list",
         "loop_get",
-        "loop_tree",
-        "loop_prune",
         "loop_delete",
         "loop_new",
         "loop_reattach",
@@ -114,8 +110,6 @@ class TestParamsRegistryCompleteness:
     ENVELOPE_ENTRIES = {
         ("request", "loop_list"),
         ("request", "loop_get"),
-        ("request", "loop_tree"),
-        ("request", "loop_prune"),
         ("request", "loop_delete"),
         ("request", "loop_new"),
         ("request", "loop_reattach"),
@@ -214,15 +208,13 @@ class TestLoopParams:
     """Validation tests for loop RPC param models."""
 
     def test_loop_get_valid(self) -> None:
-        p = LoopGetParams.model_validate({"loop_id": "abc", "verbose": True, "tree": False})
+        p = LoopGetParams.model_validate({"loop_id": "abc", "verbose": True})
         assert p.loop_id == "abc"
         assert p.verbose is True
-        assert p.tree is False
 
     def test_loop_get_defaults(self) -> None:
         p = LoopGetParams.model_validate({"loop_id": "abc"})
         assert p.verbose is False
-        assert p.tree is False
 
     def test_loop_get_missing_loop_id(self) -> None:
         with pytest.raises(ValidationError):
@@ -241,22 +233,6 @@ class TestLoopParams:
         p = LoopListParams.model_validate({})
         assert p.status is None
         assert p.limit is None
-
-    def test_loop_tree_valid(self) -> None:
-        p = LoopTreeParams.model_validate({"loop_id": "abc"})
-        assert p.loop_id == "abc"
-
-    def test_loop_tree_missing_loop_id(self) -> None:
-        with pytest.raises(ValidationError):
-            LoopTreeParams.model_validate({})
-
-    def test_loop_prune_valid(self) -> None:
-        p = LoopPruneParams.model_validate({"loop_id": "abc", "keep_latest": 3})
-        assert p.keep_latest == 3
-
-    def test_loop_prune_defaults(self) -> None:
-        p = LoopPruneParams.model_validate({"loop_id": "abc"})
-        assert p.keep_latest == 1
 
     def test_loop_delete_valid(self) -> None:
         p = LoopDeleteParams.model_validate({"loop_id": "abc"})

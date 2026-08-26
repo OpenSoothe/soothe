@@ -73,9 +73,6 @@ async def _drive_intake(
     mock_sm.save = AsyncMock()
     mock_sm.close = AsyncMock()
 
-    mock_anchor = MagicMock()
-    mock_anchor.close = AsyncMock()
-
     with (
         patch.object(sl, "_ce", None),
         patch("soothe.context.engine.ContextEngine", return_value=ce_instance),
@@ -88,7 +85,6 @@ async def _drive_intake(
             "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
-        patch("soothe.sloop.strange_loop.CheckpointAnchorManager") as am_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
@@ -107,7 +103,6 @@ async def _drive_intake(
         runtime_ctx = MagicMock()
         runtime_ctx.emit = _noop_emit
         runtime_ctx_cls.return_value = runtime_ctx
-        am_cls.create = AsyncMock(return_value=mock_anchor)
 
         gen = sl.run_with_progress(
             goal=goal,

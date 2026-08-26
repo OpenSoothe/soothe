@@ -168,17 +168,17 @@ async def test_rpc_translates_connection_error_to_error_dict() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rpc_prune_result_fields_at_top_level() -> None:
-    """Prune result fields are accessed directly (protocol-1 returns result dict)."""
-    fake = _FakeClient(result={"pruned": 3, "remaining": 7, "dry_run": False})
+async def test_rpc_result_fields_at_top_level() -> None:
+    """Result fields are accessed directly (protocol-1 returns result dict at top level)."""
+    fake = _FakeClient(result={"loop_id": "loop_1", "status": "active"})
     with _make_patch(fake):
         response = await loop_cmd.protocol1_rpc(
             "ws://test",
-            "loop_prune",
-            {"loop_id": "loop_1", "retention_days": 30, "dry_run": False},
+            "loop_get",
+            {"loop_id": "loop_1", "verbose": False},
         )
-    # The pruned/remaining fields are at the top level, not under "result".
-    assert response.get("pruned") == 3
-    assert response.get("remaining") == 7
+    # The fields are at the top level, not under "result".
+    assert response.get("loop_id") == "loop_1"
+    assert response.get("status") == "active"
     # The old "result" wrapper key must NOT be present.
     assert "result" not in response

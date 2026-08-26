@@ -67,10 +67,7 @@ def _common_patches(sl: StrangeLoop):
     mock_sm.save = AsyncMock()
     mock_sm.close = AsyncMock()
 
-    mock_anchor = MagicMock()
-    mock_anchor.close = AsyncMock()
-
-    return ce_instance, mock_sm, mock_anchor
+    return ce_instance, mock_sm
 
 
 @pytest.mark.asyncio
@@ -87,7 +84,7 @@ async def test_run_with_progress_pins_goal_trace_before_graph() -> None:
         trace_display_name="soothe-dev:strange-loop-graph",
     )
 
-    ce_instance, mock_sm, mock_anchor = _common_patches(sl)
+    ce_instance, mock_sm = _common_patches(sl)
 
     with (
         patch.object(sl, "_ce", None),
@@ -101,7 +98,6 @@ async def test_run_with_progress_pins_goal_trace_before_graph() -> None:
             "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
-        patch("soothe.sloop.strange_loop.CheckpointAnchorManager") as am_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
@@ -121,7 +117,6 @@ async def test_run_with_progress_pins_goal_trace_before_graph() -> None:
         runtime_ctx = MagicMock()
         runtime_ctx.emit = AsyncMock()
         runtime_ctx_cls.return_value = runtime_ctx
-        am_cls.create = AsyncMock(return_value=mock_anchor)
 
         gen = sl.run_with_progress(
             goal="summarize readme",
@@ -149,7 +144,7 @@ async def test_run_with_progress_skips_begin_goal_loop_when_langfuse_disabled() 
     sl = _make_strange_loop(langfuse_enabled=False)
 
     intent_classifier = _make_classifier(is_task=True)
-    ce_instance, mock_sm, mock_anchor = _common_patches(sl)
+    ce_instance, mock_sm = _common_patches(sl)
 
     with (
         patch.object(sl, "_ce", None),
@@ -163,7 +158,6 @@ async def test_run_with_progress_skips_begin_goal_loop_when_langfuse_disabled() 
             "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
-        patch("soothe.sloop.strange_loop.CheckpointAnchorManager") as am_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
@@ -182,7 +176,6 @@ async def test_run_with_progress_skips_begin_goal_loop_when_langfuse_disabled() 
         runtime_ctx = MagicMock()
         runtime_ctx.emit = AsyncMock()
         runtime_ctx_cls.return_value = runtime_ctx
-        am_cls.create = AsyncMock(return_value=mock_anchor)
 
         gen = sl.run_with_progress(
             goal="summarize readme",

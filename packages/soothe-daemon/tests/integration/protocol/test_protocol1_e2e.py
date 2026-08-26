@@ -11,7 +11,7 @@ Coverage:
 2. Error handling: pre-handshake rejection, unknown method, invalid params,
    proto mismatch.
 3. Heartbeat: ping/pong round-trip, heartbeat timeout.
-4. All major RPC message types: loop_list, loop_get, loop_tree, loop_prune,
+4. All major RPC message types: loop_list, loop_get,
    loop_delete, loop_reattach, loop_messages, loop_state_get, loop_state_update,
    loop_history_fetch, skills_list, invoke_skill, models_list, mcp_status,
    daemon_status, config_get, job_create, job_status, job_pause, job_resume,
@@ -241,19 +241,11 @@ class _MockDaemon:
                 self._loops[loop_id] = {}
             self._loops[loop_id].update(kwargs)
 
-        async def _get_failed_branches(loop_id):
-            return []
-
-        async def _get_checkpoint_anchors(*args, **kwargs):
-            return []
-
         return SimpleNamespace(
             list_loops=_list_loops,
             get_loop_metadata=_get_loop_metadata,
             register_loop=_register_loop,
             update_loop_metadata=_update_loop_metadata,
-            get_failed_branches_for_loop=_get_failed_branches,
-            get_checkpoint_anchors_for_range=_get_checkpoint_anchors,
         )
 
     def _build_input_dispatcher(self) -> Any:
@@ -528,32 +520,6 @@ def _install_rpc_stubs(server: _MockDaemonServer) -> None:
                 "proto": "1",
                 "type": "response",
                 "result": {"loop_id": loop_id, "status": meta.get("status"), "metadata": meta},
-                "id": msg.get("request_id") or msg.get("id"),
-            },
-        )
-
-    async def _handle_loop_tree(client_id, msg):
-        await daemon._send_client_message(
-            client_id,
-            {
-                "proto": "1",
-                "type": "response",
-                "result": {"loop_id": msg.get("loop_id"), "checkpoints": [], "branches": []},
-                "id": msg.get("request_id") or msg.get("id"),
-            },
-        )
-
-    async def _handle_loop_prune(client_id, msg):
-        await daemon._send_client_message(
-            client_id,
-            {
-                "proto": "1",
-                "type": "response",
-                "result": {
-                    "loop_id": msg.get("loop_id"),
-                    "pruned": 0,
-                    "kept": msg.get("keep_latest", 1),
-                },
                 "id": msg.get("request_id") or msg.get("id"),
             },
         )
@@ -931,8 +897,6 @@ def _install_rpc_stubs(server: _MockDaemonServer) -> None:
     router._handle_loop_list = _handle_loop_list  # type: ignore[method-assign]
     router._handle_loop_get = _handle_loop_get  # type: ignore[method-assign]
     router._handle_detach = _handle_detach  # type: ignore[method-assign]
-    router._handle_loop_tree = _handle_loop_tree  # type: ignore[method-assign]
-    router._handle_loop_prune = _handle_loop_prune  # type: ignore[method-assign]
     router._handle_loop_delete = _handle_loop_delete  # type: ignore[method-assign]
     router._handle_loop_reattach = _handle_loop_reattach  # type: ignore[method-assign]
     router._handle_loop_new = _handle_loop_new  # type: ignore[method-assign]
@@ -1203,33 +1167,6 @@ async def test_rpc_loop_get_not_found(mock_server: _MockDaemonServer) -> None:
         with pytest.raises(ProtocolError) as exc_info:
             await client.request("loop_get", {"loop_id": "nonexistent"}, timeout=5.0)
         assert exc_info.value.code == ErrorCode.LOOP_NOT_FOUND.value
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_rpc_loop_tree(mock_server: _MockDaemonServer) -> None:
-    """loop_tree returns checkpoint tree."""
-    client = await _connect_and_handshake(mock_server)
-    try:
-        result = await client.request("loop_tree", {"loop_id": "test"}, timeout=5.0)
-        assert result["loop_id"] == "test"
-        assert "checkpoints" in result
-        assert "branches" in result
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_rpc_loop_prune(mock_server: _MockDaemonServer) -> None:
-    """loop_prune prunes checkpoints."""
-    client = await _connect_and_handshake(mock_server)
-    try:
-        result = await client.request(
-            "loop_prune", {"loop_id": "test", "keep_latest": 2}, timeout=5.0
-        )
-        assert result["loop_id"] == "test"
-        assert result["kept"] == 2
     finally:
         await client.close()
 

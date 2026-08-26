@@ -70,7 +70,6 @@ def _make_ctx(
     return LoopRuntimeContext(
         strange_loop=strange_loop,
         state_manager=MagicMock(loop_id="loop-1"),
-        anchor_manager=MagicMock(),
         plan_manager=MagicMock(),
         checkpoint=MagicMock(),
         goal_record=None,
@@ -498,7 +497,6 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
     ctx = LoopRuntimeContext(
         strange_loop=strange_loop,
         state_manager=_StateManager(),
-        anchor_manager=MagicMock(),
         plan_manager=MagicMock(),
         checkpoint=checkpoint_obj,
         goal_record=goal_record,
@@ -594,8 +592,6 @@ async def test_synth_answer_flows_through_record_iteration_without_fatal(
 
     state_manager = MagicMock(loop_id="loop-1")
     state_manager.record_iteration = AsyncMock()
-    anchor_manager = MagicMock()
-    anchor_manager.capture_iteration_end_anchor = AsyncMock()
 
     strange_loop = MagicMock()
     strange_loop.config.agent.loop.concurrency.max_parallel_steps = 4
@@ -604,7 +600,6 @@ async def test_synth_answer_flows_through_record_iteration_without_fatal(
     ctx = LoopRuntimeContext(
         strange_loop=strange_loop,
         state_manager=state_manager,
-        anchor_manager=anchor_manager,
         plan_manager=MagicMock(),
         checkpoint=MagicMock(),
         goal_record=None,
@@ -715,7 +710,6 @@ async def test_ask_user_answer_resume_uses_command_resume(
     ctx = LoopRuntimeContext(
         strange_loop=strange_loop,
         state_manager=MagicMock(loop_id="loop-1"),
-        anchor_manager=MagicMock(),
         plan_manager=MagicMock(),
         checkpoint=MagicMock(),
         goal_record=None,

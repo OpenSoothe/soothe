@@ -1,4 +1,4 @@
-"""Persist iteration, end anchor, iteration-complete events (RFC-220 ``record_iteration``)."""
+"""Persist iteration and iteration-complete events (RFC-220 ``record_iteration``)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import logging
 import time
 from typing import Any
 
-from soothe.sloop.orchestrator.checkpoint import core_agent_checkpointer
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.utils.plan_action_text import resolve_plan_action_text
 
@@ -15,10 +14,8 @@ logger = logging.getLogger(__name__)
 
 async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Checkpoint persist + iteration_completed emission; advance iteration counter."""
-    strange_loop = ctx.strange_loop
     state = ctx.loop_state
     state_manager = ctx.state_manager
-    anchor_manager = ctx.anchor_manager
     goal_record = ctx.goal_record
     plan_manager = ctx.plan_manager
 
@@ -103,22 +100,6 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
     )
 
     plan_action_text = resolve_plan_action_text(plan_result)
-
-    execution_summary = {
-        "status": getattr(plan_result, "status", "success"),
-        "next_action_summary": plan_action_text or None,
-        "tools_executed": [
-            f"execute({sr.step_id})" for sr in step_results if hasattr(sr, "step_id")
-        ],
-        "reasoning_decision": getattr(decision, "reasoning", None),
-    }
-
-    await anchor_manager.capture_iteration_end_anchor(
-        iteration=iteration_completed,
-        thread_id=state.thread_id,
-        checkpointer=core_agent_checkpointer(strange_loop),
-        execution_summary=execution_summary,
-    )
 
     await ctx.emit(
         "iteration_completed",

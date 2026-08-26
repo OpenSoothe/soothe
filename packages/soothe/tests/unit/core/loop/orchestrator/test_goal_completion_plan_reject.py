@@ -38,7 +38,6 @@ def _reject_ctx() -> tuple[LoopRuntimeContext, ContextEngine, GoalNode]:
     ctx = LoopRuntimeContext(
         strange_loop=Mock(),
         state_manager=sm,
-        anchor_manager=Mock(),
         plan_manager=Mock(),
         checkpoint=Mock(),
         goal_record=Mock(goal_id="g1"),

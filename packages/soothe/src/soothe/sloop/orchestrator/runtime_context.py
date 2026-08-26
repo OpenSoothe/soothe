@@ -13,7 +13,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from soothe.sloop.checkpoints.anchor_manager import CheckpointAnchorManager
 from soothe.sloop.state.checkpoint import StrangeLoopCheckpoint
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.sloop.state.schemas import (
@@ -64,7 +63,6 @@ class LoopRuntimeContext:
 
     strange_loop: StrangeLoop
     state_manager: StrangeLoopStateManager
-    anchor_manager: CheckpointAnchorManager
     plan_manager: Any  # StepPlanManagerAdapter (duck-typed)
     checkpoint: StrangeLoopCheckpoint
     goal_record: GoalIndexEntry | None

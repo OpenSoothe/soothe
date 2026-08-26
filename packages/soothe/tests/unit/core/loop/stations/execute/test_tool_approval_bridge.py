@@ -21,9 +21,15 @@ from soothe.subagents.veritas.prompts import build_veritas_system_prompt_for_ori
 # ---------------------------------------------------------------------------
 
 
-def test_tool_approval_in_default_force_manual_origins() -> None:
-    """tool_approval defaults to manual so veritas doesn't auto-approve tools."""
-    assert ORIGIN_TOOL_APPROVAL in DEFAULT_FORCE_MANUAL_ORIGINS
+def test_tool_approval_not_in_default_force_manual_origins() -> None:
+    """tool_approval is auto-evaluated by veritas in auto mode by default.
+
+    Removing it from the default ``force_manual_origins`` lets safe tool actions
+    auto-approve via the veritas security-approver prompt instead of always
+    requiring a human. ``plan_mode_review`` stays a human call.
+    """
+    assert ORIGIN_TOOL_APPROVAL not in DEFAULT_FORCE_MANUAL_ORIGINS
+    assert "plan_mode_review" in DEFAULT_FORCE_MANUAL_ORIGINS
 
 
 # ---------------------------------------------------------------------------
@@ -111,18 +117,23 @@ def test_tool_approval_resume_payload_from_edit_answer() -> None:
 
 
 # ---------------------------------------------------------------------------
-# AutoClarificationPolicy routing: tool_approval is force-manual
+# AutoClarificationPolicy routing: tool_approval is veritas-evaluated by default
 # ---------------------------------------------------------------------------
 
 
-def test_auto_policy_routes_tool_approval_to_manual() -> None:
-    """AutoClarificationPolicy.requires_manual returns True for tool_approval."""
+def test_auto_policy_evaluates_tool_approval_via_veritas_by_default() -> None:
+    """By default tool_approval is NOT force-manual, so veritas evaluates it."""
     from soothe.sloop.clarification.auto import AutoClarificationPolicy
 
+    sentinel = object()
+
+    def _veritas(req: object) -> object:
+        return sentinel
+
     policy = AutoClarificationPolicy(
-        veritas_answer=lambda req: None,  # never called for force-manual
+        veritas_answer=_veritas,
         force_manual_origins=DEFAULT_FORCE_MANUAL_ORIGINS,
     )
-    assert policy.requires_manual(ORIGIN_TOOL_APPROVAL)
+    assert not policy.requires_manual(ORIGIN_TOOL_APPROVAL)
     assert policy.requires_manual("plan_mode_review")
     assert not policy.requires_manual("execute")

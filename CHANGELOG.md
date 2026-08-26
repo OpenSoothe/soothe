@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Auto clarification now auto-approves safe tool actions: remove `tool_approval` from the default `force_manual_origins` so veritas's security-approver prompt evaluates each `edit_file`/`run_command` call. Risky or low-confidence calls still degrade to a manual prompt (interactive) or park (headless). Re-add `tool_approval` to `agent.clarification.force_manual_origins` to force a human on every tool action.
+
 ### Fixed
+- Fix clarification focus bug: the tool-approval/plan-review comments input can no longer steal cursor focus — it is enabled only while the Refine/Edit action is selected, so the cursor stays on the selected action button by default.
+- Fix tool-approval popup focusing the chat input instead of the Approve action: `_active_plan_review_action_focus` now also matches the `tool_approval` origin so the app-level focus resolution prefers the popup's Approve button rather than falling through to `ChatInput`.
+- Remove the redundant `[approve / edit / reject]` suffix from tool-approval questions — the option buttons already convey the choices.
 - Fix fatal "Record iteration without plan/decision" after an `ask_user` answer resume: the synth path now populates scratch and routes through `record_iteration`. Steps that captured an ask_user interrupt score as awaiting-user instead of failed, and `ask_user` raises structured errors for whitespace-only questions.
 - Fix silent dead-end after submitting a clarification answer: save the Context Engine (step DAG) both before the interactive clarification pause and on the defer park — the resume previously loaded an empty DAG and root_eval killed the goal. The resume synth also recreates a lost CE step, and `ask_user` accepts a `query` alias.
 - Deliver clarification answers in-thread: both `ask_user` answers and tool approvals resume the interrupted agent via `Command(resume=...)` on the original step thread — the ask_user tool returns the Q&A (or the approved tool executes) and the agent continues its turn with full context. The execute stream config no longer inherits the parent graph's checkpoint namespace (which made interrupts unreachable); the config-injected checkpointer is preserved.

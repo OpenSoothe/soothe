@@ -115,7 +115,6 @@ async def _drive_intake(
             "soothe.sloop.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
-        patch("soothe.sloop.strange_loop.CheckpointAnchorManager") as anchor_cls,
         patch(
             "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
@@ -128,7 +127,6 @@ async def _drive_intake(
         patch("soothe_nano.skills.catalog.parse_slash_skill_user_line", return_value=None),
         patch("soothe_nano.skills.catalog.try_expand_slash_skill_user_line", return_value=None),
     ):
-        anchor_cls.create = AsyncMock(return_value=MagicMock(close=AsyncMock()))
         runtime_ctx = MagicMock()
         runtime_ctx.emit = AsyncMock()
         runtime_ctx_cls.return_value = runtime_ctx

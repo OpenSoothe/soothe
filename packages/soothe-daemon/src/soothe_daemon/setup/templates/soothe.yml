@@ -232,11 +232,12 @@ agent:
     default_mode: auto
     # StrangeLoop plan_generate/plan_assess are *not* listed here.
     # plan_mode_review — plan approve/reject/refine gate is a human call.
-    # tool_approval — approving a tool action (edit_file, run_command) is a
-    # human-judgment / security call by default.
+    # tool_approval is intentionally NOT listed: in auto mode veritas's
+    # security-approver prompt evaluates each tool action and auto-approves
+    # safe calls (degrading to a manual prompt only when it defers). Re-add
+    # tool_approval here to force every tool action through a human.
     force_manual_origins:
       - plan_mode_review
-      - tool_approval
 
   veritas:
     model_role: think

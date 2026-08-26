@@ -157,9 +157,6 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
     mock_core.astream = counting_astream
 
     mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
-    mock_anchor_mgr = Mock()
-    mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
-    mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()
 
     with (
@@ -171,11 +168,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
             "soothe.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
-        patch(
-            "soothe.sloop.strange_loop.CheckpointAnchorManager",
-        ) as am_cls,
     ):
-        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, SootheConfig())
 
         events = [
@@ -212,9 +205,6 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
     mock_core.astream = counting_astream
 
     mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
-    mock_anchor_mgr = Mock()
-    mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
-    mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()
 
     with (
@@ -226,16 +216,12 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
             "soothe.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
-        patch(
-            "soothe.sloop.strange_loop.CheckpointAnchorManager",
-        ) as am_cls,
         patch.object(
             SynthesisGenerator,
             "generate_synthesis",
             side_effect=empty_gen,
         ),
     ):
-        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, SootheConfig())
         loop._fast_llm = None  # Prevent synthesis LLM calls
 
@@ -266,9 +252,6 @@ async def test_completed_payload_for_summary_path() -> None:
     mock_core.astream = AsyncMock()
 
     mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
-    mock_anchor_mgr = Mock()
-    mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
-    mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce(ledger_entries=[])
 
     with (
@@ -280,16 +263,12 @@ async def test_completed_payload_for_summary_path() -> None:
             "soothe.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
-        patch(
-            "soothe.sloop.strange_loop.CheckpointAnchorManager",
-        ) as am_cls,
         patch.object(
             SynthesisGenerator,
             "generate_synthesis",
             side_effect=empty_gen,
         ),
     ):
-        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, SootheConfig())
         loop._fast_llm = None  # Prevent synthesis LLM calls
 
@@ -316,9 +295,6 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
     mock_ckpt.current_thread_id = "legacy-thread"
     mock_ckpt.thread_ids = ["legacy-thread"]
 
-    mock_anchor_mgr = Mock()
-    mock_anchor_mgr.capture_iteration_end_anchor = AsyncMock()
-    mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()
 
     with (
@@ -330,11 +306,7 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
             "soothe.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
-        patch(
-            "soothe.sloop.strange_loop.CheckpointAnchorManager",
-        ) as am_cls,
     ):
-        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, SootheConfig())
 
         _ = [

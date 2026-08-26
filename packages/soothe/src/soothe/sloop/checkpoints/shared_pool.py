@@ -5,7 +5,7 @@ Provides a singleton pool at daemon level for high-concurrency scenarios
 of creating its own, preventing connection exhaustion.
 
 SQLite mode uses a ref-counted singleton ``SQLitePersistenceBackend`` so each
-loop's anchor manager shares the process ``SqliteStoreRuntime`` for
+loop shares the process ``SqliteStoreRuntime`` for
 ``databases/checkpoints.db``.
 
 Architecture:
@@ -136,7 +136,7 @@ class SharedPostgreSQLPool:
         # Open pool
         await self._pool.open()
 
-        # Initialize schema (agentloop_checkpoints, checkpoint_anchors, etc.)
+        # Initialize schema (agentloop_checkpoints, goal_records, etc.)
         await self._initialize_schema(self._pool)
 
         self._initialized = True
