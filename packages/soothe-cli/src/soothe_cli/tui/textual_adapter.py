@@ -2924,7 +2924,7 @@ def _should_show_clarification_prompt(
 async def _mount_manual_clarification_input(
     adapter: TextualUIAdapter,
     *,
-    questions: list[str],
+    questions: list,
     origin_node: str = "",
     plan_path: str = "",
     plan_markdown: str = "",
@@ -2935,17 +2935,37 @@ async def _mount_manual_clarification_input(
     then a synthetic key from ``origin_node`` so intake-only plan review still
     shows an answer UI after the orphan card has completed.
 
+    Routes by payload shape (RFC-622 §9c): structured ``QuestionSpec`` dicts
+    with an ``options`` key → ``StructuredAskUserWidget``; HITL origins
+    (``plan_mode_review``, ``tool_approval``) → ``ClarificationInputMessage``;
+    plain strings → ``StructuredAskUserWidget`` in degraded mode.
+
     Returns:
         The step/key used for ``adapter._clarification_input_by_step``.
     """
-    questions_list = [str(q) for q in questions if str(q).strip()]
+    # Determine whether questions are structured (dict with "options") or plain.
+    is_structured = bool(questions) and isinstance(questions[0], dict) and "options" in questions[0]
+    # HITL origins always use ClarificationInputMessage.
+    is_hitl = origin_node in ("plan_mode_review", "tool_approval")
+    if is_hitl:
+        # Flatten to strings for the HITL widget.
+        questions_list = [str(q) for q in questions if str(q).strip()]
+    else:
+        # Preserve structured dicts; filter by title for structured, by str for plain.
+        questions_list = [
+            q
+            for q in questions
+            if (q.get("title", "").strip() if isinstance(q, dict) else str(q).strip())
+        ]
     if not questions_list:
         return ""
 
     target_step_id = ""
     for sid, step_widget in adapter._current_step_messages.items():
         if step_widget._status == "running":  # noqa: SLF001
-            step_widget.set_awaiting_clarification(questions_list)
+            step_widget.set_awaiting_clarification(
+                [str(q) if not isinstance(q, dict) else q.get("title", "") for q in questions_list]
+            )
             target_step_id = sid
             break
     if not target_step_id:
@@ -2961,15 +2981,29 @@ async def _mount_manual_clarification_input(
     existing = adapter._clarification_input_by_step.get(target_step_id)
     if existing is None:
         widget_id = f"clarify-{uuid.uuid4().hex[:8]}"
-        input_widget = ClarificationInputMessage(
-            step_id=target_step_id,
-            questions=questions_list,
-            origin_node=str(origin_node or ""),
-            plan_path=str(plan_path or ""),
-            plan_markdown=str(plan_markdown or ""),
-            widget_id=widget_id,
-            id=widget_id,
-        )
+        if is_hitl:
+            input_widget = ClarificationInputMessage(
+                step_id=target_step_id,
+                questions=questions_list,
+                origin_node=str(origin_node or ""),
+                plan_path=str(plan_path or ""),
+                plan_markdown=str(plan_markdown or ""),
+                widget_id=widget_id,
+                id=widget_id,
+            )
+        else:
+            from soothe_cli.tui.widgets.messages.structured_ask_user import (
+                StructuredAskUserWidget,
+            )
+
+            input_widget = StructuredAskUserWidget(
+                step_id=target_step_id,
+                questions=questions_list,
+                origin_node=str(origin_node or ""),
+                widget_id=widget_id,
+                id=widget_id,
+                degraded=not is_structured,
+            )
         adapter._clarification_input_by_step[target_step_id] = input_widget
         mount_result = adapter._mount_message(input_widget)
         if mount_result is not None:
@@ -4201,9 +4235,22 @@ async def execute_task_textual(
                                 adapter._clarification_pending = True
                                 if event_type == LOOP_CLARIFICATION_REQUESTED:
                                     raw_questions = data.get("questions") or []
-                                    questions_list = [
-                                        str(q) for q in raw_questions if str(q).strip()
-                                    ]
+                                    # Preserve structured dicts (RFC-622 §9c);
+                                    # only flatten for HITL origins.
+                                    if origin_node in ("plan_mode_review", "tool_approval"):
+                                        questions_list = [
+                                            str(q) for q in raw_questions if str(q).strip()
+                                        ]
+                                    else:
+                                        questions_list = [
+                                            q
+                                            for q in raw_questions
+                                            if (
+                                                q.get("title", "").strip()
+                                                if isinstance(q, dict)
+                                                else str(q).strip()
+                                            )
+                                        ]
                                     if questions_list and _should_show_clarification_prompt(
                                         event_data=data,
                                         fallback_mode=clarification_mode,

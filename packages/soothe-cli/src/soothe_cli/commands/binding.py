@@ -198,8 +198,21 @@ def message_from_widget(widget: Widget) -> MessageData:
         UserMessage,
     )
     from soothe_cli.tui.widgets.messages.clarification import ClarificationInputMessage
+    from soothe_cli.tui.widgets.messages.structured_ask_user import (
+        StructuredAskUserWidget,
+    )
 
     widget_id = widget.id or f"msg-{uuid.uuid4().hex[:8]}"
+
+    if isinstance(widget, StructuredAskUserWidget):
+        # Serialize StructuredAskUserWidget to MessageData for transcript.
+        answers = widget._answers_collected() if widget._submitted else []  # noqa: SLF001
+        if widget._submitted and answers:  # noqa: SLF001
+            summary = " | ".join(a for a in answers if a)
+            content = f"Clarification: {summary}" if summary else "Clarification answered"
+        else:
+            content = "Clarification: awaiting answer"
+        return MessageData(type=MessageType.APP, content=content, id=widget_id)
 
     if isinstance(widget, ClarificationInputMessage):
         origin = widget._origin_node or ""  # noqa: SLF001

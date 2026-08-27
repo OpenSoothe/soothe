@@ -71,12 +71,14 @@ def _strip_plan_frontmatter(markdown: str) -> str:
 
 
 class ClarificationInputMessage(Vertical):
-    """Inline answer-collection widget for a pending ``ask_user`` step (RFC-622).
+    """Inline answer-collection widget for HITL ``ask_user`` steps (RFC-622).
 
-    Mounted when ``soothe.loop.clarification.requested`` arrives. Three
-    render modes, keyed on ``origin_node``:
+    Mounted when ``soothe.loop.clarification.requested`` arrives for
+    plan-review or tool-approval origins. Generic (execute) ask_user
+    questions are handled by ``StructuredAskUserWidget`` (§9c).
 
-    - **Generic** (``execute`` ask_user): one free-text ``Input`` per question.
+    Two render modes, keyed on ``origin_node``:
+
     - **Plan review** (``plan_mode_review``): full draft plan, saved-path
       footer, and Approve / Refine / Reject action buttons.
     - **Tool approval** (``tool_approval``): the question already carries the
@@ -313,7 +315,6 @@ class ClarificationInputMessage(Vertical):
         self._origin_node = (origin_node or "").strip()
         self._plan_path = (plan_path or "").strip()
         self._plan_markdown = (plan_markdown or "").strip()
-        self._inputs: list[Input] = []
         self._submitted = False
         self._answers: list[str] = []
         self._widget_id = widget_id or self.id or ""
@@ -524,30 +525,15 @@ class ClarificationInputMessage(Vertical):
                     markup=True,
                 )
 
-    def _compose_generic(self) -> Any:
-        yield Static(self._title_content(), classes="clarification-title")
-        for i, q in enumerate(self._questions):
-            q_classes = "clarification-question"
-            if i > 0:
-                q_classes += " has-separator"
-            yield Static(f"Q{i + 1}: {q}", classes=q_classes, markup=False)
-            inp = Input(placeholder=f"Your answer for Q{i + 1}…", id=f"clarification-input-{i}")
-            self._inputs.append(inp)
-            yield inp
-
     def compose(self) -> Any:
         if self._is_option_selector:
             yield from self._compose_option_selector()
-        else:
-            yield from self._compose_generic()
 
     def on_mount(self) -> None:
         if self._is_option_selector:
             if self._is_plan_review:
                 self._render_plan_body()
             if self._submitted:
-                # Restored from transcript in answered state — collapse the body
-                # and populate the answered summary.
                 if self._refine_input is not None:
                     self._refine_input.disabled = True
                 self._refresh_answered_summary()
@@ -556,14 +542,6 @@ class ClarificationInputMessage(Vertical):
                 approve = self._action_buttons.get("approve")
                 if approve is not None:
                     self._schedule_focus(approve)
-            return
-        if not self._inputs:
-            return
-        app = self.app
-        if hasattr(app, "focus_primary_input"):
-            app.focus_primary_input()
-            return
-        self._schedule_focus(self._inputs[0])
 
     def _render_plan_body(self) -> None:
         body_widget = getattr(self, "_plan_body_widget", None)
@@ -737,27 +715,6 @@ class ClarificationInputMessage(Vertical):
                     self._finalize_plan_review_with_comments(comments)
                 event.stop()
             return
-        idx = self._inputs.index(event.input) if event.input in self._inputs else -1
-        if idx < 0:
-            return
-        # Move to the next blank field if any are still empty; otherwise finalize.
-        next_blank = next(
-            (
-                j
-                for j, inp in enumerate(self._inputs)
-                if j != idx and not str(inp.value or "").strip()
-            ),
-            None,
-        )
-        if next_blank is not None:
-            try:
-                self._inputs[next_blank].focus()
-            except Exception:  # noqa: BLE001
-                logger.debug("ClarificationInputMessage: focus next blank failed", exc_info=True)
-            event.stop()
-            return
-        self._finalize()
-        event.stop()
 
     def _finalize_plan_review(self, *, action: _PlanReviewAction) -> None:
         if self._submitted:
@@ -804,35 +761,6 @@ class ClarificationInputMessage(Vertical):
         self.add_class("is-submitted")
         self._refresh_title()
         self._refresh_answered_summary()
-        self.post_message(
-            self.Submitted(
-                step_id=self._step_id,
-                questions=list(self._questions),
-                answers=answers,
-                widget_id=self._widget_id,
-                origin_node=self._origin_node,
-            )
-        )
-
-    def _finalize(self) -> None:
-        if self._submitted:
-            return
-        raw = [str(inp.value or "").strip() for inp in self._inputs]
-        # Broadcast a single non-empty answer to all questions when the user
-        # only filled one field.
-        non_empty = [a for a in raw if a]
-        if len(non_empty) == 1 and len(raw) > 1:
-            answers = non_empty * len(raw)
-        else:
-            answers = raw
-        if not any(answers):
-            return
-        self._submitted = True
-        self._answers = answers
-        for inp in self._inputs:
-            inp.disabled = True
-        self.add_class("is-submitted")
-        self._refresh_title()
         self.post_message(
             self.Submitted(
                 step_id=self._step_id,

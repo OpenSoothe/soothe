@@ -494,7 +494,18 @@ class TestAskUserToolHandlerCase:
 
     def test_tool_emits_ask_user_interrupt(self) -> None:
         """When the LLM calls ask_user, the handler emits interrupt({"type":"ask_user",...})."""
-        from soothe.coreagent.tools.ask_user import _run_ask_user
+        from soothe.coreagent.tools.ask_user import OptionSpec, QuestionSpec, _run_ask_user
+
+        q = QuestionSpec(
+            title="Choose option",
+            description="Which option: A or B?",
+            options=[
+                OptionSpec(short="Option A", long="First option."),
+                OptionSpec(short="Option B", long="Second option."),
+                OptionSpec(short="Neither", long="Decline both."),
+            ],
+            recommended=0,
+        )
 
         captured: list[dict[str, Any]] = []
 
@@ -503,27 +514,49 @@ class TestAskUserToolHandlerCase:
             return {"answers": ["Option B"]}
 
         with patch("langgraph.types.interrupt", fake_interrupt):
-            result = _run_ask_user(["Which option: A or B?"])
+            result = _run_ask_user([q])
 
         assert len(captured) == 1
         assert captured[0]["type"] == "ask_user"
-        assert captured[0]["questions"] == ["Which option: A or B?"]
+        assert captured[0]["questions"][0]["title"] == "Choose option"
         assert "Option B" in result
 
     def test_tool_returns_dismissed_message_on_empty_answer(self) -> None:
-        from soothe.coreagent.tools.ask_user import _run_ask_user
+        from soothe.coreagent.tools.ask_user import OptionSpec, QuestionSpec, _run_ask_user
+
+        q = QuestionSpec(
+            title="Approve",
+            description="Approve the plan?",
+            options=[
+                OptionSpec(short="Yes", long="Approve."),
+                OptionSpec(short="No", long="Reject."),
+                OptionSpec(short="Maybe", long="Defer."),
+            ],
+            recommended=0,
+        )
 
         with patch("langgraph.types.interrupt", lambda v: None):
-            result = _run_ask_user(["Approve?"])
+            result = _run_ask_user([q])
         assert "dismissed" in result.lower()
 
     @pytest.mark.asyncio
     async def test_tool_async_path(self) -> None:
-        from soothe.coreagent.tools.ask_user import build_ask_user_tool
+        from soothe.coreagent.tools.ask_user import OptionSpec, QuestionSpec, build_ask_user_tool
+
+        q = QuestionSpec(
+            title="Approve",
+            description="Approve the plan?",
+            options=[
+                OptionSpec(short="Yes", long="Approve."),
+                OptionSpec(short="No", long="Reject."),
+                OptionSpec(short="Maybe", long="Defer."),
+            ],
+            recommended=0,
+        )
 
         with patch("langgraph.types.interrupt", lambda v: {"answers": ["yes"]}):
             tool = build_ask_user_tool()
-            result = await tool.ainvoke({"questions": ["Approve the plan?"]})
+            result = await tool.ainvoke({"questions": [q.model_dump()]})
         assert "yes" in result
 
 
@@ -827,3 +860,120 @@ class TestResumeStreamConfigCase:
         assert first_input.resume == {"i1": {"answers": ["run tests"]}}
         # One-shot: consumed, not reused by later steps sharing the Executor.
         assert executor._clarification_resume_answer_payload is None
+
+
+# ---------------------------------------------------------------------------
+# Structured ask_user wire round-trip (RFC-622 §9c)
+# ---------------------------------------------------------------------------
+
+
+class TestStructuredAskUserWireRoundTrip:
+    """Verify that structured ``QuestionSpec`` payloads survive the full
+    interrupt → capture → resume → ``_format_answers`` cycle and produce
+    model-readable Q&A text with title extraction."""
+
+    @pytest.mark.asyncio
+    async def test_structured_interrupt_detected(self) -> None:
+        """A structured ask_user interrupt (QuestionSpec dicts) is detected
+        by the detector and questions survive as structured dicts."""
+        from soothe.coreagent.tools.ask_user import OptionSpec, QuestionSpec
+        from soothe.sloop.clarification.detector import ClarificationDetector
+
+        q = QuestionSpec(
+            title="Auth method",
+            description="How should the API authenticate requests?",
+            options=[
+                OptionSpec(short="OAuth", long="OAuth 2.0 with PKCE."),
+                OptionSpec(short="API key", long="Static API key in a header."),
+                OptionSpec(short="Session", long="Server-side session with cookies."),
+            ],
+            recommended=0,
+        )
+        interrupt_value = {"type": "ask_user", "questions": [q.model_dump()]}
+
+        # Detector should recognize this as an ask_user interrupt.
+        assert is_ask_user_interrupt(interrupt_value)
+
+        # Detect via the detector.
+        detector = ClarificationDetector()
+        capture = detector.from_interrupt(
+            interrupt_value,
+            interrupt_id="struct-i1",
+            origin_node=ORIGIN_EXECUTE,
+            loop_state=_view(),
+        )
+        assert capture is not None
+        assert capture.origin_node == ORIGIN_EXECUTE
+        # Questions survive as structured dicts (not flattened to strings).
+        assert isinstance(capture.questions[0], dict)
+        assert capture.questions[0]["title"] == "Auth method"
+        assert len(capture.questions[0]["options"]) == 3
+
+    def test_structured_format_answers_uses_title(self) -> None:
+        """``_format_answers`` extracts the title from QuestionSpec dicts
+        when rendering the resume payload for the model."""
+        from soothe.coreagent.tools.ask_user import _format_answers
+
+        questions = [
+            {
+                "title": "Auth method",
+                "description": "How to authenticate?",
+                "options": [
+                    {"short": "OAuth", "long": "..."},
+                    {"short": "API key", "long": "..."},
+                    {"short": "Session", "long": "..."},
+                ],
+                "recommended": 0,
+            }
+        ]
+        out = _format_answers(questions, {"answers": ["OAuth"]})
+        assert "Q: Auth method" in out
+        assert "A: OAuth" in out
+
+    def test_structured_format_answers_multiple_questions(self) -> None:
+        """Multiple structured questions render as separate Q/A pairs with
+        titles extracted from each QuestionSpec dict."""
+        from soothe.coreagent.tools.ask_user import _format_answers
+
+        questions = [
+            {
+                "title": "Auth method",
+                "description": "D1",
+                "options": [{"short": "A", "long": "la"}] * 3,
+                "recommended": 0,
+            },
+            {
+                "title": "Token store",
+                "description": "D2",
+                "options": [{"short": "B", "long": "lb"}] * 3,
+                "recommended": 1,
+            },
+        ]
+        out = _format_answers(questions, {"answers": ["OAuth", "Redis"]})
+        assert "Q: Auth method" in out
+        assert "A: OAuth" in out
+        assert "Q: Token store" in out
+        assert "A: Redis" in out
+
+    def test_structured_format_answers_dismissed(self) -> None:
+        """Empty answers produce the dismissal message."""
+        from soothe.coreagent.tools.ask_user import _format_answers
+
+        questions = [
+            {
+                "title": "Auth",
+                "description": "D",
+                "options": [{"short": "A", "long": "la"}] * 3,
+                "recommended": 0,
+            }
+        ]
+        out = _format_answers(questions, None)
+        assert "dismissed" in out.lower()
+
+    def test_plain_string_questions_still_work_in_format_answers(self) -> None:
+        """Degraded plain-string questions still render via str() fallback."""
+        from soothe.coreagent.tools.ask_user import _format_answers
+
+        out = _format_answers(["Which option?"], {"answers": ["Option C"]})
+        assert "Q: Which option?" in out
+        assert "A: Option C" in out

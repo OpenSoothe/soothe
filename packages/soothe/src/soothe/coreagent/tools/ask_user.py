@@ -10,75 +10,117 @@ from pydantic import BaseModel, Field, model_validator
 logger = logging.getLogger(__name__)
 
 
-class _AskUserArgs(BaseModel):
-    """``questions`` (list) is primary; ``question`` (str) is a singular alias."""
+class OptionSpec(BaseModel):
+    """A single selectable option for a structured question (RFC-622 §9c).
 
-    questions: list[str] = Field(
+    ``short`` is the answer label shown in the recap and sent on resume.
+    ``long`` is shown in the hover-preview box when the option is highlighted.
+    """
+
+    short: str = Field(description="Short option label (≤12 words). Sent on resume.")
+    long: str = Field(description="Long description (1–3 sentences). Shown on hover.")
+
+
+class QuestionSpec(BaseModel):
+    """A structured question with options (RFC-622 §9c).
+
+    The LLM emits exactly 3 options plus a recommended index. The CLI widget
+    adds a 4th implicit "custom" free-text row. ``title`` is the tab label
+    (≤3 words); ``description`` is the question body (≤100 words).
+    """
+
+    title: str = Field(description="Tab label (≤3 words).")
+    description: str = Field(description="Question body (≤100 words).")
+    options: list[OptionSpec] = Field(
+        description="Exactly 3 options with short/long descriptions.",
+    )
+    recommended: int = Field(
+        default=-1,
+        description="Index of the recommended option (0–2), or -1 for none.",
+    )
+
+    @model_validator(mode="after")
+    def _validate(self) -> QuestionSpec:
+        if len(self.options) != 3:
+            raise ValueError("exactly 3 options required")
+        if self.recommended not in (-1, 0, 1, 2):
+            raise ValueError("recommended must be -1, 0, 1, or 2")
+        if len(self.title.split()) > 3:
+            raise ValueError("title must be ≤3 words")
+        if len(self.description.split()) > 100:
+            raise ValueError("description must be ≤100 words")
+        for opt in self.options:
+            if not opt.short.strip():
+                raise ValueError("option short must be non-empty")
+            if len(opt.short.split()) > 12:
+                raise ValueError("option short must be ≤12 words")
+            if not opt.long.strip():
+                raise ValueError("option long must be non-empty")
+        return self
+
+
+class _AskUserArgs(BaseModel):
+    """``questions`` (list of QuestionSpec) is the sole entry point."""
+
+    questions: list[QuestionSpec] = Field(
         default_factory=list,
-        description="The question(s) to ask the user.",
-    )
-    question: str | None = Field(
-        default=None,
-        description="Single-question shorthand for 'questions'.",
-    )
-    query: str | None = Field(
-        default=None,
-        description="Alias for 'question' (some models emit 'query').",
+        description="The question(s) to ask the user, each with structured options.",
     )
 
     @model_validator(mode="after")
     def _normalize(self) -> _AskUserArgs:
-        if not self.questions and (self.question or self.query):
-            self.questions = [self.question or self.query]
-        # Reject empty and whitespace-only question lists.
-        self.questions = [str(q).strip() for q in self.questions if str(q).strip()]
+        # Drop questions whose title is whitespace-only.
+        self.questions = [q for q in self.questions if q.title.strip()]
         if not self.questions:
             raise ValueError("ask_user requires at least one non-empty question")
         return self
 
 
-def _format_answers(questions: list[str], payload: object) -> str:
-    """Render the resume payload as a model-readable Q&A block."""
+def _format_answers(questions: list, payload: object) -> str:
+    """Render the resume payload as a model-readable Q&A block.
+
+    ``questions`` may be ``list[QuestionSpec]``, ``list[dict]`` (structured,
+    from wire), or ``list[str]`` (degraded backward compat). Title is extracted
+    from ``QuestionSpec`` or dict when available; falls back to ``str(q)``.
+    """
     raw = payload.get("answers", payload) if isinstance(payload, dict) else payload
     answers = (
         [raw] if isinstance(raw, str) else [str(a) for a in raw] if isinstance(raw, list) else []
     )
     if not answers:
         return "Clarification dismissed without an answer. Decide how to proceed."
-    pairs = [
-        f"Q: {q}\nA: {answers[i] if i < len(answers) else '(no answer)'}"
-        for i, q in enumerate(questions)
-    ]
+    pairs = []
+    for i, q in enumerate(questions):
+        title = (
+            q.title
+            if isinstance(q, QuestionSpec)
+            else q.get("title", str(q))
+            if isinstance(q, dict)
+            else str(q)
+        )
+        pairs.append(f"Q: {title}\nA: {answers[i] if i < len(answers) else '(no answer)'}")
     return "User answered:\n" + "\n".join(pairs)
 
 
-def _run_ask_user(
-    questions: list[str] | None = None,
-    *,
-    question: str | None = None,
-    query: str | None = None,
-) -> str:
+def _run_ask_user(questions: list[QuestionSpec] | None = None) -> str:
     """Pause the graph via ``interrupt()``; return formatted answers on resume."""
     from langgraph.types import interrupt
 
     qs = list(questions or [])
-    if not qs and (question or query):
-        qs = [question or query]
-    cleaned = [str(q).strip() for q in qs if str(q).strip()]
+    cleaned = [q for q in qs if q.title.strip()]
     if not cleaned:
         raise ValueError("ask_user requires at least one non-empty question")
-    logger.info("[ask_user] LLM asked %d question(s): %s", len(cleaned), cleaned[0][:120])
-    payload = interrupt({"type": "ask_user", "questions": cleaned})
+    logger.info(
+        "[ask_user] LLM asked %d question(s): %s",
+        len(cleaned),
+        cleaned[0].title[:120],
+    )
+    payload = interrupt({"type": "ask_user", "questions": [q.model_dump() for q in cleaned]})
     return _format_answers(cleaned, payload)
 
 
-async def _arun_ask_user(
-    questions: list[str] | None = None,
-    *,
-    question: str | None = None,
-    query: str | None = None,
-) -> str:
-    return _run_ask_user(questions, question=question, query=query)
+async def _arun_ask_user(questions: list[QuestionSpec] | None = None) -> str:
+    return _run_ask_user(questions)
 
 
 def build_ask_user_tool() -> StructuredTool:
@@ -87,9 +129,11 @@ def build_ask_user_tool() -> StructuredTool:
         name="ask_user",
         description=(
             "Ask the user a question and pause the loop until they answer. "
-            "Use 'question' (string) or 'questions' (list). For decision gates: "
-            "approval, confirmation, routing, or resolving ambiguity. "
-            "Plain-text questions do not pause the loop."
+            "Each question has a title (≤3 words), description (≤100 words), "
+            "exactly 3 options (each with short/long text), and a recommended "
+            "index (0–2 or -1). The CLI renders options as a picker; the user "
+            "can also type a custom answer. Use for decision gates: approval, "
+            "confirmation, routing, or resolving ambiguity."
         ),
         func=_run_ask_user,
         coroutine=_arun_ask_user,

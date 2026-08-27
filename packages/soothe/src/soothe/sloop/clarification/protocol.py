@@ -46,7 +46,10 @@ class LoopStateView:
 
 @dataclass(frozen=True)
 class ClarificationRequest:
-    questions: tuple[str, ...]
+    questions: tuple
+    """Structured (dict) or plain-string questions. Structured dicts carry
+    title/description/options/recommended (RFC-622 §9c); plain strings are
+    used by HITL origins and the degraded fallback."""
     origin_node: ClarificationOrigin
     origin_interrupt_id: str
     loop_state: LoopStateView
@@ -164,7 +167,12 @@ def request_from_state(d: Mapping[str, Any]) -> ClarificationRequest:
     if isinstance(raw_questions, str):
         questions = (raw_questions.strip(),) if raw_questions.strip() else ()
     elif isinstance(raw_questions, (list, tuple)):
-        questions = tuple(str(q).strip() for q in raw_questions if str(q).strip())
+        # Preserve structured dicts (RFC-622 §9c); flatten only plain strings.
+        questions = tuple(
+            q if isinstance(q, dict) else str(q).strip()
+            for q in raw_questions
+            if (q.get("title", "").strip() if isinstance(q, dict) else str(q).strip())
+        )
     else:
         questions = ()
     if not questions:

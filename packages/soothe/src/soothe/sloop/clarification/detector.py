@@ -142,12 +142,26 @@ class ClarificationDetector:
         return None
 
     @staticmethod
-    def _extract_questions(value: Mapping[str, Any]) -> tuple[str, ...]:
+    def _extract_questions(value: Mapping[str, Any]) -> tuple:
+        """Extract questions from an ask_user interrupt payload.
+
+        Preserves structured dicts (RFC-622 §9c: QuestionSpec with title,
+        description, options) when the payload carries them; falls back to
+        plain strings for pre-§9c in-flight interrupts.
+        """
         raw = value.get("questions")
         if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
-            cleaned = tuple(str(q).strip() for q in raw if str(q).strip())
+            cleaned: list[str | dict] = []
+            for q in raw:
+                if isinstance(q, dict):
+                    # Structured: preserve if title is non-empty.
+                    title = str(q.get("title", "") or "").strip()
+                    if title:
+                        cleaned.append(q)
+                elif str(q).strip():
+                    cleaned.append(str(q).strip())
             if cleaned:
-                return cleaned
+                return tuple(cleaned)
         single = value.get("question")
         if isinstance(single, str) and single.strip():
             return (single.strip(),)
