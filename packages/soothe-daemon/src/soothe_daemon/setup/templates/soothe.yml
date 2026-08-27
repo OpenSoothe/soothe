@@ -7,8 +7,6 @@ agent:
   autopilot:
     enabled: true
     max_retries: 2
-    max_total_goals: 99
-    max_goal_depth: 5
     # Cap goal fan-out under typical provider concurrency quotas.
     max_parallel_goals: 3
     # Goal GC — cancel non-terminal goals whose job root is already terminal.
@@ -16,7 +14,6 @@ agent:
     gc_interval_seconds: 120
     max_send_backs: 3
     max_engine_recoveries: 2
-    checkpoint_interval: 10
     # Dreaming is automatic (DAG complete / timer) and config-driven — no CLI dream/wake.
     # Wake happens on submit or scheduled task. Set dreaming_enabled: false to disable.
     dreaming_enabled: true
@@ -51,7 +48,6 @@ agent:
     verify_llm_enabled: true
     verify_llm_min_nonterminal: 1
     verify_llm_debounce: true
-    dreaming_interval: 300
     webhooks: {}
     notify:
       enabled: false
@@ -92,10 +88,9 @@ agent:
           targets: []
       sla:
         enabled: false
-        warning_after_seconds: 3600
-        critical_after_seconds: 7200
-        breach_after_seconds: 14400
-        track_root_goals_only: true
+        warning_seconds: 3600
+        critical_seconds: 7200
+        breach_seconds: 14400
     max_loops: 16
     loop_idle_timeout: 300
     poll_interval: 5
@@ -123,11 +118,9 @@ agent:
     decompose:
       max_depth: 3
       max_steps: 30
-      max_recompose: 2
       max_waves: 10
       max_branch_root: 5
       max_branch_inner: 3
-      reconcile_model_role: fast
     # Fresh readonly coverage-audit thread (RFC-905); runs only when required.
     eval:
       max_eval_rounds: 10
@@ -141,15 +134,10 @@ agent:
     step_completion_report_max_words: 50
     max_subagent_tasks_per_wave: 4
     general_purpose_subagent: "off"
-    strange_loop_output_contract_enabled: true
-    goal_completion_mode: llm_only
     final_response: always_synthesize
     step_brief_hydration_enabled: true
-    prior_conversation_limit: 10
     context_window_limit: 200000
     context_overflow_threshold_pct: 0.8
-    context_compaction_target_pct: 0.6
-    step_context_check_enabled: false
     goal_synthesis_model_role: default
     rules:
       completion:
@@ -182,10 +170,6 @@ agent:
       enabled: true
       max_inline_chars: 4000
       max_entry_chars_before_spill: 1500
-    goal_context:
-      plan_limit: 10
-      execute_limit: 10
-      enabled: true
     plan_prompt_ledger:
       plan_ledger_max_messages: 40
       plan_ledger_max_total_chars: 200000
@@ -219,14 +203,11 @@ agent:
         flush_interval: 5.0
         close_timeout_seconds: 30
         durable_flush_timeout: 10
-    loop_orchestrator_evidence_validate: true
 
   clarification:
-    auto_policy: veritas
     auto_min_confidence: 0.4
     degrade_to_manual_on_low_confidence: true
-    max_defer_age_hours: 168
-    default_mode: auto
+    default_mode: manual
     # StrangeLoop plan_generate/plan_assess are *not* listed here.
     # plan_mode_review — plan approve/reject/refine gate is a human call.
     # tool_approval is intentionally NOT listed: in auto mode the multi-stage
@@ -277,7 +258,6 @@ agent:
         enabled: true
         model_role: fast
         max_context_steps: 0
-        inline_project_instructions: false
       audit:
         log_decisions: true
         log_level: info

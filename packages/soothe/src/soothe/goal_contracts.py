@@ -1,15 +1,10 @@
 """Goal wire/contract types shared between the host and soothe-autopilot.
 
-This module is the neutral home for the goal-dispatch and evidence/backoff
-vocabulary that flows across the host ↔ autopilot boundary. Both the host
-(``soothe.sloop.state.schemas``, ``soothe.protocols.runner``) and the autopilot
-package import these types from here, so neither side owns the other's wire
-contracts.
-
-Historical note: these types previously lived in
-``soothe.autopilot.dispatch.models``. They moved here (host-owned neutral
-module) so the autopilot extraction stays one-way: ``soothe-autopilot`` imports
-``soothe.goal_contracts``, but the host never imports ``soothe_autopilot``.
+Neutral home for the goal-dispatch and evidence/backoff vocabulary that flows
+across the host ↔ autopilot boundary. Both the host (``soothe.sloop.state.schemas``,
+``soothe.protocols.runner``) and the autopilot package import these types from
+here, so neither side owns the other's wire contracts: ``soothe-autopilot``
+imports ``soothe.goal_contracts``, but the host never imports ``soothe_autopilot``.
 """
 
 from __future__ import annotations

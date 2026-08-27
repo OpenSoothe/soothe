@@ -25,7 +25,6 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
 def _make_strange_loop() -> StrangeLoop:
     config = MagicMock()
     config.agent.loop.working_memory.enabled = False
-    config.agent.loop.goal_context = MagicMock()
     config.agent.loop.context_engine = MagicMock()
     config.agent.loop.execute_prompt_ledger = MagicMock()
     config.agent.loop.execute_prompt_ledger.execute_ai_ledger_max_tokens = 0

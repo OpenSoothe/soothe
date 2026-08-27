@@ -152,7 +152,7 @@ async def test_invoke_skill_forwards_clarification_mode(
     """``invoke_skill`` must propagate the RFC-622 mode like ``loop_input`` does.
 
     Without this, slash-skill turns drop the TUI's Manual badge and always
-    fall back to ``config.agent.clarification.default_mode`` (typically auto),
+    fall back to ``config.agent.clarification.default_mode`` (typically manual),
     so veritas runs even when the operator selected Manual.
     """
     skill_dir = tmp_path / "mode_skill"

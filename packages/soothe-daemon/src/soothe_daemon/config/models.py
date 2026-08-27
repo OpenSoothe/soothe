@@ -424,10 +424,8 @@ class MemoryProfilingConfig(BaseModel):
     Args:
         enabled: Enable memory profiling (tracemalloc).
         trace_depth: Maximum traceback depth for allocations (higher = more detail).
-        snapshot_interval_seconds: Interval for automatic memory snapshots.
         top_allocations_limit: Number of top allocations to report in stats.
         log_growth_threshold_mb: Log warning when memory grows by this amount.
-        log_growth_interval_seconds: Interval for memory growth logging.
     """
 
     enabled: bool = Field(
@@ -440,12 +438,6 @@ class MemoryProfilingConfig(BaseModel):
         le=100,
         description="Maximum traceback depth for allocation tracking",
     )
-    snapshot_interval_seconds: int = Field(
-        default=0,  # Disabled by default - manual snapshots via HTTP
-        ge=0,
-        le=3600,
-        description="Interval for automatic memory snapshots (0 = disabled)",
-    )
     top_allocations_limit: int = Field(
         default=20,
         ge=5,
@@ -457,12 +449,6 @@ class MemoryProfilingConfig(BaseModel):
         ge=10,
         le=1000,
         description="Log warning when memory grows by this MB between snapshots",
-    )
-    log_growth_interval_seconds: int = Field(
-        default=0,  # Disabled by default
-        ge=0,
-        le=3600,
-        description="Interval for memory growth logging (0 = disabled)",
     )
 
 

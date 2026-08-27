@@ -26,48 +26,6 @@ def _rules(completion_rules: CompletionRulesConfig | None) -> CompletionRulesCon
 # ── Core heuristic functions ───────────────────────────────────────────
 
 
-def heuristic_requires_goal_completion(
-    *,
-    dag_failed_steps: int,
-    dag_completed_steps: int,
-    last_execute_wave_parallel_multi_step: bool,
-    last_wave_hit_subagent_cap: bool,
-    current_decision_steps: list[Any] | None = None,
-    completion_rules: CompletionRulesConfig | None = None,
-) -> bool:
-    """Deterministic heuristic for whether goal-completion synthesis is needed."""
-    rules = _rules(completion_rules)
-    if last_execute_wave_parallel_multi_step:
-        logger.info("Heuristic: parallel_multi_step=True")
-        return True
-
-    if last_wave_hit_subagent_cap:
-        logger.info("Heuristic: subagent_cap=True")
-        return True
-
-    if dag_failed_steps > 0:
-        total = dag_completed_steps + dag_failed_steps
-        success_rate = dag_completed_steps / total if total > 0 else 0.0
-        if success_rate < rules.low_success_rate_threshold:
-            logger.info("Heuristic: failed_steps (rate=%.0f%%)", success_rate * 100)
-            return True
-        logger.debug(
-            "Heuristic: failed_steps_high_success (rate=%.0f%%) → skip", success_rate * 100
-        )
-
-    if current_decision_steps:
-        has_deps = any(
-            step.dependencies and len(step.dependencies) >= rules.dag_dependency_threshold
-            for step in current_decision_steps
-        )
-        if has_deps:
-            logger.info("Heuristic: dag_dependencies=True")
-            return True
-
-    logger.debug("Heuristic: simple_execution (skip synthesis)")
-    return False
-
-
 def _ledger_direct_eligible(
     *,
     plan_wave_count: int,
@@ -161,54 +119,6 @@ def _dag_requires_synthesis(
 
 
 # ── Composite decision functions ───────────────────────────────────────
-
-
-def determine_goal_completion_needs(
-    llm_decision: bool,
-    mode: str = "llm_only",
-    *,
-    dag_failed_steps: int = 0,
-    dag_completed_steps: int = 0,
-    last_execute_wave_parallel_multi_step: bool = False,
-    last_wave_hit_subagent_cap: bool = False,
-    current_decision_steps: list[Any] | None = None,
-    completion_rules: CompletionRulesConfig | None = None,
-) -> bool:
-    """Decide whether goal-completion synthesis/reporting is required."""
-    if mode == "llm_only":
-        logger.debug("GoalCompletion: mode=llm_only result=%s", llm_decision)
-        return llm_decision
-
-    if mode == "heuristic_only":
-        result = heuristic_requires_goal_completion(
-            dag_failed_steps=dag_failed_steps,
-            dag_completed_steps=dag_completed_steps,
-            last_execute_wave_parallel_multi_step=last_execute_wave_parallel_multi_step,
-            last_wave_hit_subagent_cap=last_wave_hit_subagent_cap,
-            current_decision_steps=current_decision_steps,
-            completion_rules=completion_rules,
-        )
-        logger.debug("GoalCompletion: mode=heuristic_only result=%s", result)
-        return result
-
-    if llm_decision:
-        logger.debug("GoalCompletion: mode=hybrid LLM=True (honored)")
-        return True
-
-    heuristic_result = heuristic_requires_goal_completion(
-        dag_failed_steps=dag_failed_steps,
-        dag_completed_steps=dag_completed_steps,
-        last_execute_wave_parallel_multi_step=last_execute_wave_parallel_multi_step,
-        last_wave_hit_subagent_cap=last_wave_hit_subagent_cap,
-        current_decision_steps=current_decision_steps,
-        completion_rules=completion_rules,
-    )
-    if heuristic_result:
-        logger.debug("GoalCompletion: mode=hybrid LLM=False heuristic=True")
-    else:
-        logger.debug("GoalCompletion: mode=hybrid LLM=False heuristic=False (skip)")
-
-    return heuristic_result
 
 
 def determine_completion_strategy(

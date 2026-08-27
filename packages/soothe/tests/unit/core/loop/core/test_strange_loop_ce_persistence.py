@@ -14,7 +14,6 @@ from soothe.sloop.strange_loop import StrangeLoop
 def _make_strange_loop(*, backend: str) -> StrangeLoop:
     config = MagicMock()
     config.agent.loop.working_memory.enabled = False
-    config.agent.loop.goal_context = MagicMock()
     config.agent.loop.context_engine = MagicMock()
     config.persistence.default_backend = backend
     config.persistence.postgres_base_dsn = "postgresql://postgres:postgres@127.0.0.1:6432"

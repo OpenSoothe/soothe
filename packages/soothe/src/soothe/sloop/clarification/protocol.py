@@ -48,16 +48,15 @@ class LoopStateView:
 class ClarificationRequest:
     questions: tuple
     """Structured (dict) or plain-string questions. Structured dicts carry
-    question/header/options (RFC-622 §9c); plain strings are
-    used by HITL origins and the degraded fallback."""
+    question/header/options; plain strings are used by HITL origins and the
+    degraded fallback."""
     origin_node: ClarificationOrigin
     origin_interrupt_id: str
     loop_state: LoopStateView
     metadata: Mapping[str, Any] = field(default_factory=dict)
     """Origin-specific payload. For ``tool_approval``:
-    ``{"action_requests": [...]}`` so the pipeline (§9b) can inspect tool
-    names and args directly. Empty for other origins. Default ``{}`` —
-    backward compatible with pre-§9b serialized state."""
+    ``{"action_requests": [...]}`` so the approval pipeline can inspect tool
+    names and args directly. Empty for other origins."""
 
 
 @dataclass(frozen=True)

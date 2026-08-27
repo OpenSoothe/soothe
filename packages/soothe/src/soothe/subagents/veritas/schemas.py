@@ -26,11 +26,10 @@ class VeritasAnswerSchema(BaseModel):
             veritas arrived at its conclusion. Empty when the model omits it
             (defer branch or older models).
         answer_is_question: Per-answer self-classification — ``True`` when the
-            model acknowledges an answer is itself a question (RFC-630
-            compliance: replaces the legacy ``endswith("?")`` regex heuristic).
-            Length matches ``answers``. Empty list when the model omits the
-            field; ``implementation._any_answer_is_a_question`` falls back to
-            the ``?``-suffix check as a transitional safety net.
+            model acknowledges an answer is itself a question. Length matches
+            ``answers``. Empty list when the model omits the field;
+            ``implementation._any_answer_is_a_question`` falls back to the
+            ``?``-suffix check.
     """
 
     answers: list[str] = Field(default_factory=list)
@@ -53,8 +52,7 @@ def coerce_veritas_response(
         data: Raw structured-output dict from the LLM.
         question_count: Number of questions in the originating request.
         coerced_confidence: Confidence value assigned when the model returns
-            answers but omits ``confidence``. Defaults to ``0.7`` (the
-            historical hardcoded value); configurable via
+            answers but omits ``confidence``; configurable via
             ``VeritasConfig.coerced_confidence``.
 
     Returns:

@@ -47,15 +47,10 @@ from soothe.config.constants import (
     DEFAULT_READ_ONLY_STREAK_LIMIT,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
-from soothe.sloop.clarification import (
-    ORIGIN_EXECUTE,
-    ORIGIN_TOOL_APPROVAL,
-    ClarificationCapture,
-    ClarificationDetector,
-    ClarificationOrigin,
-    LoopStateView,
-    ResumeTicket,
-)
+from soothe.sloop.clarification.capture import ClarificationCapture, ResumeTicket
+from soothe.sloop.clarification.detector import ClarificationDetector
+from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
+from soothe.sloop.clarification.protocol import ClarificationOrigin, LoopStateView
 from soothe.sloop.engine.completion.continuation_context import (
     build_continuation_execution_hints,
     ledger_goal_completion_text,

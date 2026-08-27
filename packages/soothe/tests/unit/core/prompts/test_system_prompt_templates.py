@@ -11,11 +11,12 @@ def test_configuration_defaults():
 
 def test_prompt_templates_exist():
     """Test that all prompt templates are defined."""
-    from soothe.prompts import (
+    from soothe_nano.prompts.system_templates import (
         _DEFAULT_SYSTEM_PROMPT,
         _SIMPLE_SYSTEM_PROMPT,
-        ASSISTANT_IDENTITY_FRAGMENT,
     )
+
+    from soothe.prompts import ASSISTANT_IDENTITY_FRAGMENT
 
     # All templates should be non-empty strings
     assert isinstance(_SIMPLE_SYSTEM_PROMPT, str)

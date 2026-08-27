@@ -120,7 +120,7 @@ def test_route_after_preprocess_missing_label_falls_back_to_complex() -> None:
 @pytest.mark.asyncio
 async def test_init_or_resume_chitchat_fast_path_with_continue_loop_mode() -> None:
     """Chitchat must bypass StrangeLoop even when the loop has prior goals."""
-    from soothe.sloop.intention import IntentClassification
+    from soothe.sloop.intention.models import IntentClassification
 
     emitted: list[tuple[str, object]] = []
 
@@ -166,7 +166,7 @@ async def test_init_or_resume_chitchat_fast_path_with_continue_loop_mode() -> No
 @pytest.mark.asyncio
 async def test_init_or_resume_chitchat_continue_without_goal_history_is_social() -> None:
     """Bare continue with empty this-loop checkpoint stays in-graph chitchat."""
-    from soothe.sloop.intention import IntentClassification
+    from soothe.sloop.intention.models import IntentClassification
 
     emitted: list[tuple[str, object]] = []
 
@@ -203,7 +203,7 @@ async def test_init_or_resume_chitchat_continue_without_goal_history_is_social()
 @pytest.mark.asyncio
 async def test_init_or_resume_chitchat_continue_with_goal_history_skips_fast_path() -> None:
     """Bare continue with this-loop goal history does not take in-graph chitchat."""
-    from soothe.sloop.intention import IntentClassification
+    from soothe.sloop.intention.models import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.CHITCHAT,
@@ -234,7 +234,7 @@ async def test_init_or_resume_chitchat_continue_with_goal_history_skips_fast_pat
 @pytest.mark.asyncio
 async def test_init_or_resume_minimal_routes_to_dispatch() -> None:
     """Trivial label routes to DISPATCH without plan injection."""
-    from soothe.sloop.intention import IntentClassification
+    from soothe.sloop.intention.models import IntentClassification
 
     emitted: list[tuple[str, object]] = []
 
@@ -273,7 +273,7 @@ async def test_init_or_resume_minimal_routes_to_dispatch() -> None:
 @pytest.mark.asyncio
 async def test_init_or_resume_minimal_skipped_when_continue_loop() -> None:
     """Trivial intake still routes through DISPATCH when loop continuation is active."""
-    from soothe.sloop.intention import IntentClassification
+    from soothe.sloop.intention.models import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.MINIMAL,
@@ -308,7 +308,7 @@ async def test_init_or_resume_minimal_skipped_when_continue_loop() -> None:
 @pytest.mark.asyncio
 async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuation() -> None:
     """Simple mid-loop routes through DISPATCH; no plan injection."""
-    from soothe.sloop.intention import IntentClassification
+    from soothe.sloop.intention.models import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
@@ -342,7 +342,7 @@ async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuat
 @pytest.mark.asyncio
 async def test_init_or_resume_simple_no_plan_injection() -> None:
     """Fresh-loop simple routes through DISPATCH; no plan injection."""
-    from soothe.sloop.intention import IntentClassification
+    from soothe.sloop.intention.models import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
@@ -367,7 +367,7 @@ async def test_init_or_resume_simple_no_plan_injection() -> None:
 @pytest.mark.asyncio
 async def test_init_or_resume_complex_does_not_inject_synth_plan() -> None:
     """The complex label leaves scratch empty — DISPATCH owns the root step."""
-    from soothe.sloop.intention import IntentClassification
+    from soothe.sloop.intention.models import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.COMPLEX,

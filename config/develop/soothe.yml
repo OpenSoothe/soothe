@@ -39,10 +39,9 @@ agent:
           targets: []
       sla:
         enabled: false
-        warning_after_seconds: 3600
-        critical_after_seconds: 7200
-        breach_after_seconds: 14400
-        track_root_goals_only: true
+        warning_seconds: 3600
+        critical_seconds: 7200
+        breach_seconds: 14400
     # Develop: fewer loops than the template default (16) for faster local cycles.
     max_loops: 4
 

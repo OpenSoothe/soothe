@@ -50,7 +50,7 @@ async def test_run_strange_loop_materializes_core_agent_before_graph() -> None:
             _FakeStrangeLoop,
         ),
         patch(
-            "soothe.sloop.clarification.build_clarification_policy_for_runner",
+            "soothe.sloop.clarification.runtime_factory.build_clarification_policy_for_runner",
             return_value=MagicMock(),
         ),
         patch(

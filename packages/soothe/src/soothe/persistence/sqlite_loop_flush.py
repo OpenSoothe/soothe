@@ -233,9 +233,7 @@ class SqliteLoopFlushCoordinator:
         """Create the durable Event on the bound loop and start the worker task.
 
         The ``asyncio.Event`` is constructed here (on the bound loop) rather
-        than in ``__init__`` so it is never bound to a transient caller loop,
-        which previously caused ``RuntimeError: ... bound to a different event
-        loop`` when a worker thread awaited it.
+        than in ``__init__`` so it is never bound to a transient caller loop.
         """
         if self._worker_task is not None and not self._worker_task.done():
             return

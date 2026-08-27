@@ -1,7 +1,7 @@
-"""Loop budget / rate-limit gate helpers (re-homed from legacy check_limits).
+"""Loop budget / rate-limit gate helpers.
 
-DISPATCH calls :func:`enforce_loop_budget` before claiming work so the RFC-904
-graph retains the iteration and consecutive-429 stops without a separate
+DISPATCH calls :func:`enforce_loop_budget` before claiming work so the graph
+enforces iteration and consecutive-429 stops without a separate
 ``check_limits`` station.
 """
 

@@ -293,16 +293,6 @@ class TestPlanAdapterFormatCompletionDagReport:
         assert "Replans after first wave: 1" in report
 
 
-class TestPlanAdapterDetermineGoalCompletionNeeds:
-    @pytest.mark.asyncio
-    async def test_llm_only_mode(self) -> None:
-        ce = ContextEngine()
-        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")
-
-        assert adapter.determine_goal_completion_needs(True, None, "llm_only") is True
-        assert adapter.determine_goal_completion_needs(False, None, "llm_only") is False
-
-
 class TestPlanAdapterGoalIdProperty:
     def test_goal_id_getter_setter(self) -> None:
         ce = ContextEngine()

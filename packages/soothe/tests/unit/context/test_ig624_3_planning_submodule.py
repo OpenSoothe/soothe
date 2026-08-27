@@ -25,8 +25,6 @@ from soothe.context.planning_completion import (
     _dag_requires_synthesis,
     _ledger_direct_eligible,
     determine_completion_strategy,
-    determine_goal_completion_needs,
-    heuristic_requires_goal_completion,
 )
 from soothe.context.planning_models import (
     DagPlanningContext,
@@ -104,76 +102,6 @@ def _make_mock_state(**overrides: Any) -> MagicMock:
 # ═══════════════════════════════════════════════════════════════════════
 # completion.py — heuristic functions
 # ═══════════════════════════════════════════════════════════════════════
-
-
-class TestHeuristicRequiresGoalCompletion:
-    def test_parallel_multi_step_triggers(self) -> None:
-        assert (
-            heuristic_requires_goal_completion(
-                dag_failed_steps=0,
-                dag_completed_steps=2,
-                last_execute_wave_parallel_multi_step=True,
-                last_wave_hit_subagent_cap=False,
-            )
-            is True
-        )
-
-    def test_subagent_cap_triggers(self) -> None:
-        assert (
-            heuristic_requires_goal_completion(
-                dag_failed_steps=0,
-                dag_completed_steps=2,
-                last_execute_wave_parallel_multi_step=False,
-                last_wave_hit_subagent_cap=True,
-            )
-            is True
-        )
-
-    def test_low_success_rate_triggers(self) -> None:
-        assert (
-            heuristic_requires_goal_completion(
-                dag_failed_steps=3,
-                dag_completed_steps=1,
-                last_execute_wave_parallel_multi_step=False,
-                last_wave_hit_subagent_cap=False,
-            )
-            is True
-        )
-
-    def test_high_success_rate_with_failures_no_trigger(self) -> None:
-        assert (
-            heuristic_requires_goal_completion(
-                dag_failed_steps=1,
-                dag_completed_steps=9,
-                last_execute_wave_parallel_multi_step=False,
-                last_wave_hit_subagent_cap=False,
-            )
-            is False
-        )
-
-    def test_dag_dependency_threshold_triggers(self) -> None:
-        step = _make_step_action("01", "S", deps=["a", "b", "c"])
-        assert (
-            heuristic_requires_goal_completion(
-                dag_failed_steps=0,
-                dag_completed_steps=1,
-                last_execute_wave_parallel_multi_step=False,
-                last_wave_hit_subagent_cap=False,
-                current_decision_steps=[step],
-            )
-            is True
-        )
-
-    def test_simple_execution_no_trigger(self) -> None:
-        assert (
-            heuristic_requires_goal_completion(
-                dag_failed_steps=0,
-                dag_completed_steps=1,
-                last_execute_wave_parallel_multi_step=False,
-                last_wave_hit_subagent_cap=False,
-            )
-            is False
-        )
 
 
 class TestLedgerDirectStructuralGates:
@@ -275,39 +203,6 @@ class TestDagRequiresSynthesis:
             )
             is False
         )
-
-
-class TestDetermineGoalCompletionNeeds:
-    def test_llm_only_true(self) -> None:
-        assert determine_goal_completion_needs(True, "llm_only") is True
-
-    def test_llm_only_false(self) -> None:
-        assert determine_goal_completion_needs(False, "llm_only") is False
-
-    def test_heuristic_only_parallel(self) -> None:
-        assert (
-            determine_goal_completion_needs(
-                False, "heuristic_only", last_execute_wave_parallel_multi_step=True
-            )
-            is True
-        )
-
-    def test_heuristic_only_simple(self) -> None:
-        assert determine_goal_completion_needs(False, "heuristic_only") is False
-
-    def test_hybrid_llm_true_wins(self) -> None:
-        assert determine_goal_completion_needs(True, "hybrid") is True
-
-    def test_hybrid_llm_false_heuristic_true(self) -> None:
-        assert (
-            determine_goal_completion_needs(
-                False, "hybrid", last_execute_wave_parallel_multi_step=True
-            )
-            is True
-        )
-
-    def test_hybrid_both_false(self) -> None:
-        assert determine_goal_completion_needs(False, "hybrid") is False
 
 
 class TestDetermineCompletionStrategy:
@@ -572,31 +467,6 @@ class TestStepPlanningSubengineGetPlanningContext:
         assert ctx.replan_count == 0
 
 
-class TestStepPlanningSubengineDetermineGoalCompletionNeeds:
-    def test_llm_only_mode(self) -> None:
-        ce = ContextEngine()
-        subengine = ce.planning.step
-        state = _make_mock_state()
-
-        assert subengine.determine_goal_completion_needs("missing", True, state, "llm_only") is True
-        assert (
-            subengine.determine_goal_completion_needs("missing", False, state, "llm_only") is False
-        )
-
-    def test_heuristic_with_parallel(self) -> None:
-        ce = ContextEngine()
-        goal = GoalNode(description="Test goal")
-        ce._dag.add_goal(goal)
-
-        subengine = ce.planning.step
-        state = _make_mock_state(last_execute_wave_parallel_multi_step=True)
-
-        assert (
-            subengine.determine_goal_completion_needs(goal.id, False, state, "heuristic_only")
-            is True
-        )
-
-
 class TestStepPlanningSubengineFormatCompletionDagReport:
     def test_empty_for_missing_goal(self) -> None:
         ce = ContextEngine()
@@ -720,14 +590,6 @@ class TestStepPlanManagerAdapter:
         ctx = adapter.get_planning_context()
         assert ctx.total_steps == 0
         assert ctx.has_prior_state is False
-
-    def test_determine_goal_completion_needs_delegates(self) -> None:
-        ce = ContextEngine()
-        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")
-        state = _make_mock_state()
-
-        assert adapter.determine_goal_completion_needs(True, state, "llm_only") is True
-        assert adapter.determine_goal_completion_needs(False, state, "llm_only") is False
 
     def test_determine_completion_strategy_delegates(self) -> None:
         from soothe.sloop.utils.messages import LoopAIMessage

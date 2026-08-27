@@ -51,9 +51,7 @@ class GoalDispatchEnvelope:
 class LoopRunRequest:
     """All parameters needed to run one agent loop in a subprocess.
 
-    Consolidates fields previously passed ad-hoc to ``SootheRunner.astream()``,
-    including thread/workspace binding that was mutated on the shared singleton
-    via ``bind_execution_thread_for_loop()``.
+    Includes thread/workspace binding for the run.
 
     Workspace resolution (``resolve_workspace_path()``):
         - ``client_workspace`` set → use that path directly, or map via

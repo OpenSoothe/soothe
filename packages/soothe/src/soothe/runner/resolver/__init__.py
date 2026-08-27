@@ -3,9 +3,6 @@
 Protocol resolution (memory, planner, policy) lives here.
 Tool/subagent/infrastructure resolution is delegated to ``soothe_nano.resolve``.
 Host checkpointer / durability bindings live in ``_resolver_infra.py``.
-
-``resolve_planner`` returns ``None`` after the RFC-904 DISPATCH cutover
-(IG-752/IG-753): StrangeLoop no longer constructs ``LLMPlanner``.
 """
 
 from __future__ import annotations
@@ -47,10 +44,6 @@ def resolve_planner(
     config: SootheConfig,
     model: BaseChatModel | None,
 ) -> PlannerProtocol | None:
-    """Host planner resolution — always ``None`` after plan-spine removal.
-
-    Kept as a stable API for runner / CoreAgent builder callers that still
-    pass ``planner=`` into nano ``AgentBuilder``.
-    """
+    """Host planner resolution — always ``None``; the loop plans inline."""
     del config, model
     return None

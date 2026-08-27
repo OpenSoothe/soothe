@@ -1,28 +1,8 @@
-"""SootheRunner -- protocol-orchestrated agent runner (RFC-0003, RFC-0007, RFC-0008).
+"""SootheRunner: protocol-orchestrated agent runner.
 
-Wraps `create_soothe_agent()` with protocol pre/post-processing and
-yields the canonical ``(namespace, mode, data)`` stream
-extended with ``soothe.*`` custom events for protocol observability.
-
-RFC-0008 adds agentic loop: default execution mode with Reason → Act
-iterative refinement loop (RFC-201) via ``StrangeLoop`` and the compiled
-loop graph (RFC-220). DAG-style multi-step execution is implemented
-inside the StrangeLoop execute phase (``StepScheduler`` / ``Executor``),
-not as a separate runner mixin.
-
-RFC-222 Phase D: the legacy in-process autonomous multi-goal loop has
-been removed. Autopilot is daemon-owned; goals dispatched by the daemon
-arrive through ``LoopRunRequest.autopilot_job`` and route to the
-single-goal worker path.
-
-Implementation is decomposed into mixins:
-
-- `PhasesMixin`     -- chitchat fast path and checkpointer initialization
-- `StrangeLoopMixin` -- StrangeLoop execution (RFC-0008)
-
-The autopilot goal-dispatch path is provided by ``soothe_autopilot``'s
-``AutopilotSootheRunner``, which overrides the ``_run_autopilot_job`` hook
-below. The base ``SootheRunner`` is autopilot-agnostic.
+Wraps `create_soothe_agent()` with protocol pre/post-processing and yields the
+canonical ``(namespace, mode, data)`` stream extended with ``soothe.*`` custom
+events for protocol observability.
 """
 
 from __future__ import annotations
@@ -101,7 +81,7 @@ class SootheRunner(
             resolve_planner,
             resolve_policy,
         )
-        from soothe.sloop.intention import IntentClassifier
+        from soothe.sloop.intention.classifier import IntentClassifier
 
         init_start = time.perf_counter()
 
@@ -217,7 +197,7 @@ class SootheRunner(
 
     @property
     def _agent(self) -> CoreAgentProtocol | LazyCoreAgent:
-        """Layer-1 agent handle (lazy or materialized)."""
+        """Agent handle for the active stream (lazy or materialized)."""
         return self._core_agent
 
     async def _materialize_core_agent(

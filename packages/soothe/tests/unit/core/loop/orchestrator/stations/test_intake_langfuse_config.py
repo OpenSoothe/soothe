@@ -9,8 +9,7 @@ import pytest
 from soothe_sdk.intention.models import TaskComplexity
 
 from soothe.config import SootheConfig
-from soothe.sloop.intention import IntentClassification
-from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.intention.models import IntakeLabel, IntentClassification
 from soothe.sloop.stations.preprocess.intake import node_intent_classify
 from soothe.utils.observability.langfuse import GoalLoopTrace
 

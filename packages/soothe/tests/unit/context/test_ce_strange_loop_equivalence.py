@@ -121,20 +121,6 @@ class TestStepPlanManagerAdapterIntegration:
         assert "02" in ctx.failed_step_ids
 
     @pytest.mark.asyncio
-    async def test_determine_goal_completion_needs(self) -> None:
-        steps = [_make_step_action("01", "Step 1")]
-        plan_result = _make_plan_result(steps)
-
-        ce = ContextEngine()
-        goal = await ce.create_goal("Test goal")
-        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
-        adapter.ingest_plan(plan_result, "KFA", 0)
-
-        state = _make_loop_state()
-        assert adapter.determine_goal_completion_needs(True, state, "llm_only") is True
-        assert adapter.determine_goal_completion_needs(False, state, "llm_only") is False
-
-    @pytest.mark.asyncio
     async def test_format_completion_dag_report(self) -> None:
         steps = [
             _make_step_action("01", "First step"),

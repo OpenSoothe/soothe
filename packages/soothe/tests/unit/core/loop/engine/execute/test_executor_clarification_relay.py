@@ -8,11 +8,9 @@ from typing import Any
 import pytest
 from langgraph.types import Command, Interrupt
 
-from soothe.sloop.clarification import (
-    ClarificationCapture,
-    ClarificationDetector,
-    LoopStateView,
-)
+from soothe.sloop.clarification.capture import ClarificationCapture
+from soothe.sloop.clarification.detector import ClarificationDetector
+from soothe.sloop.clarification.protocol import LoopStateView
 from soothe.sloop.engine.execute.executor import Executor
 
 

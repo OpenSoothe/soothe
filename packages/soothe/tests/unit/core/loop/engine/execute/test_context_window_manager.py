@@ -39,13 +39,11 @@ class MockConfig:
         self,
         context_limit: int = 200_000,
         threshold_pct: float = 0.80,
-        target_pct: float = 0.60,
     ) -> None:
         self.agent = MagicMock()
         self.agent.loop = MagicMock()
         self.agent.loop.context_window_limit = context_limit
         self.agent.loop.context_overflow_threshold_pct = threshold_pct
-        self.agent.loop.context_compaction_target_pct = target_pct
 
 
 class TestEstimateCheckpointTokensSync:

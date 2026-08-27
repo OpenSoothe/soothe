@@ -5,13 +5,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from soothe_sdk.intention.models import TaskComplexity
 
-from soothe.sloop.intention import IntentClassification, IntentClassifier
+from soothe.sloop.intention.classifier import IntentClassifier
 from soothe.sloop.intention.coordinator import IntakeResult
 from soothe.sloop.intention.models import (
     IntakeConfidence,
     IntakeLabel,
     IntakeLLMResult,
     IntakeScope,
+    IntentClassification,
     ResponseLanguage,
     derive_intake_label_from_task_complexity,
     derive_task_complexity_from_intake,

@@ -16,9 +16,6 @@ from soothe.context.models import GoalNode, GoalStepDAG, StepExecution, StepNode
 from soothe.context.planning_completion import (
     determine_completion_strategy as _determine_completion_strategy,
 )
-from soothe.context.planning_completion import (
-    determine_goal_completion_needs as _determine_goal_completion_needs,
-)
 from soothe.context.planning_models import (
     CompletionStrategy,
     DagPlanningContext,
@@ -206,38 +203,6 @@ class StepPlanningSubengine:
         )
 
     # --- Completion ---
-
-    def determine_goal_completion_needs(
-        self,
-        goal_id: str,
-        llm_decision: bool,
-        state: Any,
-        mode: str = "llm_only",
-    ) -> bool:
-        """Delegate to completion.determine_goal_completion_needs.
-
-        Extracts DAG stats from goal_id's StepDAG and passes
-        them as keyword arguments, preserving CE independence.
-        """
-        goal = self._dag.get_goal(goal_id)
-        if goal is None:
-            return llm_decision
-
-        stats = _extract_dag_stats(goal, len(self._plan_waves))
-
-        return _determine_goal_completion_needs(
-            llm_decision=llm_decision,
-            mode=mode,
-            dag_failed_steps=stats.failed_steps,
-            dag_completed_steps=stats.completed_steps,
-            last_execute_wave_parallel_multi_step=getattr(
-                state, "last_execute_wave_parallel_multi_step", False
-            ),
-            last_wave_hit_subagent_cap=getattr(state, "last_wave_hit_subagent_cap", False),
-            current_decision_steps=(
-                state.current_decision.steps if getattr(state, "current_decision", None) else None
-            ),
-        )
 
     def determine_completion_strategy(
         self,
@@ -495,16 +460,6 @@ class StepPlanManagerAdapter:
 
     def get_planning_context(self) -> DagPlanningContext:
         return self._subengine.get_planning_context(self._goal_id)
-
-    def determine_goal_completion_needs(
-        self,
-        llm_decision: bool,
-        state: Any,
-        mode: str = "llm_only",
-    ) -> bool:
-        return self._subengine.determine_goal_completion_needs(
-            self._goal_id, llm_decision, state, mode
-        )
 
     def determine_completion_strategy(
         self,

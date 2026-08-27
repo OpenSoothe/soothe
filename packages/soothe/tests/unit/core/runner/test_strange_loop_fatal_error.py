@@ -69,7 +69,7 @@ async def test_fatal_error_surfaces_error_and_completion_events() -> None:
             _FatalErrorStrangeLoop,
         ),
         patch(
-            "soothe.sloop.clarification.build_clarification_policy_for_runner",
+            "soothe.sloop.clarification.runtime_factory.build_clarification_policy_for_runner",
             return_value=MagicMock(),
         ),
         patch(

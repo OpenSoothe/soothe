@@ -471,7 +471,7 @@ async def test_stream_forces_auto_clarification_policy(
         return sentinel_policy
 
     monkeypatch.setattr(
-        "soothe.sloop.clarification.build_clarification_policy_for_runner",
+        "soothe.sloop.clarification.runtime_factory.build_clarification_policy_for_runner",
         _stub_builder,
         raising=True,
     )
@@ -511,7 +511,7 @@ async def test_stream_continues_when_clarification_builder_fails(
         raise RuntimeError("no model")
 
     monkeypatch.setattr(
-        "soothe.sloop.clarification.build_clarification_policy_for_runner",
+        "soothe.sloop.clarification.runtime_factory.build_clarification_policy_for_runner",
         _raising_builder,
         raising=True,
     )

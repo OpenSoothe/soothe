@@ -6,9 +6,9 @@ import re
 from pathlib import Path
 
 import pytest
+from soothe_nano.prompts.system_templates import _TOOL_ORCHESTRATION_GUIDE
 
 from soothe.prompts import (
-    _TOOL_ORCHESTRATION_GUIDE,
     EXECUTE_WORKSPACE_RULES_FRAGMENT,
     RESPONSE_LANGUAGE_HINT_FALLBACK,
 )

@@ -87,9 +87,6 @@ from soothe.sloop.clarification.origins import DEFAULT_FORCE_MANUAL_ORIGINS
 AgenticFinalResponseMode = Literal["auto", "always_synthesize"]
 
 
-AgenticGoalCompletionMode = Literal["llm_only", "heuristic_only", "hybrid"]
-
-
 ExecuteDeliverableAssessMode = Literal["auto", "always", "never"]
 
 
@@ -322,26 +319,23 @@ class AutopilotConfig(BaseModel):
         enabled: Whether the AutopilotService scheduling loop is enabled.
             When False, the daemon constructs the service but does not start
             the scheduling loop. HTTP /autopilot/submit endpoints are available
-            but goals won't be dispatched automatically. Default is True.
+            but goals won't be dispatched automatically.
         max_retries: Maximum retries per goal on failure.
-        max_total_goals: Maximum goals allowed (RFC-0007 §5.6).
-        max_goal_depth: Maximum hierarchy depth (RFC-0007 §5.6).
         max_parallel_goals: Maximum goals running simultaneously.
 
         max_send_backs: Per-goal send-back budget for report-commit judgment.
         max_engine_recoveries: Max engine-driven recoveries per failed goal (deadlock backstop).
-        checkpoint_interval: Iterations between periodic checkpoints.
         dreaming_enabled: Enter dreaming mode when all goals complete.
         monitor_model_role: Router role for AutopilotMonitor LLM reasoners (backoff,
-            DAG verification). Defaults to ``think``.
-        consensus_model_role: Router role for RFC-204 report-commit judgment.
-            Defaults to ``think``; daemon uses ``create_chat_model`` with automatic
-            fallback to ``default`` on instantiation failure.
+            DAG verification).
+        consensus_model_role: Router role for report-commit judgment; daemon uses
+            ``create_chat_model`` with automatic fallback to ``default`` on
+            instantiation failure.
         judge_allow_structural_dag_ops: Allowlisted structural judge ops
             (``spawn_goal`` / ``cancel_goal``). Empty = deny (LoopRail owns fan-out).
         intake_scope: Forced StrangeLoop intake scope for dispatched goals
-            (``minimal``|``simple``|``complex``). Default ``None`` lets the
-            loop run intake classification.
+            (``minimal``|``simple``|``complex``); ``None`` lets the loop run
+            intake classification.
         verify_periodic_enabled: Master switch for periodic DAG health verification.
             When ``False`` (default), the monitor's background health tick is
             skipped entirely — no structural heuristics, no LLM. Event-driven
@@ -356,7 +350,7 @@ class AutopilotConfig(BaseModel):
         verify_llm_min_nonterminal: Min non-terminal goals before health LLM runs.
         verify_llm_debounce: Skip health LLM when DAG fingerprint unchanged.
         webhooks: Webhook URLs by event type (legacy; prefer ``notify.sinks.webhook``).
-        notify: Job lifecycle multi-channel notify (IG-713).
+        notify: Job lifecycle multi-channel notify.
 
     Note:
         StrangeLoop iteration budget is shared via ``agent.loop.max_iterations`` —
@@ -375,8 +369,6 @@ class AutopilotConfig(BaseModel):
         ),
     )
     max_retries: int = 2
-    max_total_goals: int = Field(default=99, ge=1, le=500)
-    max_goal_depth: int = Field(default=5, ge=1, le=10)
     max_parallel_goals: int = Field(default=3, ge=1, le=32)
     # Cap on goals scheduled at once (``AutopilotService._schedule_via_worker_pool``).
     # Independent of ``max_loops`` (WorkerPool capacity). Autopilot owns goal
@@ -414,7 +406,6 @@ class AutopilotConfig(BaseModel):
             "backstop). Separate from max_retries and max_send_backs."
         ),
     )
-    checkpoint_interval: int = Field(default=10, ge=1, le=100)
 
     # === Dreaming ===
     dreaming_enabled: bool = True
@@ -571,14 +562,6 @@ class AutopilotConfig(BaseModel):
             "since the last LLM health call."
         ),
     )
-
-    dreaming_interval: int = Field(
-        default=300,
-        ge=60,
-        le=3600,
-        description="Time-based dreaming trigger interval (seconds)",
-    )
-    """Seconds between time-triggered dreaming mode entries."""
 
     webhooks: dict[str, str | None] = Field(default_factory=dict)
     notify: AutopilotNotifyConfig = Field(
@@ -763,24 +746,6 @@ class LoopWorkingMemoryConfig(BaseModel):
         le=50_000,
         description="Spill step output to disk under SOOTHE_HOME/data/threads/{thread_id}/working_memory/ when longer than this",
     )
-
-
-class GoalContextConfig(BaseModel):
-    """Goal context injection configuration (RFC-217).
-
-    Args:
-        plan_limit: Number of previous goals to inject into Plan phase.
-        execute_limit: Number of previous goals for Execute briefing on thread switch.
-        enabled: Enable goal context injection.
-    """
-
-    plan_limit: int = Field(
-        default=10, ge=1, le=50, description="Number of previous goals for Plan phase"
-    )
-    execute_limit: int = Field(
-        default=10, ge=1, le=50, description="Number of previous goals for Execute briefing"
-    )
-    enabled: bool = Field(default=True, description="Enable goal context injection")
 
 
 class PlanPromptLedgerConfig(BaseModel):
@@ -1178,12 +1143,6 @@ class DecomposeLoopConfig(BaseModel):
         le=500,
         description="Max total StepNodes per goal (including superseded).",
     )
-    max_recompose: int = Field(
-        default=2,
-        ge=0,
-        le=20,
-        description="Max B-lazy recompose attempts per lineage replacement chain.",
-    )
     max_waves: int = Field(
         default=10,
         ge=1,
@@ -1201,10 +1160,6 @@ class DecomposeLoopConfig(BaseModel):
         ge=1,
         le=50,
         description="Max children per non-root decompose_task proposal.",
-    )
-    reconcile_model_role: str = Field(
-        default="fast",
-        description="Router model role for conflict-triggered CE reconcile LLM.",
     )
 
 
@@ -1242,15 +1197,11 @@ class StrangeLoopConfig(BaseModel):
         execute_action_retry_max: Extra Execute passes when the step deliverable gate fails (0 = disabled).
         execute_min_answer_chars: Minimum final assistant text length for deliverable satisfaction.
         execute_deliverable_assess: Fast LLM assess mode when structural deliverable checks are inconclusive.
-        strange_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
         final_response: Whether to always synthesize a final CoreAgent report (default),
             reuse last Execute assistant text when structurally eligible, or use auto heuristics.
         working_memory: Working memory / spill configuration (RFC-203).
-        goal_context: Goal context injection for Plan/Execute phases (RFC-217).
         report_output: Goal report display and synthesis limits.
         output_streaming: Enable streaming mode for all AI outputs (true=stream, false=batch).
-        goal_completion_mode: How goal completion (`require_goal_completion`) combines with
-            execution heuristics when the goal is assessed as done.
         plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts.
         execute_prompt_ledger: Caps for execute-step CoreAgent ledger projection.
         checkpoint: Progressive checkpoint persistence and startup resume (RFC-203).
@@ -1405,11 +1356,6 @@ class StrangeLoopConfig(BaseModel):
         le=100,
     )
 
-    strange_loop_output_contract_enabled: bool = Field(
-        default=True,
-        description="Instruct CoreAgent not to paste full tool outputs again during StrangeLoop Execute phase",
-    )
-
     final_response: AgenticFinalResponseMode = Field(
         default="always_synthesize",
         description=(
@@ -1424,29 +1370,12 @@ class StrangeLoopConfig(BaseModel):
     def _normalize_final_response(cls, value: Any) -> Any:
         return normalize_agentic_final_response_mode(value)
 
-    goal_completion_mode: AgenticGoalCompletionMode = Field(
-        default="llm_only",
-        description=(
-            "When the loop marks the goal done: llm_only trusts PlanResult.status only; "
-            "heuristic_only uses execution heuristics only; hybrid uses LLM first with heuristic fallback"
-        ),
-    )
-
     step_brief_hydration_enabled: bool = Field(
         default=True,
         description=(
             "When true, dependent steps with vague full_description are hydrated "
             "between execute waves using predecessor evidence (LLM when available)."
         ),
-    )
-
-    prior_conversation_limit: int = Field(
-        default=10,
-        description=(
-            "Maximum prior messages to format for Plan prompts when Execute phase uses isolated threads"
-        ),
-        ge=1,
-        le=50,
     )
 
     context_window_limit: int = Field(
@@ -1468,26 +1397,6 @@ class StrangeLoopConfig(BaseModel):
     )
     """RFC-224: Trigger threshold for context compaction (0.80 = 80%)."""
 
-    context_compaction_target_pct: float = Field(
-        default=0.60,
-        ge=0.30,
-        le=0.70,
-        description=(
-            "Target context percentage after compaction. "
-            "Provides buffer for subsequent execute waves."
-        ),
-    )
-    """RFC-224: Compaction target (0.60 = 60% of context_limit)."""
-
-    step_context_check_enabled: bool = Field(
-        default=False,
-        description=(
-            "Check context on step threads ({main_thread_id}__{hex5}). "
-            "Usually unnecessary; step threads are short-lived."
-        ),
-    )
-    """RFC-224: Enable step thread context checking."""
-
     output_streaming: OutputStreamingConfig = Field(
         default_factory=OutputStreamingConfig,
         description="Output streaming configuration",
@@ -1496,11 +1405,6 @@ class StrangeLoopConfig(BaseModel):
     working_memory: LoopWorkingMemoryConfig = Field(
         default_factory=LoopWorkingMemoryConfig,
         description="Loop working memory",
-    )
-
-    goal_context: GoalContextConfig = Field(
-        default_factory=GoalContextConfig,
-        description="Goal context injection for Plan/Execute phases",
     )
 
     report_output: ReportOutputConfig = Field(
@@ -1583,7 +1487,6 @@ class VeritasFallbackConfig(BaseModel):
     enabled: bool = True
     model_role: Literal["default", "fast", "think", "image", "ocr", "embedding"] = "fast"
     max_context_steps: int = Field(default=0, ge=0)
-    inline_project_instructions: bool = False
 
 
 class ToolApprovalAuditConfig(BaseModel):
@@ -1665,9 +1568,6 @@ class ClarificationConfig(BaseModel):
     callers that want a clarification must emit an ``ask_user`` interrupt.
     """
 
-    auto_policy: Literal["veritas"] = "veritas"
-    """Auto-mode policy. Only ``veritas`` is supported today."""
-
     auto_min_confidence: float = Field(default=0.4, ge=0.0, le=1.0)
     """Below this confidence, ``AutoClarificationPolicy`` defers rather than answers."""
 
@@ -1677,14 +1577,11 @@ class ClarificationConfig(BaseModel):
     Mirrors the structured_output_failed fallback path. Ignored for autopilot
     (headless) runs which always hard-defer."""
 
-    max_defer_age_hours: int = Field(default=168, ge=1)
-    """Autopilot scrubs goals stuck in ``awaiting_clarification`` past this age."""
-
-    default_mode: Literal["auto", "manual"] = "auto"
+    default_mode: Literal["auto", "manual"] = "manual"
     """Mode used when a request payload does not specify ``clarification_mode``.
 
-    ``auto`` routes clarifications through the veritas auto-answerer and is the
-    default. ``manual`` routes them through the TUI relay (interactive policy).
+    ``manual`` routes clarifications through the TUI relay (interactive policy)
+    and is the default. ``auto`` routes them through the veritas auto-answerer.
     Autopilot always forces ``auto`` regardless of this setting.
     """
 
@@ -1735,7 +1632,7 @@ class VeritasConfig(BaseModel):
 
     coerced_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
     """Confidence value assigned when the model returns answers but omits
-    ``confidence``. Replaces the historical hardcoded ``0.7``."""
+    ``confidence``."""
 
 
 class SkillifyConfig(BaseModel):

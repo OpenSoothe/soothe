@@ -193,9 +193,8 @@ async def _drain_workspace_shells_on_cancel(workspace: str | None) -> None:
 def _is_tool_stream_chunk(chunk: object) -> bool:
     """Return True if chunk is a ``messages``-mode LangGraph chunk carrying a tool result.
 
-    The agentic loop previously dropped all ``stream_event`` tuples to avoid duplicating
-    assistant prose on stdout. Tool rows must still reach the WebSocket so the
-    CLI can render ``on_tool_call`` / ``on_tool_result`` (RFC-0020).
+    Tool rows must reach the WebSocket so the CLI can render
+    ``on_tool_call`` / ``on_tool_result`` (RFC-0020).
 
     Args:
         chunk: Deepagents stream chunk ``(namespace, mode, data)``.
@@ -523,7 +522,9 @@ class StrangeLoopMixin:
         # RFC-622: build the clarification policy from per-request mode + config defaults.
         # Constructed once per goal so the closed-over veritas chat model is reused
         # across all clarifications inside this run.
-        from soothe.sloop.clarification import build_clarification_policy_for_runner
+        from soothe.sloop.clarification.runtime_factory import (
+            build_clarification_policy_for_runner,
+        )
 
         try:
             clarification_policy = build_clarification_policy_for_runner(

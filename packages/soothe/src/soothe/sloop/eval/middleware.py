@@ -1,11 +1,10 @@
-"""Coverage-audit policy for StrangeLoop Eval steps (RFC-905).
+"""Coverage-audit policy for StrangeLoop Eval steps.
 
 Eval steps verify whether the original user goal was fully achieved. Goals that
 require execution to verify (run tests, lint, build, query services) need access
 to the full tool surface — a read-only Eval cannot catch the "CI passes?" class
-of regressions and defaults to "no failure found" (incident: loop adbe, where
-an unexecuted ``make lint`` hid a real format/lint failure). Eval threads keep
-the coverage-audit system addendum and the ``decompose_task`` escape hatch; they
+of regressions and defaults to "no failure found". Eval threads keep the
+coverage-audit system addendum and the ``decompose_task`` escape hatch; they
 no longer restrict the tool set.
 """
 

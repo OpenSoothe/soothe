@@ -21,7 +21,7 @@ from soothe.config.models import (
     PlanPromptLedgerConfig,
 )
 from soothe.sloop import StrangeLoop
-from soothe.sloop.clarification import (
+from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationRequest,
 )
@@ -111,7 +111,6 @@ def _make_config(max_iterations: int = 4) -> Any:
     # _get_rate_limit_threshold looks at loop_cfg.thread_switch_policy
     al.thread_switch_policy = MagicMock()
     al.thread_switch_policy.consecutive_rate_limit_threshold = 999
-    al.goal_completion_mode = "llm_only"
     al.report_output.synthesis_max_chars = 10000
     al.report_output.synthesis_include_full_outputs = True
     al.report_output.output_summary_max_chars = 1500

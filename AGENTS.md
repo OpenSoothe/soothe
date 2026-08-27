@@ -38,7 +38,7 @@ Before marking work done (commit, PR, or handoff), apply this sequence every tim
 
 ### 7. Terminology
 - NEVER use "layer N" — use concrete names (CoreAgent, StrangeLoop, GoalEngine)
-- NEVER expose IG-XXX/RFC-XXX in user-facing text (logs, CLI, errors, config descriptions). They are internal only — allowed in docstrings, comments, and internal docs.
+- NEVER expose IG-XXX/RFC-XXX in user-facing text (logs, CLI, errors, config descriptions). They are internal only — allowed in comments and internal docs, never in docstrings (§17).
 - Only `docs/specs/` (RFCs) and `docs/impl/` (IGs) are active references. `docs/archive/` is historical only.
 
 ### 7b. Package Boundaries (MUST)
@@ -98,7 +98,7 @@ Hard bans (owned packages):
 2. **Daemon does not depend on the WS client** — `soothe_daemon` must not import `soothe_client` in runtime source; admin RPCs use `soothe_sdk.wire` (tests may use the client via the `dev` extra).
 3. **Private nano middleware is closed** — owned packages must not import `soothe_nano.middleware._*`.
 
-Host packages (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`, `soothe-sdk`) MAY reference IG-XXX/RFC-XXX in docstrings and comments.
+Host packages (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`, `soothe-sdk`) MAY reference IG-XXX/RFC-XXX in comments.
 
 ### 8. DO NOT Cheat Tests
 Fix the implementation, not test expectations. "Passing tests" ≠ "Working correctly."
@@ -182,6 +182,18 @@ Loop state is **independent of runtime workers** — pauseable and resumable acr
 4. **Scratch is ephemeral; channels are durable.** `LoopPhaseScratch` is deliberately not serialized by LangGraph (it carries rich non-primitive models). Fields that must survive a worker exit are projected into graph channels before parking (`build_plan_mode_review_pending`). `hydrate_scratch_from_pending` is the inverse projection on resume. New scratch fields that need persistence MUST follow this project→persist→hydrate pattern.
 
 5. **Cancel ≠ terminal.** A cancel during a long-running LLM call (synthesis, refinement, execute) cancels the in-flight operation, not the goal's clarification status. The goal's `awaiting_clarification` status is preserved so the user's next input resumes from the same parked state, not from a new goal. `resolve_clarification_resume_ce_goal` matches both `"active"` and `"awaiting_clarification"` goals.
+
+### 16. API Exposure (Minimum-Exposure) (MUST)
+- A parent `__init__.py` re-exports only what users are expected to import. For processors, that is exactly the operator class(es) — nothing else.
+- Do not re-export type schemas, builders, or helpers through parent packages when direct module imports suffice.
+- Never list private `_`-prefixed names in `__all__`.
+
+### 17. Docstrings (MUST)
+- Keep docstrings brief and sharp; no verbose prose.
+- Module docstring: one or two lines stating what the module provides. Do not repeat what function signatures or function docstrings already say.
+- Never reference external design docs, reports, or category taxonomies (e.g. "report 5.3", "category I", IG-XXX/RFC-XXX) in docstrings; docstrings must stand alone.
+- Class docstrings describe semantics, coordinate/unit conventions once, args, and a minimal usage example. Do not restate parameter defaults that are obvious from the signature.
+- Docstrings must match the implementation; if behavior changes, update the docstring.
 
 ---
 

@@ -23,7 +23,6 @@ from soothe.utils.observability.langfuse import GoalLoopTrace
 def _make_strange_loop(*, langfuse_enabled: bool = True) -> StrangeLoop:
     config = MagicMock()
     config.agent.loop.working_memory.enabled = False
-    config.agent.loop.goal_context = MagicMock()
     config.agent.loop.context_engine = MagicMock()
     config.agent.loop.execute_prompt_ledger = MagicMock()
     config.agent.loop.execute_prompt_ledger.execute_ai_ledger_max_tokens = 0

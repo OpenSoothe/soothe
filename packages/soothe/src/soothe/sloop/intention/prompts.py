@@ -83,8 +83,8 @@ def build_intake_system_prompt(
         body: Intake fragment text (from ``_read_intake_fragment``).
         assistant_name: Configured assistant display name.
         ctx: Optional pre-fetched datetime context.
-        identity: Optional configured persona. ``None`` reproduces the
-            original hardcoded identity line (backward compat).
+        identity: Optional configured persona; ``None`` falls back to the
+            built-in identity line.
     """
     from soothe.identity.persona import _format_vendor_denylist, build_assistant_identity_block
     from soothe.prompts import normalize_assistant_name

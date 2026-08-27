@@ -14,12 +14,10 @@ from typing import Any
 import pytest
 from langgraph.types import Interrupt
 
-from soothe.sloop.clarification import (
-    ORIGIN_TOOL_APPROVAL,
-    ClarificationCapture,
-    ClarificationDetector,
-    LoopStateView,
-)
+from soothe.sloop.clarification.capture import ClarificationCapture
+from soothe.sloop.clarification.detector import ClarificationDetector
+from soothe.sloop.clarification.origins import ORIGIN_TOOL_APPROVAL
+from soothe.sloop.clarification.protocol import LoopStateView
 from soothe.sloop.engine.execute.executor import Executor
 from soothe.sloop.engine.execute.graph_interrupt import (
     build_auto_resume_payload,

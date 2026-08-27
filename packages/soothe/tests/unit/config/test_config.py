@@ -14,6 +14,8 @@ from soothe.config import (
     SubagentConfig,
     ToolsConfig,
     WebSearchConfig,
+)
+from soothe.config.env import (
     _expand_env_in_config,
     _resolve_env,
     _resolve_provider_env,

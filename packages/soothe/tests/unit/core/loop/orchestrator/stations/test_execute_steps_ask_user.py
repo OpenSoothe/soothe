@@ -11,9 +11,9 @@ import pytest
 from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode
 from soothe.context.store_sqlite import SqliteContextPersistence
-from soothe.sloop.clarification import (
+from soothe.sloop.clarification.capture import ResumeTicket
+from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
-    ResumeTicket,
     answer_to_state,
     request_from_state,
 )

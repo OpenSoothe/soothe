@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Default `agent.clarification.default_mode` to `manual`: interactive runs now route clarifications through the TUI relay unless `auto` is set. Autopilot (headless) still forces auto.
+
 ### Removed
-- Remove dead `agent.goal_completion_mode` and `agent.final_response` config keys: they were never read at runtime. Set `agent.loop.goal_completion_mode` / `agent.loop.final_response` instead (the live keys, unchanged).
+- Remove dead config keys with no runtime reader: `agent.goal_completion_mode`/`agent.final_response` (agent-level duplicates of the live `agent.loop.*` keys), autopilot `checkpoint_interval`/`max_total_goals`/`max_goal_depth`/`dreaming_interval`, loop `goal_completion_mode`/`context_compaction_target_pct`/`step_context_check_enabled`/`strange_loop_output_contract_enabled`/`prior_conversation_limit`/`goal_context`/`decompose.max_recompose`/`decompose.reconcile_model_role`, clarification `auto_policy`/`max_defer_age_hours`/`tool_approval.veritas_fallback.inline_project_instructions`, and daemon `memory_profiling.snapshot_interval_seconds`/`log_growth_interval_seconds`.
+- Fix SLA template keys to match `SlaConfig` field names: `warning_seconds`/`critical_seconds`/`breach_seconds` (were `*_after_seconds`, silently ignored); drop never-existing `track_root_goals_only`. Re-remove the no-op `loop_orchestrator_evidence_validate` line that a template sync had reintroduced.
 
 ### Fixed
 - Veritas no longer auto-answers questions that solicit the user's own preference or input when no preference is stated: a "(Recommended)" option label is treated as a UI default, not evidence of user intent, so such questions defer to the human instead of fabricating the answer.

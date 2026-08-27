@@ -95,10 +95,8 @@ event_size_stats_idle_pause_seconds: 120
 memory_profiling:
   enabled: false
   trace_depth: 25
-  snapshot_interval_seconds: 0  # 0 = manual via RPC
   top_allocations_limit: 20
   log_growth_threshold_mb: 100
-  log_growth_interval_seconds: 0  # 0 = disabled
 
 # ============================================================================
 # IDENTITY SERVICE

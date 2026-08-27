@@ -1,9 +1,8 @@
 """Centralized graph prompt wrapper for synthesis and step-completion injection.
 
-Provides a single assembly point for the ``[SystemMessage, projected_ledger,
-HumanMessage]`` pattern used by StrangeLoop LLM nodes that still go through
-this wrapper: goal-completion synthesis and step-completion reporting
-(RFC-904).
+Single assembly point for the ``[SystemMessage, projected_ledger,
+HumanMessage]`` pattern used by StrangeLoop LLM nodes that go through this
+wrapper: goal-completion synthesis and step-completion reporting.
 
 The wrapper centralizes:
 
@@ -13,10 +12,6 @@ The wrapper centralizes:
    fragment helpers / ``render_synthesis_system_prompt``.
 3. **Human / task envelope** — synthesis closes with the shared TASK human
    message; step_completion uses the step input/output pair.
-
-Nodes that previously built message lists independently now delegate to
-:class:`GraphPromptWrapper` so projection and injection logic lives in one
-place (RFC-904 synthesis / step_completion).
 """
 
 from __future__ import annotations

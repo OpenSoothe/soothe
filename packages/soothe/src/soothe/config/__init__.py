@@ -1,8 +1,4 @@
-"""Declarative configuration for Soothe agents.
-
-All public names are re-exported here so that ``from soothe.config import X``
-continues to work after the module was split into a package.
-"""
+"""Declarative configuration for Soothe agents."""
 
 # Disambiguating alias for nano's SootheConfig.
 #
@@ -14,13 +10,6 @@ continues to work after the module was split into a package.
 # intent explicit.  Nano also re-exports the same class as ``NanoConfig``.
 from soothe_nano.config.settings import SootheConfig as NanoSootheConfig
 
-# Re-export facade — canonical source: soothe_nano.prompts.system_templates
-from soothe_nano.prompts.system_templates import (
-    _DEFAULT_SYSTEM_PROMPT,
-    _SIMPLE_SYSTEM_PROMPT,
-    _TOOL_ORCHESTRATION_GUIDE,
-)
-
 from soothe.config.composition import (
     CompositionConflict,
     CompositionConflictError,
@@ -30,13 +19,7 @@ from soothe.config.constants import (
     DEFAULT_EXECUTE_TIMEOUT,
     DEFAULT_MAX_ITERATIONS,
 )
-from soothe.config.env import (
-    _ENV_VAR_RE,
-    SOOTHE_HOME,
-    _expand_env_in_config,
-    _resolve_env,
-    _resolve_provider_env,
-)
+from soothe.config.env import SOOTHE_HOME
 from soothe.config.models import (
     AgentConfig,
     AutopilotConfig,
@@ -98,10 +81,6 @@ __all__ = [
     "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_EXECUTE_TIMEOUT",
     "SOOTHE_HOME",
-    "_DEFAULT_SYSTEM_PROMPT",
-    "_ENV_VAR_RE",
-    "_SIMPLE_SYSTEM_PROMPT",
-    "_TOOL_ORCHESTRATION_GUIDE",
     "AgentConfig",
     "AutopilotConfig",
     "AutopilotNotifyConfig",
@@ -150,7 +129,4 @@ __all__ = [
     "VectorStoreProviderConfig",
     "VectorStoreRouter",
     "WebSearchConfig",
-    "_resolve_env",
-    "_resolve_provider_env",
-    "_expand_env_in_config",
 ]

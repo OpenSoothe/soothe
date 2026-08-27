@@ -106,7 +106,6 @@ def _make_mock_ce(*, ledger_entries: list | None = None) -> Mock:
     mock_step_planner.ingest_plan = Mock()
     mock_step_planner.record_step_outcomes = Mock()
     mock_step_planner.get_planning_context = Mock(return_value=Mock())
-    mock_step_planner.determine_goal_completion_needs = Mock(return_value=False)
     mock_step_planner.determine_completion_strategy = Mock(
         return_value=CompletionStrategy.LEDGER_DIRECT
     )

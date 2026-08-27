@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.sloop.intention import IntentClassifier
+from soothe.sloop.intention.classifier import IntentClassifier
 from soothe.sloop.intention.coordinator import IntakeResult
 from soothe.sloop.intention.models import (
     IntakeConfidence,

@@ -140,7 +140,9 @@ class StrangeLoop:
         ctx = self._live_runtime_ctx
         if ctx is None:
             return False
-        from soothe.sloop.clarification import build_clarification_policy_for_runner
+        from soothe.sloop.clarification.runtime_factory import (
+            build_clarification_policy_for_runner,
+        )
 
         try:
             new_policy = build_clarification_policy_for_runner(

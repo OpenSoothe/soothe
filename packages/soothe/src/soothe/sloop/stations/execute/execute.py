@@ -7,14 +7,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from soothe.events import STRANGE_LOOP_CONTEXT_COMPACTED
-from soothe.sloop.clarification import (
-    ORIGIN_EXECUTE,
-    ORIGIN_TOOL_APPROVAL,
-    ClarificationCapture,
-    ClarificationDetector,
+from soothe.sloop.clarification.capture import ClarificationCapture, ResumeTicket
+from soothe.sloop.clarification.detector import ClarificationDetector
+from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
+from soothe.sloop.clarification.protocol import (
     ClarificationRequest,
     LoopStateView,
-    ResumeTicket,
     answer_from_state,
     request_from_state,
     request_to_state,

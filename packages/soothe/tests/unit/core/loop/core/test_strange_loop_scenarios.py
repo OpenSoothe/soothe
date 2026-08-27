@@ -105,7 +105,6 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
     # _get_rate_limit_threshold looks at loop_cfg.thread_switch_policy
     al.thread_switch_policy = None
     # Goal completion / synthesis config
-    al.goal_completion_mode = "llm_only"
     al.report_output.synthesis_max_chars = 10000
     al.report_output.synthesis_include_full_outputs = True
     al.report_output.output_summary_max_chars = 1500
