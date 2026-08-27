@@ -260,6 +260,9 @@ class ClarificationInputMessage(Vertical):
     ClarificationInputMessage.is-submitted .plan-review-answered-box {
         display: block;
     }
+    ClarificationInputMessage.is-submitted .clarification-title {
+        margin: 0;
+    }
     ClarificationInputMessage .plan-review-answered-action {
         height: auto;
         color: $text;

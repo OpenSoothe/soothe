@@ -41,6 +41,17 @@ def test_system_prompt_mentions_project_instructions_rule() -> None:
     assert "authoritative rules" in prompt
 
 
+def test_system_prompt_defers_preference_questions() -> None:
+    """Hard rule 9: preference-soliciting questions must defer, not pick a default."""
+    prompt = build_veritas_system_prompt()
+    assert "preference" in prompt.lower()
+    # A "(Recommended)" label is a UI affordance, not evidence of user intent.
+    assert "(Recommended)" in prompt
+    assert "NOT" in prompt
+    # Few-shot anchor: the loop-97bf scenario is an explicit Good defer.
+    assert "What two topics would you like me to ask you about?" in prompt
+
+
 def test_user_prompt_inlines_agents_md(tmp_path: Path) -> None:
     """AGENTS.md at the workspace root is inlined as a project instructions block."""
     (tmp_path / "AGENTS.md").write_text(

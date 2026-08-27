@@ -85,11 +85,15 @@ class AutoClarificationPolicy:
         # RFC-622 §9b: tool-approval pipeline short-circuit. Deterministic
         # deny → safety → allow stages resolve most tool_approval interrupts
         # without an LLM. Veritas remains the final guard for ambiguous cases.
+        # Force-manual origins still run deny/safety stages (auto-reject is a
+        # safety property, never an approval) but skip allow rules, so every
+        # non-rejected action falls through to the human relay.
         if request.origin_node == "tool_approval" and self._tool_approval_pipeline is not None:
             action_requests = request.metadata.get("action_requests", [])
             result = self._tool_approval_pipeline.evaluate(
                 action_requests,
                 workspace_root=request.loop_state.workspace_summary,
+                include_allow_rules=not self.requires_manual(request.origin_node),
             )
             if result is not None:
                 logger.info(

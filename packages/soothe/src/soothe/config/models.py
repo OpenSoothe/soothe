@@ -1634,9 +1634,23 @@ class ToolApprovalConfig(BaseModel):
     ``tool_approval`` interrupts without an LLM call. Veritas remains the
     final guard for ambiguous cases (Stage 4). When ``disabled``, all
     ``tool_approval`` interrupts go directly to veritas (pre-§9b behavior).
+
+    In manual clarification mode the pipeline still runs as a pre-filter:
+    deny/safety stages always auto-reject dangerous actions (safety
+    property); ``manual_scope`` controls whether allow rules may also
+    auto-approve.
     """
 
     enabled: bool = True
+
+    manual_scope: Literal["all", "ambiguous_only"] = "all"
+    """Which tool actions reach the human in manual clarification mode.
+
+    Deny/safety stages always auto-reject dangerous actions in any mode.
+    ``all`` (default) asks the human for every remaining tool action;
+    ``ambiguous_only`` also auto-approves allow-rule matches, so only
+    rule-unresolved actions reach the human.
+    """
     deny_rules: list[ToolApprovalRule] = Field(default_factory=_default_deny_rules)
     allow_rules: list[ToolApprovalRule] = Field(default_factory=_default_allow_rules)
     veritas_fallback: VeritasFallbackConfig = Field(default_factory=VeritasFallbackConfig)
@@ -1690,7 +1704,8 @@ class ClarificationConfig(BaseModel):
             "the loop defers. Default is ``plan_mode_review`` only — ``tool_approval`` "
             "is evaluated by the multi-stage pipeline (§9b) in auto mode so safe "
             "tool calls auto-approve without an LLM. Re-add ``tool_approval`` to "
-            "force a human on every tool action."
+            "route every non-rejected tool action through a human — deny/safety "
+            "stages still auto-reject dangerous actions."
         ),
     )
 

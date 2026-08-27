@@ -14,6 +14,7 @@ auto→manual upgrade (RFC-623 structured-output failure), via
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -28,15 +29,38 @@ from soothe.sloop.clarification.protocol import (
     ClarificationDeferredError,
     ClarificationRequest,
 )
+from soothe.sloop.clarification.tool_approval_pipeline import (
+    ToolApprovalPipeline,
+)
 
 EmitFn = Callable[[str, dict[str, Any]], Awaitable[None]]
 
+logger = logging.getLogger(__name__)
+
 
 class InteractiveClarificationPolicy:
-    """Relay clarifications to a human via the TUI; loop-level durable pause."""
+    """Relay clarifications to a human via the TUI; loop-level durable pause.
 
-    def __init__(self, emit: EmitFn | None = None) -> None:
+    When a ``ToolApprovalPipeline`` is attached (manual clarification mode,
+    RFC-622 §9b), it pre-filters ``tool_approval`` requests: deny/safety
+    stages always auto-reject dangerous actions without asking the human,
+    and allow rules auto-approve when ``manual_allow_rules`` is set
+    (``tool_approval.manual_scope: ambiguous_only``). Only rule-unresolved
+    actions reach the human. The pre-filter does not run on the
+    auto→manual upgrade path — the auto policy already evaluated the
+    pipeline before deferring to this policy as fallback.
+    """
+
+    def __init__(
+        self,
+        emit: EmitFn | None = None,
+        *,
+        tool_approval_pipeline: ToolApprovalPipeline | None = None,
+        manual_allow_rules: bool = False,
+    ) -> None:
         self._emit = emit
+        self._tool_approval_pipeline = tool_approval_pipeline
+        self._manual_allow_rules = manual_allow_rules
 
     def bind_emit(self, emit: EmitFn) -> None:
         """Attach the runtime emit callback (RFC-623 interactive fallback wiring)."""
@@ -49,6 +73,9 @@ class InteractiveClarificationPolicy:
         ``force_manual_origins`` with ``mode=manual``). Re-emitting here would
         duplicate events for every interactive pause.
         """
+        static = self._evaluate_tool_approval_pipeline(request)
+        if static is not None:
+            return static
         return await self._answer(request, announce=False)
 
     async def answer_as_manual_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
@@ -93,6 +120,37 @@ class InteractiveClarificationPolicy:
         return ClarificationAnswer(
             answers=tuple(answers),
             source="human",
+        )
+
+    def _evaluate_tool_approval_pipeline(
+        self, request: ClarificationRequest
+    ) -> ClarificationAnswer | None:
+        """Run the tool-approval pipeline pre-filter for manual mode (§9b).
+
+        Returns a static answer when the pipeline resolves the batch, or
+        ``None`` to fall through to the human interrupt.
+        """
+        if request.origin_node != ORIGIN_TOOL_APPROVAL or self._tool_approval_pipeline is None:
+            return None
+        action_requests = request.metadata.get("action_requests", [])
+        result = self._tool_approval_pipeline.evaluate(
+            action_requests,
+            workspace_root=request.loop_state.workspace_summary,
+            include_allow_rules=self._manual_allow_rules,
+        )
+        if result is None:
+            return None
+        logger.info(
+            "[clarification] tool_approval %s by stage=%s reason=%s (manual pre-filter)",
+            result.decision,
+            result.stage,
+            result.reason,
+        )
+        return ClarificationAnswer(
+            answers=(result.decision,),
+            source="static",
+            confidence=1.0,
+            audit={"stage": result.stage, "reason": result.reason},
         )
 
     @staticmethod

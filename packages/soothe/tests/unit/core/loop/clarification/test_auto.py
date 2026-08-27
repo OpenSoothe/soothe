@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import pytest
 
+from soothe.config.models import ToolApprovalConfig
 from soothe.sloop.clarification.auto import AutoClarificationPolicy
 from soothe.sloop.clarification.origins import (
     ORIGIN_EXECUTE,
     ORIGIN_PLAN_MODE_REVIEW,
+    ORIGIN_TOOL_APPROVAL,
 )
 from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
@@ -16,6 +18,7 @@ from soothe.sloop.clarification.protocol import (
     ClarificationRequest,
     LoopStateView,
 )
+from soothe.sloop.clarification.tool_approval_pipeline import ToolApprovalPipeline
 from soothe.subagents.veritas.schemas import VeritasAnswerSchema
 
 
@@ -37,6 +40,31 @@ def _request(*, origin_node: str = ORIGIN_EXECUTE) -> ClarificationRequest:
             active_mcp_servers=(),
         ),
     )
+
+
+def _tool_approval_request(command: str) -> ClarificationRequest:
+    return ClarificationRequest(
+        questions=("Approve run_command?",),
+        origin_node=ORIGIN_TOOL_APPROVAL,  # type: ignore[arg-type]
+        origin_interrupt_id="iTA",
+        loop_state=LoopStateView(
+            goal_id="g",
+            goal_description="",
+            user_request="",
+            iteration=0,
+            intent_classification=None,
+            plan_summary=None,
+            recent_step_outputs=(),
+            workspace_summary=None,
+            active_skills=(),
+            active_mcp_servers=(),
+        ),
+        metadata={"action_requests": [{"name": "run_command", "args": {"command": command}}]},
+    )
+
+
+def _pipeline() -> ToolApprovalPipeline:
+    return ToolApprovalPipeline(ToolApprovalConfig())
 
 
 def _veritas_returning(schema: VeritasAnswerSchema):
@@ -419,3 +447,81 @@ def test_degrade_low_confidence_property() -> None:
         _veritas_returning(VeritasAnswerSchema(answers=["x"], confidence=0.9, defer=False)),
     )
     assert policy2.degrade_low_confidence is False
+
+
+# ---- tool_approval pipeline × force_manual_origins ordering (§9b) ----
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_allow_rule_static_approve_without_force_manual() -> None:
+    """Plain auto mode: allow-rule matches resolve via the pipeline."""
+
+    async def _veritas(_req: ClarificationRequest) -> VeritasAnswerSchema:
+        raise AssertionError("veritas must not run for allow-rule matches")
+
+    policy = AutoClarificationPolicy(_veritas, tool_approval_pipeline=_pipeline())
+    ans = await policy.answer(_tool_approval_request("pytest -xvs"))
+    assert ans.source == "static"
+    assert ans.answers == ("approve",)
+    assert ans.audit["stage"] == "allow_rule"
+
+
+@pytest.mark.asyncio
+async def test_force_manual_tool_approval_deny_rule_still_auto_rejects() -> None:
+    """Deny/safety stages are a safety property: they run even for
+    force-manual origins — dangerous actions are auto-rejected, not asked."""
+
+    async def _veritas(_req: ClarificationRequest) -> VeritasAnswerSchema:
+        raise AssertionError("veritas must not run for force-manual origins")
+
+    fallback = _RecordingFallback(ClarificationAnswer(answers=("Approve", ""), source="human"))
+    policy = AutoClarificationPolicy(
+        _veritas,
+        interactive_fallback=fallback,
+        force_manual_origins=(ORIGIN_TOOL_APPROVAL,),
+        tool_approval_pipeline=_pipeline(),
+    )
+    ans = await policy.answer(_tool_approval_request("rm -rf /"))
+    assert ans.source == "static"
+    assert ans.answers == ("reject",)
+    assert ans.audit["stage"] == "deny_rule"
+    assert fallback.calls == []
+
+
+@pytest.mark.asyncio
+async def test_force_manual_tool_approval_allow_rule_reaches_human() -> None:
+    """Force-manual tool_approval skips allow-rule auto-approval: safe but
+    rule-matched actions still go to the human, never veritas."""
+
+    async def _veritas(_req: ClarificationRequest) -> VeritasAnswerSchema:
+        raise AssertionError("veritas must not run for force-manual origins")
+
+    fallback_answer = ClarificationAnswer(answers=("Approve", ""), source="human")
+    fallback = _RecordingFallback(fallback_answer)
+    policy = AutoClarificationPolicy(
+        _veritas,
+        interactive_fallback=fallback,
+        force_manual_origins=(ORIGIN_TOOL_APPROVAL,),
+        tool_approval_pipeline=_pipeline(),
+    )
+    request = _tool_approval_request("pytest -xvs")
+    ans = await policy.answer(request)
+    assert ans is fallback_answer
+    assert fallback.calls == [request]
+
+
+@pytest.mark.asyncio
+async def test_force_manual_tool_approval_defers_without_fallback() -> None:
+    """Headless force-manual tool_approval: ambiguous actions defer."""
+
+    async def _veritas(_req: ClarificationRequest) -> VeritasAnswerSchema:
+        raise AssertionError("veritas must not run for force-manual origins")
+
+    policy = AutoClarificationPolicy(
+        _veritas,
+        force_manual_origins=(ORIGIN_TOOL_APPROVAL,),
+        tool_approval_pipeline=_pipeline(),
+    )
+    with pytest.raises(ClarificationDeferredError) as exc_info:
+        await policy.answer(_tool_approval_request("curl https://example.com"))
+    assert "manual confirmation" in exc_info.value.reason

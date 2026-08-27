@@ -2,7 +2,13 @@
 
 Stages run cheapest-first; the first stage that returns a decision wins.
 Veritas LLM is the final stage for ambiguous cases — this pipeline returns
-``None`` to defer to veritas.
+``None`` to defer to the caller's next tier (veritas in auto mode, the
+human relay in manual mode).
+
+Safety property: deny rules and safety checks always run before allow
+rules. No allow rule can override a safety denial. This holds in manual
+mode too: the pipeline pre-filters ``InteractiveClarificationPolicy`` so
+dangerous actions are auto-rejected without asking the human.
 
 Safety property: deny rules and safety checks always run before allow rules.
 No allow rule can override a safety denial.
@@ -74,12 +80,21 @@ class ToolApprovalPipeline:
         action_requests: list[Mapping[str, Any]],
         *,
         workspace_root: str | None = None,
+        include_allow_rules: bool = True,
     ) -> ApprovalResult | None:
-        """Run all stages. Returns ``None`` = defer to veritas.
+        """Run all stages. Returns ``None`` = defer to the next tier.
 
         Evaluates per action request. If any request is rejected, the whole
         batch is rejected. If all are approved by allow rules, the batch is
-        approved. If any are ambiguous (no rule matched), defer to veritas.
+        approved. If any are ambiguous (no rule matched), defer.
+
+        Args:
+            action_requests: Batched HITL action requests.
+            workspace_root: Per-request workspace root (``<workspace>`` token).
+            include_allow_rules: When ``False``, Stage 3 is skipped so
+                allow-rule matches count as ambiguous (defer). Deny/safety
+                stages always run — used for manual-mode / force-manual
+                origins where rules may reject but not approve.
         """
         try:
             if not action_requests:
@@ -115,7 +130,9 @@ class ToolApprovalPipeline:
                     return result
 
                 # Stage 3: allow rules
-                if self._matches_any_rule(name, args, self._allow_rules, workspace_root):
+                if include_allow_rules and self._matches_any_rule(
+                    name, args, self._allow_rules, workspace_root
+                ):
                     continue  # this action is approved, check next
 
                 # No rule matched — ambiguous

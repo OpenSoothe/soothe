@@ -234,8 +234,9 @@ agent:
     # plan_mode_review — plan approve/reject/refine gate is a human call.
     # tool_approval is intentionally NOT listed: in auto mode the multi-stage
     # pipeline (§9b) resolves most tool actions deterministically; veritas
-    # handles the ambiguous tail. Re-add tool_approval here to force every
-    # tool action through a human instead.
+    # handles the ambiguous tail. Re-add tool_approval here to route every
+    # non-rejected tool action through a human (deny/safety stages still
+    # auto-reject dangerous actions).
     force_manual_origins:
       - plan_mode_review
 
@@ -245,6 +246,11 @@ agent:
     # cases. Set enabled: false to send all tool_approval to veritas (pre-§9b).
     tool_approval:
       enabled: true
+      # Manual-mode scope (default_mode: manual): deny/safety stages always
+      # auto-reject dangerous actions without asking. "all" asks the human
+      # for every remaining action; "ambiguous_only" also auto-approves
+      # allow-rule matches, so only rule-unresolved actions reach the human.
+      manual_scope: all
       deny_rules:                      # Stage 1: match = REJECT
         - { tool: run_command, pattern: "rm -rf *" }
         - { tool: run_command, pattern: "sudo *" }

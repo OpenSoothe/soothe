@@ -233,11 +233,20 @@ def _attach_plan_review_payload(
         payload["plan_markdown"] = str(plan_markdown)
 
 
-def _summary(questions: tuple[str, ...]) -> str:
-    joined = " | ".join(questions)
+def _summary(questions: tuple) -> str:
+    # RFC-622 §9c: questions may be QuestionSpec.model_dump() dicts, not just strings.
+    parts = [_question_text(q) for q in questions]
+    joined = " | ".join(parts)
     if len(joined) <= _QUESTION_SUMMARY_CHARS:
         return joined
     return joined[: _QUESTION_SUMMARY_CHARS - 1] + "…"
+
+
+def _question_text(question: Any) -> str:
+    """Render a structured question (RFC-622 §9c) or plain string as text."""
+    if isinstance(question, dict):
+        return str(question.get("question") or question.get("header") or "")
+    return str(question)
 
 
 def _mode_for_policy(policy: Any, *, origin_node: str | None = None) -> str:

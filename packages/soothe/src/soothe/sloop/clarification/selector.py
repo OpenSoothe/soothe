@@ -25,6 +25,7 @@ def build_default_clarification_policy(
     force_manual_origins: tuple[str, ...] | list[str] | None = None,
     degrade_low_confidence: bool = False,
     tool_approval_pipeline: ToolApprovalPipeline | None = None,
+    manual_allow_rules: bool = False,
 ) -> ClarificationPolicy:
     """Return the appropriate policy for the runtime mode.
 
@@ -45,15 +46,24 @@ def build_default_clarification_policy(
             results to the interactive fallback (auto→manual upgrade) instead
             of a hard defer. Ignored for manual mode.
         tool_approval_pipeline: Optional pipeline for deterministic
-            tool-approval evaluation (RFC-622 §9b). When provided, deny →
+            tool-approval evaluation (RFC-622 §9b). In auto mode, deny →
             safety → allow stages resolve most ``tool_approval`` interrupts
-            without an LLM. Veritas remains the final guard.
+            without an LLM (veritas remains the final guard). In manual mode
+            it pre-filters the human relay: deny/safety always auto-reject,
+            allow rules auto-approve only when ``manual_allow_rules`` is set.
+        manual_allow_rules: Manual mode only — let allow rules auto-approve
+            ``tool_approval`` actions instead of asking the human
+            (``tool_approval.manual_scope: ambiguous_only``).
 
     Raises:
         ValueError: if ``mode == "auto"`` but ``veritas_answer`` is not provided.
     """
     if mode == "manual":
-        return InteractiveClarificationPolicy(emit=emit)
+        return InteractiveClarificationPolicy(
+            emit=emit,
+            tool_approval_pipeline=tool_approval_pipeline,
+            manual_allow_rules=manual_allow_rules,
+        )
     if mode == "auto":
         if veritas_answer is None:
             msg = "auto mode requires veritas_answer callable"

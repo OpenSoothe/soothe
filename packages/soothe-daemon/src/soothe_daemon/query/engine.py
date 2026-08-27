@@ -16,6 +16,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from langchain_core.messages import AIMessage, AIMessageChunk
 from soothe.events import ERROR
 from soothe.logging import ThreadLogger, set_thread_id
 from soothe_sdk.display.text_extract import extract_text_from_ai_message
@@ -1361,19 +1362,31 @@ class QueryEngine:
                         )
                         if not namespace and mode == "messages" and is_msg_pair:
                             msg, _metadata = data
-                            # Apply bounded accumulation to prevent memory leak
-                            text_parts = extract_text_from_ai_message(msg)
-                            for part in text_parts:
-                                if full_response_chars + len(part) < _MAX_FULL_RESPONSE_CHARS:
-                                    full_response.append(part)
-                                    full_response_chars += len(part)
                             from soothe_sdk.ux.loop_stream import assistant_output_phase
 
-                            if assistant_output_phase(msg) == "goal_completion":
+                            # Only AI-message text composes the assistant row.
+                            # ``extract_text_from_ai_message`` also extracts
+                            # plain-string content from ToolMessages — without
+                            # this guard, tool output and langgraph error
+                            # bodies ("Error invoking tool ...") leak into the
+                            # user-facing legacy assistant row.
+                            if isinstance(msg, (AIMessage, AIMessageChunk)) or (
+                                isinstance(msg, dict) and msg.get("type") == "ai"
+                            ):
+                                # Apply bounded accumulation to prevent memory leak
+                                text_parts = extract_text_from_ai_message(msg)
                                 for part in text_parts:
-                                    if goal_completion_chars + len(part) < _MAX_FULL_RESPONSE_CHARS:
-                                        goal_completion_response.append(part)
-                                        goal_completion_chars += len(part)
+                                    if full_response_chars + len(part) < _MAX_FULL_RESPONSE_CHARS:
+                                        full_response.append(part)
+                                        full_response_chars += len(part)
+                                if assistant_output_phase(msg) == "goal_completion":
+                                    for part in text_parts:
+                                        if (
+                                            goal_completion_chars + len(part)
+                                            < _MAX_FULL_RESPONSE_CHARS
+                                        ):
+                                            goal_completion_response.append(part)
+                                            goal_completion_chars += len(part)
                             # Detect phase-tagged loop assistant output so the
                             # finally block can skip the legacy concat row.
                             if not phase_tagged_assistant_written[0]:

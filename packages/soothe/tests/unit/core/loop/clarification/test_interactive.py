@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from soothe.config.models import ToolApprovalConfig
 from soothe.sloop.clarification import interactive as interactive_mod
 from soothe.sloop.clarification.interactive import InteractiveClarificationPolicy
 from soothe.sloop.clarification.protocol import (
@@ -13,6 +14,7 @@ from soothe.sloop.clarification.protocol import (
     ClarificationRequest,
     LoopStateView,
 )
+from soothe.sloop.clarification.tool_approval_pipeline import ToolApprovalPipeline
 
 
 def _request(num_questions: int = 1, *, origin_node: str = "execute") -> ClarificationRequest:
@@ -33,6 +35,31 @@ def _request(num_questions: int = 1, *, origin_node: str = "execute") -> Clarifi
             active_mcp_servers=(),
         ),
     )
+
+
+def _tool_approval_request(command: str) -> ClarificationRequest:
+    return ClarificationRequest(
+        questions=("Approve run_command?",),
+        origin_node="tool_approval",  # type: ignore[arg-type]
+        origin_interrupt_id="iTA",
+        loop_state=LoopStateView(
+            goal_id="g",
+            goal_description="",
+            user_request="",
+            iteration=0,
+            intent_classification=None,
+            plan_summary=None,
+            recent_step_outputs=(),
+            workspace_summary=None,
+            active_skills=(),
+            active_mcp_servers=(),
+        ),
+        metadata={"action_requests": [{"name": "run_command", "args": {"command": command}}]},
+    )
+
+
+def _pipeline() -> ToolApprovalPipeline:
+    return ToolApprovalPipeline(ToolApprovalConfig())
 
 
 def _stub_interrupt(monkeypatch: pytest.MonkeyPatch, return_value: Any) -> list[Any]:
@@ -239,3 +266,88 @@ async def test_tool_approval_defers_on_blank_action(
     policy = InteractiveClarificationPolicy()
     with pytest.raises(ClarificationDeferredError):
         await policy.answer(_request(1, origin_node="tool_approval"))
+
+
+# ---------------------------------------------------------------------------
+# Manual-mode pipeline pre-filter (RFC-622 §9b)
+# ---------------------------------------------------------------------------
+
+
+async def test_pre_filter_deny_rule_auto_rejects_without_asking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dangerous actions are auto-rejected in manual mode — the human is
+    never prompted to approve them."""
+    captured = _stub_interrupt(monkeypatch, {"answers": ["approve"]})
+    policy = InteractiveClarificationPolicy(tool_approval_pipeline=_pipeline())
+    ans = await policy.answer(_tool_approval_request("rm -rf /"))
+    assert ans.source == "static"
+    assert ans.answers == ("reject",)
+    assert ans.audit["stage"] == "deny_rule"
+    assert captured == []
+
+
+async def test_pre_filter_asks_human_for_allow_rule_match_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """manual_scope=all (default): allow-rule matches still reach the human."""
+    captured = _stub_interrupt(monkeypatch, {"answers": ["approve"]})
+    policy = InteractiveClarificationPolicy(tool_approval_pipeline=_pipeline())
+    ans = await policy.answer(_tool_approval_request("pytest -xvs"))
+    assert ans.source == "human"
+    assert captured, "human interrupt must fire for non-rejected actions"
+
+
+async def test_pre_filter_allow_rule_static_approves_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """manual_scope=ambiguous_only: allow-rule matches auto-approve."""
+    captured = _stub_interrupt(monkeypatch, {"answers": ["approve"]})
+    policy = InteractiveClarificationPolicy(
+        tool_approval_pipeline=_pipeline(),
+        manual_allow_rules=True,
+    )
+    ans = await policy.answer(_tool_approval_request("pytest -xvs"))
+    assert ans.source == "static"
+    assert ans.answers == ("approve",)
+    assert ans.audit["stage"] == "allow_rule"
+    assert captured == []
+
+
+async def test_pre_filter_asks_human_for_ambiguous_actions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rule-unresolved actions reach the human even with allow rules on."""
+    captured = _stub_interrupt(monkeypatch, {"answers": ["approve"]})
+    policy = InteractiveClarificationPolicy(
+        tool_approval_pipeline=_pipeline(),
+        manual_allow_rules=True,
+    )
+    ans = await policy.answer(_tool_approval_request("curl https://example.com"))
+    assert ans.source == "human"
+    assert captured
+
+
+async def test_pre_filter_skipped_without_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No pipeline attached (tool_approval.enabled: false): current behavior,
+    every tool action asks the human."""
+    captured = _stub_interrupt(monkeypatch, {"answers": ["approve"]})
+    policy = InteractiveClarificationPolicy()
+    ans = await policy.answer(_tool_approval_request("rm -rf /"))
+    assert ans.source == "human"
+    assert captured
+
+
+async def test_manual_fallback_path_skips_pre_filter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """answer_as_manual_fallback (auto→manual upgrade) must not re-evaluate
+    the pipeline — the auto policy already ran it before deferring."""
+    captured = _stub_interrupt(monkeypatch, {"answers": ["approve"]})
+    policy = InteractiveClarificationPolicy(
+        tool_approval_pipeline=_pipeline(),
+        manual_allow_rules=True,
+    )
+    ans = await policy.answer_as_manual_fallback(_tool_approval_request("pytest -xvs"))
+    assert ans.source == "human"
+    assert captured

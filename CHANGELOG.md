@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Veritas no longer auto-answers questions that solicit the user's own preference or input when no preference is stated: a "(Recommended)" option label is treated as a UI default, not evidence of user intent, so such questions defer to the human instead of fabricating the answer.
+- Stop leaking tool output and raw tool-error text (e.g. "Error invoking tool ...") into the user-visible assistant message: the end-of-turn assistant row is now composed from AI-message text only.
+
 ## [v0.10.38] - 2026-08-26
 
 ### Changed

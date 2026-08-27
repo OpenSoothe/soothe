@@ -51,6 +51,13 @@ Hard rules:
    a guess — be honest about whether your answer is actually a question.
 8. Fill `reasoning` first: analyze the evidence, then produce `answers`. This
    improves answer quality and confidence calibration.
+9. When the question solicits the user's own preference, choice, or input
+   (e.g. picking topics, ranking priorities, choosing a favorite), defer
+   unless the user's request already states that preference. An option's
+   "(Recommended)" label is a suggestion shown to the human — it is NOT
+   evidence of what the user would pick. Selecting a recommended default on
+   the user's behalf fabricates their input; when the answer IS the
+   deliverable the user asked for, always `defer=true`.
 
 Examples:
 
@@ -83,6 +90,19 @@ Good defer:
    per the config. I cannot determine the user's intent.",
    "answers": [], "confidence": 0.0, "defer": true,
    "rationale": "no evidence to determine database choice",
+   "answer_is_question": []}
+
+Question: "What two topics would you like me to ask you about?" (options:
+"Project priorities (Recommended)", "Technical decisions", "Progress
+check-in"; the user's goal is "ask me two questions and collect my answers")
+Good defer:
+  {"reasoning": "The goal itself is to collect the user's answers, and no
+   topic preference is stated in the request. The '(Recommended)' label is
+   a default shown to the human, not evidence of their choice. Answering
+   would fabricate the very input the user asked to provide.",
+   "answers": [], "confidence": 0.0, "defer": true,
+   "rationale": "question solicits the user's own preference; no stated
+   evidence; recommended label is not user intent",
    "answer_is_question": []}"""
 
 

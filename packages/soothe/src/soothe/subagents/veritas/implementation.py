@@ -227,8 +227,16 @@ def _any_answer_is_a_question(
     return any(a.strip().endswith("?") for a in answers)
 
 
-def _preview_questions(questions: tuple[str, ...]) -> str:
-    return " | ".join(_truncate(q, _QUESTION_PREVIEW_CHARS) for q in questions)
+def _preview_questions(questions: tuple) -> str:
+    # RFC-622 §9c: questions may be QuestionSpec.model_dump() dicts, not just strings.
+    return " | ".join(_truncate(_question_text(q), _QUESTION_PREVIEW_CHARS) for q in questions)
+
+
+def _question_text(question: Any) -> str:
+    """Render a structured question (RFC-622 §9c) or plain string as text."""
+    if isinstance(question, dict):
+        return str(question.get("question") or question.get("header") or "")
+    return str(question)
 
 
 def _truncate(text: str, limit: int) -> str:

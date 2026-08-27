@@ -9,7 +9,7 @@
 **Updated**: 2026-08-27
 **Depends on**: RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)
 **Supersedes**: Empty-answer auto-resume behavior currently encoded in `sloop/engine/graph_interrupt.py::build_auto_resume_payload` for `type=="ask_user"` interrupts.
-**Revisions**: [2026-08-27](#changelog) — §9c Structured ask_user schema + `StructuredAskUserWidget`; §2.1, §4.2, §4.3, §5.1, §6, §10, §15, §17 updated. | [2026-08-27](#changelog) — §9b Multi-stage tool-approval pipeline; §2.1, §4.2, §4.3, §6, §12 updated.
+**Revisions**: [2026-08-27](#changelog) — §9b.5a Manual-mode pipeline pre-filter + `manual_scope`; force-manual `tool_approval` skips allow rules; §9b.5, §9b.8, §12 updated. | [2026-08-27](#changelog) — §9c Structured ask_user schema + `StructuredAskUserWidget`; §2.1, §4.2, §4.3, §5.1, §6, §10, §15, §17 updated. | [2026-08-27](#changelog) — §9b Multi-stage tool-approval pipeline; §2.1, §4.2, §4.3, §6, §12 updated.
 
 ---
 
@@ -456,13 +456,14 @@ Code's `DANGEROUS_FILES` / `DANGEROUS_DIRECTORIES`).
 
 ```python
 async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
-    # NEW: tool-approval pipeline short-circuit (§9b)
+    # tool-approval pipeline short-circuit (§9b)
     if (request.origin_node == "tool_approval"
             and self._tool_approval_pipeline is not None):
         action_requests = request.metadata.get("action_requests", [])
         result = self._tool_approval_pipeline.evaluate(
             action_requests,
             workspace_root=request.loop_state.workspace_summary,
+            include_allow_rules=not self.requires_manual(request.origin_node),
         )
         if result is not None:
             return ClarificationAnswer(
@@ -471,11 +472,36 @@ async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
                 confidence=1.0,
                 audit={"stage": result.stage, "reason": result.reason},
             )
-        # fall through to veritas (existing path)
+        # fall through (veritas / human relay — existing path)
 
     # existing: requires_manual check, veritas call, fallback logic
     ...
 ```
+
+`include_allow_rules=False` for force-manual `tool_approval` (operator
+re-added it to `force_manual_origins`): deny/safety stages still
+auto-reject — auto-rejection is a safety property, not an approval — but
+allow rules are skipped so every non-rejected action reaches the human
+instead of being silently approved by a rule.
+
+### 9b.5a Manual-mode pre-filter
+
+In manual clarification mode the pipeline pre-filters
+`InteractiveClarificationPolicy` before the human interrupt:
+
+- **Deny/safety stages always run** — dangerous actions are auto-rejected
+  without asking. Asking a human to approve `rm -rf /` is noise: the
+  execution-layer safety guard (nano `WorkspaceToolOperationSecurity`)
+  would deny it after approval anyway.
+- **Allow rules run only under `manual_scope: ambiguous_only`** — the
+  operator opt-in where rule-matched actions auto-approve and only
+  rule-unresolved actions reach the human. Default `manual_scope: all`
+  preserves ask-the-human-for-everything-else semantics.
+- The pre-filter does **not** run on the auto→manual upgrade path
+  (`answer_as_manual_fallback`): the auto policy already evaluated the
+  pipeline before deferring, and the deferred action was ambiguous.
+- When `tool_approval.enabled: false`, no pre-filter exists and manual
+  mode asks the human for every tool action (pre-§9b behavior).
 
 ### 9b.6 Veritas fallback prompt truncation
 
@@ -507,6 +533,8 @@ allow rules do not fire — everything reaches veritas (fail-safe).
 5. **Fail-safe on workspace unknown.** `workspace_summary is None` → path-based allow rules don't fire → veritas.
 6. **Veritas remains the final guard.** Ambiguous cases still get LLM scrutiny.
 7. **`delete` is never auto-approved by default.** Default allow rules include `edit_file`/`write_file` but not `delete`. Operators can add a `delete` allow rule explicitly.
+8. **Deny/safety are mode-independent.** Auto-rejection runs in manual mode and for force-manual origins too (§9b.5a) — humans are never prompted to approve dangerous actions.
+9. **Auto-approval is mode-gated.** Allow rules fire only where the operator permitted: auto mode (default), manual mode under `manual_scope: ambiguous_only`. Force-manual origins and `manual_scope: all` skip Stage 3.
 
 ### 9b.9 Expected impact
 
@@ -786,6 +814,7 @@ agent:
     # §9b: Multi-stage tool-approval pipeline
     tool_approval:
       enabled: true                    # master switch; false = all tool_approval go to veritas
+      manual_scope: all                # manual mode: all | ambiguous_only (§9b.5a)
       deny_rules:                      # Stage 1: match = immediate REJECT
         - { tool: run_command, pattern: "rm -rf *" }
         - { tool: run_command, pattern: "sudo *" }
@@ -844,6 +873,12 @@ interrupts go directly to veritas (pre-§9b behavior). Pattern syntax:
 match). Path patterns support `**` recursive matching via `pathspec`. The
 `<workspace>` token expands to the per-request workspace root from
 `LoopStateView.workspace_summary`.
+
+In manual clarification mode the pipeline pre-filters the human relay
+(§9b.5a): deny/safety stages always auto-reject dangerous actions;
+`manual_scope: ambiguous_only` additionally lets allow rules auto-approve,
+so only rule-unresolved actions reach the human. Default `manual_scope: all`
+asks the human for every non-rejected action.
 
 Per project rule, both `config/soothe.template.yml` and the packaged
 `soothe-daemon` setup template are updated in the same change.
@@ -930,6 +965,13 @@ Integration:
 ---
 
 ## Changelog
+
+### 2026-08-27 (Revised — §9b.5a Manual-mode pre-filter + force-manual allow-rule skip)
+- **§9b.5a added**: in manual clarification mode the pipeline pre-filters the human relay. Deny/safety stages always auto-reject dangerous actions (no "approve `rm -rf`?" prompts); allow rules auto-approve only under the new `tool_approval.manual_scope: ambiguous_only` (default `all`). Pre-filter skipped on the auto→manual upgrade path and when `tool_approval.enabled: false`.
+- **§9b.5 fixed**: `AutoClarificationPolicy` passes `include_allow_rules=not requires_manual(origin)` — force-manual `tool_approval` now truly routes non-rejected actions to the human instead of allow-rule auto-approvals bypassing the operator's intent. Deny/safety still auto-reject (safety property).
+- **§9b.8 extended**: safety properties 8 (deny/safety mode-independent) and 9 (auto-approval mode-gated).
+- **§12 config**: `manual_scope` added to the `tool_approval` sub-block; prose on manual-mode semantics.
+- `ToolApprovalPipeline.evaluate` gains `include_allow_rules` kwarg; `InteractiveClarificationPolicy` gains `tool_approval_pipeline` / `manual_allow_rules` init args; `runtime_factory` wires the pipeline in manual mode.
 
 ### 2026-08-27 (Revised — §9c Structured ask_user schema + widget)
 - **§9c added**: `ask_user` tool args change from `list[str]` to `list[QuestionSpec]` (title ≤3 words, description ≤100 words, exactly 3 options with short+long, recommended index). New `StructuredAskUserWidget` in the CLI with tab navigation (←/→), inline per-option long-desc rendering (↑/↓ + Enter), 4th custom free-text row, persistent Submit/Abandon footer with inline recap. Applies to generic (execute) render path only; HITL plan-review and tool-approval modes untouched.

@@ -329,3 +329,84 @@ async def test_coerced_confidence_parameter_forwarded(
     raw = {"answers": ["go"]}
     normalized = normalize_fn(raw)
     assert normalized["confidence"] == 0.85
+
+
+@pytest.mark.asyncio
+async def test_structured_dict_questions_do_not_crash(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """RFC-622 §9c: clarification questions may be QuestionSpec.model_dump() dicts.
+
+    Regression: in auto clarification mode, ``_preview_questions`` eagerly formatted
+    dict questions into the debug log and crashed with
+    ``AttributeError: 'dict' object has no attribute 'strip'`` before any LLM call.
+    The error escaped ``node_await_clarification``, became a fatal wire event, and
+    the user saw the traceback in the TUI instead of a real answer.
+    """
+
+    async def _fake(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {"answers": ["red", "M"], "confidence": 0.7, "defer": False, "rationale": "ok"}
+
+    monkeypatch.setattr(veritas_impl, "ainvoke_structured_traced", _fake)
+
+    request = ClarificationRequest(
+        questions=(
+            {
+                "question": "Pick a color",
+                "header": "Color",
+                "options": [
+                    {"label": "red", "description": "warm"},
+                    {"label": "blue", "description": "cool"},
+                ],
+                "multiSelect": False,
+            },
+            {
+                "question": "Pick a size",
+                "header": "Size",
+                "options": [{"label": "M", "description": "medium"}],
+                "multiSelect": False,
+            },
+        ),
+        origin_node="execute",
+        origin_interrupt_id="i",
+        loop_state=LoopStateView(
+            goal_id="g",
+            goal_description="refine the auth module",
+            user_request="please refine auth",
+            iteration=2,
+            intent_classification="agentic",
+            plan_summary="explored auth/",
+            recent_step_outputs=("read auth/main.py",),
+            workspace_summary="src/auth/",
+            active_skills=("platonic-coding",),
+            active_mcp_servers=(),
+        ),
+    )
+
+    with caplog.at_level("DEBUG", logger="soothe.subagents.veritas.implementation"):
+        result = await answer(request, model=object())
+
+    assert result.defer is False
+    assert result.answers == ["red", "M"]
+    # Debug log emits the preview without crashing and renders the question text.
+    preview_logs = [r.message for r in caplog.records if "questions:" in r.message]
+    assert preview_logs, "expected veritas debug log of question preview"
+    assert "Pick a color" in preview_logs[-1]
+    assert "Pick a size" in preview_logs[-1]
+
+
+def test_preview_questions_accepts_structured_dicts() -> None:
+    """Direct unit test for _preview_questions: dict inputs are textified, not stripped."""
+    questions = (
+        {
+            "question": "Pick a color",
+            "header": "Color",
+            "options": [{"label": "red", "description": "warm"}],
+            "multiSelect": False,
+        },
+        {"question": "Pick a size", "header": "Size"},
+    )
+    preview = veritas_impl._preview_questions(questions)
+    assert "Pick a color" in preview
+    assert "Pick a size" in preview

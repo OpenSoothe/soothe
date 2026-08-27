@@ -208,6 +208,49 @@ class TestPipelineDisabled:
 
 
 # ---------------------------------------------------------------------------
+# Partial evaluation (allow rules skipped — manual / force-manual paths)
+# ---------------------------------------------------------------------------
+
+
+class TestIncludeAllowRulesDisabled:
+    """include_allow_rules=False: deny/safety still reject, allow matches defer."""
+
+    def test_deny_rule_still_rejects(self) -> None:
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="rm -rf /")],
+            include_allow_rules=False,
+        )
+        assert result is not None
+        assert result.decision == "reject"
+        assert result.stage == "deny_rule"
+
+    def test_safety_check_still_rejects(self) -> None:
+        result = _pipeline().evaluate(
+            [_ar("edit_file", file_path="/workspace/.git/config")],
+            workspace_root="/workspace",
+            include_allow_rules=False,
+        )
+        assert result is not None
+        assert result.decision == "reject"
+        assert result.stage == "safety_check"
+
+    def test_allow_rule_match_defers(self) -> None:
+        """Allow-rule matches count as ambiguous when allow rules are skipped."""
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="pytest -xvs")],
+            include_allow_rules=False,
+        )
+        assert result is None
+
+    def test_ambiguous_still_defers(self) -> None:
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="curl https://example.com")],
+            include_allow_rules=False,
+        )
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
 # Fail-safe
 # ---------------------------------------------------------------------------
 

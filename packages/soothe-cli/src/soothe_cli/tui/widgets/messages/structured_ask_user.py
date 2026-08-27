@@ -292,6 +292,10 @@ class StructuredAskUserWidget(Vertical):
         display: block;
     }
 
+    StructuredAskUserWidget.is-submitted .saq-title {
+        margin: 0;
+    }
+
     StructuredAskUserWidget .saq-answered-row {
         height: auto;
         color: $text;

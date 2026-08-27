@@ -77,26 +77,36 @@ def build_clarification_policy_for_runner(
 
     Returns:
         A ``ClarificationPolicy`` ready to attach to a goal run. The veritas
-        chat model is only instantiated when ``mode`` resolves to ``"auto"`` —
-        manual mode skips the model construction entirely.
+        chat model is only instantiated when ``mode`` resolves to ``"auto"``
+        — manual mode skips the model construction entirely. In manual mode
+        the tool-approval pipeline (when enabled) still pre-filters
+        ``tool_approval`` requests: deny/safety stages auto-reject, allow
+        rules auto-approve only under ``manual_scope: ambiguous_only``.
     """
     resolved_mode = resolve_clarification_mode(mode, config)
     clar_cfg = config.agent.clarification
-
-    if resolved_mode == "manual":
-        return build_default_clarification_policy(mode="manual", emit=emit)
-
-    veritas_cfg = config.agent.veritas
-    veritas_model = config.create_chat_model(veritas_cfg.model_role)
-
-    # RFC-622 §9b: build tool-approval pipeline from config.
     ta_cfg = clar_cfg.tool_approval
+
     tool_approval_pipeline: ToolApprovalPipeline | None = None
     if ta_cfg.enabled:
         tool_approval_pipeline = ToolApprovalPipeline(
             config=ta_cfg,
             security_config=config.security,
         )
+
+    if resolved_mode == "manual":
+        # RFC-622 §9b: pipeline pre-filters the human relay in manual mode —
+        # deny/safety stages always auto-reject dangerous actions; allow
+        # rules auto-approve only when manual_scope is ambiguous_only.
+        return build_default_clarification_policy(
+            mode="manual",
+            emit=emit,
+            tool_approval_pipeline=tool_approval_pipeline,
+            manual_allow_rules=(ta_cfg.manual_scope == "ambiguous_only"),
+        )
+
+    veritas_cfg = config.agent.veritas
+    veritas_model = config.create_chat_model(veritas_cfg.model_role)
 
     # RFC-622 §9b: fast model for tool-approval fallback, think for intent.
     ta_fallback_cfg = ta_cfg.veritas_fallback
