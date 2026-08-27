@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import ConfigDict
 from soothe_sdk.core.events import (
@@ -20,7 +20,10 @@ class ClarificationRequestedEvent(SootheEvent):
     """Fired when ``await_clarification`` enters with a pending question."""
 
     type: Literal["soothe.loop.clarification.requested"] = LOOP_CLARIFICATION_REQUESTED  # type: ignore[assignment]
-    questions: list[str] = []
+    # RFC-622 §9c: questions may be structured dicts (QuestionSpec) or plain
+    # strings (HITL origins / degraded fallback). Use list[Any] so the wire
+    # event accepts both without a Pydantic validation error.
+    questions: list[Any] = []
     origin_node: str = ""
     mode: Literal["manual", "auto"] = "manual"
     # RFC-633 planner-subagent review card (empty for other origins).
@@ -47,7 +50,8 @@ class ClarificationDeferredEvent(SootheEvent):
     type: Literal["soothe.loop.clarification.deferred"] = LOOP_CLARIFICATION_DEFERRED  # type: ignore[assignment]
     reason: str = ""
     question_summary: str = ""
-    questions: list[str] = []
+    # RFC-622 §9c: same as ClarificationRequestedEvent — structured dicts or strings.
+    questions: list[Any] = []
     # RFC-623 taxonomy: explicit | low_confidence | structured_output_failed | answer_was_question
     defer_kind: str = ""
 
