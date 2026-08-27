@@ -48,7 +48,7 @@ class LoopStateView:
 class ClarificationRequest:
     questions: tuple
     """Structured (dict) or plain-string questions. Structured dicts carry
-    title/description/options/recommended (RFC-622 §9c); plain strings are
+    question/header/options (RFC-622 §9c); plain strings are
     used by HITL origins and the degraded fallback."""
     origin_node: ClarificationOrigin
     origin_interrupt_id: str
@@ -171,7 +171,7 @@ def request_from_state(d: Mapping[str, Any]) -> ClarificationRequest:
         questions = tuple(
             q if isinstance(q, dict) else str(q).strip()
             for q in raw_questions
-            if (q.get("title", "").strip() if isinstance(q, dict) else str(q).strip())
+            if (q.get("question", "").strip() if isinstance(q, dict) else str(q).strip())
         )
     else:
         questions = ()

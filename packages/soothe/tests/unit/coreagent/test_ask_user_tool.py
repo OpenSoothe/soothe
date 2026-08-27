@@ -21,21 +21,19 @@ from soothe.coreagent.tools.ask_user import (
 # ---------------------------------------------------------------------------
 
 
-def _opt(short: str = "Option", long: str = "A description.") -> OptionSpec:
-    return OptionSpec(short=short, long=long)
+def _opt(label: str = "Option", description: str = "A description.") -> OptionSpec:
+    return OptionSpec(label=label, description=description)
 
 
 def _question(
-    title: str = "Auth method",
-    description: str = "How should the API authenticate requests?",
+    question: str = "How should the API authenticate requests?",
+    header: str = "Auth",
     options: list[OptionSpec] | None = None,
-    recommended: int = 0,
 ) -> QuestionSpec:
     return QuestionSpec(
-        title=title,
-        description=description,
+        question=question,
+        header=header,
         options=options or [_opt("OAuth"), _opt("API key"), _opt("Session")],
-        recommended=recommended,
     )
 
 
@@ -49,12 +47,9 @@ def test_tool_name_and_schema() -> None:
     assert tool.name == "ask_user"
     schema = tool.args_schema.model_json_schema()
     assert "questions" in schema["properties"]
-    # The singular aliases (question/query) are gone — structured only.
-    assert "question" not in schema["properties"]
-    assert "query" not in schema["properties"]
 
 
-def test_tool_description_mentions_structured_options() -> None:
+def test_tool_description_mentions_options() -> None:
     tool = build_ask_user_tool()
     assert "options" in tool.description.lower()
 
@@ -66,27 +61,20 @@ def test_tool_description_mentions_structured_options() -> None:
 
 def test_option_spec_valid() -> None:
     opt = _opt("OAuth 2.0", "Best for browser flows.")
-    assert opt.short == "OAuth 2.0"
-    assert opt.long == "Best for browser flows."
+    assert opt.label == "OAuth 2.0"
+    assert opt.description == "Best for browser flows."
 
 
-def test_option_spec_rejects_empty_short() -> None:
-    """Empty option short is rejected by QuestionSpec validation."""
+def test_option_spec_rejects_empty_label() -> None:
+    """Empty option label is rejected by QuestionSpec validation."""
     with pytest.raises(Exception, match="non-empty"):  # noqa: PT011
         _question(options=[_opt("  ", "desc"), _opt("B"), _opt("C")])
 
 
-def test_option_spec_rejects_empty_long() -> None:
-    """Empty option long is rejected by QuestionSpec validation."""
+def test_option_spec_rejects_empty_description() -> None:
+    """Empty option description is rejected by QuestionSpec validation."""
     with pytest.raises(Exception, match="non-empty"):  # noqa: PT011
-        _question(options=[_opt("short", "  "), _opt("B"), _opt("C")])
-
-
-def test_option_spec_rejects_short_over_12_words() -> None:
-    """Option short >12 words is rejected by QuestionSpec validation."""
-    long_short = " ".join(["word"] * 13)
-    with pytest.raises(Exception, match="≤12 words"):  # noqa: PT011
-        _question(options=[_opt(long_short, "desc"), _opt("B"), _opt("C")])
+        _question(options=[_opt("label", "  "), _opt("B"), _opt("C")])
 
 
 # ---------------------------------------------------------------------------
@@ -96,41 +84,44 @@ def test_option_spec_rejects_short_over_12_words() -> None:
 
 def test_question_spec_valid() -> None:
     q = _question()
-    assert q.title == "Auth method"
+    assert q.header == "Auth"
     assert len(q.options) == 3
-    assert q.recommended == 0
 
 
-def test_question_spec_rejects_not_3_options() -> None:
-    with pytest.raises(Exception, match="exactly 3"):  # noqa: PT011
-        _question(options=[_opt("A"), _opt("B")])
-
-    with pytest.raises(Exception, match="exactly 3"):  # noqa: PT011
-        _question(options=[_opt("A"), _opt("B"), _opt("C"), _opt("D")])
+def test_question_spec_accepts_2_options() -> None:
+    q = _question(options=[_opt("A"), _opt("B")])
+    assert len(q.options) == 2
 
 
-def test_question_spec_rejects_recommended_out_of_range() -> None:
-    with pytest.raises(Exception, match="recommended"):  # noqa: PT011
-        _question(recommended=3)
-
-    with pytest.raises(Exception, match="recommended"):  # noqa: PT011
-        _question(recommended=-2)
+def test_question_spec_accepts_4_options() -> None:
+    q = _question(options=[_opt("A"), _opt("B"), _opt("C"), _opt("D")])
+    assert len(q.options) == 4
 
 
-def test_question_spec_accepts_recommended_minus_one() -> None:
-    q = _question(recommended=-1)
-    assert q.recommended == -1
+def test_question_spec_rejects_1_option() -> None:
+    with pytest.raises(Exception, match="2-4 options"):  # noqa: PT011
+        _question(options=[_opt("A")])
 
 
-def test_question_spec_rejects_title_over_3_words() -> None:
-    with pytest.raises(Exception, match="≤3 words"):  # noqa: PT011
-        _question(title="This is too many words here")
+def test_question_spec_rejects_5_options() -> None:
+    with pytest.raises(Exception, match="2-4 options"):  # noqa: PT011
+        _question(options=[_opt("A"), _opt("B"), _opt("C"), _opt("D"), _opt("E")])
 
 
-def test_question_spec_rejects_description_over_100_words() -> None:
-    long_desc = " ".join(["word"] * 101)
+def test_question_spec_rejects_header_over_12_chars() -> None:
+    with pytest.raises(Exception, match="≤12 chars"):  # noqa: PT011
+        _question(header="This header is way too long")
+
+
+def test_question_spec_rejects_question_over_100_words() -> None:
+    long_q = " ".join(["word"] * 101)
     with pytest.raises(Exception, match="≤100 words"):  # noqa: PT011
-        _question(description=long_desc)
+        _question(question=long_q)
+
+
+def test_question_spec_rejects_duplicate_option_labels() -> None:
+    with pytest.raises(Exception, match="unique"):  # noqa: PT011
+        _question(options=[_opt("Same"), _opt("Same"), _opt("C")])
 
 
 # ---------------------------------------------------------------------------
@@ -143,54 +134,62 @@ def test_args_schema_rejects_empty() -> None:
         _AskUserArgs()
 
 
-def test_args_schema_rejects_whitespace_only_title() -> None:
-    q = _question(title="  ")
+def test_args_schema_rejects_whitespace_only_question() -> None:
+    q = _question(question="  ")
     with pytest.raises(Exception, match="non-empty"):  # noqa: PT011
         _AskUserArgs(questions=[q])
 
 
-def test_args_schema_strips_whitespace_title_entries() -> None:
-    blank = _question(title="  ")
-    real = _question(title="Real question")
+def test_args_schema_strips_whitespace_entries() -> None:
+    blank = _question(question="  ")
+    real = _question(question="Real question?")
     args = _AskUserArgs(questions=[blank, real])
     assert len(args.questions) == 1
-    assert args.questions[0].title == "Real question"
+    assert args.questions[0].question == "Real question?"
 
 
 def test_args_schema_accepts_multiple_questions() -> None:
-    q1 = _question(title="Q1")
-    q2 = _question(title="Q2")
+    q1 = _question(question="Q1?", header="H1")
+    q2 = _question(question="Q2?", header="H2")
     args = _AskUserArgs(questions=[q1, q2])
     assert len(args.questions) == 2
 
 
+def test_args_schema_rejects_duplicate_question_texts() -> None:
+    q1 = _question(question="Same question?", header="H1")
+    q2 = _question(question="Same question?", header="H2")
+    with pytest.raises(Exception, match="unique"):  # noqa: PT011
+        _AskUserArgs(questions=[q1, q2])
+
+
+# ---------------------------------------------------------------------------
+# LLM arg-quirk coercion (loops f182, 065e, 9125)
+# ---------------------------------------------------------------------------
+
+
 def test_args_schema_coerces_stringified_json_questions() -> None:
-    """Some LLMs emit questions as a stringified JSON array (loop f182)."""
+    """Loop f182: questions as stringified JSON array."""
     raw = json.dumps(
         [
             {
-                "title": "First question",
-                "description": "What would you like to discuss first?",
+                "question": "What would you like to discuss first?",
+                "header": "Topic",
                 "options": [
-                    {"short": "A", "long": "Option A desc."},
-                    {"short": "B", "long": "Option B desc."},
-                    {"short": "C", "long": "Option C desc."},
+                    {"label": "A", "description": "Option A desc."},
+                    {"label": "B", "description": "Option B desc."},
+                    {"label": "C", "description": "Option C desc."},
                 ],
-                "recommended": 0,
             },
         ]
     )
     args = _AskUserArgs(questions=raw)  # type: ignore[arg-type]
     assert len(args.questions) == 1
-    assert args.questions[0].title == "First question"
-    assert args.questions[0].recommended == 0
+    assert args.questions[0].question == "What would you like to discuss first?"
 
 
 def test_args_schema_coerces_stringified_json_via_ainvoke() -> None:
     """The structured tool accepts stringified JSON questions from LLMs."""
-    import json as _json
-
-    raw = _json.dumps([_question(title="Test").model_dump()])
+    raw = json.dumps([_question().model_dump()])
     tool = build_ask_user_tool()
     captured: list[dict[str, Any]] = []
 
@@ -201,60 +200,62 @@ def test_args_schema_coerces_stringified_json_via_ainvoke() -> None:
     with patch("langgraph.types.interrupt", fake_interrupt):
         result = tool.invoke({"questions": raw})
 
-    assert captured[0]["questions"][0]["title"] == "Test"
+    assert captured[0]["questions"][0]["question"] == "How should the API authenticate requests?"
     assert "A: yes" in result
 
 
 def test_args_schema_wraps_flat_single_question() -> None:
-    """Loop 065e: model emitted title/description/options/recommended as
-    top-level tool args instead of wrapping in questions: [{...}]."""
+    """Loop 065e: model emitted question fields as top-level tool args."""
     args = _AskUserArgs(
-        title="Project feedback",
-        description="Two quick questions to gather your input.",
+        question="Project feedback?",
+        header="Feedback",
         options=[
-            {"short": "A", "long": "Option A desc."},
-            {"short": "B", "long": "Option B desc."},
-            {"short": "C", "long": "Option C desc."},
+            {"label": "A", "description": "Option A desc."},
+            {"label": "B", "description": "Option B desc."},
+            {"label": "C", "description": "Option C desc."},
         ],
-        recommended="-1",  # also: string instead of int
     )  # type: ignore[call-arg]
     assert len(args.questions) == 1
-    assert args.questions[0].title == "Project feedback"
-    assert args.questions[0].recommended == -1  # coerced from "-1"
+    assert args.questions[0].question == "Project feedback?"
 
 
 def test_args_schema_coerces_stringified_options() -> None:
-    """Loop 065e: options arrived as a JSON string, not a native list."""
-    opts_json = json.dumps([
-        {"short": "A", "long": "la", "index": 0},
-        {"short": "B", "long": "lb", "index": 1},
-        {"short": "C", "long": "lc", "index": 2},
-    ])
+    """Loop 065e: options arrived as a JSON string."""
+    opts_json = json.dumps(
+        [
+            {"label": "A", "description": "la"},
+            {"label": "B", "description": "lb"},
+            {"label": "C", "description": "lc"},
+        ]
+    )
     args = _AskUserArgs(
-        questions=[{"title": "Q", "description": "D", "options": opts_json, "recommended": 0}],
+        questions=[{"question": "Q?", "header": "H", "options": opts_json}],
     )
     assert len(args.questions[0].options) == 3
-    assert args.questions[0].options[0].short == "A"
+    assert args.questions[0].options[0].label == "A"
 
 
-def test_args_schema_strips_extra_index_from_options() -> None:
-    """Loop 065e: model added 'index' field inside each option object.
-    The validator strips it so Pydantic doesn't choke."""
+def test_args_schema_renames_old_field_names() -> None:
+    """In-flight loops with old field names (title/short/long) are coerced."""
     args = _AskUserArgs(
         questions=[
             {
-                "title": "Q",
-                "description": "D",
+                "title": "Auth",
+                "description": "Which method?",
                 "options": [
-                    {"short": "A", "long": "la", "index": 0},
-                    {"short": "B", "long": "lb", "index": 1},
-                    {"short": "C", "long": "lc", "index": 2},
+                    {"short": "A", "long": "la"},
+                    {"short": "B", "long": "lb"},
+                    {"short": "C", "long": "lc"},
                 ],
                 "recommended": 0,
             }
         ],
     )
-    assert len(args.questions[0].options) == 3
+    assert len(args.questions) == 1
+    assert args.questions[0].header == "Auth"
+    assert args.questions[0].question == "Which method?"
+    assert args.questions[0].options[0].label == "A"
+    assert args.questions[0].options[0].description == "la"
 
 
 # ---------------------------------------------------------------------------
@@ -262,10 +263,10 @@ def test_args_schema_strips_extra_index_from_options() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_format_answers_with_question_spec_title() -> None:
-    q = _question(title="Auth method")
+def test_format_answers_with_question_spec() -> None:
+    q = _question(question="Which option?")
     out = _format_answers([q], {"answers": ["OAuth 2.0"]})
-    assert "Q: Auth method" in out
+    assert "Q: Which option?" in out
     assert "A: OAuth 2.0" in out
 
 
@@ -277,34 +278,34 @@ def test_format_answers_with_plain_string_fallback() -> None:
 
 
 def test_format_answers_dict_answers() -> None:
-    q = _question(title="Pick one")
+    q = _question(question="Pick one?")
     out = _format_answers([q], {"answers": ["Option C"]})
     assert "A: Option C" in out
 
 
 def test_format_answers_bare_string() -> None:
-    q = _question(title="Approve")
+    q = _question(question="Approve?")
     out = _format_answers([q], "yes")
     assert "A: yes" in out
 
 
 def test_format_answers_list() -> None:
-    q1 = _question(title="Q1")
-    q2 = _question(title="Q2")
+    q1 = _question(question="Q1?")
+    q2 = _question(question="Q2?")
     out = _format_answers([q1, q2], ["a1", "a2"])
     assert "A: a1" in out
     assert "A: a2" in out
 
 
 def test_format_answers_empty_dismissed() -> None:
-    q = _question(title="Q")
+    q = _question(question="Q?")
     out = _format_answers([q], None)
     assert "dismissed" in out.lower()
 
 
 def test_format_answers_pads_missing_answers() -> None:
-    q1 = _question(title="Q1")
-    q2 = _question(title="Q2")
+    q1 = _question(question="Q1?")
+    q2 = _question(question="Q2?")
     out = _format_answers([q1, q2], {"answers": ["only one"]})
     assert "A: only one" in out
     assert "(no answer)" in out
@@ -324,13 +325,13 @@ def test_run_ask_user_emits_interrupt_and_returns_answers() -> None:
         return {"answers": ["OAuth 2.0"]}
 
     with patch("langgraph.types.interrupt", fake_interrupt):
-        result = _run(questions=[_question(title="Auth method")])
+        result = _run(questions=[_question(question="Which option?")])
 
     assert len(captured) == 1
     payload = captured[0]
     assert payload["type"] == "ask_user"
-    assert payload["questions"][0]["title"] == "Auth method"
-    assert payload["questions"][0]["options"][0]["short"] == "OAuth"
+    assert payload["questions"][0]["question"] == "Which option?"
+    assert payload["questions"][0]["options"][0]["label"] == "OAuth"
     assert "A: OAuth 2.0" in result
 
 
@@ -343,18 +344,17 @@ def test_run_ask_user_serializes_question_spec_dicts() -> None:
         return {"answers": ["yes"]}
 
     with patch("langgraph.types.interrupt", fake_interrupt):
-        _run(questions=[_question(title="Confirm")])
+        _run(questions=[_question(question="Confirm?")])
 
     payload = captured[0]
     q = payload["questions"][0]
     assert isinstance(q, dict)
-    assert "title" in q
-    assert "description" in q
+    assert "question" in q
+    assert "header" in q
     assert "options" in q
-    assert "recommended" in q
 
 
-def test_run_ask_user_strips_empty_title_questions() -> None:
+def test_run_ask_user_strips_empty_questions() -> None:
     captured: list[dict[str, Any]] = []
 
     def fake_interrupt(value: Any) -> Any:
@@ -362,17 +362,17 @@ def test_run_ask_user_strips_empty_title_questions() -> None:
         return {"answers": ["go"]}
 
     with patch("langgraph.types.interrupt", fake_interrupt):
-        result = _run(questions=[_question(title="  "), _question(title="real")])
+        result = _run(questions=[_question(question="  "), _question(question="real?")])
 
     assert len(captured[0]["questions"]) == 1
-    assert captured[0]["questions"][0]["title"] == "real"
+    assert captured[0]["questions"][0]["question"] == "real?"
     assert "A: go" in result
 
 
 def test_run_ask_user_all_empty_raises_value_error() -> None:
     with patch("langgraph.types.interrupt", side_effect=AssertionError("must not call")):
         with pytest.raises(ValueError, match="non-empty"):
-            _run(questions=[_question(title="  ")])
+            _run(questions=[_question(question="  ")])
 
 
 def test_run_ask_user_propagates_graph_interrupt() -> None:
@@ -380,7 +380,7 @@ def test_run_ask_user_propagates_graph_interrupt() -> None:
     from langgraph.errors import GraphInterrupt
     from langgraph.types import Interrupt
 
-    q = _question(title="Approve")
+    q = _question(question="Approve?")
     exc = GraphInterrupt(
         (Interrupt(value={"type": "ask_user", "questions": [q.model_dump()]}, id="i1"),)
     )
@@ -404,7 +404,7 @@ async def test_arun_ask_user_matches_sync() -> None:
 
     with patch("langgraph.types.interrupt", fake_interrupt):
         tool = build_ask_user_tool()
-        result = await tool.ainvoke({"questions": [_question(title="Confirm").model_dump()]})
+        result = await tool.ainvoke({"questions": [_question(question="Confirm?").model_dump()]})
 
     assert captured[0]["type"] == "ask_user"
     assert "A: yes" in result

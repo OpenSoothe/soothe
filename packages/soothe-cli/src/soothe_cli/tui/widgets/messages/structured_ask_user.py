@@ -1,11 +1,12 @@
 """Structured multi-question option-picker widget for ``ask_user`` (RFC-622 §9c).
 
 Mounted when a structured ``ask_user`` clarification request arrives (generic
-``execute`` origin). The LLM emits ``QuestionSpec`` objects with a title,
-description, exactly 3 options (short + long), and a recommended index. The
-widget renders tabs for multi-question navigation (←/→), hover-preview option
-selection (↑/↓ + Enter), a 4th implicit "custom" free-text row, and a
-persistent footer with Submit/Abandon + inline recap before final submit.
+``execute`` origin). The LLM emits ``QuestionSpec`` objects with a question,
+header, and 2-4 options (each with label + description). The recommended
+option has "(Recommended)" in its label. The widget renders tabs for
+multi-question navigation (←/→), hover-preview option selection (↑/↓ + Enter),
+an implicit "Other" custom free-text row, and a persistent footer with
+Submit/Abandon + inline recap before final submit.
 
 HITL plan-review and tool-approval origins stay on ``ClarificationInputMessage``;
 this widget is only for the generic (execute) render path. A degraded mode
@@ -334,30 +335,24 @@ class StructuredAskUserWidget(Vertical):
     def _all_answered(self) -> bool:
         return len(self._selected) >= self._num_questions
 
-    def _question_title(self, idx: int) -> str:
+    def _question_header(self, idx: int) -> str:
         q = self._questions[idx]
         if isinstance(q, dict):
-            return q.get("title", f"Q{idx + 1}")
+            return q.get("header", f"Q{idx + 1}")
         return str(q)
 
-    def _question_description(self, idx: int) -> str:
+    def _question_question(self, idx: int) -> str:
         q = self._questions[idx]
         if isinstance(q, dict):
-            return q.get("description", "")
+            return q.get("question", "")
         return ""
 
     def _question_options(self, idx: int) -> list[dict[str, str]]:
-        """Return list of option dicts with 'short' and 'long' keys."""
+        """Return list of option dicts with 'label' and 'description' keys."""
         q = self._questions[idx]
         if isinstance(q, dict):
             return q.get("options", [])
         return []
-
-    def _question_recommended(self, idx: int) -> int:
-        q = self._questions[idx]
-        if isinstance(q, dict):
-            return q.get("recommended", -1)
-        return -1
 
     def _answer_text(self, q_idx: int) -> str:
         """The text to send on resume for the selected answer."""
@@ -368,7 +363,7 @@ class StructuredAskUserWidget(Vertical):
             return self._custom_texts.get(q_idx, "")
         options = self._question_options(q_idx)
         if sel < len(options):
-            return options[sel].get("short", "")
+            return options[sel].get("label", "")
         return ""
 
     def _answers_collected(self) -> list[str]:
@@ -411,7 +406,7 @@ class StructuredAskUserWidget(Vertical):
         with Vertical(classes="saq-answered-box"):
             for i in range(self._num_questions):
                 yield Static(
-                    f"{gutter}[{self._question_title(i)} → {self._answer_text(i) or '—'}]",
+                    f"{gutter}[{self._question_header(i)} → {self._answer_text(i) or '—'}]",
                     classes="saq-answered-row",
                     markup=False,
                 )
@@ -430,13 +425,13 @@ class StructuredAskUserWidget(Vertical):
                     )
         with Vertical(classes="saq-question-body"):
             yield Static(
-                self._question_title(self._current_q),
+                self._question_header(self._current_q),
                 classes="saq-question-title",
                 id="saq-qtitle",
                 markup=False,
             )
             yield Static(
-                self._question_description(self._current_q),
+                self._question_question(self._current_q),
                 classes="saq-description",
                 id="saq-desc",
                 markup=False,
@@ -444,20 +439,17 @@ class StructuredAskUserWidget(Vertical):
             with Vertical(classes="saq-option-list"):
                 options = self._question_options(self._current_q)
                 for j, opt in enumerate(options):
-                    short = opt.get("short", "")
-                    rec = ""
-                    if j == self._question_recommended(self._current_q):
-                        rec = " (recommended)"
+                    label = opt.get("label", "")
                     yield Static(
-                        f"  {j + 1}. {short}{rec}",
+                        f"  {j + 1}. {label}",
                         id=f"saq-opt-{j}",
                         classes="saq-option-row",
                         markup=False,
                     )
-                # 4th custom row
+                # "Other" custom row (implicit — auto-added, always last)
                 yield Static(
-                    "  4. Custom:",
-                    id="saq-opt-3",
+                    "  Other:",
+                    id="saq-opt-custom",
                     classes="saq-option-row",
                     markup=False,
                 )
@@ -515,7 +507,7 @@ class StructuredAskUserWidget(Vertical):
 
     def _compose_degraded(self) -> Any:
         for i, q in enumerate(self._questions):
-            text = q if isinstance(q, str) else self._question_title(i)
+            text = q if isinstance(q, str) else self._question_header(i)
             yield Static(
                 f"Q{i + 1}: {text}",
                 classes="saq-question-title",
@@ -562,7 +554,7 @@ class StructuredAskUserWidget(Vertical):
         answered = idx in self._selected
         if answered:
             prefix = f"{g.checkmark} " if idx == self._current_q else f"{g.checkmark} "
-        return f"{prefix}{self._question_title(idx)}"
+        return f"{prefix}{self._question_header(idx)}"
 
     # ------------------------------------------------------------------
     # on_mount
@@ -591,23 +583,22 @@ class StructuredAskUserWidget(Vertical):
         """Re-render the question body when switching tabs."""
         try:
             qtitle = self.query_one("#saq-qtitle", Static)
-            qtitle.update(self._question_title(self._current_q))
+            qtitle.update(self._question_header(self._current_q))
         except Exception:  # noqa: BLE001
             pass
         try:
             desc = self.query_one("#saq-desc", Static)
-            desc.update(self._question_description(self._current_q))
+            desc.update(self._question_question(self._current_q))
         except Exception:  # noqa: BLE001
             pass
         # Re-render options
         options = self._question_options(self._current_q)
-        recommended = self._question_recommended(self._current_q)
-        for j in range(3):
+        num_opts = len(options)
+        for j in range(num_opts):
             try:
                 opt_w = self.query_one(f"#saq-opt-{j}", Static)
-                short = options[j].get("short", "") if j < len(options) else ""
-                rec = " (recommended)" if j == recommended else ""
-                opt_w.update(f"  {j + 1}. {short}{rec}")
+                label = options[j].get("label", "") if j < len(options) else ""
+                opt_w.update(f"  {j + 1}. {label}")
             except Exception:  # noqa: BLE001
                 pass
         # Restore selection highlight for this question
@@ -618,7 +609,9 @@ class StructuredAskUserWidget(Vertical):
 
     def _update_option_highlight(self) -> None:
         """Update which option row is highlighted."""
-        for j in range(4):
+        num_opts = len(self._question_options(self._current_q))
+        custom_idx = num_opts  # Custom row is always at index == num_opts
+        for j in range(num_opts):
             try:
                 opt_w = self.query_one(f"#saq-opt-{j}", Static)
                 if j == self._highlighted:
@@ -626,7 +619,6 @@ class StructuredAskUserWidget(Vertical):
                     opt_w.remove_class("is-selected")
                 else:
                     opt_w.remove_class("is-highlighted")
-                    # Keep selected highlight on non-highlighted rows
                     sel = self._selected.get(self._current_q)
                     if sel is not None and sel == j:
                         opt_w.add_class("is-selected")
@@ -634,9 +626,24 @@ class StructuredAskUserWidget(Vertical):
                         opt_w.remove_class("is-selected")
             except Exception:  # noqa: BLE001
                 pass
+        # Custom row
+        try:
+            custom_w = self.query_one("#saq-opt-custom", Static)
+            if self._highlighted == custom_idx:
+                custom_w.add_class("is-highlighted")
+                custom_w.remove_class("is-selected")
+            else:
+                custom_w.remove_class("is-highlighted")
+                sel = self._selected.get(self._current_q)
+                if sel is not None and sel == custom_idx:
+                    custom_w.add_class("is-selected")
+                else:
+                    custom_w.remove_class("is-selected")
+        except Exception:  # noqa: BLE001
+            pass
         # Enable custom input only when custom row is highlighted
         if self._custom_input is not None:
-            self._custom_input.disabled = self._highlighted != 3
+            self._custom_input.disabled = self._highlighted != custom_idx
         # Show the custom-empty hint when the custom row is highlighted but
         # the input has no text (§9c.7).
         try:
@@ -654,16 +661,21 @@ class StructuredAskUserWidget(Vertical):
             pass
 
     def _update_preview(self) -> None:
-        """Update the hover-preview box with the highlighted option's long desc."""
+        """Update the hover-preview box with the highlighted option's description."""
         try:
             preview = self.query_one("#saq-preview", Static)
-            if self._highlighted < 3:
-                options = self._question_options(self._current_q)
-                if self._highlighted < len(options):
-                    long_desc = options[self._highlighted].get("long", "")
-                    preview.update(long_desc)
-                    preview.remove_class("is-empty")
-                    return
+            options = self._question_options(self._current_q)
+            num_opts = len(options)
+            if self._highlighted < num_opts:
+                desc = options[self._highlighted].get("description", "")
+                preview.update(desc)
+                preview.remove_class("is-empty")
+                return
+            # Custom row — no preview
+            preview.update("")
+            preview.add_class("is-empty")
+            preview.update("")
+            preview.add_class("is-empty")
             preview.update("")
             preview.add_class("is-empty")
         except Exception:  # noqa: BLE001
@@ -715,7 +727,7 @@ class StructuredAskUserWidget(Vertical):
                 label = answer if answer else "—"
                 box.mount(
                     Static(
-                        f"{gutter}[{self._question_title(i)} → {label}]",
+                        f"{gutter}[{self._question_header(i)} → {label}]",
                         classes="saq-answered-row",
                         markup=False,
                     )
@@ -741,7 +753,7 @@ class StructuredAskUserWidget(Vertical):
                 label = answer if answer else "—"
                 recap_box.mount(
                     Static(
-                        f"  {self._question_title(i)} → {label}",
+                        f"  {self._question_header(i)} → {label}",
                         classes="saq-recap-row",
                         markup=False,
                     )
@@ -822,14 +834,18 @@ class StructuredAskUserWidget(Vertical):
     def action_prev_option(self) -> None:
         if self._degraded or self._submitted or self._submit_review_open:
             return
-        self._highlighted = (self._highlighted - 1) % 4
+        num_opts = len(self._question_options(self._current_q))
+        total = num_opts + 1  # +1 for custom row
+        self._highlighted = (self._highlighted - 1) % total
         self._update_option_highlight()
         self._update_preview()
 
     def action_next_option(self) -> None:
         if self._degraded or self._submitted or self._submit_review_open:
             return
-        self._highlighted = (self._highlighted + 1) % 4
+        num_opts = len(self._question_options(self._current_q))
+        total = num_opts + 1  # +1 for custom row
+        self._highlighted = (self._highlighted + 1) % total
         self._update_option_highlight()
         self._update_preview()
 
@@ -843,7 +859,8 @@ class StructuredAskUserWidget(Vertical):
             return
         if self._degraded:
             return
-        if self._highlighted == 3:
+        num_opts = len(self._question_options(self._current_q))
+        if self._highlighted == num_opts:
             # Custom row — focus the input if not yet selected
             if self._custom_input is not None and not self._custom_input.disabled:
                 self._schedule_focus(self._custom_input)

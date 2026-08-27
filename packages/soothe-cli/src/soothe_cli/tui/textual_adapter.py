@@ -2955,7 +2955,7 @@ async def _mount_manual_clarification_input(
         questions_list = [
             q
             for q in questions
-            if (q.get("title", "").strip() if isinstance(q, dict) else str(q).strip())
+            if (q.get("question", "").strip() if isinstance(q, dict) else str(q).strip())
         ]
     if not questions_list:
         return ""
@@ -2964,7 +2964,10 @@ async def _mount_manual_clarification_input(
     for sid, step_widget in adapter._current_step_messages.items():
         if step_widget._status == "running":  # noqa: SLF001
             step_widget.set_awaiting_clarification(
-                [str(q) if not isinstance(q, dict) else q.get("title", "") for q in questions_list]
+                [
+                    str(q) if not isinstance(q, dict) else q.get("question", "")
+                    for q in questions_list
+                ]
             )
             target_step_id = sid
             break
@@ -4246,7 +4249,7 @@ async def execute_task_textual(
                                             q
                                             for q in raw_questions
                                             if (
-                                                q.get("title", "").strip()
+                                                q.get("question", "").strip()
                                                 if isinstance(q, dict)
                                                 else str(q).strip()
                                             )

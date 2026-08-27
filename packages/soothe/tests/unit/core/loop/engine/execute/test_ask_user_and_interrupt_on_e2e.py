@@ -497,14 +497,13 @@ class TestAskUserToolHandlerCase:
         from soothe.coreagent.tools.ask_user import OptionSpec, QuestionSpec, _run_ask_user
 
         q = QuestionSpec(
-            title="Choose option",
-            description="Which option: A or B?",
+            question="Which option: A or B?",
+            header="Choose",
             options=[
-                OptionSpec(short="Option A", long="First option."),
-                OptionSpec(short="Option B", long="Second option."),
-                OptionSpec(short="Neither", long="Decline both."),
+                OptionSpec(label="Option A", description="First option."),
+                OptionSpec(label="Option B", description="Second option."),
+                OptionSpec(label="Neither", description="Decline both."),
             ],
-            recommended=0,
         )
 
         captured: list[dict[str, Any]] = []
@@ -518,21 +517,20 @@ class TestAskUserToolHandlerCase:
 
         assert len(captured) == 1
         assert captured[0]["type"] == "ask_user"
-        assert captured[0]["questions"][0]["title"] == "Choose option"
+        assert captured[0]["questions"][0]["question"] == "Which option: A or B?"
         assert "Option B" in result
 
     def test_tool_returns_dismissed_message_on_empty_answer(self) -> None:
         from soothe.coreagent.tools.ask_user import OptionSpec, QuestionSpec, _run_ask_user
 
         q = QuestionSpec(
-            title="Approve",
-            description="Approve the plan?",
+            question="Approve the plan?",
+            header="Approve",
             options=[
-                OptionSpec(short="Yes", long="Approve."),
-                OptionSpec(short="No", long="Reject."),
-                OptionSpec(short="Maybe", long="Defer."),
+                OptionSpec(label="Yes", description="Approve."),
+                OptionSpec(label="No", description="Reject."),
+                OptionSpec(label="Maybe", description="Defer."),
             ],
-            recommended=0,
         )
 
         with patch("langgraph.types.interrupt", lambda v: None):
@@ -544,14 +542,13 @@ class TestAskUserToolHandlerCase:
         from soothe.coreagent.tools.ask_user import OptionSpec, QuestionSpec, build_ask_user_tool
 
         q = QuestionSpec(
-            title="Approve",
-            description="Approve the plan?",
+            question="Approve the plan?",
+            header="Approve",
             options=[
-                OptionSpec(short="Yes", long="Approve."),
-                OptionSpec(short="No", long="Reject."),
-                OptionSpec(short="Maybe", long="Defer."),
+                OptionSpec(label="Yes", description="Approve."),
+                OptionSpec(label="No", description="Reject."),
+                OptionSpec(label="Maybe", description="Defer."),
             ],
-            recommended=0,
         )
 
         with patch("langgraph.types.interrupt", lambda v: {"answers": ["yes"]}):
@@ -880,14 +877,13 @@ class TestStructuredAskUserWireRoundTrip:
         from soothe.sloop.clarification.detector import ClarificationDetector
 
         q = QuestionSpec(
-            title="Auth method",
-            description="How should the API authenticate requests?",
+            question="How should the API authenticate requests?",
+            header="Auth method",
             options=[
-                OptionSpec(short="OAuth", long="OAuth 2.0 with PKCE."),
-                OptionSpec(short="API key", long="Static API key in a header."),
-                OptionSpec(short="Session", long="Server-side session with cookies."),
+                OptionSpec(label="OAuth", description="OAuth 2.0 with PKCE."),
+                OptionSpec(label="API key", description="Static API key in a header."),
+                OptionSpec(label="Session", description="Server-side session with cookies."),
             ],
-            recommended=0,
         )
         interrupt_value = {"type": "ask_user", "questions": [q.model_dump()]}
 
@@ -906,53 +902,50 @@ class TestStructuredAskUserWireRoundTrip:
         assert capture.origin_node == ORIGIN_EXECUTE
         # Questions survive as structured dicts (not flattened to strings).
         assert isinstance(capture.questions[0], dict)
-        assert capture.questions[0]["title"] == "Auth method"
+        assert capture.questions[0]["header"] == "Auth method"
         assert len(capture.questions[0]["options"]) == 3
 
-    def test_structured_format_answers_uses_title(self) -> None:
-        """``_format_answers`` extracts the title from QuestionSpec dicts
+    def test_structured_format_answers_uses_question(self) -> None:
+        """``_format_answers`` extracts the question text from QuestionSpec dicts
         when rendering the resume payload for the model."""
         from soothe.coreagent.tools.ask_user import _format_answers
 
         questions = [
             {
-                "title": "Auth method",
-                "description": "How to authenticate?",
+                "question": "How to authenticate?",
+                "header": "Auth method",
                 "options": [
-                    {"short": "OAuth", "long": "..."},
-                    {"short": "API key", "long": "..."},
-                    {"short": "Session", "long": "..."},
+                    {"label": "OAuth", "description": "..."},
+                    {"label": "API key", "description": "..."},
+                    {"label": "Session", "description": "..."},
                 ],
-                "recommended": 0,
             }
         ]
         out = _format_answers(questions, {"answers": ["OAuth"]})
-        assert "Q: Auth method" in out
+        assert "Q: How to authenticate?" in out
         assert "A: OAuth" in out
 
     def test_structured_format_answers_multiple_questions(self) -> None:
         """Multiple structured questions render as separate Q/A pairs with
-        titles extracted from each QuestionSpec dict."""
+        question text extracted from each QuestionSpec dict."""
         from soothe.coreagent.tools.ask_user import _format_answers
 
         questions = [
             {
-                "title": "Auth method",
-                "description": "D1",
-                "options": [{"short": "A", "long": "la"}] * 3,
-                "recommended": 0,
+                "question": "How to authenticate?",
+                "header": "Auth",
+                "options": [{"label": "A", "description": "la"}] * 3,
             },
             {
-                "title": "Token store",
-                "description": "D2",
-                "options": [{"short": "B", "long": "lb"}] * 3,
-                "recommended": 1,
+                "question": "Where to store tokens?",
+                "header": "Token",
+                "options": [{"label": "B", "description": "lb"}] * 3,
             },
         ]
         out = _format_answers(questions, {"answers": ["OAuth", "Redis"]})
-        assert "Q: Auth method" in out
+        assert "Q: How to authenticate?" in out
         assert "A: OAuth" in out
-        assert "Q: Token store" in out
+        assert "Q: Where to store tokens?" in out
         assert "A: Redis" in out
 
     def test_structured_format_answers_dismissed(self) -> None:
@@ -961,10 +954,9 @@ class TestStructuredAskUserWireRoundTrip:
 
         questions = [
             {
-                "title": "Auth",
-                "description": "D",
-                "options": [{"short": "A", "long": "la"}] * 3,
-                "recommended": 0,
+                "question": "Approve?",
+                "header": "Auth",
+                "options": [{"label": "A", "description": "la"}] * 3,
             }
         ]
         out = _format_answers(questions, None)

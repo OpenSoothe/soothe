@@ -145,8 +145,8 @@ class ClarificationDetector:
     def _extract_questions(value: Mapping[str, Any]) -> tuple:
         """Extract questions from an ask_user interrupt payload.
 
-        Preserves structured dicts (RFC-622 §9c: QuestionSpec with title,
-        description, options) when the payload carries them; falls back to
+        Preserves structured dicts (RFC-622 §9c: QuestionSpec with question,
+        header, options) when the payload carries them; falls back to
         plain strings for pre-§9c in-flight interrupts.
         """
         raw = value.get("questions")
@@ -155,7 +155,7 @@ class ClarificationDetector:
             for q in raw:
                 if isinstance(q, dict):
                     # Structured: preserve if title is non-empty.
-                    title = str(q.get("title", "") or "").strip()
+                    title = str(q.get("question", "") or "").strip()
                     if title:
                         cleaned.append(q)
                 elif str(q).strip():

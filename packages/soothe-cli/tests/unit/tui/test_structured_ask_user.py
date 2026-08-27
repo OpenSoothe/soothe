@@ -15,25 +15,40 @@ from soothe_cli.tui.widgets.messages.structured_ask_user import (
 
 
 def _question_dict(
-    title: str = "Auth method",
-    description: str = "How should the API authenticate requests?",
-    recommended: int = 0,
+    question: str = "How should the API authenticate requests?",
+    header: str = "Auth method",
 ) -> dict:
     return {
-        "title": title,
-        "description": description,
+        "question": question,
+        "header": header,
         "options": [
-            {"short": "OAuth", "long": "OAuth 2.0 with PKCE. Best for browser flows."},
-            {"short": "API key", "long": "Static API key in a header. Simplest to implement."},
-            {"short": "Session", "long": "Server-side session with cookies. Best for SSR apps."},
+            {"label": "OAuth", "description": "OAuth 2.0 with PKCE. Best for browser flows."},
+            {
+                "label": "API key",
+                "description": "Static API key in a header. Simplest to implement.",
+            },
+            {
+                "label": "Session",
+                "description": "Server-side session with cookies. Best for SSR apps.",
+            },
         ],
-        "recommended": recommended,
     }
 
 
 def _questions(n: int = 2) -> list[dict]:
-    titles = ["Auth method", "Token store", "Retry policy", "Cache layer", "Log level"]
-    return [_question_dict(title=titles[i], description=f"Question {i + 1} desc") for i in range(n)]
+    headers = ["Auth", "Token", "Retry", "Cache", "Log"]
+    return [_question_dict(header=headers[i], question=f"Question {i + 1}?") for i in range(n)]
+
+
+class _WidgetApp(App[None]):
+    """Minimal harness mounting a single StructuredAskUserWidget."""
+
+    def __init__(self, widget: StructuredAskUserWidget) -> None:
+        super().__init__()
+        self._widget = widget
+
+    def compose(self) -> ComposeResult:
+        yield self._widget
 
 
 def _make_widget(
@@ -50,17 +65,6 @@ def _make_widget(
         origin_node=origin_node,
         degraded=degraded,
     )
-
-
-class _WidgetApp(App[None]):
-    """Minimal harness mounting a single StructuredAskUserWidget."""
-
-    def __init__(self, widget: StructuredAskUserWidget) -> None:
-        super().__init__()
-        self._widget = widget
-
-    def compose(self) -> ComposeResult:
-        yield self._widget
 
 
 # ---------------------------------------------------------------------------
@@ -89,12 +93,13 @@ async def test_structured_compose_hides_tab_bar_for_single_question() -> None:
 
 
 @pytest.mark.asyncio
-async def test_structured_compose_renders_4_option_rows() -> None:
+async def test_structured_compose_renders_option_rows_plus_custom() -> None:
     app = _WidgetApp(_make_widget())
     async with app.run_test() as pilot:
         await pilot.pause()
         w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
         opts = w.query(".saq-option-row")
+        # 3 options + 1 custom row
         assert len(opts) == 4
 
 
@@ -167,9 +172,9 @@ async def test_next_option_cycles_highlight() -> None:
         w.action_next_option()
         assert w._highlighted == 2
         w.action_next_option()
-        assert w._highlighted == 3
+        assert w._highlighted == 3  # custom
         w.action_next_option()
-        assert w._highlighted == 0
+        assert w._highlighted == 0  # wraps
 
 
 @pytest.mark.asyncio
@@ -179,7 +184,7 @@ async def test_prev_option_cycles_highlight() -> None:
         await pilot.pause()
         w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
         w.action_prev_option()
-        assert w._highlighted == 3
+        assert w._highlighted == 3  # wraps backward to custom
         w.action_prev_option()
         assert w._highlighted == 2
 
@@ -195,7 +200,7 @@ async def test_enter_selects_option() -> None:
     async with app.run_test() as pilot:
         await pilot.pause()
         w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
-        w.action_next_option()
+        w.action_next_option()  # highlight 1
         assert w._highlighted == 1
         w.action_confirm()
         assert w._selected.get(0) == 1
@@ -253,56 +258,6 @@ async def test_custom_row_disables_input_when_not_highlighted() -> None:
         assert w._highlighted == 0
         assert w._custom_input is not None
         assert w._custom_input.disabled is True
-
-
-@pytest.mark.asyncio
-async def test_custom_empty_hint_shown_when_custom_highlighted() -> None:
-    """§9c.7: highlighting the custom row with no text shows the hint."""
-    from textual.widgets import Static
-
-    app = _WidgetApp(_make_widget())
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
-        # Navigate to custom row
-        w.action_next_option()
-        w.action_next_option()
-        w.action_next_option()
-        assert w._highlighted == 3
-        hint = w.query_one("#saq-custom-hint", Static)
-        assert hint.has_class("is-visible")
-
-
-@pytest.mark.asyncio
-async def test_custom_empty_hint_hidden_when_custom_not_highlighted() -> None:
-    """§9c.7: hint is hidden when a non-custom option is highlighted."""
-    from textual.widgets import Static
-
-    app = _WidgetApp(_make_widget())
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
-        assert w._highlighted == 0
-        hint = w.query_one("#saq-custom-hint", Static)
-        assert not hint.has_class("is-visible")
-
-
-# ---------------------------------------------------------------------------
-# Tab footer focus
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_tab_moves_focus_to_footer_submit() -> None:
-    """§9c.5: Tab cycles focus from question area to footer (Submit first)."""
-    app = _WidgetApp(_make_widget())
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
-        assert w._footer_focused is False
-        w.action_focus_footer()
-        await pilot.pause()
-        assert w._footer_focused is True
 
 
 # ---------------------------------------------------------------------------
@@ -433,7 +388,7 @@ async def test_degraded_no_option_rows() -> None:
 
 
 @pytest.mark.asyncio
-async def test_answer_text_returns_selected_option_short() -> None:
+async def test_answer_text_returns_selected_option_label() -> None:
     app = _WidgetApp(_make_widget(questions=_questions(2)))
     async with app.run_test() as pilot:
         await pilot.pause()

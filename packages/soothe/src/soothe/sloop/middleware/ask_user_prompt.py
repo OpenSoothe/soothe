@@ -36,10 +36,12 @@ reply will start a brand-new goal instead of resuming this one. Calling
 Rules:
 - At every confirmation gate, clarification question, design approval, or
   routing menu: call `ask_user` with structured questions.
-- Each question must have: a `title` (≤3 words), a `description` (≤100 words),
-  exactly 3 `options` (each with `short` ≤12 words and `long` 1–3 sentences),
-  and a `recommended` index (0–2, or -1 for no recommendation).
-- The user can pick one of the 3 options or type a custom free-text answer.
+- Each question must have: a `question` (the full question text), a `header`
+  (short label ≤12 chars, e.g. "Auth method"), and 2-4 `options` (each with
+  `label` 1-5 words and `description` explaining the choice).
+- Put the recommended option first and add "(Recommended)" to its label.
+- Never include an "Other" option — it is auto-added by the UI.
+- The user can pick one of the options or type a custom free-text answer.
 - Prefer one question per `ask_user` call. Multiple questions render as tabs.
 - This applies to ALL modes (brainstorm, implementation, review, workflow).
 </ASK_USER_GATE_DIRECTIVE>"""
