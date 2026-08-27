@@ -10,6 +10,7 @@ from soothe.sloop.clarification.interactive import (
     InteractiveClarificationPolicy,
 )
 from soothe.sloop.clarification.protocol import ClarificationPolicy
+from soothe.sloop.clarification.tool_approval_pipeline import ToolApprovalPipeline
 
 ClarificationMode = Literal["manual", "auto"]
 
@@ -23,6 +24,7 @@ def build_default_clarification_policy(
     interactive_fallback: ClarificationPolicy | None = None,
     force_manual_origins: tuple[str, ...] | list[str] | None = None,
     degrade_low_confidence: bool = False,
+    tool_approval_pipeline: ToolApprovalPipeline | None = None,
 ) -> ClarificationPolicy:
     """Return the appropriate policy for the runtime mode.
 
@@ -42,6 +44,10 @@ def build_default_clarification_policy(
         degrade_low_confidence: When True, route low-confidence veritas
             results to the interactive fallback (auto→manual upgrade) instead
             of a hard defer. Ignored for manual mode.
+        tool_approval_pipeline: Optional pipeline for deterministic
+            tool-approval evaluation (RFC-622 §9b). When provided, deny →
+            safety → allow stages resolve most ``tool_approval`` interrupts
+            without an LLM. Veritas remains the final guard.
 
     Raises:
         ValueError: if ``mode == "auto"`` but ``veritas_answer`` is not provided.
@@ -58,6 +64,7 @@ def build_default_clarification_policy(
             interactive_fallback=interactive_fallback,
             force_manual_origins=force_manual_origins,
             degrade_low_confidence=degrade_low_confidence,
+            tool_approval_pipeline=tool_approval_pipeline,
         )
     msg = f"unknown clarification mode: {mode!r}"
     raise ValueError(msg)

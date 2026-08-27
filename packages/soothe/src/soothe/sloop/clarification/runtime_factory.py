@@ -17,6 +17,7 @@ from soothe.sloop.clarification.protocol import (
     ClarificationRequest,
 )
 from soothe.sloop.clarification.selector import build_default_clarification_policy
+from soothe.sloop.clarification.tool_approval_pipeline import ToolApprovalPipeline
 from soothe.subagents.veritas import answer as veritas_answer
 
 if TYPE_CHECKING:
@@ -88,7 +89,35 @@ def build_clarification_policy_for_runner(
     veritas_cfg = config.agent.veritas
     veritas_model = config.create_chat_model(veritas_cfg.model_role)
 
+    # RFC-622 §9b: build tool-approval pipeline from config.
+    ta_cfg = clar_cfg.tool_approval
+    tool_approval_pipeline: ToolApprovalPipeline | None = None
+    if ta_cfg.enabled:
+        tool_approval_pipeline = ToolApprovalPipeline(config=ta_cfg)
+
+    # RFC-622 §9b: fast model for tool-approval fallback, think for intent.
+    ta_fallback_cfg = ta_cfg.veritas_fallback
+    tool_approval_model = veritas_model
+    if (
+        ta_cfg.enabled
+        and ta_fallback_cfg.enabled
+        and ta_fallback_cfg.model_role != veritas_cfg.model_role
+    ):
+        tool_approval_model = config.create_chat_model(ta_fallback_cfg.model_role)
+
     async def _veritas(request: ClarificationRequest) -> VeritasAnswerSchema:
+        if request.origin_node == "tool_approval" and ta_cfg.enabled and ta_fallback_cfg.enabled:
+            return await veritas_answer(
+                request,
+                model=tool_approval_model,
+                max_context_steps=ta_fallback_cfg.max_context_steps,
+                soothe_config=config,
+                thread_id=thread_id,
+                loop_id=loop_id,
+                max_retries=veritas_cfg.max_retries,
+                retry_backoff_seconds=veritas_cfg.retry_backoff_seconds,
+                coerced_confidence=veritas_cfg.coerced_confidence,
+            )
         return await veritas_answer(
             request,
             model=veritas_model,
@@ -113,6 +142,7 @@ def build_clarification_policy_for_runner(
         interactive_fallback=interactive_fallback,
         force_manual_origins=list(clar_cfg.force_manual_origins or ()),
         degrade_low_confidence=clar_cfg.degrade_to_manual_on_low_confidence,
+        tool_approval_pipeline=tool_approval_pipeline,
     )
 
 

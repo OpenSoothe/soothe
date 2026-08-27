@@ -13,6 +13,9 @@ from soothe.sloop.clarification.protocol import (
     ClarificationRequest,
     DeferKind,
 )
+from soothe.sloop.clarification.tool_approval_pipeline import (
+    ToolApprovalPipeline,
+)
 from soothe.subagents.veritas.schemas import VeritasAnswerSchema
 
 logger = logging.getLogger(__name__)
@@ -53,12 +56,14 @@ class AutoClarificationPolicy:
         interactive_fallback: ClarificationPolicy | None = None,
         force_manual_origins: Collection[ClarificationOrigin] | None = None,
         degrade_low_confidence: bool = False,
+        tool_approval_pipeline: ToolApprovalPipeline | None = None,
     ) -> None:
         self._veritas_answer = veritas_answer
         self._min_confidence = min_confidence
         self._interactive_fallback = interactive_fallback
         self._force_manual_origins: frozenset[str] = frozenset(force_manual_origins or ())
         self._degrade_low_confidence = degrade_low_confidence
+        self._tool_approval_pipeline = tool_approval_pipeline
 
     @property
     def min_confidence(self) -> float:
@@ -77,6 +82,33 @@ class AutoClarificationPolicy:
         return origin_node in self._force_manual_origins
 
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
+        # RFC-622 §9b: tool-approval pipeline short-circuit. Deterministic
+        # deny → safety → allow stages resolve most tool_approval interrupts
+        # without an LLM. Veritas remains the final guard for ambiguous cases.
+        if request.origin_node == "tool_approval" and self._tool_approval_pipeline is not None:
+            action_requests = request.metadata.get("action_requests", [])
+            result = self._tool_approval_pipeline.evaluate(
+                action_requests,
+                workspace_root=request.loop_state.workspace_summary,
+            )
+            if result is not None:
+                logger.info(
+                    "[clarification] tool_approval %s by stage=%s reason=%s",
+                    result.decision,
+                    result.stage,
+                    result.reason,
+                )
+                return ClarificationAnswer(
+                    answers=(result.decision,),
+                    source="static",
+                    confidence=1.0,
+                    audit={
+                        "stage": result.stage,
+                        "reason": result.reason,
+                    },
+                )
+            # fall through to veritas (existing path)
+
         if self.requires_manual(request.origin_node):
             if self._interactive_fallback is not None:
                 logger.info(

@@ -387,21 +387,21 @@ def is_tool_approval_interrupt(value: Any) -> bool:
     """Return True if ``value`` is a deepagents ``action_requests`` interrupt.
 
     The ``HumanInTheLoopMiddleware`` emits this shape when a tool call matches
-    an ``interrupt_on`` rule. When the tool-approval relay is active
-    (``ToolApprovalConfig.mode != "off"``), these are captured into the
-    clarification relay instead of being auto-approved.
+    an ``interrupt_on`` rule. These are captured into the clarification relay
+    (``tool_approval`` origin) and resolved by the multi-stage pipeline
+    (RFC-622 §9b) or veritas fallback — never auto-approved silently.
     """
     return isinstance(value, Mapping) and "action_requests" in value
 
 
 def build_auto_resume_payload(pending_interrupts: Mapping[str, Any]) -> dict[str, Any]:
-    """Build a LangGraph ``Command(resume=...)`` payload that auto-approves tool interrupts.
+    """Build a ``Command(resume=...)`` payload for residual non-clarification interrupts.
 
     ``ask_user`` and ``action_requests`` (tool-approval) interrupts are
-    captured from the ``GraphInterrupt`` exception before this function
-    runs; they never reach ``pending_interrupts``. This function handles
-    only residual action-approval interrupts (e.g. deepagents tool-approval
-    interrupts that were not surfaced to the relay).
+    captured by the clarification relay before this function runs; they never
+    reach ``pending_interrupts``. This function auto-approves any *other*
+    interrupt type that reached ``pending_interrupts`` — these are typically
+    deepagents middleware interrupts unrelated to clarification.
     """
     payload: dict[str, Any] = {}
     for iid, value in pending_interrupts.items():

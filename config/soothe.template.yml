@@ -232,12 +232,52 @@ agent:
     default_mode: auto
     # StrangeLoop plan_generate/plan_assess are *not* listed here.
     # plan_mode_review — plan approve/reject/refine gate is a human call.
-    # tool_approval is intentionally NOT listed: in auto mode veritas's
-    # security-approver prompt evaluates each tool action and auto-approves
-    # safe calls (degrading to a manual prompt only when it defers). Re-add
-    # tool_approval here to force every tool action through a human.
+    # tool_approval is intentionally NOT listed: in auto mode the multi-stage
+    # pipeline (§9b) resolves most tool actions deterministically; veritas
+    # handles the ambiguous tail. Re-add tool_approval here to force every
+    # tool action through a human instead.
     force_manual_origins:
       - plan_mode_review
+
+    # RFC-622 §9b: Multi-stage tool-approval pipeline.
+    # Deterministic deny → safety → allow stages resolve most tool_approval
+    # interrupts without an LLM. Veritas remains the final guard for ambiguous
+    # cases. Set enabled: false to send all tool_approval to veritas (pre-§9b).
+    tool_approval:
+      enabled: true
+      deny_rules:                      # Stage 1: match = REJECT
+        - { tool: run_command, pattern: "rm -rf *" }
+        - { tool: run_command, pattern: "sudo *" }
+        - { tool: run_command, pattern: "chmod 777 *" }
+        - { tool: run_command, pattern: "git push --force*" }
+        - { tool: run_command, pattern: "git push -f*" }
+        - { tool: run_command, pattern: "dd if=*" }
+        - { tool: run_command, pattern: "mkfs*" }
+        - { tool: edit_file, pattern: "/etc/**" }
+        - { tool: write_file, pattern: "/etc/**" }
+      # Stage 2: safety checks are built-in, bypass-immune (not configurable).
+      allow_rules:                      # Stage 3: match = APPROVE
+        - { tool: edit_file, pattern: "<workspace>/**" }
+        - { tool: write_file, pattern: "<workspace>/**" }
+        - { tool: run_command, pattern: "ls *" }
+        - { tool: run_command, pattern: "cat *" }
+        - { tool: run_command, pattern: "grep *" }
+        - { tool: run_command, pattern: "find *" }
+        - { tool: run_command, pattern: "pytest*" }
+        - { tool: run_command, pattern: "python -m pytest*" }
+        - { tool: run_command, pattern: "ruff *" }
+        - { tool: run_command, pattern: "mypy *" }
+        - { tool: run_command, pattern: "git status" }
+        - { tool: run_command, pattern: "git diff*" }
+        - { tool: run_command, pattern: "git log*" }
+      veritas_fallback:                 # Stage 4: LLM for ambiguous cases
+        enabled: true
+        model_role: fast
+        max_context_steps: 0
+        inline_project_instructions: false
+      audit:
+        log_decisions: true
+        log_level: info
 
   veritas:
     model_role: think

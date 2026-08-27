@@ -100,6 +100,7 @@ class ClarificationDetector:
             origin_node=ORIGIN_TOOL_APPROVAL,
             origin_interrupt_id=interrupt_id,
             loop_state=loop_state,
+            metadata={"action_requests": list(action_requests)},
         )
 
     def detect(

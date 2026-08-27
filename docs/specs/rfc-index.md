@@ -539,7 +539,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Depends on: RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)
   - Supersedes: Empty-answer auto-resume behavior currently encoded in `sloop/engine/graph_interrupt.py::build_auto_resume_payload` for `type=="ask_user"` interrupts.
   - Authors: Soothe Team
-  - Updated: 2026-08-24 (reentrant state — IG-760)
+  - Updated: 2026-08-27 (§9b multi-stage tool-approval pipeline)
 - **RFC-623**: [Veritas Auto-Mode Robustness](RFC-623-veritas-auto-mode-robustness.md)
   - Kind: Implementation Interface Design
   - Status: Implemented

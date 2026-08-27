@@ -78,6 +78,9 @@ class TestBuildClarificationPolicyForRunner:
     def test_veritas_model_built_with_configured_role(self) -> None:
         config = _make_config()
         config.agent.veritas.model_role = "fast"
+        # When veritas model_role matches tool-approval fallback model_role
+        # (both "fast"), only one model is constructed.
+        config.agent.clarification.tool_approval.veritas_fallback.model_role = "fast"
         build_clarification_policy_for_runner(config, mode="auto")
         config.create_chat_model.assert_called_once_with("fast")
 

@@ -50,12 +50,17 @@ class ClarificationRequest:
     origin_node: ClarificationOrigin
     origin_interrupt_id: str
     loop_state: LoopStateView
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+    """Origin-specific payload. For ``tool_approval``:
+    ``{"action_requests": [...]}`` so the pipeline (§9b) can inspect tool
+    names and args directly. Empty for other origins. Default ``{}`` —
+    backward compatible with pre-§9b serialized state."""
 
 
 @dataclass(frozen=True)
 class ClarificationAnswer:
     answers: tuple[str, ...]
-    source: Literal["human", "veritas", "fallback"]
+    source: Literal["human", "veritas", "fallback", "static"]
     confidence: float | None = None
     defer: bool = False
     audit: Mapping[str, Any] = field(default_factory=dict)
@@ -145,6 +150,7 @@ def request_to_state(req: ClarificationRequest) -> dict[str, Any]:
         "origin_node": req.origin_node,
         "origin_interrupt_id": req.origin_interrupt_id,
         "loop_state": _view_to_state(req.loop_state),
+        "metadata": dict(req.metadata) if req.metadata else {},
     }
 
 
@@ -169,6 +175,7 @@ def request_from_state(d: Mapping[str, Any]) -> ClarificationRequest:
         origin_node=origin,  # type: ignore[arg-type]
         origin_interrupt_id=str(d.get("origin_interrupt_id", "")),
         loop_state=_view_from_state(d.get("loop_state", {})),
+        metadata=dict(d.get("metadata", {}) or {}),
     )
 
 
@@ -186,7 +193,7 @@ def answer_to_state(ans: ClarificationAnswer) -> dict[str, Any]:
 def answer_from_state(d: Mapping[str, Any]) -> ClarificationAnswer:
     """Inverse of :func:`answer_to_state`."""
     source = d.get("source")
-    if source not in ("human", "veritas", "fallback"):
+    if source not in ("human", "veritas", "fallback", "static"):
         msg = f"invalid source: {source!r}"
         raise ValueError(msg)
     return ClarificationAnswer(

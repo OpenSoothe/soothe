@@ -1553,6 +1553,96 @@ class StrangeLoopConfig(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# RFC-622 §9b: Multi-stage tool-approval pipeline config
+# (defined before ClarificationConfig so the field type resolves)
+# ---------------------------------------------------------------------------
+
+
+class ToolApprovalRule(BaseModel):
+    """One deny or allow rule for tool-action approval (RFC-622 §9b).
+
+    Pattern syntax (adapted from Claude Code's ``shellRuleMatching``):
+
+    - ``"exact"`` — exact string match (e.g. ``"git status"``)
+    - ``"prefix:*"`` — prefix match (e.g. ``"grep:*"`` matches ``"grep -r foo"``)
+    - ``"wildcard*"`` — wildcard match, ``*`` = any sequence (e.g. ``"pytest*"``)
+
+    Path patterns support ``**`` recursive matching via ``pathspec``
+    (gitignore-style). The ``<workspace>`` token expands to the per-request
+    workspace root from ``LoopStateView.workspace_summary``.
+    """
+
+    tool: Literal["edit_file", "write_file", "delete", "run_command"]
+    pattern: str
+
+
+class VeritasFallbackConfig(BaseModel):
+    """Stage 4: veritas LLM fallback for ambiguous tool approvals (RFC-622 §9b)."""
+
+    enabled: bool = True
+    model_role: Literal["default", "fast", "think", "image", "ocr", "embedding"] = "fast"
+    max_context_steps: int = Field(default=0, ge=0)
+    inline_project_instructions: bool = False
+
+
+class ToolApprovalAuditConfig(BaseModel):
+    """Audit logging for tool-approval pipeline decisions (RFC-622 §9b)."""
+
+    log_decisions: bool = True
+    log_level: Literal["debug", "info", "warning"] = "info"
+
+
+def _default_deny_rules() -> list[ToolApprovalRule]:
+    """Default deny rules for Stage 1 of the tool-approval pipeline."""
+    return [
+        ToolApprovalRule(tool="run_command", pattern="rm -rf *"),
+        ToolApprovalRule(tool="run_command", pattern="sudo *"),
+        ToolApprovalRule(tool="run_command", pattern="chmod 777 *"),
+        ToolApprovalRule(tool="run_command", pattern="git push --force*"),
+        ToolApprovalRule(tool="run_command", pattern="git push -f*"),
+        ToolApprovalRule(tool="run_command", pattern="dd if=*"),
+        ToolApprovalRule(tool="run_command", pattern="mkfs*"),
+        ToolApprovalRule(tool="edit_file", pattern="/etc/**"),
+        ToolApprovalRule(tool="write_file", pattern="/etc/**"),
+    ]
+
+
+def _default_allow_rules() -> list[ToolApprovalRule]:
+    """Default allow rules for Stage 3 of the tool-approval pipeline."""
+    return [
+        ToolApprovalRule(tool="edit_file", pattern="<workspace>/**"),
+        ToolApprovalRule(tool="write_file", pattern="<workspace>/**"),
+        ToolApprovalRule(tool="run_command", pattern="ls *"),
+        ToolApprovalRule(tool="run_command", pattern="cat *"),
+        ToolApprovalRule(tool="run_command", pattern="grep *"),
+        ToolApprovalRule(tool="run_command", pattern="find *"),
+        ToolApprovalRule(tool="run_command", pattern="pytest*"),
+        ToolApprovalRule(tool="run_command", pattern="python -m pytest*"),
+        ToolApprovalRule(tool="run_command", pattern="ruff *"),
+        ToolApprovalRule(tool="run_command", pattern="mypy *"),
+        ToolApprovalRule(tool="run_command", pattern="git status"),
+        ToolApprovalRule(tool="run_command", pattern="git diff*"),
+        ToolApprovalRule(tool="run_command", pattern="git log*"),
+    ]
+
+
+class ToolApprovalConfig(BaseModel):
+    """Multi-stage tool-approval pipeline config (RFC-622 §9b).
+
+    When ``enabled``, deterministic deny → safety → allow stages resolve most
+    ``tool_approval`` interrupts without an LLM call. Veritas remains the
+    final guard for ambiguous cases (Stage 4). When ``disabled``, all
+    ``tool_approval`` interrupts go directly to veritas (pre-§9b behavior).
+    """
+
+    enabled: bool = True
+    deny_rules: list[ToolApprovalRule] = Field(default_factory=_default_deny_rules)
+    allow_rules: list[ToolApprovalRule] = Field(default_factory=_default_allow_rules)
+    veritas_fallback: VeritasFallbackConfig = Field(default_factory=VeritasFallbackConfig)
+    audit: ToolApprovalAuditConfig = Field(default_factory=ToolApprovalAuditConfig)
+
+
 class ClarificationConfig(BaseModel):
     """RFC-622: configuration for the clarification relay.
 
@@ -1598,11 +1688,17 @@ class ClarificationConfig(BaseModel):
             "``default_mode`` / wire ``clarification_mode`` is ``auto``. "
             "With a human attached, the interactive TUI relay is used; otherwise "
             "the loop defers. Default is ``plan_mode_review`` only — ``tool_approval`` "
-            "is evaluated by veritas's security-approver prompt in auto mode so safe "
-            "tool calls auto-approve. Re-add ``tool_approval`` to force a human on "
-            "every tool action."
+            "is evaluated by the multi-stage pipeline (§9b) in auto mode so safe "
+            "tool calls auto-approve without an LLM. Re-add ``tool_approval`` to "
+            "force a human on every tool action."
         ),
     )
+
+    tool_approval: ToolApprovalConfig = Field(default_factory=ToolApprovalConfig)
+    """RFC-622 §9b: multi-stage tool-approval pipeline. When enabled,
+    deterministic deny → safety → allow stages resolve most tool_approval
+    interrupts without an LLM. Veritas remains the final guard for ambiguous
+    cases."""
 
 
 class VeritasConfig(BaseModel):

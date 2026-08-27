@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from soothe.prompts import load_agent_instructions
@@ -170,11 +171,16 @@ def build_veritas_user_prompt(
 ) -> str:
     """Render the per-request context for veritas.
 
-    The workspace's project instructions (``AGENTS.md`` preferred, then
-    ``CLAUDE.md``) are loaded via the shared loader and inlined as an
+    For ``tool_approval`` origin (RFC-622 §9b), a slim prompt is used: only
+    tool name, args, user request, and goal description. No AGENTS.md, no
+    prior clarifications, no recent step outputs. This keeps the LLM cost
+    minimal for the ambiguous-case tail that reaches Stage 4.
+
+    For all other origins, the full context prompt is used: the workspace's
+    project instructions (``AGENTS.md`` preferred, then ``CLAUDE.md``) are
+    loaded via the shared loader and inlined as an
     ``=== Project instructions ===`` section so veritas's answers respect the
-    target repo's guidance — the same instructions the host CoreAgent and
-    synthesis prompts already receive. ``LoopStateView.workspace_summary``
+    target repo's guidance. ``LoopStateView.workspace_summary``
     carries the thread workspace path at all three origins (execute,
     delegate, rail pause), which the loader resolves relative to.
 
@@ -183,6 +189,10 @@ def build_veritas_user_prompt(
     the full project rules reach veritas, not a truncated headline. Only
     unusually large files degrade to a partial headline + ``read_file`` hint.
     """
+    # RFC-622 §9b: slim prompt for tool-approval fallback.
+    if request.origin_node == "tool_approval":
+        return _build_tool_approval_user_prompt(request)
+
     view = request.loop_state
     lines: list[str] = []
     lines.append("=== Original user request ===")
@@ -245,6 +255,33 @@ def build_veritas_user_prompt(
     for i, q in enumerate(request.questions, 1):
         lines.append(f"{i}. {q}")
 
+    return "\n".join(lines)
+
+
+def _build_tool_approval_user_prompt(request: ClarificationRequest) -> str:
+    """Slim prompt for tool-approval fallback (RFC-622 §9b).
+
+    Only includes what's needed for a safety judgment:
+    - Tool name + full args (from ``metadata.action_requests``)
+    - User request (context for intent alignment)
+    - Goal description (context for intent alignment)
+
+    No AGENTS.md, no prior clarifications, no recent step outputs.
+    """
+    view = request.loop_state
+    lines: list[str] = [
+        "=== Original user request ===",
+        view.user_request.strip() or "(none)",
+        "",
+        "=== Goal description ===",
+        view.goal_description.strip() or "(none)",
+        "",
+        "=== Pending tool actions ===",
+    ]
+    for i, ar in enumerate(request.metadata.get("action_requests", []), 1):
+        name = ar.get("name", "?") if isinstance(ar, Mapping) else "?"
+        args = ar.get("args", {}) if isinstance(ar, Mapping) else {}
+        lines.append(f"{i}. {name}({dict(args)})")
     return "\n".join(lines)
 
 

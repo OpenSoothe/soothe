@@ -57,12 +57,12 @@ DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = (ORIGIN_PLAN_MODE_REVIEW,)
 ``plan_mode_review`` — the plan approve/reject/refine gate is a human call.
 
 ``tool_approval`` is intentionally NOT in this list: in auto mode the
-``tool_approval`` origin is routed through veritas's dedicated security-approver
-prompt (see ``build_veritas_system_prompt_for_origin``), which approves
-non-destructive tool actions and rejects / defers risky or unjustified ones.
-This lets auto clarification actually auto-approve safe tool calls. Operators
-who want every tool action to require a human can re-add ``tool_approval`` to
-``ClarificationConfig.force_manual_origins`` in config."""
+``tool_approval`` origin is resolved by the multi-stage pipeline (§9b) —
+deterministic deny → safety → allow stages handle most tool actions without
+an LLM. Veritas's security-approver prompt (see
+``build_veritas_system_prompt_for_origin``) handles the ambiguous tail.
+Operators who want every tool action to require a human can re-add
+``tool_approval`` to ``ClarificationConfig.force_manual_origins`` in config."""
 
 PLAN_MODE_REVIEW_INTERRUPT_PREFIX: Final = "plan-mode-review:"
 """Interrupt prefix for plan-mode review clarifications."""

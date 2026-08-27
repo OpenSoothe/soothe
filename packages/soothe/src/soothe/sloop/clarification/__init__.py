@@ -44,8 +44,22 @@ from soothe.sloop.clarification.runtime_factory import (
     resolve_clarification_mode,
 )
 from soothe.sloop.clarification.selector import build_default_clarification_policy
+from soothe.sloop.clarification.tool_approval_pipeline import (
+    ApprovalResult,
+    ToolApprovalPipeline,
+)
+from soothe.sloop.clarification.tool_rule_matcher import (
+    match_command_rule,
+    match_path_rule,
+)
+from soothe.sloop.clarification.tool_safety_check import (
+    SafetyResult,
+    check_command_safety,
+    check_path_safety,
+)
 
 __all__ = [
+    "ApprovalResult",
     "AutoClarificationPolicy",
     "CLARIFICATION_ORIGINS",
     "CLARIFICATION_ORIGIN_RESUME_NODE",
@@ -66,11 +80,17 @@ __all__ = [
     "ORIGIN_RAIL_PAUSE",
     "ORIGIN_TOOL_APPROVAL",
     "PLAN_MODE_REVIEW_INTERRUPT_PREFIX",
+    "SafetyResult",
+    "ToolApprovalPipeline",
     "answer_from_state",
     "answer_to_state",
     "bind_clarification_emit",
     "build_clarification_policy_for_runner",
     "build_default_clarification_policy",
+    "check_command_safety",
+    "check_path_safety",
+    "match_command_rule",
+    "match_path_rule",
     "request_from_state",
     "request_to_state",
     "resolve_clarification_mode",
