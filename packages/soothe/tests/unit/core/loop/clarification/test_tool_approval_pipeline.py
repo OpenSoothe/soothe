@@ -45,14 +45,13 @@ class TestDenyRules:
 
 
 # ---------------------------------------------------------------------------
-# Stage 2: safety checks
+# Stage 2: safety checks (delegated to nano's WorkspaceToolOperationSecurity)
 # ---------------------------------------------------------------------------
 
 
 class TestSafetyChecks:
     def test_git_dir_rejected_by_safety(self) -> None:
-        """Path not matched by deny rules but caught by safety check."""
-        # .git/config is not in deny_rules patterns, but safety check blocks it
+        """Path not matched by deny rules but caught by nano safety check."""
         result = _pipeline().evaluate(
             [_ar("edit_file", file_path="/workspace/.git/config")],
             workspace_root="/workspace",
@@ -61,18 +60,35 @@ class TestSafetyChecks:
         assert result.decision == "reject"
         assert result.stage == "safety_check"
 
-    def test_bashrc_rejected_by_safety(self) -> None:
-        result = _pipeline().evaluate([_ar("edit_file", file_path="/home/user/.bashrc")])
-        assert result is not None
-        assert result.decision == "reject"
-        assert result.stage == "safety_check"
-
     def test_rm_r_only_caught_by_safety(self) -> None:
-        """rm -r (without -rf) is caught by safety, not deny rules."""
+        """rm -r (without -rf) is caught by nano's banned patterns."""
         result = _pipeline().evaluate([_ar("run_command", command="rm -r /tmp/stuff")])
         assert result is not None
         assert result.decision == "reject"
         assert result.stage == "safety_check"
+
+    def test_shred_caught_by_safety(self) -> None:
+        """shred is caught by nano's banned patterns."""
+        result = _pipeline().evaluate([_ar("run_command", command="shred /etc/passwd")])
+        assert result is not None
+        assert result.decision == "reject"
+        assert result.stage == "safety_check"
+
+    def test_git_force_push_caught_by_deny_rule(self) -> None:
+        """git push --force is caught by deny rule (Stage 1) before safety."""
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="git push --force origin main")]
+        )
+        assert result is not None
+        assert result.decision == "reject"
+        assert result.stage == "deny_rule"
+
+    def test_security_config_none_command_still_checked(self) -> None:
+        """When security_config is None, command safety still fires."""
+        pipeline = ToolApprovalPipeline(_DEFAULT_CONFIG, security_config=None)
+        result = pipeline.evaluate([_ar("run_command", command="rm -rf /")])
+        assert result is not None
+        assert result.decision == "reject"
 
 
 # ---------------------------------------------------------------------------

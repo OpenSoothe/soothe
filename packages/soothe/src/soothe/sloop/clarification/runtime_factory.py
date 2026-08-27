@@ -93,7 +93,10 @@ def build_clarification_policy_for_runner(
     ta_cfg = clar_cfg.tool_approval
     tool_approval_pipeline: ToolApprovalPipeline | None = None
     if ta_cfg.enabled:
-        tool_approval_pipeline = ToolApprovalPipeline(config=ta_cfg)
+        tool_approval_pipeline = ToolApprovalPipeline(
+            config=ta_cfg,
+            security_config=config.security,
+        )
 
     # RFC-622 §9b: fast model for tool-approval fallback, think for intent.
     ta_fallback_cfg = ta_cfg.veritas_fallback

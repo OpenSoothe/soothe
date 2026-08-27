@@ -19,10 +19,6 @@ from soothe.sloop.clarification.tool_rule_matcher import (
     match_command_rule,
     match_path_rule,
 )
-from soothe.sloop.clarification.tool_safety_check import (
-    check_command_safety,
-    check_path_safety,
-)
 
 if TYPE_CHECKING:
     from soothe.config.models import ToolApprovalConfig
@@ -55,12 +51,23 @@ class ToolApprovalPipeline:
     rules. No allow rule can override a safety denial. Fail-safe: any
     exception in stages 1–3 returns ``None`` (defer to veritas), never
     auto-approves on error.
+
+    Stage 2 delegates to nano's ``WorkspaceToolOperationSecurity`` — the same
+    evaluator used by ``SoothePolicyMiddleware`` (Layer 1) and the tool
+    execution layer (Layer 3). This ensures one source of truth for safety
+    constants (banned command patterns, dangerous paths/files).
     """
 
-    def __init__(self, config: ToolApprovalConfig) -> None:
+    def __init__(
+        self,
+        config: ToolApprovalConfig,
+        *,
+        security_config: Any = None,
+    ) -> None:
         self._deny_rules = config.deny_rules
         self._allow_rules = config.allow_rules
         self._audit = config.audit
+        self._security_config = security_config
 
     def evaluate(
         self,
@@ -96,8 +103,8 @@ class ToolApprovalPipeline:
                     self._log_decision(result)
                     return result
 
-                # Stage 2: safety checks (bypass-immune)
-                safety_result = self._check_safety(name, args)
+                # Stage 2: safety checks (bypass-immune, delegated to nano)
+                safety_result = self._check_safety(name, args, workspace_root)
                 if safety_result is not None:
                     result = ApprovalResult(
                         "reject",
@@ -130,20 +137,35 @@ class ToolApprovalPipeline:
             logger.exception("[tool_approval] pipeline error; deferring to veritas")
             return None
 
-    def _check_safety(self, name: str, args: Mapping[str, Any]) -> str | None:
-        """Run bypass-immune safety checks. Returns reason if unsafe, else None."""
-        if name in ("edit_file", "write_file", "delete"):
-            path = str(args.get("file_path") or args.get("path") or "")
-            safety = check_path_safety(path)
-            if not safety.safe:
-                return safety.reason
+    def _check_safety(
+        self,
+        name: str,
+        args: Mapping[str, Any],
+        workspace_root: str | None,
+    ) -> str | None:
+        """Run bypass-immune safety checks via nano's OperationSecurity.
 
-        if name == "run_command":
-            cmd = str(args.get("command") or "")
-            safety = check_command_safety(cmd)
-            if not safety.safe:
-                return safety.reason
+        Delegates to ``WorkspaceToolOperationSecurity.evaluate()`` — the same
+        evaluator used at Layer 1 (SoothePolicyMiddleware) and Layer 3 (tool
+        execution). Returns reason if denied, else None.
+        """
+        from soothe_nano.security.operation_guard import (
+            WorkspaceToolOperationSecurity,
+            build_operation_security_request,
+        )
+        from soothe_sdk.protocols.operation_security import (
+            OperationSecurityContext,
+        )
 
+        evaluator = WorkspaceToolOperationSecurity()
+        request = build_operation_security_request(name, dict(args))
+        ctx = OperationSecurityContext(
+            workspace=workspace_root,
+            security_config=self._security_config,
+        )
+        decision = evaluator.evaluate(request, ctx)
+        if decision.verdict == "deny":
+            return decision.reason
         return None
 
     def _matches_any_rule(
