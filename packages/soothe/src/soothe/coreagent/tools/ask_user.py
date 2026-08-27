@@ -71,22 +71,73 @@ class _AskUserArgs(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _coerce_string_questions(cls, data: Any) -> Any:
-        """Some LLMs emit ``questions`` as a stringified JSON array instead of
-        a native list of objects. Parse it before Pydantic validation so the
-        structured schema accepts both forms (observed in loop f182)."""
+    def _coerce_llm_arg_quirks(cls, data: Any) -> Any:
+        """Handle common LLM argument-shape quirks before Pydantic validation.
+
+        Observed in production loops (f182, 065e):
+
+        1. **Stringified JSON questions**: the model emits ``questions`` as a
+           JSON string ``'[{"title": ...}]'`` instead of a native list.
+           Parse it before validation.
+
+        2. **Flat single question**: the model emits ``title``, ``description``,
+           ``options``, ``recommended`` as top-level tool args instead of
+           wrapping them in ``questions: [{...}]``. Detect and wrap them.
+
+        3. **Stringified options**: ``options`` may also arrive as a JSON
+           string instead of a list. Parse it.
+
+        4. **String-typed numerics**: ``recommended`` may arrive as ``"-1"``
+           instead of ``-1``. Coerce to int.
+        """
         if not isinstance(data, dict):
             return data
-        raw = data.get("questions")
-        if isinstance(raw, str):
-            raw_stripped = raw.strip()
+
+        # Quirk 1: questions as stringified JSON.
+        raw_questions = data.get("questions")
+        if isinstance(raw_questions, str):
+            raw_stripped = raw_questions.strip()
             if raw_stripped:
                 try:
                     parsed = json.loads(raw_stripped)
                     if isinstance(parsed, list):
                         data["questions"] = parsed
                 except (json.JSONDecodeError, TypeError):
-                    pass  # Let Pydantic reject it with its own error.
+                    pass
+
+        # Quirk 2: flat single question fields at top level — wrap them.
+        if "questions" not in data or not data.get("questions"):
+            question_keys = {"title", "description", "options", "recommended"}
+            if any(k in data for k in question_keys):
+                question: dict[str, Any] = {}
+                for k in question_keys:
+                    if k in data:
+                        question[k] = data.pop(k)
+                data["questions"] = [question]
+
+        # Quirk 3: options as stringified JSON (within each question).
+        for q in data.get("questions", []):
+            if isinstance(q, dict):
+                raw_opts = q.get("options")
+                if isinstance(raw_opts, str):
+                    try:
+                        parsed_opts = json.loads(raw_opts)
+                        if isinstance(parsed_opts, list):
+                            q["options"] = parsed_opts
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                # Quirk 4: recommended as string.
+                rec = q.get("recommended")
+                if isinstance(rec, str):
+                    try:
+                        q["recommended"] = int(rec)
+                    except ValueError:
+                        pass
+                # Strip extra keys the model may emit (e.g. "index" inside options).
+                for opt in q.get("options", []):
+                    if isinstance(opt, dict):
+                        opt.pop("index", None)
+
         return data
 
     @model_validator(mode="after")

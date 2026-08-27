@@ -205,6 +205,58 @@ def test_args_schema_coerces_stringified_json_via_ainvoke() -> None:
     assert "A: yes" in result
 
 
+def test_args_schema_wraps_flat_single_question() -> None:
+    """Loop 065e: model emitted title/description/options/recommended as
+    top-level tool args instead of wrapping in questions: [{...}]."""
+    args = _AskUserArgs(
+        title="Project feedback",
+        description="Two quick questions to gather your input.",
+        options=[
+            {"short": "A", "long": "Option A desc."},
+            {"short": "B", "long": "Option B desc."},
+            {"short": "C", "long": "Option C desc."},
+        ],
+        recommended="-1",  # also: string instead of int
+    )  # type: ignore[call-arg]
+    assert len(args.questions) == 1
+    assert args.questions[0].title == "Project feedback"
+    assert args.questions[0].recommended == -1  # coerced from "-1"
+
+
+def test_args_schema_coerces_stringified_options() -> None:
+    """Loop 065e: options arrived as a JSON string, not a native list."""
+    opts_json = json.dumps([
+        {"short": "A", "long": "la", "index": 0},
+        {"short": "B", "long": "lb", "index": 1},
+        {"short": "C", "long": "lc", "index": 2},
+    ])
+    args = _AskUserArgs(
+        questions=[{"title": "Q", "description": "D", "options": opts_json, "recommended": 0}],
+    )
+    assert len(args.questions[0].options) == 3
+    assert args.questions[0].options[0].short == "A"
+
+
+def test_args_schema_strips_extra_index_from_options() -> None:
+    """Loop 065e: model added 'index' field inside each option object.
+    The validator strips it so Pydantic doesn't choke."""
+    args = _AskUserArgs(
+        questions=[
+            {
+                "title": "Q",
+                "description": "D",
+                "options": [
+                    {"short": "A", "long": "la", "index": 0},
+                    {"short": "B", "long": "lb", "index": 1},
+                    {"short": "C", "long": "lc", "index": 2},
+                ],
+                "recommended": 0,
+            }
+        ],
+    )
+    assert len(args.questions[0].options) == 3
+
+
 # ---------------------------------------------------------------------------
 # _format_answers — resume payload rendering
 # ---------------------------------------------------------------------------
