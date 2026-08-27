@@ -81,6 +81,17 @@ class StructuredAskUserWidget(Vertical):
         margin: 0 0 1 0;
     }
 
+    /* height: auto is required — Vertical defaults to 1fr, which collapses
+    content when the widget is mounted in a stream/auto-height container
+    (e.g. #messages), crushing the description and option rows to zero. */
+    StructuredAskUserWidget .saq-question-body {
+        height: auto;
+    }
+
+    StructuredAskUserWidget .saq-option-list {
+        height: auto;
+    }
+
     StructuredAskUserWidget .saq-tab {
         height: 1;
         min-width: 0;
@@ -114,7 +125,7 @@ class StructuredAskUserWidget(Vertical):
 
     StructuredAskUserWidget .saq-description {
         height: auto;
-        color: $text-muted;
+        color: $text;
         padding: 0;
         margin: 0 0 1 0;
     }
@@ -124,7 +135,7 @@ class StructuredAskUserWidget(Vertical):
         width: 1fr;
         padding: 0;
         margin: 0;
-        color: $text-muted;
+        color: $text;
     }
 
     StructuredAskUserWidget .saq-option-row.is-highlighted {
@@ -137,16 +148,19 @@ class StructuredAskUserWidget(Vertical):
         text-style: bold;
     }
 
-    StructuredAskUserWidget .saq-preview-box {
+    /* Long description rendered directly below each option label. */
+    StructuredAskUserWidget .saq-option-desc {
         height: auto;
-        padding: 0 1;
+        width: 1fr;
+        padding: 0;
         margin: 0 0 1 0;
-        border: solid $primary 40%;
-        background: $surface;
         color: $text-muted;
     }
 
-    StructuredAskUserWidget .saq-preview-box.is-empty {
+    /* Hide stale option/desc rows when switching to a question with
+    fewer options than the initially rendered one. */
+    StructuredAskUserWidget .saq-option-row.is-hidden,
+    StructuredAskUserWidget .saq-option-desc.is-hidden {
         display: none;
     }
 
@@ -209,23 +223,36 @@ class StructuredAskUserWidget(Vertical):
     }
 
     StructuredAskUserWidget .saq-recap {
+        display: none;
         height: auto;
-        padding: 0 1;
-        margin: 0 0 1 0;
-        border: solid $primary 30%;
-        background: $surface;
+        padding: 0 0 0 2;
+        margin: 1 0 0 0;
         color: $text;
+    }
+
+    StructuredAskUserWidget .saq-recap.is-visible {
+        display: block;
     }
 
     StructuredAskUserWidget .saq-recap-title {
         text-style: bold;
-        margin: 0 0 1 0;
+        color: $text-muted;
+        margin: 0 0 0 0;
     }
 
     StructuredAskUserWidget .saq-recap-row {
         height: auto;
         padding: 0;
         margin: 0;
+        color: $text;
+    }
+
+    /* Horizontal rule separating the QA widget from surrounding transcript. */
+    StructuredAskUserWidget .saq-separator {
+        height: 1;
+        color: $text-muted 30%;
+        padding: 0;
+        margin: 1 0 1 0;
     }
 
     StructuredAskUserWidget .saq-hint {
@@ -256,7 +283,8 @@ class StructuredAskUserWidget(Vertical):
     StructuredAskUserWidget.is-submitted .saq-question-body,
     StructuredAskUserWidget.is-submitted .saq-footer,
     StructuredAskUserWidget.is-submitted .saq-hint,
-    StructuredAskUserWidget.is-submitted .saq-recap {
+    StructuredAskUserWidget.is-submitted .saq-recap,
+    StructuredAskUserWidget.is-submitted .saq-separator {
         display: none;
     }
 
@@ -311,6 +339,7 @@ class StructuredAskUserWidget(Vertical):
         self._selected: dict[int, int] = {}  # q_idx → option_idx (0–2) or 3 (custom)
         self._custom_texts: dict[int, str] = {}
         self._highlighted = 0  # 0–3 within current question (3 = custom)
+        self._rendered_opt_count = 0  # option rows created at compose time
         self._submit_review_open = False
         self._submitted = False
         self._degraded_inputs: list[Input] = []
@@ -318,6 +347,7 @@ class StructuredAskUserWidget(Vertical):
         self._submit_btn: Button | None = None
         self._abandon_btn: Button | None = None
         self._footer_focused = False  # False = question area, True = footer
+        self._focus_guard_timer = None  # recurring timer that steals focus back from chat input
 
     # ------------------------------------------------------------------
     # Properties
@@ -412,6 +442,9 @@ class StructuredAskUserWidget(Vertical):
                 )
 
     def _compose_structured(self) -> Any:
+        # Top visual separator — clearly distinguishes the QA widget from
+        # surrounding messages in the transcript.
+        yield Static("─" * 60, classes="saq-separator", markup=False)
         # Tab bar (hidden for single question — CSS can't conditionally
         # hide, so we just don't render it when there's only one question).
         if self._num_questions > 1:
@@ -438,15 +471,41 @@ class StructuredAskUserWidget(Vertical):
             )
             with Vertical(classes="saq-option-list"):
                 options = self._question_options(self._current_q)
-                for j, opt in enumerate(options):
-                    label = opt.get("label", "")
+                # Guard: if options are missing/malformed, fall back to a
+                # free-text row so the user can still answer.  This covers
+                # LLM outputs that pass the ``is_structured`` key-check but
+                # carry empty or non-list options.
+                _has_renderable_opts = isinstance(options, list) and len(options) > 0
+                if not _has_renderable_opts:
+                    logger.warning(
+                        "StructuredAskUserWidget: question %r has no renderable "
+                        "options (got %r). Falling back to free-text input.",
+                        self._question_header(self._current_q),
+                        options,
+                    )
+                # Rows rendered for the initial question; tab switches update
+                # these in place (and hide extras when a question has fewer
+                # options — see _update_question_display).
+                self._rendered_opt_count = len(options) if _has_renderable_opts else 0
+                for j, opt in enumerate(options if _has_renderable_opts else []):
+                    label = opt.get("label", "") if isinstance(opt, dict) else ""
                     yield Static(
                         f"  {j + 1}. {label}",
                         id=f"saq-opt-{j}",
                         classes="saq-option-row",
                         markup=False,
                     )
-                # "Other" custom row (implicit — auto-added, always last)
+                    # Long description directly below the label (muted).
+                    desc = opt.get("description", "") if isinstance(opt, dict) else ""
+                    yield Static(
+                        f"     {desc}",
+                        id=f"saq-optdesc-{j}",
+                        classes="saq-option-desc",
+                        markup=False,
+                    )
+                # "Other" custom row (implicit — auto-added, always last).
+                # When there are no structured options we enable it immediately
+                # so the user isn't stuck on an empty picker.
                 yield Static(
                     "  Other:",
                     id="saq-opt-custom",
@@ -457,9 +516,13 @@ class StructuredAskUserWidget(Vertical):
                     placeholder="Type a custom answer…",
                     id="saq-custom-input",
                     classes="saq-custom-input",
-                    disabled=True,
+                    disabled=_has_renderable_opts,
                 )
                 yield self._custom_input
+                # Auto-highlight the custom row when there are no options
+                # so the user can start typing immediately.
+                if not _has_renderable_opts:
+                    self._highlighted = 0  # point at "Other"
             # Inline hint shown when custom row is highlighted but text is empty.
             yield Static(
                 "Enter a custom answer or pick an option",
@@ -467,18 +530,6 @@ class StructuredAskUserWidget(Vertical):
                 id="saq-custom-hint",
                 markup=False,
             )
-            # Preview box for highlighted option's long desc
-            yield Static(
-                "",
-                classes="saq-preview-box is-empty",
-                id="saq-preview",
-                markup=False,
-            )
-        yield Static(
-            "←/→ questions  ↑/↓ options  Enter select  Tab footer",
-            classes="saq-hint",
-            markup=False,
-        )
         # Recap (hidden until submit review opens)
         with Vertical(classes="saq-recap", id="saq-recap-box"):
             yield Static("Review:", classes="saq-recap-title", markup=False)
@@ -504,6 +555,8 @@ class StructuredAskUserWidget(Vertical):
                 compact=True,
             )
             yield self._abandon_btn
+        # Bottom visual separator — mirrors the top rule.
+        yield Static("─" * 60, classes="saq-separator", markup=False)
 
     def _compose_degraded(self) -> Any:
         for i, q in enumerate(self._questions):
@@ -569,11 +622,118 @@ class StructuredAskUserWidget(Vertical):
                 self._schedule_focus(self._degraded_inputs[0])
             return
         self._update_option_highlight()
-        self._update_preview()
         self._update_tab_highlight()
         self._update_submit_state()
         # Focus the widget so keybindings work.
         self._schedule_focus(self)
+        # Belt-and-braces: keep focus pinned to the widget for the first
+        # ~600 ms after mount so the user can immediately press ↑/↓/Enter
+        # without the screen stealing focus back to the chat input.
+        self._schedule_robust_focus()
+        # Long-running focus guard: while the widget is active, anything
+        # in the chat input that steals focus back to the prompt would
+        # break arrow/Enter handling.  Poll every 200 ms and recapture
+        # if focus has drifted to the chat input.  Stopped on submit/abandon.
+        self._start_focus_guard()
+
+    def _start_focus_guard(self) -> None:
+        """Begin a recurring timer that recaptures focus from the chat input.
+
+        The TUI's chat input is the default focus target — the screen's
+        post-mount layout, click handlers, and other lifecycle events all
+        re-focus it.  While the QA widget is waiting for an answer we
+        need keyboard input to reach the widget, not the chat prompt.
+        """
+
+        def _tick() -> None:
+            if self._submitted:
+                return
+            try:
+                focused = self.app.focused
+            except Exception:  # noqa: BLE001
+                return
+            # Only recapture if focus has drifted to the chat input.
+            if not self._focus_is_on_chat(focused):
+                return
+            try:
+                self.app.set_focus(self)
+            except Exception:  # noqa: BLE001
+                pass
+
+        try:
+            self._focus_guard_timer = self.set_interval(0.2, _tick)
+        except Exception:  # noqa: BLE001
+            self._focus_guard_timer = None
+
+    def _stop_focus_guard(self) -> None:
+        """Stop the focus-recapture timer (called on submit/abandon)."""
+        timer = getattr(self, "_focus_guard_timer", None)
+        if timer is not None:
+            try:
+                timer.stop()
+            except Exception:  # noqa: BLE001
+                pass
+            self._focus_guard_timer = None
+
+    def _schedule_robust_focus(self) -> None:
+        """Keep focus pinned to the widget for a brief window after mount.
+
+        Textual's post-mount layout can move focus to the chat input or
+        another child after ``call_after_refresh`` fires.  Repeated
+        focused attempts at increasing intervals ensure the widget
+        retains keyboard navigation so arrow keys / Enter work
+        immediately on appear.
+        """
+
+        def _refocus() -> None:
+            try:
+                if self._submitted:
+                    return
+                # Only recapture focus if something stole it from us.  The
+                # chat input is the usual culprit (its post-mount
+                # ``set_app_focus`` can re-focus the text area).  Skip
+                # when another interactive widget already owns focus.
+                focused = self.app.focused
+                if focused is self:
+                    return
+                # If focus is on a descendant of ours, treat it as ours.
+                if focused is not None:
+                    try:
+                        if self in focused.ancestors_with_self:
+                            return
+                    except Exception:  # noqa: BLE001
+                        pass
+                # Detect chat-input focus (covers the TextArea child too).
+                if not self._focus_is_on_chat(focused):
+                    return
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                self.app.set_focus(self)
+            except Exception:  # noqa: BLE001
+                pass
+
+        try:
+            self.set_timer(0.05, _refocus)
+            self.set_timer(0.15, _refocus)
+            self.set_timer(0.30, _refocus)
+            self.set_timer(0.60, _refocus)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _focus_is_on_chat(self, focused: Any) -> bool:
+        """Return True if ``focused`` is the chat input (or its TextArea child)."""
+        if focused is None:
+            return False
+        if focused.id == "chat-input":
+            return True
+        chat_input = getattr(self.app, "_chat_input", None)
+        if chat_input is None:
+            return False
+        try:
+            return focused in chat_input.walk_children()
+        except Exception:  # noqa: BLE001
+            return False
 
     # ------------------------------------------------------------------
     # Rendering updates
@@ -591,20 +751,39 @@ class StructuredAskUserWidget(Vertical):
             desc.update(self._question_question(self._current_q))
         except Exception:  # noqa: BLE001
             pass
-        # Re-render options
+        # Re-render option rows (labels + inline descriptions) in place.
+        # Questions may have different option counts: extra rows from the
+        # initially rendered question are hidden via the is-hidden class.
         options = self._question_options(self._current_q)
         num_opts = len(options)
-        for j in range(num_opts):
+        for j in range(self._rendered_opt_count):
             try:
                 opt_w = self.query_one(f"#saq-opt-{j}", Static)
-                label = options[j].get("label", "") if j < len(options) else ""
-                opt_w.update(f"  {j + 1}. {label}")
             except Exception:  # noqa: BLE001
-                pass
+                continue
+            try:
+                desc_w = self.query_one(f"#saq-optdesc-{j}", Static)
+            except Exception:  # noqa: BLE001
+                desc_w = None
+            if j < num_opts:
+                label = options[j].get("label", "") if isinstance(options[j], dict) else ""
+                opt_w.update(f"  {j + 1}. {label}")
+                opt_w.remove_class("is-hidden")
+                if desc_w is not None:
+                    opt_desc = (
+                        options[j].get("description", "") if isinstance(options[j], dict) else ""
+                    )
+                    desc_w.update(f"     {opt_desc}")
+                    desc_w.remove_class("is-hidden")
+            else:
+                opt_w.update("")
+                opt_w.add_class("is-hidden")
+                if desc_w is not None:
+                    desc_w.update("")
+                    desc_w.add_class("is-hidden")
         # Restore selection highlight for this question
         self._highlighted = self._selected.get(self._current_q, 0)
         self._update_option_highlight()
-        self._update_preview()
         self._update_tab_highlight()
 
     def _update_option_highlight(self) -> None:
@@ -657,27 +836,6 @@ class StructuredAskUserWidget(Vertical):
                 hint.add_class("is-visible")
             else:
                 hint.remove_class("is-visible")
-        except Exception:  # noqa: BLE001
-            pass
-
-    def _update_preview(self) -> None:
-        """Update the hover-preview box with the highlighted option's description."""
-        try:
-            preview = self.query_one("#saq-preview", Static)
-            options = self._question_options(self._current_q)
-            num_opts = len(options)
-            if self._highlighted < num_opts:
-                desc = options[self._highlighted].get("description", "")
-                preview.update(desc)
-                preview.remove_class("is-empty")
-                return
-            # Custom row — no preview
-            preview.update("")
-            preview.add_class("is-empty")
-            preview.update("")
-            preview.add_class("is-empty")
-            preview.update("")
-            preview.add_class("is-empty")
         except Exception:  # noqa: BLE001
             pass
 
@@ -758,6 +916,7 @@ class StructuredAskUserWidget(Vertical):
                         markup=False,
                     )
                 )
+            recap_box.add_class("is-visible")
         except Exception:  # noqa: BLE001
             pass
 
@@ -768,6 +927,7 @@ class StructuredAskUserWidget(Vertical):
             for child in list(recap_box.children):
                 child.remove()
             recap_box.mount(Static("Review:", classes="saq-recap-title", markup=False))
+            recap_box.remove_class("is-visible")
         except Exception:  # noqa: BLE001
             pass
 
@@ -779,8 +939,8 @@ class StructuredAskUserWidget(Vertical):
         """Collect answers and post Submitted."""
         if self._submitted:
             return
-        answers = [self._answer_text(i) for i in range(self._num_questions)]
         self._submitted = True
+        self._stop_focus_guard()
         self.add_class("is-submitted")
         self._refresh_title()
         self._refresh_answered_summary()
@@ -788,7 +948,7 @@ class StructuredAskUserWidget(Vertical):
             self.Submitted(
                 step_id=self._step_id,
                 questions=self._questions,
-                answers=answers,
+                answers=[self._answer_text(i) for i in range(self._num_questions)],
                 widget_id=self._widget_id,
                 origin_node=self._origin_node,
             )
@@ -799,6 +959,7 @@ class StructuredAskUserWidget(Vertical):
         if self._submitted:
             return
         self._submitted = True
+        self._stop_focus_guard()
         self.add_class("is-submitted")
         self._refresh_title()
         self.post_message(
@@ -838,7 +999,6 @@ class StructuredAskUserWidget(Vertical):
         total = num_opts + 1  # +1 for custom row
         self._highlighted = (self._highlighted - 1) % total
         self._update_option_highlight()
-        self._update_preview()
 
     def action_next_option(self) -> None:
         if self._degraded or self._submitted or self._submit_review_open:
@@ -847,7 +1007,6 @@ class StructuredAskUserWidget(Vertical):
         total = num_opts + 1  # +1 for custom row
         self._highlighted = (self._highlighted + 1) % total
         self._update_option_highlight()
-        self._update_preview()
 
     def action_confirm(self) -> None:
         """Enter: select highlighted option, or finalize submit review."""
@@ -870,7 +1029,8 @@ class StructuredAskUserWidget(Vertical):
         self._update_option_highlight()
         self._update_tab_highlight()
         self._update_submit_state()
-        # Auto-advance to next unanswered question
+        # Auto-advance to next unanswered question; when every question is
+        # answered, open the submit review so Enter finalizes.
         if not self._all_answered:
             for i in range(1, self._num_questions + 1):
                 next_q = (self._current_q + i) % self._num_questions
@@ -878,9 +1038,17 @@ class StructuredAskUserWidget(Vertical):
                     self._current_q = next_q
                     self._update_question_display()
                     break
+        else:
+            self._open_submit_review()
+            self._schedule_focus(self)
 
     def action_abandon(self) -> None:
         if self._submitted:
+            return
+        if self._submit_review_open:
+            # First Escape closes the review so answers stay editable;
+            # a second Escape (outside review) abandons.
+            self._close_submit_review()
             return
         self._abandon()
 
@@ -1008,7 +1176,8 @@ class StructuredAskUserWidget(Vertical):
                 self._update_option_highlight()
                 self._update_tab_highlight()
                 self._update_submit_state()
-                # Auto-advance
+                # Auto-advance to the next unanswered question; when all
+                # are answered, open the submit review so Enter finalizes.
                 if not self._all_answered:
                     for i in range(1, self._num_questions + 1):
                         next_q = (self._current_q + i) % self._num_questions
@@ -1017,7 +1186,8 @@ class StructuredAskUserWidget(Vertical):
                             self._update_question_display()
                             break
                 else:
-                    self._schedule_focus(self)
+                    self._open_submit_review()
+                self._schedule_focus(self)
             event.stop()
 
     def _finalize_degraded(self) -> None:

@@ -51,6 +51,30 @@ class _WidgetApp(App[None]):
         yield self._widget
 
 
+class _StreamLayoutApp(App[None]):
+    """Harness replicating the real app layout (#chat scroll → #messages stream).
+
+    The production app mounts message widgets into a ``layout: stream``
+    container; Vertical children with the default ``1fr`` height collapse
+    there. Regression guard for the missing ``height: auto`` bug.
+    """
+
+    CSS = """
+    #chat { height: 1fr; }
+    #messages { layout: stream; height: auto; }
+    """
+
+    def __init__(self, widget: StructuredAskUserWidget) -> None:
+        super().__init__()
+        self._widget = widget
+
+    def compose(self) -> ComposeResult:
+        from textual.containers import Container, VerticalScroll
+
+        with VerticalScroll(id="chat"):
+            yield Container(self._widget, id="messages")
+
+
 def _make_widget(
     *,
     questions: list | None = None,
@@ -101,6 +125,81 @@ async def test_structured_compose_renders_option_rows_plus_custom() -> None:
         opts = w.query(".saq-option-row")
         # 3 options + 1 custom row
         assert len(opts) == 4
+
+
+@pytest.mark.asyncio
+async def test_structured_renders_inline_option_descriptions() -> None:
+    """Each option's long description renders directly below its label."""
+    app = _WidgetApp(_make_widget())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        descs = w.query(".saq-option-desc")
+        assert len(descs) == 3  # one per option, custom row has none
+        first = w.query_one("#saq-optdesc-0")
+        assert "OAuth 2.0 with PKCE" in str(first.render())
+        # No hover-preview box — descriptions are inline now.
+        assert len(w.query(".saq-preview-box")) == 0
+        # Recap box hidden until submit review opens.
+        recap = w.query_one("#saq-recap-box")
+        assert "is-visible" not in recap.classes
+
+
+@pytest.mark.asyncio
+async def test_no_hint_line() -> None:
+    """The keyboard hint line is removed — keybindings are self-evident."""
+    app = _WidgetApp(_make_widget())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        assert len(w.query(".saq-hint")) == 0
+
+
+@pytest.mark.asyncio
+async def test_visual_separators_above_and_below() -> None:
+    """Top + bottom separator rules distinguish the widget from surrounding messages."""
+    app = _WidgetApp(_make_widget())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        seps = w.query(".saq-separator")
+        assert len(seps) == 2
+
+
+@pytest.mark.asyncio
+async def test_separators_hidden_after_submit() -> None:
+    """After submit the separators are hidden — the widget collapses to a compact summary."""
+    app = _WidgetApp(_make_widget())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        # Visible before submit.
+        seps = list(w.query(".saq-separator"))
+        assert len(seps) == 2
+        assert all(s.display for s in seps)
+        w.action_confirm()  # Q1 selected, auto-advance to Q2
+        w.action_confirm()  # Q2 selected, auto-open review
+        w.action_confirm()  # finalizes
+        await pilot.pause()
+        assert w._submitted is True
+        # Separators are in the DOM but visually hidden via display: none.
+        seps = list(w.query(".saq-separator"))
+        assert len(seps) == 2
+        assert all(not s.display for s in seps)
+
+
+@pytest.mark.asyncio
+async def test_focus_guard_runs_while_active() -> None:
+    """A recurring focus guard starts on mount to recapture focus from the chat input."""
+    app = _WidgetApp(_make_widget())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        assert w._focus_guard_timer is not None
+        # And it stops after submit/abandon.
+        w._finalize()
+        await pilot.pause()
+        assert w._focus_guard_timer is None
 
 
 @pytest.mark.asyncio
@@ -216,6 +315,40 @@ async def test_enter_auto_advances_to_next_unanswered() -> None:
         w.action_confirm()
         assert w._selected.get(0) == 0
         assert w._current_q == 1
+
+
+@pytest.mark.asyncio
+async def test_last_answer_auto_opens_submit_review() -> None:
+    """Selecting the final unanswered option opens the review so Enter submits."""
+    app = _WidgetApp(_make_widget(questions=_questions(1)))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        assert w._num_questions == 1
+        w.action_confirm()
+        assert w._all_answered is True
+        assert w._submit_review_open is True
+        # Enter again finalizes.
+        w.action_confirm()
+        await pilot.pause()
+        assert w._submitted is True
+
+
+@pytest.mark.asyncio
+async def test_escape_from_review_returns_to_editing() -> None:
+    """Escape closes the review (keep editing) instead of abandoning."""
+    app = _WidgetApp(_make_widget(questions=_questions(1)))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        w.action_confirm()
+        assert w._submit_review_open is True
+        w.action_abandon()
+        assert w._submit_review_open is False
+        assert w._submitted is False
+        # Second Escape (outside review) abandons.
+        w.action_abandon()
+        assert w._submitted is True
 
 
 @pytest.mark.asyncio
@@ -407,3 +540,189 @@ async def test_answer_text_returns_custom_text() -> None:
         w._selected[0] = 3
         w._custom_texts[0] = "My custom answer"
         assert w._answer_text(0) == "My custom answer"
+
+
+# ---------------------------------------------------------------------------
+# Empty-options fallback (structured mode with missing/malformed options)
+# ---------------------------------------------------------------------------
+
+
+def _question_dict_no_options(
+    question: str = "What is your focus area?",
+    header: str = "Focus",
+) -> dict:
+    """Question dict that passes the ``is_structured`` key-check but has no options."""
+    return {
+        "question": question,
+        "header": header,
+        "options": [],
+    }
+
+
+@pytest.mark.asyncio
+async def test_empty_options_falls_back_to_custom_input() -> None:
+    """When a structured question has an empty options list, the widget should
+    enable the custom input immediately so the user can still answer."""
+    app = _WidgetApp(
+        _make_widget(
+            questions=[
+                _question_dict_no_options(),
+                _question_dict_no_options(header="Priority", question="What priority?"),
+            ],
+        )
+    )
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        # No option rows should be rendered (only "Other:" + custom input).
+        opt_rows = [r for r in w.query(".saq-option-row") if r.id != "saq-opt-custom"]
+        assert len(opt_rows) == 0
+        # Custom input should be enabled (not disabled).
+        assert w._custom_input is not None
+        assert w._custom_input.disabled is False
+        # Highlighted should point at the custom row (index 0 when 0 options).
+        assert w._highlighted == 0
+
+
+@pytest.mark.asyncio
+async def test_empty_options_allows_typing_and_submit() -> None:
+    """User can type in the custom input and submit when options are empty."""
+    app = _WidgetApp(_make_widget(questions=[_question_dict_no_options()]))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        # Simulate typing in the custom input.
+        assert w._custom_input is not None
+        w._custom_input.value = "Security"
+        # Directly set the internal state as if Enter selected the custom row.
+        w._selected[0] = 3
+        w._custom_texts[0] = "Security"
+        w._update_option_highlight()
+        w._update_tab_highlight()
+        w._update_submit_state()
+        assert w._all_answered is True
+        assert w._answer_text(0) == "Security"
+
+
+# ---------------------------------------------------------------------------
+# App-level Submitted forwarding — answers must reach the daemon
+# ---------------------------------------------------------------------------
+
+
+class _FakeAdapter:
+    """Minimal adapter stand-in for handler-forwarding tests."""
+
+    def __init__(self) -> None:
+        self._current_step_messages: dict = {}
+        self._clarification_input_by_step: dict = {}
+        self._clarification_answers_pending: list[str] | None = None
+        self._clarification_pending = False
+
+
+class _ForwardingHarness:
+    """Minimal stand-in exercising the app-level Submitted handler."""
+
+    def __init__(self) -> None:
+        self._composer_mode = "ask"
+        self._status_bar = None
+        self._ui_adapter = _FakeAdapter()
+        self.sent: list[str] = []
+
+    async def _set_spinner(self, status: Any, **_kwargs: Any) -> None:  # noqa: ANN401
+        pass
+
+    async def _resolve_default_clarification_mode(self) -> str:
+        return "auto"
+
+    async def _send_to_agent(self, message: str, **_kwargs: Any) -> None:  # noqa: ANN401
+        self.sent.append(message)
+
+
+def _structured_event(answers: list[str]) -> StructuredAskUserWidget.Submitted:
+    return StructuredAskUserWidget.Submitted(
+        step_id="step-1",
+        questions=[
+            {
+                "question": "What is your focus?",
+                "header": "Focus",
+                "options": [{"label": "Code", "description": "d"}],
+            }
+        ],
+        answers=answers,
+        widget_id="test-widget",
+        origin_node="execute",
+    )
+
+
+@pytest.mark.asyncio
+async def test_submitted_event_forwards_answers_to_agent() -> None:
+    """Regression guard: the app must handle StructuredAskUserWidget.Submitted.
+
+    Before this handler existed, submitting answers collapsed the widget but
+    the message bubbled to nothing — the daemon never received the answers
+    and the loop stayed parked in await_clarification forever (loop 328b).
+    """
+    from soothe_cli.tui.app._execution import _ExecutionMixin
+
+    class _Harness(_ForwardingHarness, _ExecutionMixin):
+        pass
+
+    app = _Harness()
+    event = _structured_event(["Code"])
+    await app.on_structured_ask_user_widget_submitted(event)
+
+    # The answers were handed to the turn pipeline with the resume flag set.
+    assert app.sent, "answers must be forwarded via _send_to_agent"
+    assert app._ui_adapter._clarification_pending is True
+    assert app._ui_adapter._clarification_answers_pending == ["Code"]
+
+
+@pytest.mark.asyncio
+async def test_submitted_event_abandon_sends_nothing() -> None:
+    """Abandon (empty answers) must not trigger a resume turn."""
+    from soothe_cli.tui.app._execution import _ExecutionMixin
+
+    class _Harness(_ForwardingHarness, _ExecutionMixin):
+        pass
+
+    app = _Harness()
+    event = _structured_event([])
+    await app.on_structured_ask_user_widget_submitted(event)
+
+    assert app.sent == []
+    assert app._ui_adapter._clarification_pending is False
+
+
+# ---------------------------------------------------------------------------
+# Focus on mount — keep focus on the widget, not the chat input
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_widget_has_focus_after_mount() -> None:
+    """After the widget mounts, focus should be on the widget itself so
+    arrow keys / Enter navigate the option picker immediately."""
+    app = _WidgetApp(_make_widget())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        assert pilot.app.focused is w
+
+
+@pytest.mark.asyncio
+async def test_options_render_in_stream_layout() -> None:
+    """Regression guard: in the real app, widgets mount into a stream-layout
+    container (#messages).  Vertical children defaulting to ``1fr`` collapse
+    there — question body and option list must declare ``height: auto`` or
+    the description/options render at zero height."""
+    app = _StreamLayoutApp(_make_widget())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        # Description and option rows must have non-zero height.
+        desc = w.query_one("#saq-desc")
+        assert desc.region.height == 1
+        opt0 = w.query_one("#saq-opt-0")
+        assert opt0.region.height == 1
+        opt_custom = w.query_one("#saq-opt-custom")
+        assert opt_custom.region.height == 1

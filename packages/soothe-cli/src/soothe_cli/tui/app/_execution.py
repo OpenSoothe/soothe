@@ -43,6 +43,7 @@ from soothe_cli.tui.widgets.messages import (
     ClarificationInputMessage,
     ErrorMessage,
     QueuedUserMessage,
+    StructuredAskUserWidget,
     UserMessage,
 )
 from soothe_cli.tui.widgets.welcome import WelcomeBanner
@@ -240,18 +241,59 @@ class _ExecutionMixin:
         self,
         event: ClarificationInputMessage.Submitted,
     ) -> None:
-        """Forward a clarification answer to the daemon and refresh the step card.
+        """Forward a HITL clarification answer to the daemon and refresh the step card.
 
         Wired to ``ClarificationInputMessage.Submitted`` (RFC-622). The inline
         widget collects per-question answers; here we render them on the
-        matching step card and trigger ``_run_agent_task`` with the answer
-        text. ``execute_task_textual`` reads ``adapter._clarification_pending``
+        matching step card and trigger the standard turn pipeline with the
+        answer text. ``execute_task_textual`` reads ``adapter._clarification_pending``
         and attaches ``clarification_answer=True`` to the wire so the daemon
         resumes the suspended loop graph rather than starting a new turn.
         """
         event.stop()
-        first_answer = str(event.answers[0]).strip() if event.answers else ""
+        await self._handle_clarification_submitted(
+            step_id=event.step_id,
+            questions=list(event.questions),
+            answers=list(event.answers),
+            origin_node=getattr(event, "origin_node", "") or "",
+        )
 
+    async def on_structured_ask_user_widget_submitted(
+        self,
+        event: StructuredAskUserWidget.Submitted,
+    ) -> None:
+        """Forward structured ``ask_user`` answers to the daemon (RFC-622 §9c).
+
+        Same forwarding pipeline as the HITL handler; ``questions`` are
+        ``QuestionSpec`` dicts here, so extract the question text for the
+        step-card rendering.
+        """
+        event.stop()
+        card_questions = [
+            q.get("question", str(q)) if isinstance(q, dict) else str(q) for q in event.questions
+        ]
+        await self._handle_clarification_submitted(
+            step_id=event.step_id,
+            questions=card_questions,
+            answers=list(event.answers),
+            origin_node=getattr(event, "origin_node", "") or "",
+        )
+
+    async def _handle_clarification_submitted(
+        self,
+        *,
+        step_id: str,
+        questions: list,
+        answers: list[str],
+        origin_node: str = "",
+    ) -> None:
+        """Shared clarification-answer forwarding (RFC-622).
+
+        Renders the answers on the matching step card, disarms stale inline
+        widgets, and hands the answers to ``_send_to_agent`` so the daemon
+        resumes the suspended loop graph with one answer per question
+        instead of starting a new turn.
+        """
         adapter = self._ui_adapter
         if adapter is None:
             return
@@ -259,12 +301,12 @@ class _ExecutionMixin:
         # Render answers on the corresponding step card so the user sees
         # confirmation in-place. ``set_clarification_details`` handles styling
         # and the detail-area layout.
-        step_widget = adapter._current_step_messages.get(event.step_id)
+        step_widget = adapter._current_step_messages.get(step_id)
         if step_widget is not None:
             try:
                 step_widget.set_clarification_details(
-                    questions=list(event.questions),
-                    answers=list(event.answers),
+                    questions=list(questions),
+                    answers=list(answers),
                     source="human",
                     confidence=None,
                 )
@@ -273,13 +315,13 @@ class _ExecutionMixin:
 
         # Drop tracking; the inline widget itself stays mounted (disabled) so
         # the user can still see what they answered.
-        adapter._clarification_input_by_step.pop(event.step_id, None)
+        adapter._clarification_input_by_step.pop(step_id, None)
 
         # A stale empty remount (resume re-emit) can leave another interactive
         # plan-review card. Disable extras so a second click cannot fire a
         # second plan-review turn after clarification_answered cleared the pending flag.
         for sid, other in list(adapter._clarification_input_by_step.items()):
-            if sid == event.step_id:
+            if sid == step_id:
                 continue
             try:
                 other._submitted = True  # noqa: SLF001
@@ -292,7 +334,7 @@ class _ExecutionMixin:
                 logger.debug("Failed to disarm leftover clarification widget", exc_info=True)
             adapter._clarification_input_by_step.pop(sid, None)
 
-        non_empty = [a for a in event.answers if a.strip()]
+        non_empty = [a for a in answers if a.strip()]
         if not non_empty:
             return
 
@@ -315,7 +357,7 @@ class _ExecutionMixin:
         # auto-enqueues the exec goal carrying the approved plan (Bug #3 fix);
         # this composer flip just aligns the badge for the user's next manual
         # input and is not the execution mechanism.
-        origin_node = getattr(event, "origin_node", "") or ""
+        first_answer = str(non_empty[0]).strip()
         if origin_node == "plan_mode_review" and first_answer == "Approve":
             mode = await self._resolve_default_clarification_mode()
             self._composer_mode = mode
@@ -327,8 +369,8 @@ class _ExecutionMixin:
         # concatenated string. ``content`` carries a human-readable summary
         # for clients that look at it; the authoritative payload is the
         # ``clarification_answers`` wire field.
-        payload_text = clarification_wire_content(list(event.answers), origin_node=origin_node)
-        adapter._clarification_answers_pending = list(event.answers)
+        payload_text = clarification_wire_content(list(answers), origin_node=origin_node)
+        adapter._clarification_answers_pending = list(answers)
         # Always resume clarification from a widget submit — even if a prior
         # clarification_answered cleared ``_clarification_pending`` (empty
         # remount / race). Without this, the action is treated as a new goal.

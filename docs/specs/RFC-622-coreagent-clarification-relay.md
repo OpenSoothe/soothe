@@ -33,7 +33,7 @@ The relay works identically in solo StrangeLoop and autopilot runs **without** f
 - `veritas` subagent (intent-grounded auto-answerer) under `subagents/veritas/`.
 - TUI Manual ↔ Auto toggle, status badge, and `--mode` CLI flag.
 - Detection of structured `ask_user` LangGraph interrupts. Plain-text questions in assistant messages are intentionally **not** detected; callers that want to ask the user must emit a structured interrupt.
-- **Structured `ask_user` schema (§9c)**: the `ask_user` tool accepts `list[QuestionSpec]` — each with title, description, exactly 3 options (short + long), and a recommended index. The CLI renders a `StructuredAskUserWidget` with tab navigation, hover-preview option selection, a 4th custom free-text row, and a persistent Submit/Abandon footer. Applies to the generic (execute) render path only; HITL plan-review and tool-approval modes are untouched.
+- **Structured `ask_user` schema (§9c)**: the `ask_user` tool accepts `list[QuestionSpec]` — each with title, description, exactly 3 options (short + long), and a recommended index. The CLI renders a `StructuredAskUserWidget` with tab navigation, inline long-desc per option, a 4th custom free-text row, and a persistent Submit/Abandon footer. Applies to the generic (execute) render path only; HITL plan-review and tool-approval modes are untouched.
 - New goal status `awaiting_clarification` and a CLI/API to answer deferred clarifications out-of-band.
 - New event types `soothe.loop.clarification_*` and `soothe.subagent.veritas.*`.
 - `agent.clarification.*` and `agent.veritas.*` configuration additions in both `config/config.template.yml` and `config/develop/nano.yml`.
@@ -227,7 +227,7 @@ the schema upgrade.
 ```
 OptionSpec {
   short: Text          # ≤12 words — answer label shown in recap, sent on resume
-  long: Text           # 1–3 sentences — shown in hover-preview box
+  long: Text           # 1–3 sentences — shown inline below the option label
 }
 
 QuestionSpec {
@@ -553,7 +553,7 @@ The `ask_user` tool args change from `list[str]` to `list[QuestionSpec]`:
 ```python
 class OptionSpec(BaseModel):
     short: str   # ≤12 words — answer label, shown in recap, sent on resume
-    long: str    # 1–3 sentences — shown in hover-preview box
+    long: str    # 1–3 sentences — shown inline below the option label
 
 class QuestionSpec(BaseModel):
     title: str           # ≤3 words — tab label
@@ -642,8 +642,8 @@ question (no siblings to switch between; ←/→ are no-ops).
 
 **Option list:** 3 model-provided options + a 4th "Custom" row with an inline
 `Input`. The recommended option shows "(recommended)". ↑/↓ cycles all 4 rows.
-The highlighted option's `long` description expands in a bordered preview box;
-unhighlighted options show only their `short` label.
+Each option's `long` description renders directly below its label (indented,
+muted) — always visible, no hover-preview box.
 
 **Custom row:** when highlighted, the inline `Input` is enabled and focusable.
 Typing text + Enter finalizes the custom answer for that question. Selecting
@@ -751,7 +751,7 @@ dead.
 | Autopilot | Ignores the flag. Always Auto. |
 | Hot swap | Replaces `LoopRuntimeContext.clarification_policy` for future requests. In-flight requests complete under the prior policy. |
 | Modal | Manual mode shows a modal with the question(s); submit sends `Command(resume=…)` to the loop graph. |
-| Structured widget (§9c) | Generic (execute) `ask_user` renders as `StructuredAskUserWidget`: tabs for multi-question navigation (←/→), ↑/↓ highlight with inline long-desc preview, Enter selects, 4th custom free-text row, persistent footer with Submit/Abandon + inline recap before final submit. HITL plan-review and tool-approval keep their existing 3-button selector. |
+| Structured widget (§9c) | Generic (execute) `ask_user` renders as `StructuredAskUserWidget`: tabs for multi-question navigation (←/→), ↑/↓ highlight, Enter selects, long desc shown inline below each label, 4th custom free-text row, persistent footer with Submit/Abandon + inline recap before final submit. HITL plan-review and tool-approval keep their existing 3-button selector. |
 
 ---
 
@@ -932,7 +932,7 @@ Integration:
 ## Changelog
 
 ### 2026-08-27 (Revised — §9c Structured ask_user schema + widget)
-- **§9c added**: `ask_user` tool args change from `list[str]` to `list[QuestionSpec]` (title ≤3 words, description ≤100 words, exactly 3 options with short+long, recommended index). New `StructuredAskUserWidget` in the CLI with tab navigation (←/→), hover-preview option selection (↑/↓ + Enter), 4th custom free-text row, persistent Submit/Abandon footer with inline recap. Applies to generic (execute) render path only; HITL plan-review and tool-approval modes untouched.
+- **§9c added**: `ask_user` tool args change from `list[str]` to `list[QuestionSpec]` (title ≤3 words, description ≤100 words, exactly 3 options with short+long, recommended index). New `StructuredAskUserWidget` in the CLI with tab navigation (←/→), inline per-option long-desc rendering (↑/↓ + Enter), 4th custom free-text row, persistent Submit/Abandon footer with inline recap. Applies to generic (execute) render path only; HITL plan-review and tool-approval modes untouched.
 - **§2.1 scope** extended: structured schema + widget added to in-scope.
 - **§2.2 non-goals** extended: HITL structured-option support explicitly out of scope (future RFC).
 - **§4.2 components** extended: `StructuredAskUserWidget`, `QuestionSpec`/`OptionSpec` added.

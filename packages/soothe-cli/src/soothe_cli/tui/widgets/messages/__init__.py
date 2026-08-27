@@ -36,6 +36,7 @@ from soothe_cli.tui.widgets.messages.skill import (
     _SkillToggle,
     _strip_frontmatter,
 )
+from soothe_cli.tui.widgets.messages.structured_ask_user import StructuredAskUserWidget
 from soothe_cli.tui.widgets.messages.user import (
     QueuedUserMessage,
     UserMessage,
@@ -60,6 +61,7 @@ __all__ = [
     "SummarizationMessage",
     # Clarification
     "ClarificationInputMessage",
+    "StructuredAskUserWidget",
     # Cognition
     "CognitionGoalTreeMessage",
     "CognitionReasonMessage",
