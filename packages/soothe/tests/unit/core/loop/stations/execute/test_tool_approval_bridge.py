@@ -163,6 +163,53 @@ def test_build_clarification_resume_payload_tool_approval() -> None:
     assert payload == {"i1": {"decisions": [{"type": "approve"}]}}
 
 
+def test_build_clarification_resume_payload_tool_approval_multi_action() -> None:
+    """Multi-action tool_approval produces one decision per pending tool call.
+
+    Regression test for the bug where ``build_clarification_resume_payload``
+    only emitted a single decision regardless of how many action requests
+    (hanging tool calls) were pending. The ``HumanInTheLoopMiddleware``
+    requires the decisions list length to match the number of hanging tool
+    calls — a mismatch raises ``ValueError`` at resume time.
+    """
+    req = request_from_state(
+        {
+            "questions": ["q1", "q2"],
+            "origin_node": ORIGIN_TOOL_APPROVAL,
+            "origin_interrupt_id": "i2",
+            "loop_state": {
+                "goal_id": "g",
+                "goal_description": "",
+                "user_request": "",
+                "iteration": 0,
+                "intent_classification": None,
+                "plan_summary": None,
+                "recent_step_outputs": [],
+                "workspace_summary": None,
+                "active_skills": [],
+                "active_mcp_servers": [],
+            },
+            "metadata": {
+                "action_requests": [
+                    {"name": "run_command", "args": {"command": "git log"}},
+                    {"name": "run_command", "args": {"command": "git diff"}},
+                ],
+            },
+        }
+    )
+    ans = _bridge_answer(("approve", "approve"))
+    payload = build_clarification_resume_payload(req, ans)  # type: ignore[arg-type]
+    assert payload == {"i2": {"decisions": [{"type": "approve"}, {"type": "approve"}]}}
+
+
+def test_build_clarification_resume_payload_tool_approval_multi_answer_no_metadata() -> None:
+    """When action_requests metadata is missing, fall back to answer count."""
+    req = _bridge_request(ORIGIN_TOOL_APPROVAL)
+    ans = _bridge_answer(("approve", "reject"))
+    payload = build_clarification_resume_payload(req, ans)  # type: ignore[arg-type]
+    assert payload == {"i1": {"decisions": [{"type": "approve"}, {"type": "reject"}]}}
+
+
 def test_build_clarification_resume_payload_ask_user() -> None:
     """Unified translator delivers answers verbatim for ask_user (execute)."""
     req = _bridge_request(ORIGIN_EXECUTE)

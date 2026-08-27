@@ -458,14 +458,31 @@ def build_clarification_resume_payload(
     Single resume translator for every clarification origin:
 
     - ``tool_approval`` — map the relay's answer to a HITL ``decisions`` shape.
+      One decision per pending action request (hanging tool call). The
+      ``HumanInTheLoopMiddleware`` requires the decisions list length to match
+      the number of hanging tool calls — a mismatch raises ``ValueError`` at
+      resume time. When the answer has fewer entries than action requests,
+      remaining slots default to the first answer (or ``"approve"``).
     - otherwise (``ask_user`` / execute) — deliver the answers verbatim so the
       ``ask_user`` tool returns the Q&A and the agent continues its turn.
     """
     if request.origin_node == ORIGIN_TOOL_APPROVAL:
-        decision = _answer_to_decision(answer.answers[0] if answer.answers else "approve")
+        action_requests = request.metadata.get("action_requests", [])
+        n_pending = (
+            len(action_requests) if isinstance(action_requests, list) and action_requests else 0
+        )
+        answers = list(answer.answers) if answer.answers else ["approve"]
+        # When action_requests metadata is unavailable, fall back to the
+        # number of answers (one answer per pending tool call).
+        if n_pending == 0:
+            n_pending = len(answers) if answers else 1
+        decisions: list[dict[str, Any]] = []
+        for i in range(n_pending):
+            ans = answers[i] if i < len(answers) else answers[0]
+            decisions.append({"type": _answer_to_decision(ans)})
         return build_tool_approval_resume_payload(
             request.origin_interrupt_id,
-            decisions=[{"type": decision}],
+            decisions=decisions,
         )
     return {request.origin_interrupt_id: {"answers": list(answer.answers)}}
 

@@ -26,6 +26,52 @@ logger = logging.getLogger(__name__)
 _READONLY_MODES = frozenset({"plan", "ask"})
 
 
+def _try_auto_to_manual_fallback(
+    ctx: LoopRuntimeContext,
+    goal: Any,
+) -> NodeResult | None:
+    """Attempt to downgrade from auto to manual when all steps failed.
+
+    When the loop is in auto clarification mode and a human is attached
+    (interactive_fallback is wired), switch to manual mode, reset failed
+    steps so they can be re-dispatched, and route to dispatch instead of
+    fatal. This gives the human a chance to approve/reject the tool calls
+    that veritas auto-answered incorrectly.
+
+    Returns a ``NodeResult`` to route to dispatch, or ``None`` when the
+    fallback is not applicable (manual mode, no human, or no failed steps).
+    """
+    policy = getattr(ctx, "clarification_policy", None)
+    if policy is None:
+        return None
+    # Detect auto mode by checking for AutoClarificationPolicy.
+    try:
+        from soothe.sloop.clarification.auto import AutoClarificationPolicy
+
+        if not isinstance(policy, AutoClarificationPolicy):
+            return None
+    except ImportError:
+        return None
+    # Only proceed when a human is attached (interactive_fallback wired).
+    if getattr(policy, "_interactive_fallback", None) is None:
+        return None
+    # Find and reset failed action steps.
+    failed_steps = [node for node in goal.steps.nodes.values() if node.status == "failed"]
+    if not failed_steps:
+        return None
+    swapped = ctx.strange_loop.set_clarification_mode("manual")
+    if not swapped:
+        logger.warning("[root_eval] auto→manual fallback: mode swap failed; fatal")
+        return None
+    for node in failed_steps:
+        goal.steps.reset_failed_step(node.id)
+    logger.info(
+        "[root_eval] auto→manual fallback: reset %d failed step(s), routing to dispatch",
+        len(failed_steps),
+    )
+    return NodeResult(payload={"root_eval_route": "dispatch"})
+
+
 def _eval_envelope(goal_text: str, nodes: list[Any]) -> str:
     rows: list[str] = []
     for node in nodes:
@@ -74,6 +120,9 @@ class RootEvalNode(LoopNode):
             if goal is not None:
                 if any(n.status == "failed" for n in goal.steps.nodes.values()):
                     logger.warning("[root_eval] unresolved failed steps present")
+                    fallback = _try_auto_to_manual_fallback(ctx, goal)
+                    if fallback is not None:
+                        return fallback
                     return NodeResult(payload={"root_eval_route": "fatal"})
                 if not goal.steps.action_tree_green():
                     if goal.steps.ready_steps():

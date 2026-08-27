@@ -5,9 +5,11 @@
 plan graph) so operators need not type ``/plan`` on every turn.
 ``ask`` is a read-only mode enforced via ``interaction_mode=ask``.
 
-Default composer mode is ``auto`` so interactive TUI sessions relay
-clarification questions to the veritas auto-answerer unless the operator
-switches to Manual, Plan, or Ask.
+The initial badge falls back to ``auto`` until the daemon is ready, at which
+point ``on_soothe_app_daemon_ready`` re-seeds it from the daemon's configured
+``agent.clarification.default_mode`` (e.g. ``manual``) when ``--mode`` was not
+passed. ``auto`` routes clarifications to the veritas auto-answerer; ``manual``
+relays them to the operator via the interactive TUI relay.
 """
 
 from __future__ import annotations

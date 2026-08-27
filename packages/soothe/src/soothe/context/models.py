@@ -210,6 +210,23 @@ class StepDAG(BaseModel):
         if node is not None:
             node.status = "superseded"
 
+    def reset_failed_step(self, step_id: str) -> bool:
+        """Reset a failed step back to pending for retry.
+
+        Used by the Auto-to-Manual fallback in ``root_eval``: when all
+        action steps have failed and the loop is in auto clarification mode
+        with a human attached, the failed step is reset so it can be
+        re-dispatched under the newly-switched manual policy.
+
+        Returns ``True`` when the step was failed and is now pending.
+        """
+        node = self.nodes.get(step_id)
+        if node is not None and node.status == "failed":
+            node.status = "pending"
+            node.execution = None
+            return True
+        return False
+
     def lineage_depth(self, step_id: str) -> int:
         """Depth along ``parent_step_id`` chain (root = 1). Missing id → 0."""
         if step_id not in self.nodes:

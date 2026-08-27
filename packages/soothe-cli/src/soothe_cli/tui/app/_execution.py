@@ -425,6 +425,36 @@ class _ExecutionMixin:
             )
             return normalize_composer_mode(None)
 
+    async def _seed_composer_mode_from_daemon(self) -> None:
+        """Seed the composer mode from the daemon's configured default.
+
+        When the operator did not pass ``--mode`` explicitly, the TUI badge
+        must reflect ``agent.clarification.default_mode`` from the daemon
+        config (e.g. ``manual``) rather than a hard-coded ``auto``. This runs
+        once after the daemon is ready so subsequent turns send the correct
+        ``clarification_mode`` wire field.
+
+        When ``--mode`` was passed, ``CLIConfig.clarification_mode`` is set
+        and we keep that choice instead.
+        """
+        cli_mode = getattr(self._daemon_config, "clarification_mode", None)
+        if cli_mode is not None:
+            # Explicit --mode wins; badge already seeded in on_mount.
+            return
+        try:
+            mode = await self._resolve_default_clarification_mode()
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "Could not seed composer mode from daemon; keeping current",
+                exc_info=True,
+            )
+            return
+        if mode == getattr(self, "_composer_mode", None):
+            return
+        self._composer_mode = mode
+        if self._status_bar is not None:
+            self._status_bar.set_clarification_mode(mode)
+
     async def _handle_shell_command(self, command: str) -> None:
         """Handle a shell command (! prefix).
 

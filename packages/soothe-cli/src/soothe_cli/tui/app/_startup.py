@@ -138,7 +138,8 @@ class _StartupMixin:
                 PlanQuickViewOverlay,
             )
 
-        # Seed the badge from the app-level composer mode (CLI flag, default Manual).
+        # Seed the badge from the app-level composer mode (CLI flag, or the
+        # hard-coded "auto" fallback before the daemon-default seed runs).
         self._status_bar.set_clarification_mode(self._composer_mode)
 
         # Seed the status footer with the first rotating tip and start rotation.
@@ -605,6 +606,17 @@ class _StartupMixin:
             self._refresh_daemon_skills_catalog(),
             exclusive=True,
             group="daemon-skills-catalog",
+        )
+
+        # Seed the composer badge from the daemon's configured default
+        # clarification mode when --mode was not passed explicitly. Without
+        # this the TUI stays on the hard-coded "auto" default and every turn
+        # sends clarification_mode=auto, causing veritas auto-clarification
+        # even when the daemon is configured for manual.
+        self.run_worker(
+            self._seed_composer_mode_from_daemon(),
+            exclusive=True,
+            group="daemon-composer-seed",
         )
 
         self.run_worker(

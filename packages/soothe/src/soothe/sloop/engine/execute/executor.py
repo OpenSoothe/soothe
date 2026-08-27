@@ -1548,6 +1548,14 @@ class Executor:
         """Generate a first-person TUI cognition summary from the step human/ai pair."""
         if self._fast_model is None or self._config is None:
             return None
+        # Skip the success-flavored summary when the step actually failed.
+        # The LLM otherwise sees partial output from a resumed checkpoint and
+        # produces a false "I have successfully ..." line before the failure
+        # is recorded. Inject the error so the summary reflects reality.
+        step_result = result.step_result
+        if step_result is not None and not step_result.success:
+            error_msg = step_result.error or "unknown error"
+            return f"Step failed: {error_msg[:200]}"
         human, ai = self._build_step_report_pair_content(step, result, state)
         if not human.strip() and not ai.strip():
             return None
@@ -1793,7 +1801,11 @@ class Executor:
                     loop_state=state,
                     live_event_queue=live_queue,
                 )
-                if isinstance(payload, _ExecuteStepResult) and payload.step_result:
+                if (
+                    isinstance(payload, _ExecuteStepResult)
+                    and payload.step_result
+                    and not payload.paused_by_clarification
+                ):
                     completion_report_tasks[sid] = asyncio.create_task(
                         self._summarize_step_completion_report(step, payload, state)
                     )
@@ -2254,6 +2266,16 @@ class Executor:
                         pass_execution_metrics,
                     )
 
+                # A captured clarification (tool_approval / ask_user) pauses the
+                # step — it resumes after the user answers. Skip the deliverable
+                # gate LLM assess and retry loop: the step is not complete yet,
+                # so any completion LLM call now is wasted cost on stale input.
+                if (
+                    self._clarification_capture is not None
+                    and self._clarification_capture.pending_request is not None
+                ):
+                    break
+
                 pass_final_ai = self._extract_final_assistant_text_from_step_messages(pass_messages)
                 if step_has_deliverable_gate(step):
                     deliverable_verdict = await evaluate_step_deliverable(
@@ -2362,7 +2384,15 @@ class Executor:
             # Add CoreAgent input/output evidence
             primary_outcome["step_input"] = envelope  # HumanMessage content sent to Layer 1
             primary_outcome["output_summary"] = create_output_summary(output)  # Truncated findings
-            if step.kind == "action":
+            # Compute captured_clarification early — it gates both the close-report
+            # LLM call below and the step-success logic. A captured clarification
+            # (tool_approval / ask_user) pauses the step; completion-assessment LLM
+            # calls are skipped because the step resumes after the user answers.
+            captured_clarification = (
+                self._clarification_capture is not None
+                and self._clarification_capture.pending_request is not None
+            )
+            if step.kind == "action" and not captured_clarification:
                 from soothe.sloop.eval.step_close_report import assess_step_close
 
                 close_report = await assess_step_close(
@@ -2379,10 +2409,6 @@ class Executor:
             # Step success: fail only when every tool call errored; otherwise a step
             # may recover from individual tool failures and still finish. A captured
             # ask_user interrupt means the step is awaiting the user, not failed.
-            captured_clarification = (
-                self._clarification_capture is not None
-                and self._clarification_capture.pending_request is not None
-            )
             all_tools_failed = all_tool_outcomes_failed(stream_outcomes)
             step_success = not all_tools_failed or captured_clarification
             step_error: str | None = None
@@ -2490,6 +2516,7 @@ class Executor:
                 output=output,  # accumulated text for ledger fallback
                 human_core_agent_message_id=human_core_agent_message_id,
                 ai_core_agent_message_id=ai_core_agent_message_id,
+                paused_by_clarification=captured_clarification,
             )
 
         except asyncio.CancelledError:

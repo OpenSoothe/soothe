@@ -39,6 +39,11 @@ class _ExecuteStepResult:
     output: str = ""  # Accumulated text chunks for ledger fallback
     human_core_agent_message_id: str | None = None
     ai_core_agent_message_id: str | None = None
+    # True when a clarification (tool_approval / ask_user) interrupt paused the
+    # step mid-stream. Step-completion LLM calls (deliverable assess, close
+    # report, cognition summary) are skipped because the step resumes after the
+    # user answers — any summary now is stale and wasted cost.
+    paused_by_clarification: bool = False
 
     def __post_init__(self) -> None:
         if self.events is None:

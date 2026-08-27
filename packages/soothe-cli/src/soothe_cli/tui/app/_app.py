@@ -227,8 +227,10 @@ class SootheApp(
 
         self._router_profile_override: str | None = None
 
-        # Composer mode (Auto / Manual / Plan / Ask). Seeded from --mode (CLIConfig);
-        # default Auto so TUI sessions auto-answer clarifications via veritas.
+        # Composer mode (Auto / Manual / Plan / Ask). Seeded from --mode (CLIConfig)
+        # when passed; otherwise re-seeded from the daemon's configured default
+        # clarification mode once the daemon is ready (on_soothe_app_daemon_ready).
+        # Falls back to "auto" only when the daemon is unreachable.
         self._composer_mode: str = normalize_composer_mode(
             getattr(daemon_config, "clarification_mode", None)
         )
