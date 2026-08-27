@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from typing import Any
 
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field, model_validator
@@ -66,6 +68,26 @@ class _AskUserArgs(BaseModel):
         default_factory=list,
         description="The question(s) to ask the user, each with structured options.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_string_questions(cls, data: Any) -> Any:
+        """Some LLMs emit ``questions`` as a stringified JSON array instead of
+        a native list of objects. Parse it before Pydantic validation so the
+        structured schema accepts both forms (observed in loop f182)."""
+        if not isinstance(data, dict):
+            return data
+        raw = data.get("questions")
+        if isinstance(raw, str):
+            raw_stripped = raw.strip()
+            if raw_stripped:
+                try:
+                    parsed = json.loads(raw_stripped)
+                    if isinstance(parsed, list):
+                        data["questions"] = parsed
+                except (json.JSONDecodeError, TypeError):
+                    pass  # Let Pydantic reject it with its own error.
+        return data
 
     @model_validator(mode="after")
     def _normalize(self) -> _AskUserArgs:

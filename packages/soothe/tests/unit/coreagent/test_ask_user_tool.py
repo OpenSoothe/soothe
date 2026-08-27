@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest.mock import patch
 
@@ -161,6 +162,47 @@ def test_args_schema_accepts_multiple_questions() -> None:
     q2 = _question(title="Q2")
     args = _AskUserArgs(questions=[q1, q2])
     assert len(args.questions) == 2
+
+
+def test_args_schema_coerces_stringified_json_questions() -> None:
+    """Some LLMs emit questions as a stringified JSON array (loop f182)."""
+    raw = json.dumps(
+        [
+            {
+                "title": "First question",
+                "description": "What would you like to discuss first?",
+                "options": [
+                    {"short": "A", "long": "Option A desc."},
+                    {"short": "B", "long": "Option B desc."},
+                    {"short": "C", "long": "Option C desc."},
+                ],
+                "recommended": 0,
+            },
+        ]
+    )
+    args = _AskUserArgs(questions=raw)  # type: ignore[arg-type]
+    assert len(args.questions) == 1
+    assert args.questions[0].title == "First question"
+    assert args.questions[0].recommended == 0
+
+
+def test_args_schema_coerces_stringified_json_via_ainvoke() -> None:
+    """The structured tool accepts stringified JSON questions from LLMs."""
+    import json as _json
+
+    raw = _json.dumps([_question(title="Test").model_dump()])
+    tool = build_ask_user_tool()
+    captured: list[dict[str, Any]] = []
+
+    def fake_interrupt(value: Any) -> Any:
+        captured.append(value)
+        return {"answers": ["yes"]}
+
+    with patch("langgraph.types.interrupt", fake_interrupt):
+        result = tool.invoke({"questions": raw})
+
+    assert captured[0]["questions"][0]["title"] == "Test"
+    assert "A: yes" in result
 
 
 # ---------------------------------------------------------------------------

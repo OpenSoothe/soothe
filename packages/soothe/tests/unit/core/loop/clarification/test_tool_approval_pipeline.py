@@ -76,9 +76,7 @@ class TestSafetyChecks:
 
     def test_git_force_push_caught_by_deny_rule(self) -> None:
         """git push --force is caught by deny rule (Stage 1) before safety."""
-        result = _pipeline().evaluate(
-            [_ar("run_command", command="git push --force origin main")]
-        )
+        result = _pipeline().evaluate([_ar("run_command", command="git push --force origin main")])
         assert result is not None
         assert result.decision == "reject"
         assert result.stage == "deny_rule"
