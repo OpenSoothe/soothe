@@ -92,8 +92,6 @@ def test_host_agent_config_subclasses_nano() -> None:
         "assistant_identity",
         "autopilot",
         "clarification",
-        "final_response",
-        "goal_completion_mode",
         "loop",
         "veritas",
     }

@@ -6,8 +6,6 @@
 # template remains the single source of default values.
 
 agent:
-  final_response: always_synthesize
-
   autopilot:
     judge_allow_structural_dag_ops: []
     rail_auto_pick_deny: []

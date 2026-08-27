@@ -4,9 +4,6 @@
 # This file must not contain nano-owned/shared keys.
 
 agent:
-  goal_completion_mode: llm_only
-  final_response: always_synthesize
-
   autopilot:
     enabled: true
     max_retries: 2

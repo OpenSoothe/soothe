@@ -1810,30 +1810,6 @@ class AgentConfig(NanoAgentConfig):
     )
     """Configurable assistant identity for prompt blocks and intake replies."""
 
-    goal_completion_mode: AgenticGoalCompletionMode = Field(
-        default="llm_only",
-        description=(
-            "When loop marks goal done: llm_only trusts PlanResult.status only; "
-            "heuristic_only uses execution heuristics only; hybrid uses LLM first with fallback"
-        ),
-    )
-    """How goal completion (require_goal_completion) combines with execution heuristics."""
-
-    final_response: AgenticFinalResponseMode = Field(
-        default="always_synthesize",
-        description=(
-            "On goal completion: always_synthesize always runs a final CoreAgent report; "
-            "auto uses structural heuristics to choose ledger direct vs a final CoreAgent "
-            "report. Legacy alias: adaptive → auto."
-        ),
-    )
-    """Whether to always synthesize a final CoreAgent report or use auto heuristics."""
-
-    @field_validator("final_response", mode="before")
-    @classmethod
-    def _normalize_agent_final_response(cls, value: Any) -> Any:
-        return normalize_agentic_final_response_mode(value)
-
     autopilot: AutopilotConfig = Field(
         default_factory=AutopilotConfig,
         description="Autopilot scheduling and self-running configuration",

@@ -83,7 +83,7 @@ Define chat/image routing in **`router_profiles`** and select with **`active_rou
 
 ## Agent
 
-The largest section. `AgentConfig` consolidates identity (`name`, `system_prompt`), behavior (`goal_completion_mode`: llm_only/heuristic_only/hybrid; `final_response`: auto/always_synthesize), `autopilot`, `loop`, and `protocols`.
+The largest section. `AgentConfig` consolidates identity (`name`, `system_prompt`), `autopilot`, `loop`, and `protocols`. Goal-completion behavior (`goal_completion_mode`: llm_only/heuristic_only/hybrid; `final_response`: auto/always_synthesize) lives under `agent.loop`.
 
 ### Autopilot (`agent.autopilot`)
 
