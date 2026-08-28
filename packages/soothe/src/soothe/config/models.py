@@ -1386,13 +1386,23 @@ class ClarificationConfig(BaseModel):
     """
 
     auto_min_confidence: float = Field(default=0.4, ge=0.0, le=1.0)
-    """Below this confidence, ``AutoClarificationPolicy`` defers rather than answers."""
+    """Below this confidence, ``AutoClarificationPolicy`` treats the result as a
+    failure and applies the fallback path (TUI: degrade to manual; autopilot:
+    retry)."""
 
-    degrade_to_manual_on_low_confidence: bool = True
-    """When True and a human is attached, route low-confidence veritas results to
-    the interactive TUI relay (auto→manual upgrade) instead of a hard defer.
-    Mirrors the structured_output_failed fallback path. Ignored for autopilot
-    (headless) runs which always hard-defer."""
+    degrade_to_manual_on_failure: bool = True
+    """When True and a human is attached (TUI), route *all* veritas failures
+    (low confidence, structured output failure, answer-was-question, explicit
+    defer) to the interactive TUI relay (auto→manual upgrade) instead of a hard
+    defer. The user sees an ask widget and can answer manually. Ignored for
+    autopilot (headless) runs — see ``autopilot_retry_on_fail``."""
+
+    autopilot_retry_on_fail: bool = True
+    """When True and no human is attached (autopilot), veritas failures return a
+    synthetic retry answer instead of parking the goal. The sentinel
+    ``"(retry)"`` is fed back to the CoreAgent as the tool result, prompting
+    the LLM to try a different action. When False, veritas failures hard-defer
+    (legacy behavior — the goal parks in ``awaiting_clarification`` status)."""
 
     default_mode: Literal["auto", "manual"] = "auto"
     """Mode used when a request payload does not specify ``clarification_mode``.

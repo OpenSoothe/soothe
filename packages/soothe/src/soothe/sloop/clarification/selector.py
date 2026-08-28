@@ -23,9 +23,12 @@ def build_default_clarification_policy(
     min_confidence: float = 0.4,
     interactive_fallback: ClarificationPolicy | None = None,
     force_manual_origins: tuple[str, ...] | list[str] | None = None,
-    degrade_low_confidence: bool = False,
+    degrade_to_manual_on_failure: bool = True,
+    autopilot_retry_on_fail: bool = True,
     tool_approval_pipeline: ToolApprovalPipeline | None = None,
     manual_allow_rules: bool = False,
+    # Backward-compat alias (deprecated).
+    degrade_low_confidence: bool | None = None,
 ) -> ClarificationPolicy:
     """Return the appropriate policy for the runtime mode.
 
@@ -37,14 +40,15 @@ def build_default_clarification_policy(
         emit: Optional emit function for `InteractiveClarificationPolicy`.
         min_confidence: Threshold for auto policy.
         interactive_fallback: Optional policy injected into
-            :class:`AutoClarificationPolicy`. Invoked when veritas
-            itself fails (`DeferKind == "structured_output_failed"`) and a
-            human is wired. Ignored for manual mode.
+            :class:`AutoClarificationPolicy`. Invoked when veritas fails and
+            a human is wired (TUI auto→manual upgrade).
         force_manual_origins: Origins that skip veritas and use the interactive
             relay (or defer when no human is attached).
-        degrade_low_confidence: When True, route low-confidence veritas
-            results to the interactive fallback (auto→manual upgrade) instead
-            of a hard defer. Ignored for manual mode.
+        degrade_to_manual_on_failure: When True, route *all* veritas failures
+            to the interactive fallback (TUI only). Ignored for manual mode.
+        autopilot_retry_on_fail: When True and no human is attached, veritas
+            failures return a synthetic retry answer so the LLM tries a
+            different action instead of parking the goal.
         tool_approval_pipeline: Optional pipeline for deterministic
             tool-approval evaluation. In auto mode, deny →
             safety → allow stages resolve most `tool_approval` interrupts
@@ -54,6 +58,8 @@ def build_default_clarification_policy(
         manual_allow_rules: Manual mode only — let allow rules auto-approve
             `tool_approval` actions instead of asking the human
             (`tool_approval.manual_scope: ambiguous_only`).
+        degrade_low_confidence: Deprecated alias for
+            ``degrade_to_manual_on_failure``. When set, overrides the new flag.
 
     Raises:
         ValueError: if `mode == "auto"` but `veritas_answer` is not provided.
@@ -68,12 +74,15 @@ def build_default_clarification_policy(
         if veritas_answer is None:
             msg = "auto mode requires veritas_answer callable"
             raise ValueError(msg)
+        if degrade_low_confidence is not None:
+            degrade_to_manual_on_failure = degrade_low_confidence
         return AutoClarificationPolicy(
             veritas_answer,
             min_confidence=min_confidence,
             interactive_fallback=interactive_fallback,
             force_manual_origins=force_manual_origins,
-            degrade_low_confidence=degrade_low_confidence,
+            degrade_to_manual_on_failure=degrade_to_manual_on_failure,
+            autopilot_retry_on_fail=autopilot_retry_on_fail,
             tool_approval_pipeline=tool_approval_pipeline,
         )
     msg = f"unknown clarification mode: {mode!r}"

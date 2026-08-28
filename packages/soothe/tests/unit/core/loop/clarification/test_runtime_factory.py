@@ -23,7 +23,8 @@ def _make_config(default_mode: str = "auto") -> Any:
     cfg = MagicMock()
     cfg.agent.clarification.default_mode = default_mode
     cfg.agent.clarification.auto_min_confidence = 0.4
-    cfg.agent.clarification.degrade_to_manual_on_low_confidence = True
+    cfg.agent.clarification.degrade_to_manual_on_failure = True
+    cfg.agent.clarification.autopilot_retry_on_fail = True
     cfg.agent.clarification.force_manual_origins = list(DEFAULT_FORCE_MANUAL_ORIGINS)
     cfg.agent.veritas.model_role = "think"
     cfg.agent.veritas.max_context_steps = 8
@@ -151,27 +152,43 @@ class TestBuildClarificationPolicyForRunner:
             InteractiveClarificationPolicy,
         )
 
-    def test_auto_degrade_low_confidence_flows_through(self) -> None:
-        """Config flag reaches AutoClarificationPolicy.degrade_low_confidence."""
+    def test_auto_degrade_to_manual_flows_through(self) -> None:
+        """Config flag reaches AutoClarificationPolicy.degrade_to_manual_on_failure."""
         config = _make_config()
-        config.agent.clarification.degrade_to_manual_on_low_confidence = True
+        config.agent.clarification.degrade_to_manual_on_failure = True
         policy = build_clarification_policy_for_runner(config, mode="auto", human_attached=True)
         assert isinstance(policy, AutoClarificationPolicy)
-        assert policy.degrade_low_confidence is True
+        assert policy.degrade_to_manual_on_failure is True
 
-    def test_auto_degrade_low_confidence_defaults_true(self) -> None:
+    def test_auto_degrade_to_manual_defaults_true(self) -> None:
         config = _make_config()
         policy = build_clarification_policy_for_runner(config, mode="auto", human_attached=True)
         assert isinstance(policy, AutoClarificationPolicy)
-        assert policy.degrade_low_confidence is True
+        assert policy.degrade_to_manual_on_failure is True
 
-    def test_auto_degrade_low_confidence_can_be_disabled(self) -> None:
-        """Operators may opt out of auto→manual upgrade on low confidence."""
+    def test_auto_degrade_to_manual_can_be_disabled(self) -> None:
+        """Operators may opt out of auto→manual upgrade on veritas failure."""
         config = _make_config()
-        config.agent.clarification.degrade_to_manual_on_low_confidence = False
+        config.agent.clarification.degrade_to_manual_on_failure = False
         policy = build_clarification_policy_for_runner(config, mode="auto", human_attached=True)
         assert isinstance(policy, AutoClarificationPolicy)
-        assert policy.degrade_low_confidence is False
+        assert policy.degrade_to_manual_on_failure is False
+
+    def test_auto_autopilot_retry_flows_through(self) -> None:
+        """Config flag reaches AutoClarificationPolicy.autopilot_retry_on_fail."""
+        config = _make_config()
+        config.agent.clarification.autopilot_retry_on_fail = True
+        policy = build_clarification_policy_for_runner(config, mode="auto", human_attached=False)
+        assert isinstance(policy, AutoClarificationPolicy)
+        assert policy.autopilot_retry_on_fail is True
+
+    def test_auto_autopilot_retry_can_be_disabled(self) -> None:
+        """Operators may opt out of autopilot retry (legacy hard-defer)."""
+        config = _make_config()
+        config.agent.clarification.autopilot_retry_on_fail = False
+        policy = build_clarification_policy_for_runner(config, mode="auto", human_attached=False)
+        assert isinstance(policy, AutoClarificationPolicy)
+        assert policy.autopilot_retry_on_fail is False
 
     @pytest.mark.asyncio
     async def test_auto_policy_invokes_veritas_with_configured_steps(self) -> None:

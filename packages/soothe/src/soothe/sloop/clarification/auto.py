@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable, Collection
+from typing import TYPE_CHECKING
 
 from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
@@ -18,6 +19,9 @@ from soothe.sloop.clarification.tool_approval_pipeline import (
 )
 from soothe.subagents.veritas.schemas import VeritasAnswerSchema
 
+if TYPE_CHECKING:
+    pass
+
 logger = logging.getLogger(__name__)
 
 VeritasAnswerFn = Callable[[ClarificationRequest], Awaitable[VeritasAnswerSchema]]
@@ -25,48 +29,37 @@ VeritasAnswerFn = Callable[[ClarificationRequest], Awaitable[VeritasAnswerSchema
 _RATIONALE_PREFIX_STRUCTURED = "structured_output_failed"
 _RATIONALE_MARKER_QUESTION = "answer_was_question"
 
-# DeferKind → (should_fallback_to_human, reason_template).
-# ``low_confidence`` fallback is conditional on ``degrade_low_confidence``
-# and handled separately in ``_should_fallback``.
-_DEFER_TABLE: dict[DeferKind, tuple[bool, str]] = {
-    "structured_output_failed": (
-        True,
-        "veritas structured output failed: {rationale}",
-    ),
-    "low_confidence": (
-        False,  # conditional — upgraded by degrade_low_confidence
-        "veritas low confidence ({conf:.2f} < {min:.2f})",
-    ),
-    "explicit": (
-        False,
-        "veritas explicit defer (confidence={conf:.2f})",
-    ),
-    "answer_was_question": (
-        False,
-        "veritas answer was a question",
-    ),
+# DeferKind → reason_template.
+_REASON_TEMPLATES: dict[DeferKind, str] = {
+    "structured_output_failed": "veritas structured output failed: {rationale}",
+    "low_confidence": "veritas low confidence ({conf:.2f} < {min:.2f})",
+    "explicit": "veritas explicit defer (confidence={conf:.2f})",
+    "answer_was_question": "veritas answer was a question",
 }
+
+# Sentinel answer for autopilot retry — tells the LLM to try a different action.
+_RETRY_SENTINEL = "(retry)"
 
 
 class AutoClarificationPolicy:
-    """Delegate clarifications to veritas; defer below confidence threshold.
+    """Delegate clarifications to veritas; fall back on any failure.
 
-    Adds two behaviors on top of the original policy:
+    Two fallback paths depending on whether a human is attached:
 
-    1. Every defer carries a :data:`DeferKind` so operators can distinguish
-       legitimate "I don't know" defers from forced ones (LLM glitches).
-    2. When `defer_kind == "structured_output_failed"` and an
-       `interactive_fallback` policy is wired, the policy delegates to it
-       (durable LangGraph `interrupt(...)`) instead of terminating the loop.
-       The fallback is only present in interactive runs (`emit` wired);
-       autopilot has no human at the other end and keeps the hard-defer path.
+    1. **TUI (interactive_fallback wired)**: When
+       ``degrade_to_manual_on_failure`` is True (default), *all* veritas
+       failure kinds route to the interactive relay (auto→manual upgrade)
+       instead of hard-defering. The user sees an ask widget and can answer
+       manually.
 
-    When `degrade_low_confidence` is True and a human is attached, the same
-    auto→manual upgrade applies to `low_confidence` defers — veritas wasn't
-    confident, so surface the questions to the human instead of parking the
-    loop silently. Ignored for autopilot (headless) runs.
+    2. **Autopilot (no interactive_fallback)**: When
+       ``autopilot_retry_on_fail`` is True (default), veritas failures return
+       a synthetic ``ClarificationAnswer(source="retry")`` carrying a
+       ``"(retry)"`` sentinel. The execute node feeds this back to the
+       CoreAgent as the tool result, prompting the LLM to try a different
+       action instead of parking the goal indefinitely.
 
-    Origins listed in `force_manual_origins` skip veritas entirely and use
+    Origins listed in ``force_manual_origins`` skip veritas entirely and use
     the interactive relay (or defer when no human is attached).
     """
 
@@ -77,14 +70,22 @@ class AutoClarificationPolicy:
         min_confidence: float = 0.4,
         interactive_fallback: ClarificationPolicy | None = None,
         force_manual_origins: Collection[ClarificationOrigin] | None = None,
-        degrade_low_confidence: bool = False,
+        degrade_to_manual_on_failure: bool = True,
+        autopilot_retry_on_fail: bool = True,
         tool_approval_pipeline: ToolApprovalPipeline | None = None,
+        # Backward-compat alias (deprecated).
+        degrade_low_confidence: bool | None = None,
     ) -> None:
         self._veritas_answer = veritas_answer
         self._min_confidence = min_confidence
         self._interactive_fallback = interactive_fallback
         self._force_manual_origins: frozenset[str] = frozenset(force_manual_origins or ())
-        self._degrade_low_confidence = degrade_low_confidence
+        # degrade_low_confidence is the old name; if explicitly set, treat
+        # it as degrade_to_manual_on_failure for backward compat.
+        if degrade_low_confidence is not None:
+            degrade_to_manual_on_failure = degrade_low_confidence
+        self._degrade_to_manual_on_failure = degrade_to_manual_on_failure
+        self._autopilot_retry_on_fail = autopilot_retry_on_fail
         self._tool_approval_pipeline = tool_approval_pipeline
 
     @property
@@ -92,8 +93,17 @@ class AutoClarificationPolicy:
         return self._min_confidence
 
     @property
+    def degrade_to_manual_on_failure(self) -> bool:
+        return self._degrade_to_manual_on_failure
+
+    @property
     def degrade_low_confidence(self) -> bool:
-        return self._degrade_low_confidence
+        """Backward-compat alias for the old flag name."""
+        return self._degrade_to_manual_on_failure
+
+    @property
+    def autopilot_retry_on_fail(self) -> bool:
+        return self._autopilot_retry_on_fail
 
     @property
     def force_manual_origins(self) -> frozenset[str]:
@@ -147,6 +157,10 @@ class AutoClarificationPolicy:
         if self._interactive_fallback is not None:
             logger.info("[clarification] tool_approval no rule match; routing to interactive relay")
             return await self._delegate_to_fallback(request)
+        # Autopilot — retry instead of hard defer.
+        if self._autopilot_retry_on_fail:
+            logger.info("[clarification] tool_approval no rule match; autopilot retry")
+            return self._build_retry_answer(request)
         raise ClarificationDeferredError(
             "tool_approval: no rule matched and veritas fallback disabled",
             request,
@@ -156,8 +170,8 @@ class AutoClarificationPolicy:
     async def _answer_force_manual(self, request: ClarificationRequest) -> ClarificationAnswer:
         """Force-manual origins skip veritas entirely.
 
-        `await_clarification` already emitted with `mode=manual`, so we
-        call `answer()` directly (no re-announce).
+        ``await_clarification`` already emitted with ``mode=manual``, so we
+        call ``answer()`` directly (no re-announce).
         """
         if self._interactive_fallback is not None:
             logger.info(
@@ -165,6 +179,9 @@ class AutoClarificationPolicy:
                 request.origin_node,
             )
             return await self._interactive_fallback.answer(request)
+        # No human — try autopilot retry, else hard defer.
+        if self._autopilot_retry_on_fail:
+            return self._build_retry_answer(request)
         raise ClarificationDeferredError(
             f"origin {request.origin_node} requires manual confirmation",
             request,
@@ -172,42 +189,56 @@ class AutoClarificationPolicy:
         )
 
     async def _answer_veritas(self, request: ClarificationRequest) -> ClarificationAnswer:
-        """Veritas LLM auto-answer with confidence-based defer/fallback."""
+        """Veritas LLM auto-answer with confidence-based fallback.
+
+        On any veritas failure (DeferKind is not None):
+        - TUI: route to the interactive relay when
+          ``degrade_to_manual_on_failure`` is True.
+        - Autopilot: return a synthetic retry answer when
+          ``autopilot_retry_on_fail`` is True, prompting the LLM to try a
+          different action.
+        - Otherwise: hard defer (legacy behavior).
+        """
         result = await self._veritas_answer(request)
         kind = self._classify(result)
 
-        if kind is not None and self._should_fallback(kind):
-            if self._interactive_fallback is None:
-                raise ClarificationDeferredError(
-                    self._reason_for(kind, result),
-                    request,
-                    kind=kind,
-                )
-            if kind == "structured_output_failed":
-                logger.warning(
-                    "[veritas] structured output failed; falling back to interactive relay"
-                )
-            else:
-                logger.info(
-                    "[veritas] low confidence (%.2f); degrading to interactive relay",
-                    result.confidence,
-                )
-            return await self._delegate_to_fallback(request)
-
         if kind is not None:
-            raise ClarificationDeferredError(
-                self._reason_for(kind, result),
-                request,
-                kind=kind,
-            )
+            reason = self._reason_for(kind, result)
+            # Path 1: TUI — degrade to manual on any failure.
+            if self._degrade_to_manual_on_failure and self._interactive_fallback is not None:
+                if kind == "structured_output_failed":
+                    logger.warning(
+                        "[veritas] structured output failed; falling back to interactive relay"
+                    )
+                else:
+                    logger.info(
+                        "[veritas] %s; degrading to interactive relay",
+                        kind,
+                    )
+                return await self._delegate_to_fallback(request)
+
+            # Path 2: Autopilot — synthetic retry so the LLM tries again.
+            if self._autopilot_retry_on_fail and self._interactive_fallback is None:
+                logger.info(
+                    "[veritas] %s; autopilot retry (letting LLM try a different action)",
+                    kind,
+                )
+                return self._build_retry_answer(request)
+
+            # Path 3: hard defer (legacy / opt-out).
+            raise ClarificationDeferredError(reason, request, kind=kind)
 
         answers = tuple(str(a).strip() for a in result.answers)
         if not answers or any(not a for a in answers):
-            raise ClarificationDeferredError(
-                "veritas returned empty answer(s)",
-                request,
-                kind="explicit",
-            )
+            # Empty answers — same fallback logic as above.
+            reason = "veritas returned empty answer(s)"
+            if self._degrade_to_manual_on_failure and self._interactive_fallback is not None:
+                logger.info("[veritas] empty answers; degrading to interactive relay")
+                return await self._delegate_to_fallback(request)
+            if self._autopilot_retry_on_fail and self._interactive_fallback is None:
+                logger.info("[veritas] empty answers; autopilot retry")
+                return self._build_retry_answer(request)
+            raise ClarificationDeferredError(reason, request, kind="explicit")
 
         return ClarificationAnswer(
             answers=answers,
@@ -217,13 +248,28 @@ class AutoClarificationPolicy:
             audit={"rationale": result.rationale},
         )
 
+    def _build_retry_answer(self, request: ClarificationRequest) -> ClarificationAnswer:
+        """Build a synthetic retry answer for autopilot mode.
+
+        The sentinel ``"(retry)"`` is fed back to the CoreAgent as the tool
+        result for the ask_user / tool_approval interrupt, prompting the LLM
+        to try a different action instead of parking the goal.
+        """
+        n_questions = len(request.questions) or 1
+        return ClarificationAnswer(
+            answers=tuple([_RETRY_SENTINEL] * n_questions),
+            source="retry",
+            confidence=0.0,
+            audit={"reason": "veritas failed; autopilot retry"},
+        )
+
     async def _delegate_to_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
         """Route to the interactive relay with auto→manual re-announce.
 
-        Uses `answer_as_manual_fallback` when available so the TUI
-        re-announces with `mode=manual` before pausing (the earlier
-        `await_clarification` emit used `mode=auto`). Falls back to
-        `answer()` for bare policies without the upgrade method.
+        Uses ``answer_as_manual_fallback`` when available so the TUI
+        re-announces with ``mode=manual`` before pausing (the earlier
+        ``await_clarification`` emit used ``mode=auto``). Falls back to
+        ``answer()`` for bare policies without the upgrade method.
         """
         fallback = self._interactive_fallback
         upgrade = getattr(fallback, "answer_as_manual_fallback", None)
@@ -243,17 +289,9 @@ class AutoClarificationPolicy:
             return "low_confidence"
         return None
 
-    def _should_fallback(self, kind: DeferKind) -> bool:
-        """Whether this defer kind should route to the interactive fallback."""
-        if kind not in _DEFER_TABLE:
-            return False
-        if kind == "low_confidence":
-            return self._degrade_low_confidence
-        return _DEFER_TABLE[kind][0]
-
     def _reason_for(self, kind: DeferKind, result: VeritasAnswerSchema) -> str:
         """Build the defer reason message for the given kind."""
-        template = _DEFER_TABLE.get(kind, ("", "veritas deferred"))[1]
+        template = _REASON_TEMPLATES.get(kind, "veritas deferred")
         return template.format(
             rationale=result.rationale,
             conf=result.confidence,

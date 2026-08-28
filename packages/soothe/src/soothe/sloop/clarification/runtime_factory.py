@@ -144,7 +144,8 @@ def build_clarification_policy_for_runner(
         min_confidence=clar_cfg.auto_min_confidence,
         interactive_fallback=interactive_fallback,
         force_manual_origins=list(clar_cfg.force_manual_origins or ()),
-        degrade_low_confidence=clar_cfg.degrade_to_manual_on_low_confidence,
+        degrade_to_manual_on_failure=clar_cfg.degrade_to_manual_on_failure,
+        autopilot_retry_on_fail=clar_cfg.autopilot_retry_on_fail,
         tool_approval_pipeline=tool_approval_pipeline,
     )
 

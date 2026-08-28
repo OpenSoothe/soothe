@@ -43,15 +43,29 @@ def test_auto_passes_min_confidence_through() -> None:
     assert policy.min_confidence == pytest.approx(0.75)
 
 
-def test_auto_passes_degrade_low_confidence_through() -> None:
+def test_auto_passes_degrade_to_manual_through() -> None:
     policy = build_default_clarification_policy(
-        "auto", veritas_answer=_stub_veritas, degrade_low_confidence=True
+        "auto", veritas_answer=_stub_veritas, degrade_to_manual_on_failure=True
     )
     assert isinstance(policy, AutoClarificationPolicy)
-    assert policy.degrade_low_confidence is True
+    assert policy.degrade_to_manual_on_failure is True
 
 
-def test_auto_degrade_low_confidence_defaults_false() -> None:
+def test_auto_degrade_to_manual_defaults_true() -> None:
     policy = build_default_clarification_policy("auto", veritas_answer=_stub_veritas)
     assert isinstance(policy, AutoClarificationPolicy)
-    assert policy.degrade_low_confidence is False
+    assert policy.degrade_to_manual_on_failure is True
+
+
+def test_auto_passes_autopilot_retry_through() -> None:
+    policy = build_default_clarification_policy(
+        "auto", veritas_answer=_stub_veritas, autopilot_retry_on_fail=True
+    )
+    assert isinstance(policy, AutoClarificationPolicy)
+    assert policy.autopilot_retry_on_fail is True
+
+
+def test_auto_autopilot_retry_defaults_true() -> None:
+    policy = build_default_clarification_policy("auto", veritas_answer=_stub_veritas)
+    assert isinstance(policy, AutoClarificationPolicy)
+    assert policy.autopilot_retry_on_fail is True
