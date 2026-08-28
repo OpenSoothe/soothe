@@ -230,7 +230,7 @@ def test_plan_approval_sets_submitting_spinner_before_mode_resolution() -> None:
 
     app = _SpinnerHarness()
 
-    # Simulate the relevant tail of on_clarification_input_message_submitted:
+    # Simulate the relevant tail of on_structured_ask_user_widget_submitted:
     # spinner set, then mode resolved, then composer mode updated.
     from soothe_cli.display.spinner_labels import SPINNER_LABEL_SUBMITTING
 
@@ -253,8 +253,8 @@ def test_plan_approval_does_not_mount_confirmation_message() -> None:
     from textual.widgets import Static
 
     from soothe_cli.tui.widgets.messages import AppMessage
-    from soothe_cli.tui.widgets.messages.clarification import (
-        ClarificationInputMessage,
+    from soothe_cli.tui.widgets.messages.structured_ask_user import (
+        StructuredAskUserWidget,
     )
 
     mounted: list[Static] = []
@@ -280,14 +280,14 @@ def test_plan_approval_does_not_mount_confirmation_message() -> None:
 
     app = _ConfirmHarness()
 
-    event = ClarificationInputMessage.Submitted(
+    event = StructuredAskUserWidget.Submitted(
         step_id="plan_mode_review",
         questions=["Action for this plan: Approve, Refine, or Reject"],
         answers=["Approve", ""],
         widget_id="clarify-approve",
     )
 
-    asyncio_run(app.on_clarification_input_message_submitted(event))
+    asyncio_run(app.on_structured_ask_user_widget_submitted(event))
 
     confirm_msgs = [w for w in mounted if isinstance(w, AppMessage)]
     assert confirm_msgs == []
@@ -304,8 +304,8 @@ def test_plan_refine_does_not_mount_confirmation_message() -> None:
     from textual.widgets import Static
 
     from soothe_cli.tui.widgets.messages import AppMessage
-    from soothe_cli.tui.widgets.messages.clarification import (
-        ClarificationInputMessage,
+    from soothe_cli.tui.widgets.messages.structured_ask_user import (
+        StructuredAskUserWidget,
     )
 
     mounted: list[Static] = []
@@ -331,14 +331,14 @@ def test_plan_refine_does_not_mount_confirmation_message() -> None:
 
     app = _RefineHarness()
 
-    event = ClarificationInputMessage.Submitted(
+    event = StructuredAskUserWidget.Submitted(
         step_id="plan_mode_review",
         questions=["Action for this plan: Approve, Refine, or Reject"],
         answers=["Refine", "tighten scope to auth"],
         widget_id="clarify-refine",
     )
 
-    asyncio_run(app.on_clarification_input_message_submitted(event))
+    asyncio_run(app.on_structured_ask_user_widget_submitted(event))
 
     confirm_msgs = [w for w in mounted if isinstance(w, AppMessage)]
     assert confirm_msgs == []

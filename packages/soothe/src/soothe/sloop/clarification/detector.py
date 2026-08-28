@@ -156,13 +156,18 @@ class ClarificationDetector:
     _MAX_ARG_PREVIEW = 120
 
     @staticmethod
-    def _format_action_request(ar: Mapping[str, Any]) -> str | None:
-        """Render one pending tool call as an approval question.
+    def _format_action_request(ar: Mapping[str, Any]) -> dict | None:
+        """Render one pending tool call as a structured approval QuestionSpec.
+
+        Returns a ``QuestionSpec`` dict with three options (Approve, Edit,
+        Reject) so the unified ``StructuredAskUserWidget`` can render it as
+        an option picker. The ``header`` carries the tool name + informative
+        arg so the card title reads ``"Approve tool: <name> (<arg>)"``.
 
         Surfaces the tool name plus its most informative argument (the file
         path, command, etc.) so the user can see what is about to execute
         without inspecting the full args blob. Long values (e.g. multi-line
-        shell commands) are truncated to `_MAX_ARG_PREVIEW` chars with an
+        shell commands) are truncated to ``_MAX_ARG_PREVIEW`` chars with an
         ellipsis so the approval card stays readable.
         """
         name = str(ar.get("name") or "").strip()
@@ -181,7 +186,26 @@ class ClarificationDetector:
                 first_val = next(iter(args.values()), None)
                 if isinstance(first_val, str) and first_val.strip():
                     detail = f" ({ClarificationDetector._truncate(first_val.strip())})"
-        return f"Approve {name}{detail}?"
+        header = f"Approve {name}{detail}?"
+        question = f"Approve {name}{detail}?"
+        return {
+            "question": question,
+            "header": header,
+            "options": [
+                {
+                    "label": "Approve",
+                    "description": "Allow this tool call to execute.",
+                },
+                {
+                    "label": "Edit",
+                    "description": "Modify the tool arguments before executing.",
+                },
+                {
+                    "label": "Reject",
+                    "description": "Block this tool call from executing.",
+                },
+            ],
+        }
 
     @staticmethod
     def _truncate(val: str) -> str:

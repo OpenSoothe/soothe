@@ -241,9 +241,11 @@ class TestInterruptOnCase:
         )
         assert req is not None
         assert req.origin_node == ORIGIN_TOOL_APPROVAL
-        assert "edit_file" in req.questions[0]
-        assert "/w/x.py" in req.questions[0]
-        assert "approve" in req.questions[0].lower()
+        q = req.questions[0]
+        assert isinstance(q, dict)
+        assert "edit_file" in q["header"]
+        assert "/w/x.py" in q["header"]
+        assert "approve" in q["header"].lower()
 
     def test_detector_formats_run_command(self) -> None:
         """A destructive run_command surfaces the command in the question."""
@@ -254,7 +256,9 @@ class TestInterruptOnCase:
             loop_state=_view(),
         )
         assert req is not None
-        assert "rm -rf /" in req.questions[0]
+        q = req.questions[0]
+        assert isinstance(q, dict)
+        assert "rm -rf /" in q["header"]
 
     @pytest.mark.asyncio
     async def test_action_requests_captured_and_stream_stops(self) -> None:
@@ -576,8 +580,8 @@ class TestMultiActionInterruptCase:
         )
         assert req is not None
         assert len(req.questions) == 2
-        assert "edit_file" in req.questions[0]
-        assert "write_file" in req.questions[1]
+        assert "edit_file" in req.questions[0]["header"]
+        assert "write_file" in req.questions[1]["header"]
 
     def test_multi_action_resume_payload_has_one_decision_per_action(self) -> None:
         """The resume payload must carry one decision per action_request."""

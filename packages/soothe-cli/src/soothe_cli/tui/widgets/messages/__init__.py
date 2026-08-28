@@ -16,7 +16,6 @@ from soothe_cli.tui.widgets.messages.assistant import (
     _rich_style_with_textual_selection,
     _SelectableMarkdownBody,
 )
-from soothe_cli.tui.widgets.messages.clarification import ClarificationInputMessage
 from soothe_cli.tui.widgets.messages.cognition_goal_tree import CognitionGoalTreeMessage
 from soothe_cli.tui.widgets.messages.cognition_reason import CognitionReasonMessage
 from soothe_cli.tui.widgets.messages.cognition_step import (
@@ -56,7 +55,6 @@ __all__ = [
     "AppMessage",
     "SummarizationMessage",
     # Clarification
-    "ClarificationInputMessage",
     "StructuredAskUserWidget",
     # Cognition
     "CognitionGoalTreeMessage",

@@ -30,9 +30,25 @@ from soothe.sloop.utils.messages import last_ledger_ai_content
 
 logger = logging.getLogger(__name__)
 
-_PLAN_MODE_REVIEW_QUESTIONS: tuple[str, ...] = (
-    "Action for this plan: Approve, Refine, or Reject",
-    "Refinement instructions (when choosing Refine)",
+_PLAN_MODE_REVIEW_QUESTIONS: tuple[dict, ...] = (
+    {
+        "question": "Action for this plan: Approve, Refine, or Reject?",
+        "header": "Plan review",
+        "options": [
+            {
+                "label": "Approve",
+                "description": "Accept the plan and proceed to implementation.",
+            },
+            {
+                "label": "Refine",
+                "description": "Request changes with refinement instructions.",
+            },
+            {
+                "label": "Reject",
+                "description": "Reject the plan and terminate this goal.",
+            },
+        ],
+    },
 )
 
 # Matches the ``## Plan: <title>`` marker that the plan-mode addendum

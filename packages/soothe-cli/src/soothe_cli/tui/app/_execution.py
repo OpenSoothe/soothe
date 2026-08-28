@@ -40,7 +40,6 @@ from soothe_cli.tui.widgets.chat_input import ChatInput
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
-    ClarificationInputMessage,
     ErrorMessage,
     QueuedUserMessage,
     StructuredAskUserWidget,
@@ -237,36 +236,19 @@ class _ExecutionMixin:
         if self._status_bar:
             self._status_bar.set_mode(event.mode)
 
-    async def on_clarification_input_message_submitted(
-        self,
-        event: ClarificationInputMessage.Submitted,
-    ) -> None:
-        """Forward a HITL clarification answer to the daemon and refresh the step card.
-
-        Wired to `ClarificationInputMessage.Submitted`. The inline
-        widget collects per-question answers; here we render them on the
-        matching step card and trigger the standard turn pipeline with the
-        answer text. `execute_task_textual` reads `adapter._clarification_pending`
-        and attaches `clarification_answer=True` to the wire so the daemon
-        resumes the suspended loop graph rather than starting a new turn.
-        """
-        event.stop()
-        await self._handle_clarification_submitted(
-            step_id=event.step_id,
-            questions=list(event.questions),
-            answers=list(event.answers),
-            origin_node=getattr(event, "origin_node", "") or "",
-        )
-
     async def on_structured_ask_user_widget_submitted(
         self,
         event: StructuredAskUserWidget.Submitted,
     ) -> None:
-        """Forward structured `ask_user` answers to the daemon.
+        """Forward a clarification answer to the daemon and refresh the step card.
 
-        Same forwarding pipeline as the HITL handler; `questions` are
-        `QuestionSpec` dicts here, so extract the question text for the
-        step-card rendering.
+        Unified handler for all origins (execute, plan_mode_review,
+        tool_approval). The inline widget collects per-question answers;
+        here we render them on the matching step card and trigger the
+        standard turn pipeline with the answer text.
+        ``execute_task_textual`` reads ``adapter._clarification_pending``
+        and attaches ``clarification_answer=True`` to the wire so the daemon
+        resumes the suspended loop graph rather than starting a new turn.
         """
         event.stop()
         card_questions = [
@@ -326,9 +308,14 @@ class _ExecutionMixin:
             try:
                 other._submitted = True  # noqa: SLF001
                 other.add_class("is-submitted")
-                for btn in getattr(other, "_action_buttons", {}).values():
-                    btn.disabled = True
-                for inp in getattr(other, "_inputs", []) or []:
+                # Disable submit/abandon buttons and any active inputs.
+                for btn in (other._submit_btn, other._abandon_btn):  # noqa: SLF001
+                    if btn is not None:
+                        btn.disabled = True
+                for inp in (other._custom_input, other._comment_input):  # noqa: SLF001
+                    if inp is not None:
+                        inp.disabled = True
+                for inp in other._degraded_inputs or []:  # noqa: SLF001
                     inp.disabled = True
             except Exception:  # noqa: BLE001
                 logger.debug("Failed to disarm leftover clarification widget", exc_info=True)

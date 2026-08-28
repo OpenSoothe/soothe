@@ -516,9 +516,11 @@ class _MessagesMixin:
         except NoMatches:
             pass
 
-        from soothe_cli.tui.widgets.messages.clarification import ClarificationInputMessage
+        from soothe_cli.tui.widgets.messages.structured_ask_user import (
+            StructuredAskUserWidget,
+        )
 
-        if isinstance(widget, ClarificationInputMessage):
+        if isinstance(widget, StructuredAskUserWidget):
             self.focus_primary_input()
 
     async def _prune_old_messages(self) -> None:
@@ -1238,7 +1240,7 @@ class _MessagesMixin:
         Original intent: clicking the dead transcript area should drop the
         caret back in the prompt. But this handler bubbles for *every* click,
         so an unconditional refocus also steals focus from inline focusable
-        widgets (e.g., the ClarificationInputMessage answer field) on the same
+        widgets (e.g., the StructuredAskUserWidget answer field) on the same
         click that Textual just used to focus them. Skip the refocus whenever
         the click landed on a focusable widget — Textual's default focus
         handling already does the right thing there.

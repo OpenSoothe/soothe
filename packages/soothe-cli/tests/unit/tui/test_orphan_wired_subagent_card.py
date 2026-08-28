@@ -380,8 +380,8 @@ async def test_manual_clarification_mounts_without_step_or_orphan() -> None:
     widget = adapter._clarification_input_by_step[key]
     assert widget in adapter._mounted  # type: ignore[attr-defined]
     assert getattr(widget, "_origin_node", "") == "plan_mode_review"
-    assert getattr(widget, "_plan_path", "") == "/tmp/plans/demo.md"
-    assert "# Plan" in getattr(widget, "_plan_markdown", "")
+    assert getattr(widget, "_body_path", "") == "/tmp/plans/demo.md"
+    assert "# Plan" in getattr(widget, "_body_markdown", "")
 
 
 @pytest.mark.asyncio

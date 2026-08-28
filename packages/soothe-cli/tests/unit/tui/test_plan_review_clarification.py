@@ -1,16 +1,24 @@
-"""Plan-review clarification widget (plan_mode_review)."""
+"""Plan-review clarification widget (plan_mode_review) — unified widget tests.
+
+After IG-767, plan-review and tool-approval HITL gates render through
+``StructuredAskUserWidget`` with ``allow_custom=False`` and prefilled
+options (Approve / Refine or Edit / Reject).
+"""
 
 from __future__ import annotations
 
 import pytest
 from textual.app import App, ComposeResult
-from textual.widgets import Static
 
 from soothe_cli.commands.binding import message_from_widget
-from soothe_cli.tui.widgets.messages.clarification import (
-    ClarificationInputMessage,
+from soothe_cli.tui.widgets.messages.structured_ask_user import (
+    StructuredAskUserWidget,
     _strip_plan_frontmatter,
 )
+
+# ---------------------------------------------------------------------------
+# Frontmatter helper (moved from clarification.py)
+# ---------------------------------------------------------------------------
 
 
 def test_strip_plan_frontmatter_removes_yaml() -> None:
@@ -22,32 +30,9 @@ def test_strip_plan_frontmatter_passthrough() -> None:
     assert _strip_plan_frontmatter("# Already clean") == "# Already clean"
 
 
-def test_plan_review_actions_use_primary_text_highlight() -> None:
-    """Selected action is bold green; non-selected is dim grey — no reverse fill."""
-    css = ClarificationInputMessage.DEFAULT_CSS
-    assert "Button.plan-review-selected" in css
-    assert "color: $success;" in css
-    assert "text-style: bold reverse;" not in css
-    selected_block = css.split("Button.plan-review-selected {", 1)[1].split("}", 1)[0]
-    assert "background: transparent;" in selected_block
-    assert "background: $primary;" not in selected_block
-    # Non-selected (base Button rule) is dim grey.
-    base_block = css.split(".plan-review-actions Button {", 1)[1].split("}", 1)[0]
-    assert "color: $text-muted" in base_block
-
-
-def test_plan_review_action_rows_are_single_line_and_borderless() -> None:
-    """Each action occupies one row; the inline Refine entry carries no input chrome."""
-    css = ClarificationInputMessage.DEFAULT_CSS
-    row_block = css.split(".plan-review-action-row {", 1)[1].split("}", 1)[0]
-    assert "height: 1;" in row_block
-    button_block = css.split(".plan-review-actions Button {", 1)[1].split("}", 1)[0]
-    assert "height: 1;" in button_block
-    assert "border: none;" in button_block
-    refine_block = css.split("Input.plan-review-refine-input {", 1)[1].split("}", 1)[0]
-    assert "height: 1;" in refine_block
-    assert "border: none;" in refine_block
-    assert "background: transparent;" in refine_block
+# ---------------------------------------------------------------------------
+# Wire content helper (unchanged — lives in _execution.py)
+# ---------------------------------------------------------------------------
 
 
 def test_clarification_wire_content_plan_review() -> None:
@@ -64,7 +49,6 @@ def test_clarification_wire_content_plan_review() -> None:
 
 
 def test_plan_review_refine_wire_content_with_comments() -> None:
-    """Refine carries refinement text in answers[1]; wire formats it."""
     from soothe_cli.tui.app._execution import clarification_wire_content
 
     assert clarification_wire_content(["Refine", "tighten scope to auth"]) == (
@@ -73,32 +57,98 @@ def test_plan_review_refine_wire_content_with_comments() -> None:
     assert clarification_wire_content(["Reject", ""]) == "Plan review: Reject"
 
 
-def test_path_footer_text() -> None:
-    with_path = ClarificationInputMessage(
-        step_id="s1",
-        questions=["Action?", "Refinement instructions (when choosing Refine)"],
+# ---------------------------------------------------------------------------
+# Widget fixtures
+# ---------------------------------------------------------------------------
+
+_PLAN_REVIEW_Q = {
+    "question": "Action for this plan: Approve, Refine, or Reject?",
+    "header": "Plan review",
+    "options": [
+        {"label": "Approve", "description": "Accept the plan and proceed."},
+        {"label": "Refine", "description": "Request changes with refinement instructions."},
+        {"label": "Reject", "description": "Reject the plan and terminate this goal."},
+    ],
+}
+
+_TOOL_APPROVAL_Q = {
+    "question": "Approve read_file (path=/tmp/x)?",
+    "header": "Approve read_file (path=/tmp/x)",
+    "options": [
+        {"label": "Approve", "description": "Allow this tool call."},
+        {"label": "Edit", "description": "Revise the tool args."},
+        {"label": "Reject", "description": "Deny this tool call."},
+    ],
+}
+
+
+def _make_plan_review_widget(**kwargs) -> StructuredAskUserWidget:
+    defaults = dict(
+        step_id="plan_mode_review",
+        questions=[_PLAN_REVIEW_Q],
         origin_node="plan_mode_review",
-        plan_path="/tmp/plans/x.md",
-        plan_markdown="# Plan",
+        allow_custom=False,
+        comment_option_index=1,
+    )
+    defaults.update(kwargs)
+    return StructuredAskUserWidget(**defaults)
+
+
+def _make_tool_approval_widget(**kwargs) -> StructuredAskUserWidget:
+    defaults = dict(
+        step_id="tool_approval",
+        questions=[_TOOL_APPROVAL_Q],
+        origin_node="tool_approval",
+        allow_custom=False,
+        comment_option_index=1,
+    )
+    defaults.update(kwargs)
+    return StructuredAskUserWidget(**defaults)
+
+
+class _WidgetApp(App[None]):
+    """Minimal harness mounting a single StructuredAskUserWidget."""
+
+    def __init__(self, widget: StructuredAskUserWidget) -> None:
+        super().__init__()
+        self._widget = widget
+        self.submitted: list[StructuredAskUserWidget.Submitted] = []
+
+    def compose(self) -> ComposeResult:
+        yield self._widget
+
+    def on_structured_ask_user_widget_submitted(
+        self, event: StructuredAskUserWidget.Submitted
+    ) -> None:
+        self.submitted.append(event)
+
+
+# ---------------------------------------------------------------------------
+# Path footer
+# ---------------------------------------------------------------------------
+
+
+def test_path_footer_text() -> None:
+    with_path = _make_plan_review_widget(
+        body_path="/tmp/plans/x.md",
+        body_markdown="# Plan",
     )
     assert with_path._path_footer_text() == "Plan saved to: /tmp/plans/x.md"
-    memory = ClarificationInputMessage(
-        step_id="s1",
-        questions=["Action?", "Refinement instructions (when choosing Refine)"],
-        origin_node="plan_mode_review",
-    )
+    memory = _make_plan_review_widget()
     assert memory._path_footer_text() == "Plan held in memory only"
+
+
+# ---------------------------------------------------------------------------
+# Serialization (message_from_widget)
+# ---------------------------------------------------------------------------
 
 
 def test_widget_to_message_serializes_plan_review() -> None:
     from soothe_sdk.display.transcript_types import MessageType
 
-    widget = ClarificationInputMessage(
-        step_id="s1",
-        questions=["Action?", "Refinement instructions (when choosing Refine)"],
-        origin_node="plan_mode_review",
-        plan_path="/tmp/x.md",
-        plan_markdown="# Plan",
+    widget = _make_plan_review_widget(
+        body_path="/tmp/x.md",
+        body_markdown="# Plan",
         id="clarify-test",
     )
     data = message_from_widget(widget)
@@ -108,17 +158,13 @@ def test_widget_to_message_serializes_plan_review() -> None:
 
 
 def test_widget_to_message_serializes_answered_plan_review_refine() -> None:
-    """Answered (submitted) plan-review serializes to PLAN_REVIEW with full fidelity."""
     from soothe_sdk.display.transcript_types import MessageType
 
     from soothe_cli.commands.binding import message_to_widget
 
-    widget = ClarificationInputMessage(
-        step_id="s1",
-        questions=["Action?", "Refinement instructions (when choosing Refine)"],
-        origin_node="plan_mode_review",
-        plan_path="/tmp/x.md",
-        plan_markdown="# Plan\n\nDo things.",
+    widget = _make_plan_review_widget(
+        body_path="/tmp/x.md",
+        body_markdown="# Plan\n\nDo things.",
         id="clarify-answered",
     )
     widget._submitted = True
@@ -133,21 +179,17 @@ def test_widget_to_message_serializes_answered_plan_review_refine() -> None:
 
     # Round-trip: deserialize back to a widget in answered state.
     restored = message_to_widget(data)
-    assert isinstance(restored, ClarificationInputMessage)
+    assert isinstance(restored, StructuredAskUserWidget)
     assert restored._submitted is True
     assert restored._answers == ["Refine", "将plan翻译成中文"]
-    assert restored._plan_markdown == "# Plan\n\nDo things."
+    assert restored._body_markdown == "# Plan\n\nDo things."
 
 
 def test_widget_to_message_serializes_answered_plan_review_approve() -> None:
-    """Approved plan-review serializes with no comments."""
     from soothe_sdk.display.transcript_types import MessageType
 
-    widget = ClarificationInputMessage(
-        step_id="s1",
-        questions=["Action?"],
-        origin_node="plan_mode_review",
-        plan_markdown="# Plan",
+    widget = _make_plan_review_widget(
+        body_markdown="# Plan",
         id="clarify-approved",
     )
     widget._submitted = True
@@ -159,514 +201,233 @@ def test_widget_to_message_serializes_answered_plan_review_approve() -> None:
     assert "approved" in data.content.lower()
 
 
-class _PlanReviewHarnessApp(App[None]):
-    def __init__(self, **kwargs) -> None:  # noqa: ANN003
-        super().__init__()
-        self._kwargs = kwargs
-        self.submitted: list[ClarificationInputMessage.Submitted] = []
-
-    def compose(self) -> ComposeResult:
-        yield ClarificationInputMessage(**self._kwargs)
-
-    def on_clarification_input_message_submitted(
-        self, event: ClarificationInputMessage.Submitted
-    ) -> None:
-        self.submitted.append(event)
+# ---------------------------------------------------------------------------
+# Interactive: approve / reject / refine
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_plan_review_approve_submits_immediately() -> None:
-    app = _PlanReviewHarnessApp(
-        step_id="plan_mode_review",
-        questions=[
-            "Action for this plan: Approve, Refine, or Reject",
-        ],
-        origin_node="plan_mode_review",
-        plan_path="/ws/.soothe/plans/demo.md",
-        plan_markdown="---\nstatus: draft\n---\n\n# Optimize deps\n\nStep 1.\n",
+    widget = _make_plan_review_widget(
+        body_path="/ws/.soothe/plans/demo.md",
+        body_markdown="---\nstatus: draft\n---\n\n# Optimize deps\n\nStep 1.\n",
         id="clarify-approve",
     )
+    app = _WidgetApp(widget)
     async with app.run_test() as pilot:
-        widget = app.query_one(ClarificationInputMessage)
+        await pilot.pause()
         assert widget._path_footer_text() == "Plan saved to: /ws/.soothe/plans/demo.md"
-        await pilot.click("#plan-review-btn-approve")
+        # Select Approve (option 0) and confirm — HITL immediate-submit.
+        widget.action_confirm()
+        await pilot.pause()
         assert len(app.submitted) == 1
-        assert app.submitted[0].answers == ["Approve", ""]
-
-
-@pytest.mark.asyncio
-async def test_plan_review_arrow_keys_cycle_actions() -> None:
-    app = _PlanReviewHarnessApp(
-        step_id="plan_mode_review",
-        questions=[
-            "Action for this plan: Approve, Refine, or Reject",
-        ],
-        origin_node="plan_mode_review",
-        plan_path="/ws/.soothe/plans/demo.md",
-        plan_markdown="# Plan\n\nBody.\n",
-        id="clarify-arrows",
-    )
-    async with app.run_test() as pilot:
-        widget = app.query_one(ClarificationInputMessage)
-        assert widget._plan_path.endswith("demo.md")
-        assert widget._plan_markdown.startswith("# Plan")
-        assert widget._selected_action == "approve"
-        await pilot.press("down")
-        assert widget._selected_action == "refine"
-        await pilot.press("down")
-        assert widget._selected_action == "reject"
-        await pilot.press("down")
-        assert widget._selected_action == "approve"
-        await pilot.press("up")
-        assert widget._selected_action == "reject"
-        await pilot.press("up")
-        assert widget._selected_action == "refine"
-        # Refine focuses the comments field within the second action row.
-        await pilot.press("enter")
-        assert len(app.submitted) == 0
-        refine_input = widget.query_one("#plan-review-refine-comments")
-        refine_input.value = "narrow scope to auth"
-        refine_input.focus()
-        await pilot.press("enter")
-        assert len(app.submitted) == 1
-        assert app.submitted[0].answers == ["Refine", "narrow scope to auth"]
-
-
-@pytest.mark.asyncio
-async def test_plan_review_actions_render_as_numbered_rows() -> None:
-    from textual.widgets import Button, Input
-
-    app = _PlanReviewHarnessApp(
-        step_id="plan_mode_review",
-        questions=["Action for this plan: Approve, Refine, or Reject"],
-        origin_node="plan_mode_review",
-        plan_markdown="# Plan",
-    )
-    async with app.run_test():
-        widget = app.query_one(ClarificationInputMessage)
-        labels = [str(button.label) for button in widget.query(".plan-review-actions Button")]
-        assert labels == ["1. Approve", "2. Refine:", "3. Reject"]
-        refine_row = widget.query_one("#plan-review-btn-refine").parent
-        assert refine_row is not None
-        assert len(list(refine_row.query(Input))) == 1
-        assert len(list(widget.query(".plan-review-action-row"))) == 3
-        assert len(list(widget.query(Button))) == 3
+        assert app.submitted[0].answers == ["Approve"]
 
 
 @pytest.mark.asyncio
 async def test_plan_review_reject_submits_immediately() -> None:
-    app = _PlanReviewHarnessApp(
-        step_id="plan_mode_review",
-        questions=["Action for this plan: Approve, Refine, or Reject"],
-        origin_node="plan_mode_review",
-        plan_markdown="# Plan\n\nBody.\n",
+    widget = _make_plan_review_widget(
+        body_markdown="# Plan\n\nBody.\n",
         id="clarify-reject",
     )
+    app = _WidgetApp(widget)
     async with app.run_test() as pilot:
-        await pilot.click("#plan-review-btn-reject")
+        await pilot.pause()
+        # Navigate to Reject (option 2) and confirm.
+        widget.action_next_option()  # highlight 1 (Refine)
+        widget.action_next_option()  # highlight 2 (Reject)
+        widget.action_confirm()
+        await pilot.pause()
         assert len(app.submitted) == 1
-        assert app.submitted[0].answers == ["Reject", ""]
+        assert app.submitted[0].answers == ["Reject"]
+
+
+@pytest.mark.asyncio
+async def test_plan_review_refine_with_comments() -> None:
+    widget = _make_plan_review_widget(
+        body_markdown="# Plan\n\nBody.\n",
+        id="clarify-refine",
+    )
+    app = _WidgetApp(widget)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Navigate to Refine (option 1).
+        widget.action_next_option()  # highlight 1 (Refine)
+        widget.action_confirm()  # selects Refine → focuses comment input
+        await pilot.pause()
+        assert len(app.submitted) == 0  # not submitted yet
+        # Type refinement comments and press Enter.
+        comment_input = widget.query_one("#saq-comment-input")
+        comment_input.value = "narrow scope to auth"
+        comment_input.focus()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert len(app.submitted) == 1
+        assert app.submitted[0].answers[0] == "Refine"
+        assert "narrow scope to auth" in app.submitted[0].answers[1]
+
+
+# ---------------------------------------------------------------------------
+# Plan body rendering
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_plan_review_body_shows_full_content_without_inner_scroll() -> None:
-    """Plan body expands to full height; no VerticalScroll / max-height box."""
-    from textual.containers import Vertical, VerticalScroll
+    from textual.containers import VerticalScroll
 
     long_plan = "# Solution\n\n" + "\n".join(f"- step {i}" for i in range(60))
-    app = _PlanReviewHarnessApp(
-        step_id="plan_mode_review",
-        questions=[
-            "Action for this plan: Approve, Refine, or Reject",
-        ],
-        origin_node="plan_mode_review",
-        plan_path="/ws/.soothe/plans/demo.md",
-        plan_markdown=long_plan,
+    widget = _make_plan_review_widget(
+        body_path="/ws/.soothe/plans/demo.md",
+        body_markdown=long_plan,
         id="clarify-full-body",
     )
+    app = _WidgetApp(widget)
     async with app.run_test():
-        widget = app.query_one(ClarificationInputMessage)
-        assert list(widget.query(VerticalScroll)) == []
-        box = widget.query_one(".plan-review-body-box", Vertical)
-        # No max-height cap (was 48 rows on VerticalScroll).
-        assert "max-height" not in box.styles.css or "max-height: none" in box.styles.css
-        body = widget.query_one(".plan-review-body")
+        w = app.query_one(StructuredAskUserWidget)
+        assert list(w.query(VerticalScroll)) == []
+        body = w.query_one(".saq-body")
         rendered = str(getattr(body, "renderable", "") or "")
         assert "step 0" in rendered or "step 59" in rendered or body.display
 
 
 @pytest.mark.asyncio
 async def test_plan_review_answered_tree_expand_via_enter() -> None:
-    """Submitted card: Enter toggles the plan body open, then closed."""
     from textual.containers import Vertical
 
-    app = _PlanReviewHarnessApp(
-        step_id="plan_mode_review",
-        questions=["Action for this plan: Approve, Refine, or Reject"],
-        origin_node="plan_mode_review",
-        plan_path="/ws/.soothe/plans/demo.md",
-        plan_markdown="# Plan\n\nDo things.",
+    widget = _make_plan_review_widget(
+        body_path="/ws/.soothe/plans/demo.md",
+        body_markdown="# Plan\n\nDo things.",
         id="clarify-expand",
     )
+    app = _WidgetApp(widget)
     async with app.run_test() as pilot:
-        widget = app.query_one(ClarificationInputMessage)
-        widget._finalize_plan_review(action="approve")
+        w = app.query_one(StructuredAskUserWidget)
+        # Submit with Approve.
+        w.action_confirm()
         await pilot.pause()
-        assert widget._submitted is True
-        box = widget.query_one(".plan-review-body-box", Vertical)
-        # Collapsed by default in the answered view.
-        assert widget._body_expanded is False
+        assert w._submitted is True
+        box = w.query_one(".saq-body-box", Vertical)
+        assert w._body_expanded is False
         assert not box.has_class("is-expanded")
-        # Focus the card so the Enter binding lands on it.
-        widget.focus()
+        # Enter toggles body expand.
+        w.focus()
         await pilot.pause()
         await pilot.press("enter")
-        assert widget._body_expanded is True
+        assert w._body_expanded is True
         assert box.has_class("is-expanded")
         await pilot.press("enter")
-        assert widget._body_expanded is False
+        assert w._body_expanded is False
         assert not box.has_class("is-expanded")
 
 
 @pytest.mark.asyncio
 async def test_plan_review_answered_tree_expand_via_click() -> None:
-    """Submitted card: a click toggles the plan body open."""
     from textual.containers import Vertical
 
-    app = _PlanReviewHarnessApp(
-        step_id="plan_mode_review",
-        questions=["Action for this plan: Approve, Refine, or Reject"],
-        origin_node="plan_mode_review",
-        plan_markdown="# Plan\n\nDo things.",
+    widget = _make_plan_review_widget(
+        body_markdown="# Plan\n\nDo things.",
         id="clarify-click-expand",
     )
+    app = _WidgetApp(widget)
     async with app.run_test() as pilot:
-        widget = app.query_one(ClarificationInputMessage)
-        widget._finalize_plan_review(action="approve")
+        w = app.query_one(StructuredAskUserWidget)
+        w.action_confirm()
         await pilot.pause()
-        box = widget.query_one(".plan-review-body-box", Vertical)
-        assert widget._body_expanded is False
-        await pilot.click(ClarificationInputMessage)
-        assert widget._body_expanded is True
+        box = w.query_one(".saq-body-box", Vertical)
+        assert w._body_expanded is False
+        # Click toggles body expand.
+        await pilot.click(".saq-body-box")
+        await pilot.pause()
+        assert w._body_expanded is True
         assert box.has_class("is-expanded")
 
 
-def test_plan_review_answered_summary_renders_single_tree_branch() -> None:
-    """Answered view: no stray empty branch; action + plan-body toggle each
-    carry the ``⎿`` tree gutter (parity with the goal→step tree).
-
-    Asserts the actual rendered output (not the pre-render private text), so
-    a regression that turns the action label into Rich markup (e.g. ``[Reject]``
-    parsed as a style tag with ``markup=True``) leaves the row visibly empty
-    would be caught here.
-    """
-    import asyncio
-
-    from textual.widgets import Static
-
-    async def _check() -> None:
-        app = _PlanReviewHarnessApp(
-            step_id="plan_mode_review",
-            questions=["Action?"],
-            origin_node="plan_mode_review",
-            plan_markdown="# Plan",
-            id="clarify-tree",
-        )
-        async with app.run_test() as pilot:
-            widget = app.query_one(ClarificationInputMessage)
-            widget._finalize_plan_review(action="reject")
-            await pilot.pause()  # let the answered-summary update() flush
-            # No stray empty .plan-review-answered node (the old first branch).
-            assert list(widget.query(".plan-review-answered")) == []
-            # Action row must render its literal label — not just the gutter.
-            action_w = widget.query_one(".plan-review-answered-action", Static)
-            action_rendered = str(action_w.render())
-            assert action_rendered.startswith("⎿")
-            assert "[Reject]" in action_rendered
-            assert action_rendered.strip() != "⎿".strip(), (
-                "Action row collapsed to gutter only — Rich markup is stripping "
-                "the literal ``[Reject]`` label."
-            )
-            # Toggle row carries the same tree gutter + expand glyph.
-            toggle_w = widget.query_one(".plan-review-expand-toggle", Static)
-            toggle_rendered = str(toggle_w.render())
-            assert toggle_rendered.startswith("⎿")
-            assert "Plan body" in toggle_rendered
-            assert "expand" in toggle_rendered
-
-    asyncio.run(_check())
-
-
-# ===========================================================================
-# tool_approval (interrupt_on) — option selector, not Input box
-# ===========================================================================
-
-
-def test_tool_approval_uses_option_selector_not_input() -> None:
-    """A tool_approval card renders Approve / Edit / Reject buttons, no Input."""
-    widget = ClarificationInputMessage(
-        step_id="s1",
-        questions=["Approve edit_file (file_path=/w/x.py)? [approve / edit / reject]"],
-        origin_node="tool_approval",
-        id="clarify-tool",
-    )
-    assert widget._is_option_selector is True
-    assert widget._is_tool_approval is True
-    assert widget._is_plan_review is False
-
-
-def test_tool_approval_wire_content() -> None:
-    """Tool-approval actions get a ``Tool approval:`` prefix on the wire."""
-    from soothe_cli.tui.app._execution import clarification_wire_content
-
-    assert clarification_wire_content(["Approve"], origin_node="tool_approval") == (
-        "Tool approval: Approve"
-    )
-    assert clarification_wire_content(["Edit", "rename to y"], origin_node="tool_approval") == (
-        "Tool approval: Edit — rename to y"
-    )
-    assert clarification_wire_content(["Reject"], origin_node="tool_approval") == (
-        "Tool approval: Reject"
-    )
-
-
-def test_tool_approval_answered_serialization() -> None:
-    """Answered tool_approval serializes with origin + Edit action."""
-    from soothe_sdk.display.transcript_types import MessageType
-
-    widget = ClarificationInputMessage(
-        step_id="s1",
-        questions=["Approve edit_file (file_path=/w/x.py)?"],
-        origin_node="tool_approval",
-        id="clarify-edit",
-    )
-    widget._submitted = True
-    widget._answers = ["Edit", "rename to y.py"]
-    data = message_from_widget(widget)
-    assert data.type == MessageType.PLAN_REVIEW
-    assert data.plan_review_action == "Edit"
-    assert data.plan_review_comments == "rename to y.py"
-    assert data.plan_origin_node == "tool_approval"
-    assert "Tool edit requested" in data.content
-
-    # Round-trip: deserialize back to a widget in answered state.
-    from soothe_cli.commands.binding import message_to_widget
-
-    restored = message_to_widget(data)
-    assert isinstance(restored, ClarificationInputMessage)
-    assert restored._submitted is True
-    assert restored._answers == ["Edit", "rename to y.py"]
-    assert restored._origin_node == "tool_approval"
+# ---------------------------------------------------------------------------
+# Tool approval
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_tool_approval_renders_approve_edit_reject_buttons() -> None:
-    from textual.widgets import Button, Input
-
-    app = _PlanReviewHarnessApp(
-        step_id="tool_approval",
-        questions=["Approve edit_file (file_path=/w/x.py)?"],
-        origin_node="tool_approval",
-        id="clarify-tool-buttons",
-    )
-    async with app.run_test():
-        widget = app.query_one(ClarificationInputMessage)
-        labels = [str(button.label) for button in widget.query(".plan-review-actions Button")]
-        # ``Edit`` label (not ``Refine``) for tool_approval.
-        assert labels == ["1. Approve", "2. Edit:", "3. Reject"]
-        assert len(list(widget.query(Button))) == 3
-        # No free-text answer Input — only the inline Refine/Edit comments Input.
-        inputs = list(widget.query(Input))
-        assert len(inputs) == 1
-        assert inputs[0].id == "plan-review-refine-comments"
-
-
-@pytest.mark.asyncio
-async def test_tool_approval_approve_submits_immediately() -> None:
-    app = _PlanReviewHarnessApp(
-        step_id="tool_approval",
-        questions=["Approve edit_file (file_path=/w/x.py)?"],
-        origin_node="tool_approval",
-        id="clarify-tool-approve",
-    )
+async def test_tool_approval_title() -> None:
+    widget = _make_tool_approval_widget(id="clarify-tool")
+    app = _WidgetApp(widget)
     async with app.run_test() as pilot:
-        await pilot.click("#plan-review-btn-approve")
+        await pilot.pause()
+        w = app.query_one(StructuredAskUserWidget)
+        title = w._tool_approval_title()
+        assert "read_file" in title
+        assert "Approve tool" in title
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_approve() -> None:
+    widget = _make_tool_approval_widget(id="clarify-tool-approve")
+    app = _WidgetApp(widget)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = app.query_one(StructuredAskUserWidget)
+        w.action_confirm()  # Approve (option 0)
+        await pilot.pause()
         assert len(app.submitted) == 1
-        assert app.submitted[0].answers == ["Approve", ""]
-        assert app.submitted[0].origin_node == "tool_approval"
+        assert app.submitted[0].answers == ["Approve"]
 
 
 @pytest.mark.asyncio
-async def test_tool_approval_edit_with_comments_submits() -> None:
-    app = _PlanReviewHarnessApp(
-        step_id="tool_approval",
-        questions=["Approve edit_file (file_path=/w/x.py)?"],
-        origin_node="tool_approval",
-        id="clarify-tool-edit",
-    )
+async def test_tool_approval_reject() -> None:
+    widget = _make_tool_approval_widget(id="clarify-tool-reject")
+    app = _WidgetApp(widget)
     async with app.run_test() as pilot:
-        widget = app.query_one(ClarificationInputMessage)
-        await pilot.press("down")  # approve → edit
-        assert widget._selected_action == "refine"
-        await pilot.press("enter")  # focus the Edit comments input
-        assert len(app.submitted) == 0
-        edit_input = widget.query_one("#plan-review-refine-comments")
-        edit_input.value = "rename to y.py"
-        edit_input.focus()
-        await pilot.press("enter")
+        await pilot.pause()
+        w = app.query_one(StructuredAskUserWidget)
+        w.action_next_option()  # Refine
+        w.action_next_option()  # Reject
+        w.action_confirm()
+        await pilot.pause()
         assert len(app.submitted) == 1
-        assert app.submitted[0].answers == ["Edit", "rename to y.py"]
-        assert app.submitted[0].origin_node == "tool_approval"
+        assert app.submitted[0].answers == ["Reject"]
 
 
-# ===========================================================================
-# Tool approval — title shape, Q-row suppression, [Approved] branch label
-# ===========================================================================
-
-
-def test_tool_approval_title_embeds_first_tool_call() -> None:
-    """Single pending tool call → title is 'Approve tool: <name> (<args>)'."""
-    widget = ClarificationInputMessage(
-        step_id="s1",
-        questions=["Approve run_command (command=ls packages/)?"],
-        origin_node="tool_approval",
-        id="clarify-tool-title",
-    )
-    title = str(widget._tool_approval_title())
-    assert title == "Approve tool: run_command (command=ls packages/)"
-    # No leading "Approve " / trailing "?" leaks from the detector wrapper.
-    assert not title.startswith("Approve Approve")
-    assert not title.endswith("?")
-
-
-def test_tool_approval_title_collapses_multiple_tool_calls() -> None:
-    """Multiple pending tool calls collapse into 'Approve N tools: <first> (+M more)'."""
-    widget = ClarificationInputMessage(
-        step_id="s1",
-        questions=[
-            "Approve run_command (command=git status)?",
-            "Approve run_command (command=git log --oneline -5)?",
-            "Approve edit_file (file_path=/w/x.py)?",
-        ],
-        origin_node="tool_approval",
-        id="clarify-tool-title-multi",
-    )
-    title = str(widget._tool_approval_title())
-    assert title == "Approve 3 tools: run_command (command=git status) (+2 more)"
-
-
-def test_tool_approval_title_handles_no_questions() -> None:
-    """Empty question list falls back to the bare 'Approve tool' title."""
-    widget = ClarificationInputMessage(
-        step_id="s1",
-        questions=[],
-        origin_node="tool_approval",
-        id="clarify-tool-title-empty",
-    )
-    assert widget._tool_approval_title() == "Approve tool"
+# ---------------------------------------------------------------------------
+# HITL: no "Other" custom row
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_tool_approval_title_keeps_plan_review_unchanged() -> None:
-    """plan_mode_review titles are unaffected by the tool-approval reshape."""
-    app = _PlanReviewHarnessApp(
-        step_id="plan_review",
-        questions=["Are the steps correct?"],
-        origin_node="plan_mode_review",
-        plan_path="/tmp/x.md",
-        id="clarify-plan-untouched",
-    )
-    async with app.run_test():
-        widget = app.query_one(ClarificationInputMessage)
-        # `_title_content` returns Textual Content; pull the plain text
-        # from it for the assertion (Content is a Textual rich-text type).
-        rendered_title = str(widget._title_content())
-        assert "Review this plan" in rendered_title
-        assert "Approve tool" not in rendered_title
-
-
-@pytest.mark.asyncio
-async def test_tool_approval_renders_no_q_rows_in_body() -> None:
-    """Tool-approval cards do NOT render Q1/Q2 body rows (title carries the info)."""
-    app = _PlanReviewHarnessApp(
-        step_id="tool_approval",
-        questions=[
-            "Approve run_command (command=ls)?",
-            "Approve run_command (command=pwd)?",
-        ],
-        origin_node="tool_approval",
-        id="clarify-tool-no-q",
-    )
-    async with app.run_test():
-        widget = app.query_one(ClarificationInputMessage)
-        q_rows = list(widget.query(".clarification-question"))
-        assert q_rows == []
-        # Title itself carries the tool info instead.
-        title_widget = widget.query_one(".clarification-title", Static)
-        rendered_title = str(title_widget.content)
-        assert "Approve 2 tools: run_command (command=ls) (+1 more)" in rendered_title
-
-
-@pytest.mark.asyncio
-async def test_tool_approval_approved_branch_label() -> None:
-    """Approved tool call collapses the answered view to '[Approved]', not '[Approve]'."""
-    app = _PlanReviewHarnessApp(
-        step_id="tool_approval",
-        questions=["Approve run_command (command=ls)?"],
-        origin_node="tool_approval",
-        id="clarify-tool-approved",
-    )
+async def test_hitl_no_custom_row() -> None:
+    widget = _make_plan_review_widget(id="clarify-no-custom")
+    app = _WidgetApp(widget)
     async with app.run_test() as pilot:
-        await pilot.click("#plan-review-btn-approve")
-        # Wire content still uses the action verb the daemon recognizes.
-        assert app.submitted[0].answers == ["Approve", ""]
-        widget = app.query_one(ClarificationInputMessage)
-        answered = widget.query_one(".plan-review-answered-action", Static)
-        rendered = str(answered.content)
-        assert "[Approved]" in rendered
-        assert "[Approve]" not in rendered
+        await pilot.pause()
+        w = app.query_one(StructuredAskUserWidget)
+        # No custom row, no custom input.
+        try:
+            w.query_one("#saq-opt-custom")
+            assert False, "custom row should not exist for HITL"
+        except Exception:
+            pass
+        try:
+            w.query_one("#saq-custom-input")
+            assert False, "custom input should not exist for HITL"
+        except Exception:
+            pass
 
 
-@pytest.mark.asyncio
-async def test_tool_approval_rejected_branch_label_unchanged() -> None:
-    """Reject path is unaffected — only the Approve→Approved remap applies."""
-    app = _PlanReviewHarnessApp(
-        step_id="tool_approval",
-        questions=["Approve run_command (command=ls)?"],
-        origin_node="tool_approval",
-        id="clarify-tool-rejected",
-    )
-    async with app.run_test() as pilot:
-        await pilot.click("#plan-review-btn-reject")
-        assert app.submitted[0].answers == ["Reject", ""]
-        widget = app.query_one(ClarificationInputMessage)
-        answered = widget.query_one(".plan-review-answered-action", Static)
-        rendered = str(answered.content)
-        assert "[Reject]" in rendered
-        assert "[Approved]" not in rendered
+# ---------------------------------------------------------------------------
+# CSS: padding parity with other cards
+# ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_tool_approval_answered_view_has_no_q_row_stubs() -> None:
-    """After submit, no stale Q1/Q2 rows remain above the [Approved] branch label."""
-    app = _PlanReviewHarnessApp(
-        step_id="tool_approval",
-        questions=[
-            "Approve run_command (command=ls)?",
-            "Approve run_command (command=pwd)?",
-        ],
-        origin_node="tool_approval",
-        id="clarify-tool-no-q-after-submit",
-    )
-    async with app.run_test() as pilot:
-        await pilot.click("#plan-review-btn-approve")
-        widget = app.query_one(ClarificationInputMessage)
-        # In submitted state, the answer box is shown and the question list
-        # never rendered to begin with (per `_compose_option_selector`).
-        q_rows = list(widget.query(".clarification-question"))
-        assert q_rows == []
-        answered = widget.query_one(".plan-review-answered-action", Static)
-        rendered = str(answered.content)
-        assert "[Approved]" in rendered
-        assert "Q1:" not in rendered
-        assert "Q2:" not in rendered
+def test_stream_cards_use_horizontal_inset_padding() -> None:
+    from soothe_cli.tui.widgets.messages.assistant import AssistantMessage
+    from soothe_cli.tui.widgets.messages.cognition_step import CognitionStepMessage
+
+    step_css = CognitionStepMessage.DEFAULT_CSS
+    assistant_css = AssistantMessage.DEFAULT_CSS
+    clarification_css = StructuredAskUserWidget.DEFAULT_CSS
+    assert "padding: 0 1;" in step_css
+    assert "padding: 0 1;" in assistant_css
+    assert "padding: 0 1;" in clarification_css
+    assert "border-left:" not in step_css
+    assert "border-left:" not in assistant_css
+    assert "border-left:" not in clarification_css

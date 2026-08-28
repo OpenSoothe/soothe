@@ -1,19 +1,33 @@
-"""Structured multi-question option-picker widget for `ask_user`."""
+"""Structured multi-question option-picker widget for `ask_user` and HITL gates.
+
+Unifies the generic ``ask_user`` (execute origin) and the HITL plan-review /
+tool-approval origins into one widget. HITL origins differ only in that their
+options are system-prefilled (Approve / Refine or Edit / Reject), the ``Other``
+free-text row is suppressed, and the Refine/Edit option shows a comment input.
+"""
 
 from __future__ import annotations
 
 import logging
+import re
+from contextlib import suppress
 from typing import Any
 
 from textual import on
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.content import Content
+from textual.events import Click, DescendantFocus
 from textual.message import Message
 from textual.widgets import Button, Input, Static
 
 from soothe_cli.display import theme
+from soothe_cli.display.markdown_theme import (
+    ThemedMarkdownRenderer,
+    resolve_markdown_theme_parts,
+)
 from soothe_cli.settings import get_glyphs
+from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
 from soothe_cli.tui.widgets.messages._helpers import (
     _assemble_card_header,
     _card_body_gutter,
@@ -21,18 +35,37 @@ from soothe_cli.tui.widgets.messages._helpers import (
 
 logger = logging.getLogger(__name__)
 
-# Wire origin constant (mirrors host ORIGIN_EXECUTE). CLI must not import
-# soothe host packages.
+# Wire origin constants (mirror host ORIGIN_* constants). CLI must not import
+# soothe host packages; keep the wire strings local.
 _ORIGIN_EXECUTE = "execute"
+_ORIGIN_PLAN_MODE_REVIEW = "plan_mode_review"
+_ORIGIN_TOOL_APPROVAL = "tool_approval"
+
+_HITL_ORIGINS: frozenset[str] = frozenset({_ORIGIN_PLAN_MODE_REVIEW, _ORIGIN_TOOL_APPROVAL})
+
+_FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n?", re.DOTALL)
+
+
+def _strip_plan_frontmatter(markdown: str) -> str:
+    """Remove YAML frontmatter from a plan artifact for display."""
+    raw = (markdown or "").strip()
+    if not raw.startswith("---"):
+        return raw
+    return _FRONTMATTER_RE.sub("", raw, count=1).strip()
 
 
 class StructuredAskUserWidget(Vertical):
-    """Structured multi-question option-picker for generic `ask_user`.
+    """Unified multi-question option-picker for ``ask_user`` and HITL gates.
 
-    Two modes:
+    Three modes:
     - **Structured** (default): tabs + options + hover-preview + footer.
-    - **Degraded**: plain free-text `Input` per question + Submit button.
-    Used for in-flight plain-string questions from before the schema upgrade.
+      Used for generic ``ask_user`` (execute origin) with LLM-emitted options.
+    - **HITL**: same structured layout but ``allow_custom=False`` (no "Other"
+      row), origin-aware title, optional plan body rendering, and a comment
+      field tied to the Refine/Edit option. Used for ``plan_mode_review``
+      and ``tool_approval`` origins.
+    - **Degraded**: plain free-text ``Input`` per question + Submit button.
+      Used for in-flight plain-string questions from before the schema upgrade.
     """
 
     can_focus = True
@@ -289,6 +322,77 @@ class StructuredAskUserWidget(Vertical):
         padding: 0;
         margin: 0;
     }
+
+    /* ── HITL: plan body rendering ─────────────────────────────────── */
+
+    StructuredAskUserWidget .saq-body-box {
+        height: auto;
+        padding: 0 1;
+        margin: 0 0 1 0;
+        border: solid $primary 40%;
+        background: $surface;
+        overflow: hidden;
+    }
+
+    StructuredAskUserWidget .saq-body {
+        height: auto;
+        width: 1fr;
+        padding: 0;
+        margin: 0;
+        color: $text;
+    }
+
+    StructuredAskUserWidget .saq-body-path {
+        height: auto;
+        padding: 0;
+        margin: 0 0 1 0;
+        color: $text-muted;
+        text-style: italic;
+    }
+
+    /* ── HITL: comment input for Refine/Edit ───────────────────────── */
+
+    StructuredAskUserWidget .saq-comment-row {
+        height: auto;
+        width: 1fr;
+        padding: 0;
+        margin: 0 0 0 2;
+    }
+
+    StructuredAskUserWidget .saq-comment-input {
+        margin: 0;
+        width: 1fr;
+        height: 1;
+        padding: 0 1;
+        background: $surface;
+        border: none;
+    }
+
+    StructuredAskUserWidget .saq-comment-input:disabled {
+        opacity: 0.5;
+    }
+
+    StructuredAskUserWidget .saq-comment-hint {
+        height: auto;
+        padding: 0;
+        margin: 0 0 0 2;
+        color: $text-muted;
+        text-style: italic;
+    }
+
+    /* ── HITL: expand/collapse plan body in answered view ──────────── */
+
+    StructuredAskUserWidget .saq-expand-toggle {
+        height: auto;
+        color: $primary;
+        text-style: italic;
+        padding: 0;
+        margin: 0;
+    }
+
+    StructuredAskUserWidget.is-submitted .saq-body-box.is-expanded {
+        display: block;
+    }
     """
 
     class Submitted(Message):
@@ -318,6 +422,10 @@ class StructuredAskUserWidget(Vertical):
         widget_id: str | None = None,
         origin_node: str | None = None,
         degraded: bool = False,
+        body_markdown: str | None = None,
+        body_path: str | None = None,
+        allow_custom: bool = True,
+        comment_option_index: int | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -333,12 +441,23 @@ class StructuredAskUserWidget(Vertical):
         self._rendered_opt_count = 0  # option rows created at compose time
         self._submit_review_open = False
         self._submitted = False
+        self._answers: list[str] = []
         self._degraded_inputs: list[Input] = []
         self._custom_input: Input | None = None
         self._submit_btn: Button | None = None
         self._abandon_btn: Button | None = None
         self._footer_focused = False  # False = question area, True = footer
         self._focus_guard_timer = None  # recurring timer that steals focus back from chat input
+        # HITL extensions
+        self._body_markdown = (body_markdown or "").strip()
+        self._body_path = (body_path or "").strip()
+        self._allow_custom = allow_custom
+        self._comment_option_index = comment_option_index  # option idx that shows comment
+        self._comment_input: Input | None = None
+        self._comment_text: str = ""
+        self._body_expanded = False
+        self._plan_body_widget: Static | None = None
+        self._plan_body_text: str = ""
 
     # ------------------------------------------------------------------
     # Properties
@@ -347,6 +466,19 @@ class StructuredAskUserWidget(Vertical):
     @property
     def _is_structured(self) -> bool:
         return not self._degraded
+
+    @property
+    def _is_hitl(self) -> bool:
+        """True for plan-review and tool-approval origins."""
+        return self._origin_node in _HITL_ORIGINS
+
+    @property
+    def _is_plan_review(self) -> bool:
+        return self._origin_node == _ORIGIN_PLAN_MODE_REVIEW
+
+    @property
+    def _is_tool_approval(self) -> bool:
+        return self._origin_node == _ORIGIN_TOOL_APPROVAL
 
     @property
     def _num_questions(self) -> int:
@@ -366,7 +498,7 @@ class StructuredAskUserWidget(Vertical):
         q = self._questions[idx]
         if isinstance(q, dict):
             return q.get("question", "")
-        return ""
+        return str(q)
 
     def _question_options(self, idx: int) -> list[dict[str, str]]:
         """Return list of option dicts with 'label' and 'description' keys."""
@@ -380,6 +512,9 @@ class StructuredAskUserWidget(Vertical):
         sel = self._selected.get(q_idx)
         if sel is None:
             return ""
+        if not self._allow_custom and sel == 3:
+            # HITL custom shouldn't happen, but guard.
+            return ""
         if sel == 3:
             return self._custom_texts.get(q_idx, "")
         options = self._question_options(q_idx)
@@ -387,20 +522,74 @@ class StructuredAskUserWidget(Vertical):
             return options[sel].get("label", "")
         return ""
 
+    def _hitl_comment_label(self) -> str:
+        """The comment text from the HITL comment input (if any)."""
+        if self._comment_input is not None:
+            return str(self._comment_input.value or "").strip()
+        return self._comment_text
+
     def _answers_collected(self) -> list[str]:
-        """All answer texts in question order (empty string if unanswered)."""
-        return [self._answer_text(i) for i in range(self._num_questions)]
+        """All answer texts in question order (empty string if unanswered).
+
+        For HITL origins, appends the comment text as a second slot when
+        the Refine/Edit option is selected — the wire shape is
+        ``[action, comment]`` for the host decoder.
+        """
+        answers = [self._answer_text(i) for i in range(self._num_questions)]
+        if self._is_hitl and self._comment_option_index is not None:
+            sel = self._selected.get(0)
+            if sel == self._comment_option_index and self._hitl_comment_label():
+                # Append comment as second answer for the host decoder.
+                if len(answers) == 1:
+                    answers.append(self._hitl_comment_label())
+                elif len(answers) > 1:
+                    answers[1] = self._hitl_comment_label()
+        return answers
 
     # ------------------------------------------------------------------
     # Title content
     # ------------------------------------------------------------------
 
     def _title_content(self) -> Content:
-        title = "Awaiting your answer"
+        if self._is_plan_review:
+            title = "Review this plan"
+        elif self._is_tool_approval:
+            title = self._tool_approval_title()
+        else:
+            title = "Awaiting your answer"
         if self._submitted:
             return _assemble_card_header(self, title, status="success")
         colors = theme.get_theme_colors(self)
         return _assemble_card_header(self, title, status="pending", accent=colors.warning)
+
+    def _tool_approval_title(self) -> str:
+        """Build the tool-approval card title from the first question.
+
+        Each HITL question for tool_approval is shaped as a ``QuestionSpec``
+        with ``header`` = ``"Approve <name> (<arg>)"``. The card title
+        re-shapes it to ``"Approve tool: <name> (<arg>)"``. Multiple
+        pending tool calls collapse into one title.
+        """
+        if not self._questions:
+            return "Approve tool"
+        q0 = self._questions[0]
+        if isinstance(q0, dict):
+            body = q0.get("header", "")
+        else:
+            body = str(q0)
+        if body.startswith("Approve "):
+            body = body[len("Approve ") :]
+        if body.endswith("?"):
+            body = body[:-1]
+        more = len(self._questions) - 1
+        if more > 0:
+            return f"Approve {more + 1} tools: {body} (+{more} more)"
+        return f"Approve tool: {body}"
+
+    def _path_footer_text(self) -> str:
+        if self._body_path:
+            return f"Plan saved to: {self._body_path}"
+        return "Plan held in memory only"
 
     def _refresh_title(self) -> None:
         try:
@@ -425,17 +614,54 @@ class StructuredAskUserWidget(Vertical):
     def _compose_answered_summary(self) -> Any:
         gutter = _card_body_gutter()
         with Vertical(classes="saq-answered-box"):
-            for i in range(self._num_questions):
+            if self._is_hitl:
+                # HITL answered view: action label + optional comments + body toggle
+                answer = self._answers[0] if self._answers else ""
+                comments = self._answers[1] if len(self._answers) > 1 else ""
+                display_action = answer
+                # Tool-approval "Approve" reads as past-tense "Approved"
+                if self._is_tool_approval and answer == "Approve":
+                    display_action = "Approved"
+                shows_comments = comments and answer in ("Refine", "Edit")
+                summary = f"{display_action}: {comments}" if shows_comments else display_action
                 yield Static(
-                    f"{gutter}[{self._question_header(i)} → {self._answer_text(i) or '—'}]",
+                    f"{gutter}[{summary}]",
                     classes="saq-answered-row",
                     markup=False,
                 )
+                if self._is_plan_review and self._body_markdown.strip():
+                    g = get_glyphs()
+                    yield Static(
+                        f"{g.expand} Plan body — click or press Enter to expand",
+                        classes="saq-expand-toggle",
+                        markup=True,
+                    )
+            else:
+                for i in range(self._num_questions):
+                    yield Static(
+                        f"{gutter}[{self._question_header(i)} → {self._answer_text(i) or '—'}]",
+                        classes="saq-answered-row",
+                        markup=False,
+                    )
 
     def _compose_structured(self) -> Any:
         # Top visual separator — clearly distinguishes the QA widget from
         # surrounding messages in the transcript.
         yield Static("─" * 60, classes="saq-separator", markup=False)
+        # HITL plan review: render the plan body above the options.
+        if self._is_plan_review and self._body_markdown.strip():
+            body = _strip_plan_frontmatter(self._body_markdown)
+            with Vertical(classes="saq-body-box"):
+                body_widget = Static("", classes="saq-body", markup=False)
+                yield body_widget
+                self._plan_body_widget = body_widget
+                self._plan_body_text = body
+            if self._body_path:
+                yield Static(
+                    self._path_footer_text(),
+                    classes="saq-body-path",
+                    markup=False,
+                )
         # Tab bar (hidden for single question — CSS can't conditionally
         # hide, so we just don't render it when there's only one question).
         if self._num_questions > 1:
@@ -495,32 +721,43 @@ class StructuredAskUserWidget(Vertical):
                         markup=False,
                     )
                 # "Other" custom row (implicit — auto-added, always last).
-                # When there are no structured options we enable it immediately
-                # so the user isn't stuck on an empty picker.
+                # Suppressed for HITL origins (allow_custom=False).
+                if self._allow_custom:
+                    yield Static(
+                        "  Other:",
+                        id="saq-opt-custom",
+                        classes="saq-option-row",
+                        markup=False,
+                    )
+                    self._custom_input = Input(
+                        placeholder="Type a custom answer…",
+                        id="saq-custom-input",
+                        classes="saq-custom-input",
+                        disabled=_has_renderable_opts,
+                    )
+                    yield self._custom_input
+                    # Auto-highlight the custom row when there are no options
+                    # so the user can start typing immediately.
+                    if not _has_renderable_opts:
+                        self._highlighted = 0  # point at "Other"
+                # HITL comment input: shown when the Refine/Edit option is selected.
+                if self._is_hitl and self._comment_option_index is not None:
+                    comment_placeholder = "Revised args…" if self._is_tool_approval else "Comments…"
+                    self._comment_input = Input(
+                        placeholder=comment_placeholder,
+                        id="saq-comment-input",
+                        classes="saq-comment-input",
+                        disabled=True,
+                    )
+                    yield self._comment_input
+            # Inline hint shown when custom row is highlighted but text is empty.
+            if self._allow_custom:
                 yield Static(
-                    "  Other:",
-                    id="saq-opt-custom",
-                    classes="saq-option-row",
+                    "Enter a custom answer or pick an option",
+                    classes="saq-custom-hint",
+                    id="saq-custom-hint",
                     markup=False,
                 )
-                self._custom_input = Input(
-                    placeholder="Type a custom answer…",
-                    id="saq-custom-input",
-                    classes="saq-custom-input",
-                    disabled=_has_renderable_opts,
-                )
-                yield self._custom_input
-                # Auto-highlight the custom row when there are no options
-                # so the user can start typing immediately.
-                if not _has_renderable_opts:
-                    self._highlighted = 0  # point at "Other"
-            # Inline hint shown when custom row is highlighted but text is empty.
-            yield Static(
-                "Enter a custom answer or pick an option",
-                classes="saq-custom-hint",
-                id="saq-custom-hint",
-                markup=False,
-            )
         # Recap (hidden until submit review opens)
         with Vertical(classes="saq-recap", id="saq-recap-box"):
             yield Static("Review:", classes="saq-recap-title", markup=False)
@@ -612,6 +849,9 @@ class StructuredAskUserWidget(Vertical):
             if self._degraded_inputs:
                 self._schedule_focus(self._degraded_inputs[0])
             return
+        # Render plan body markdown for HITL plan review.
+        if self._is_plan_review:
+            self._render_plan_body()
         self._update_option_highlight()
         self._update_tab_highlight()
         self._update_submit_state()
@@ -626,6 +866,32 @@ class StructuredAskUserWidget(Vertical):
         # break arrow/Enter handling.  Poll every 200 ms and recapture
         # if focus has drifted to the chat input.  Stopped on submit/abandon.
         self._start_focus_guard()
+
+    def _render_plan_body(self) -> None:
+        """Render the plan body markdown via the themed renderer."""
+        body_widget = self._plan_body_widget
+        text = self._plan_body_text
+        if body_widget is None:
+            with suppress(Exception):
+                body_widget = self.query_one(".saq-body", Static)
+        if body_widget is None:
+            return
+        if not text:
+            body_widget.update("(No plan content)")
+            return
+        try:
+            entry, colors, code_theme = resolve_markdown_theme_parts(self)
+            body_widget.update(
+                ThemedMarkdownRenderer(
+                    text,
+                    entry=entry,
+                    colors=colors,
+                    code_theme=code_theme,
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug("Plan review markdown render failed; using plain text", exc_info=True)
+            body_widget.update(text)
 
     def _start_focus_guard(self) -> None:
         """Begin a recurring timer that recaptures focus from the chat input.
@@ -727,6 +993,44 @@ class StructuredAskUserWidget(Vertical):
             return False
 
     # ------------------------------------------------------------------
+    # HITL: plan body expand/collapse + comment focus guard
+    # ------------------------------------------------------------------
+
+    def _toggle_body_expanded(self) -> None:
+        """Expand or collapse the plan body in the answered view."""
+        self._body_expanded = not self._body_expanded
+        try:
+            body_box = self.query_one(".saq-body-box", Vertical)
+            if self._body_expanded:
+                body_box.add_class("is-expanded")
+            else:
+                body_box.remove_class("is-expanded")
+        except Exception:  # noqa: BLE001
+            pass
+        self._refresh_answered_summary()
+
+    def on_click(self, event: Click) -> None:
+        """Toggle plan body expand/collapse in the answered (submitted) view."""
+        if not self._is_plan_review or not self._submitted:
+            return
+        if screen_has_text_selection(self.screen):
+            return
+        event.stop()
+        self._toggle_body_expanded()
+
+    def on_descendant_focus(self, event: DescendantFocus) -> None:
+        """Guard: the HITL comment input may only hold focus when the
+        Refine/Edit option is the selected action."""
+        if (
+            self._comment_input is not None
+            and event.widget is self._comment_input
+            and self._comment_option_index is not None
+        ):
+            sel = self._selected.get(self._current_q)
+            if sel != self._comment_option_index:
+                self.screen.set_focus(self)
+
+    # ------------------------------------------------------------------
     # Rendering updates
     # ------------------------------------------------------------------
 
@@ -796,39 +1100,46 @@ class StructuredAskUserWidget(Vertical):
                         opt_w.remove_class("is-selected")
             except Exception:  # noqa: BLE001
                 pass
-        # Custom row
-        try:
-            custom_w = self.query_one("#saq-opt-custom", Static)
-            if self._highlighted == custom_idx:
-                custom_w.add_class("is-highlighted")
-                custom_w.remove_class("is-selected")
-            else:
-                custom_w.remove_class("is-highlighted")
-                sel = self._selected.get(self._current_q)
-                if sel is not None and sel == custom_idx:
-                    custom_w.add_class("is-selected")
-                else:
+        # Custom row (only when allow_custom)
+        if self._allow_custom:
+            try:
+                custom_w = self.query_one("#saq-opt-custom", Static)
+                if self._highlighted == custom_idx:
+                    custom_w.add_class("is-highlighted")
                     custom_w.remove_class("is-selected")
-        except Exception:  # noqa: BLE001
-            pass
+                else:
+                    custom_w.remove_class("is-highlighted")
+                    sel = self._selected.get(self._current_q)
+                    if sel is not None and sel == custom_idx:
+                        custom_w.add_class("is-selected")
+                    else:
+                        custom_w.remove_class("is-selected")
+            except Exception:  # noqa: BLE001
+                pass
         # Enable custom input only when custom row is highlighted
         if self._custom_input is not None:
             self._custom_input.disabled = self._highlighted != custom_idx
         # Show the custom-empty hint when the custom row is highlighted but
         # the input has no text (§9c.7).
-        try:
-            hint = self.query_one("#saq-custom-hint", Static)
-            custom_text = (
-                str(self._custom_input.value or "").strip()
-                if self._custom_input is not None
-                else ""
-            )
-            if self._highlighted == 3 and not custom_text:
-                hint.add_class("is-visible")
-            else:
-                hint.remove_class("is-visible")
-        except Exception:  # noqa: BLE001
-            pass
+        if self._allow_custom:
+            try:
+                hint = self.query_one("#saq-custom-hint", Static)
+                custom_text = (
+                    str(self._custom_input.value or "").strip()
+                    if self._custom_input is not None
+                    else ""
+                )
+                if self._highlighted == custom_idx and not custom_text:
+                    hint.add_class("is-visible")
+                else:
+                    hint.remove_class("is-visible")
+            except Exception:  # noqa: BLE001
+                pass
+        # HITL: enable/disable comment input based on the selected option.
+        if self._comment_input is not None and self._comment_option_index is not None:
+            sel = self._selected.get(self._current_q)
+            should_enable = sel is not None and sel == self._comment_option_index
+            self._comment_input.disabled = not should_enable
 
     def _update_tab_highlight(self) -> None:
         """Update tab labels to reflect current question and answered state."""
@@ -871,16 +1182,43 @@ class StructuredAskUserWidget(Vertical):
             for child in list(box.children):
                 child.remove()
             gutter = _card_body_gutter()
-            for i in range(self._num_questions):
-                answer = self._answer_text(i)
-                label = answer if answer else "—"
+            if self._is_hitl:
+                answers = self._answers if hasattr(self, "_answers") else self._answers_collected()
+                action = answers[0] if answers else ""
+                comments = answers[1] if len(answers) > 1 else ""
+                display_action = action
+                if self._is_tool_approval and action == "Approve":
+                    display_action = "Approved"
+                shows_comments = comments and action in ("Refine", "Edit")
+                summary = f"{display_action}: {comments}" if shows_comments else display_action
                 box.mount(
                     Static(
-                        f"{gutter}[{self._question_header(i)} → {label}]",
+                        f"{gutter}[{summary}]",
                         classes="saq-answered-row",
                         markup=False,
                     )
                 )
+                if self._is_plan_review and self._body_markdown.strip():
+                    g = get_glyphs()
+                    toggle = Static(
+                        f"{g.expand} Plan body — click or press Enter to expand"
+                        if not self._body_expanded
+                        else f"{g.collapse} Collapse plan body",
+                        classes="saq-expand-toggle",
+                        markup=True,
+                    )
+                    box.mount(toggle)
+            else:
+                for i in range(self._num_questions):
+                    answer = self._answer_text(i)
+                    label = answer if answer else "—"
+                    box.mount(
+                        Static(
+                            f"{gutter}[{self._question_header(i)} → {label}]",
+                            classes="saq-answered-row",
+                            markup=False,
+                        )
+                    )
         except Exception:  # noqa: BLE001
             pass
 
@@ -933,13 +1271,14 @@ class StructuredAskUserWidget(Vertical):
         self._submitted = True
         self._stop_focus_guard()
         self.add_class("is-submitted")
+        self._answers = self._answers_collected()
         self._refresh_title()
         self._refresh_answered_summary()
         self.post_message(
             self.Submitted(
                 step_id=self._step_id,
                 questions=self._questions,
-                answers=[self._answer_text(i) for i in range(self._num_questions)],
+                answers=self._answers,
                 widget_id=self._widget_id,
                 origin_node=self._origin_node,
             )
@@ -952,7 +1291,9 @@ class StructuredAskUserWidget(Vertical):
         self._submitted = True
         self._stop_focus_guard()
         self.add_class("is-submitted")
+        self._answers = []
         self._refresh_title()
+        self._refresh_answered_summary()
         self.post_message(
             self.Submitted(
                 step_id=self._step_id,
@@ -987,7 +1328,7 @@ class StructuredAskUserWidget(Vertical):
         if self._degraded or self._submitted or self._submit_review_open:
             return
         num_opts = len(self._question_options(self._current_q))
-        total = num_opts + 1  # +1 for custom row
+        total = num_opts + (1 if self._allow_custom else 0)
         self._highlighted = (self._highlighted - 1) % total
         self._update_option_highlight()
 
@@ -995,13 +1336,16 @@ class StructuredAskUserWidget(Vertical):
         if self._degraded or self._submitted or self._submit_review_open:
             return
         num_opts = len(self._question_options(self._current_q))
-        total = num_opts + 1  # +1 for custom row
+        total = num_opts + (1 if self._allow_custom else 0)
         self._highlighted = (self._highlighted + 1) % total
         self._update_option_highlight()
 
     def action_confirm(self) -> None:
         """Enter: select highlighted option, or finalize submit review."""
         if self._submitted:
+            # HITL plan review: toggle body expand after submit.
+            if self._is_plan_review:
+                self._toggle_body_expanded()
             return
         if self._submit_review_open:
             # Enter on the recap = submit
@@ -1010,7 +1354,8 @@ class StructuredAskUserWidget(Vertical):
         if self._degraded:
             return
         num_opts = len(self._question_options(self._current_q))
-        if self._highlighted == num_opts:
+        custom_idx = num_opts  # Custom row is at index == num_opts (if allowed)
+        if self._allow_custom and self._highlighted == custom_idx:
             # Custom row — focus the input if not yet selected
             if self._custom_input is not None and not self._custom_input.disabled:
                 self._schedule_focus(self._custom_input)
@@ -1020,6 +1365,18 @@ class StructuredAskUserWidget(Vertical):
         self._update_option_highlight()
         self._update_tab_highlight()
         self._update_submit_state()
+        # HITL: if the selected option has a comment field, focus it.
+        if (
+            self._comment_option_index is not None
+            and self._highlighted == self._comment_option_index
+            and self._comment_input is not None
+        ):
+            self._schedule_focus(self._comment_input)
+            return
+        # HITL: immediate submit on action selection (Approve/Reject).
+        if self._is_hitl:
+            self._finalize()
+            return
         # Auto-advance to next unanswered question; when every question is
         # answered, open the submit review so Enter finalizes.
         if not self._all_answered:
@@ -1131,6 +1488,12 @@ class StructuredAskUserWidget(Vertical):
         if self._submitted:
             event.stop()
             return
+        # HITL: comment input — Enter submits with the comment.
+        if event.input is self._comment_input:
+            event.stop()
+            self._comment_text = str(event.input.value or "").strip()
+            self._finalize()
+            return
         if self._degraded:
             # In degraded mode, Enter on an input finalizes if all filled
             idx = -1
@@ -1198,6 +1561,7 @@ class StructuredAskUserWidget(Vertical):
         self._submitted = True
         self._selected = {i: 0 for i in range(len(answers))}
         self._custom_texts = {i: answers[i] for i in range(len(answers))}
+        self._answers = answers
         self.add_class("is-submitted")
         self._refresh_title()
         self._refresh_answered_summary()

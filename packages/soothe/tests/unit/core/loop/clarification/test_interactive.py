@@ -233,7 +233,7 @@ async def test_tool_approval_tolerates_blank_comment_slot(
     _stub_interrupt(monkeypatch, {"answers": ["Approve", ""]})
     policy = InteractiveClarificationPolicy()
     ans = await policy.answer(_request(1, origin_node="tool_approval"))
-    assert ans.answers == ("Approve",)
+    assert ans.answers == ("Approve", "")
     assert ans.source == "human"
 
 
@@ -251,11 +251,11 @@ async def test_tool_approval_edit_carries_action(
 async def test_tool_approval_single_action_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A bare action answer works unchanged."""
+    """A bare action answer works, padded with a blank comment slot."""
     _stub_interrupt(monkeypatch, {"answers": ["reject"]})
     policy = InteractiveClarificationPolicy()
     ans = await policy.answer(_request(1, origin_node="tool_approval"))
-    assert ans.answers == ("reject",)
+    assert ans.answers == ("reject", "")
 
 
 async def test_tool_approval_defers_on_blank_action(

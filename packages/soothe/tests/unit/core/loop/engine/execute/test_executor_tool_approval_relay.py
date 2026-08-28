@@ -153,9 +153,16 @@ def test_detector_captures_tool_approval_interrupt() -> None:
     assert req.origin_node == ORIGIN_TOOL_APPROVAL
     assert req.origin_interrupt_id == "iTA"
     assert len(req.questions) == 1
-    assert "edit_file" in req.questions[0]
-    assert "/a.py" in req.questions[0]
-    assert "approve" in req.questions[0].lower()
+    q = req.questions[0]
+    assert isinstance(q, dict)
+    assert "edit_file" in q["header"]
+    assert "/a.py" in q["header"]
+    assert "approve" in q["header"].lower()
+    assert len(q["options"]) == 3
+    labels = [opt["label"] for opt in q["options"]]
+    assert "Approve" in labels
+    assert "Edit" in labels
+    assert "Reject" in labels
 
 
 def test_detector_rejects_non_action_requests() -> None:
@@ -186,7 +193,9 @@ def test_detector_formats_run_command_with_command_arg() -> None:
         loop_state=_view(),
     )
     assert req is not None
-    assert "rm -rf /" in req.questions[0]
+    q = req.questions[0]
+    assert isinstance(q, dict)
+    assert "rm -rf /" in q["header"]
 
 
 def test_detector_truncates_long_command_arg() -> None:
@@ -200,13 +209,15 @@ def test_detector_truncates_long_command_arg() -> None:
     )
     assert req is not None
     q = req.questions[0]
-    assert q.startswith("Approve run_command (command=")
-    assert q.endswith("?")
-    # Truncated — the full command should NOT be in the question
-    assert long_cmd not in q
-    assert "…" in q
+    assert isinstance(q, dict)
+    header = q["header"]
+    assert "run_command" in header
+    assert "command=" in header
+    # Truncated — the full command should NOT be in the header
+    assert long_cmd not in header
+    assert "…" in header
     # The truncated preview should be present
-    assert long_cmd[:50] in q
+    assert long_cmd[:50] in header
 
 
 # ---------------------------------------------------------------------------

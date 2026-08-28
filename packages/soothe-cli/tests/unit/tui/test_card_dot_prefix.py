@@ -9,8 +9,8 @@ from soothe_cli.tui.widgets.messages._helpers import (
     _card_dot_tone,
 )
 from soothe_cli.tui.widgets.messages.assistant import AssistantMessage
-from soothe_cli.tui.widgets.messages.clarification import ClarificationInputMessage
 from soothe_cli.tui.widgets.messages.cognition_step import CognitionStepMessage
+from soothe_cli.tui.widgets.messages.structured_ask_user import StructuredAskUserWidget
 
 
 def test_card_dot_tone_maps_lifecycle_phases() -> None:
@@ -68,7 +68,7 @@ def test_stream_cards_use_horizontal_inset_padding() -> None:
     """
     step_css = CognitionStepMessage.DEFAULT_CSS
     assistant_css = AssistantMessage.DEFAULT_CSS
-    clarification_css = ClarificationInputMessage.DEFAULT_CSS
+    clarification_css = StructuredAskUserWidget.DEFAULT_CSS
     assert "padding: 0 1;" in step_css
     assert "padding: 0 1;" in assistant_css
     assert "padding: 0 1;" in clarification_css

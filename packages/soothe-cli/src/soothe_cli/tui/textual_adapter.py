@@ -164,10 +164,10 @@ from soothe_cli.tui.input import MediaTracker, parse_file_mentions
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
-    ClarificationInputMessage,
     CognitionGoalTreeMessage,
     CognitionReasonMessage,
     CognitionStepMessage,
+    StructuredAskUserWidget,
     SummarizationMessage,
     create_subagent_card,
     flush_deferred_tools_refreshes,
@@ -352,8 +352,8 @@ class TextualUIAdapter:
         self._execute_wave_completed: int = 0
         """Completed steps in the current execute batch."""
 
-        self._clarification_input_by_step: dict[str, ClarificationInputMessage] = {}
-        """Active inline ``ClarificationInputMessage`` widgets keyed by step id.
+        self._clarification_input_by_step: dict[str, StructuredAskUserWidget] = {}
+        """Active inline ``StructuredAskUserWidget`` widgets keyed by step id.
 
         Entry is added when a clarification request arrives and removed once
         the user submits the dialog (the app handler renders the answers on
@@ -2927,32 +2927,28 @@ async def _mount_manual_clarification_input(
 ) -> str:
     """Mount (or reuse) the inline clarification answer widget.
 
-    Prefers a running execute step card, then an active orphan SubAgent card,
-    then a synthetic key from `origin_node` so intake-only plan review still
-    shows an answer UI after the orphan card has completed.
+        Prefers a running execute step card, then an active orphan SubAgent card,
+        then a synthetic key from `origin_node` so intake-only plan review still
+        shows an answer UI after the orphan card has completed.
 
-    Routes by payload shape: structured `QuestionSpec` dicts
-    with an `options` key → `StructuredAskUserWidget`; HITL origins
-    (`plan_mode_review`, `tool_approval`) → `ClarificationInputMessage`;
-    plain strings → `StructuredAskUserWidget` in degraded mode.
+    All origins now route through ``StructuredAskUserWidget``. HITL origins
+        (``plan_mode_review``, ``tool_approval``) get ``allow_custom=False``,
+        a comment field on the Refine/Edit option, and optional plan body
+        rendering. Structured dicts with ``options`` → structured mode; plain
+        strings → degraded mode.
 
-    Returns:
-    The step/key used for `adapter._clarification_input_by_step`.
+        Returns:
+            The step/key used for `adapter._clarification_input_by_step`.
     """
     # Determine whether questions are structured (dict with "options") or plain.
     is_structured = bool(questions) and isinstance(questions[0], dict) and "options" in questions[0]
-    # HITL origins always use ClarificationInputMessage.
     is_hitl = origin_node in ("plan_mode_review", "tool_approval")
-    if is_hitl:
-        # Flatten to strings for the HITL widget.
-        questions_list = [str(q) for q in questions if str(q).strip()]
-    else:
-        # Preserve structured dicts; filter by title for structured, by str for plain.
-        questions_list = [
-            q
-            for q in questions
-            if (q.get("question", "").strip() if isinstance(q, dict) else str(q).strip())
-        ]
+    # Preserve structured dicts; filter by question text for structured, by str for plain.
+    questions_list = [
+        q
+        for q in questions
+        if (q.get("question", "").strip() if isinstance(q, dict) else str(q).strip())
+    ]
     if not questions_list:
         return ""
 
@@ -2980,34 +2976,37 @@ async def _mount_manual_clarification_input(
     existing = adapter._clarification_input_by_step.get(target_step_id)
     if existing is None:
         widget_id = f"clarify-{uuid.uuid4().hex[:8]}"
-        if is_hitl:
-            input_widget = ClarificationInputMessage(
-                step_id=target_step_id,
-                questions=questions_list,
-                origin_node=str(origin_node or ""),
-                plan_path=str(plan_path or ""),
-                plan_markdown=str(plan_markdown or ""),
-                widget_id=widget_id,
-                id=widget_id,
-            )
-        else:
-            from soothe_cli.tui.widgets.messages.structured_ask_user import (
-                StructuredAskUserWidget,
-            )
+        from soothe_cli.tui.widgets.messages.structured_ask_user import (
+            StructuredAskUserWidget,
+        )
 
-            input_widget = StructuredAskUserWidget(
-                step_id=target_step_id,
-                questions=questions_list,
-                origin_node=str(origin_node or ""),
-                widget_id=widget_id,
-                id=widget_id,
-                degraded=not is_structured,
-            )
+        # HITL: find the Refine/Edit option index for the comment field.
+        comment_option_index = None
+        if is_hitl and is_structured:
+            opts = questions_list[0].get("options", []) if questions_list else []
+            for i, opt in enumerate(opts):
+                label = (opt.get("label", "") if isinstance(opt, dict) else "").lower()
+                if label in ("refine", "edit"):
+                    comment_option_index = i
+                    break
+
+        input_widget = StructuredAskUserWidget(
+            step_id=target_step_id,
+            questions=questions_list,
+            origin_node=str(origin_node or ""),
+            widget_id=widget_id,
+            id=widget_id,
+            degraded=not is_structured,
+            body_markdown=str(plan_markdown or "") if is_hitl else None,
+            body_path=str(plan_path or "") if is_hitl else None,
+            allow_custom=not is_hitl,
+            comment_option_index=comment_option_index,
+        )
         adapter._clarification_input_by_step[target_step_id] = input_widget
         mount_result = adapter._mount_message(input_widget)
         if mount_result is not None:
             await mount_result
-    return target_step_id
+        return target_step_id
 
 
 async def execute_task_textual(
@@ -4195,22 +4194,17 @@ async def execute_task_textual(
                                 adapter._clarification_pending = True
                                 if event_type == LOOP_CLARIFICATION_REQUESTED:
                                     raw_questions = data.get("questions") or []
-                                    # Preserve structured dicts (RFC-622 §9c);
-                                    # only flatten for HITL origins.
-                                    if origin_node in ("plan_mode_review", "tool_approval"):
-                                        questions_list = [
-                                            str(q) for q in raw_questions if str(q).strip()
-                                        ]
-                                    else:
-                                        questions_list = [
-                                            q
-                                            for q in raw_questions
-                                            if (
-                                                q.get("question", "").strip()
-                                                if isinstance(q, dict)
-                                                else str(q).strip()
-                                            )
-                                        ]
+                                    # Preserve structured dicts for all origins
+                                    # (HITL origins now emit QuestionSpec dicts too).
+                                    questions_list = [
+                                        q
+                                        for q in raw_questions
+                                        if (
+                                            q.get("question", "").strip()
+                                            if isinstance(q, dict)
+                                            else str(q).strip()
+                                        )
+                                    ]
                                     if questions_list and _should_show_clarification_prompt(
                                         event_data=data,
                                         fallback_mode=clarification_mode,

@@ -143,20 +143,37 @@ def message_to_widget(data: MessageData) -> Widget:
             return w
 
         case MessageType.PLAN_REVIEW:
-            from soothe_cli.tui.widgets.messages.clarification import (
-                ClarificationInputMessage,
+            from soothe_cli.tui.widgets.messages.structured_ask_user import (
+                StructuredAskUserWidget,
             )
 
             action = data.plan_review_action or ""
             comments = data.plan_review_comments or ""
             answers = [action, comments] if comments else [action, ""]
-            w = ClarificationInputMessage(
+            # Reconstruct a minimal HITL QuestionSpec for the answered view.
+            origin = data.plan_origin_node or "plan_mode_review"
+            is_tool_approval = origin == "tool_approval"
+            refine_label = "Edit" if is_tool_approval else "Refine"
+            question_spec = {
+                "question": "Action for this plan: Approve, Refine, or Reject?"
+                if not is_tool_approval
+                else "Approve this tool call?",
+                "header": "Plan review" if not is_tool_approval else "Tool approval",
+                "options": [
+                    {"label": "Approve", "description": "Accept and proceed."},
+                    {"label": refine_label, "description": "Request changes."},
+                    {"label": "Reject", "description": "Reject."},
+                ],
+            }
+            w = StructuredAskUserWidget(
                 step_id="",
-                questions=[],
+                questions=[question_spec],
                 widget_id=data.id,
-                origin_node=data.plan_origin_node,
-                plan_path=data.plan_path,
-                plan_markdown=data.plan_markdown,
+                origin_node=origin,
+                body_markdown=data.plan_markdown,
+                body_path=data.plan_path,
+                allow_custom=False,
+                comment_option_index=1,
                 id=data.id,
             )
             w._submitted = True  # noqa: SLF001
@@ -197,7 +214,6 @@ def message_from_widget(widget: Widget) -> MessageData:
         SummarizationMessage,
         UserMessage,
     )
-    from soothe_cli.tui.widgets.messages.clarification import ClarificationInputMessage
     from soothe_cli.tui.widgets.messages.structured_ask_user import (
         StructuredAskUserWidget,
     )
@@ -205,21 +221,11 @@ def message_from_widget(widget: Widget) -> MessageData:
     widget_id = widget.id or f"msg-{uuid.uuid4().hex[:8]}"
 
     if isinstance(widget, StructuredAskUserWidget):
-        # Serialize StructuredAskUserWidget to MessageData for transcript.
-        answers = widget._answers_collected() if widget._submitted else []  # noqa: SLF001
-        if widget._submitted and answers:  # noqa: SLF001
-            summary = " | ".join(a for a in answers if a)
-            content = f"Clarification: {summary}" if summary else "Clarification answered"
-        else:
-            content = "Clarification: awaiting answer"
-        return MessageData(type=MessageType.APP, content=content, id=widget_id)
-
-    if isinstance(widget, ClarificationInputMessage):
         origin = widget._origin_node or ""  # noqa: SLF001
         is_plan_review = origin == "plan_mode_review"
         is_tool_approval = origin == "tool_approval"
-        is_option_selector = is_plan_review or is_tool_approval
-        if widget._submitted and widget._answers and is_option_selector:  # noqa: SLF001
+        is_hitl = is_plan_review or is_tool_approval
+        if widget._submitted and widget._answers and is_hitl:  # noqa: SLF001
             action = widget._answers[0] if widget._answers else ""  # noqa: SLF001
             comments = widget._answers[1] if len(widget._answers) > 1 else ""  # noqa: SLF001
             if is_tool_approval:
@@ -248,23 +254,21 @@ def message_from_widget(widget: Widget) -> MessageData:
                 id=widget_id,
                 plan_review_action=action,
                 plan_review_comments=comments or None,
-                plan_markdown=widget._plan_markdown or None,  # noqa: SLF001
-                plan_path=widget._plan_path or None,  # noqa: SLF001
+                plan_markdown=widget._body_markdown or None,  # noqa: SLF001
+                plan_path=widget._body_path or None,  # noqa: SLF001
                 plan_origin_node=widget._origin_node or None,  # noqa: SLF001
             )
-        if widget._submitted and widget._answers:  # noqa: SLF001
-            summary = " | ".join(a for a in widget._answers if a)  # noqa: SLF001
+        # Awaiting state for HITL origins.
+        if is_hitl and not widget._submitted:  # noqa: SLF001
             if is_plan_review:
-                prefix = "Plan review"
-            elif is_tool_approval:
-                prefix = "Tool approval"
+                content = "Plan review: awaiting Approve / Refine / Reject"
             else:
-                prefix = "Clarification"
-            content = f"{prefix}: {summary}" if summary else f"{prefix} answered"
-        elif is_plan_review:
-            content = "Plan review: awaiting Approve / Refine / Reject"
-        elif is_tool_approval:
-            content = "Tool approval: awaiting Approve / Edit / Reject"
+                content = "Tool approval: awaiting Approve / Edit / Reject"
+            return MessageData(type=MessageType.APP, content=content, id=widget_id)
+        answers = widget._answers_collected() if widget._submitted else []  # noqa: SLF001
+        if widget._submitted and answers:  # noqa: SLF001
+            summary = " | ".join(a for a in answers if a)
+            content = f"Clarification: {summary}" if summary else "Clarification answered"
         else:
             content = "Clarification: awaiting answer"
         return MessageData(type=MessageType.APP, content=content, id=widget_id)

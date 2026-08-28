@@ -152,18 +152,22 @@ class InteractiveClarificationPolicy:
         # Action-selector origins (plan-mode review, tool approval) send
         # [action, optional-comment]; only the action field (index 0) is
         # required — the trailing comment is legitimately blank (approve) or
-        # carries edit args. Treat a non-empty action as answered and pad /
-        # truncate to the expected length instead of dismissing the whole
-        # answer (the TUI always submits both slots).
+        # carries edit/refine args. Treat a non-empty action as answered and
+        # pad / truncate to the expected length instead of dismissing the
+        # whole answer (the TUI always submits both slots).
         if (
             origin in (ORIGIN_PLAN_MODE_REVIEW, ORIGIN_TOOL_APPROVAL)
             and expected in (1, 2)
             and stripped
             and stripped[0]
         ):
+            # Preserve the comment (index 1) even when expected=1 — the host
+            # decoder (parse_plan_review_answers / _answer_to_decision) reads
+            # it from answer.answers[1].
             if len(stripped) == 1:
                 stripped.append("")
-            return stripped[:expected]
+            # Don't truncate — return both [action, comment].
+            return stripped
 
         if any(not a for a in stripped):
             return None
