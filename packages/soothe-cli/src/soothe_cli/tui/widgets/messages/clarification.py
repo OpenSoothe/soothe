@@ -335,11 +335,37 @@ class ClarificationInputMessage(Vertical):
             return _TOOL_APPROVAL_ACTION_LABELS.get(action, _ACTION_LABELS[action])
         return _ACTION_LABELS[action]
 
+    def _tool_approval_title(self) -> str:
+        """Build the tool-approval card title from pending action requests.
+
+        Each question produced by `ClarificationDetector._format_action_request`
+        is shaped as ``"Approve <name> (<arg>)?"``. The card title re-shapes
+        the first one to ``"Approve tool: <name> (<arg>)"`` so the user sees
+        what is about to execute in the title itself, with no extra body row.
+        Multiple pending tool calls collapse into
+        ``"Approve <N> tools: <first> (+<more> more)"`` to keep the title
+        single-line and scannable.
+        """
+        if not self._questions:
+            return "Approve tool"
+        body = self._questions[0]
+        # Strip the detector's outer wrapper so the title reads as
+        # "Approve tool: <name> (<args>)" — the body of the title IS the
+        # question content, so the redundant Q-row body is dropped entirely.
+        if body.startswith("Approve "):
+            body = body[len("Approve ") :]
+        if body.endswith("?"):
+            body = body[:-1]
+        more = len(self._questions) - 1
+        if more > 0:
+            return f"Approve {more + 1} tools: {body} (+{more} more)"
+        return f"Approve tool: {body}"
+
     def _title_content(self) -> Content:
         if self._is_plan_review:
             title = "Review this plan"
         elif self._is_tool_approval:
-            title = "Approve tool action"
+            title = self._tool_approval_title()
         else:
             title = "Awaiting your answer"
         if self._submitted:
@@ -375,9 +401,16 @@ class ClarificationInputMessage(Vertical):
         gutter = _card_body_gutter()
         action = self._answers[0] if self._answers else ""
         comments = self._answers[1] if len(self._answers) > 1 else ""
+        # Tool-approval "Approve" reads as past-tense "Approved" in the
+        # branch label — the action has already happened by the time the
+        # answered view is rendered. Wire content (the action verb sent to
+        # the host) is unchanged, so the daemon still recognizes it.
+        display_action = action
+        if self._is_tool_approval and action == "Approve":
+            display_action = "Approved"
         # "Refine" (plan review) and "Edit" (tool approval) both carry comments.
         shows_comments = action in ("Refine", "Edit") and comments
-        summary = f"{action}: {comments}" if shows_comments else action
+        summary = f"{display_action}: {comments}" if shows_comments else display_action
         try:
             action_w = self.query_one(".plan-review-answered-action", Static)
             action_w.update(f"{gutter}[{summary}]")
@@ -452,9 +485,14 @@ class ClarificationInputMessage(Vertical):
                 self._plan_body_widget = body_widget
                 self._plan_body_text = body
             yield Static(self._path_footer_text(), classes="plan-review-path", markup=False)
-        else:
-            # tool_approval: surface each pending tool-call question so the
-            # user can see what is about to execute before approving.
+        elif not self._is_tool_approval:
+            # tool_approval: the title already names the pending tool call(s)
+            # (see `_tool_approval_title`), so the body intentionally renders
+            # no per-question rows. Rendering them again here would leave a
+            # redundant `Q1: ...` / `Q2: ...` stub above the branch label
+            # after submit, since the submitted-state CSS hides the active
+            # review body but not the question rows. Plan review uses the
+            # question list elsewhere (ask_user flow), so we keep it scoped.
             for i, q in enumerate(self._questions):
                 q_classes = "clarification-question"
                 if i > 0:

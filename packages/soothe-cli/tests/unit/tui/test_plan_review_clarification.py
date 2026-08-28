@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from textual.app import App, ComposeResult
+from textual.widgets import Static
 
 from soothe_cli.commands.binding import message_from_widget
 from soothe_cli.tui.widgets.messages.clarification import (
@@ -516,3 +517,156 @@ async def test_tool_approval_edit_with_comments_submits() -> None:
         assert len(app.submitted) == 1
         assert app.submitted[0].answers == ["Edit", "rename to y.py"]
         assert app.submitted[0].origin_node == "tool_approval"
+
+
+# ===========================================================================
+# Tool approval — title shape, Q-row suppression, [Approved] branch label
+# ===========================================================================
+
+
+def test_tool_approval_title_embeds_first_tool_call() -> None:
+    """Single pending tool call → title is 'Approve tool: <name> (<args>)'."""
+    widget = ClarificationInputMessage(
+        step_id="s1",
+        questions=["Approve run_command (command=ls packages/)?"],
+        origin_node="tool_approval",
+        id="clarify-tool-title",
+    )
+    title = str(widget._tool_approval_title())
+    assert title == "Approve tool: run_command (command=ls packages/)"
+    # No leading "Approve " / trailing "?" leaks from the detector wrapper.
+    assert not title.startswith("Approve Approve")
+    assert not title.endswith("?")
+
+
+def test_tool_approval_title_collapses_multiple_tool_calls() -> None:
+    """Multiple pending tool calls collapse into 'Approve N tools: <first> (+M more)'."""
+    widget = ClarificationInputMessage(
+        step_id="s1",
+        questions=[
+            "Approve run_command (command=git status)?",
+            "Approve run_command (command=git log --oneline -5)?",
+            "Approve edit_file (file_path=/w/x.py)?",
+        ],
+        origin_node="tool_approval",
+        id="clarify-tool-title-multi",
+    )
+    title = str(widget._tool_approval_title())
+    assert title == "Approve 3 tools: run_command (command=git status) (+2 more)"
+
+
+def test_tool_approval_title_handles_no_questions() -> None:
+    """Empty question list falls back to the bare 'Approve tool' title."""
+    widget = ClarificationInputMessage(
+        step_id="s1",
+        questions=[],
+        origin_node="tool_approval",
+        id="clarify-tool-title-empty",
+    )
+    assert widget._tool_approval_title() == "Approve tool"
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_title_keeps_plan_review_unchanged() -> None:
+    """plan_mode_review titles are unaffected by the tool-approval reshape."""
+    app = _PlanReviewHarnessApp(
+        step_id="plan_review",
+        questions=["Are the steps correct?"],
+        origin_node="plan_mode_review",
+        plan_path="/tmp/x.md",
+        id="clarify-plan-untouched",
+    )
+    async with app.run_test():
+        widget = app.query_one(ClarificationInputMessage)
+        # `_title_content` returns Textual Content; pull the plain text
+        # from it for the assertion (Content is a Textual rich-text type).
+        rendered_title = str(widget._title_content())
+        assert "Review this plan" in rendered_title
+        assert "Approve tool" not in rendered_title
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_renders_no_q_rows_in_body() -> None:
+    """Tool-approval cards do NOT render Q1/Q2 body rows (title carries the info)."""
+    app = _PlanReviewHarnessApp(
+        step_id="tool_approval",
+        questions=[
+            "Approve run_command (command=ls)?",
+            "Approve run_command (command=pwd)?",
+        ],
+        origin_node="tool_approval",
+        id="clarify-tool-no-q",
+    )
+    async with app.run_test():
+        widget = app.query_one(ClarificationInputMessage)
+        q_rows = list(widget.query(".clarification-question"))
+        assert q_rows == []
+        # Title itself carries the tool info instead.
+        title_widget = widget.query_one(".clarification-title", Static)
+        rendered_title = str(title_widget.content)
+        assert "Approve 2 tools: run_command (command=ls) (+1 more)" in rendered_title
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_approved_branch_label() -> None:
+    """Approved tool call collapses the answered view to '[Approved]', not '[Approve]'."""
+    app = _PlanReviewHarnessApp(
+        step_id="tool_approval",
+        questions=["Approve run_command (command=ls)?"],
+        origin_node="tool_approval",
+        id="clarify-tool-approved",
+    )
+    async with app.run_test() as pilot:
+        await pilot.click("#plan-review-btn-approve")
+        # Wire content still uses the action verb the daemon recognizes.
+        assert app.submitted[0].answers == ["Approve", ""]
+        widget = app.query_one(ClarificationInputMessage)
+        answered = widget.query_one(".plan-review-answered-action", Static)
+        rendered = str(answered.content)
+        assert "[Approved]" in rendered
+        assert "[Approve]" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_rejected_branch_label_unchanged() -> None:
+    """Reject path is unaffected — only the Approve→Approved remap applies."""
+    app = _PlanReviewHarnessApp(
+        step_id="tool_approval",
+        questions=["Approve run_command (command=ls)?"],
+        origin_node="tool_approval",
+        id="clarify-tool-rejected",
+    )
+    async with app.run_test() as pilot:
+        await pilot.click("#plan-review-btn-reject")
+        assert app.submitted[0].answers == ["Reject", ""]
+        widget = app.query_one(ClarificationInputMessage)
+        answered = widget.query_one(".plan-review-answered-action", Static)
+        rendered = str(answered.content)
+        assert "[Reject]" in rendered
+        assert "[Approved]" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_answered_view_has_no_q_row_stubs() -> None:
+    """After submit, no stale Q1/Q2 rows remain above the [Approved] branch label."""
+    app = _PlanReviewHarnessApp(
+        step_id="tool_approval",
+        questions=[
+            "Approve run_command (command=ls)?",
+            "Approve run_command (command=pwd)?",
+        ],
+        origin_node="tool_approval",
+        id="clarify-tool-no-q-after-submit",
+    )
+    async with app.run_test() as pilot:
+        await pilot.click("#plan-review-btn-approve")
+        widget = app.query_one(ClarificationInputMessage)
+        # In submitted state, the answer box is shown and the question list
+        # never rendered to begin with (per `_compose_option_selector`).
+        q_rows = list(widget.query(".clarification-question"))
+        assert q_rows == []
+        answered = widget.query_one(".plan-review-answered-action", Static)
+        rendered = str(answered.content)
+        assert "[Approved]" in rendered
+        assert "Q1:" not in rendered
+        assert "Q2:" not in rendered
