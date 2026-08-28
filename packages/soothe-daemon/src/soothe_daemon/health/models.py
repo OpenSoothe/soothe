@@ -36,14 +36,7 @@ class CheckStatus(StrEnum):
 
 @dataclass
 class CheckResult:
-    """Result of a single health check.
-
-    Attributes:
-    name: Unique identifier for this check (e.g., "config_file_valid")
-    status: Check status (ok, warning, error, info, skipped)
-    message: Human-readable result message
-    details: Additional structured data (e.g., paths, values, error details)
-    """
+    """Result of a single health check."""
 
     name: str
     status: CheckStatus
@@ -62,14 +55,7 @@ class CheckResult:
 
 @dataclass
 class CategoryResult:
-    """Results for a health check category.
-
-    Attributes:
-    category: Category name (e.g., "configuration", "daemon", "persistence")
-    status: Aggregated status (worst of all checks)
-    checks: List of individual check results
-    message: Optional category-level message
-    """
+    """Results for a health check category."""
 
     category: str
     status: CheckStatus

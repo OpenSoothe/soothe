@@ -9,15 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def path_exists(path: Path) -> bool:
-    """Return whether `path` exists, treating OS errors as non-existent.
-
-    Args:
-    path: Filesystem path to probe.
-
-    Returns:
-    True when `path.exists()` succeeds and is true; False on missing paths
-    or when the OS rejects the probe (e.g. name too long).
-    """
+    """Return whether `path` exists, treating OS errors as non-existent."""
     try:
         return path.exists()
     except OSError as exc:

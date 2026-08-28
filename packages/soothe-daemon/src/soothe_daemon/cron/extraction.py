@@ -78,17 +78,7 @@ Return valid JSON matching the schema. Be precise with datetime calculations.
 
 
 class CronExtractionService:
-    """LLM-based natural language schedule extraction.
-
-    Uses configurable LLM role (default: fast) with structured output.
-    Includes retry logic and timeout handling.
-
-    Args:
-    config: SootheConfig for LLM factory access.
-    model_role: Model role to use (default: fast).
-    timeout: Extraction timeout in seconds.
-    max_retries: Maximum retry attempts on failure.
-    """
+    """LLM-based natural language schedule extraction."""
 
     def __init__(
         self,

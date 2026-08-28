@@ -16,15 +16,7 @@ _SHELL_COLOR_PREFIX = (
 def shell_subprocess_env(
     base: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
-    """Build environment for TUI `!` shell commands with color-friendly defaults.
-
-    Args:
-    base: Starting environment (defaults to `os.environ`).
-
-    Returns:
-    Copy of `base` with `TERM`, `COLORTERM`, `FORCE_COLOR`, and
-    `CLICOLOR_FORCE` set for piped subprocess output.
-    """
+    """Build environment for TUI `!` shell commands with color-friendly defaults."""
     env = dict(base if base is not None else os.environ)
     env.setdefault("TERM", "xterm-256color")
     env.setdefault("COLORTERM", "truecolor")
@@ -34,14 +26,7 @@ def shell_subprocess_env(
 
 
 def wrap_shell_command_for_color(command: str) -> str:
-    """Prefix a shell command so piped stdout still receives ANSI from common CLIs.
-
-    Args:
-    command: User shell command from TUI shell mode.
-
-    Returns:
-    Command prefixed with exports and a POSIX `git` wrapper.
-    """
+    """Prefix a shell command so piped stdout still receives ANSI from common CLIs."""
     trimmed = command.strip()
     if not trimmed:
         return trimmed

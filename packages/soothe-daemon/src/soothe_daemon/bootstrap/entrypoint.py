@@ -26,15 +26,7 @@ def run_daemon(
     *,
     detached: bool = False,
 ) -> None:
-    """Start the daemon in the current process (blocking).
-
-    Args:
-    config: Agent `SootheConfig` (in-proc agent core, `nano.yml` [+ `soothe.yml`]).
-    daemon_config: Daemon-server `SootheDaemonConfig` (transports,
-    worker pool, distributed runner, `daemon.yml`).
-    detached: Whether daemon is running as a detached background process.
-    In detached mode, SIGINT shutdown handling is disabled.
-    """
+    """Start the daemon in the current process (blocking)."""
     daemon = SootheDaemon(
         config,
         daemon_config=daemon_config,

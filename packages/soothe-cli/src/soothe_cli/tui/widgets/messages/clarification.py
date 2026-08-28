@@ -71,22 +71,7 @@ def _strip_plan_frontmatter(markdown: str) -> str:
 
 
 class ClarificationInputMessage(Vertical):
-    """Inline answer-collection widget for HITL `ask_user` steps.
-
-    Mounted when `soothe.loop.clarification.requested` arrives for
-    plan-review or tool-approval origins. Generic (execute) ask_user
-    questions are handled by `StructuredAskUserWidget` (§9c).
-
-    Two render modes, keyed on `origin_node`:
-
-    - **Plan review** (`plan_mode_review`): full draft plan, saved-path
-    footer, and Approve / Refine / Reject action buttons.
-    - **Tool approval** (`tool_approval`): the question already carries the
-    pending tool call (name + args); render an Approve / Edit / Reject
-    option selector — no free-text Input for the answer itself. The `Edit`
-    row keeps an inline comments Input (the host maps it to the HITL
-    `edit` decision, which re-invokes the tool with revised args).
-    """
+    """Inline answer-collection widget for HITL `ask_user` steps."""
 
     # Focusable so the Enter binding (expand/collapse plan body) lands on the
     # card in the submitted state, where the plan-review buttons are disabled

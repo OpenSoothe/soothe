@@ -19,11 +19,7 @@ _LEGACY_CLI_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
 
 
 def resolve_cli_config_path() -> Path:
-    """Return the CLI prefs path, migrating legacy `config.yml` once if needed.
-
-    Returns:
-    Path to `~/.soothe/config/cli.yml` (created/migrated lazily).
-    """
+    """Return the CLI prefs path, migrating legacy `config.yml` once if needed."""
     if _DEFAULT_CLI_CONFIG_PATH.exists():
         return _DEFAULT_CLI_CONFIG_PATH
     if _LEGACY_CLI_CONFIG_PATH.exists():

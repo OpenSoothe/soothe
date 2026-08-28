@@ -379,21 +379,7 @@ async def run_textual_app(
     mcp_server_info: list[dict[str, Any]] | None = None,
     profile_override: dict[str, Any] | None = None,
 ) -> AppResult:
-    """Run the Textual TUI (daemon execution only).
-
-    Args:
-    daemon_config: Loaded Soothe configuration used for WebSocket bootstrap.
-    assistant_id: Agent identifier for memory storage.
-    cwd: Current working directory to display.
-    resume_loop_id: Initial loop id when attaching to an existing conversation.
-    initial_prompt: Optional prompt to auto-submit when session starts.
-    initial_skill: Optional skill name to invoke when session starts.
-    mcp_server_info: MCP server metadata for the `/mcp` viewer.
-    profile_override: Extra profile fields from `--profile-override`.
-
-    Returns:
-    An `AppResult` with the return code and final loop id.
-    """
+    """Run the Textual TUI (daemon execution only)."""
     from soothe_cli.tui.app._app import SootheApp  # deferred to avoid circular import
 
     app = SootheApp(

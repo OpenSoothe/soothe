@@ -17,16 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class LoopRunnerFactory:
-    """Creates a `LoopRunnerProtocol` instance for each new `loop_id`.
-
-    Selects runner implementation based on config (exactly one must be enabled):
-
-    - `worker_pool.enabled=true` → `PoolLoopRunner` (persistent subprocess pool)
-    - `thread_pool.enabled=true` → `ThreadLoopRunner` (persistent thread pool)
-    - `distributed.enabled=true` → `RayLoopRunner` (Ray actor per loop)
-
-    Validation ensures exactly one mode is enabled at startup.
-    """
+    """Creates a `LoopRunnerProtocol` instance for each new `loop_id`."""
 
     def __init__(
         self,
@@ -91,10 +82,7 @@ class LoopRunnerFactory:
         return None
 
     async def initialize_pool(self) -> None:
-        """Pre-warm worker pool if enabled.
-
-        Called by SootheDaemon.start() during startup.
-        """
+        """Pre-warm worker pool if enabled."""
         if self._pool_initialized:
             return
 

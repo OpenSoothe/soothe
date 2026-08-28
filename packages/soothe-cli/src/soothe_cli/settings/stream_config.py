@@ -17,19 +17,10 @@ logger = logging.getLogger(__name__)
 config: RunnableConfig = {
     "recursion_limit": 1000,
 }
-"""Default LangGraph runnable config.
-
-Sets `recursion_limit` to 1000 to accommodate deeply nested agent graphs without
-hitting the default LangGraph ceiling.
-"""
+"""Default LangGraph runnable config."""
 
 _git_branch_cache: dict[str, str | None] = {}
-"""Per-cwd cache of resolved git branch names.
-
-Avoids repeated `git rev-parse` subprocess calls within the same session. Keyed
-by `str(Path.cwd())`; `None` values indicate the directory is not inside a git
-repository.
-"""
+"""Per-cwd cache of resolved git branch names."""
 
 
 def _get_git_branch() -> str | None:
@@ -69,25 +60,7 @@ def build_stream_config(
     sandbox_type: str | None = None,
     workspace: str | None = None,
 ) -> RunnableConfig:
-    """Build the LangGraph stream config dict.
-
-    Injects the resolved Soothe version into `metadata["versions"]` so runs
-    can be correlated with specific releases. The runtime config replaces the
-    graph config's `versions` key at stream time, so this must carry the
-    canonical release string.
-
-    Args:
-    loop_id: Active StrangeLoop id (stored under LangGraph `configurable.thread_id`).
-    assistant_id: The agent/assistant identifier, if any.
-    sandbox_type: Sandbox provider name for trace metadata, or `None` if no
-    sandbox is active.
-    workspace: Workspace directory for in-process TUI runs. When
-    omitted, uses `Path.cwd()` (resolved). Mirrored to
-    `configurable["workspace"]` for middleware and task-tool propagation.
-
-    Returns:
-    Config dict with `configurable` and `metadata` keys.
-    """
+    """Build the LangGraph stream config dict."""
     from datetime import UTC, datetime
 
     try:

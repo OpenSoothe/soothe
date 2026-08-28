@@ -38,19 +38,7 @@ def _dotenv_start_path() -> Path:
 
 
 def bootstrap_dotenv(*, start_path: Path | str | None = None) -> bool:
-    """Load project and global `.env` files before config/YAML parsing.
-
-    Precedence (`override=False` throughout; shell exports win):
-
-    1. Nearest project `.env` from *start_path*, invocation env, or cwd
-    2. `$SOOTHE_HOME/.env` global defaults
-
-    Args:
-    start_path: Optional directory to begin the upward `.env` search.
-
-    Returns:
-    `True` when at least one dotenv file was loaded.
-    """
+    """Load project and global `.env` files before config/YAML parsing."""
     loaded = False
     search_root = Path(start_path).expanduser() if start_path is not None else _dotenv_start_path()
     project_env = _find_dotenv_from_path(search_root)

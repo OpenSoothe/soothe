@@ -15,24 +15,7 @@ from soothe.identity.runtime import (
 
 
 class WebSocketConfig(BaseModel):
-    """WebSocket server configuration.
-
-    WebSocket is the required bidirectional transport for all clients.
-
-    Args:
-    enabled: Enable WebSocket server (required).
-    host: Bind address.
-    port: Listen port.
-    tls_enabled: Enable TLS encryption.
-    tls_cert: TLS certificate path.
-    tls_key: TLS key path.
-    cors_origins: Allowed CORS origins.
-    max_frame_size: Maximum WebSocket frame size in bytes.
-    heartbeat_interval_ms: Interval (ms) for protocol-level ping/pong heartbeat
-    declared in the connection_ack handshake. Default 30000.
-    heartbeat_timeout_ms: If no pong is received within this window (ms), the
-    connection is considered dead and closed. Default 10000.
-    """
+    """WebSocket server configuration."""
 
     enabled: bool = True
     host: str = "127.0.0.1"
@@ -57,36 +40,13 @@ class WebSocketConfig(BaseModel):
 
 
 class TransportConfig(BaseModel):
-    """Transport layer configuration.
-
-    WebSocket is required for bidirectional streaming.
-
-    Args:
-    websocket: WebSocket configuration (required).
-    """
+    """Transport layer configuration."""
 
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
 
 
 class ChannelsConfig(BaseModel):
-    """Unified channel configuration.
-
-    Replaces TransportConfig with extensible channel architecture.
-    Built-in WebSocket channel plus external plugins.
-
-    Global settings apply to all channels:
-    - send_progress: Show progress indicators
-    - send_tool_hints: Show tool execution hints
-    - show_reasoning: Show model reasoning (where supported)
-    - send_max_retries: Retry attempts for outbound messages
-
-    Args:
-    websocket: WebSocket channel configuration (required).
-    send_progress: Show progress indicators.
-    send_tool_hints: Show tool hints.
-    show_reasoning: Show reasoning content.
-    send_max_retries: Maximum retry attempts.
-    """
+    """Unified channel configuration with built-in WebSocket and external plugins."""
 
     model_config = ConfigDict(extra="allow")  # Allow per-channel plugin configs
 
@@ -213,15 +173,7 @@ class WorkerPoolConfig(BaseModel):
 
 
 class DistributedConfig(BaseModel):
-    """Distributed loop execution configuration.
-
-    Controls whether loops run in isolated subprocesses (local multiprocessing)
-    or Ray actors (distributed cluster). Worker pool is for local mode;
-    Ray config is for distributed cluster mode.
-
-    Args:
-    enabled: Enable distributed mode (Ray actors).
-    """
+    """Distributed loop execution configuration (Ray actors or local multiprocessing)."""
 
     enabled: bool = Field(
         default=False,
@@ -230,39 +182,7 @@ class DistributedConfig(BaseModel):
 
 
 class ThreadPoolConfig(BaseModel):
-    """Thread pool configuration for loop execution.
-
-    Uses threads instead of subprocesses for lower overhead (~ms vs ~8s spawn).
-    Each thread has a dedicated asyncio event loop. One reused SootheRunner per
-    worker (`prepare_for_request` between turns) balances startup cost and isolation.
-
-    PostgreSQL Pool Sharing:
-    Daemon-level singleton pools are shared by ALL threads in the pool. This is
-    efficient because threads share the same memory space and asyncio event loops
-    can access shared AsyncConnectionPool instances. Defaults use persistence.postgres.pool_min_size
-    8 and max 64 per shared checkpointer/sloop pool; tune for 50–100 concurrent loops
-    with PgBouncer (see persistence.postgres.metadata_pool_size).
-
-    Trade-offs vs WorkerPoolConfig:
-    - Lower spawn overhead (milliseconds vs ~8s subprocess)
-    - Shared memory space (no config pickling required)
-    - PostgreSQL pools shared across threads (singleton)
-    - No CPU parallelism (GIL blocks across threads)
-    - Less crash isolation (thread crash affects daemon process)
-
-    Best for: Development/testing, I/O-bound async workloads, high-concurrency scenarios.
-
-    Default runner mode: lighter weight, faster startup.
-
-    Args:
-    enabled: Enable thread pool mode.
-    min_pool_size: Minimum threads to keep pooled.
-    max_pool_size: Maximum threads to scale up under load.
-    idle_timeout_seconds: Idle thread timeout before graceful exit.
-    max_requests_per_thread: Max requests before thread respawn (prevents memory buildup).
-    request_timeout_seconds: Default per-request timeout (0 = no timeout).
-    thread_startup_timeout_seconds: Timeout for thread startup and event loop init.
-    """
+    """Thread pool configuration for loop execution with shared asyncio event loops."""
 
     enabled: bool = Field(
         default=True,
@@ -336,13 +256,7 @@ class StaleWorkerReapConfig(BaseModel):
 
 
 class LoopGcConfig(BaseModel):
-    """Background GC for idle loops.
-
-    Single periodic sweeper that runs two passes per tick:
-    - Ephemeral pass: `is_ephemeral=True` loops idle past `ephemeral_idle_hours`.
-    - Empty pass: any loop with zero human + zero AI messages idle past `empty_idle_hours`
-    (bootstrap sessions that never produced a real exchange).
-    """
+    """Background GC for idle loops (ephemeral and empty)."""
 
     enabled: bool = Field(default=True, description="Run periodic loop GC")
     interval_seconds: int = Field(
@@ -372,13 +286,7 @@ class LoopGcConfig(BaseModel):
 
 
 class LoopStatusReconciliationConfig(BaseModel):
-    """Periodic reconciliation of stale `status="running"` loop rows.
-
-    A row with `status="running"` but no active runner on this daemon and
-    `updated_at` older than `stale_running_seconds` is demoted to `idle`.
-    The runner's heartbeat keeps live loops fresh; rows that miss multiple
-    heartbeat windows are presumed orphaned (daemon/runner crash).
-    """
+    """Periodic reconciliation of stale `status="running"` loop rows."""
 
     enabled: bool = Field(
         default=True,
@@ -407,22 +315,7 @@ class LoopStatusReconciliationConfig(BaseModel):
 
 
 class MemoryProfilingConfig(BaseModel):
-    """Memory profiling and leak detection configuration.
-
-    Uses Python's built-in tracemalloc for allocation tracking with minimal
-    overhead. Provides HTTP endpoints for real-time memory inspection.
-
-    tracemalloc tracks Python object allocations and can identify:
-    - Top memory consumers by file/line
-    - Allocation traceback chains
-    - Memory growth between snapshots
-
-    Args:
-    enabled: Enable memory profiling (tracemalloc).
-    trace_depth: Maximum traceback depth for allocations (higher = more detail).
-    top_allocations_limit: Number of top allocations to report in stats.
-    log_growth_threshold_mb: Log warning when memory grows by this amount.
-    """
+    """Memory profiling and leak detection via tracemalloc."""
 
     enabled: bool = Field(
         default=False,

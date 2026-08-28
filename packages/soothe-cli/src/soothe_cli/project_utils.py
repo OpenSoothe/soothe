@@ -20,22 +20,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ProjectContext:
-    """Explicit user/project path context for project-sensitive behavior.
-
-    Attributes:
-    user_cwd: Authoritative working directory from the CLI invocation.
-    project_root: Resolved project root for `user_cwd`, if one exists.
-    """
+    """Explicit user/project path context for project-sensitive behavior."""
 
     user_cwd: Path
     project_root: Path | None = None
 
     def __post_init__(self) -> None:
-        """Validate that path fields are absolute.
-
-        Raises:
-        ValueError: If `user_cwd` or `project_root` is not absolute.
-        """
+        """Validate that path fields are absolute."""
         if not self.user_cwd.is_absolute():
             msg = f"user_cwd must be absolute, got {self.user_cwd!r}"
             raise ValueError(msg)
@@ -47,14 +38,7 @@ class ProjectContext:
 def get_server_project_context(
     env: Mapping[str, str] | None = None,
 ) -> ProjectContext | None:
-    """Read the server project context from environment transport data.
-
-    Args:
-    env: Environment mapping to read from.
-
-    Returns:
-    Reconstructed project context, or `None` if no server context exists.
-    """
+    """Read the server project context from environment transport data."""
     environment = os.environ if env is None else env
     raw_cwd = environment.get(f"{SERVER_ENV_PREFIX}CWD")
     if not raw_cwd:
@@ -80,18 +64,7 @@ def get_server_project_context(
 
 
 def find_project_root(start_path: str | Path | None = None) -> Path | None:
-    """Find the project root by looking for .git directory.
-
-    Walks up the directory tree from start_path (or cwd) looking for a .git
-    directory, which indicates the project root.
-
-    Args:
-    start_path: Directory to start searching from.
-    Defaults to current working directory.
-
-    Returns:
-    Path to the project root if found, None otherwise.
-    """
+    """Find the project root by looking for .git directory."""
     current = Path(start_path or Path.cwd()).expanduser().resolve()
 
     # Walk up the directory tree

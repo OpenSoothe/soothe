@@ -31,21 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 class CronService:
-    """Orchestrating service for cron jobs.
-
-    Coordinates:
-    - NL extraction via CronExtractionService
-    - Schedule math via ScheduleSpec
-    - Persistence via CronJobStore / PostgresCronJobStore
-    - Execution via AutopilotService.submit_task()
-
-    Runs periodic monitoring tick to dispatch due jobs.
-
-    Args:
-    config: SootheConfig for settings and LLM factory.
-    autopilot: AutopilotService for goal dispatch.
-    store: Optional store (created from `persistence.default_backend` if None).
-    """
+    """Orchestrating service for cron jobs (extraction, scheduling, persistence, dispatch)."""
 
     def __init__(
         self,
@@ -53,13 +39,7 @@ class CronService:
         autopilot: AutopilotService | None = None,
         store: Any | None = None,
     ) -> None:
-        """Initialize CronService.
-
-        Args:
-        config: SootheConfig for settings and LLM factory.
-        autopilot: AutopilotService for goal dispatch.
-        store: Optional cron store (created from config when None).
-        """
+        """Initialize CronService."""
         self._config = config
         self._autopilot = autopilot
         self._cron_config = config.cron

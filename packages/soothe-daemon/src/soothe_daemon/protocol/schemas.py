@@ -84,13 +84,7 @@ __all__ = [
 
 
 class ParamsBase(BaseModel):
-    """Base for all param models — allows extra fields for forward compat.
-
-    The protocol envelope carries `proto`, `type`, `method`,
-    `request_id`, and `id` alongside the operation-specific fields. All
-    models validate against the *whole* message dict (or the nested
-    `params` dict) so extra keys must be tolerated.
-    """
+    """Base for all param models — allows extra fields for forward compat."""
 
     model_config = {"extra": "allow"}
 

@@ -16,14 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def parse_slash_command(input_text: str) -> tuple[str, str | None]:
-    """Parse slash command and extract command + query.
-
-    Args:
-    input_text: Full user input (e.g., "/deep_research topic summary")
-
-    Returns:
-    Tuple of (command, query) where query may be None
-    """
+    """Parse slash command and extract command + query."""
     stripped = input_text.strip()
     if not stripped.startswith("/"):
         return ("", None)
@@ -38,17 +31,7 @@ def parse_slash_command(input_text: str) -> tuple[str, str | None]:
 def validate_command(
     entry: dict[str, Any], command: str, query: str | None, loop_id: str | None
 ) -> tuple[bool, str | None]:
-    """Validate command before routing.
-
-    Args:
-    entry: Command registry entry
-    command: Command name
-    query: Query parameter (if present)
-    loop_id: Active StrangeLoop id for this session
-
-    Returns:
-    Tuple of (is_valid, error_message)
-    """
+    """Validate command before routing."""
     if entry.get("requires_loop") and not loop_id:
         return (False, "No active loop")
 
@@ -60,14 +43,7 @@ def validate_command(
 
 
 def find_command_by_daemon_command(daemon_command: str) -> dict[str, Any] | None:
-    """Find command entry by daemon command name.
-
-    Args:
-    daemon_command: Daemon command name (e.g., "memory")
-
-    Returns:
-    Command entry dict or None if not found
-    """
+    """Find command entry by daemon command name."""
     from soothe_cli.commands.slash_commands import COMMANDS
 
     for cmd_name, entry in COMMANDS.items():
@@ -77,15 +53,7 @@ def find_command_by_daemon_command(daemon_command: str) -> dict[str, Any] | None
 
 
 def parse_command_params(entry: dict[str, Any], query: str) -> dict[str, Any]:
-    """Parse query into params based on schema.
-
-    Args:
-    entry: Command registry entry with params_schema
-    query: Query string to parse
-
-    Returns:
-    Dict of params
-    """
+    """Parse query into params based on schema."""
     schema = entry.get("params_schema", {})
     if not schema:
         return {}

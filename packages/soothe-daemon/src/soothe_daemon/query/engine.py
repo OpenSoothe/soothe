@@ -75,16 +75,7 @@ class _ActiveLoopRunner:
 
 
 class AsyncCancelOrchestrator:
-    """Manages async cancellation with retry and force kill - guarantees success.
-
-    When cancel_loop() is called, this orchestrator kicks off a background task
-    that:
-    1. Signals cooperative cancellation (cancel_event)
-    2. Retries with exponential backoff up to cancel_retry_count
-    3. Force kills the worker if retries are exhausted
-
-    The caller returns immediately; cancellation is guaranteed in background.
-    """
+    """Manages async cancellation with retry and force kill."""
 
     def __init__(self, daemon: Any, query_engine: QueryEngine) -> None:
         """Initialize orchestrator with daemon and query engine references."""

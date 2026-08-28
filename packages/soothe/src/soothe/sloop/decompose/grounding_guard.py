@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from soothe.context.decomposition import DecompositionProposal
+from soothe.context.decomposition import DecompositionProposal, ProposedSubtask
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -17,8 +18,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Cap the total evidence text fed to the critic prompt (bounds cost/latency).
+# Cap the total evidence text fed to the critic / generation prompt.
 _EVIDENCE_PROMPT_CAP = 6000
+
+# Internal wall-clock budget for the grounding critic LLM call.  When this
+# elapses, the critic fails open (returns ``None`` → proposal is queued
+# without grounding verification).  This must be strictly less than the
+# ``decompose_task`` per-tool timeout (180 s) so the tool never gets
+# killed mid-retry by the outer middleware.
+_CRITIC_TIMEOUT_SECONDS = 45.0
+
+# Internal wall-clock budget for the fast-model subtask generation call.
+# Must also be < ``decompose_task`` per-tool timeout (180 s).
+_GENERATE_TIMEOUT_SECONDS = 60.0
 
 
 class UngroundedClaim(BaseModel):
@@ -43,6 +55,138 @@ class GroundingVerdict(BaseModel):
         default_factory=list,
         description="Claims NOT supported by the evidence (empty if grounded)",
     )
+
+
+# ── Fast-model subtask generation ───────────────────────────────────────────
+
+
+class GeneratedSubtask(BaseModel):
+    """A single subtask produced by the FAST model from evidence."""
+
+    description: str = Field(description="Short imperative title for this subtask")
+    full_description: str = Field(
+        default="",
+        description=(
+            "Detailed scope: files to touch, functions to modify, concrete "
+            "actions. Only reference paths/modules confirmed in the evidence."
+        ),
+    )
+    expected_output: str = Field(
+        default="",
+        description="What the completed subtask produces or changes.",
+    )
+
+
+class GeneratedSubtaskList(BaseModel):
+    """Structured output schema for fast-model subtask generation."""
+
+    subtasks: list[GeneratedSubtask] = Field(
+        min_length=1,
+        description="Proposed child subtasks grounded in the evidence.",
+    )
+
+
+_GENERATE_PROMPT = """\
+You are a task decomposition assistant for an AI coding agent.
+
+The agent is working on a step in a goal-driven loop. Below is the TASK \
+description and EVIDENCE — the concatenated outputs of search/inspection \
+tool calls the agent gathered in this step thread.
+
+Decompose the TASK into 1-{max_subtasks} child subtasks that can be \
+executed in parallel or in dependency order. Each subtask must be:
+- Grounded: only reference files, modules, functions, or directories that \
+appear in the EVIDENCE. Do not invent paths.
+- Self-contained: each subtask should be independently executable.
+- Concrete: the full_description must specify what to change and where.
+
+If the task is simple enough to finish in one thread, propose exactly 1 \
+subtask that covers the whole task.
+
+TASK:
+{task}
+
+EVIDENCE:
+{evidence}
+"""
+
+
+def _normalize_generated_subtasks(
+    data: dict[str, Any],
+) -> list[ProposedSubtask]:
+    """Convert GeneratedSubtaskList dicts to ProposedSubtask instances."""
+    raw = data.get("subtasks") or data.get("generated_subtasks") or []
+    out: list[ProposedSubtask] = []
+    for item in raw:
+        if isinstance(item, ProposedSubtask):
+            out.append(item)
+            continue
+        if isinstance(item, dict):
+            out.append(ProposedSubtask.model_validate(item))
+            continue
+        out.append(ProposedSubtask.model_validate(item))
+    return out
+
+
+async def generate_subtasks_via_fast_model(
+    task: str,
+    *,
+    evidence_corpus: list[str],
+    fast_model: BaseChatModel | None,
+    soothe_config: SootheConfig | None = None,
+    step_id: str,
+    max_subtasks: int = 8,
+    goal_trace: GoalLoopTrace | None = None,
+) -> list[ProposedSubtask] | None:
+    """Generate subtasks from evidence using the FAST model.
+
+    Returns a list of :class:`ProposedSubtask`, or ``None`` on failure \
+    (caller should fall back to the main-model-provided subtasks).
+    """
+    if fast_model is None:
+        return None
+    evidence = _render_evidence(evidence_corpus)
+    if not evidence_corpus:
+        return None
+    prompt = _GENERATE_PROMPT.format(
+        task=task,
+        evidence=evidence,
+        max_subtasks=max_subtasks,
+    )
+    try:
+        from soothe_nano.llm import ainvoke_structured_traced
+
+        data = await asyncio.wait_for(
+            ainvoke_structured_traced(
+                fast_model,
+                [{"role": "user", "content": prompt}],
+                json_schema=GeneratedSubtaskList.model_json_schema(),
+                schema_name="GeneratedSubtaskList",
+                soothe_config=soothe_config,
+                purpose="decompose_generate",
+                component="sloop.decompose.grounding_guard",
+                phase="execute_step",
+                goal_trace=goal_trace,
+                methods=("json_schema", "json_mode", "function_calling", None),
+                strict=False,
+            ),
+            timeout=_GENERATE_TIMEOUT_SECONDS,
+        )
+        return _normalize_generated_subtasks(data)
+    except TimeoutError:
+        logger.warning(
+            "[decompose] subtask generation timed out after %.0fs (step=%s)",
+            _GENERATE_TIMEOUT_SECONDS,
+            step_id,
+        )
+        return None
+    except Exception:
+        logger.warning(
+            "[decompose] subtask generation LLM call failed (step=%s)",
+            step_id,
+            exc_info=True,
+        )
+        return None
 
 
 def _render_proposal(proposal: DecompositionProposal) -> str:
@@ -118,6 +262,10 @@ async def check_proposal_grounded(
 
     Returns a :class:`GroundingVerdict`, or `None` on failure (fail-open: \
     the caller should not block the proposal when the critic itself errors).
+
+    An internal timeout (:data:`_CRITIC_TIMEOUT_SECONDS`) ensures the critic \
+    fails open well before the outer ``decompose_task`` tool timeout fires, \
+    so the tool is never killed mid-retry by the middleware.
     """
     if fast_model is None:
         # No fast model resolved — fail open (don't block legitimate work).
@@ -132,18 +280,38 @@ async def check_proposal_grounded(
     try:
         from soothe_nano.llm import ainvoke_structured_traced
 
-        data = await ainvoke_structured_traced(
-            fast_model,
-            [{"role": "user", "content": prompt}],
-            json_schema=GroundingVerdict.model_json_schema(),
-            schema_name="GroundingVerdict",
-            soothe_config=soothe_config,
-            purpose="decompose_grounding_critic",
-            component="sloop.decompose.grounding_guard",
-            phase="execute_step",
-            goal_trace=goal_trace,
+        data = await asyncio.wait_for(
+            ainvoke_structured_traced(
+                fast_model,
+                [{"role": "user", "content": prompt}],
+                json_schema=GroundingVerdict.model_json_schema(),
+                schema_name="GroundingVerdict",
+                soothe_config=soothe_config,
+                purpose="decompose_grounding_critic",
+                component="sloop.decompose.grounding_guard",
+                phase="execute_step",
+                goal_trace=goal_trace,
+                # Prefer json_schema over function_calling: the GroundingVerdict
+                # schema has a nested list of objects, which many FAST models
+                # fail to emit correctly under function_calling strict mode
+                # (observed: every attempt fails validation → repair retry →
+                # fallback, wasting 20-40s).  json_schema handles nested
+                # structures better and avoids the retry cycle.
+                methods=("json_schema", "json_mode", "function_calling", None),
+                # strict=False skips post-validation repair retries; we
+                # validate via Pydantic below instead.
+                strict=False,
+            ),
+            timeout=_CRITIC_TIMEOUT_SECONDS,
         )
         return GroundingVerdict.model_validate(data)
+    except TimeoutError:
+        logger.warning(
+            "[decompose] grounding critic timed out after %.0fs (step=%s); fail-open",
+            _CRITIC_TIMEOUT_SECONDS,
+            step_id,
+        )
+        return None
     except Exception:
         logger.warning(
             "[decompose] grounding critic LLM call failed (step=%s); fail-open",
@@ -191,9 +359,12 @@ def build_no_evidence_guidance(*, step_id: str) -> str:
 
 
 __all__ = [
+    "GeneratedSubtask",
+    "GeneratedSubtaskList",
     "GroundingVerdict",
     "UngroundedClaim",
     "build_no_evidence_guidance",
     "build_ungrounded_claims_guidance",
     "check_proposal_grounded",
+    "generate_subtasks_via_fast_model",
 ]

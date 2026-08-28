@@ -16,24 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def open_style_link(event: Click) -> None:
-    """Open the URL from a Rich link style on click, if present.
-
-    Rich `Style(link=...)` embeds OSC 8 terminal hyperlinks, but Textual's
-    mouse capture intercepts normal clicks before the terminal can act on them.
-    By handling the Textual click event directly we open the URL with a single
-    click, matching the behavior of links in the Markdown widget.
-
-    URLs that fail the safety check (e.g. containing hidden Unicode or
-    homograph domains) are blocked and not opened; the event bubbles and a
-    warning is logged and displayed as a Textual notification.
-
-    On success the event is stopped so it does not bubble further. On failure
-    (e.g. no browser available in a headless environment) the error is logged at
-    debug level and the event bubbles normally.
-
-    Args:
-    event: The Textual click event to inspect.
-    """
+    """Open the URL from a Rich link style on click, if present."""
     url = event.style.link
     if not url:
         return

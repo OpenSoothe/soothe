@@ -14,18 +14,7 @@ async def handle_loop_reattach(
     daemon: Any,
     client_id: Any,
 ) -> None:
-    """Handle loop (re)attachment by streaming bound cards from the ledger.
-
-    Process:
-    1. Ensure the daemon's card ledger for this loop is populated (eagerly
-    backfill from checkpoint + activity log if needed).
-    2. Stream `soothe.card.replay.begin` → `soothe.card.created` × N → `soothe.card.replay.end`.
-
-    Args:
-    loop_id: StrangeLoop identifier.
-    daemon: Daemon instance (for sending messages + card manager access).
-    client_id: Client connection identifier.
-    """
+    """Handle loop (re)attachment by streaming bound cards from the ledger."""
     try:
         logger.info("Handling loop reattachment for %s (client=%s)", loop_id, client_id)
 
@@ -68,12 +57,7 @@ def schedule_loop_reattach(
     daemon: Any,
     client_id: Any,
 ) -> asyncio.Task[None]:
-    """Schedule card replay after `loop_subscribe` without blocking the RPC.
-
-    The subscribe response is sent first so clients (TUI) can leave the
-    connecting state immediately. Card frames stream afterward on the same
-    client connection.
-    """
+    """Schedule card replay after `loop_subscribe` without blocking the RPC."""
 
     async def _run() -> None:
         try:

@@ -27,22 +27,14 @@ if TYPE_CHECKING:
 
 
 def _ensure_default_config_dir() -> Path:
-    """Ensure the default `SOOTHE_HOME/config` directory exists.
-
-    Returns:
-    Absolute path to the default config directory.
-    """
+    """Ensure the default `SOOTHE_HOME/config` directory exists."""
     config_dir = Path(SOOTHE_HOME).expanduser() / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir
 
 
 def default_soothe_config_path() -> Path:
-    """Default path of the nano-owned agent config YAML the daemon loads.
-
-    Split layout: `~/.soothe/config/nano.yml`. Host overlay lives in
-    `soothe.yml` beside it and is composed when present.
-    """
+    """Default path of the nano-owned agent config YAML the daemon loads."""
     return _ensure_default_config_dir() / "nano.yml"
 
 
@@ -52,14 +44,7 @@ def default_daemon_config_path() -> Path:
 
 
 class SootheDaemonConfig(BaseSettings):
-    """Top-level configuration for the Soothe daemon server.
-
-    Environment overrides use the `SOOTHE_DAEMON_` prefix (e.g.
-    `SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__PORT=9000`).
-
-    The agent config (`SootheConfig`) loaded for in-proc execution is
-    addressed by `soothe_config_path` and resolved via `load_soothe_config()`.
-    """
+    """Top-level configuration for the Soothe daemon server."""
 
     model_config = {"env_prefix": "SOOTHE_DAEMON_", "env_nested_delimiter": "__"}
 

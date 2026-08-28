@@ -76,14 +76,7 @@ def _parse_iso_to_local(iso_timestamp: str) -> datetime | None:
 
 
 def format_timestamp(iso_timestamp: str | None) -> str:
-    """Format ISO timestamp for display (e.g., 'Dec 30, 6:10pm').
-
-    Args:
-    iso_timestamp: ISO 8601 timestamp string, or `None`.
-
-    Returns:
-    Formatted timestamp string or empty string if invalid.
-    """
+    """Format ISO timestamp for display (e.g., 'Dec 30, 6:10pm')."""
     if not iso_timestamp:
         return ""
     dt = _parse_iso_to_local(iso_timestamp)
@@ -94,14 +87,7 @@ def format_timestamp(iso_timestamp: str | None) -> str:
 
 
 def format_relative_timestamp(iso_timestamp: str | None) -> str:
-    """Format ISO timestamp as relative time (e.g., '5m ago', '2h ago').
-
-    Args:
-    iso_timestamp: ISO 8601 timestamp string, or `None`.
-
-    Returns:
-    Relative time string or empty string if invalid.
-    """
+    """Format ISO timestamp as relative time (e.g., '5m ago', '2h ago')."""
     if not iso_timestamp:
         return ""
     dt = _parse_iso_to_local(iso_timestamp)
@@ -142,14 +128,7 @@ def _fallback_duration_ms(created: str | None, updated: str | None) -> int | Non
 
 
 def normalize_workspace_path(path: str | None) -> str | None:
-    """Resolve a workspace path for equality checks.
-
-    Args:
-    path: Raw workspace path, possibly relative or unexpanded.
-
-    Returns:
-    Absolute resolved path, or `None` when `path` is empty.
-    """
+    """Resolve a workspace path for equality checks."""
     if not path or not str(path).strip():
         return None
     try:
@@ -159,15 +138,7 @@ def normalize_workspace_path(path: str | None) -> str | None:
 
 
 def loop_matches_workspace(loop: dict[str, Any], workspace: str) -> bool:
-    """Return True when a loop row belongs to `workspace`.
-
-    Args:
-    loop: Loop metadata dict from `loop_list`.
-    workspace: Current TUI workspace path.
-
-    Returns:
-    True when the loop's recorded workspace matches after path resolution.
-    """
+    """Return True when a loop row belongs to `workspace`."""
     raw = loop.get("client_workspace")
     if not isinstance(raw, str) or not raw.strip():
         return False
@@ -179,11 +150,7 @@ def loop_matches_workspace(loop: dict[str, Any], workspace: str) -> bool:
 
 
 def generate_loop_id() -> str:
-    """Generate a new loop ID as a full UUID7 string.
-
-    Returns:
-    UUID7 string (time-ordered for natural sort by creation time).
-    """
+    """Generate a new loop ID as a full UUID7 string."""
     from uuid_utils import uuid7
 
     return str(uuid7())
@@ -195,25 +162,7 @@ async def list_loops_via_daemon_rpc(
     sort_by: str = "updated",
     workspace: str | None = None,
 ) -> list[LoopInfo]:
-    """List StrangeLoop instances via daemon WebSocket RPC.
-
-    Queries daemon's loop persistence (per-loop metadata.json files)
-    instead of only local SQLite checkpoint walks.
-
-    Args:
-    daemon_session: TuiDaemonSession instance for WebSocket RPC.
-    limit: Maximum number of loops to return.
-    sort_by: Sort field — `"updated"` or `"created"`.
-    workspace: When set, request only loops recorded for this workspace.
-
-    Returns:
-    List of `LoopInfo` dicts with `loop_id`, `status`, context counts,
-    `goals`, `switches`, `created`.
-
-    Raises:
-    ValueError: If `sort_by` is not `"updated"` or `"created"`.
-    RuntimeError: If daemon session is not available.
-    """
+    """List StrangeLoop instances via daemon WebSocket RPC."""
     if daemon_session is None:
         raise RuntimeError("Daemon session required for loop listing")
 

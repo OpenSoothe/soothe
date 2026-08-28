@@ -21,47 +21,17 @@ from soothe_cli.settings import console
 logger = logging.getLogger(__name__)
 
 PATH_CHAR_CLASS = r"A-Za-z0-9._~/\\:-"
-"""Characters allowed in file paths.
-
-Includes alphanumeric, period, underscore, tilde (home), forward/back slashes
-(path separators), colon (Windows drive letters), and hyphen.
-"""
+"""Characters allowed in file paths."""
 
 FILE_MENTION_PATTERN = re.compile(r"@(?P<path>(?:\\.|[" + PATH_CHAR_CLASS + r"])+)")
-"""Pattern for extracting `@file` mentions from input text.
-
-Matches `@` followed by one or more path characters or escaped character
-pairs (backslash + any character, e.g., `\\ ` for spaces in paths).
-
-Uses `+` (not `*`) because a bare `@` without a path is not a valid
-file reference.
-"""
+"""Pattern for extracting `@file` mentions from input text."""
 
 EMAIL_PREFIX_PATTERN = re.compile(r"[a-zA-Z0-9._%+-]$")
-"""Pattern to detect email-like text preceding an `@` symbol.
-
-If the character immediately before `@` matches this pattern, the `@mention`
-is likely part of an email address (e.g., `user@example.com`) rather than
-a file reference.
-"""
+"""Pattern to detect email-like text preceding an `@` symbol."""
 
 
 def command_token_span(line: str) -> tuple[int, int]:
-    """Return the `(start, end)` span of the leading slash-command token.
-
-    Used by the live input box (where `/` may still be present for one frame
-    before the mode prompt glyph strips it) and by submitted `UserMessage`
-    cards (where `/` has already been moved into the mode glyph).
-
-    A leading `/` is skipped when measuring the token body but included in
-    the returned span so the transient trigger character is highlighted too.
-
-    Args:
-    line: Plain text of the first input line, with or without a leading `/`.
-
-    Returns:
-    Span of the token, or `(0, 0)` when there is no token.
-    """
+    """Return the `(start, end)` span of the leading slash-command token."""
     start = 1 if line.startswith("/") else 0
     end = start
     while end < len(line) and not line[end].isspace():
@@ -243,29 +213,7 @@ class MediaTracker:
 
 
 def parse_file_mentions(text: str) -> tuple[str, list[Path]]:
-    r"""Extract `@file` mentions and return the text with resolved file paths.
-
-    Parses `@file` mentions from the input text and resolves them to absolute
-    file paths. Files that do not exist or cannot be resolved are excluded with
-    a warning printed to the console.
-
-    Email addresses (e.g., `user@example.com`) are automatically excluded by
-    detecting email-like characters before the `@` symbol.
-
-    Backslash-escaped spaces in paths (e.g., `@my\ folder/file.txt`) are
-    unescaped before resolution. Tilde paths (e.g., `@~/file.txt`) are expanded
-    via `Path.expanduser()`. Only regular files are returned; directories are
-    excluded.
-
-    This function does not raise exceptions; invalid paths are handled
-    internally with a console warning.
-
-    Args:
-    text: Input text potentially containing `@file` mentions.
-
-    Returns:
-    Tuple of (original text unchanged, list of resolved file paths that exist).
-    """
+    r"""Extract `@file` mentions and return the text with resolved file paths."""
     matches = FILE_MENTION_PATTERN.finditer(text)
 
     files = []

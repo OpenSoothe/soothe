@@ -49,11 +49,7 @@ _HEARTBEAT_INTERVAL_S = 5.0  # Broadcast heartbeat every 5 seconds
 
 
 def _log_startup_banner(channel_manager: ChannelManager | None) -> None:
-    """Log a clean startup banner with channel info.
-
-    Args:
-    channel_manager: The channel manager with started channels.
-    """
+    """Log a clean startup banner with channel info."""
     from soothe_daemon import __version__
 
     # Get channel details
@@ -72,14 +68,7 @@ def _log_startup_banner(channel_manager: ChannelManager | None) -> None:
 
 
 class SootheDaemon(DaemonHandlersMixin):
-    """Background daemon that runs `SootheRunner` and serves TUI clients.
-
-    Args:
-    config: Agent `SootheConfig` (in-proc agent core, `nano.yml` [+ `soothe.yml`]).
-    daemon_config: Daemon-server `SootheDaemonConfig` (transports,
-    worker pool, distributed runner, `daemon.yml`).
-    handle_sigint_shutdown: Whether SIGINT should trigger daemon shutdown.
-    """
+    """Background daemon that runs `SootheRunner` and serves TUI clients."""
 
     def __init__(
         self,
@@ -88,14 +77,7 @@ class SootheDaemon(DaemonHandlersMixin):
         *,
         handle_sigint_shutdown: bool = True,
     ) -> None:
-        """Initialize the Soothe daemon.
-
-        Args:
-        config: Agent `SootheConfig`.
-        daemon_config: Daemon-server `SootheDaemonConfig`.
-        handle_sigint_shutdown: Whether SIGINT should trigger daemon shutdown.
-        Disable for detached/background mode to avoid accidental Ctrl+C shutdown.
-        """
+        """Initialize the Soothe daemon."""
         self._config = config or SootheConfig()
         self._daemon_config = daemon_config or SootheDaemonConfig()
         self._handle_sigint_shutdown = handle_sigint_shutdown

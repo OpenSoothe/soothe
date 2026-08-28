@@ -19,18 +19,7 @@ _LOCAL_SENTINEL = "local"
 
 
 def resolve_schedule_timezone(name: str | None) -> tzinfo:
-    """Resolve a configured schedule timezone name to a tzinfo.
-
-    Args:
-    name: `local` for the system timezone, `UTC` for UTC, or an IANA
-    timezone such as `Asia/Shanghai`.
-
-    Returns:
-    tzinfo used when interpreting cron and wall-clock schedules.
-
-    Raises:
-    ValueError: If the timezone name is invalid.
-    """
+    """Resolve a configured schedule timezone name to a tzinfo."""
     if name is None or name.upper() == "UTC":
         return UTC
     if name.casefold() == _LOCAL_SENTINEL:
@@ -71,14 +60,7 @@ class ScheduleSpec:
     timezone: str | None = None  # "local", "UTC", or IANA name; None => UTC
 
     def next_after(self, after: datetime) -> datetime | None:
-        """Calculate next run time after the given time.
-
-        Args:
-        after: Reference time.
-
-        Returns:
-        Next scheduled time in UTC, or None if one-shot already past.
-        """
+        """Calculate next run time after the given time."""
         after_utc = _as_utc(after)
         schedule_tz = resolve_schedule_timezone(self.timezone)
 

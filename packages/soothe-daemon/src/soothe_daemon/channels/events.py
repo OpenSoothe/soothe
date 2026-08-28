@@ -19,20 +19,7 @@ from soothe_daemon.events.constants import (
 
 
 class ChannelMessageReceived(ProtocolEvent):
-    """User message received from any channel.
-
-    This event represents inbound user input, routed to the agent via
-    EventBus topic `loop:{loop_id}`. The agent processes this as the
-    primary user message for a turn.
-
-    Attributes:
-    channel: Source channel name (e.g., "websocket", "telegram").
-    chat_id: Conversation identifier on the platform.
-    sender_id: User identifier on the platform.
-    content: Message text.
-    media: Attachments (file paths or URLs).
-    metadata: Channel-specific extras (e.g., platform features).
-    """
+    """User message received from any channel."""
 
     type: str = CHANNEL_MESSAGE_RECEIVED
     channel: str
@@ -44,37 +31,19 @@ class ChannelMessageReceived(ProtocolEvent):
 
     @property
     def session_key(self) -> str:
-        """Unique key for session identification.
-
-        Format: `{channel}:{chat_id}` matches loop_id for external channels.
-        """
+        """Unique key for session identification."""
         return f"{self.channel}:{self.chat_id}"
 
 
 class TextEvent(OutputEvent):
-    """Complete text output for user display.
-
-    Represents a complete (non-streaming) text response from the agent.
-    ChannelManager translates this to ChannelMessage for delivery.
-
-    Attributes:
-    content: Complete text content (markdown formatted).
-    """
+    """Complete text output for user display."""
 
     type: str = OUTPUT_TEXT_COMPLETE
     content: str
 
 
 class TextDeltaEvent(OutputEvent):
-    """Incremental text chunk for streaming.
-
-    Represents a partial text chunk during streaming output. ChannelManager
-    may coalesce consecutive deltas before dispatching to channel.
-
-    Attributes:
-    content: Text chunk.
-    stream_id: Unique identifier for this stream (for stateful channels).
-    """
+    """Incremental text chunk for streaming."""
 
     type: str = OUTPUT_TEXT_DELTA
     content: str
@@ -82,14 +51,7 @@ class TextDeltaEvent(OutputEvent):
 
 
 class TextEndEvent(OutputEvent):
-    """End of text stream marker.
-
-    Signals the end of a streaming text response. ChannelManager flushes
-    any buffered deltas and sends final message.
-
-    Attributes:
-    stream_id: Unique identifier matching the TextDeltaEvent stream.
-    """
+    """End of text stream marker."""
 
     type: str = OUTPUT_TEXT_END
     stream_id: str

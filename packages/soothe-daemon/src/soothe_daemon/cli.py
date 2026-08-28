@@ -56,11 +56,7 @@ _DEFAULT_WS_PORT = 8765
 
 
 def _get_ws_address() -> tuple[str, int]:
-    """Get WebSocket host:port from daemon config.
-
-    Loads SootheDaemonConfig from default YAML (fast, ~50ms).
-    Falls back to default 127.0.0.1:8765 if config is unavailable.
-    """
+    """Get WebSocket host:port from daemon config, falling back to defaults."""
     try:
         from soothe_daemon.config import SootheDaemonConfig
 
@@ -83,14 +79,7 @@ def _is_port_live(host: str, port: int) -> bool:
 
 
 def _find_port_pid(port: int) -> int | None:
-    """Find PID of process listening on a TCP port using lsof.
-
-    Args:
-    port: TCP port number.
-
-    Returns:
-    PID if found, None otherwise.
-    """
+    """Find PID of process listening on a TCP port using lsof."""
     from soothe_daemon.bootstrap.port_lookup import find_listening_pid
 
     return find_listening_pid(port)

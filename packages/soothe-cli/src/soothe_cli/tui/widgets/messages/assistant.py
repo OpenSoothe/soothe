@@ -44,27 +44,7 @@ def _rich_style_with_textual_selection(
 
 
 class _SelectableMarkdownBody(Static):
-    """Static body that supports text selection over Rich renderables.
-
-    `Static.update(RichMarkdown(...))` breaks selection in three independent
-    places, all rooted in `RichVisual.render_strips` rendering via plain
-    `console.render(...)` instead of going through `Content`/`Text`. We patch
-    each one in `render_line`:
-
-    1. **Selection capture.** `Compositor.get_widget_and_offset_at` walks
-    segments looking for an `offset` style meta. `Content.to_strip` adds it
-    via `rich_style_with_offset(x, y)`; `RichVisual` emits none, so click +
-    drag never resolves to a content offset and the screen silently drops
-    the selection. We re-apply offsets with `Strip.apply_offsets(0, y)`.
-    2. **Visual highlight.** `RichVisual.render_strips` ignores
-    `options.selection` / `options.selection_style`, so even an active
-    selection is invisible on the card. For `RichVisual` we overlay
-    `screen--selection` with Textual alpha blending. Plain `Content`
-    visuals already receive selection styling from `Visual.to_strips`.
-    3. **Copy extraction.** `Widget.get_selection` returns `None` for
-    non-`Text`/`Content` visuals. We reconstruct visible text from the
-    cached strips.
-    """
+    """Static body that supports text selection over Rich renderables."""
 
     def render_line(self, y: int) -> Strip:  # type: ignore[override]
         from rich.segment import Segment as _Segment

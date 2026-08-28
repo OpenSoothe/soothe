@@ -1,7 +1,4 @@
-"""Cron Service models.
-
-Dataclasses and enums for scheduled job representation.
-"""
+"""Cron service models: dataclasses and enums for scheduled jobs."""
 
 from __future__ import annotations
 
@@ -37,15 +34,7 @@ def cron_descriptions_equivalent(left: str, right: str) -> bool:
 
 
 class ScheduleKind(StrEnum):
-    """Schedule kind extracted from natural language.
-
-    Values:
-    ONCE: One-shot at specific datetime (no recurrence)
-    DELAY: Relative delay from now (e.g., "in 2 hours")
-    AT: Specific datetime (e.g., "tomorrow at 9am")
-    EVERY: Recurring interval (e.g., "every hour", "daily")
-    CRON: Cron expression (e.g., "0 9 * * 1-5")
-    """
+    """Schedule kind extracted from natural language."""
 
     ONCE = "once"
     DELAY = "delay"
@@ -55,15 +44,7 @@ class ScheduleKind(StrEnum):
 
 
 class JobStatus(StrEnum):
-    """Status of a scheduled job.
-
-    Values:
-    PENDING: Waiting for scheduled time
-    RUNNING: Currently executing
-    COMPLETED: Finished successfully (one-shot) or expired (recurring)
-    FAILED: Execution failed
-    CANCELLED: User cancelled
-    """
+    """Status of a scheduled job."""
 
     PENDING = "pending"
     RUNNING = "running"
@@ -87,16 +68,7 @@ class DuplicateCronJobError(Exception):
 
 @dataclass
 class ExtractionResult:
-    """Result of LLM-based schedule extraction.
-
-    Attributes:
-    description: Extracted task description in imperative form.
-    schedule_kind: Kind of schedule (once, delay, at, every, cron).
-    schedule_value: Parsed schedule value (duration, datetime, or cron expr).
-    end_condition: Optional end condition (e.g., "until 2026-06-30", "for 2 weeks").
-    confidence: Extraction confidence score (0.0-1.0).
-    raw_input: Original natural language input (for debugging).
-    """
+    """Result of LLM-based schedule extraction."""
 
     description: str
     schedule_kind: ScheduleKind

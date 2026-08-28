@@ -1,7 +1,4 @@
-"""Event bus for topic-based event routing.
-
-Phase 2: Lock-free publish with reader-writer pattern.
-"""
+"""Event bus for topic-based event routing."""
 
 from __future__ import annotations
 

@@ -10,15 +10,7 @@ LSOF_PORT_LOOKUP_TIMEOUT_S = 2.0
 
 
 def find_listening_pid(port: int, *, timeout: float = LSOF_PORT_LOOKUP_TIMEOUT_S) -> int | None:
-    """Return PID listening on `port`, or `None` if not found / lookup fails.
-
-    Args:
-    port: TCP port number.
-    timeout: Seconds to wait for `lsof` before giving up.
-
-    Returns:
-    First LISTEN PID for the port, or `None`.
-    """
+    """Return PID listening on `port`, or `None` if not found."""
     with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
         result = subprocess.run(
             ["lsof", "-nP", "-i", f"TCP:{port}", "-t", "-sTCP:LISTEN"],

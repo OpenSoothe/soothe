@@ -69,27 +69,14 @@ class DoctorProgress(Protocol):
 
 
 class HealthChecker:
-    """Orchestrates health checks across vital (and optional deep) categories.
-
-    Attributes:
-    config: Agent `SootheConfig` for config-driven checks (optional).
-    daemon_config: Daemon `SootheDaemonConfig` for transport checks (optional).
-    """
+    """Orchestrates health checks across vital and optional deep categories."""
 
     def __init__(
         self,
         config: SootheConfig | None = None,
         daemon_config: SootheDaemonConfig | None = None,
     ) -> None:
-        """Initialize health checker.
-
-        Args:
-        config: Agent `SootheConfig`. If `None`, runs basic checks
-        that don't require configuration.
-        daemon_config: Daemon `SootheDaemonConfig` for transport /
-        worker-pool / queue checks. If `None`, daemon-side checks
-        fall back to defaults.
-        """
+        """Initialize health checker."""
         self.config = config
         self.daemon_config = daemon_config
         self._nano_cache: dict[str, CategoryResult] | None = None

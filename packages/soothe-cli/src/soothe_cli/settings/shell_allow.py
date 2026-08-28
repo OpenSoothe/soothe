@@ -4,12 +4,7 @@ from __future__ import annotations
 
 
 class _ShellAllowAll(list):  # noqa: FURB189  # sentinel type, not a general-purpose list subclass
-    """Sentinel subclass for unrestricted shell access.
-
-    Using a dedicated type instead of a plain list lets consumers use
-    `isinstance` checks, which survive serialization/copy unlike identity
-    checks (`is`).
-    """
+    """Sentinel subclass for unrestricted shell access."""
 
 
 SHELL_ALLOW_ALL: list[str] = _ShellAllowAll(["__ALL__"])
@@ -59,25 +54,7 @@ intentionally excluded.
 
 
 def parse_shell_allow_list(allow_list_str: str | None) -> list[str] | None:
-    """Parse shell allow-list from string.
-
-    Args:
-    allow_list_str: Comma-separated list of commands, or `'recommended'`
-    for safe defaults, or `'all'` to allow any command.
-
-    `'all'` must be the sole value — it is not recognized inside a
-    comma-separated list (unlike `'recommended'`).
-
-    Can also include `'recommended'` in the list to merge with custom
-    commands.
-
-    Returns:
-    List of allowed commands, `SHELL_ALLOW_ALL` if `'all'` was specified,
-    or `None` if no allow-list configured.
-
-    Raises:
-    ValueError: If `'all'` is combined with other commands.
-    """
+    """Parse shell allow-list from string."""
     if not allow_list_str:
         return None
 

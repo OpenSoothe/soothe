@@ -14,14 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def discover_channel_names() -> list[str]:
-    """Scan channels/ directory via pkgutil for available module names.
-
-    This is a cheap operation (no imports) that lists candidate channel
-    modules. Used to identify config sections that might be channel configs.
-
-    Returns:
-    List of channel module names (excluding base, message, events, registry).
-    """
+    """Scan channels/ directory via pkgutil for available module names."""
     try:
         from soothe_daemon.channels import __path__
     except ImportError:
@@ -38,14 +31,7 @@ def discover_channel_names() -> list[str]:
 
 
 def load_channel_class(name: str) -> type[Channel] | None:
-    """Import and return Channel class by module name.
-
-    Args:
-    name: Channel module name (e.g., "websocket", "telegram").
-
-    Returns:
-    Channel subclass, or None if not found or not a valid Channel.
-    """
+    """Import and return Channel class by module name."""
     try:
         module = importlib.import_module(f"soothe_daemon.channels.{name}")
     except ImportError as e:
@@ -69,20 +55,7 @@ def load_channel_class(name: str) -> type[Channel] | None:
 
 
 def discover_plugins(enabled_names: set[str]) -> dict[str, type[Channel]]:
-    """Load external channels via Python entry_points.
-
-    Entry points are registered in pyproject.toml:
-    ```toml
-    [project.entry-points."soothe.channels"]
-    telegram = "soothe_telegram:TelegramChannel"
-    ```
-
-    Args:
-    enabled_names: Set of channel names to load.
-
-    Returns:
-    Dict mapping channel name to Channel class.
-    """
+    """Load external channels via Python entry_points."""
     channels: dict[str, type[Channel]] = {}
 
     try:

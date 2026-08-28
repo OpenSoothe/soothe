@@ -25,14 +25,7 @@ _bootstrap_start_path: Path | None = None
 
 
 def _find_dotenv_from_start_path(start_path: Path) -> Path | None:
-    """Find the nearest `.env` file from an explicit start path upward.
-
-    Args:
-    start_path: Directory to start searching from.
-
-    Returns:
-    Path to the nearest `.env` file, or `None` if not found.
-    """
+    """Find the nearest `.env` file from an explicit start path upward."""
     current = start_path.expanduser().resolve()
     for parent in [current, *list(current.parents)]:
         candidate = parent / ".env"
@@ -53,33 +46,7 @@ except RuntimeError:
 
 
 def _load_dotenv(*, start_path: Path | None = None) -> bool:
-    """Load environment variables from project and global `.env` files.
-
-    Loads in order (first write wins, `override=False`):
-
-    1. Project/CWD `.env` — project-specific values
-    2. `SOOTHE_HOME/.env` — global user defaults
-
-    Both layers use `override=False` (the python-dotenv default) so that
-    shell-exported variables always take precedence over dotenv files.
-    Because project loads first, the effective precedence is:
-
-    ```text
-    shell env (incl. inline `VAR=x`) > project `.env` > global `.env`
-    ```
-
-    !!! note
-
-    To scope credentials to the CLI without colliding with
-    identically-named shell exports, use the `SOOTHE_` env-var
-    prefix (see `resolve_env_var` in `soothe.model_config`).
-
-    Args:
-    start_path: Directory to use for project `.env` discovery.
-
-    Returns:
-    `True` when at least one dotenv file was loaded, `False` otherwise.
-    """
+    """Load environment variables from project and global `.env` files."""
     import dotenv
 
     loaded = False

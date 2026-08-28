@@ -24,14 +24,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Settings:
-    """Global settings and environment detection for Soothe.
-
-    This class is initialized once at startup and provides access to:
-    - Available models and API keys
-    - Current project information
-    - Tool availability (e.g., Tavily)
-    - File system paths
-    """
+    """Global settings and environment detection for Soothe."""
 
     openai_api_key: str | None
     """OpenAI API key if available."""
@@ -67,28 +60,11 @@ class Settings:
     """Shell commands that don't require user approval."""
 
     extra_skills_dirs: list[Path] | None = None
-    """Extra directories added to the skill path containment allowlist.
-
-    These do NOT add new skill discovery locations — skills are still only
-    discovered from the standard directories. They exist so that symlinks inside
-    standard skill directories can point to targets in these additional
-    locations without being rejected by the containment check
-    in `load_skill_content`.
-
-    Set via `SOOTHE_EXTRA_SKILLS_DIRS` env var (colon-separated) or
-    `[skills].extra_allowed_dirs` in `SOOTHE_HOME/config/cli.yml`.
-    """
+    """Extra directories added to the skill path containment allowlist."""
 
     @classmethod
     def from_environment(cls, *, start_path: Path | None = None) -> Settings:
-        """Create settings by detecting the current environment.
-
-        Args:
-        start_path: Directory to start project detection from (defaults to cwd)
-
-        Returns:
-        Settings instance with detected configuration
-        """
+        """Create settings by detecting the current environment."""
         # Detect API keys (normalize empty strings to None).
         from soothe_cli.model_config import resolve_env_var
 

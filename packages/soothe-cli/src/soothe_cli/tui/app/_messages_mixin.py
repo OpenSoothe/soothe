@@ -1,4 +1,4 @@
-"""Message widget lifecycle, store management, queue management, interrupt/quit, toggles, editor, and mouse/focus events mixin."""
+"""Message widget lifecycle, store management, queue management, and toggles mixin."""
 
 from __future__ import annotations
 

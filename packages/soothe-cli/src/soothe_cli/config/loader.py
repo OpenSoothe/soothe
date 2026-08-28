@@ -1,4 +1,4 @@
-"""Configuration loading utilities (Phase 3)."""
+"""Configuration loading utilities."""
 
 from __future__ import annotations
 
@@ -25,11 +25,7 @@ def reset_runtime_config() -> None:
 
 
 def load_config() -> CLIConfig:
-    """Return active CLI config from parsed global flags, or defaults.
-
-    Returns:
-    A `CLIConfig` instance.
-    """
+    """Return active CLI config from parsed global flags, or defaults."""
     cfg = _runtime_config.get()
     if cfg is not None:
         logger.debug("Using CLI config from parsed global flags")

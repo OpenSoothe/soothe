@@ -9,15 +9,7 @@ from soothe_daemon.cron.models import ScheduleKind
 
 @dataclass(frozen=True)
 class BuiltinJobSpec:
-    """Specification for a daemon-seeding built-in cron job.
-
-    Attributes:
-    job_id: Stable identifier used for idempotent seeding.
-    description: Imperative task description dispatched to Autopilot.
-    schedule_kind: Schedule type (typically CRON for recurring maintenance).
-    schedule_value: Cron expression or duration string.
-    priority: Goal priority (1-100).
-    """
+    """Specification for a daemon-seeding built-in cron job."""
 
     job_id: str
     description: str

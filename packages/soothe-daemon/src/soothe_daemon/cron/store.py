@@ -1,7 +1,4 @@
-"""CronJobStore — Database persistence for cron jobs.
-
-SQLite-backed storage via process-scoped `SqliteStoreRuntime`.
-"""
+"""CronJobStore — SQLite persistence for cron jobs."""
 
 from __future__ import annotations
 
@@ -18,12 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class CronJobStore:
-    """SQLite-backed persistence for cron jobs via `SqliteStoreRuntime`.
-
-    Args:
-    db_path: Path to SQLite database file. Defaults to `$SOOTHE_DATA_DIR/databases/cron.db`.
-    reader_pool_size: Reader pool size for the Runtime.
-    """
+    """SQLite-backed persistence for cron jobs."""
 
     def __init__(
         self,

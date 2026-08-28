@@ -17,6 +17,7 @@ from soothe.sloop.decompose.grounding_guard import (
     build_no_evidence_guidance,
     build_ungrounded_claims_guidance,
     check_proposal_grounded,
+    generate_subtasks_via_fast_model,
 )
 
 # ── fixtures ────────────────────────────────────────────────────────────────
@@ -153,6 +154,33 @@ async def test_check_grounded_fails_open_on_llm_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_check_grounded_fails_open_on_timeout() -> None:
+    """LLM call exceeds internal timeout → fail-open (None), not kill the tool."""
+    import asyncio as _asyncio
+
+    mock_model = MagicMock()
+    proposal = _proposal("do some work")
+
+    async def _slow_call(*_a: object, **_kw: object) -> dict:
+        await _asyncio.sleep(600)
+
+    with (
+        patch("soothe_nano.llm.ainvoke_structured_traced", new=_slow_call),
+        patch(
+            "soothe.sloop.decompose.grounding_guard._CRITIC_TIMEOUT_SECONDS",
+            0.5,
+        ),
+    ):
+        verdict = await check_proposal_grounded(
+            proposal,
+            evidence_corpus=["some evidence"],
+            fast_model=mock_model,
+            step_id="SUZ-01",
+        )
+    assert verdict is None
+
+
+@pytest.mark.asyncio
 async def test_check_grounded_fails_open_when_no_evidence() -> None:
     """Empty evidence corpus → None (defensive; tool.py gate catches this first)."""
     mock_model = MagicMock()
@@ -164,3 +192,90 @@ async def test_check_grounded_fails_open_when_no_evidence() -> None:
         step_id="SUZ-01",
     )
     assert verdict is None
+
+
+# ── generate_subtasks_via_fast_model ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_generate_subtasks_returns_list_on_success() -> None:
+    """FAST model returns subtasks derived from evidence."""
+    from soothe.sloop.decompose.grounding_guard import GeneratedSubtask
+
+    mock_model = MagicMock()
+    generated = [
+        GeneratedSubtask(
+            description="Polish config/",
+            full_description="Rewrite docstrings in config/",
+        ),
+    ]
+    with patch(
+        "soothe_nano.llm.ainvoke_structured_traced",
+        new_callable=AsyncMock,
+        return_value={"subtasks": [s.model_dump() for s in generated]},
+    ):
+        result = await generate_subtasks_via_fast_model(
+            "Polish docstrings",
+            evidence_corpus=["packages/soothe/src/soothe/config/ exists"],
+            fast_model=mock_model,
+            step_id="SUZ-01",
+        )
+    assert result is not None
+    assert len(result) == 1
+    assert result[0].description == "Polish config/"
+
+
+@pytest.mark.asyncio
+async def test_generate_subtasks_returns_none_on_error() -> None:
+    """LLM error → None (fail-open)."""
+    mock_model = MagicMock()
+    with patch(
+        "soothe_nano.llm.ainvoke_structured_traced",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("provider down"),
+    ):
+        result = await generate_subtasks_via_fast_model(
+            "Polish docstrings",
+            evidence_corpus=["some evidence"],
+            fast_model=mock_model,
+            step_id="SUZ-01",
+        )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_generate_subtasks_returns_none_when_no_fast_model() -> None:
+    """No fast model → None."""
+    result = await generate_subtasks_via_fast_model(
+        "Polish docstrings",
+        evidence_corpus=["some evidence"],
+        fast_model=None,
+        step_id="SUZ-01",
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_generate_subtasks_returns_none_on_timeout() -> None:
+    """LLM call timeout → None (fail-open)."""
+    import asyncio as _asyncio
+
+    mock_model = MagicMock()
+
+    async def _slow_call(*_a: object, **_kw: object) -> dict:
+        await _asyncio.sleep(600)
+
+    with (
+        patch("soothe_nano.llm.ainvoke_structured_traced", new=_slow_call),
+        patch(
+            "soothe.sloop.decompose.grounding_guard._GENERATE_TIMEOUT_SECONDS",
+            0.5,
+        ),
+    ):
+        result = await generate_subtasks_via_fast_model(
+            "Polish docstrings",
+            evidence_corpus=["some evidence"],
+            fast_model=mock_model,
+            step_id="SUZ-01",
+        )
+    assert result is None

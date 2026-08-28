@@ -38,11 +38,7 @@ class TuiDaemonSession(DaemonSession):
         )
 
     def _resolve_stream_delivery_mode(self) -> str:
-        """Determine stream delivery mode from config.
-
-        Returns one of `batch` | `adaptive` | `streaming`. CLI override
-        wins, then config; defaults to `adaptive`.
-        """
+        """Determine stream delivery mode from config."""
         if (
             self._cfg
             and hasattr(self._cfg, "output_streaming_mode")
@@ -62,13 +58,7 @@ class TuiDaemonSession(DaemonSession):
         limit: int = 20,
         workspace: str | None = None,
     ) -> dict[str, Any]:
-        """Return `loop_list` via the RPC sidecar.
-
-        Args:
-        limit: Maximum number of loops to return.
-        workspace: When set, pass `filter.workspace` so the daemon
-        returns only loops recorded for this host path.
-        """
+        """Return `loop_list` via the RPC sidecar."""
         params: dict[str, Any] = {"limit": limit}
         if workspace:
             params["filter"] = {"workspace": workspace}

@@ -69,11 +69,7 @@ _card_bind_max_workers = 4
 
 
 def _get_card_bind_executor() -> ThreadPoolExecutor:
-    """Return the dedicated card-bind executor (lazily initialized).
-
-    Separate from asyncio.to_thread pool to prevent contention
-    when N concurrent loops all call card binding simultaneously.
-    """
+    """Return the dedicated card-bind executor (lazily initialized)."""
     global _card_bind_executor
     if _card_bind_executor is None:
         _card_bind_executor = ThreadPoolExecutor(

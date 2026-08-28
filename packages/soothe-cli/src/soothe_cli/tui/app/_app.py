@@ -164,19 +164,7 @@ class SootheApp(
         profile_override: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Initialize the Textual application (daemon-backed execution only).
-
-        Args:
-        daemon_config: Loaded Soothe configuration (WebSocket URL, etc.).
-        assistant_id: Agent identifier for memory storage.
-        cwd: Current working directory to display.
-        resume_loop_id: Initial StrangeLoop id when attaching to an existing loop.
-        initial_prompt: Optional prompt to auto-submit when session starts.
-        initial_skill: Optional skill name to invoke when session starts.
-        mcp_server_info: MCP server metadata for the `/mcp` viewer.
-        profile_override: Extra profile fields from `--profile-override`.
-        **kwargs: Additional arguments passed to the Textual `App`.
-        """
+        """Initialize the Textual application (daemon-backed execution only)."""
         super().__init__(**kwargs)
 
         self._register_custom_themes()

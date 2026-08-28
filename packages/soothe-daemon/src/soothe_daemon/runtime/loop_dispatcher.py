@@ -19,25 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
-    """Bind the loop's checkpoint thread and return its id.
-
-    , the main StrangeLoop checkpoint thread id is the `loop_id`
-    itself — the runtime in `soothe.sloop.strange_loop` normalizes
-    any caller-supplied id back to `loop_id` before saving. Returning a
-    distinct UUID here causes read RPCs (`loop_state_get`, `loop_messages`)
-    to query the wrong LangGraph checkpoint and surface an empty conversation
-    on resume.
-
-    Args:
-    daemon: `SootheDaemon` instance.
-    loop_id: StrangeLoop identifier.
-
-    Returns:
-    Checkpoint thread id for this loop (always equals `loop_id`).
-
-    Raises:
-    RuntimeError: If loop metadata is missing or invalid.
-    """
+    """Bind the loop's checkpoint thread and return its id."""
     # Set loop_id in logging context for full ID in daemon.log
     set_loop_id(loop_id)
 

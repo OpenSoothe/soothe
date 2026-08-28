@@ -23,25 +23,7 @@ _SEND_RETRY_DELAYS = (1, 2, 4)
 
 
 class ChannelManager:
-    """Manages all channels and coordinates message routing.
-
-    The channel manager:
-    1. Initializes enabled channels from configuration (via registry)
-    2. Routes inbound messages to EventBus loop topics
-    3. Subscribes to loop topics, translates events, dispatches outbound
-    4. Handles streaming: coalesces deltas, buffers for non-streaming
-    5. Applies retry policy on send failures
-
-    Args:
-    config: Daemon configuration.
-    event_bus: EventBus for routing events.
-    runner: Optional SootheRunner (for command handlers).
-    soothe_config: Optional SootheConfig (for command handlers).
-    session_manager: Optional ClientSessionManager for WebSocket sessions.
-    autopilot_service: Optional AutopilotService for WebSocket command handlers.
-    cron_service: Optional CronService for WebSocket command handlers.
-    memory_profiler: Optional MemoryProfiler for WebSocket command handlers.
-    """
+    """Manages channels, routes inbound messages, and dispatches outbound events."""
 
     def __init__(
         self,
@@ -54,18 +36,7 @@ class ChannelManager:
         cron_service: Any | None = None,
         memory_profiler: Any | None = None,
     ) -> None:
-        """Initialize channel manager.
-
-        Args:
-        config: Daemon configuration.
-        event_bus: EventBus for routing events.
-        runner: Optional SootheRunner (for command handlers).
-        soothe_config: Optional SootheConfig (for command handlers).
-        session_manager: Optional ClientSessionManager for session management.
-        autopilot_service: Optional daemon-owned AutopilotService.
-        cron_service: Optional daemon-owned CronService.
-        memory_profiler: Optional MemoryProfiler for memory command handlers.
-        """
+        """Initialize channel manager."""
         self._config = config
         self._event_bus = event_bus
         self._runner = runner

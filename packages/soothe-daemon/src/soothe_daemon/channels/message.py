@@ -8,30 +8,7 @@ from typing import Any
 
 @dataclass
 class ChannelMessage:
-    """Message for channel routing and platform delivery.
-
-    This is the channel-layer message type, distinct from agent-layer
-    SootheEvent. ChannelManager translates between the two layers.
-
-    Attributes:
-    channel: Target channel name (e.g., "websocket", "telegram").
-    chat_id: Conversation/thread identifier on the platform.
-    content: Text content (markdown formatted).
-    media: Attachments (file paths or URLs).
-    buttons: Interactive button rows (each row is a list of button labels).
-    metadata: Channel-specific flags and routing hints.
-
-    Metadata keys:
-    _progress: Progress indicator message (not final output).
-    _tool_hint: Tool execution hint message.
-    _stream_delta: Streaming text chunk (not complete).
-    _stream_end: End of stream marker.
-    _stream_id: Unique stream identifier for stateful streaming.
-    _reasoning: Complete reasoning block (one-shot).
-    _reasoning_delta: Streaming reasoning chunk.
-    _reasoning_end: End of reasoning stream.
-    _wants_stream: Inbound hint that sender wants streaming responses.
-    """
+    """Message for channel routing and platform delivery."""
 
     channel: str
     chat_id: str

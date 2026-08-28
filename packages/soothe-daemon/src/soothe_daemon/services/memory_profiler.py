@@ -21,20 +21,7 @@ LARGE_ALLOCATION_THRESHOLD_KB = 100.0
 
 
 class MemoryProfiler:
-    """Memory profiling service using tracemalloc.
-
-    Start/stop integrates with daemon lifecycle. Provides methods for
-    taking snapshots, comparing allocations, and getting memory stats.
-
-    additions:
-    - `get_large_allocations()`: Captures multi-MB objects that standard
-    statistics("lineno") misses due to count-based aggregation
-    - `get_queue_metrics()`: Reports response queue depths for diagnosing
-    stream backpressure issues
-
-    Args:
-    config: MemoryProfilingConfig with tracing parameters.
-    """
+    """Memory profiling service using tracemalloc."""
 
     def __init__(self, config: MemoryProfilingConfig) -> None:
         self._config = config
@@ -45,10 +32,7 @@ class MemoryProfiler:
         self._process = psutil.Process(os.getpid())
 
     def start(self) -> None:
-        """Start tracemalloc tracing.
-
-        Called during daemon startup when memory_profiling.enabled=true.
-        """
+        """Start tracemalloc tracing."""
         if self._running:
             return
 
@@ -66,10 +50,7 @@ class MemoryProfiler:
         )
 
     def stop(self) -> None:
-        """Stop tracemalloc tracing.
-
-        Called during daemon shutdown.
-        """
+        """Stop tracemalloc tracing."""
         if not self._running:
             return
 
@@ -83,21 +64,13 @@ class MemoryProfiler:
         return self._running and tracemalloc.is_tracing()
 
     def take_snapshot(self) -> tracemalloc.Snapshot:
-        """Take a new tracemalloc snapshot.
-
-        Returns:
-        Current memory allocation snapshot.
-        """
+        """Take a new tracemalloc snapshot."""
         if not self._running:
             raise RuntimeError("MemoryProfiler not running")
         return tracemalloc.take_snapshot()
 
     def get_current_stats(self) -> dict[str, Any]:
-        """Get current memory statistics.
-
-        Returns:
-        Dict with RSS, VSZ, tracemalloc tracked size, and top allocations.
-        """
+        """Get current memory statistics."""
         mem_info = self._process.memory_info()
         rss_mb = mem_info.rss / 1024 / 1024
         vsz_mb = mem_info.vms / 1024 / 1024

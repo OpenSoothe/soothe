@@ -1,7 +1,4 @@
-"""WebSocket channel implementation.
-
-WebSocket channel as a proper Channel subclass with streaming support.
-"""
+"""WebSocket channel implementation with streaming support."""
 
 from __future__ import annotations
 
@@ -30,24 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class WebSocketChannel(Channel):
-    """WebSocket channel with full streaming support.
-
-    This channel implements the Channel interface for WebSocket.
-    It supports:
-    - Bidirectional messaging (supports_inbound=True, supports_outbound=True)
-    - Real-time streaming (supports_streaming=True)
-    - Multiple concurrent clients
-    - Command handlers for autopilot, cron, and memory profiling
-
-    Args:
-    config: WebSocket configuration.
-    manager: ChannelManager for inbound routing.
-    unified_app: Optional shared FastAPI app for unified listener.
-    session_manager: Optional ClientSessionManager for session management.
-    autopilot_service: Optional AutopilotService for command handling.
-    cron_service: Optional CronService for command handling.
-    memory_profiler: Optional MemoryProfiler for command handling.
-    """
+    """WebSocket channel with full streaming support."""
 
     name = "websocket"
     display_name = "WebSocket"
@@ -66,17 +46,7 @@ class WebSocketChannel(Channel):
         cron_service: Any | None = None,
         memory_profiler: Any | None = None,
     ) -> None:
-        """Initialize WebSocket channel.
-
-        Args:
-        config: WebSocket configuration.
-        manager: ChannelManager for inbound routing.
-        unified_app: Optional shared FastAPI app.
-        session_manager: Optional ClientSessionManager.
-        autopilot_service: Optional AutopilotService for WebSocket command handlers.
-        cron_service: Optional CronService for WebSocket command handlers.
-        memory_profiler: Optional MemoryProfiler for WebSocket command handlers.
-        """
+        """Initialize WebSocket channel."""
         super().__init__(config, manager)
         self._ws_config = config
         self._unified_parent_app = unified_app

@@ -21,19 +21,7 @@ _MAX_WIDTH_FALLBACK = 80
 
 
 class PinnedGoalBar(Static):
-    """A docked bar that pins the latest user message at the top of the screen.
-
-    Renders a compact, single-line view of the most recent user query/goal
-    using the same visual cues as `UserMessage` (the `> ` prefix, mode glyphs,
-    `@file` mentions). Long messages are truncated with an ellipsis so the
-    bar never occupies more than one terminal row.
-
-    Visibility is controlled by scroll position via `set_visible()`: the bar
-    appears when the user scrolls away from the bottom of the chat (so the
-    latest message is no longer in view), and hides when they scroll back.
-    A user can manually override with `toggle_user_override()` (Ctrl+g) to
-    force-hide the bar even while scrolled up.
-    """
+    """A docked bar that pins the latest user message at the top of the screen."""
 
     ALLOW_SELECT = True
     """Enable text selection for copy functionality."""
@@ -54,11 +42,7 @@ class PinnedGoalBar(Static):
     """Compact docked bar echoing the latest user message."""
 
     def __init__(self, **kwargs: Any) -> None:
-        """Initialize the pinned goal bar.
-
-        Args:
-        **kwargs: Additional arguments passed to parent.
-        """
+        """Initialize the pinned goal bar."""
         super().__init__(**kwargs)
         self._content: str = ""
         self._user_override: bool = False

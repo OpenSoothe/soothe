@@ -123,14 +123,7 @@ class UrlSafetyResult:
 
 
 def detect_dangerous_unicode(text: str) -> list[UnicodeIssue]:
-    """Detect deceptive or hidden Unicode code points in text.
-
-    Args:
-    text: Input text to inspect.
-
-    Returns:
-    A list of `UnicodeIssue` entries in source order.
-    """
+    """Detect deceptive or hidden Unicode code points in text."""
     issues: list[UnicodeIssue] = []
     for position, character in enumerate(text):
         if character not in _DANGEROUS_CHARACTERS:
@@ -147,31 +140,12 @@ def detect_dangerous_unicode(text: str) -> list[UnicodeIssue]:
 
 
 def strip_dangerous_unicode(text: str) -> str:
-    """Remove known dangerous/invisible Unicode characters from text.
-
-    Args:
-    text: Input text to sanitize.
-
-    Returns:
-    Sanitized text with dangerous characters removed.
-    """
+    """Remove known dangerous/invisible Unicode characters from text."""
     return "".join(ch for ch in text if ch not in _DANGEROUS_CHARACTERS)
 
 
 def summarize_issues(issues: list[UnicodeIssue], *, max_items: int = 3) -> str:
-    """Summarize Unicode issues for warning messages.
-
-    Deduplicates by code point. When more than *max_items* unique entries exist,
-    the summary is truncated with a `+N more entries` suffix.
-
-    Args:
-    issues: A list of detected issues.
-    max_items: Max unique code points to include in output.
-
-    Returns:
-    Comma-separated summary, e.g.
-    `U+202E RIGHT-TO-LEFT OVERRIDE, U+200B ZERO WIDTH SPACE`.
-    """
+    """Summarize Unicode issues for warning messages."""
     unique_entries: list[str] = []
     seen: set[str] = set()
     for issue in issues:
@@ -191,14 +165,7 @@ def summarize_issues(issues: list[UnicodeIssue], *, max_items: int = 3) -> str:
 
 
 def check_url_safety(url: str) -> UrlSafetyResult:
-    """Check a URL for suspicious Unicode and domain spoofing patterns.
-
-    Args:
-    url: URL string to inspect.
-
-    Returns:
-    `UrlSafetyResult` including decoded domain and warning details.
-    """
+    """Check a URL for suspicious Unicode and domain spoofing patterns."""
     warnings: list[str] = []
     suspicious = False
 

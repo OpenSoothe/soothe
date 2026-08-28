@@ -307,3 +307,114 @@ def test_evidence_counter_survives_copy_context_snapshots() -> None:
         assert current_evidence_calls() == 3
     finally:
         reset_decompose_runtime(tokens)
+
+
+# ── FAST-model auto-generation path ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_decompose_tool_auto_generates_subtasks_via_fast_model() -> None:
+    """When subtasks are omitted, the FAST model generates them from evidence."""
+    from unittest.mock import MagicMock
+
+    from soothe.sloop.decompose.grounding_guard import GeneratedSubtask
+
+    sink: list[DecompositionProposal] = []
+    tokens = bind_decompose_runtime(step_id="GEN-01", sink=sink)
+    try:
+        record_evidence_call()
+        record_evidence_output("packages/soothe/src/soothe/config/ exists")
+        record_evidence_output("packages/soothe/src/soothe/sloop/ exists")
+        tool = build_decompose_task_tool()
+        mock_model = MagicMock()
+
+        generated = [
+            GeneratedSubtask(
+                description="Polish config/ docstrings",
+                full_description="Rewrite docstrings in packages/soothe/src/soothe/config/",
+            ),
+            GeneratedSubtask(
+                description="Polish sloop/ docstrings",
+                full_description="Rewrite docstrings in packages/soothe/src/soothe/sloop/",
+            ),
+        ]
+
+        # The first call (generation) returns subtasks; the second (critic)
+        # returns grounded=True.
+        call_count = 0
+
+        async def _mock_structured(*_a: object, **_kw: object) -> dict:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {"subtasks": [s.model_dump() for s in generated]}
+            return {"grounded": True, "ungrounded_claims": []}
+
+        with (
+            patch(
+                "soothe.sloop.decompose.tool.langgraph_configurable",
+                return_value={"fast_model": mock_model},
+            ),
+            patch(
+                "soothe_nano.llm.ainvoke_structured_traced",
+                new=_mock_structured,
+            ),
+        ):
+            result = await tool.ainvoke({"task": "Polish docstrings"})
+
+        assert "queued" in result.lower()
+        assert len(sink) == 1
+        assert len(sink[0].subtasks) == 2
+        assert sink[0].subtasks[0].description == "Polish config/ docstrings"
+    finally:
+        reset_decompose_runtime(tokens)
+
+
+@pytest.mark.asyncio
+async def test_decompose_tool_auto_generation_fails_open() -> None:
+    """When FAST-model generation fails, the tool asks for explicit subtasks."""
+    from unittest.mock import MagicMock
+
+    sink: list[DecompositionProposal] = []
+    tokens = bind_decompose_runtime(step_id="GEN-02", sink=sink)
+    try:
+        record_evidence_call()
+        record_evidence_output("some evidence")
+        tool = build_decompose_task_tool()
+        mock_model = MagicMock()
+
+        async def _failing_structured(*_a: object, **_kw: object) -> dict:
+            raise RuntimeError("provider down")
+
+        with (
+            patch(
+                "soothe.sloop.decompose.tool.langgraph_configurable",
+                return_value={"fast_model": mock_model},
+            ),
+            patch(
+                "soothe_nano.llm.ainvoke_structured_traced",
+                new=_failing_structured,
+            ),
+        ):
+            result = await tool.ainvoke({"task": "Polish docstrings"})
+
+        assert "Error" in result
+        assert "explicit subtasks" in result.lower()
+        assert len(sink) == 0
+    finally:
+        reset_decompose_runtime(tokens)
+
+
+def test_decompose_tool_sync_path_requires_explicit_subtasks() -> None:
+    """Sync path cannot auto-generate; asks for explicit subtasks."""
+    sink: list[DecompositionProposal] = []
+    tokens = bind_decompose_runtime(step_id="GEN-03", sink=sink)
+    try:
+        record_evidence_call()
+        tool = build_decompose_task_tool()
+        result = tool.invoke({"task": "some work"})
+        assert "Error" in result
+        assert "explicit subtasks" in result.lower()
+        assert len(sink) == 0
+    finally:
+        reset_decompose_runtime(tokens)

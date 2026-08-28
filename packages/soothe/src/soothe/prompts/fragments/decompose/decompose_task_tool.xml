@@ -15,6 +15,17 @@ Do NOT call when the task is simple or minimal: finish one clear deliverable
 here with tools.
 Do NOT use as a personal checklist — use write_todos for that.
 
+## Auto-generation mode
+
+You may call decompose_task with only the `task` argument and omit
+`subtasks`. In this mode the FAST model generates subtasks from the
+evidence you have gathered. This is preferred when you have already
+grounded the task with ls/glob/grep/read_file — the FAST model will
+produce grounded subtasks faster than you can enumerate them.
+
+When you provide explicit `subtasks`, the grounding critic still
+verifies them against the evidence.
+
 ## Ground your subtasks in evidence
 
 Do not propose subtasks that cite files or directories you have not
@@ -35,5 +46,6 @@ Args: task, subtasks[{description, full_description, expected_output,
 execution_hint, depends_on_local, task_complexity}]. Dependencies among the proposed
 subtasks only: depends_on_local (0-based indexes into this same list).
 For each subtask, set task_complexity to "simple" (single focused step) or
-"complex" (needs further decomposition).
+"complex" (needs further decomposition). When subtasks is omitted, the
+FAST model generates them from gathered evidence.
 </DECOMPOSE_TASK_TOOL>

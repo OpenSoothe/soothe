@@ -32,11 +32,7 @@ client_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 
 
 class DaemonFormatter(ShortLevelFormatter):
-    """Formatter that includes loop_id and client_id from context variables.
-
-    Only includes loop_id and client_id in the prefix when they are actually set,
-    keeping logs brief and non-verbose.
-    """
+    """Formatter that includes loop_id and client_id from context variables."""
 
     def format(self, record: logging.LogRecord) -> str:
         """Format with loop_id and client_id from context variables."""
@@ -59,20 +55,12 @@ class DaemonFormatter(ShortLevelFormatter):
 
 
 def set_loop_id(loop_id: str | None) -> None:
-    """Set the current loop ID for logging context.
-
-    Args:
-    loop_id: The loop ID to set, or None to clear.
-    """
+    """Set the current loop ID for logging context."""
     loop_id_ctx.set(loop_id)
 
 
 def set_client_id(client_id: str | None) -> None:
-    """Set the current client ID for logging context.
-
-    Args:
-    client_id: The client ID to set, or None to clear.
-    """
+    """Set the current client ID for logging context."""
     client_id_ctx.set(client_id)
 
 

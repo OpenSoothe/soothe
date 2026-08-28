@@ -15,18 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class Channel(ABC):
-    """Abstract base class for all communication channels.
-
-    Each channel implementation must define:
-    - `name`: Unique identifier (e.g., "websocket", "telegram")
-    - `display_name`: Human-readable name
-    - Capability flags: `supports_inbound`, `supports_outbound`, `supports_streaming`
-    - Abstract methods: `start()`, `stop()`, `send()`
-
-    Optional streaming methods can be overridden:
-    - `send_delta()`: Incremental text chunks
-    - `send_reasoning_delta()`: Model thinking/reasoning
-    """
+    """Abstract base class for all communication channels."""
 
     name: str = "base"
     display_name: str = "Base"
@@ -46,12 +35,7 @@ class Channel(ABC):
         config: Any,
         manager: ChannelManager,
     ) -> None:
-        """Initialize channel.
-
-        Args:
-        config: Channel-specific configuration.
-        manager: ChannelManager for inbound routing.
-        """
+        """Initialize channel."""
         self.config = config
         self._manager = manager
         self._running = False
@@ -59,38 +43,15 @@ class Channel(ABC):
 
     @abstractmethod
     async def start(self) -> None:
-        """Start channel and begin listening for messages.
-
-        This should be a long-running async task that:
-        1. Connects to the platform
-        2. Listens for incoming messages
-        3. Calls `_handle_message()` for each incoming message
-
-        For channels that don't receive messages (supports_inbound=False),
-        this may just initialize resources and return.
-        """
+        """Start channel and begin listening for messages."""
 
     @abstractmethod
     async def stop(self) -> None:
-        """Stop channel and clean up resources.
-
-        This method should:
-        1. Stop accepting new connections/messages
-        2. Close existing connections
-        3. Release all resources
-        """
+        """Stop channel and clean up resources."""
 
     @abstractmethod
     async def send(self, chat_id: str, message: ChannelMessage) -> None:
-        """Deliver outbound message to platform.
-
-        Args:
-        chat_id: Conversation identifier on this platform.
-        message: Message to deliver.
-
-        Raises:
-        Exception: On delivery failure (ChannelManager will retry).
-        """
+        """Deliver outbound message to platform."""
 
     async def send_delta(
         self,

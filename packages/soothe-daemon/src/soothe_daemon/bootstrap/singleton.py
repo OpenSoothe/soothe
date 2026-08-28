@@ -35,11 +35,7 @@ def cleanup_pid() -> None:
 
 
 def acquire_pid_lock() -> int | None:
-    """Try to acquire an exclusive lock on the PID file.
-
-    Returns:
-    File descriptor on success, None if another daemon holds the lock.
-    """
+    """Try to acquire an exclusive lock on the PID file."""
     pf = pid_path()
     pf.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -56,11 +52,7 @@ def acquire_pid_lock() -> int | None:
 
 
 def release_pid_lock(fd: int) -> None:
-    """Release the PID file lock and clean up.
-
-    Args:
-    fd: File descriptor returned by acquire_pid_lock().
-    """
+    """Release the PID file lock and clean up."""
     with contextlib.suppress(OSError):
         fcntl.flock(fd, fcntl.LOCK_UN)
         os.close(fd)

@@ -17,27 +17,12 @@ _UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*]')
 
 
 def safe_filename(name: str) -> str:
-    """Replace unsafe path characters with underscores.
-
-    Args:
-    name: Original filename.
-
-    Returns:
-    Sanitized filename safe for filesystem use.
-    """
+    """Replace unsafe path characters with underscores."""
     return _UNSAFE_CHARS.sub("_", name).strip()
 
 
 def split_message(content: str, max_len: int = 2000) -> list[str]:
-    """Split content into chunks within max_len, preferring line breaks.
-
-    Args:
-    content: The text content to split.
-    max_len: Maximum length per chunk (default 2000 for Discord compatibility).
-
-    Returns:
-    List of message chunks, each within max_len.
-    """
+    """Split content into chunks within max_len, preferring line breaks."""
     if not content:
         return []
     if len(content) <= max_len:
@@ -60,29 +45,14 @@ def split_message(content: str, max_len: int = 2000) -> list[str]:
 
 
 def truncate_text(text: str, max_chars: int) -> str:
-    """Truncate text with a stable suffix.
-
-    Args:
-    text: Text to truncate.
-    max_chars: Maximum character limit.
-
-    Returns:
-    Truncated text with suffix if needed.
-    """
+    """Truncate text with a stable suffix."""
     if max_chars <= 0 or len(text) <= max_chars:
         return text
     return text[:max_chars] + "\n... (truncated)"
 
 
 def detect_image_mime(data: bytes) -> str | None:
-    """Detect image MIME type from magic bytes.
-
-    Args:
-    data: Image binary data.
-
-    Returns:
-    MIME type string or None if unrecognized.
-    """
+    """Detect image MIME type from magic bytes."""
     if data[:8] == b"\x89PNG\r\n\x1a\n":
         return "image/png"
     if data[:3] == b"\xff\xd8\xff":

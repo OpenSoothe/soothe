@@ -78,24 +78,7 @@ class _DeferredStepComplete(NamedTuple):
 
 
 class CognitionStepMessage(Vertical):
-    """Agent-loop act step card.
-
-    Header is the full step description plus compact live meta while running
-    (` · 45s · 12/1 · ↑8.1K ↓2.0K`). Activity nests under To-do then Tool-use.
-    The Running footer line is omitted; Completed/Failed/Pending footers remain.
-    Optional full tool lists use `STEP_CARD_SHOW_TOOL_ROW_DETAILS`. Cards
-    auto-collapse to title + status on terminal status (success / error);
-    click toggles manual expand / collapse.
-
-    Intake-only orphan SubAgent cards reuse this widget with `_subagent_type`
-    set: same header meta / activity tree / footers, with a subagent glyph and
-    `DisplayName(preview)` title.
-
-    Pure rendering and classification live in `cognition_step_activity.py`.
-    Card headers use a stateful card-prefix glyph (see `_assemble_card_header`); body
-    lines use the goal-tree gutter (`⎿`) plus hollow/filled circles when shown.
-    Prose / notes keep `⎿ ○` continuation lines.
-    """
+    """Agent-loop act step card with activity tree and status footers."""
 
     ALLOW_SELECT = True
 
