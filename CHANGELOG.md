@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.39] - 2026-08-28
+
 ### Changed
 - Default `agent.clarification.default_mode` to `manual`: interactive runs now route clarifications through the TUI relay unless `auto` is set. Autopilot (headless) still forces auto.
+- Bump `soothe-nano` dependency floor to v1.2.14 across `soothe` and `soothe-autopilot` packages.
 
 ### Removed
 - Remove dead config keys with no runtime reader: `agent.goal_completion_mode`/`agent.final_response` (agent-level duplicates of the live `agent.loop.*` keys), autopilot `checkpoint_interval`/`max_total_goals`/`max_goal_depth`/`dreaming_interval`, loop `goal_completion_mode`/`context_compaction_target_pct`/`step_context_check_enabled`/`strange_loop_output_contract_enabled`/`prior_conversation_limit`/`goal_context`/`decompose.max_recompose`/`decompose.reconcile_model_role`, clarification `auto_policy`/`max_defer_age_hours`/`tool_approval.veritas_fallback.inline_project_instructions`, and daemon `memory_profiling.snapshot_interval_seconds`/`log_growth_interval_seconds`.
@@ -17,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Veritas no longer auto-answers questions that solicit the user's own preference or input when no preference is stated: a "(Recommended)" option label is treated as a UI default, not evidence of user intent, so such questions defer to the human instead of fabricating the answer.
 - Stop leaking tool output and raw tool-error text (e.g. "Error invoking tool ...") into the user-visible assistant message: the end-of-turn assistant row is now composed from AI-message text only.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.38...v0.10.39
 
 ## [v0.10.38] - 2026-08-26
 
