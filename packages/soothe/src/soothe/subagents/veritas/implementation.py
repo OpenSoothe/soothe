@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.language_models import BaseChatModel
@@ -54,38 +55,38 @@ async def answer(
     Args:
         request: The pending clarification.
         model: A langchain chat model. Veritas drives it through the shared
-            ``invoke_structured_chat`` helper which iterates structured-output
+            `invoke_structured_chat` helper which iterates structured-output
             methods for thinking-model compatibility.
         max_context_steps: Cap on recent step outputs included in the user prompt.
         soothe_config: Optional config; when provided, the structured-output call
             is wrapped in a Langfuse-traced RunnableConfig so the veritas span
             shows up under the parent loop graph trace.
-        thread_id: Loop thread id; forwarded as Langfuse ``session_id`` and
+        thread_id: Loop thread id; forwarded as Langfuse `session_id` and
             recorded in debug logs.
         loop_id: Loop identifier for Langfuse trace correlation across sub-traces.
         max_retries: Max retry attempts for transient infrastructure failures
-            (rate limit, timeout, connection error). ``StructuredOutputError``
-            (model output malformed) still defers immediately. Set to ``0`` to
-            disable retries. Default ``2``.
+            (rate limit, timeout, connection error). `StructuredOutputError`
+            (model output malformed) still defers immediately. Set to `0` to
+            disable retries. Default `2`.
         retry_backoff_seconds: Base backoff for exponential retry
-            (``backoff * 2**attempt``). Default ``2.0`` seconds.
+            (`backoff * 2**attempt`). Default `2.0` seconds.
         coerced_confidence: Confidence value assigned when the model returns
-            answers but omits ``confidence``. Default ``0.7``.
+            answers but omits `confidence`. Default `0.7`.
 
     Returns:
         Validated :class:`VeritasAnswerSchema`. When the LLM call fails or its
         output cannot satisfy the per-request schema, the result is coerced to
-        ``defer=True`` with a rationale prefix (``structured_output_failed: ...``
-        or ``transient_failure: ...``) so the policy can populate ``DeferKind``
+        `defer=True` with a rationale prefix (`structured_output_failed: ...`
+        or `transient_failure: ...`) so the policy can populate `DeferKind`
         and route the recovery path.
 
     Notes:
-        Any answer the model self-classifies as a question (``answer_is_question``
-        field) is collapsed to ``defer=True`` with
-        ``rationale="answer_was_question"`` so the policy classifies it as a
+        Any answer the model self-classifies as a question (`answer_is_question`
+        field) is collapsed to `defer=True` with
+        `rationale="answer_was_question"` so the policy classifies it as a
         forced defer (LLM glitch) rather than a genuine "I don't know." As a
-        transitional safety net, the legacy ``endswith("?")`` regex check is
-        used when the model omits the ``answer_is_question`` field.
+        transitional safety net, the legacy `endswith("?")` regex check is
+        used when the model omits the `answer_is_question` field.
     """
     view = request.loop_state
     n = len(request.questions)
@@ -123,10 +124,14 @@ async def answer(
         if soothe_config is not None
         else ""
     )
+    model_name = getattr(model, "model", None) or model.__class__.__name__
     data: dict[str, Any] | None = None
     last_exc: Exception | None = None
+    attempts_used = 0
+    t0 = time.monotonic()
 
     for attempt in range(max_retries + 1):
+        attempts_used = attempt + 1
         try:
             data = await ainvoke_structured_traced(
                 model,
@@ -150,6 +155,18 @@ async def answer(
             break
         except StructuredOutputError as exc:
             logger.warning("[veritas] structured output failed: %s", exc)
+            _log_call_stat(
+                model_name=model_name,
+                goal_id=view.goal_id,
+                origin=request.origin_node,
+                elapsed=time.monotonic() - t0,
+                attempts=attempts_used,
+                outcome="structured_output_error",
+                defer=True,
+                confidence=0.0,
+                answers=0,
+                thread_id=thread_id,
+            )
             return VeritasAnswerSchema(
                 defer=True,
                 confidence=0.0,
@@ -177,6 +194,18 @@ async def answer(
                 )
 
     if data is None:
+        _log_call_stat(
+            model_name=model_name,
+            goal_id=view.goal_id,
+            origin=request.origin_node,
+            elapsed=time.monotonic() - t0,
+            attempts=attempts_used,
+            outcome="transient_failure",
+            defer=True,
+            confidence=0.0,
+            answers=0,
+            thread_id=thread_id,
+        )
         return VeritasAnswerSchema(
             defer=True,
             confidence=0.0,
@@ -191,6 +220,18 @@ async def answer(
         result.confidence,
         len(result.answers),
         _truncate(result.rationale, _QUESTION_PREVIEW_CHARS),
+    )
+    _log_call_stat(
+        model_name=model_name,
+        goal_id=view.goal_id,
+        origin=request.origin_node,
+        elapsed=time.monotonic() - t0,
+        attempts=attempts_used,
+        outcome="ok",
+        defer=result.defer,
+        confidence=result.confidence,
+        answers=len(result.answers),
+        thread_id=thread_id,
     )
     if result.reasoning:
         logger.debug(
@@ -216,8 +257,8 @@ def _any_answer_is_a_question(
 ) -> bool:
     """Detect whether any answer is itself a question.
 
-    Prefers the model's structured self-classification (``answer_is_question``
-    field) when available. Falls back to the legacy ``endswith("?")`` regex
+    Prefers the model's structured self-classification (`answer_is_question`
+    field) when available. Falls back to the legacy `endswith("?")` regex
     check when the model omits the field — a transitional safety net that will
     be removed once all models reliably emit the structured field.
     """
@@ -244,6 +285,41 @@ def _truncate(text: str, limit: int) -> str:
     if len(s) <= limit:
         return s
     return s[: limit - 1] + "…"
+
+
+def _log_call_stat(
+    *,
+    model_name: str,
+    goal_id: str | None,
+    origin: str,
+    elapsed: float,
+    attempts: int,
+    outcome: str,
+    defer: bool,
+    confidence: float,
+    answers: int,
+    thread_id: str | None,
+) -> None:
+    """Emit an info-level log line for veritas LLM call-stat analysis.
+
+    Fields: model, goal_id, origin, elapsed_ms, attempts, outcome,
+    defer, confidence, answers, thread_id. Designed for grep/awk
+    aggregation over `[veritas] call_stat` lines.
+    """
+    logger.info(
+        "[veritas] call_stat model=%s goal_id=%s origin=%s elapsed_ms=%.0f "
+        "attempts=%d outcome=%s defer=%s confidence=%.2f answers=%d thread_id=%s",
+        model_name,
+        goal_id or "<none>",
+        origin,
+        elapsed * 1000,
+        attempts,
+        outcome,
+        defer,
+        confidence,
+        answers,
+        thread_id or "<none>",
+    )
 
 
 __all__ = ["answer"]
