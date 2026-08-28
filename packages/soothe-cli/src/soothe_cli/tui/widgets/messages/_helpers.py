@@ -7,15 +7,12 @@ import os
 import re
 import weakref
 from time import monotonic
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from textual.content import Content
 
 from soothe_cli.display import theme
 from soothe_cli.settings import get_glyphs
-
-if TYPE_CHECKING:
-    pass
 
 from soothe_cli.display.preview_limits import STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
 

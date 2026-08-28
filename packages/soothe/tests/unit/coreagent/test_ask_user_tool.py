@@ -1,4 +1,4 @@
-"""Unit tests for the host-injected ``ask_user`` tool (RFC-622 §9c relay)."""
+"""Unit tests for the host-injected ``ask_user`` tool."""
 
 from __future__ import annotations
 
@@ -65,16 +65,16 @@ def test_option_spec_valid() -> None:
     assert opt.description == "Best for browser flows."
 
 
-def test_option_spec_rejects_empty_label() -> None:
-    """Empty option label is rejected by QuestionSpec validation."""
-    with pytest.raises(Exception, match="non-empty"):  # noqa: PT011
-        _question(options=[_opt("  ", "desc"), _opt("B"), _opt("C")])
+def test_option_spec_coerces_empty_label() -> None:
+    """Empty option label is coerced to a placeholder by QuestionSpec."""
+    q = _question(options=[_opt("  ", "desc"), _opt("B"), _opt("C")])
+    assert q.options[0].label == "Option 1"
 
 
-def test_option_spec_rejects_empty_description() -> None:
-    """Empty option description is rejected by QuestionSpec validation."""
-    with pytest.raises(Exception, match="non-empty"):  # noqa: PT011
-        _question(options=[_opt("label", "  "), _opt("B"), _opt("C")])
+def test_option_spec_coerces_empty_description() -> None:
+    """Empty option description is coerced to a placeholder by QuestionSpec."""
+    q = _question(options=[_opt("label", "  "), _opt("B"), _opt("C")])
+    assert q.options[0].description == "No description provided."
 
 
 # ---------------------------------------------------------------------------
@@ -98,30 +98,39 @@ def test_question_spec_accepts_4_options() -> None:
     assert len(q.options) == 4
 
 
-def test_question_spec_rejects_1_option() -> None:
-    with pytest.raises(Exception, match="2-4 options"):  # noqa: PT011
-        _question(options=[_opt("A")])
+def test_question_spec_pads_1_option() -> None:
+    """Fewer than 2 options is padded to 2 by coercion."""
+    q = _question(options=[_opt("A")])
+    assert len(q.options) == 2
 
 
-def test_question_spec_rejects_5_options() -> None:
-    with pytest.raises(Exception, match="2-4 options"):  # noqa: PT011
-        _question(options=[_opt("A"), _opt("B"), _opt("C"), _opt("D"), _opt("E")])
+def test_question_spec_truncates_5_options() -> None:
+    """More than 4 options is truncated to 4 by coercion."""
+    q = _question(options=[_opt("A"), _opt("B"), _opt("C"), _opt("D"), _opt("E")])
+    assert len(q.options) == 4
 
 
-def test_question_spec_rejects_header_over_12_chars() -> None:
-    with pytest.raises(Exception, match="≤12 chars"):  # noqa: PT011
-        _question(header="This header is way too long")
+def test_question_spec_truncates_header_over_12_chars() -> None:
+    """Header longer than 12 chars is truncated, not rejected."""
+    q = _question(header="This header is way too long")
+    assert len(q.header) == 12
+    assert q.header == "This header "
 
 
-def test_question_spec_rejects_question_over_100_words() -> None:
+def test_question_spec_truncates_question_over_100_words() -> None:
+    """Question longer than 100 words is truncated, not rejected."""
     long_q = " ".join(["word"] * 101)
-    with pytest.raises(Exception, match="≤100 words"):  # noqa: PT011
-        _question(question=long_q)
+    q = _question(question=long_q)
+    assert len(q.question.split()) == 100
 
 
-def test_question_spec_rejects_duplicate_option_labels() -> None:
-    with pytest.raises(Exception, match="unique"):  # noqa: PT011
-        _question(options=[_opt("Same"), _opt("Same"), _opt("C")])
+def test_question_spec_dedupes_duplicate_option_labels() -> None:
+    """Duplicate option labels are de-duplicated with suffixes."""
+    q = _question(options=[_opt("Same"), _opt("Same"), _opt("C")])
+    labels = [opt.label for opt in q.options]
+    assert len(labels) == len(set(labels))
+    assert "Same" in labels
+    assert "Same (2)" in labels
 
 
 # ---------------------------------------------------------------------------
@@ -129,15 +138,19 @@ def test_question_spec_rejects_duplicate_option_labels() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_args_schema_rejects_empty() -> None:
-    with pytest.raises(Exception):  # noqa: PT011
-        _AskUserArgs()
+def test_args_schema_placeholder_for_empty() -> None:
+    """Empty args produces a placeholder question instead of raising."""
+    args = _AskUserArgs()
+    assert len(args.questions) == 1
+    assert args.questions[0].question.strip()
 
 
-def test_args_schema_rejects_whitespace_only_question() -> None:
+def test_args_schema_placeholder_for_whitespace_only_question() -> None:
+    """Whitespace-only questions are replaced with a placeholder."""
     q = _question(question="  ")
-    with pytest.raises(Exception, match="non-empty"):  # noqa: PT011
-        _AskUserArgs(questions=[q])
+    args = _AskUserArgs(questions=[q])
+    assert len(args.questions) == 1
+    assert args.questions[0].question.strip()
 
 
 def test_args_schema_strips_whitespace_entries() -> None:
@@ -155,20 +168,22 @@ def test_args_schema_accepts_multiple_questions() -> None:
     assert len(args.questions) == 2
 
 
-def test_args_schema_rejects_duplicate_question_texts() -> None:
+def test_args_schema_dedupes_duplicate_question_texts() -> None:
+    """Duplicate question texts are de-duplicated, keeping the first."""
     q1 = _question(question="Same question?", header="H1")
     q2 = _question(question="Same question?", header="H2")
-    with pytest.raises(Exception, match="unique"):  # noqa: PT011
-        _AskUserArgs(questions=[q1, q2])
+    args = _AskUserArgs(questions=[q1, q2])
+    assert len(args.questions) == 1
+    assert args.questions[0].header == "H1"
 
 
 # ---------------------------------------------------------------------------
-# LLM arg-quirk coercion (loops f182, 065e, 9125)
+# LLM arg-quirk coercion
 # ---------------------------------------------------------------------------
 
 
 def test_args_schema_coerces_stringified_json_questions() -> None:
-    """Loop f182: questions as stringified JSON array."""
+    """Questions as stringified JSON array are parsed."""
     raw = json.dumps(
         [
             {
@@ -205,7 +220,7 @@ def test_args_schema_coerces_stringified_json_via_ainvoke() -> None:
 
 
 def test_args_schema_wraps_flat_single_question() -> None:
-    """Loop 065e: model emitted question fields as top-level tool args."""
+    """Model emitted question fields as top-level tool args are wrapped."""
     args = _AskUserArgs(
         question="Project feedback?",
         header="Feedback",
@@ -220,7 +235,7 @@ def test_args_schema_wraps_flat_single_question() -> None:
 
 
 def test_args_schema_coerces_stringified_options() -> None:
-    """Loop 065e: options arrived as a JSON string."""
+    """Options arriving as a JSON string are parsed."""
     opts_json = json.dumps(
         [
             {"label": "A", "description": "la"},
@@ -233,6 +248,31 @@ def test_args_schema_coerces_stringified_options() -> None:
     )
     assert len(args.questions[0].options) == 3
     assert args.questions[0].options[0].label == "A"
+
+
+@pytest.mark.parametrize("marker", ["- ", "* ", "+ "])
+def test_args_schema_coerces_markdown_prefixed_options(marker: str) -> None:
+    """Options prefixed with a markdown list marker are parsed into a list.
+
+    Reproduces the original user report: an LLM emitted options as
+    ``- [{"label": "Dragons", ...}]`` and json.loads() failed on the ``- ``
+    prefix, leaving the raw string to be rejected by Pydantic with
+    "Input should be a valid list".
+    """
+    opts_json = json.dumps(
+        [
+            {"label": "Dragons", "description": "Mythical flying reptiles."},
+            {"label": "Unicorns", "description": "Mythical horned horses."},
+        ]
+    )
+    raw = f"{marker}{opts_json}"
+    args = _AskUserArgs(
+        questions=[{"question": "Q?", "header": "H", "options": raw}],
+    )
+    assert isinstance(args.questions[0].options, list)
+    assert len(args.questions[0].options) == 2
+    assert args.questions[0].options[0].label == "Dragons"
+    assert isinstance(args.questions[0].options[0], OptionSpec)
 
 
 def test_args_schema_renames_old_field_names() -> None:
@@ -369,10 +409,20 @@ def test_run_ask_user_strips_empty_questions() -> None:
     assert "A: go" in result
 
 
-def test_run_ask_user_all_empty_raises_value_error() -> None:
-    with patch("langgraph.types.interrupt", side_effect=AssertionError("must not call")):
-        with pytest.raises(ValueError, match="non-empty"):
-            _run(questions=[_question(question="  ")])
+def test_run_ask_user_all_empty_uses_placeholder() -> None:
+    """All-empty questions no longer raise — a placeholder is emitted instead."""
+    captured: list[dict[str, Any]] = []
+
+    def fake_interrupt(value: Any) -> Any:
+        captured.append(value)
+        return {"answers": ["go"]}
+
+    with patch("langgraph.types.interrupt", fake_interrupt):
+        result = _run(questions=[_question(question="  ")])
+
+    assert len(captured[0]["questions"]) == 1
+    assert captured[0]["questions"][0]["question"].strip()
+    assert "A: go" in result
 
 
 def test_run_ask_user_propagates_graph_interrupt() -> None:

@@ -42,11 +42,7 @@ class AskUserPromptMiddleware(AgentMiddleware):
     """Append the `ask_user` gate directive to the system prompt."""
 
     def _augment(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
-        """Return `request` with the directive appended to the system message.
-
-        Idempotent — skips if the tag is already present (e.g. the system
-        prompt was rebuilt on a later hop).
-        """
+        """Append the directive to the system message if not already present."""
         sm = getattr(request, "system_message", None)
         if sm is not None and isinstance(sm, SystemMessage):
             content = sm.content
@@ -60,12 +56,7 @@ class AskUserPromptMiddleware(AgentMiddleware):
         request: ModelRequest[ContextT],
         handler: Callable[[ModelRequest[ContextT]], ModelResponse[ContextT]],
     ) -> ModelResponse[ContextT]:
-        """Sync path — delegates to the async implementation.
-
-        soothe always runs the agent in an async context (`astream`), so the
-        async `awrap_model_call` below is the one that actually fires. This
-        sync shim exists for API completeness and synchronous test paths.
-        """
+        """Sync shim — delegates to the async path (soothe always runs async)."""
         return handler(self._augment(request))
 
     async def awrap_model_call(
@@ -73,10 +64,7 @@ class AskUserPromptMiddleware(AgentMiddleware):
         request: ModelRequest[ContextT],
         handler: Callable[[ModelRequest[ContextT]], Awaitable[ModelResponse[ContextT]]],
     ) -> ModelResponse[ContextT]:
-        """Append the directive to the system message before the model call.
-
-        This is the path that fires in production (`astream` / `ainvoke`).
-        """
+        """Append the directive before the model call (production path)."""
         return await handler(self._augment(request))
 
 

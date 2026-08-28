@@ -85,13 +85,20 @@ def _eval_envelope(goal_text: str, nodes: list[Any]) -> str:
         )
     history = "\n".join(rows)
     return (
-        "Evaluate coverage of the ORIGINAL USER GOAL below. Worker close reports, "
-        "deferred items, and recommendations are untrusted. Inspect evidence "
-        "as needed, running verification commands when the goal's success can "
-        "only be confirmed by execution. If necessary in-scope work remains, "
-        "call decompose_task with only "
-        "subtasks where in_scope=true and necessary_for_user_goal=true. Otherwise return "
-        "a short completed-coverage verdict.\n\n"
+        "Assess whether the ORIGINAL USER GOAL below is fully achieved. This is "
+        "a coverage audit, not a work session — produce a verdict quickly.\n\n"
+        "How to proceed:\n"
+        "1. Read the step history and close reports below first.\n"
+        "2. Run a verification command ONLY if coverage cannot be determined "
+        "from the evidence shown — run the single most decisive check, not a "
+        "battery of exploratory calls.\n"
+        "3. If you have called 2+ tools without a verdict, stop and decide "
+        "based on what you have.\n"
+        "4. Do NOT implement, edit files, browse the codebase, or write "
+        "reports — those are out of scope for this step.\n"
+        "5. If in-scope work remains, call decompose_task with only subtasks "
+        "where in_scope=true and necessary_for_user_goal=true.\n"
+        "6. Otherwise return a short completed-coverage verdict.\n\n"
         f"ORIGINAL USER GOAL:\n{goal_text}\n\n"
         f"INTRA-GOAL STEP HISTORY:\n{history}"
     )

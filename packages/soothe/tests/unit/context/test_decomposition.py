@@ -1,4 +1,4 @@
-"""Tests for RFC-904 decomposition proposal types (IG-751 P0)."""
+"""Tests for decomposition proposal types."""
 
 import pytest
 from pydantic import ValidationError
@@ -8,9 +8,9 @@ from soothe.context.decomposition import DecompositionProposal, ProposedSubtask
 
 
 class TestProposedSubtask:
-    def test_requires_description(self) -> None:
-        with pytest.raises(ValidationError):
-            ProposedSubtask(description="  ")
+    def test_empty_description_coerced(self) -> None:
+        sub = ProposedSubtask(description="  ")
+        assert sub.description == "(untitled subtask)"
 
 
 class TestDecompositionProposal:
@@ -25,12 +25,25 @@ class TestDecompositionProposal:
         assert len(prop.subtasks) == 2
         assert prop.subtasks[1].depends_on_local == [0]
 
-    def test_rejects_bad_local_dep(self) -> None:
-        with pytest.raises(ValidationError):
-            DecompositionProposal(
-                parent_step_id="R",
-                subtasks=[ProposedSubtask(description="only", depends_on_local=[1])],
-            )
+    def test_bad_local_dep_dropped(self) -> None:
+        """Out-of-range or self-ref deps are dropped, not rejected."""
+        prop = DecompositionProposal(
+            parent_step_id="R",
+            subtasks=[ProposedSubtask(description="only", depends_on_local=[1])],
+        )
+        assert prop.subtasks[0].depends_on_local is None
+
+    def test_self_ref_dep_dropped(self) -> None:
+        """Self-referential deps are dropped."""
+        prop = DecompositionProposal(
+            parent_step_id="R",
+            subtasks=[
+                ProposedSubtask(description="A", depends_on_local=[0]),
+                ProposedSubtask(description="B", depends_on_local=[0, 1]),
+            ],
+        )
+        assert prop.subtasks[0].depends_on_local is None
+        assert prop.subtasks[1].depends_on_local == [0]
 
     def test_rejects_empty_subtasks(self) -> None:
         with pytest.raises(ValidationError):

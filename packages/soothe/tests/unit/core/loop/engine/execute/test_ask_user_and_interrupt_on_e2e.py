@@ -763,7 +763,7 @@ class TestCapturedClarificationScoringCase:
                         "type": "tool",
                         "tool_name": "ask_user",
                         "has_error": True,
-                        "error_preview": "ask_user requires at least one non-empty question",
+                        "error_preview": "ask_user emitted a placeholder question",
                     }
                 ],
                 has_error=True,

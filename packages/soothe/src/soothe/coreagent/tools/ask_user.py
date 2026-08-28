@@ -38,7 +38,9 @@ class QuestionSpec(BaseModel):
     """A structured question with 2-4 options."""
 
     question: str = Field(description="The full question text. Clear, specific, ends with '?'.")
-    header: str = Field(description="Short chip label (max 12 chars). E.g. 'Auth method'.")
+    header: str = Field(
+        description="Short chip label (max 12 chars). E.g. 'Auth method'. Truncated if longer."
+    )
     options: list[OptionSpec] = Field(
         description="2-4 options. Put the recommended one first with '(Recommended)' in its label. Never include an 'Other' option — it's auto-added.",
     )
@@ -46,22 +48,41 @@ class QuestionSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
-    def _validate(self) -> QuestionSpec:
-        if not 2 <= len(self.options) <= 4:
-            raise ValueError("2-4 options required")
+    def _coerce(self) -> QuestionSpec:
+        """Coerce LLM-produced values: truncate header/question, pad/trim options, dedup labels."""
+        # Header: truncate to 12 chars.
         if len(self.header) > 12:
-            raise ValueError("header must be ≤12 chars")
-        if len(self.question.split()) > 100:
-            raise ValueError("question must be ≤100 words")
-        # Uniqueness: option labels must be distinct within each question.
-        labels = [opt.label for opt in self.options]
-        if len(labels) != len(set(labels)):
-            raise ValueError("option labels must be unique")
-        for opt in self.options:
+            self.header = self.header[:12]
+
+        # Question: truncate to 100 words.
+        words = self.question.split()
+        if len(words) > 100:
+            self.question = " ".join(words[:100])
+
+        # Options: ensure 2-4.
+        if len(self.options) > 4:
+            self.options = self.options[:4]
+        while len(self.options) < 2:
+            self.options.append(
+                OptionSpec(
+                    label=f"Option {len(self.options) + 1}",
+                    description="No description provided.",
+                )
+            )
+
+        # Option labels: ensure non-empty and unique.
+        seen: set[str] = set()
+        for i, opt in enumerate(self.options):
             if not opt.label.strip():
-                raise ValueError("option label must be non-empty")
+                opt.label = f"Option {i + 1}"
+            base = opt.label
+            suffix = 1
+            while opt.label in seen:
+                suffix += 1
+                opt.label = f"{base} ({suffix})"
+            seen.add(opt.label)
             if not opt.description.strip():
-                raise ValueError("option description must be non-empty")
+                opt.description = "No description provided."
         return self
 
 
@@ -78,24 +99,7 @@ class _AskUserArgs(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _coerce_llm_arg_quirks(cls, data: Any) -> Any:
-        """Handle common LLM argument-shape quirks before Pydantic validation.
-
-        Observed in production loops (f182, 065e, 9125):
-
-        1. **Stringified JSON questions**: the model emits `questions` as a
-           JSON string instead of a native list. Parse it.
-
-        2. **Flat single question**: the model emits `question`, `header`,
-           `options` as top-level tool args instead of wrapping them in
-           `questions: [{...}]`. Detect and wrap them.
-
-        3. **Stringified options**: `options` may also arrive as a JSON
-           string instead of a list. Parse it.
-
-        4. **Old field names**: in-flight loops from before the schema rename
-           may use `title`/`description`/`short`/`long`/`recommended`.
-           Rename them to the new fields.
-        """
+        """Handle LLM argument quirks: stringified JSON, flat fields, old field names."""
         if not isinstance(data, dict):
             return data
 
@@ -140,8 +144,17 @@ class _AskUserArgs(BaseModel):
             # Parse stringified options.
             raw_opts = q.get("options")
             if isinstance(raw_opts, str):
+                # LLMs sometimes prefix the JSON with a markdown list marker
+                # (e.g. ``- [{"label": ...}]``). Strip it so json.loads can
+                # succeed; otherwise the raw string reaches Pydantic and is
+                # rejected with "Input should be a valid list".
+                stripped_opts = raw_opts.strip()
+                for marker in ("- ", "* ", "+ "):
+                    if stripped_opts.startswith(marker):
+                        stripped_opts = stripped_opts[len(marker) :].lstrip()
+                        break
                 try:
-                    parsed_opts = json.loads(raw_opts)
+                    parsed_opts = json.loads(stripped_opts)
                     if isinstance(parsed_opts, list):
                         q["options"] = parsed_opts
                 except (json.JSONDecodeError, TypeError):
@@ -158,25 +171,33 @@ class _AskUserArgs(BaseModel):
 
     @model_validator(mode="after")
     def _normalize(self) -> _AskUserArgs:
-        # Drop questions whose question text is whitespace-only.
+        """Drop whitespace-only questions, dedup by text, keep a placeholder if all empty."""
         self.questions = [q for q in self.questions if q.question.strip()]
         if not self.questions:
-            raise ValueError("ask_user requires at least one non-empty question")
-        # Uniqueness: question texts must be distinct.
-        texts = [q.question for q in self.questions]
-        if len(texts) != len(set(texts)):
-            raise ValueError("question texts must be unique")
+            self.questions = [
+                QuestionSpec(
+                    question="Please provide your input:",
+                    header="Input",
+                    options=[
+                        OptionSpec(label="Yes", description="Proceed."),
+                        OptionSpec(label="No", description="Do not proceed."),
+                    ],
+                )
+            ]
+        # De-duplicate by question text (keep first occurrence).
+        seen_texts: set[str] = set()
+        unique: list[QuestionSpec] = []
+        for q in self.questions:
+            key = q.question.strip().lower()
+            if key not in seen_texts:
+                seen_texts.add(key)
+                unique.append(q)
+        self.questions = unique
         return self
 
 
 def _format_answers(questions: list, payload: object) -> str:
-    """Render the resume payload as a model-readable Q&A block.
-
-    `questions` may be `list[QuestionSpec]`, `list[dict]` (structured,
-    from wire), or `list[str]` (degraded backward compat). Question text is
-    extracted from `QuestionSpec` or dict when available; falls back to
-    `str(q)`.
-    """
+    """Render the resume payload as a model-readable Q&A block."""
     raw = payload.get("answers", payload) if isinstance(payload, dict) else payload
     answers = (
         [raw] if isinstance(raw, str) else [str(a) for a in raw] if isinstance(raw, list) else []
@@ -203,7 +224,16 @@ def _run_ask_user(questions: list[QuestionSpec] | None = None) -> str:
     qs = list(questions or [])
     cleaned = [q for q in qs if q.question.strip()]
     if not cleaned:
-        raise ValueError("ask_user requires at least one non-empty question")
+        cleaned = [
+            QuestionSpec(
+                question="Please provide your input:",
+                header="Input",
+                options=[
+                    OptionSpec(label="Yes", description="Proceed."),
+                    OptionSpec(label="No", description="Do not proceed."),
+                ],
+            )
+        ]
     logger.info(
         "[ask_user] LLM asked %d question(s): %s",
         len(cleaned),
@@ -225,8 +255,7 @@ def build_ask_user_tool() -> StructuredTool:
             "Ask the user a question and pause the loop until they answer. "
             "Each question has a header (short label), question text, and 2-4 "
             "options (each with label + description). Put the recommended "
-            "option first with '(Recommended)' in its label. The CLI renders "
-            "a picker; the user can also type a custom answer. Use for "
+            "option first with '(Recommended)' in its label. Use for "
             "decision gates: approval, confirmation, routing, or resolving "
             "ambiguity."
         ),

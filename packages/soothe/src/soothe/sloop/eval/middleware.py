@@ -56,11 +56,11 @@ def _append_system_addendum(request: ModelRequest[ContextT]) -> ModelRequest[Con
 class EvalStepMiddleware(AgentMiddleware):
     """Coverage-audit policy for Eval steps.
 
-    Keeps the full tool surface so the auditor can execute verification commands
-    (tests, lint, build) and, when work remains, emit `decompose_task` proposals.
-    The coverage-audit system addendum is still injected to anchor the thread's
-    role: verify, then delegate remaining implementation via decomposition rather
-    than performing it inline.
+    Keeps the full tool surface so the auditor can run a decisive verification
+    command when coverage cannot be confirmed from step history alone. The
+    coverage-audit system addendum anchors the thread's role: assess quickly,
+    run at most one decisive verification, then delegate remaining work via
+    decomposition rather than performing it inline.
     """
 
     tools = [_DECOMPOSE_TOOL]
@@ -98,7 +98,8 @@ class EvalStepMiddleware(AgentMiddleware):
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], Awaitable[Any]],
     ) -> Any:
-        """All tools are permitted on Eval threads — full verification surface."""
+        """All tools are permitted on Eval threads — but the prompt policy
+        constrains usage to at most one decisive verification command."""
         return await handler(request)
 
 

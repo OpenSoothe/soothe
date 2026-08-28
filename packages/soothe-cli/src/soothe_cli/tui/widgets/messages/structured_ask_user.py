@@ -1102,6 +1102,18 @@ class StructuredAskUserWidget(Vertical):
         self._update_option_highlight()
         self._update_tab_highlight()
 
+    # Suffix appended to the selected option's label text so the user sees
+    # an inline "Enter to submit." hint right next to their chosen answer.
+    _SELECTED_HINT = "  ← Enter to submit."
+
+    def _option_label(self, q_idx: int, opt_idx: int) -> str:
+        """Build the display text for an option row (without hint)."""
+        options = self._question_options(q_idx)
+        if opt_idx < len(options):
+            label = options[opt_idx].get("label", "") if isinstance(options[opt_idx], dict) else ""
+            return f"  {opt_idx + 1}. {label}"
+        return ""
+
     def _update_option_highlight(self) -> None:
         """Update which option row is highlighted."""
         num_opts = len(self._question_options(self._current_q))
@@ -1119,6 +1131,14 @@ class StructuredAskUserWidget(Vertical):
                         opt_w.add_class("is-selected")
                     else:
                         opt_w.remove_class("is-selected")
+                # Append the inline hint to the selected option's text so the
+                # user knows they can press Enter to submit their choice.
+                base_text = self._option_label(self._current_q, j)
+                sel = self._selected.get(self._current_q)
+                if sel is not None and sel == j and j != self._highlighted:
+                    opt_w.update(f"{base_text}{self._SELECTED_HINT}")
+                else:
+                    opt_w.update(base_text)
             except Exception:  # noqa: BLE001
                 pass
         # Custom row (only when allow_custom)
@@ -1135,6 +1155,24 @@ class StructuredAskUserWidget(Vertical):
                         custom_w.add_class("is-selected")
                     else:
                         custom_w.remove_class("is-selected")
+                # Inline hint for a selected custom answer.
+                sel = self._selected.get(self._current_q)
+                custom_text = (
+                    str(self._custom_input.value or "").strip()
+                    if self._custom_input is not None
+                    else ""
+                )
+                if (
+                    sel is not None
+                    and sel == custom_idx
+                    and custom_idx != self._highlighted
+                    and custom_text
+                ):
+                    custom_w.update(f"  Other: {custom_text}{self._SELECTED_HINT}")
+                elif sel is not None and sel == custom_idx and custom_idx != self._highlighted:
+                    custom_w.update(f"  Other:{self._SELECTED_HINT}")
+                else:
+                    custom_w.update("  Other:")
             except Exception:  # noqa: BLE001
                 pass
         # Enable custom input only when custom row is highlighted

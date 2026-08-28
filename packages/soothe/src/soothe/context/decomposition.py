@@ -41,7 +41,7 @@ class ProposedSubtask(BaseModel):
     def _description_nonempty(cls, value: str) -> str:
         text = (value or "").strip()
         if not text:
-            raise ValueError("subtask description must be non-empty")
+            return "(untitled subtask)"
         return text
 
 
@@ -66,9 +66,9 @@ class DecompositionProposal(BaseModel):
         n = len(subtasks)
         for idx, sub in enumerate(subtasks):
             deps = sub.depends_on_local or []
-            for dep in deps:
-                if dep < 0 or dep >= n or dep == idx:
-                    raise ValueError(
-                        f"subtask[{idx}] depends_on_local={dep} is out of range or self-ref"
-                    )
+            if not deps:
+                continue
+            filtered = [d for d in deps if 0 <= d < n and d != idx]
+            if len(filtered) != len(deps):
+                sub.depends_on_local = filtered or None
         return subtasks

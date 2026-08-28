@@ -206,6 +206,39 @@ async def test_enter_hint_hidden_until_all_answered() -> None:
 
 
 @pytest.mark.asyncio
+async def test_inline_hint_shown_on_selected_option() -> None:
+    """A selected (but not highlighted) option shows an inline "Enter to submit" hint."""
+    app = _WidgetApp(_make_widget(questions=_questions(2)))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        # Select option 0 on Q1 (auto-advances to Q2)
+        w.action_confirm()
+        # Go back to Q1
+        w.action_prev_question()
+        await pilot.pause()
+        # Move highlight to option 1 so option 0 is selected-but-not-highlighted
+        w.action_next_option()
+        await pilot.pause()
+        opt_0 = w.query_one("#saq-opt-0")
+        rendered = str(opt_0.render())
+        assert "Enter to submit" in rendered
+
+
+@pytest.mark.asyncio
+async def test_inline_hint_not_on_unselected_options() -> None:
+    """Unselected options do not show the inline hint."""
+    app = _WidgetApp(_make_widget(questions=_questions(1)))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        # Nothing selected yet — no hint on any option.
+        for j in range(3):
+            opt = w.query_one(f"#saq-opt-{j}")
+            assert "Enter to submit" not in str(opt.render())
+
+
+@pytest.mark.asyncio
 async def test_submitted_title_shows_answered_from_human() -> None:
     """After submit the generic title reads "Answered (from human)"."""
     app = _WidgetApp(_make_widget(questions=_questions(1)))
