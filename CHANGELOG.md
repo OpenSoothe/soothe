@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.11.0] - 2026-08-29
+
+### Changed
+- Minor version bump to 0.11.0 across all monorepo-owned packages (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`). The `soothe-sdk` package remains on its independent 1.x version line.
+
+### Fixed
+- Fix import ordering in `soothe-cli` TUI message helpers (`_helpers.py`).
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.40...v0.11.0
+
 ## [v0.10.40] - 2026-08-29
 
 ### Fixed
