@@ -25,10 +25,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_STAGE_PREFIX = "tool_approval"
-
 ApprovalDecision = Literal["approve", "reject"]
-PipelineStage = Literal["deny_rule", "safety_check", "allow_rule", "default_approve"]
+PipelineStage = Literal["deny_rule", "safety_check", "default_approve"]
 
 
 @dataclass(frozen=True)
@@ -63,16 +61,15 @@ class ToolApprovalPipeline:
         security_config: Any = None,
     ) -> None:
         self._deny_rules = config.deny_rules
-        self._allow_rules = config.allow_rules
-        self._audit = config.audit
         self._security_config = security_config
+        self._security_evaluator: Any = None  # lazy-init in _check_safety
 
     def evaluate(
         self,
         action_requests: list[Mapping[str, Any]],
         *,
         workspace_root: str | None = None,
-        include_allow_rules: bool = True,
+        auto_approve: bool = True,
     ) -> ApprovalResult | None:
         """Run deny → safety stages. Returns ``None`` = defer to the next tier.
 
@@ -86,9 +83,9 @@ class ToolApprovalPipeline:
         Args:
             action_requests: Batched HITL action requests.
             workspace_root: Per-request workspace root (``<workspace>`` token).
-            include_allow_rules: Kept for API compatibility. When ``False``
-                (manual mode), actions that pass deny/safety are deferred to
-                the human instead of being auto-approved.
+            auto_approve: When ``True`` (auto mode), actions that pass
+                deny/safety are auto-approved. When ``False`` (manual mode),
+                passing actions are deferred to the human relay.
         """
         try:
             if not action_requests:
@@ -107,7 +104,9 @@ class ToolApprovalPipeline:
                         "deny_rule",
                         f"matched deny rule for {name}",
                     )
-                    self._log_decision(result)
+                    logger.info(
+                        "[%s] %s by stage=%s", "tool_approval", result.decision, result.stage
+                    )
                     return result
 
                 # Stage 2: safety checks (bypass-immune, delegated to nano)
@@ -118,19 +117,20 @@ class ToolApprovalPipeline:
                         "safety_check",
                         safety_result,
                     )
-                    self._log_decision(result)
+                    logger.info(
+                        "[%s] %s by stage=%s", "tool_approval", result.decision, result.stage
+                    )
                     return result
 
             # All action requests passed deny + safety checks.
-            # In auto mode (include_allow_rules=True), default-approve.
-            # In manual mode (include_allow_rules=False), defer to human.
-            if include_allow_rules:
+            # In auto mode, default-approve. In manual mode, defer to human.
+            if auto_approve:
                 result = ApprovalResult(
                     "approve",
                     "default_approve",
                     "no deny rule or safety check matched",
                 )
-                self._log_decision(result)
+                logger.info("[%s] %s by stage=%s", "tool_approval", result.decision, result.stage)
                 return result
 
             return None  # manual mode → defer to human relay
@@ -159,13 +159,14 @@ class ToolApprovalPipeline:
             OperationSecurityContext,
         )
 
-        evaluator = WorkspaceToolOperationSecurity()
+        if self._security_evaluator is None:
+            self._security_evaluator = WorkspaceToolOperationSecurity()
         request = build_operation_security_request(name, dict(args))
         ctx = OperationSecurityContext(
             workspace=workspace_root,
             security_config=self._security_config,
         )
-        decision = evaluator.evaluate(request, ctx)
+        decision = self._security_evaluator.evaluate(request, ctx)
         if decision.verdict == "deny":
             return decision.reason
         return None
@@ -177,35 +178,30 @@ class ToolApprovalPipeline:
         rules: list,
         workspace_root: str | None,
     ) -> bool:
-        """Check if a tool action matches any rule in the list."""
-        for rule in rules:
-            if rule.tool != tool_name:
-                continue
-            if tool_name == "run_command":
-                cmd = str(args.get("command") or "")
-                if match_command_rule(cmd, rule.pattern):
+        """Check if a tool action matches any rule in the list.
+
+        Selects the matcher function once based on ``tool_name`` instead of
+        re-dispatching inside the loop.
+        """
+        if tool_name == "run_command":
+            val = str(args.get("command") or "")
+            for rule in rules:
+                if rule.tool != tool_name:
+                    continue
+                if match_command_rule(val, rule.pattern):
                     return True
-            elif tool_name in ("edit_file", "write_file", "delete"):
-                path = str(args.get("file_path") or args.get("path") or "")
-                if match_path_rule(path, rule.pattern, workspace_root):
+            return False
+
+        if tool_name in ("edit_file", "write_file", "delete"):
+            val = str(args.get("file_path") or args.get("path") or "")
+            for rule in rules:
+                if rule.tool != tool_name:
+                    continue
+                if match_path_rule(val, rule.pattern, workspace_root):
                     return True
-        return False
+            return False
 
-    def _log_decision(self, result: ApprovalResult) -> None:
-        """Log pipeline decision if audit is enabled."""
-        if not self._audit.log_decisions:
-            return
-        level = getattr(logger, self._audit.log_level, logger.info)
-        level(
-            "[%s] %s by stage=%s reason=%s",
-            _STAGE_PREFIX,
-            result.decision,
-            result.stage,
-            result.reason,
-        )
+        return False  # unknown tool type — no rule match
 
 
-__all__ = [
-    "ApprovalResult",
-    "ToolApprovalPipeline",
-]
+__all__ = ["ApprovalResult", "ToolApprovalPipeline"]

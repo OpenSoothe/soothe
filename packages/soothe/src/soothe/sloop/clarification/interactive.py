@@ -136,7 +136,7 @@ class InteractiveClarificationPolicy:
         result = self._tool_approval_pipeline.evaluate(
             action_requests,
             workspace_root=request.loop_state.workspace_summary,
-            include_allow_rules=self._manual_allow_rules,
+            auto_approve=self._manual_allow_rules,
         )
         if result is None:
             return None
@@ -157,26 +157,9 @@ class InteractiveClarificationPolicy:
     def _extract_answers(
         payload: Any, *, expected: int, origin: str | None = None
     ) -> list[str] | None:
-        if payload is None:
+        stripped = InteractiveClarificationPolicy._normalize_payload(payload)
+        if stripped is None:
             return None
-        if isinstance(payload, str):
-            answers = [payload]
-        elif isinstance(payload, dict):
-            raw = payload.get("answers", payload.get("answer"))
-            if raw is None:
-                return None
-            if isinstance(raw, str):
-                answers = [raw]
-            elif isinstance(raw, list):
-                answers = [str(a) for a in raw]
-            else:
-                return None
-        elif isinstance(payload, list):
-            answers = [str(a) for a in payload]
-        else:
-            return None
-
-        stripped = [a.strip() for a in answers]
 
         # Action-selector origins (plan-mode review, tool approval) send
         # [action, optional-comment]; only the action field (index 0) is
@@ -203,6 +186,33 @@ class InteractiveClarificationPolicy:
             # broadcast single answer when caller didn't split per-question
             return stripped * expected
         return None
+
+    @staticmethod
+    def _normalize_payload(payload: Any) -> list[str] | None:
+        """Extract a raw answer list from an interrupt payload.
+
+        Returns stripped strings, or ``None`` when the payload is empty or
+        has an unrecognizable shape.
+        """
+        if payload is None:
+            return None
+        if isinstance(payload, str):
+            raw = [payload]
+        elif isinstance(payload, dict):
+            val = payload.get("answers", payload.get("answer"))
+            if val is None:
+                return None
+            if isinstance(val, str):
+                raw = [val]
+            elif isinstance(val, list):
+                raw = [str(a) for a in val]
+            else:
+                return None
+        elif isinstance(payload, list):
+            raw = [str(a) for a in payload]
+        else:
+            return None
+        return [a.strip() for a in raw]
 
 
 __all__ = ["EmitFn", "InteractiveClarificationPolicy"]

@@ -241,17 +241,17 @@ class TestPipelineDisabled:
 
 
 # ---------------------------------------------------------------------------
-# Manual mode (include_allow_rules=False — deny/safety still reject, rest defer)
+# Manual mode (auto_approve=False — deny/safety still reject, rest defer)
 # ---------------------------------------------------------------------------
 
 
 class TestManualMode:
-    """include_allow_rules=False: deny/safety still reject, everything else defers."""
+    """auto_approve=False: deny/safety still reject, everything else defers."""
 
     def test_deny_rule_still_rejects(self) -> None:
         result = _pipeline().evaluate(
             [_ar("run_command", command="rm -rf /")],
-            include_allow_rules=False,
+            auto_approve=False,
         )
         assert result is not None
         assert result.decision == "reject"
@@ -261,7 +261,7 @@ class TestManualMode:
         result = _pipeline().evaluate(
             [_ar("edit_file", file_path="/workspace/.git/config")],
             workspace_root="/workspace",
-            include_allow_rules=False,
+            auto_approve=False,
         )
         assert result is not None
         assert result.decision == "reject"
@@ -271,14 +271,14 @@ class TestManualMode:
         """In manual mode, safe commands defer to the human relay."""
         result = _pipeline().evaluate(
             [_ar("run_command", command="pytest -xvs")],
-            include_allow_rules=False,
+            auto_approve=False,
         )
         assert result is None
 
     def test_ambiguous_defers_in_manual(self) -> None:
         result = _pipeline().evaluate(
             [_ar("run_command", command="curl https://example.com")],
-            include_allow_rules=False,
+            auto_approve=False,
         )
         assert result is None
 

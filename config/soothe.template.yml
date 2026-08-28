@@ -286,9 +286,6 @@ agent:
         enabled: false
         model_role: fast
         max_context_steps: 0
-      audit:
-        log_decisions: true
-        log_level: info
 
   veritas:
     model_role: think

@@ -119,22 +119,18 @@ def build_clarification_policy_for_runner(
         tool_approval_model = config.create_chat_model(ta_fallback_cfg.model_role)
 
     async def _veritas(request: ClarificationRequest) -> VeritasAnswerSchema:
-        if request.origin_node == "tool_approval" and ta_cfg.enabled and ta_fallback_cfg.enabled:
-            return await veritas_answer(
-                request,
-                model=tool_approval_model,
-                max_context_steps=ta_fallback_cfg.max_context_steps,
-                soothe_config=config,
-                thread_id=thread_id,
-                loop_id=loop_id,
-                max_retries=veritas_cfg.max_retries,
-                retry_backoff_seconds=veritas_cfg.retry_backoff_seconds,
-                coerced_confidence=veritas_cfg.coerced_confidence,
-            )
+        # RFC-622 §9b: fast model for tool-approval fallback, think for intent.
+        use_ta_fallback = (
+            request.origin_node == "tool_approval" and ta_cfg.enabled and ta_fallback_cfg.enabled
+        )
+        model = tool_approval_model if use_ta_fallback else veritas_model
+        max_context_steps = (
+            ta_fallback_cfg.max_context_steps if use_ta_fallback else veritas_cfg.max_context_steps
+        )
         return await veritas_answer(
             request,
-            model=veritas_model,
-            max_context_steps=veritas_cfg.max_context_steps,
+            model=model,
+            max_context_steps=max_context_steps,
             soothe_config=config,
             thread_id=thread_id,
             loop_id=loop_id,

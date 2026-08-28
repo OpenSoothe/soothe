@@ -1495,13 +1495,6 @@ class VeritasFallbackConfig(BaseModel):
     max_context_steps: int = Field(default=0, ge=0)
 
 
-class ToolApprovalAuditConfig(BaseModel):
-    """Audit logging for tool-approval pipeline decisions."""
-
-    log_decisions: bool = True
-    log_level: Literal["debug", "info", "warning"] = "info"
-
-
 def _default_deny_rules() -> list[ToolApprovalRule]:
     """Default deny rules — high-risk operations that are always blocked.
 
@@ -1596,9 +1589,6 @@ class ToolApprovalConfig(BaseModel):
     property: dangerous actions are always auto-rejected), but
     non-matching actions are deferred to the human relay instead of
     being auto-approved.
-
-    ``allow_rules`` is kept for backward compatibility but is empty by
-    default and has no effect on the pipeline decision.
     """
 
     enabled: bool = True
@@ -1614,7 +1604,6 @@ class ToolApprovalConfig(BaseModel):
     deny_rules: list[ToolApprovalRule] = Field(default_factory=_default_deny_rules)
     allow_rules: list[ToolApprovalRule] = Field(default_factory=_default_allow_rules)
     veritas_fallback: VeritasFallbackConfig = Field(default_factory=VeritasFallbackConfig)
-    audit: ToolApprovalAuditConfig = Field(default_factory=ToolApprovalAuditConfig)
 
 
 class ClarificationConfig(BaseModel):
