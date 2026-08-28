@@ -119,20 +119,6 @@ identity:
 # thread_pool: Daemon-level singleton PG pool shared by all threads
 # worker_pool: Each subprocess has its OWN pool (N × connections)
 # distributed: Ray cluster for horizontal scaling
-
-# Thread pool (DEFAULT) - Lightweight async, fast startup
-# Each concurrent synthesis loop occupies one thread for the full turn.
-# Defaults tuned for 32 concurrent loops (production multi-tenant workloads).
-# For 50–100 concurrent loops, raise max_pool_size to 96–100 and align
-# persistence.postgres.checkpoints_pool_size / metadata_pool_size / vectors_pool_size behind PgBouncer.
-# - max_pool_size ≥ concurrent loops for full parallelism
-# - min_pool_size pre-warms threads for fast initial dispatch
-# - Lower values cause queue waits; higher values increase memory and PG connection usage.
-#
-# CoreAgent cold start (daemon + TUI): keep agent.runtime.lazy_core_agent=true in soothe
-# config AND warmup_core_agent=true here — lazy defers compile; warmup runs primary +
-# ephemeral execute graphs during daemon "warming" so the first client turn avoids
-# two multi-second compiles (~7s primary + ~7s execute twin).
 thread_pool:
   enabled: true
   min_pool_size: 16  # Pre-warm baseline for 50–100 loop bursts

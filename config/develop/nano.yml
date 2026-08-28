@@ -1,9 +1,3 @@
-# Team develop nano profile (nano-owned keys only).
-# Compose with config/develop/soothe.yml for full soothe host behavior.
-# Carries only dev-specific overrides; values equal to config/nano.template.yml
-# (and matching the Pydantic model default) have been stripped so that the
-# template remains the single source of default values.
-
 providers:
   - name: dashscope
     provider_type: openai
@@ -28,14 +22,6 @@ providers:
       - DeepSeek-OCR-4bit
       - nomicai-modernbert-embed-base-bf16
 
-  - name: vllm
-    provider_type: openai
-    api_base_url: "http://localhost:9543/v1"
-    api_key: "mirasoth"
-    streaming: false
-    models:
-      - mlx-community/Muse-Glimmer-30B-4bit
-
 router_profiles:
   - name: glm
     router:
@@ -45,58 +31,34 @@ router_profiles:
       image: "dashscope:qwen3.7-plus"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
-  - name: minimax
-    router:
-      default: "dashscope:MiniMax-M3"
-      fast: "dashscope:qwen3.6-flash"
-      think: "dashscope:MiniMax-M3"
-      image: "dashscope:MiniMax-M3"
-      ocr: "omlx:DeepSeek-OCR-4bit"
-
   - name: qwen
     router:
       default: "omlx:Qwen3.8-27B-4bit"
       image: "omlx:GLM-4.6V-Flash-4bit"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
-  - name: muse-glimmer
-    router:
-      default: "vllm:mlx-community/Muse-Glimmer-30B-4bit"
-      image: "vllm:mlx-community/Muse-Glimmer-30B-4bit"
-      ocr: "omlx:DeepSeek-OCR-4bit"
-
 active_router_profile: glm
-
 embedding_profile:
   - model_role: dashscope:text-embedding-v4
     embedding_dims: 1536
 
-# Process-wide LLM headroom for ~2 Autopilot jobs + ~3 CLI StrangeLoops.
-# Job fan-out stays in soothe.yml (autopilot.max_parallel_goals); per-loop
-# step/subagent caps stay under agent.loop.concurrency.
 agent:
   middleware:
     llm_rate_limit:
-      # Sized for ~2 Autopilot jobs (max_parallel_goals=3) + ~3 CLI StrangeLoops.
       rpm_limit: 180
       concurrent_limit: 4
       global_concurrent_limit: 18
 
 tools:
   wizsearch:
-    # Tarzi-backed; default_engines is ordered failover (first success wins).
     default_engines:
       - duckduckgo
       - bing
   http_requests:
     allow_dangerous_requests: false  # SEC: opt-in; prevents SSRF/arbitrary POST
   deepxiv:
-    # Plain string, ${DEEPXIV_API_KEY}, or null (env lookup: DEEPXIV_API_KEY / DEEPXIV_TOKEN).
     token: "${DEEPXIV_API_KEY}"
 
-# Local develop defaults to SQLite (one process mode for the whole runtime).
-# Flip to postgresql + pgvector when exercising the Postgres path against
-# docker compose / PgBouncer — do not mix backends in one process.
 persistence:
   # Unused while default_backend is sqlite; kept for a quick Postgres flip:
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
@@ -108,7 +70,6 @@ persistence:
 observability:
   log_file_level: DEBUG
   langfuse:
-    # Plain string or ${ENV_VAR}; omit/null also reads LANGFUSE_* from the environment.
     public_key: pk-lf-soothe-local
     secret_key: sk-lf-soothe-local
     host: http://localhost:3300
@@ -118,14 +79,12 @@ observability:
 
 security:
   allow_paths_outside_workspace: true
-  # Explicit-empty bypass lists: safety assertion against privilege escalation.
   whitelist_paths_bypass: []
   whitelist_commands_bypass: []
 
 vector_stores:
   - name: sqlite_vec_dev
     provider_type: sqlite_vec
-    # dsn / url / api_key: plain string or ${ENV_VAR} (pgvector / Weaviate).
     dsn: null
     index_type: hnsw
     url: null
