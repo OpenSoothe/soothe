@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.40] - 2026-08-29
+
+### Fixed
+- `ask_user` tool now coerces invalid LLM output instead of crashing the loop: over-long headers are truncated, wrong option counts are padded/trimmed, empty/duplicate labels are de-duplicated, and whitespace-only questions are replaced with a placeholder. Markdown-list-prefixed JSON option strings (e.g. `- [{"label": ...}]`) are now parsed instead of rejected by Pydantic.
+- Decomposition proposals no longer reject out-of-range or self-referential `depends_on_local` deps — they are dropped, so a single bad subtask no longer kills the whole proposal. Empty subtask descriptions are coerced to a placeholder.
+- Eval coverage-audit prompt now constrains the thread to assessment only: run at most one decisive verification command, never implement/edit/explore. Stops Eval rounds from burning a full loop on exploratory tool calls.
+- TUI clarification picker shows an inline "Enter to submit" hint on the selected option row so the user knows their choice is captured.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.10.39...v0.10.40
+
 ## [v0.10.39] - 2026-08-28
 
 ### Changed
