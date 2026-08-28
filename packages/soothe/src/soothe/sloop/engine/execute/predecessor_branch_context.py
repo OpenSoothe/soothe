@@ -1,18 +1,4 @@
-"""Predecessor execute-step ledger slices for parallel branch threads.
-
-When the executor uses a branched LangGraph ``thread_id`` (``{main_thread_id}__{hex5}``), the
-checkpoint namespace starts empty. This module provides helpers for:
-
-- **Transitive dependency closure** (``transitive_dependency_step_ids``): used by
-  ``predecessor_messages_for_step()`` / ``project_predecessor_execute_ledger_for_step()``
-  for same-goal dependent steps.
-
-Loop-continuation bootstrap grounds via projected ``goal_completion`` ledger rows
-(execute Slice A), not by replaying prior execute rows.
-
-Same-goal DAG dependent steps ground predecessors via projected execute-step ledger rows
-; the current-step envelope carries only the task and hints.
-"""
+"""Predecessor execute-step ledger slices for parallel branch threads."""
 
 from __future__ import annotations
 
@@ -51,8 +37,8 @@ def _message_step_id(msg: Any) -> str | None:
 def transitive_dependency_step_ids(step: StepAction, decision: AgentDecision) -> frozenset[str]:
     """Collect dependency step ids reachable backward through in-plan edges.
 
-    Includes every string listed in ``step.dependencies`` (cross-plan refs may appear here)
-    and, for each dependency that matches another step in ``decision.steps``, expands
+    Includes every string listed in `step.dependencies` (cross-plan refs may appear here)
+    and, for each dependency that matches another step in `decision.steps`, expands
     recursively through that step's dependencies.
 
     Args:
@@ -88,12 +74,12 @@ def predecessor_execute_messages_for_branch(
 ) -> list[BaseMessage]:
     """Return deep-copied ledger messages for predecessor steps, in ledger order.
 
-    Only messages tagged ``phase == \"execute_step\"`` with a ``step_id`` in
-    ``predecessor_step_ids`` are included. Chronological order follows
-    ``loop_messages`` iteration.
+    Only messages tagged `phase == \"execute_step\"` with a `step_id` in
+    `predecessor_step_ids` are included. Chronological order follows
+    `loop_messages` iteration.
 
     Args:
-        loop_messages: ``LoopState.loop_messages`` ledger.
+        loop_messages: `LoopState.loop_messages` ledger.
         predecessor_step_ids: Step ids whose execute evidence should be replayed.
         max_messages: Hard cap on copied messages (Human+AI rows each count as one).
         exclude_step_ids: Step ids to exclude (execute rows subsumed by Slice A goal_completion).

@@ -1,8 +1,4 @@
-"""Decomposition proposal types for recursive step decompose.
-
-Threads emit proposals; CE reconcile commits children. These models must not
-write the StepDAG directly.
-"""
+"""Decomposition proposal types for recursive step decompose."""
 
 from __future__ import annotations
 
@@ -17,7 +13,7 @@ StepOutcome = Literal["complete", "decompose", "blocked"]
 
 
 class ProposedSubtask(BaseModel):
-    """One proposed child step inside a ``DecompositionProposal``."""
+    """One proposed child step inside a `DecompositionProposal`."""
 
     description: str
     full_description: str = ""

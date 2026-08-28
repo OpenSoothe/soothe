@@ -1,21 +1,4 @@
-"""Recognize structured clarifications emitted by CoreAgent / deepagents.
-
-Two interrupt shapes are detected:
-
-1. ``ask_user`` interrupts — emitted by the ``ask_user`` host tool
-   or planner-emitted ``kind="ask_user"`` steps. The payload is
-   ``{"type": "ask_user", "questions": [...]}``.
-
-2. ``action_requests`` interrupts (tool-approval) — emitted by the deepagents
-   ``HumanInTheLoopMiddleware`` when a tool call matches an ``interrupt_on``
-   rule or a ``FilesystemPermission(mode="interrupt")`` rule. The payload is
-   ``{"action_requests": [{"name": "edit_file", "args": {...}}], ...}``.
-
-Plain-text questions in assistant messages are intentionally *not* detected.
-Code paths that want a clarification must emit a structured interrupt;
-otherwise the relay does not engage and the model's text is treated as a
-normal turn.
-"""
+"""Recognize structured clarifications emitted by CoreAgent / deepagents."""
 
 from __future__ import annotations
 
@@ -53,7 +36,7 @@ class ClarificationDetector:
         origin_node: ClarificationOrigin,
         loop_state: LoopStateView,
     ) -> ClarificationRequest | None:
-        """Return a request if ``value`` is a structured ``ask_user`` interrupt."""
+        """Return a request if `value` is a structured `ask_user` interrupt."""
         if not isinstance(value, Mapping):
             return None
         if value.get("type") != "ask_user":
@@ -75,11 +58,11 @@ class ClarificationDetector:
         interrupt_id: str,
         loop_state: LoopStateView,
     ) -> ClarificationRequest | None:
-        """Return a request if ``value`` is a deepagents ``action_requests`` interrupt.
+        """Return a request if `value` is a deepagents `action_requests` interrupt.
 
         Builds an approval question per pending tool call so the TUI can render
-        an Approve / Reject prompt. The origin is always ``tool_approval``
-        and the request resumes at ``EXECUTE`` (the step that issued the call).
+        an Approve / Reject prompt. The origin is always `tool_approval`
+        and the request resumes at `EXECUTE` (the step that issued the call).
         """
         if not isinstance(value, Mapping):
             return None
@@ -113,15 +96,15 @@ class ClarificationDetector:
     ) -> ClarificationRequest | None:
         """Route an interrupt payload to the right request constructor.
 
-        Single entry point replacing the per-shape ``is_*`` + ``from_*``
+        Single entry point replacing the per-shape `is_*` + `from_*`
         branching in the executor. Selection is by payload key:
 
-        - ``"action_requests"`` → tool-approval (origin forced to
-          ``ORIGIN_TOOL_APPROVAL``).
-        - ``type == "ask_user"`` → execute-origin question (origin from caller).
-        - anything else → ``None`` (not a structured clarification).
+        - `"action_requests"` → tool-approval (origin forced to
+          `ORIGIN_TOOL_APPROVAL`).
+        - `type == "ask_user"` → execute-origin question (origin from caller).
+        - anything else → `None` (not a structured clarification).
 
-        ``from_interrupt`` / ``from_tool_approval_interrupt`` remain as public
+        `from_interrupt` / `from_tool_approval_interrupt` remain as public
         delegating constructors; this method just picks between them.
         """
         if not isinstance(value, Mapping):
@@ -179,7 +162,7 @@ class ClarificationDetector:
         Surfaces the tool name plus its most informative argument (the file
         path, command, etc.) so the user can see what is about to execute
         without inspecting the full args blob. Long values (e.g. multi-line
-        shell commands) are truncated to ``_MAX_ARG_PREVIEW`` chars with an
+        shell commands) are truncated to `_MAX_ARG_PREVIEW` chars with an
         ellipsis so the approval card stays readable.
         """
         name = str(ar.get("name") or "").strip()
@@ -202,7 +185,7 @@ class ClarificationDetector:
 
     @staticmethod
     def _truncate(val: str) -> str:
-        """Truncate a long arg value to ``_MAX_ARG_PREVIEW`` chars with ellipsis."""
+        """Truncate a long arg value to `_MAX_ARG_PREVIEW` chars with ellipsis."""
         max_len = ClarificationDetector._MAX_ARG_PREVIEW
         if len(val) <= max_len:
             return val

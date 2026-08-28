@@ -17,7 +17,7 @@ from soothe.events import register_event
 
 
 class ClarificationRequestedEvent(SootheEvent):
-    """Fired when ``await_clarification`` enters with a pending question."""
+    """Fired when `await_clarification` enters with a pending question."""
 
     type: Literal["soothe.loop.clarification.requested"] = LOOP_CLARIFICATION_REQUESTED  # type: ignore[assignment]
     # RFC-622 §9c: questions may be structured dicts (QuestionSpec with
@@ -50,7 +50,7 @@ class ClarificationAnsweredEvent(SootheEvent):
 
 
 class ClarificationDeferredEvent(SootheEvent):
-    """Fired when the policy raises ``ClarificationDeferredError``."""
+    """Fired when the policy raises `ClarificationDeferredError`."""
 
     type: Literal["soothe.loop.clarification.deferred"] = LOOP_CLARIFICATION_DEFERRED  # type: ignore[assignment]
     reason: str = ""

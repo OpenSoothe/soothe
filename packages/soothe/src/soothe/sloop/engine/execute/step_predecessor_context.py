@@ -1,10 +1,4 @@
-"""Predecessor step evidence and execute-envelope helpers for dependent steps.
-
-When a planned step declares ``dependencies``, the executor must ground the
-CoreAgent prompt with concrete output from predecessor steps ( ledger and
-``StepExecutionRecord`` rows). Without this, milestone-only descriptions cause redundant
-discovery actions (e.g. re-running a verify script on a fix step).
-"""
+"""Predecessor step evidence and execute-envelope helpers for dependent steps."""
 
 from __future__ import annotations
 
@@ -148,7 +142,7 @@ def build_prior_steps_summary_block(
 
 
 def _ledger_ai_content_for_step(loop_messages: list[Any], step_id: str) -> str:
-    """Return the latest execute_step AI ledger body for ``step_id``."""
+    """Return the latest execute_step AI ledger body for `step_id`."""
     content = ""
     for msg in loop_messages:
         if getattr(msg, "phase", None) != "execute_step":
@@ -277,7 +271,7 @@ def template_hydrate_step_brief(
 ) -> str:
     """Heuristic brief expansion when LLM hydration is unavailable.
 
-    When ``evidence_in_ledger`` is True (Slice B will replay predecessor
+    When `evidence_in_ledger` is True (Slice B will replay predecessor
     Human/AI pairs), do not paste evidence into the brief — that would
     duplicate the projected ledger.
     """
@@ -315,7 +309,7 @@ def build_dependent_execution_hints(
     """Build EXPECTED OUTPUT and slim INSTRUCTIONS for the execute user envelope.
 
     Finish-vs-split policy and search hygiene live in system + tool schemas
-    (``THREAD_POLICY_SYSTEM_ADDENDUM``); user keeps instance scope only.
+    (`THREAD_POLICY_SYSTEM_ADDENDUM`); user keeps instance scope only.
     """
     from soothe.prompts import user_finish_or_split_hint_lines
 

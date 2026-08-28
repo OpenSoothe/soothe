@@ -19,24 +19,24 @@ class GoalDispatchEnvelope:
     """Transient dispatch message for worker goal execution.
 
     This is a **wire message**, not a persistent entity. Created by the daemon's
-    ``AutopilotService`` when dispatching a goal to a subprocess worker, and
-    consumed by the worker's ``SootheRunner.astream(autopilot_job=...)`` path.
+    `AutopilotService` when dispatching a goal to a subprocess worker, and
+    consumed by the worker's `SootheRunner.astream(autopilot_job=...)` path.
 
     **Terminology note:**
     - "Job" in /Desktop UX = user-facing term for a **root Goal** (persistent)
-    - ``GoalDispatchEnvelope`` here = transient dispatch **message** (not stored)
+    - `GoalDispatchEnvelope` here = transient dispatch **message** (not stored)
 
-    Attached to ``LoopRunRequest.autopilot_job`` when present. The worker
-    hydrates StrangeLoop from ``merged_context`` and executes ``goal_description``,
-    ignoring ``LoopRunRequest.user_input``. When ``None``, the worker runs
+    Attached to `LoopRunRequest.autopilot_job` when present. The worker
+    hydrates StrangeLoop from `merged_context` and executes `goal_description`,
+    ignoring `LoopRunRequest.user_input`. When `None`, the worker runs
     solo-mode behavior — today's path, unchanged.
 
     Attributes:
         goal_id: Daemon's canonical goal id.
         goal_description: Frozen at dispatch time.
         merged_context: Pre-projected hydration bundle from the daemon's
-            ``ContextProjector``. Worker treats it as opaque.
-        deadline_seconds: Wall-clock budget for this attempt; ``None`` = no cap.
+            `ContextProjector`. Worker treats it as opaque.
+        deadline_seconds: Wall-clock budget for this attempt; `None` = no cap.
         attempt: 1 on first dispatch, N on retry/backoff.
     """
 
@@ -53,17 +53,17 @@ class LoopRunRequest:
 
     Includes thread/workspace binding for the run.
 
-    Workspace resolution (``resolve_workspace_path()``):
-        - ``client_workspace`` set → use that path directly, or map via
-          ``workspace_mapping`` / config ``workspace_mount`` when absent locally.
-        - else → ``$SOOTHE_HOME/data/workspaces/<normalized_user_id>/ws_<hash>`` where
-          ``normalized_user_id`` is ``anonymous`` when ``user_id`` is empty, and
-          hash uses ``user_id`` (or ``""``) with ``client_workspace_id`` or ``loop_id``.
+    Workspace resolution (`resolve_workspace_path()`):
+        - `client_workspace` set → use that path directly, or map via
+          `workspace_mapping` / config `workspace_mount` when absent locally.
+        - else → `$SOOTHE_HOME/data/workspaces/<normalized_user_id>/ws_<hash>` where
+          `normalized_user_id` is `anonymous` when `user_id` is empty, and
+          hash uses `user_id` (or `""`) with `client_workspace_id` or `loop_id`.
 
-     extension (additive): when ``autopilot_job`` is set, this
-    request is dispatched by the daemon's ``AutopilotService``; the worker
-    branches to a hydrate-from-bundle path. When ``None``, the worker runs
-    today's solo-mode path. The ``LoopRunnerProtocol.run`` signature is
+     extension (additive): when `autopilot_job` is set, this
+    request is dispatched by the daemon's `AutopilotService`; the worker
+    branches to a hydrate-from-bundle path. When `None`, the worker runs
+    today's solo-mode path. The `LoopRunnerProtocol.run` signature is
     unchanged.
     """
 
@@ -115,7 +115,7 @@ class LoopRunRequest:
     approved_plan_path: str | None = None
 
     def resolve_workspace_path(self) -> str:
-        """Absolute workspace path for ``SootheRunner.astream(workspace=...)``."""
+        """Absolute workspace path for `SootheRunner.astream(workspace=...)`."""
         from soothe.workspace.loop_workspace import resolve_loop_workspace
 
         return str(
@@ -132,20 +132,20 @@ class LoopRunRequest:
 class LoopRunnerProtocol(Protocol):
     """Structural interface satisfied by all loop runner implementations.
 
-    Consumers (``QueryEngine``, ``AutopilotService``) depend only on this
-    interface. The concrete runtime — ``LocalLoopRunner`` (multiprocessing)
-    or ``RayLoopRunner`` (Ray actor) — is selected by
-    ``soothe_daemon.runner.LoopRunnerFactory`` based on ``SootheDaemonConfig``.
+    Consumers (`QueryEngine`, `AutopilotService`) depend only on this
+    interface. The concrete runtime — `LocalLoopRunner` (multiprocessing)
+    or `RayLoopRunner` (Ray actor) — is selected by
+    `soothe_daemon.runner.LoopRunnerFactory` based on `SootheDaemonConfig`.
 
-    Cancel escalation: ``cancel()`` is cooperative and
+    Cancel escalation: `cancel()` is cooperative and
     best-effort — it only lands at await points inside the running loop. Callers
     that must guarantee termination (goal cancel, deadline) follow up with
-    ``is_idle()`` and, if still busy, ``force_kill()``. This mirrors the
-    query engine's ``_cancel_loop`` retry → idle-check → force-kill ladder.
+    `is_idle()` and, if still busy, `force_kill()`. This mirrors the
+    query engine's `_cancel_loop` retry → idle-check → force-kill ladder.
     """
 
     async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk]:
-        """Execute the loop; yield ``StreamChunk`` tuples until completion."""
+        """Execute the loop; yield `StreamChunk` tuples until completion."""
         ...
 
     async def cancel(self) -> None:
@@ -154,16 +154,16 @@ class LoopRunnerProtocol(Protocol):
         Best-effort: signals the worker (cancel_event / actor flag) so the loop
         unwinds at its next await. Does not guarantee termination — a worker
         blocked in sync code or a long LLM call may not observe the signal.
-        Pair with ``is_idle()`` / ``force_kill()`` when a guarantee is required.
+        Pair with `is_idle()` / `force_kill()` when a guarantee is required.
         """
         ...
 
     async def is_idle(self) -> bool:
         """Return True if no loop for this runner is currently busy.
 
-        ``True`` means either no worker is mapped to this ``loop_id`` or the
+        `True` means either no worker is mapped to this `loop_id` or the
         mapped worker has returned to idle. Callers poll this after
-        ``cancel()`` to decide whether to escalate to ``force_kill()``.
+        `cancel()` to decide whether to escalate to `force_kill()`.
         """
         ...
 
@@ -171,8 +171,8 @@ class LoopRunnerProtocol(Protocol):
         """Force-terminate the worker running this loop's request.
 
         Guaranteed termination: SIGTERM then SIGKILL the worker process group
-        (or hard-kill the Ray actor). Use only after cooperative ``cancel()``
-        fails to drive ``is_idle()`` True within a grace window. Releases the
+        (or hard-kill the Ray actor). Use only after cooperative `cancel()`
+        fails to drive `is_idle()` True within a grace window. Releases the
         worker slot and routes a failure to any pending response so the stream
         consumer unblocks.
         """
@@ -181,10 +181,10 @@ class LoopRunnerProtocol(Protocol):
     def set_clarification_mode(self, mode: str) -> bool:
         """Hot-swap the clarification mode on the running goal.
 
-        Rebuilds the ``ClarificationPolicy`` on the live ``LoopRuntimeContext``
-        so the next ``await_clarification`` node entry uses the new mode without
-        waiting for a new turn. Returns ``True`` when the swap landed on a live
-        goal; ``False`` when no goal is currently running.
+        Rebuilds the `ClarificationPolicy` on the live `LoopRuntimeContext`
+        so the next `await_clarification` node entry uses the new mode without
+        waiting for a new turn. Returns `True` when the swap landed on a live
+        goal; `False` when no goal is currently running.
         """
         ...
 

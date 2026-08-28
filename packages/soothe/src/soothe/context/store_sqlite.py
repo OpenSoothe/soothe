@@ -1,8 +1,4 @@
-"""SQLite persistence backend for the Context Engine.
-
-Stores CE DAG and ledger in ``databases/context.db`` keyed by ``loop_id``.
-Uses process-scoped ``SqliteStoreRuntime``.
-"""
+"""SQLite persistence backend for the Context Engine."""
 
 from __future__ import annotations
 
@@ -36,7 +32,7 @@ def _ensure_ce_schema(conn: Any) -> None:
 
 
 class SqliteContextPersistence:
-    """SQLite-backed persistence for ContextEngine via ``SqliteStoreRuntime``.
+    """SQLite-backed persistence for ContextEngine via `SqliteStoreRuntime`.
 
     Args:
         loop_id: Loop identifier used as primary key.
@@ -53,7 +49,7 @@ class SqliteContextPersistence:
         self._runtime.run_write_sync(_ensure_ce_schema)
 
     async def close(self) -> None:
-        """Release Runtime (or close private ``:memory:`` Runtime)."""
+        """Release Runtime (or close private `:memory:` Runtime)."""
         if self._owns_private_runtime:
             await self._runtime.close()
             return
@@ -186,7 +182,7 @@ def purge_loop_context_engine_state(
     *,
     db_path: Path | None = None,
 ) -> None:
-    """Delete ContextEngine rows for ``loop_id`` from the shared database."""
+    """Delete ContextEngine rows for `loop_id` from the shared database."""
     from soothe.sloop.checkpoints.runtime_paths import (
         resolve_context_db_path,
     )

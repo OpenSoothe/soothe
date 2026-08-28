@@ -1,11 +1,4 @@
-"""LangGraph interrupt detection and auto-resume for CoreAgent streams.
-
-Action-approval interrupts (soothe_deepagents tool review) and ``ask_user``
-interrupts both bubble up through :class:`ClarificationCapture` to the
-``await_clarification`` loop node. This module owns the resume-payload
-translators that turn a clarified answer back into the ``Command(resume=...)``
-shape each origin's middleware expects.
-"""
+"""LangGraph interrupt detection and auto-resume for CoreAgent streams."""
 
 from __future__ import annotations
 
@@ -62,15 +55,15 @@ class DispatchTimeoutError(Exception):
     """Raised when the graph stream stalls between chunks beyond a deadline.
 
     This covers the gap between LLM response capture and tool dispatch — a
-    phase not covered by ``LLMRateLimitMiddleware`` (which only wraps the LLM
+    phase not covered by `LLMRateLimitMiddleware` (which only wraps the LLM
     HTTP call). When the LangGraph runtime stalls scheduling a tool_call, no
     stream chunks are produced, and this watchdog fires.
 
     Attributes:
         timeout_seconds: The inactivity threshold that was exceeded.
         step_id: Optional step identifier for correlation.
-        reason: What kind of timeout fired (``"idle"``, ``"tool_wall_clock"``,
-            ``"sentinel_cap"``).
+        reason: What kind of timeout fired (`"idle"`, `"tool_wall_clock"`,
+            `"sentinel_cap"`).
     """
 
     def __init__(
@@ -105,9 +98,9 @@ class DispatchTimeoutError(Exception):
 def _is_root_stream_namespace(namespace: Any) -> bool:
     """True for main-graph / step-level namespaces (not nested subgraph tools).
 
-    Empty ``()`` is treated as root (common in unit tests and some stream
-    shapes). Step-level ``execute:*`` namespaces (including parallel branches)
-    are root for watchdog purposes. Nested ``tools:*`` subgraphs are not.
+    Empty `()` is treated as root (common in unit tests and some stream
+    shapes). Step-level `execute:*` namespaces (including parallel branches)
+    are root for watchdog purposes. Nested `tools:*` subgraphs are not.
     """
     if not namespace:
         return True
@@ -144,8 +137,8 @@ def _extract_dispatch_tool_call_ids(msg: Any) -> tuple[str, ...]:
 def _classify_stream_chunk(chunk: Any) -> StreamChunkClass:
     """Classify a stream chunk for tool-boundary and progress tracking.
 
-    Root-namespace ``tool_dispatch`` / ``tool_result`` update the pending-tool
-    set. Nested subgraph messages (and all other real chunks) are ``chunk`` —
+    Root-namespace `tool_dispatch` / `tool_result` update the pending-tool
+    set. Nested subgraph messages (and all other real chunks) are `chunk` —
     they reset idle/sentinel clocks but do not clear parent tool activity.
     """
     if chunk is _STREAM_HEARTBEAT_SENTINEL:
@@ -186,18 +179,18 @@ def _classify_stream_chunk(chunk: Any) -> StreamChunkClass:
 class GraphStreamChunkReader:
     """Persistent async-iterator reader for CoreAgent graph streams.
 
-    Keeps a single pending ``__anext__`` task alive across heartbeat
+    Keeps a single pending `__anext__` task alive across heartbeat
     sentinels so long-running tool/subagent execution is not aborted when the
     client receives keep-alive events.
 
     Tool-aware inactivity tracking:
 
-    - **Idle timer** (``idle_timeout``): resets on every real chunk. Fires only
+    - **Idle timer** (`idle_timeout`): resets on every real chunk. Fires only
       when no root-level tools are pending — the deadlock gap after the last
       ToolMessage before the next LLM hop.
-    - **Tool wall-clock timer** (``tool_timeout``): starts when the first root
-      tool becomes pending, stops when the pending set empties. Optional; ``0``
-      defers to ``agent.middleware.tool_timeout`` middleware.
+    - **Tool wall-clock timer** (`tool_timeout`): starts when the first root
+      tool becomes pending, stops when the pending set empties. Optional; `0`
+      defers to `agent.middleware.tool_timeout` middleware.
     - **Pending-tool set**: root dispatches add tool_call ids; root ToolMessages
       remove them. Nested subgraph messages never clear parent activity.
     - **Sentinel cap**: applies only while no root tools are pending, so
@@ -327,7 +320,7 @@ class GraphStreamChunkReader:
         return None
 
     async def read_next(self) -> Any:
-        """Return the next chunk, a heartbeat sentinel, or raise ``StopAsyncIteration``."""
+        """Return the next chunk, a heartbeat sentinel, or raise `StopAsyncIteration`."""
         anext_task = self._ensure_pending()
         try:
             while not anext_task.done():
@@ -374,33 +367,33 @@ class GraphStreamChunkReader:
             raise
 
     async def cancel(self) -> None:
-        """Cancel any pending ``__anext__()`` and close the stream read."""
+        """Cancel any pending `__anext__()` and close the stream read."""
         await self._cancel_pending()
 
 
 def is_ask_user_interrupt(value: Any) -> bool:
-    """Return True if ``value`` is a structured ``ask_user`` interrupt payload."""
+    """Return True if `value` is a structured `ask_user` interrupt payload."""
     return isinstance(value, Mapping) and value.get("type") == "ask_user"
 
 
 def is_tool_approval_interrupt(value: Any) -> bool:
-    """Return True if ``value`` is a deepagents ``action_requests`` interrupt.
+    """Return True if `value` is a deepagents `action_requests` interrupt.
 
-       The ``HumanInTheLoopMiddleware`` emits this shape when a tool call matches
-       an ``interrupt_on`` rule. These are captured into the clarification relay
-       (``tool_approval`` origin) and resolved by the multi-stage pipeline
+       The `HumanInTheLoopMiddleware` emits this shape when a tool call matches
+       an `interrupt_on` rule. These are captured into the clarification relay
+       (`tool_approval` origin) and resolved by the multi-stage pipeline
     or veritas fallback — never auto-approved silently.
     """
     return isinstance(value, Mapping) and "action_requests" in value
 
 
 def build_auto_resume_payload(pending_interrupts: Mapping[str, Any]) -> dict[str, Any]:
-    """Build a ``Command(resume=...)`` payload for residual non-clarification interrupts.
+    """Build a `Command(resume=...)` payload for residual non-clarification interrupts.
 
-    ``ask_user`` and ``action_requests`` (tool-approval) interrupts are
+    `ask_user` and `action_requests` (tool-approval) interrupts are
     captured by the clarification relay before this function runs; they never
-    reach ``pending_interrupts``. This function auto-approves any *other*
-    interrupt type that reached ``pending_interrupts`` — these are typically
+    reach `pending_interrupts`. This function auto-approves any *other*
+    interrupt type that reached `pending_interrupts` — these are typically
     deepagents middleware interrupts unrelated to clarification.
     """
     payload: dict[str, Any] = {}
@@ -420,8 +413,8 @@ def build_tool_approval_resume_payload(
     """Build the resume payload for a tool-approval interrupt.
 
     Translates the clarification relay's answer (approve/reject/edit per
-    action request) into the ``{"decisions": [...]}`` shape the deepagents
-    ``HumanInTheLoopMiddleware`` expects on ``Command(resume=...)``.
+    action request) into the `{"decisions": [...]}` shape the deepagents
+    `HumanInTheLoopMiddleware` expects on `Command(resume=...)`.
     """
     return {interrupt_id: {"decisions": decisions}}
 
@@ -434,12 +427,12 @@ _EDIT_TOKENS = frozenset({"edit", "modify", "change", "revise"})
 
 
 def _answer_to_decision(answer: str) -> str:
-    """Map a tool-approval answer string to a HITL ``DecisionType``.
+    """Map a tool-approval answer string to a HITL `DecisionType`.
 
     The clarification relay answers with a free-form string (from veritas or
-    the TUI input). The deepagents middleware expects ``"approve"`` /
-    ``"edit"`` / ``"reject"``. Defaults to ``"approve"`` for unrecognized
-    positive-ish answers and ``"reject"`` only on an explicit reject token.
+    the TUI input). The deepagents middleware expects `"approve"` /
+    `"edit"` / `"reject"`. Defaults to `"approve"` for unrecognized
+    positive-ish answers and `"reject"` only on an explicit reject token.
     """
     token = (answer or "").strip().lower()
     if token in _REJECT_TOKENS:
@@ -453,18 +446,18 @@ def build_clarification_resume_payload(
     request: ClarificationRequest,
     answer: ClarificationAnswer,
 ) -> dict[str, Any]:
-    """Build the ``Command(resume=...)`` payload for a clarified interrupt.
+    """Build the `Command(resume=...)` payload for a clarified interrupt.
 
     Single resume translator for every clarification origin:
 
-    - ``tool_approval`` — map the relay's answer to a HITL ``decisions`` shape.
+    - `tool_approval` — map the relay's answer to a HITL `decisions` shape.
       One decision per pending action request (hanging tool call). The
-      ``HumanInTheLoopMiddleware`` requires the decisions list length to match
-      the number of hanging tool calls — a mismatch raises ``ValueError`` at
+      `HumanInTheLoopMiddleware` requires the decisions list length to match
+      the number of hanging tool calls — a mismatch raises `ValueError` at
       resume time. When the answer has fewer entries than action requests,
-      remaining slots default to the first answer (or ``"approve"``).
-    - otherwise (``ask_user`` / execute) — deliver the answers verbatim so the
-      ``ask_user`` tool returns the Q&A and the agent continues its turn.
+      remaining slots default to the first answer (or `"approve"`).
+    - otherwise (`ask_user` / execute) — deliver the answers verbatim so the
+      `ask_user` tool returns the Q&A and the agent continues its turn.
     """
     if request.origin_node == ORIGIN_TOOL_APPROVAL:
         action_requests = request.metadata.get("action_requests", [])

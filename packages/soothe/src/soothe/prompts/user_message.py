@@ -1,10 +1,4 @@
-"""Unified scenario-based user message builder for execute and synthesis.
-
-Execute-step uses ``EXECUTION TASK`` for the planner step work unit.
-Goal-synthesis uses a TASK-only closing human message.
-
-System messages retain XML. Only user messages use this format.
-"""
+"""Unified scenario-based user message builder for execute and synthesis."""
 
 from __future__ import annotations
 
@@ -214,8 +208,8 @@ class UserMessageBuilder:
 def flatten_user_message_content(content: str) -> str:
     """Extract the primary directive from a scenario-formatted user message.
 
-    Execute-step envelopes use ``EXECUTION TASK:``; plan envelopes use ``GOAL:`` /
-    ``GOAL RECAP:``. Continuation prompts may use ``EXECUTION TASK RECAP:``.
+    Execute-step envelopes use `EXECUTION TASK:`; plan envelopes use `GOAL:` /
+    `GOAL RECAP:`. Continuation prompts may use `EXECUTION TASK RECAP:`.
 
     Returns raw content when no known section prefix matches.
     """

@@ -1,6 +1,6 @@
 """Phase orchestration mixin for SootheRunner (chitchat and checkpointer helpers).
 
-Extracted from ``runner.py`` to keep the main module focused on orchestration.
+Extracted from `runner.py` to keep the main module focused on orchestration.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class PhasesMixin:
     """Chitchat fast path and LangGraph checkpointer initialization.
 
-    Mixed into ``SootheRunner`` -- all ``self.*`` attributes are defined
+    Mixed into `SootheRunner` -- all `self.*` attributes are defined
     on the concrete class.
     """
 
@@ -45,9 +45,9 @@ class PhasesMixin:
     ) -> AsyncGenerator[StreamChunk]:
         """Fast path for chitchat intake: emit piggybacked response directly.
 
-        When ``defer_persistence`` is true, only the wire response is emitted; the
-        caller must invoke ``_save_chitchat_to_state`` after the StrangeLoop graph
-        finishes so checkpoint finalize does not race ``run_with_progress`` teardown.
+        When `defer_persistence` is true, only the wire response is emitted; the
+        caller must invoke `_save_chitchat_to_state` after the StrangeLoop graph
+        finishes so checkpoint finalize does not race `run_with_progress` teardown.
         """
         main_thread_id = (loop_id or self._client_loop_id_for_stream or thread_id or "").strip()
         if not main_thread_id:
@@ -237,10 +237,10 @@ class PhasesMixin:
     async def _ensure_checkpointer_initialized(self) -> None:
         """Attach the async checkpointer (AsyncSqliteSaver / AsyncPostgresSaver).
 
-        Created from ``self._checkpointer_pool`` and wired onto
-        ``self._core_agent.graph``. Prefer ``_materialize_core_agent()`` from
+        Created from `self._checkpointer_pool` and wired onto
+        `self._core_agent.graph`. Prefer `_materialize_core_agent()` from
         StrangeLoop / autopilot entry points so LazyCoreAgent is compiled first;
-        this method is also the LazyCoreAgent ``materialize_hook``.
+        this method is also the LazyCoreAgent `materialize_hook`.
 
         Raises:
             ConfigurationError: Checkpointer initialization failed.
@@ -309,7 +309,7 @@ class PhasesMixin:
 
         Ensures the parent directory exists before connecting (defensive
         against cleanup races and worker-subprocess directory absence),
-        wraps ``aiosqlite.connect`` + ``AsyncSqliteSaver.setup`` in a
+        wraps `aiosqlite.connect` + `AsyncSqliteSaver.setup` in a
         try/except that closes the connection on failure (prevents leaked
         aiosqlite background threads), and retries transient SQLite errors
         (WAL contention, file-lock races) with exponential backoff.

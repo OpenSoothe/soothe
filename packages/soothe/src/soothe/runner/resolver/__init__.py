@@ -1,9 +1,4 @@
-"""Protocol, subagent, and tool resolution logic for create_soothe_agent.
-
-Protocol resolution (memory, planner, policy) lives here.
-Tool/subagent/infrastructure resolution is delegated to ``soothe_nano.resolve``.
-Host checkpointer / durability bindings live in ``_resolver_infra.py``.
-"""
+"""Protocol, subagent, and tool resolution logic for create_soothe_agent."""
 
 from __future__ import annotations
 
@@ -44,6 +39,6 @@ def resolve_planner(
     config: SootheConfig,
     model: BaseChatModel | None,
 ) -> PlannerProtocol | None:
-    """Host planner resolution — always ``None``; the loop plans inline."""
+    """Host planner resolution — always `None`; the loop plans inline."""
     del config, model
     return None

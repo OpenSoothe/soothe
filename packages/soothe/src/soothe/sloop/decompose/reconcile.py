@@ -1,8 +1,4 @@
-"""Deterministic CE reconcile for DecompositionProposal batches.
-
-LLM-assisted semantic dedup / cross-subtree inference is P4. This module always
-runs exact dedup, branch/depth/step budgets, ID assignment, and commit.
-"""
+"""Deterministic CE reconcile for DecompositionProposal batches."""
 
 from __future__ import annotations
 
@@ -55,7 +51,7 @@ def _branch_cap(parent_step_id: str, dag: StepDAG, cfg: DecomposeLoopConfig) -> 
 
 
 def _next_local_ids(n: int) -> list[str]:
-    """Allocate ``01``..``n`` zero-padded to at least 2 digits."""
+    """Allocate `01`..`n` zero-padded to at least 2 digits."""
     width = max(2, len(str(n)))
     return [f"{i:0{width}d}" for i in range(1, n + 1)]
 
@@ -98,10 +94,10 @@ def plan_commit_from_proposals(
     config: DecomposeLoopConfig,
     plan_id: str | None = None,
 ) -> tuple[list[StepNode], list[str], list[ReconcileRejection], str]:
-    """Build StepNodes to commit without mutating ``dag``.
+    """Build StepNodes to commit without mutating `dag`.
 
     Returns:
-        ``(new_nodes, parents_to_mark_decomposed, rejections, plan_id)``.
+        `(new_nodes, parents_to_mark_decomposed, rejections, plan_id)`.
     """
     rejections: list[ReconcileRejection] = []
     if not proposals:

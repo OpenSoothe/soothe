@@ -1,15 +1,4 @@
-"""Global constants for Soothe configuration.
-
-This module defines default values and limits used across the framework.
-Centralizing constants ensures consistency and easier maintenance.
-
-Shared execution-tool limits (``DEFAULT_EXECUTE_TIMEOUT``,
-``MAX_EXECUTE_TIMEOUT``, ``DEFAULT_TASK_TIMEOUT_SECONDS``,
-``clamp_execute_timeout``, ``DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS``,
-``DEFAULT_TOOL_OUTPUT_CHARS``) are owned by ``soothe_nano.config.constants``
-and re-exported here so host consumers keep a single import surface. Host-only
-iteration/budget limits stay local.
-"""
+"""Global constants for Soothe configuration."""
 
 # Re-export facade — canonical source: soothe_nano.config.constants
 from soothe_nano.config.constants import (  # noqa: F401

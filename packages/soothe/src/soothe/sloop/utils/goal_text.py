@@ -27,14 +27,14 @@ def resolve_clarification_resume_ce_goal(ce: Any, *, loop_id: str) -> Any | None
     """Pick the in-flight ContextEngine goal to reuse on clarification resume.
 
     Clarification answers resume the same StrangeLoop goal; they must not create a
-    new CE goal titled with the answer text (e.g. ``Approve``).
+    new CE goal titled with the answer text (e.g. `Approve`).
 
     Args:
-        ce: Loaded ``ContextEngine`` instance.
+        ce: Loaded `ContextEngine` instance.
         loop_id: StrangeLoop loop id for this turn.
 
     Returns:
-        Matching active ``GoalNode``, or ``None`` when no reusable goal exists.
+        Matching active `GoalNode`, or `None` when no reusable goal exists.
     """
     return _resolve_resumable_ce_goal(
         ce, loop_id=loop_id, statuses=frozenset({"active", "awaiting_clarification"})
@@ -44,15 +44,15 @@ def resolve_clarification_resume_ce_goal(ce: Any, *, loop_id: str) -> Any | None
 def resolve_interrupt_resume_ce_goal(ce: Any, *, loop_id: str) -> Any | None:
     """Pick the CE goal to reuse when resuming after user cancel / crash.
 
-    Prefers ``active``, then ``pending`` / ``suspended``, then ``cancelled``
-    (pre-cancel path). Same ``assigned_loop_id`` matching as clarification.
+    Prefers `active`, then `pending` / `suspended`, then `cancelled`
+    (pre-cancel path). Same `assigned_loop_id` matching as clarification.
 
     Args:
-        ce: Loaded ``ContextEngine`` instance.
+        ce: Loaded `ContextEngine` instance.
         loop_id: StrangeLoop loop id for this turn.
 
     Returns:
-        Matching ``GoalNode``, or ``None`` when nothing is reusable.
+        Matching `GoalNode`, or `None` when nothing is reusable.
     """
     return _resolve_resumable_ce_goal(ce, loop_id=loop_id, statuses=_RESUMABLE_CE_STATUSES)
 
@@ -100,10 +100,10 @@ def _resolve_resumable_ce_goal(
 
 
 def apply_clarification_resume_goal_text(state: LoopState, ce_goal: Any) -> str:
-    """Copy the CE goal description onto ``LoopState`` for a clarification resume.
+    """Copy the CE goal description onto `LoopState` for a clarification resume.
 
     Args:
-        state: Loop state whose ``goal`` may still hold answer text.
+        state: Loop state whose `goal` may still hold answer text.
         ce_goal: Reused ContextEngine goal node.
 
     Returns:

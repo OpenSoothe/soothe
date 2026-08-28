@@ -1,14 +1,4 @@
-"""Extract daemon vision-preflight blocks for execute-step context.
-
-Daemon ``enrich_user_text_with_vision`` appends a delimited summary::
-
-    --- Vision summary ---
-    ...
-    ---
-
-StrangeLoop execute envelopes use that body as subordinate ``VISION CONTEXT``
-without re-injecting the full parent GOAL (over-execution risk).
-"""
+"""Extract daemon vision-preflight blocks for execute-step context."""
 
 from __future__ import annotations
 
@@ -55,7 +45,7 @@ def extract_vision_summary(
         max_chars: Hard cap on returned body length.
 
     Returns:
-        Stripped summary body, or ``None`` when the delimiter is absent / empty.
+        Stripped summary body, or `None` when the delimiter is absent / empty.
     """
     match = _VISION_BLOCK_RE.search(text or "")
     if match is None:
@@ -78,7 +68,7 @@ def format_image_facts_for_brief(
     *,
     max_chars: int = VISION_BRIEF_IMAGE_FACTS_MAX_CHARS,
 ) -> str:
-    """Compact ``Image facts: …`` suffix for synthesized step ``full_description``."""
+    """Compact `Image facts: …` suffix for synthesized step `full_description`."""
     body = _truncate(vision_summary, max_chars=max_chars)
     if not body:
         return ""

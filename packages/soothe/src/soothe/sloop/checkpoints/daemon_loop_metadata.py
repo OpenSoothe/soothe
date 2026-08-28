@@ -41,7 +41,7 @@ def merge_daemon_loop_metadata(
 
 
 async def load_preserved_daemon_metadata(cur: Any, loop_id: str) -> dict[str, Any]:
-    """Load daemon metadata for ``loop_id`` from ``agentloop_checkpoints``."""
+    """Load daemon metadata for `loop_id` from `agentloop_checkpoints`."""
     await cur.execute(
         """
         SELECT checkpoint_data, client_workspace

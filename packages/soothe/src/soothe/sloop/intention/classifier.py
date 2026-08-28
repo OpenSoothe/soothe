@@ -1,9 +1,4 @@
-"""Intent classifier facade.
-
-Intake classification decides social vs task, and for tasks emits
-``task_complexity`` and a short step-card title. Loop continuation is derived
-structurally inside ``StrangeLoop`` from the loaded checkpoint.
-"""
+"""Intent classifier facade."""
 
 from __future__ import annotations
 
@@ -34,7 +29,7 @@ class IntentClassifier:
     """Intake classification facade.
 
     Single entry point:
-    - ``classify_intake``: runs in the graph INTAKE node. Projects prior-goal
+    - `classify_intake`: runs in the graph INTAKE node. Projects prior-goal
       completion units from the CE ledger into the prompt so the second goal
       sees the first goal's context.
 
@@ -81,7 +76,7 @@ class IntentClassifier:
         """Classify query as social or task with full CE ledger context.
 
         Projects prior-goal completion units from the ledger into the prompt when
-        ``loop_messages`` is provided.
+        `loop_messages` is provided.
         """
         if not self._fast_model:
             return self._fallback(query)
@@ -170,7 +165,7 @@ class IntentClassifier:
         *,
         error_context: Exception | None = None,
     ) -> IntentClassification:
-        """Safe fallback to ``complex``: run the full pipeline."""
+        """Safe fallback to `complex`: run the full pipeline."""
         reason = type(error_context).__name__ if error_context else "classification_disabled"
         logger.debug("Intake fallback to complex (%s)", reason)
         return IntentClassification(

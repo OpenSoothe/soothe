@@ -1,15 +1,4 @@
-"""Automatic context window compaction for StrangeLoop threads.
-
-This module provides ContextWindowManager which handles:
-- Estimating token count from checkpoint messages
-- Checking if threshold exceeded (configurable percentage)
-- Triggering in-place compaction via LLM summarization
-- Updating LoopState metrics after compaction
-
- : When estimated token count exceeds threshold (default 80%),
-in-place compaction is triggered to enable long-running goals to
-continue autonomously without hitting model context limits.
-"""
+"""Automatic context window compaction for StrangeLoop threads."""
 
 from __future__ import annotations
 
@@ -159,9 +148,9 @@ class ContextWindowManager:
         Used internally when checkpoint is already loaded, avoiding
         redundant async call.
 
-         : delegates to the unified ``estimate_token_usage`` API so
+         : delegates to the unified `estimate_token_usage` API so
         context-window estimation stays consistent with the executor's token
-        accounting. The unified API prefers real ``usage_metadata`` on AI
+        accounting. The unified API prefers real `usage_metadata` on AI
         messages (no double-estimation of turns the provider already
         counted) and estimates the remaining prompt tokens with the
         model-aware tokenizer, including per-message structural overhead

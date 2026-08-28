@@ -1,11 +1,4 @@
-"""StrangeLoop checkpoint persistence backend.
-
-This module provides persistence infrastructure for StrangeLoop checkpoints
-with thread/loop isolation and dual backend support (SQLite/PostgreSQL).
-
- : StrangeLoop Persistence Backend Architecture
-ArchiveBackend for loop archival and knowledge transfer.
-"""
+"""StrangeLoop checkpoint persistence backend."""
 
 from soothe.sloop.checkpoints.archive_backend import (
     ArchiveBackend,

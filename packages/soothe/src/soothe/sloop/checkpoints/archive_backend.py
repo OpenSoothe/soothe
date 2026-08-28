@@ -1,8 +1,4 @@
-"""Archive storage for finalized StrangeLoop checkpoints.
-
-Provides persistent storage for archived loops, preserving goal history and
-metrics for knowledge transfer via /recall.
-"""
+"""Archive storage for finalized StrangeLoop checkpoints."""
 
 from __future__ import annotations
 

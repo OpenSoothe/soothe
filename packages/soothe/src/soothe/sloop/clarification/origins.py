@@ -1,9 +1,4 @@
-"""Clarification origin constants.
-
-Live origins: ``execute`` (step ``ask_user``), ``plan_mode_review``
-(plan draft approve/reject gate), ``rail_pause`` (host gate),
-``tool_approval`` (deepagents HITL tool-action approval gate).
-"""
+"""Clarification origin constants."""
 
 from __future__ import annotations
 
@@ -75,8 +70,8 @@ def resume_node_for_clarification_origin(origin: str | None) -> str | None:
     """Map a clarification origin to the StrangeLoop graph station that should resume.
 
     Returns:
-        Canonical graph station name, or ``None`` when the origin is unknown
-        or host-only (``rail_pause`` — not a StrangeLoop interrupt).
+        Canonical graph station name, or `None` when the origin is unknown
+        or host-only (`rail_pause` — not a StrangeLoop interrupt).
     """
     if not origin or origin not in CLARIFICATION_ORIGINS:
         return None

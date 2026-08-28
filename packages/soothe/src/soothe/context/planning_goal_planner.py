@@ -1,9 +1,4 @@
-"""Goal-level planning subengine for ContextEngine.
-
-Provides goal decomposition helpers, multi-goal orchestration, and
-reflection-driven goal creation. LLM-driven decomposition is wired
-through the AutopilotMonitor verifier path (apply_llm_subgoals).
-"""
+"""Goal-level planning subengine for ContextEngine."""
 
 from __future__ import annotations
 
@@ -50,7 +45,7 @@ class GoalPlanningSubengine:
         Validates depth limits and creates child goals with proper
         parent_id, depends_on, workspace inheritance, and priority fields.
 
-        When every subgoal omits ``depends_on`` and there are 2+ children,
+        When every subgoal omits `depends_on` and there are 2+ children,
         applies a deterministic sequential chain (AH-3).
         """
         parent = self._dag.get_goal(parent_id)
@@ -191,7 +186,7 @@ class GoalPlanningSubengine:
         Args:
             new_goals: Dicts with description, priority, depends_on.
             parent_id: Optional parent goal for lineage.
-            source: Goal source tag (``reflection`` maps to allowed Literal).
+            source: Goal source tag (`reflection` maps to allowed Literal).
 
         Returns:
             Created GoalNode instances.
@@ -257,7 +252,7 @@ class GoalPlanningSubengine:
     ) -> list[GoalNode]:
         """Create follow-up goals after a goal completes.
 
-        When ``new_goals`` is provided (from post-completion verification),
+        When `new_goals` is provided (from post-completion verification),
         materializes them in the DAG. Callers may also invoke
         :meth:`create_follow_up_goals` directly.
 

@@ -1,21 +1,4 @@
-"""Grounding guard for decompose_task proposals (d15f hallucination defense).
-
-Two runtime layers that reject decompose proposals issued without evidence:
-
-- ``check_proposal_grounded``: an LLM-driven critic (FAST model) that judges
-  whether the concrete claims in a proposal (paths, modules, functions,
-  quantities, behavioral assertions) are supported by the evidence the agent
-  actually gathered in the step thread. Replaces the old rigid
-  filesystem-path existence check so it works in sandboxes with no real
-  project paths and catches hallucinations beyond paths.
-- ``current_evidence_calls`` (in :mod:`runtime`): a decompose_task issued
-  with zero prior evidence-gathering tool calls in the thread is rejected
-  without invoking the model (cheap short-circuit).
-
-Together they prevent the d15f failure: a complex root step called
-``decompose_task`` as its first action (no grounding) and fabricated
-``client/swift/``, ``client/kotlin/`` subtasks that did not exist.
-"""
+"""Grounding guard for decompose_task proposals (d15f hallucination defense)."""
 
 from __future__ import annotations
 
@@ -133,7 +116,7 @@ async def check_proposal_grounded(
 ) -> GroundingVerdict | None:
     """Run the FAST grounding critic on a decompose proposal.
 
-    Returns a :class:`GroundingVerdict`, or ``None`` on failure (fail-open: \
+    Returns a :class:`GroundingVerdict`, or `None` on failure (fail-open: \
     the caller should not block the proposal when the critic itself errors).
     """
     if fast_model is None:

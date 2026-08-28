@@ -1,8 +1,4 @@
-"""Host-specific Langfuse display-name helpers for StrangeLoop runtime.
-
-Run-name suffixes align with stem stations. Kebab-case matches existing
-Langfuse tags (``strange-loop-graph``, ``execute-step``).
-"""
+"""Host-specific Langfuse display-name helpers for StrangeLoop runtime."""
 
 _HOST_LOOP_GRAPH_RUN_NAME = "strange-loop-graph"
 _HOST_INTAKE_PHASE_RUN_NAMES = {
@@ -25,7 +21,7 @@ def loop_graph_langfuse_run_display_name(trace_name: str | None) -> str:
 
 
 def intake_phase_langfuse_run_display_name(trace_name: str | None, phase: str) -> str | None:
-    """Return the child run name under ``intake`` for a phase, or None when unmapped."""
+    """Return the child run name under `intake` for a phase, or None when unmapped."""
     suffix = _HOST_INTAKE_PHASE_RUN_NAMES.get(phase)
     if suffix is None:
         return None

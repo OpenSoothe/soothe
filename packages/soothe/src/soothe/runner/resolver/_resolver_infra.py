@@ -1,8 +1,4 @@
-"""Infrastructure resolution: durability and checkpointer backends.
-
-Host binds pool classes to the host registry-aware shims; canonical logic
-lives in :mod:`soothe_nano.resolve._resolver_infra`.
-"""
+"""Infrastructure resolution: durability and checkpointer backends."""
 
 from __future__ import annotations
 

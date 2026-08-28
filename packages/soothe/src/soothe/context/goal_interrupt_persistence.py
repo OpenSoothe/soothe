@@ -1,12 +1,4 @@
-"""Write ``goal_interrupted`` CE ledger markers for cancelled in-flight goals.
-
-When a user submits a new goal (or cancels) while one is in flight, callers
-outside the StrangeLoop graph often have only ``loop_id`` — not a
-``LoopRuntimeContext``. This module loads the CE ledger, appends a
-``phase="goal_interrupted"`` Human+AI pair whose AI body is a compact
-deterministic digest of the cancelled goal's partial ``execute_step`` work,
-and persists both. Goal DAG status remains the caller's responsibility.
-"""
+"""Write `goal_interrupted` CE ledger markers for cancelled in-flight goals."""
 
 from __future__ import annotations
 
@@ -52,9 +44,9 @@ def _entry_content_text(entry: dict[str, Any]) -> str:
 
 
 def _build_cancelled_digest(ledger: list[dict[str, Any]], *, reason: str) -> str:
-    """Build the ``goal_interrupted`` AI body from the persisted ledger.
+    """Build the `goal_interrupted` AI body from the persisted ledger.
 
-    Walks the ledger backward collecting ``execute_step`` AI excerpts (the
+    Walks the ledger backward collecting `execute_step` AI excerpts (the
     user-facing synthesis of each wave), deduped by a 64-char prefix. Returns
     empty string when there is no usable execute evidence — callers treat that
     as "no marker".
@@ -118,7 +110,7 @@ async def mark_cancelled_goal_interrupted(
     *,
     reason: str = "user_cancelled",
 ) -> int:
-    """Append a ``goal_interrupted`` ledger pair for the in-flight cancelled goal.
+    """Append a `goal_interrupted` ledger pair for the in-flight cancelled goal.
 
     Returns the number of ledger entries appended (0 when no partial execute
     work exists, or on best-effort failure). Failures are logged and swallowed

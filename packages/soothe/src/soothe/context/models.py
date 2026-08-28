@@ -114,9 +114,9 @@ class StepCloseReport(BaseModel):
 class StepNode(BaseModel):
     """Single step within a goal's step DAG.
 
-    Lineage / decompose fields: ``parent_step_id``,
-    ``secondary_parent_step_ids``, ``replacement_of``, ``recompose_count``.
-    Scheduler uses ``dependencies`` + ``status`` only.
+    Lineage / decompose fields: `parent_step_id`,
+    `secondary_parent_step_ids`, `replacement_of`, `recompose_count`.
+    Scheduler uses `dependencies` + `status` only.
     """
 
     id: str
@@ -213,12 +213,12 @@ class StepDAG(BaseModel):
     def reset_failed_step(self, step_id: str) -> bool:
         """Reset a failed step back to pending for retry.
 
-        Used by the Auto-to-Manual fallback in ``root_eval``: when all
+        Used by the Auto-to-Manual fallback in `root_eval`: when all
         action steps have failed and the loop is in auto clarification mode
         with a human attached, the failed step is reset so it can be
         re-dispatched under the newly-switched manual policy.
 
-        Returns ``True`` when the step was failed and is now pending.
+        Returns `True` when the step was failed and is now pending.
         """
         node = self.nodes.get(step_id)
         if node is not None and node.status == "failed":
@@ -228,7 +228,7 @@ class StepDAG(BaseModel):
         return False
 
     def lineage_depth(self, step_id: str) -> int:
-        """Depth along ``parent_step_id`` chain (root = 1). Missing id → 0."""
+        """Depth along `parent_step_id` chain (root = 1). Missing id → 0."""
         if step_id not in self.nodes:
             return 0
         depth = 0
@@ -550,16 +550,16 @@ class GoalStepDAG(BaseModel):
             goal.updated_at = datetime.now(UTC)
 
     def collect_subtree_ids(self, root_id: str) -> list[str]:
-        """Return ``root_id`` and all descendants, deepest-first.
+        """Return `root_id` and all descendants, deepest-first.
 
         Used by cascading cancel so child workers are stopped before parents.
-        Missing ``root_id`` yields an empty list.
+        Missing `root_id` yields an empty list.
 
         Args:
             root_id: Subtree root goal id.
 
         Returns:
-            Goal ids in post-order (leaves before ancestors); ``root_id`` last.
+            Goal ids in post-order (leaves before ancestors); `root_id` last.
         """
         if root_id not in self.goals:
             return []
@@ -692,7 +692,7 @@ class GoalStepDAG(BaseModel):
     def recover_active_goals(self) -> list[str]:
         """Reset goals stuck in 'active' to 'pending' (crash recovery).
 
-        Increments ``attempts_after_crash`` on each recovered goal (P1-3).
+        Increments `attempts_after_crash` on each recovered goal (P1-3).
         """
         recovered: list[str] = []
         now = datetime.now(UTC)

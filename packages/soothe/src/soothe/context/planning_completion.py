@@ -1,11 +1,4 @@
-"""Completion heuristics for goal and step-level planning.
-
-Single source of truth for completion strategy determination. Extracted from
-PlanManager to eliminate duplication with ContextEnginePlanAdapter.
-
-All functions take primitive/keyword arguments rather than LoopState or PlanDAG,
-preserving ContextEngine's independence from StrangeLoop.
-"""
+"""Completion heuristics for goal and step-level planning."""
 
 from __future__ import annotations
 
@@ -35,7 +28,7 @@ def _ledger_direct_eligible(
     last_wave_tool_call_count: int,
     completion_rules: CompletionRulesConfig | None = None,
 ) -> bool:
-    """Declarative structural gates for ``ledger_direct`` (no content heuristics)."""
+    """Declarative structural gates for `ledger_direct` (no content heuristics)."""
     rules = _rules(completion_rules)
     if not (
         plan_wave_count <= 1

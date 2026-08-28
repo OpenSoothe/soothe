@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_context_engine_persistence(config: SootheConfig, loop_id: str) -> Any:
-    """Return a ContextEngine persistence backend for ``loop_id``.
+    """Return a ContextEngine persistence backend for `loop_id`.
 
     Mirrors the backend selection used when StrangeLoop binds ContextEngine.
     """

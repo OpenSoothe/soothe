@@ -1,12 +1,4 @@
-"""Tool call argument enrichment and normalization.
-
-This module provides functions for processing tool call arguments during
-streaming: normalizing raw args to dict, backfilling empty args from chunks,
-enriching task kwargs with descriptions, and ensuring JSON string format.
-
-Used by executor.py for stream processing and by tool_call_args.py for
-argument collection during Act-phase streaming.
-"""
+"""Tool call argument enrichment and normalization."""
 
 from __future__ import annotations
 
@@ -20,7 +12,7 @@ _TASK_KWARG_DESC_KEYS = ("description", "prompt", "task", "instruction")
 
 
 def _coerce_tool_call_args_mapping(raw: Any) -> dict[str, Any]:
-    """Normalize tool-call ``args`` to a dict when possible."""
+    """Normalize tool-call `args` to a dict when possible."""
     if isinstance(raw, dict):
         inp = raw.get("input")
         if isinstance(inp, dict) and inp:
@@ -45,7 +37,7 @@ def _task_kwargs_have_description(args: dict[str, Any]) -> bool:
 
 
 def _chunk_args_dict(chunk: dict[str, Any]) -> dict[str, Any]:
-    """Extract parsed args from one ``tool_call_chunk`` block."""
+    """Extract parsed args from one `tool_call_chunk` block."""
     cargs = chunk.get("args")
     if isinstance(cargs, dict) and cargs:
         return dict(cargs)
@@ -55,11 +47,11 @@ def _chunk_args_dict(chunk: dict[str, Any]) -> dict[str, Any]:
 
 
 def _backfill_tool_calls_args_from_chunks(msg: BaseMessage) -> BaseMessage:
-    """Fill empty ``tool_calls[].args`` from ``tool_call_chunks`` on the same message.
+    """Fill empty `tool_calls[].args` from `tool_call_chunks` on the same message.
 
-    Some providers emit a terminal ``AIMessage`` whose ``tool_calls`` have ``{}`` while
+    Some providers emit a terminal `AIMessage` whose `tool_calls` have `{}` while
     the accumulated chunk args on the same object are complete. The TUI needs those
-    kwargs on ``tool_calls`` for wire deserialization and overlay seeding.
+    kwargs on `tool_calls` for wire deserialization and overlay seeding.
     """
     if not isinstance(msg, (AIMessage, AIMessageChunk)):
         return msg
@@ -124,7 +116,7 @@ def _patch_task_tool_call_dict(
     *,
     step_description: str,
 ) -> tuple[dict[str, Any], bool]:
-    """Fill missing ``task`` kwargs from execute-step metadata (main graph only)."""
+    """Fill missing `task` kwargs from execute-step metadata (main graph only)."""
     if str(tc.get("name") or "").strip() != "task":
         return tc, False
     args = _coerce_tool_call_args_mapping(tc.get("args"))
@@ -146,11 +138,11 @@ def _enrich_execute_step_task_kwargs_on_message(
     step_description: str,
     task_idx: int | None,
 ) -> BaseMessage:
-    """Ensure main-graph ``task`` tool calls carry a description for TUI delegation cards.
+    """Ensure main-graph `task` tool calls carry a description for TUI delegation cards.
 
-    Parallel execute often streams ``tool_calls`` with empty ``args`` and no
-    ``tool_call_chunks`` on the terminal chunk. The model still has the step brief in the
-    HumanMessage envelope, so copy it onto ``task`` kwargs at emit time and clients always
+    Parallel execute often streams `tool_calls` with empty `args` and no
+    `tool_call_chunks` on the terminal chunk. The model still has the step brief in the
+    HumanMessage envelope, so copy it onto `task` kwargs at emit time and clients always
     receive a real delegation description.
     """
     if task_idx is not None:
@@ -198,7 +190,7 @@ def _enrich_execute_step_task_kwargs_on_message(
 
 
 def _stringify_tool_call_chunk_args_on_message(msg: BaseMessage) -> BaseMessage:
-    """Ensure ``tool_call_chunks[].args`` are JSON strings (LangChain wire invariant)."""
+    """Ensure `tool_call_chunks[].args` are JSON strings (LangChain wire invariant)."""
     if not isinstance(msg, (AIMessage, AIMessageChunk)):
         return msg
     chunks = getattr(msg, "tool_call_chunks", None) or []

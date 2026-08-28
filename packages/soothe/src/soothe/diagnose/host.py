@@ -37,7 +37,7 @@ def _check_import(module_path: str, name: str) -> CheckResult:
 def _check_autopilot(config: Any | None) -> CheckResult:
     """Check autopilot config presence and module import.
 
-    ``soothe`` sits below ``soothe-autopilot`` in the dependency DAG, so the
+    `soothe` sits below `soothe-autopilot` in the dependency DAG, so the
     module may legitimately be absent when autopilot is disabled. Only surface
     an import failure as ERROR when autopilot is actually enabled.
     """
@@ -126,11 +126,11 @@ def _check_loop(config: Any | None) -> CheckResult:
 def _check_cron(config: Any | None) -> CheckResult:
     """Check cron config presence and module import.
 
-    ``soothe`` sits below ``soothe-daemon`` in the dependency DAG, so the
+    `soothe` sits below `soothe-daemon` in the dependency DAG, so the
     daemon cron module may legitimately be absent in an isolated core venv.
     The config is still validated here; the module itself is exercised at the
     daemon level. An import failure is only surfaced as ERROR when cron is
-    actually enabled (``enable_builtin_jobs=true``).
+    actually enabled (`enable_builtin_jobs=true`).
     """
     cron = getattr(config, "cron", None) if config is not None else None
     enabled = bool(getattr(cron, "enable_builtin_jobs", False)) if cron is not None else False

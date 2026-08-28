@@ -43,14 +43,14 @@ def _provider_has_credentials(cfg: SootheConfig, provider_name: str) -> bool | N
 
 
 def build_models_list_payload(cfg: SootheConfig) -> dict[str, Any]:
-    """Return JSON-serializable catalog for ``models_list_response``.
+    """Return JSON-serializable catalog for `models_list_response`.
 
     Args:
-        cfg: Loaded daemon ``SootheConfig``.
+        cfg: Loaded daemon `SootheConfig`.
 
     Returns:
-        Dict with ``models`` (list of rows) and ``default_model``
-        (``provider:model`` or ``None``).
+        Dict with `models` (list of rows) and `default_model`
+        (`provider:model` or `None`).
     """
     rows: list[dict[str, Any]] = []
     for p in cfg.providers or []:

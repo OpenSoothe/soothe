@@ -1,14 +1,4 @@
-"""Recover decompose_task proposals from LLM text output.
-
-When an Eval step's LLM emits continuation subtasks as text/JSON instead of
-calling the ``decompose_task`` tool, this module extracts the JSON payload
-from the final assistant text and constructs ``DecompositionProposal``
-objects so the downstream RECONCILE station can still commit the children.
-
-The recovery is conservative: only well-formed ``{"subtasks": [...]}`` payloads
-with at least one valid subtask are accepted. Malformed or missing JSON returns
-an empty list — the caller proceeds as if no proposal was found.
-"""
+"""Recover decompose_task proposals from LLM text output."""
 
 from __future__ import annotations
 
@@ -44,9 +34,9 @@ def recover_proposals_from_text(
 ) -> list[DecompositionProposal]:
     """Extract DecompositionProposals from LLM text output.
 
-    Scans ``text`` for a JSON object containing a ``subtasks`` array. When
+    Scans `text` for a JSON object containing a `subtasks` array. When
     found and at least one subtask validates, returns a single
-    ``DecompositionProposal`` whose ``parent_step_id`` is ``parent_step_id``.
+    `DecompositionProposal` whose `parent_step_id` is `parent_step_id`.
 
     Args:
         text: Final assistant text from the Eval step stream.

@@ -34,7 +34,7 @@ def route_after_preprocess(state: dict[str, Any]) -> str:
 
     The chitchat fast-path ENDs the graph here unconditionally. Whether a
     chitchat message should bypass the fast-path at all is decided upstream in
-    ``enter_loop`` via ``should_bypass_chitchat_fast_path`` (loop-control phrase
+    `enter_loop` via `should_bypass_chitchat_fast_path` (loop-control phrase
     + intra-loop checkpoint work) — the sole bypass authority. Routing must
     not re-litigate that decision.
     """
@@ -122,13 +122,13 @@ def route_after_record_iteration(state: dict[str, Any]) -> str:
 def route_after_plan_review(state: dict[str, Any]) -> str:
     """Plan review → FINALIZE (approve/reject) or AWAIT_USER (pending/refine).
 
-    On approve, ``handle_plan_mode_review_answer`` set ``plan_approved_follow_on``
-    and stashed a follow-on exec signal on ``ctx.scratch.follow_on_exec``. The
+    On approve, `handle_plan_mode_review_answer` set `plan_approved_follow_on`
+    and stashed a follow-on exec signal on `ctx.scratch.follow_on_exec`. The
     plan-mode goal finalizes (its root already completed during exploration);
-    the finalize node attaches the follow-on signal to the ``completed`` event
+    the finalize node attaches the follow-on signal to the `completed` event
     so the daemon enqueues a fresh exec goal carrying the approved plan.
     Reject ends the current goal with no follow-on and no completion report
-    (finalize short-circuits on ``ctx.scratch.plan_rejected``). Refine re-emits
+    (finalize short-circuits on `ctx.scratch.plan_rejected`). Refine re-emits
     the pending clarification so the user can provide more instruction. On a
     fresh plan review the pending clarification is still set → AWAIT_USER.
     """

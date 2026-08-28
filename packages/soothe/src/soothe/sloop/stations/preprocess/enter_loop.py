@@ -1,13 +1,4 @@
-"""Loop Graph ``init_or_resume`` node.
-
-Hydrates intent/routing from intake classified in the graph entry node.
-Surfaces ``intake_label`` and ``intent_route`` for routing. Tasks route to
-DISPATCH (root StepNode created there). Wired specialists set
-``intent_route=wired_subagent``.
-
-Chitchat bypass is decided here via :func:`should_bypass_chitchat_fast_path`
-(loop-control phrase + intra-loop checkpoint work); routing trusts that.
-"""
+"""Loop Graph `init_or_resume` node."""
 
 from __future__ import annotations
 

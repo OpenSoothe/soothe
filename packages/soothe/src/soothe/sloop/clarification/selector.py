@@ -30,15 +30,15 @@ def build_default_clarification_policy(
     """Return the appropriate policy for the runtime mode.
 
     Args:
-        mode: ``"manual"`` for TUI relay, ``"auto"`` for veritas.
-        veritas_answer: Required when ``mode == "auto"``. Callable that
+        mode: `"manual"` for TUI relay, `"auto"` for veritas.
+        veritas_answer: Required when `mode == "auto"`. Callable that
             takes a :class:`ClarificationRequest` and returns a
             :class:`~soothe.subagents.veritas.schemas.VeritasAnswerSchema`.
-        emit: Optional emit function for ``InteractiveClarificationPolicy``.
+        emit: Optional emit function for `InteractiveClarificationPolicy`.
         min_confidence: Threshold for auto policy.
         interactive_fallback: Optional policy injected into
             :class:`AutoClarificationPolicy`. Invoked when veritas
-            itself fails (``DeferKind == "structured_output_failed"``) and a
+            itself fails (`DeferKind == "structured_output_failed"`) and a
             human is wired. Ignored for manual mode.
         force_manual_origins: Origins that skip veritas and use the interactive
             relay (or defer when no human is attached).
@@ -47,16 +47,16 @@ def build_default_clarification_policy(
             of a hard defer. Ignored for manual mode.
         tool_approval_pipeline: Optional pipeline for deterministic
             tool-approval evaluation. In auto mode, deny →
-            safety → allow stages resolve most ``tool_approval`` interrupts
+            safety → allow stages resolve most `tool_approval` interrupts
             without an LLM (veritas remains the final guard). In manual mode
             it pre-filters the human relay: deny/safety always auto-reject,
-            allow rules auto-approve only when ``manual_allow_rules`` is set.
+            allow rules auto-approve only when `manual_allow_rules` is set.
         manual_allow_rules: Manual mode only — let allow rules auto-approve
-            ``tool_approval`` actions instead of asking the human
-            (``tool_approval.manual_scope: ambiguous_only``).
+            `tool_approval` actions instead of asking the human
+            (`tool_approval.manual_scope: ambiguous_only`).
 
     Raises:
-        ValueError: if ``mode == "auto"`` but ``veritas_answer`` is not provided.
+        ValueError: if `mode == "auto"` but `veritas_answer` is not provided.
     """
     if mode == "manual":
         return InteractiveClarificationPolicy(

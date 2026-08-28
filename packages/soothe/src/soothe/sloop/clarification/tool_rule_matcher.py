@@ -1,15 +1,4 @@
-"""Pattern matching for tool-approval rules.
-
-Adapts Claude Code's ``shellRuleMatching.ts`` command matching and
-``filesystem.ts`` path matching to Python. Supports three command pattern
-syntaxes (exact, prefix ``:*``, wildcard ``*``) and gitignore-style path
-matching via ``pathspec``.
-
-Compound commands (``cd /path && git status``, ``A && B || C``) are split
-on shell operators (``&&``, ``||``, ``;``, ``|``) so each sub-command is
-matched independently. ``cd`` and ``pushd`` prefixes are stripped because
-they are side-effect-free directory changes that don't warrant blocking.
-"""
+"""Pattern matching for tool-approval rules."""
 
 from __future__ import annotations
 
@@ -34,11 +23,11 @@ _DIR_CHANGE_PREFIXES = ("cd", "pushd", "popd")
 
 
 def _strip_dir_change(command: str) -> str:
-    """Strip ``cd``/``pushd``/``popd`` sub-commands from a compound command.
+    """Strip `cd`/`pushd`/`popd` sub-commands from a compound command.
 
-    ``cd /path && git status`` → ``git status``
-    ``pushd /path && make && popd`` → ``make``
-    ``cd /path && git status && git diff`` → ``git status && git diff``
+    `cd /path && git status` → `git status`
+    `pushd /path && make && popd` → `make`
+    `cd /path && git status && git diff` → `git status && git diff`
     """
     parts = _COMPOUND_SPLIT_RE.split(command.strip())
     # Strip leading cd/pushd segments
@@ -69,11 +58,11 @@ def _strip_dir_change(command: str) -> str:
 def split_compound_command(command: str) -> list[str]:
     """Split a compound shell command into individual sub-commands.
 
-    Strips ``cd``/``pushd``/``popd`` segments (directory changes are
-    side-effect-free) and splits on ``&&``, ``||``, ``;``, and ``|`` so
+    Strips `cd`/`pushd`/`popd` segments (directory changes are
+    side-effect-free) and splits on `&&`, `||`, `;`, and `|` so
     each remaining sub-command is matched independently.
 
-    Returns at least one element. Returns ``[""]`` for empty input.
+    Returns at least one element. Returns `[""]` for empty input.
     """
     stripped = _strip_dir_change(command)
     parts = _COMPOUND_SPLIT_RE.split(stripped)
@@ -83,11 +72,11 @@ def split_compound_command(command: str) -> list[str]:
 def _parse_command_rule(pattern: str) -> dict[str, str]:
     """Parse a command permission pattern.
 
-    Returns a dict with ``type`` (``"exact"``, ``"prefix"``, or
-    ``"wildcard"``) and the relevant field (``command``, ``prefix``, or
-    ``pattern``).
+    Returns a dict with `type` (`"exact"`, `"prefix"`, or
+    `"wildcard"`) and the relevant field (`command`, `prefix`, or
+    `pattern`).
 
-    Mirrors Claude Code's ``parsePermissionRule``.
+    Mirrors Claude Code's `parsePermissionRule`.
     """
     # Legacy :* prefix syntax (e.g. "grep:*" → prefix "grep")
     if pattern.endswith(":*"):
@@ -102,7 +91,7 @@ def _parse_command_rule(pattern: str) -> dict[str, str]:
 def _has_wildcards(pattern: str) -> bool:
     """Check if a pattern contains unescaped wildcards.
 
-    Mirrors Claude Code's ``hasWildcards``. A trailing ``:*`` is legacy
+    Mirrors Claude Code's `hasWildcards`. A trailing `:*` is legacy
     prefix syntax, not a wildcard.
     """
     if pattern.endswith(":*"):
@@ -125,10 +114,10 @@ def _has_wildcards(pattern: str) -> bool:
 def _match_wildcard(pattern: str, command: str, *, case_insensitive: bool = False) -> bool:
     """Match a command against a wildcard pattern.
 
-    ``*`` matches any sequence of characters. ``\\*`` matches a literal
-    asterisk. ``\\\\`` matches a literal backslash.
+    `*` matches any sequence of characters. `\\*` matches a literal
+    asterisk. `\\\\` matches a literal backslash.
 
-    Adapted from Claude Code's ``matchWildcardPattern``.
+    Adapted from Claude Code's `matchWildcardPattern`.
     """
     trimmed = pattern.strip()
     # Step 1: Process escape sequences into placeholders
@@ -194,15 +183,15 @@ def _match_single_command(command: str, pattern: str) -> bool:
 def match_command_rule(command: str, pattern: str) -> bool:
     """Match a shell command against a permission pattern.
 
-    Supports three syntaxes (mirrors Claude Code's ``parsePermissionRule``):
+    Supports three syntaxes (mirrors Claude Code's `parsePermissionRule`):
 
-    - ``"exact"`` — exact string match (e.g. ``"git status"``)
-    - ``"prefix:*"`` — prefix match (e.g. ``"grep:*"`` matches ``"grep -r foo"``)
-    - ``"wildcard*"`` — wildcard match (e.g. ``"pytest*"`` matches ``"pytest -xvs"``)
+    - `"exact"` — exact string match (e.g. `"git status"`)
+    - `"prefix:*"` — prefix match (e.g. `"grep:*"` matches `"grep -r foo"`)
+    - `"wildcard*"` — wildcard match (e.g. `"pytest*"` matches `"pytest -xvs"`)
 
-    Compound commands (``cd /path && git status``) are split into
+    Compound commands (`cd /path && git status`) are split into
     sub-commands; the rule matches if **every** sub-command matches.
-    ``cd``/``pushd``/``popd`` segments are stripped before matching.
+    `cd`/`pushd`/`popd` segments are stripped before matching.
 
     Matching is case-insensitive for commands.
     """
@@ -223,9 +212,9 @@ def match_command_rule(command: str, pattern: str) -> bool:
 
 
 def _expand_workspace(pattern: str, workspace_root: str | None) -> str | None:
-    """Expand ``<workspace>`` token to the workspace root.
+    """Expand `<workspace>` token to the workspace root.
 
-    Returns ``None`` if the pattern uses ``<workspace>`` but no workspace
+    Returns `None` if the pattern uses `<workspace>` but no workspace
     root is available (fail-safe: don't match).
     """
     if _WORKSPACE_TOKEN not in pattern:
@@ -238,16 +227,16 @@ def _expand_workspace(pattern: str, workspace_root: str | None) -> str | None:
 def match_path_rule(path: str, pattern: str, workspace_root: str | None) -> bool:
     """Match a file path against a permission pattern.
 
-    Uses ``pathspec`` (gitignore-style) for ``**`` recursive matching.
-    Expands the ``<workspace>`` token to ``workspace_root``.
+    Uses `pathspec` (gitignore-style) for `**` recursive matching.
+    Expands the `<workspace>` token to `workspace_root`.
 
     Supports:
-    - ``<workspace>/**`` — any path inside workspace root
-    - ``/etc/**`` — absolute path patterns
-    - ``~/...`` — home directory patterns (expanded)
+    - `<workspace>/**` — any path inside workspace root
+    - `/etc/**` — absolute path patterns
+    - `~/...` — home directory patterns (expanded)
     - relative patterns resolved against workspace root
 
-    Returns ``False`` if the pattern uses ``<workspace>`` but no workspace
+    Returns `False` if the pattern uses `<workspace>` but no workspace
     root is available (fail-safe).
     """
     if not path or not pattern:

@@ -39,7 +39,7 @@ class ThreadLogger:
     user/assistant conversation turns for lightweight in-terminal review.
 
     Args:
-        thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/data/threads/{thread_id}/logs/``.
+        thread_dir: Directory for thread logs. Defaults to `SOOTHE_HOME/data/threads/{thread_id}/logs/`.
         thread_id: Thread ID for the log file name.
     """
 
@@ -53,10 +53,10 @@ class ThreadLogger:
         """Initialize the thread logger.
 
         Args:
-            thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/data/threads/{thread_id}/logs/``.
+            thread_dir: Directory for thread logs. Defaults to `SOOTHE_HOME/data/threads/{thread_id}/logs/`.
             thread_id: Thread ID for the log file name.
             retention_days: Days to retain thread logs before cleanup.
-            max_size_mb: Maximum total size for all thread logs under ``data/threads/``.
+            max_size_mb: Maximum total size for all thread logs under `data/threads/`.
         """
         tid = str(thread_id or "default")
         default_dir = PersistenceDirectoryManager.get_thread_directory(tid) / "logs"
@@ -84,7 +84,7 @@ class ThreadLogger:
 
         Args:
             namespace: Stream namespace (empty tuple for main agent).
-            mode: Stream mode (``messages``, ``updates``, ``custom``).
+            mode: Stream mode (`messages`, `updates`, `custom`).
             data: Stream data payload.
         """
         if mode == "custom" and isinstance(data, dict):
@@ -296,14 +296,14 @@ def cleanup_stale_thread_logs(
     max_size_mb: int = 100,
     threads_root: Path | None = None,
 ) -> int:
-    """Delete old ``conversation.jsonl`` files across all thread directories.
+    """Delete old `conversation.jsonl` files across all thread directories.
 
-    Expects the layout ``threads/{id}/logs/conversation.jsonl``.
+    Expects the layout `threads/{id}/logs/conversation.jsonl`.
 
     Args:
         retention_days: Remove logs older than this many days.
         max_size_mb: When total size exceeds this budget, delete oldest logs first.
-        threads_root: Override ``$SOOTHE_HOME/data/threads`` for tests.
+        threads_root: Override `$SOOTHE_HOME/data/threads` for tests.
 
     Returns:
         Number of log files deleted.
@@ -355,7 +355,7 @@ def cleanup_stale_thread_logs(
 
 
 def _remove_thread_dir_if_empty(thread_dir: Path) -> None:
-    """Remove ``threads/{id}`` when only empty ``logs/`` remains."""
+    """Remove `threads/{id}` when only empty `logs/` remains."""
     try:
         if not thread_dir.is_dir():
             return

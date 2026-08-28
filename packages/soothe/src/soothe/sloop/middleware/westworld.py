@@ -1,27 +1,4 @@
-"""WestWorldMiddleware: fixed directive phrase → fixed agent behavior.
-
-Themed after *Westworld* — narrative triggers that override agent behavior.
-When the user's submission contains a registered phrase (e.g. "fan out beams"
-or "fan out subagents"), the matching system-prompt addendum is injected so
-the model performs a deterministic action.
-
-The registry is extensible: each ``(phrase, addendum)`` pair is one trigger.
-The ``fan out beams`` and ``fan out subagents`` triggers ship initially, both
-driving the model to call ``decompose_task`` with maximum parallelism
-(independent subtasks, zero ``depends_on_local`` edges).
-
-Compatibility with ``DecomposeTaskMiddleware``:
-- This middleware only appends a system addendum; it never touches the tool
-  list. ``DecomposeTaskMiddleware`` (same suffix, runs after this one) owns
-  ``decompose_task`` injection / mode-based stripping.
-- Guard conditions mirror ``DecomposeTaskMiddleware`` so the addendum only
-  lands on real agent-mode step threads where ``decompose_task`` is present.
-- Trigger detection reads only the **last** ``HumanMessage`` (the current
-  step envelope), NOT the full projected history. The root envelope carries
-  the user goal text (and thus the phrase); child-step envelopes carry the
-  child task description (no phrase) — so fan-out fires once at the root and
-  does not recurse into children.
-"""
+"""WestWorldMiddleware: fixed directive phrase → fixed agent behavior."""
 
 from __future__ import annotations
 
@@ -65,12 +42,12 @@ _WESTWORLD_ESCALATION_EVIDENCE_THRESHOLD = 10
 
 
 def _last_human_text(request: ModelRequest[ContextT]) -> str:
-    """Return the text content of the last ``HumanMessage`` in the request.
+    """Return the text content of the last `HumanMessage` in the request.
 
     The last HumanMessage is the current step envelope (root = user goal text,
     child = child task description). Scanning only it prevents a phrase in a
     projected root envelope from re-triggering fan-out on every child thread.
-    Returns ``""`` when there is no HumanMessage or content is non-textual.
+    Returns `""` when there is no HumanMessage or content is non-textual.
     """
     messages = list(request.messages or [])
     for msg in reversed(messages):
@@ -91,7 +68,7 @@ def _last_human_text(request: ModelRequest[ContextT]) -> str:
 
 
 def _match_triggers(text: str) -> list[str]:
-    """Return addenda for every phrase (case-insensitive) present in ``text``."""
+    """Return addenda for every phrase (case-insensitive) present in `text`."""
     if not text:
         return []
     lowered = text.lower()
@@ -131,7 +108,7 @@ def _append_addenda(
 class WestWorldMiddleware(AgentMiddleware):
     """Inject directive-phrase addenda that override agent behavior.
 
-    Active on real agent-mode step threads (where ``decompose_task`` exists).
+    Active on real agent-mode step threads (where `decompose_task` exists).
     Inert everywhere else (plan/ask modes strip the tool; eval and
     goal-synthesis have their own policies; non-step threads have no step id).
     """

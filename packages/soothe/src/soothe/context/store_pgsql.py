@@ -1,8 +1,4 @@
-"""PostgreSQL persistence backend for the Context Engine.
-
-Stores CE DAG and ledger in PostgreSQL keyed by ``loop_id``. Writes go through
-the process-scoped persistence writer; reads use the shared soothe_checkpoints pool.
-"""
+"""PostgreSQL persistence backend for the Context Engine."""
 
 from __future__ import annotations
 
@@ -27,8 +23,8 @@ class PgsqlContextPersistence:
     """PostgreSQL-backed persistence for ContextEngine.
 
     Two tables in a single database:
-    - ``ce_dag`` — serialized GoalStepDAG (one row per loop_id)
-    - ``ce_ledger`` — serialized message ledger (one row per loop_id)
+    - `ce_dag` — serialized GoalStepDAG (one row per loop_id)
+    - `ce_ledger` — serialized message ledger (one row per loop_id)
 
     Args:
         loop_id: Loop identifier used as primary key.

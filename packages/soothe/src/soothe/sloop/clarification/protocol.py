@@ -71,14 +71,14 @@ class ClarificationAnswer:
 class ClarificationDeferredError(Exception):
     """Raised by a policy when no answer is available.
 
-    ``await_clarification`` translates this into ``awaiting_clarification``
+    `await_clarification` translates this into `awaiting_clarification`
     goal status and terminates the loop until the question is answered
-    out-of-band (e.g. by ``soothe goal answer ...``).
+    out-of-band (e.g. by `soothe goal answer ...`).
 
-     attaches a ``kind: DeferKind`` so operators can distinguish
+     attaches a `kind: DeferKind` so operators can distinguish
     legitimate "I don't know" defers from forced ones (e.g. the LLM produced
     malformed structured output). The kind is propagated into the
-    ``LOOP_CLARIFICATION_DEFERRED`` event payload.
+    `LOOP_CLARIFICATION_DEFERRED` event payload.
     """
 
     def __init__(
@@ -98,7 +98,7 @@ class ClarificationPolicy(Protocol):
     """Resolve a :class:`ClarificationRequest` into a :class:`ClarificationAnswer`.
 
     Implementations: :class:`InteractiveClarificationPolicy` (TUI relay) and
-    :class:`AutoClarificationPolicy` (``veritas`` subagent).
+    :class:`AutoClarificationPolicy` (`veritas` subagent).
     """
 
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer: ...

@@ -1,10 +1,4 @@
-"""Generate structured metadata from tool results for StrangeLoop reasoning.
-
-This module extracts concise, structured metadata from tool execution results
-to enable StrangeLoop reasoning without full content bloat.
-
- : StrangeLoop Tool Result Optimization
-"""
+"""Generate structured metadata from tool results for StrangeLoop reasoning."""
 
 from __future__ import annotations
 
@@ -31,7 +25,7 @@ def generate_outcome_metadata(
         tool_name: Name of the tool that was executed
         result: Tool execution result (string, dict, or list)
         tool_call_id: Unique identifier for this tool invocation
-        tool_status: Optional LangChain ToolMessage status (e.g. ``"error"``).
+        tool_status: Optional LangChain ToolMessage status (e.g. `"error"`).
 
     Returns:
         Structured metadata dict for Layer 2 reasoning with fields:
@@ -212,7 +206,7 @@ def _extract_subagent_metadata(result: Any) -> dict[str, Any]:
 
     Returns:
         Metadata dict with completed status, artifacts_created, entities,
-        and optional ``task_return_preview`` (bounded excerpt of this ``task`` return;).
+        and optional `task_return_preview` (bounded excerpt of this `task` return;).
     """
     content = result if isinstance(result, str) else str(result)
 

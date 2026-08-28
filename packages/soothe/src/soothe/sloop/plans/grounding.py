@@ -37,7 +37,7 @@ def compose_root_full_description(
     approved_plan_markdown: str,
     approved_plan_path: str | None = None,
 ) -> str:
-    """Compose root ``full_description`` that carries the approved plan into THREAD."""
+    """Compose root `full_description` that carries the approved plan into THREAD."""
     goal = (goal_text or "").strip() or "Execute task"
     section = approved_plan_section_body(
         approved_plan_markdown=approved_plan_markdown,
@@ -52,7 +52,7 @@ def root_already_grounded(full_description: str | None) -> bool:
 
 
 def consume_approved_plan_from_state(loop_state: Any) -> tuple[str | None, str | None]:
-    """Read and clear one-shot approved plan fields from ``LoopState``."""
+    """Read and clear one-shot approved plan fields from `LoopState`."""
     if loop_state is None:
         return None, None
     body = (getattr(loop_state, "approved_plan_markdown", None) or "").strip() or None
@@ -67,8 +67,8 @@ def consume_approved_plan_from_state(loop_state: Any) -> tuple[str | None, str |
 def peek_approved_plan_from_state(loop_state: Any) -> tuple[str | None, str | None]:
     """Read approved plan fields without clearing.
 
-    When the plan body is not cached on ``loop_state`` (e.g. the plan-mode
-    approve exec-goal carries only ``approved_plan_path``), reload the body
+    When the plan body is not cached on `loop_state` (e.g. the plan-mode
+    approve exec-goal carries only `approved_plan_path`), reload the body
     from the artifact on disk so DISPATCH can ground it onto the exec root.
     """
     if loop_state is None:

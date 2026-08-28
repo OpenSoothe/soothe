@@ -1,8 +1,4 @@
-"""Step deliverable gate for execute action retry.
-
-Structural evidence checks, optional fast-LLM assessment, and
-failure-mode-specific retry instructions.
-"""
+"""Step deliverable gate for execute action retry."""
 
 from __future__ import annotations
 

@@ -34,9 +34,9 @@ SOOTHE_IS_DAG_ROOT_KEY = "soothe_is_dag_root"
 
 
 def positive_config_int(value: Any, default: int, *, minimum: int = 1) -> int:
-    """Coerce a config budget to an int at or above ``minimum``.
+    """Coerce a config budget to an int at or above `minimum`.
 
-    MagicMock and other non-ints must not collapse to ``1`` via ``int()``.
+    MagicMock and other non-ints must not collapse to `1` via `int()`.
     """
     if type(value) is int and value >= minimum:
         return value

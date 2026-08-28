@@ -1,11 +1,4 @@
-"""Middleware: inject decompose prompts / tool on step THREADS.
-
-In plan/ask modes the ``decompose_task`` tool is **stripped** from the schema
-so the LLM cannot call it. A ``awrap_tool_call`` guard also intercepts any
-stray ``decompose_task`` call (e.g. from a cached/forced tool choice) and
-returns a guidance ``ToolMessage`` directing the LLM to finish its plan /
-answer in-thread.
-"""
+"""Middleware: inject decompose prompts / tool on step THREADS."""
 
 from __future__ import annotations
 
@@ -96,7 +89,7 @@ def _is_grounding_call(tool_name: str, tool_call: dict[str, Any]) -> bool:
 def _extract_result_text(result: Any) -> str:
     """Best-effort extraction of a tool result's text for the evidence corpus.
 
-    Handles ``ToolMessage`` (str or list content) and ``Command`` (with
+    Handles `ToolMessage` (str or list content) and `Command` (with
     messages). Defensive — never raises; returns "" on any failure so the
     tool call itself is never broken by evidence capture.
     """
@@ -131,14 +124,14 @@ def _extract_result_text(result: Any) -> str:
 
 
 class DecomposeTaskMiddleware(AgentMiddleware):
-    """Inject ``decompose_task`` + THREAD policy on step threads.
+    """Inject `decompose_task` + THREAD policy on step threads.
 
     Active when a StrangeLoop step id is bound (contextvar or LangGraph
-    configurable ``soothe_decompose_step_id``). Hidden on non-step threads
+    configurable `soothe_decompose_step_id`). Hidden on non-step threads
     (synthesis, intake specialists, etc.).
 
     In plan/ask modes the tool is stripped from the schema (coded policy)
-    and an ``awrap_tool_call`` guard intercepts stray calls with a guidance
+    and an `awrap_tool_call` guard intercepts stray calls with a guidance
     message. System gets finish-vs-split / write_todos / hygiene policy +
     mode-specific addendum; user envelope stays instance-focused.
     """
@@ -151,7 +144,7 @@ class DecomposeTaskMiddleware(AgentMiddleware):
 
     @staticmethod
     def _active_mode(conf: dict[str, Any]) -> str | None:
-        """Return ``"plan"``, ``"ask"``, or ``None`` (agent) from config."""
+        """Return `"plan"`, `"ask"`, or `None` (agent) from config."""
         mode = conf.get(SOOTHE_INTERACTION_MODE_KEY)
         return mode if mode in ("plan", "ask") else None
 
@@ -164,11 +157,11 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         request: Any,
         handler: Callable[[Any], Awaitable[Any]],
     ) -> Any:
-        """Intercept ``decompose_task`` in plan/ask modes.
+        """Intercept `decompose_task` in plan/ask modes.
 
         Even though the tool is stripped from the schema, a forced
-        ``tool_choice`` or cached tool map might still route a call here.
-        Return a ``ToolMessage`` that guides the LLM to finish in-thread.
+        `tool_choice` or cached tool map might still route a call here.
+        Return a `ToolMessage` that guides the LLM to finish in-thread.
         """
         tool_call = getattr(request, "tool_call", None) or {}
         tool_name = str(tool_call.get("name", ""))

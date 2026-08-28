@@ -45,14 +45,14 @@ step id instead of trying to resume a CoreAgent interrupt that never existed."""
 
 
 def _coerce_resume_ticket(raw: Any) -> ResumeTicket | None:
-    """Normalize a ``resume_ticket`` value read from the graph-state dict.
+    """Normalize a `resume_ticket` value read from the graph-state dict.
 
     LangGraph passes nodes the raw checkpoint dict, not a reconstructed
-    ``LoopState``. A ``ResumeTicket`` (plain dataclass) stored on the graph
-    channel therefore comes back as a plain ``dict`` after the checkpoint
-    round-trip. Attribute access (``.thread_id`` etc.) on the dict raises
-    ``AttributeError``; this helper coerces it back to a ``ResumeTicket``
-    so the resume path can use attribute access uniformly. ``None`` and
+    `LoopState`. A `ResumeTicket` (plain dataclass) stored on the graph
+    channel therefore comes back as a plain `dict` after the checkpoint
+    round-trip. Attribute access (`.thread_id` etc.) on the dict raises
+    `AttributeError`; this helper coerces it back to a `ResumeTicket`
+    so the resume path can use attribute access uniformly. `None` and
     already-typed values pass through unchanged.
     """
     if raw is None or isinstance(raw, ResumeTicket):
@@ -111,8 +111,8 @@ def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
 def _extract_prior_clarifications(state: Any) -> tuple[str, ...]:
     """Extract prior Q&A pairs from the loop state's clarification history.
 
-    Reads from ``state.clarification_history`` when present (a list of dicts
-    with ``questions``, ``answers``, ``source``, and ``confidence`` keys).
+    Reads from `state.clarification_history` when present (a list of dicts
+    with `questions`, `answers`, `source`, and `confidence` keys).
     Returns an empty tuple when no history exists.
     """
     history = getattr(state, "clarification_history", None)
@@ -183,7 +183,7 @@ def _append_ask_user_loop_messages(
 ) -> None:
     """Mirror the executor (Execute → AI) ledger pattern for ask_user steps.
 
-    plan-assess / plan-generate consume ``state.loop_messages`` to ground the
+    plan-assess / plan-generate consume `state.loop_messages` to ground the
     next planning iteration. Without this pair the loop re-asks the same
     clarification because it has no record of what was asked or answered.
     """
@@ -221,7 +221,7 @@ async def _record_and_emit_step_completed(
     result: StepExecutionRecord,
     step_desc: dict[str, str],
 ) -> None:
-    """Apply step outcome to loop state and emit ``step_completed`` for live UIs."""
+    """Apply step outcome to loop state and emit `step_completed` for live UIs."""
     state = ctx.loop_state
     state.add_step_result(result)
     if state.working_memory is not None:
@@ -302,11 +302,11 @@ async def _persist_planner_ask_step_outcome(
     ctx: LoopRuntimeContext,
     result: StepExecutionRecord,
 ) -> None:
-    """Record a synthesized planner ``ask_user`` step into the plan DAG and CE.
+    """Record a synthesized planner `ask_user` step into the plan DAG and CE.
 
-    ``LoopState.add_step_result`` is a no-op when CE is bound; without explicit
-    persistence here, Branch 2 would re-detect the same ready ``ask_user`` step
-    and loop forever through ``await_clarification``.
+    `LoopState.add_step_result` is a no-op when CE is bound; without explicit
+    persistence here, Branch 2 would re-detect the same ready `ask_user` step
+    and loop forever through `await_clarification`.
     """
     try:
         ctx.plan_manager.record_step_outcomes([result])
@@ -347,7 +347,7 @@ async def _persist_planner_ask_step_outcome(
 
 
 async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> dict[str, Any]:
-    """Run ready steps, stream events, apply step results to ``LoopState``."""
+    """Run ready steps, stream events, apply step results to `LoopState`."""
     strange_loop = ctx.strange_loop
     state = ctx.loop_state
     state_manager = ctx.state_manager
@@ -656,7 +656,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     queued_step_ids: set[str] = set()
 
     async def _emit_step_queued_for_steps(steps: list[StepAction]) -> None:
-        """Emit ``step_queued`` for ready steps waiting on ``max_parallel_steps``."""
+        """Emit `step_queued` for ready steps waiting on `max_parallel_steps`."""
         for step in steps:
             if step.id in queued_step_ids or step.id in started_step_ids:
                 continue
@@ -667,7 +667,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             )
 
     async def _emit_step_started_for_steps(steps: list[StepAction]) -> None:
-        """Emit ``step_started`` when a step enters an active execute batch (live TUI)."""
+        """Emit `step_started` when a step enters an active execute batch (live TUI)."""
         for step in steps:
             if step.id in started_step_ids:
                 continue

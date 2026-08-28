@@ -1,10 +1,4 @@
-"""LLM-callable ``request_plan_mode`` tool.
-
-When the model invokes this tool, it returns a message telling the model the
-operator will be asked to confirm. The actual plan-mode switch is driven by
-the TUI / daemon via ``GoalRequest.interaction_mode``, not by this tool — it
-is a signal only (the model cannot switch interaction mode mid-goal).
-"""
+"""LLM-callable `request_plan_mode` tool."""
 
 from __future__ import annotations
 
@@ -40,7 +34,7 @@ async def _arun_request_plan_mode(reason: str = "") -> str:
 
 
 def build_request_plan_mode_tool() -> StructuredTool:
-    """Build the ``request_plan_mode`` LLM-callable tool."""
+    """Build the `request_plan_mode` LLM-callable tool."""
     return StructuredTool.from_function(
         name="request_plan_mode",
         description=(

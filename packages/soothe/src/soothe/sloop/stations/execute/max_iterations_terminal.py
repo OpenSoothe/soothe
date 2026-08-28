@@ -1,4 +1,4 @@
-"""Terminal handling when ``max_iterations`` is exhausted."""
+"""Terminal handling when `max_iterations` is exhausted."""
 
 from __future__ import annotations
 

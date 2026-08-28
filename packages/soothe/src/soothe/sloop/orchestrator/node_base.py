@@ -1,9 +1,4 @@
-"""Generalized StrangeLoop graph node lifecycle.
-
-``LoopNode`` provides ``pre`` / ``project`` / ``prompt`` / ``process`` / ``post``.
-``wrap_node`` adapts ``LoopNode`` instances or legacy ``async def(ctx, state)``
-callables for LangGraph ``add_node``.
-"""
+"""Generalized StrangeLoop graph node lifecycle."""
 
 from __future__ import annotations
 
@@ -86,7 +81,7 @@ class LoopNode(ABC):
     call_kind: GraphCallKind | None = None  # type: ignore[assignment]
 
     async def pre(self, ctx: LoopRuntimeContext, state: dict[str, Any]) -> GuardOutcome | None:
-        """Guards and setup. Return ``GuardOutcome`` to short-circuit."""
+        """Guards and setup. Return `GuardOutcome` to short-circuit."""
         return None
 
     def project(self, ctx: LoopRuntimeContext, state: dict[str, Any]) -> ProjectionResult:
@@ -123,7 +118,7 @@ class LoopNode(ABC):
         return RouteDecision(kind="proceed")
 
     async def __call__(self, ctx: LoopRuntimeContext, state: dict[str, Any]) -> dict[str, Any]:
-        """Run ``pre -> project -> prompt -> process -> post``."""
+        """Run `pre -> project -> prompt -> process -> post`."""
         guard = await self.pre(ctx, state)
         if guard is not None:
             return guard.as_state_patch()
@@ -141,15 +136,15 @@ def wrap_node(
     node: LoopNode | Any,
     ctx: LoopRuntimeContext,
 ) -> Any:
-    """Adapt a ``LoopNode`` or legacy node function for LangGraph ``add_node``.
+    """Adapt a `LoopNode` or legacy node function for LangGraph `add_node`.
 
     Args:
         station: Canonical station id (for logging/debugging only).
-        node: A :class:`LoopNode` instance or legacy ``async def(ctx, state)``.
+        node: A :class:`LoopNode` instance or legacy `async def(ctx, state)`.
         ctx: The :class:`LoopRuntimeContext` to bind.
 
     Returns:
-        ``async def(state) -> dict`` suitable for ``graph.add_node``.
+        `async def(state) -> dict` suitable for `graph.add_node`.
     """
 
     if isinstance(node, LoopNode):

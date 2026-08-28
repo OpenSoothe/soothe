@@ -1,4 +1,4 @@
-"""``ask_user`` tool — pauses the loop for a human answer."""
+"""`ask_user` tool — pauses the loop for a human answer."""
 
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ _QUESTION_FIELD_RENAMES: dict[str, str] = {
 class OptionSpec(BaseModel):
     """A single selectable option for a structured question.
 
-    ``label`` is the answer display text shown in the recap and sent on
-    resume. ``description`` is shown in the hover-preview box when the
+    `label` is the answer display text shown in the recap and sent on
+    resume. `description` is shown in the hover-preview box when the
     option is highlighted.
     """
 
@@ -44,8 +44,8 @@ class QuestionSpec(BaseModel):
 
     The LLM emits 2-4 options. Put the recommended option first and add
     "(Recommended)" to its label. The CLI widget adds an implicit "Other"
-    free-text row. ``header`` is the tab/chip label (max 12 chars);
-    ``question`` is the full question text.
+    free-text row. `header` is the tab/chip label (max 12 chars);
+    `question` is the full question text.
     """
 
     question: str = Field(description="The full question text. Clear, specific, ends with '?'.")
@@ -77,7 +77,7 @@ class QuestionSpec(BaseModel):
 
 
 class _AskUserArgs(BaseModel):
-    """``questions`` (list of QuestionSpec) is the sole entry point."""
+    """`questions` (list of QuestionSpec) is the sole entry point."""
 
     questions: list[QuestionSpec] = Field(
         default_factory=list,
@@ -93,18 +93,18 @@ class _AskUserArgs(BaseModel):
 
         Observed in production loops (f182, 065e, 9125):
 
-        1. **Stringified JSON questions**: the model emits ``questions`` as a
+        1. **Stringified JSON questions**: the model emits `questions` as a
            JSON string instead of a native list. Parse it.
 
-        2. **Flat single question**: the model emits ``question``, ``header``,
-           ``options`` as top-level tool args instead of wrapping them in
-           ``questions: [{...}]``. Detect and wrap them.
+        2. **Flat single question**: the model emits `question`, `header`,
+           `options` as top-level tool args instead of wrapping them in
+           `questions: [{...}]`. Detect and wrap them.
 
-        3. **Stringified options**: ``options`` may also arrive as a JSON
+        3. **Stringified options**: `options` may also arrive as a JSON
            string instead of a list. Parse it.
 
         4. **Old field names**: in-flight loops from before the schema rename
-           may use ``title``/``description``/``short``/``long``/``recommended``.
+           may use `title`/`description`/`short`/`long`/`recommended`.
            Rename them to the new fields.
         """
         if not isinstance(data, dict):
@@ -183,10 +183,10 @@ class _AskUserArgs(BaseModel):
 def _format_answers(questions: list, payload: object) -> str:
     """Render the resume payload as a model-readable Q&A block.
 
-    ``questions`` may be ``list[QuestionSpec]``, ``list[dict]`` (structured,
-    from wire), or ``list[str]`` (degraded backward compat). Question text is
-    extracted from ``QuestionSpec`` or dict when available; falls back to
-    ``str(q)``.
+    `questions` may be `list[QuestionSpec]`, `list[dict]` (structured,
+    from wire), or `list[str]` (degraded backward compat). Question text is
+    extracted from `QuestionSpec` or dict when available; falls back to
+    `str(q)`.
     """
     raw = payload.get("answers", payload) if isinstance(payload, dict) else payload
     answers = (
@@ -208,7 +208,7 @@ def _format_answers(questions: list, payload: object) -> str:
 
 
 def _run_ask_user(questions: list[QuestionSpec] | None = None) -> str:
-    """Pause the graph via ``interrupt()``; return formatted answers on resume."""
+    """Pause the graph via `interrupt()`; return formatted answers on resume."""
     from langgraph.types import interrupt
 
     qs = list(questions or [])
@@ -229,7 +229,7 @@ async def _arun_ask_user(questions: list[QuestionSpec] | None = None) -> str:
 
 
 def build_ask_user_tool() -> StructuredTool:
-    """Build the ``ask_user`` StructuredTool."""
+    """Build the `ask_user` StructuredTool."""
     return StructuredTool.from_function(
         name="ask_user",
         description=(

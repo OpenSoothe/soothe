@@ -1,24 +1,4 @@
-"""Thread selection logic for execute steps.
-
-Thread IDs are **decoupled from step IDs**: each new step gets a random
-5-hex thread_id from `execute_step_thread_id` (the id grammar lives in
-`soothe.sloop.orchestrator.checkpoint`), cached in
-``LoopState.step_thread_ids[step.id]``. Thread reuse happens only in two
-cases:
-
-1. **Strict linear chain**: the step has exactly 1 dependency, and the
-   parent step has exactly 1 child (no fan-out). The parent's thread_id is
-   reused so the child inherits accumulated context (file reads, search
-   results) without re-reading the codebase.
-
-2. **Interrupt resume**: the step is being resumed after an
-   ``ask_user`` / ``action_requests`` interrupt. The original thread_id
-   (stored in ``LoopState.resume_ticket.thread_id``) is reused so
-   ``Command(resume=...)`` finds the pending interrupt in the checkpointer.
-
-All other cases (parallel siblings, fan-in, root step) get a new random
-thread_id.
-"""
+"""Thread selection logic for execute steps."""
 
 from __future__ import annotations
 
@@ -70,7 +50,7 @@ def resolve_user_requested_wire_subagent(
 
 
 def _is_only_child(parent_id: str, decision: AgentDecision) -> bool:
-    """True when ``parent_id`` has exactly one child in the decision's step list."""
+    """True when `parent_id` has exactly one child in the decision's step list."""
     children = [s for s in decision.steps if parent_id in (s.dependencies or [])]
     return len(children) == 1
 
@@ -87,9 +67,9 @@ def _select_thread_for_step(
 
     Reuse rules (only one must hold to reuse a parent thread):
 
-    - **Interrupt resume** (``is_clarification_resume=True``): reuse the
-      thread_id stored in ``loop_state.resume_ticket.thread_id`` so
-      ``Command(resume=...)`` finds the pending interrupt.
+    - **Interrupt resume** (`is_clarification_resume=True`): reuse the
+      thread_id stored in `loop_state.resume_ticket.thread_id` so
+      `Command(resume=...)` finds the pending interrupt.
     - **Strict linear chain**: step has exactly 1 dependency AND the parent
       has exactly 1 child (no fan-out). Reuse the parent's thread_id.
 

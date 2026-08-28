@@ -1,10 +1,4 @@
-"""LLM-structured decision on whether a coverage Eval step is needed.
-
-For SIMPLE tasks where the structural ``eval_required()`` predicate returns
-False, a fast-model call decides whether the execution evidence still warrants
-a coverage audit. MINIMAL tasks short-circuit (never call the LLM). COMPLEX
-tasks rely on the structural predicate (always insert Eval when required).
-"""
+"""LLM-structured decision on whether a coverage Eval step is needed."""
 
 from __future__ import annotations
 
@@ -70,9 +64,9 @@ async def decide_eval_required(
 ) -> EvalDecision:
     """Return an LLM decision on whether a coverage Eval step should run.
 
-    MINIMAL tasks short-circuit to ``should_run_eval=False`` without calling
-    the LLM. When ``fast_model`` is None or the call fails, fail-safe to
-    ``should_run_eval=True`` (run Eval rather than silently skip).
+    MINIMAL tasks short-circuit to `should_run_eval=False` without calling
+    the LLM. When `fast_model` is None or the call fails, fail-safe to
+    `should_run_eval=True` (run Eval rather than silently skip).
 
     Args:
         fast_model: Resolved fast chat model (or None → fail-safe).
@@ -83,7 +77,7 @@ async def decide_eval_required(
         goal_trace: Optional Langfuse goal trace.
 
     Returns:
-        EvalDecision with ``should_run_eval`` and ``reasoning``.
+        EvalDecision with `should_run_eval` and `reasoning`.
     """
     # MINIMAL never needs Eval — skip the LLM call entirely.
     if intake_label == IntakeLabel.MINIMAL:

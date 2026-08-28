@@ -1,16 +1,4 @@
-"""Project StrangeLoop ledger messages for execute / synthesis / intake.
-
- : The complete ledger includes all phases. CoreAgent execution sees only
-``execute_step`` messages (plan-phase reasoning is not injected into the
-CoreAgent thread). Goal-completion synthesis uses the current-goal execute
-segment (plus optional compacted prior terminal status). Intake classify may
-project the last ``goal_completion`` unit.
-
-When ``PlanPromptLedgerConfig`` limits are all zero/unset, the caller receives
-the same message object references as ``state.loop_messages`` (shallow list
-copy). When any limit is positive, messages are deep-copied and trimmed
-without mutating persisted ledger state.
-"""
+"""Project StrangeLoop ledger messages for execute / synthesis / intake."""
 
 from __future__ import annotations
 
@@ -142,7 +130,7 @@ def _goal_report_truncation_marker(dropped: int) -> str:
 
 
 def _truncate_head_tail(text: str, *, cap: int, marker: str) -> str:
-    """Truncate to ``cap`` chars keeping 40% head + 60% tail with a truncation marker.
+    """Truncate to `cap` chars keeping 40% head + 60% tail with a truncation marker.
 
     The tail is favored (recommendations, file paths, deferred items live near the
     end of a goal-completion report) so the most actionable content survives.
@@ -158,7 +146,7 @@ def _truncate_head_tail(text: str, *, cap: int, marker: str) -> str:
 
 
 def _is_goal_completion_ai(msg: BaseMessage) -> bool:
-    """True when ``msg`` is a goal-completion AI turn (the synthesis report body)."""
+    """True when `msg` is a goal-completion AI turn (the synthesis report body)."""
     if getattr(msg, "phase", None) != "goal_completion":
         return False
     return type(msg).__name__.endswith("AIMessage")
@@ -225,7 +213,7 @@ def _trim_total_chars_front(
 
 
 def _compact_intent_classify_human_for_projection(msg: BaseMessage) -> BaseMessage:
-    """Rewrite ``GOAL:`` to ``GOAL RECAP:`` on projected intent-classify humans (D1)."""
+    """Rewrite `GOAL:` to `GOAL RECAP:` on projected intent-classify humans (D1)."""
     if getattr(msg, "phase", None) != "intent_classify" or not _is_loop_human_message(msg):
         return msg
     from soothe.sloop.utils.ledger_compaction import compact_planning_human_content
@@ -258,8 +246,8 @@ def project_loop_messages_for_plan(
     """Return ledger messages for plan LLM prompts.
 
     Args:
-        loop_messages: ledger from ``LoopState.loop_messages``.
-        ledger_cfg: Optional caps; ``None`` treated as all limits disabled.
+        loop_messages: ledger from `LoopState.loop_messages`.
+        ledger_cfg: Optional caps; `None` treated as all limits disabled.
 
     Returns:
         Same references as input when no limits apply (shallow list copy).
@@ -320,9 +308,9 @@ def project_loop_messages_for_plan(
 def _current_goal_segment_start(loop_messages: list[BaseMessage]) -> int:
     """Return index after the last prior-goal terminal AI row.
 
-    A goal segment boundary is marked by either a ``goal_completion`` (success)
-    or ``goal_interrupted`` (cancel/fatal/max-iter) AI row. Both terminate the
-    prior goal's segment so its ``execute_step`` rows do not bleed into the
+    A goal segment boundary is marked by either a `goal_completion` (success)
+    or `goal_interrupted` (cancel/fatal/max-iter) AI row. Both terminate the
+    prior goal's segment so its `execute_step` rows do not bleed into the
     next goal's current-segment projection.
     """
     for i in range(len(loop_messages) - 1, -1, -1):
@@ -413,8 +401,8 @@ def _compact_terminal_unit_for_projection(
 ) -> list[BaseMessage]:
     """Dispatch a terminal unit to its phase-specific compaction.
 
-    ``goal_completion`` units use the anti-anchoring boundary by default;
-    ``goal_interrupted`` units do not (their leftover work should anchor).
+    `goal_completion` units use the anti-anchoring boundary by default;
+    `goal_interrupted` units do not (their leftover work should anchor).
     """
     # Detect the unit's phase from its first human/AI row.
     phase = None
@@ -437,9 +425,9 @@ def project_last_goal_completion_for_intake(
     include_boundary: bool = True,
     k: int = 3,
 ) -> list[BaseMessage]:
-    """Project up to ``k`` prior ``goal_completion`` ledger units into intake classify input.
+    """Project up to `k` prior `goal_completion` ledger units into intake classify input.
 
-    Uses the same ``goal_completion`` resolution as execute Slice A. The synthesis
+    Uses the same `goal_completion` resolution as execute Slice A. The synthesis
     human envelope is rewritten to a short label so the classifier focuses on the
     terminal AI report.
 
@@ -494,7 +482,7 @@ def current_goal_has_execute_ledger(state: LoopState) -> bool:
 
 
 def resolve_execute_projection_mode(state: LoopState) -> ExecuteProjectionMode:
-    """Return ``goal_boundary`` at first execute slice of a goal, else ``mid_goal``."""
+    """Return `goal_boundary` at first execute slice of a goal, else `mid_goal`."""
     if state.iteration == 0 and not state.step_results:
         # CE-bound loops record execute_step ledger per wave; step_results stay empty
         # until record_iteration. Treat in-flight plan execution as mid_goal so Slice A
@@ -521,7 +509,7 @@ def _execute_plan_tail_index(loop_messages: list[BaseMessage]) -> int:
 
 
 def _goal_segment_start(loop_messages: list[BaseMessage], unit_start: int) -> int:
-    """Return index where the goal segment containing ``unit_start`` began."""
+    """Return index where the goal segment containing `unit_start` began."""
     seg_after_prev_terminal = 0
     for i in range(unit_start - 1, -1, -1):
         msg = loop_messages[i]
@@ -539,11 +527,11 @@ def _find_last_phase_pair_indices(
     before_index: int,
     phase: str | frozenset[str],
 ) -> tuple[int, int] | None:
-    """Return ``(human_idx, ai_idx)`` for the last ``phase`` pair ending before ``before_index``.
+    """Return `(human_idx, ai_idx)` for the last `phase` pair ending before `before_index`.
 
-    ``phase`` may be a single phase string or a frozenset of phases; the AI row
-    matches if its ``phase`` is in the set. ``_GOAL_TERMINAL_PHASES`` (both
-    ``goal_completion`` and ``goal_interrupted``) is the set used by cross-goal
+    `phase` may be a single phase string or a frozenset of phases; the AI row
+    matches if its `phase` is in the set. `_GOAL_TERMINAL_PHASES` (both
+    `goal_completion` and `goal_interrupted`) is the set used by cross-goal
     projection so interrupted goals' partial-work digests are surfaced alongside
     completions.
     """
@@ -573,9 +561,9 @@ def resolve_goal_completion_unit(
     loop_messages: list[BaseMessage],
     before_index: int,
 ) -> tuple[list[BaseMessage], int] | None:
-    """Resolve one prior-goal ``goal_completion`` unit ending before ``before_index``.
+    """Resolve one prior-goal `goal_completion` unit ending before `before_index`.
 
-    Completion-only: used by intake classify (``project_last_goal_completion_for_intake``)
+    Completion-only: used by intake classify (`project_last_goal_completion_for_intake`)
     which must NOT see interrupted goals' digests. Cross-goal Slice A projection
     uses :func:`resolve_goal_terminal_unit` instead to surface both.
     """
@@ -591,10 +579,10 @@ def resolve_goal_terminal_unit(
     loop_messages: list[BaseMessage],
     before_index: int,
 ) -> tuple[list[BaseMessage], int] | None:
-    """Resolve one prior-goal terminal unit (completion OR interrupted) before ``before_index``.
+    """Resolve one prior-goal terminal unit (completion OR interrupted) before `before_index`.
 
-    Cross-goal Slice A variant: scans both ``goal_completion`` and
-    ``goal_interrupted`` so an interrupted goal's partial-work digest is
+    Cross-goal Slice A variant: scans both `goal_completion` and
+    `goal_interrupted` so an interrupted goal's partial-work digest is
     surfaced to the next goal's planning projection.
     """
     idxs = _find_last_phase_pair_indices(loop_messages, before_index, _GOAL_TERMINAL_PHASES)
@@ -610,13 +598,13 @@ def collect_goal_completion_units(
     *,
     k: int,
 ) -> list[list[BaseMessage]]:
-    """Collect up to ``k`` prior-goal ``goal_completion`` units, oldest first.
+    """Collect up to `k` prior-goal `goal_completion` units, oldest first.
 
     Completion-only (contrast with :func:`collect_cross_goal_completion_units`,
-    which also includes ``goal_interrupted`` units): used by intake classify,
+    which also includes `goal_interrupted` units): used by intake classify,
     which must not see interrupted goals' digests.
 
-    ``k <= 0`` means unlimited (project all prior-goal completion units).
+    `k <= 0` means unlimited (project all prior-goal completion units).
     """
     if not loop_messages:
         return []
@@ -640,12 +628,12 @@ def collect_cross_goal_completion_units(
     *,
     k: int,
 ) -> list[list[BaseMessage]]:
-    """Collect up to ``k`` prior-goal terminal units, oldest first.
+    """Collect up to `k` prior-goal terminal units, oldest first.
 
-    Now includes ``goal_interrupted`` units so interrupted goals' partial-work
+    Now includes `goal_interrupted` units so interrupted goals' partial-work
     digests are projected beside completions.
 
-    ``k <= 0`` means unlimited (project all prior-goal terminal units).
+    `k <= 0` means unlimited (project all prior-goal terminal units).
     """
     if not loop_messages:
         return []
@@ -669,14 +657,14 @@ def execute_step_ids_subsumed_by_cross_goal_completion(
     *,
     k: int,
 ) -> frozenset[str]:
-    """Return execute ``step_id`` values subsumed by projected terminal units.
+    """Return execute `step_id` values subsumed by projected terminal units.
 
     When Slice A replays a prior goal's terminal report (completion **or**
-    interrupted digest), the ``execute_step`` rows from that same goal segment
-    must not appear again in Slice B (including ``ledger_direct`` goals where
+    interrupted digest), the `execute_step` rows from that same goal segment
+    must not appear again in Slice B (including `ledger_direct` goals where
     the completion body copies execute text).
 
-    ``k <= 0`` means unlimited (subsume across all prior-goal terminal units).
+    `k <= 0` means unlimited (subsume across all prior-goal terminal units).
     """
     if not loop_messages:
         return frozenset()
@@ -710,7 +698,7 @@ def project_cross_goal_completion_tail(
     ledger_cfg: PlanPromptLedgerConfig | None,
     include_boundary: bool = False,
 ) -> list[BaseMessage]:
-    """Project K prior-goal ``goal_completion`` units for execute Slice A.
+    """Project K prior-goal `goal_completion` units for execute Slice A.
 
     Args:
         loop_messages: Full ledger.
@@ -925,15 +913,15 @@ def project_predecessor_execute_ledger_for_step(
 ) -> list[BaseMessage]:
     """Project transitive-predecessor execute_step ledger rows for branched CoreAgent input.
 
-    Branched step threads (``{main_thread_id}__{hex5}``) start with empty checkpoints.
+    Branched step threads (`{main_thread_id}__{hex5}`) start with empty checkpoints.
     Dependent steps receive predecessor Human/AI pairs from the orchestration ledger
-    instead of an inline ``PRIOR STEP EVIDENCE`` block in the current envelope.
+    instead of an inline `PRIOR STEP EVIDENCE` block in the current envelope.
 
     Args:
-        loop_messages: ledger from ``LoopState.loop_messages``.
+        loop_messages: ledger from `LoopState.loop_messages`.
         step: Step about to execute on an isolated branch thread.
         decision: Current scoped plan decision (for transitive dependency closure).
-        max_messages: Cap on copied ledger rows; ``None`` uses the branch default.
+        max_messages: Cap on copied ledger rows; `None` uses the branch default.
         exclude_step_ids: Step ids to exclude (execute rows subsumed by Slice A goal_completion).
 
     Returns:
@@ -972,7 +960,7 @@ def project_loop_messages_for_core_agent(
     turns are not injected into the CoreAgent thread.
 
     Args:
-        loop_messages: complete ledger from ``LoopState.loop_messages``.
+        loop_messages: complete ledger from `LoopState.loop_messages`.
 
     Returns:
         Filtered list with only execute_step Human/AI message pairs.
@@ -1002,7 +990,7 @@ def _compact_terminal_unit_for_synthesis(unit: list[BaseMessage]) -> list[BaseMe
 
     Only the human envelope is replaced with a status-reference boundary; the AI
     terminal report is kept in full so the prior goal's completion report stays
-    in the projection. Global ``plan_prompt_ledger`` caps still bound total size.
+    in the projection. Global `plan_prompt_ledger` caps still bound total size.
     """
     phase: str | None = None
     for msg in unit:
@@ -1036,7 +1024,7 @@ def _project_prior_goal_for_synthesis(
     ledger_cfg: PlanPromptLedgerConfig | None,
     k: int,
 ) -> list[BaseMessage]:
-    """Project up to ``k`` compacted prior terminal units for synthesis."""
+    """Project up to `k` compacted prior terminal units for synthesis."""
     units = collect_cross_goal_completion_units(loop_messages, k=k)
     if not units:
         return []
@@ -1054,18 +1042,18 @@ def project_loop_messages_for_synthesis(
 ) -> list[BaseMessage]:
     """Return ledger messages for goal-synthesis prompts.
 
-    Unlike plan-assess / plan-generate, synthesis injects only ``execute_step``
+    Unlike plan-assess / plan-generate, synthesis injects only `execute_step`
     human/AI turns from the **current goal segment** — plan-phase reasoning and
     prior-goal execute rows are excluded. When prior terminals exist on the
-    same loop, up to ``prior_goal_tail`` compacted prior completion/interrupted
+    same loop, up to `prior_goal_tail` compacted prior completion/interrupted
     units are prepended as brief status reference (not full prior execute evidence).
 
-    Optional ``plan_prompt_ledger`` caps apply to the filtered slice (same
+    Optional `plan_prompt_ledger` caps apply to the filtered slice (same
     trimming as plan prompts).
 
     Args:
-        loop_messages: complete ledger from ``LoopState.loop_messages``.
-        ledger_cfg: Optional size caps; ``None`` treated as all limits disabled.
+        loop_messages: complete ledger from `LoopState.loop_messages`.
+        ledger_cfg: Optional size caps; `None` treated as all limits disabled.
         prior_goal_tail: Max prior-goal terminal units to prepend.
 
     Returns:

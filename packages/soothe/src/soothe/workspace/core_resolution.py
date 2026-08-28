@@ -1,10 +1,4 @@
-"""Unified workspace resolution core with pluggable precedence.
-
-Provides a single ``resolve_workspace()`` function that each resolution chain
-calls with the appropriate precedence level.  Existing public functions
-(``resolve_loop_workspace``, ``resolve_workspace_for_stream``,
-``resolve_workspace_for_tool_execution``) become thin wrappers.
-"""
+"""Unified workspace resolution core with pluggable precedence."""
 
 from __future__ import annotations
 
@@ -38,7 +32,7 @@ def resolve_workspace(
         **sources: Keyword arguments matching the source fields for that chain.
 
     Returns:
-        ``ResolvedWorkspace`` with absolute ``path`` and ``source`` label.
+        `ResolvedWorkspace` with absolute `path` and `source` label.
     """
     if precedence == WorkspacePrecedence.LOOP:
         return _resolve_loop(**sources)

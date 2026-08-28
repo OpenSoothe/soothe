@@ -1,9 +1,4 @@
-"""Goal-entry and continuation policy for StrangeLoop preprocess.
-
-Fresh vs structural-continuation detection for ``enter_loop`` routing.
-Plan-spine mid-loop helpers (lightweight generate, inventory, bypass assess)
-were removed with LLMPlanner.
-"""
+"""Goal-entry and continuation policy for StrangeLoop preprocess."""
 
 from __future__ import annotations
 
@@ -39,7 +34,7 @@ def has_prior_goal_context(ctx: Any) -> bool:
 
 
 def is_structural_continuation(ctx: Any) -> bool:
-    """True when ``continue_loop_mode`` and prior goal context exist."""
+    """True when `continue_loop_mode` and prior goal context exist."""
     if not getattr(ctx, "continue_loop_mode", False):
         return False
     return has_prior_goal_context(ctx)

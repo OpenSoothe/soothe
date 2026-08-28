@@ -1,4 +1,4 @@
-"""Clarification relay: routes structured ``ask_user`` interrupts through a clarification policy and resumes the loop with the answer."""
+"""Clarification relay: routes structured `ask_user` interrupts through a clarification policy and resumes the loop with the answer."""
 
 from __future__ import annotations
 

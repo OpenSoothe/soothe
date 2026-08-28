@@ -1,12 +1,4 @@
-"""Deny-list-first tool-approval pipeline evaluator.
-
-Two stages run cheapest-first: deny rules → safety checks. Any action
-that passes both is auto-approved (absence of deny = implicit allow).
-In manual mode, passing actions are deferred to the human relay.
-
-Safety property: deny rules and safety checks always run before the
-default-approve. No configuration can override a safety denial.
-"""
+"""Deny-list-first tool-approval pipeline evaluator."""
 
 from __future__ import annotations
 
@@ -48,8 +40,8 @@ class ToolApprovalPipeline:
     Safety property: deny rules and safety checks always run before the
     default-approve. No configuration can override a safety denial.
 
-    Stage 2 delegates to nano's ``WorkspaceToolOperationSecurity`` — the same
-    evaluator used by ``SoothePolicyMiddleware`` (Layer 1) and the tool
+    Stage 2 delegates to nano's `WorkspaceToolOperationSecurity` — the same
+    evaluator used by `SoothePolicyMiddleware` (Layer 1) and the tool
     execution layer (Layer 3). This ensures one source of truth for safety
     constants (banned command patterns, dangerous paths/files).
     """
@@ -71,20 +63,20 @@ class ToolApprovalPipeline:
         workspace_root: str | None = None,
         auto_approve: bool = True,
     ) -> ApprovalResult | None:
-        """Run deny → safety stages. Returns ``None`` = defer to the next tier.
+        """Run deny → safety stages. Returns `None` = defer to the next tier.
 
         The pipeline is **deny-list-first**: any action that does not match
         a deny rule or fail a safety check is auto-approved (in auto mode).
         There is no allow-list stage — the absence of a deny is an implicit
         allow. This avoids the "piped command" problem where compound
-        commands like ``git diff ... | tail -5`` could never match a single
+        commands like `git diff ... | tail -5` could never match a single
         allow rule and were always deferred to the human.
 
         Args:
             action_requests: Batched HITL action requests.
-            workspace_root: Per-request workspace root (``<workspace>`` token).
-            auto_approve: When ``True`` (auto mode), actions that pass
-                deny/safety are auto-approved. When ``False`` (manual mode),
+            workspace_root: Per-request workspace root (`<workspace>` token).
+            auto_approve: When `True` (auto mode), actions that pass
+                deny/safety are auto-approved. When `False` (manual mode),
                 passing actions are deferred to the human relay.
         """
         try:
@@ -147,7 +139,7 @@ class ToolApprovalPipeline:
     ) -> str | None:
         """Run bypass-immune safety checks via nano's OperationSecurity.
 
-        Delegates to ``WorkspaceToolOperationSecurity.evaluate()`` — the same
+        Delegates to `WorkspaceToolOperationSecurity.evaluate()` — the same
         evaluator used at Layer 1 (SoothePolicyMiddleware) and Layer 3 (tool
         execution). Returns reason if denied, else None.
         """
@@ -180,7 +172,7 @@ class ToolApprovalPipeline:
     ) -> bool:
         """Check if a tool action matches any rule in the list.
 
-        Selects the matcher function once based on ``tool_name`` instead of
+        Selects the matcher function once based on `tool_name` instead of
         re-dispatching inside the loop.
         """
         if tool_name == "run_command":

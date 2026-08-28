@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 
 def _hydrate_previous_plan_from_ce(state: LoopState, ce_goal: Any) -> None:
-    """Restore ``LoopState.previous_plan`` from a reused CE goal when present.
+    """Restore `LoopState.previous_plan` from a reused CE goal when present.
 
     Without this, interrupt resume plans as if no prior wave existed even though
     the CE step DAG still holds completed steps.
@@ -68,8 +68,8 @@ def _hydrate_previous_plan_from_ce(state: LoopState, ce_goal: Any) -> None:
 class StrangeLoop:
     """Agentic goal execution via the DISPATCH / THREAD graph.
 
-    Orchestration is a compiled LangGraph whose configurable checkpoint key is ``loop_id``.
-    Execute runs claimed CE steps via CoreAgent (``thread_id``).
+    Orchestration is a compiled LangGraph whose configurable checkpoint key is `loop_id`.
+    Execute runs claimed CE steps via CoreAgent (`thread_id`).
 
     Attributes:
         core_agent: CoreAgent for step execution
@@ -124,17 +124,17 @@ class StrangeLoop:
     def set_clarification_mode(self, mode: str) -> bool:
         """Hot-swap the clarification policy on the live runtime context.
 
-        Rebuilds the policy via ``build_clarification_policy_for_runner`` and
-        atomically swaps ``ctx.clarification_policy``. The ``await_clarification``
-        graph node reads ``ctx.clarification_policy`` on each entry, so the next
+        Rebuilds the policy via `build_clarification_policy_for_runner` and
+        atomically swaps `ctx.clarification_policy`. The `await_clarification`
+        graph node reads `ctx.clarification_policy` on each entry, so the next
         clarification inside this goal uses the new mode without waiting for a
         new turn.
 
         Args:
-            mode: ``"auto"`` or ``"manual"``.
+            mode: `"auto"` or `"manual"`.
 
         Returns:
-            ``True`` when the swap landed on a live context, ``False`` when no
+            `True` when the swap landed on a live context, `False` when no
             goal is currently running (caller may retry on the next turn).
         """
         ctx = self._live_runtime_ctx
@@ -226,27 +226,27 @@ class StrangeLoop:
             max_iterations: Maximum loop iterations (default: 8)
             loop_id: Optional loop_id (None → auto-generate UUID)
             intent: IntentClassification. When omitted, the graph entry
-                ``intent_classify`` node runs classification with full CE ledger
+                `intent_classify` node runs classification with full CE ledger
                 projection (prior-goal completion + preamble). Loop continuation is
                 derived from the checkpoint.
             shared_pool: SharedPostgreSQLPool for high-concurrency.
                 - new_goal: Normal goal execution flow
                 - chitchat: Handled via in-graph fast-path and runner chitchat response
-            routing_classification: ``RoutingClassification`` for CoreAgent middleware.
-            clarification_policy: Optional ``ClarificationPolicy`` used by
-                the loop graph's ``await_clarification`` node. When ``None``, clarification
+            routing_classification: `RoutingClassification` for CoreAgent middleware.
+            clarification_policy: Optional `ClarificationPolicy` used by
+                the loop graph's `await_clarification` node. When `None`, clarification
                 requests are deferred via the legacy no-policy path.
             resume_interrupted: When True, skip the chitchat fast-path and recover
-                the in-flight ``status=running`` goal without continue-keyword cancel.
-            goal_trace: Optional pre-allocated ``GoalLoopTrace``; when omitted and Langfuse
+                the in-flight `status=running` goal without continue-keyword cancel.
+            goal_trace: Optional pre-allocated `GoalLoopTrace`; when omitted and Langfuse
                 is enabled, one is opened before the graph runs so intake classification
-                and ``strange-loop-graph`` share one pinned trace.
-            preamble: Optional flattened list of ``BaseMessage`` (ancestor
-                ``(user, ai)`` pairs) projected by the daemon's
-                ``ContextProjector``.
-                When present, seeded into the CE ledger (phase ``"preamble"``)
-                after ``state.bind_ce`` and before the graph runs, so the
-                executing LLM begins with a real multi-turn transcript. ``None``
+                and `strange-loop-graph` share one pinned trace.
+            preamble: Optional flattened list of `BaseMessage` (ancestor
+                `(user, ai)` pairs) projected by the daemon's
+                `ContextProjector`.
+                When present, seeded into the CE ledger (phase `"preamble"`)
+                after `state.bind_ce` and before the graph runs, so the
+                executing LLM begins with a real multi-turn transcript. `None`
                 or empty → existing first-user-message path unchanged.
 
         Yields:

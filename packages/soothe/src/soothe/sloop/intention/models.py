@@ -1,21 +1,4 @@
-"""Intent classification Pydantic models.
-
-Intent classification produces a 4-class intake label
-``chitchat`` | ``minimal`` | ``simple`` | ``complex`` — that drives
-``route_after_preprocess`` branch routing. Whether an agentic query continues an
-in-flight loop is derived structurally inside ``StrangeLoop`` from the loaded
-checkpoint, not classified here.
-
-The intake LLM emits ``task_complexity`` for agentic goals; ``intake_label``
-is derived from that field for the TUI and graph routing. DISPATCH owns
-decomposition. ``complex`` runs the coverage Eval gate via the structural
-``eval_required()`` predicate; ``simple`` uses an LLM decision
-(``decide_eval_required``) to determine dynamically whether a coverage audit is
-warranted; ``minimal`` skips Eval entirely (no LLM call).
-
-CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
-``soothe_sdk.intention.models`` and re-exported here.
-"""
+"""Intent classification Pydantic models."""
 
 from __future__ import annotations
 
@@ -33,15 +16,15 @@ class IntakeLabel(StrEnum):
     Continuation is NOT a label — it is a structural overlay from the
     checkpoint. The intake LLM never decides continuation.
 
-    - ``chitchat``: small talk (greetings, thanks, casual banter); the intake
-      LLM piggybacks ``chitchat_response`` and the runner emits it directly.
-    - ``minimal``: trivia, single obvious tool call, or direct answer; DISPATCH
+    - `chitchat`: small talk (greetings, thanks, casual banter); the intake
+      LLM piggybacks `chitchat_response` and the runner emits it directly.
+    - `minimal`: trivia, single obvious tool call, or direct answer; DISPATCH
       grounds a one-step root (no multi-step decomposition). Skips the coverage
       Eval phase and finalizes from the CoreAgent result (no LLM decision).
-    - ``simple``: single focused deliverable CoreAgent can finish in one execute.
-      An LLM decision (``decide_eval_required``) dynamically determines whether
+    - `simple`: single focused deliverable CoreAgent can finish in one execute.
+      An LLM decision (`decide_eval_required`) dynamically determines whether
       a coverage Eval is warranted based on execution evidence.
-    - ``complex``: multi-phase / parallel workstreams / durable phase gates; runs
+    - `complex`: multi-phase / parallel workstreams / durable phase gates; runs
       the full coverage Eval gate before finalization.
     """
 
@@ -54,14 +37,14 @@ class IntakeLabel(StrEnum):
 def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplexity:
     """Map a routing label to execute-phase task complexity.
 
-    Used for client-forced ``intake_scope`` and fail-safes where the intake LLM
-    did not emit ``task_complexity``.
+    Used for client-forced `intake_scope` and fail-safes where the intake LLM
+    did not emit `task_complexity`.
 
     Args:
         intake_label: 4-class intake label.
 
     Returns:
-        Task complexity for ``RoutingClassification`` and system prompt tiers.
+        Task complexity for `RoutingClassification` and system prompt tiers.
     """
     if intake_label in (IntakeLabel.CHITCHAT, IntakeLabel.MINIMAL):
         return TaskComplexity.MINIMAL
@@ -73,15 +56,15 @@ def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplex
 def derive_intake_label_from_task_complexity(
     task_complexity: TaskComplexity | None,
 ) -> IntakeLabel:
-    """Map intake LLM ``task_complexity`` to the 4-class routing label.
+    """Map intake LLM `task_complexity` to the 4-class routing label.
 
-    The TUI plan panel and ``route_after_preprocess`` read ``intake_label``.
+    The TUI plan panel and `route_after_preprocess` read `intake_label`.
 
     Args:
-        task_complexity: Execute-phase complexity from intake, or ``None``.
+        task_complexity: Execute-phase complexity from intake, or `None`.
 
     Returns:
-        ``minimal``, ``simple``, or ``complex`` (never ``chitchat``).
+        `minimal`, `simple`, or `complex` (never `chitchat`).
     """
     if task_complexity == TaskComplexity.MINIMAL:
         return IntakeLabel.MINIMAL
@@ -94,21 +77,21 @@ class IntentClassification(BaseModel):
     """Primary intent classification model.
 
     4-class LLM intake classification:
-    - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.
-    - ``minimal``: direct execute via DISPATCH root; skips the coverage Eval phase
+    - `chitchat`: small talk; `chitchat_response` is emitted directly to the client.
+    - `minimal`: direct execute via DISPATCH root; skips the coverage Eval phase
       and finalizes from the CoreAgent result (no LLM decision).
-    - ``simple``: single focused deliverable; an LLM decision at ROOT_EVAL
+    - `simple`: single focused deliverable; an LLM decision at ROOT_EVAL
       dynamically determines whether a coverage Eval is warranted.
-    - ``complex``: multi-phase / parallel workstreams; runs the full coverage
+    - `complex`: multi-phase / parallel workstreams; runs the full coverage
       Eval gate. The runner / StrangeLoop derive loop continuation structurally
       from the checkpoint.
 
-    ``intake_label`` drives ``route_after_preprocess``.
+    `intake_label` drives `route_after_preprocess`.
 
     Args:
         intake_label: 4-class intake label for branch routing.
         reasoning: Brief reasoning for classification.
-        chitchat_response: Direct reply for ``chitchat`` intake only.
+        chitchat_response: Direct reply for `chitchat` intake only.
         task_short_description: Short step-card title for agentic goals.
         task_complexity: Routing complexity level.
     """
@@ -143,7 +126,7 @@ def build_loop_routing_classification(
 ) -> RoutingClassification | None:
     """Build routing classification consumed by StrangeLoop Plan/Execute.
 
-    Wired specialists are requested explicitly via slash/daemon ``preferred_subagent``;
+    Wired specialists are requested explicitly via slash/daemon `preferred_subagent`;
     intake never infers one.
     """
     from soothe.sloop.state.schemas import resolve_wire_subagent
@@ -197,9 +180,9 @@ class IntakeLLMResult(BaseModel):
     """Structured output from intake classification: social vs task.
 
     Intake cleanly separates social interactions from work requests. When
-    ``is_task=True`` it also emits ``task_complexity`` and a short step-card
-    title (``task_short_description``). ``social_response`` is included for the
-    fast-path END when ``is_task=False``.
+    `is_task=True` it also emits `task_complexity` and a short step-card
+    title (`task_short_description`). `social_response` is included for the
+    fast-path END when `is_task=False`.
 
     Args:
         is_task: True if work request, False if social interaction.
@@ -261,7 +244,7 @@ class IntakeLLMResult(BaseModel):
 
 
 def normalize_response_language(value: object | None) -> ResponseLanguage | None:
-    """Coerce wire values to ``ResponseLanguage``; unknown values become ``other``."""
+    """Coerce wire values to `ResponseLanguage`; unknown values become `other`."""
     if value is None:
         return None
     if isinstance(value, ResponseLanguage):
@@ -278,7 +261,7 @@ def normalize_response_language(value: object | None) -> ResponseLanguage | None
 class IntakeScope(StrEnum):
     """3-class forced scope (minimal, simple, complex).
 
-    The same values are accepted on ``loop_input.intake_scope`` to skip LLM
+    The same values are accepted on `loop_input.intake_scope` to skip LLM
     intake classification and force branch routing.
     """
 
@@ -288,16 +271,16 @@ class IntakeScope(StrEnum):
 
 
 def parse_intake_scope(raw: object | None) -> IntakeScope | None:
-    """Parse a wire ``intake_scope`` value.
+    """Parse a wire `intake_scope` value.
 
     Args:
-        raw: Client value (string or ``None``). Empty / whitespace → ``None``.
+        raw: Client value (string or `None`). Empty / whitespace → `None`.
 
     Returns:
-        Normalized ``IntakeScope``, or ``None`` when unset.
+        Normalized `IntakeScope`, or `None` when unset.
 
     Raises:
-        ValueError: When ``raw`` is a non-empty string outside minimal|simple|complex,
+        ValueError: When `raw` is a non-empty string outside minimal|simple|complex,
             or a non-string non-None value.
     """
     if raw is None:
@@ -318,9 +301,9 @@ def intent_classification_from_intake_scope(
     *,
     reasoning: str | None = None,
 ) -> IntentClassification:
-    """Build a forced ``IntentClassification`` from a client ``intake_scope``.
+    """Build a forced `IntentClassification` from a client `intake_scope`.
 
-    Implies ``is_task=True`` (skips the social-vs-task classification) and the
+    Implies `is_task=True` (skips the social-vs-task classification) and the
     given scope. Continuation remains a structural checkpoint overlay.
     """
     intake_label = IntakeLabel(scope)
@@ -336,8 +319,8 @@ def intent_classification_from_intake(
 ) -> IntentClassification:
     """Build task IntentClassification from the intake result.
 
-    ``task_complexity`` and ``task_short_description`` come from the intake
-    LLM; ``intake_label`` is derived from that complexity so the TUI and
+    `task_complexity` and `task_short_description` come from the intake
+    LLM; `intake_label` is derived from that complexity so the TUI and
     graph routing see the same verdict.
     """
     task_complexity = intake_result.task_complexity or TaskComplexity.COMPLEX

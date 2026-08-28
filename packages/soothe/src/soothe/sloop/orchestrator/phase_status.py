@@ -1,8 +1,4 @@
-"""Shared ``plan_phase_status`` status-card emission for loop stations.
-
-The event carries phase labels for intake, wired-subagent delegation, and
-goal finalize.
-"""
+"""Shared `plan_phase_status` status-card emission for loop stations."""
 
 from __future__ import annotations
 
@@ -14,7 +10,7 @@ async def emit_plan_phase_status(
     *,
     label: str,
 ) -> None:
-    """Emit ``plan_phase_status`` with the current token total from loop state."""
+    """Emit `plan_phase_status` with the current token total from loop state."""
     await ctx.emit(
         "plan_phase_status",
         {

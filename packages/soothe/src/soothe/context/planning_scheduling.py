@@ -1,9 +1,4 @@
-"""Goal scheduling for ContextEngine.
-
-Extracts scheduling logic from GoalEngine for use with ContextEngine's
-GoalStepDAG. Provides ready-goal computation, atomic goal claiming,
-and completion checking.
-"""
+"""Goal scheduling for ContextEngine."""
 
 from __future__ import annotations
 

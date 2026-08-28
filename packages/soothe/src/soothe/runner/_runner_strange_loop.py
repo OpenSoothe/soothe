@@ -88,11 +88,11 @@ class _LoopHeartbeatHandle:
 
 
 def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
-    """Spawn a background task that ticks ``updated_at`` for ``loop_id``.
+    """Spawn a background task that ticks `updated_at` for `loop_id`.
 
-    Returns an opaque handle whose ``stop()`` cancels the task and releases the
+    Returns an opaque handle whose `stop()` cancels the task and releases the
     persistence manager. Failure to start the heartbeat is non-fatal — returns
-    a handle whose ``stop()`` is a no-op so the calling site can stay simple.
+    a handle whose `stop()` is a no-op so the calling site can stay simple.
     """
 
     async def _tick() -> None:
@@ -137,9 +137,9 @@ def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
 async def _touch_loop_after_interrupt(config: Any, loop_id: str) -> None:
     """Mark loop idle and bump freshness after cancel so /resume stays accurate.
 
-    Cancel paths often flush the in-memory checkpoint while ``status`` is still
-    ``running``; without an explicit idle write, status reconciliation can leave
-    the loop stuck ``running`` for minutes with no active worker.
+    Cancel paths often flush the in-memory checkpoint while `status` is still
+    `running`; without an explicit idle write, status reconciliation can leave
+    the loop stuck `running` for minutes with no active worker.
     """
     try:
         from soothe.sloop.checkpoints.manager import (
@@ -157,9 +157,9 @@ async def _touch_loop_after_interrupt(config: Any, loop_id: str) -> None:
 
 
 async def _mark_interrupted_goal_ledger(config: Any, loop_id: str) -> None:
-    """Best-effort ``goal_interrupted`` ledger marker after a cancelled run.
+    """Best-effort `goal_interrupted` ledger marker after a cancelled run.
 
-    Hard client disconnects land in the runner cancel ``finally`` without the
+    Hard client disconnects land in the runner cancel `finally` without the
     daemon cancel path; write the CE ledger marker so the next goal can bound
     partial work. Swallows all errors.
     """
@@ -174,7 +174,7 @@ async def _mark_interrupted_goal_ledger(config: Any, loop_id: str) -> None:
 
 
 async def _drain_workspace_shells_on_cancel(workspace: str | None) -> None:
-    """Best-effort kill of in-flight ``run_command`` / ``run_background`` on cancel."""
+    """Best-effort kill of in-flight `run_command` / `run_background` on cancel."""
     ws = str(workspace or "").strip()
     if not ws:
         return
@@ -191,16 +191,16 @@ async def _drain_workspace_shells_on_cancel(workspace: str | None) -> None:
 
 
 def _is_tool_stream_chunk(chunk: object) -> bool:
-    """Return True if chunk is a ``messages``-mode LangGraph chunk carrying a tool result.
+    """Return True if chunk is a `messages`-mode LangGraph chunk carrying a tool result.
 
     Tool rows must reach the WebSocket so the CLI can render
-    ``on_tool_call`` / ``on_tool_result``.
+    `on_tool_call` / `on_tool_result`.
 
     Args:
-        chunk: Deepagents stream chunk ``(namespace, mode, data)``.
+        chunk: Deepagents stream chunk `(namespace, mode, data)`.
 
     Returns:
-        True only for ``ToolMessage`` payloads (object or serialized dict).
+        True only for `ToolMessage` payloads (object or serialized dict).
     """
     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
         return False
@@ -295,7 +295,7 @@ def _ai_chunk_has_actionable_payload(msg: object) -> bool:
 
 
 def _is_ai_messages_stream_chunk(chunk: object) -> bool:
-    """True for ``messages`` chunks whose payload is assistant AI (not human/tool).
+    """True for `messages` chunks whose payload is assistant AI (not human/tool).
 
     Used so daemon clients receive full streamed assistant content from subgraphs
     and execute phases, not only tool rows. Empty AI chunks with no tool
@@ -328,15 +328,15 @@ def _is_ai_messages_stream_chunk(chunk: object) -> bool:
 
 
 def _is_tool_call_update_chunk(chunk: object) -> bool:
-    """Return True if chunk is a ``custom`` mode ``soothe.stream.tool_call.update`` event.
+    """Return True if chunk is a `custom` mode `soothe.stream.tool_call.update` event.
 
     Executor emits these for main-graph and subgraph tool invocations so the CLI
-    can seed tool kwargs (step stats, file-change previews) before ``ToolMessage``
+    can seed tool kwargs (step stats, file-change previews) before `ToolMessage`
     results arrive. Main-graph updates are not guaranteed on messages-mode AI
     chunks alone (parallel tool waves).
 
     Args:
-        chunk: Deepagents stream chunk ``(namespace, mode, data)``.
+        chunk: Deepagents stream chunk `(namespace, mode, data)`.
 
     Returns:
         True for custom tool_call_update events (any namespace, including root).
@@ -352,7 +352,7 @@ def _is_tool_call_update_chunk(chunk: object) -> bool:
 
 
 def _is_subagent_wire_custom_chunk(chunk: object) -> bool:
-    """Return True for namespaced ``custom`` curated ``soothe.subagent.*`` wire events."""
+    """Return True for namespaced `custom` curated `soothe.subagent.*` wire events."""
     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
         return False
     _namespace, mode, data = chunk
@@ -369,15 +369,15 @@ def _is_subagent_wire_custom_chunk(chunk: object) -> bool:
 def _forward_messages_chunk(
     chunk: object,
 ) -> bool:
-    """Whether to forward a ``stream_event`` chunk to WebSocket / TUI.
+    """Whether to forward a `stream_event` chunk to WebSocket / TUI.
 
     Forwards:
-    - ``messages`` mode: ``ToolMessage`` and ``AIMessage`` / ``AIMessageChunk``
-    - ``custom`` mode: ``soothe.stream.tool_call.update`` (main graph and subgraph)
-    - ``custom`` mode: curated ``soothe.subagent.*`` progress (sparse metadata)
+    - `messages` mode: `ToolMessage` and `AIMessage` / `AIMessageChunk`
+    - `custom` mode: `soothe.stream.tool_call.update` (main graph and subgraph)
+    - `custom` mode: curated `soothe.subagent.*` progress (sparse metadata)
 
     Args:
-        chunk: Deepagents stream chunk ``(namespace, mode, data)``.
+        chunk: Deepagents stream chunk `(namespace, mode, data)`.
 
     Returns:
         True if chunk should be forwarded.
@@ -394,10 +394,10 @@ def _forward_messages_chunk(
 
 
 def _step_completed_ui_summary(event_data: dict[str, Any]) -> str:
-    """Build the TUI step-card summary for a ``step_completed`` progress event.
+    """Build the TUI step-card summary for a `step_completed` progress event.
 
-    Successful steps keep ``output_preview`` (e.g. ``Done [N tools]``) even when
-    ``error`` carries a recoverable tool failure. Failed steps prefer the error
+    Successful steps keep `output_preview` (e.g. `Done [N tools]`) even when
+    `error` carries a recoverable tool failure. Failed steps prefer the error
     text when present.
     """
     success = bool(event_data.get("success"))
@@ -451,15 +451,15 @@ class StrangeLoopMixin:
             workspace: Thread-specific workspace path
             max_iterations: Maximum loop iterations (default: 8)
             preferred_subagent: Optional subagent hint for routing
-            intake_scope: Optional client-forced scope (``minimal``|``simple``|
-                ``complex``). When set (and not a clarification resume), skips
+            intake_scope: Optional client-forced scope (`minimal`|`simple`|
+                `complex`). When set (and not a clarification resume), skips
                 intake classification.
-            clarification_mode: mode for this goal (``"auto"`` /
-                ``"manual"``). ``None`` falls back to
-                ``config.agent.clarification.default_mode``.
+            clarification_mode: mode for this goal (`"auto"` /
+                `"manual"`). `None` falls back to
+                `config.agent.clarification.default_mode`.
             interaction_mode: per-request CoreAgent interaction mode
-                (``"agent"`` / ``"ask"``). ``"ask"`` selects the read-only
-                graph; ``None`` selects the default graph.
+                (`"agent"` / `"ask"`). `"ask"` selects the read-only
+                graph; `None` selects the default graph.
             resume_interrupted: When True, recover an interrupted running goal
                 without chitchat routing or continue-keyword cancel.
 

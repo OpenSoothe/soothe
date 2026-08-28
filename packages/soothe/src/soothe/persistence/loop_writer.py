@@ -1,12 +1,4 @@
-"""Unified high-performance loop persistence writer.
-
-Process-scoped singleton coalescing checkpoint and ContextEngine writes onto a
-shared PostgreSQL pool with bounded shutdown and goal-boundary transactions.
-
-asyncio tasks and loop-bound locks run on a single bound event loop
-(typically the daemon main loop). Worker threads call ``submit_*`` to schedule
-work via ``asyncio.run_coroutine_threadsafe``.
-"""
+"""Unified high-performance loop persistence writer."""
 
 from __future__ import annotations
 
@@ -95,7 +87,7 @@ class LoopPersistenceWriter:
 
     @classmethod
     def bind_main_loop(cls, loop: asyncio.AbstractEventLoop) -> None:
-        """Pin writer asyncio primitives to ``loop`` (daemon main loop in thread_pool)."""
+        """Pin writer asyncio primitives to `loop` (daemon main loop in thread_pool)."""
         cls._bound_loop = loop
         logger.debug("LoopPersistenceWriter bound to event loop %s", loop)
 
@@ -159,7 +151,7 @@ class LoopPersistenceWriter:
         self,
         coro_factory: Callable[[], Coroutine[Any, Any, T]],
     ) -> T:
-        """Run ``coro_factory`` on the bound writer loop; await from any caller loop."""
+        """Run `coro_factory` on the bound writer loop; await from any caller loop."""
         running = asyncio.get_running_loop()
         bound = type(self)._bound_loop
         if bound is None:

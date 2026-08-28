@@ -1,10 +1,4 @@
-"""Step-level planning subengine for ContextEngine.
-
-Absorbs PlanManager responsibilities: plan ingestion, step outcome recording,
-DagPlanningContext construction, completion heuristics, and DAG report formatting.
-Operates on ContextEngine's GoalStepDAG directly, eliminating the
-ContextEnginePlanAdapter bridge.
-"""
+"""Step-level planning subengine for ContextEngine."""
 
 from __future__ import annotations
 
@@ -75,7 +69,7 @@ class StepPlanningSubengine:
     GoalStepDAG passed to it, maintaining ContextEngine as the single
     source of truth.
 
-    All methods take ``goal_id`` as the first parameter to support
+    All methods take `goal_id` as the first parameter to support
     multi-goal awareness.
     """
 
@@ -299,7 +293,7 @@ class StepPlanningSubengine:
         Emits a Markdown report covering execution statistics (planned,
         completed, failed, pending step counts, dependency depth, success
         rate, replan count) followed by a per-step breakdown of status and
-        dependencies. Consumed by ``format_completion_dag_report``.
+        dependencies. Consumed by `format_completion_dag_report`.
         """
         ctx = self.get_planning_context(goal.id)
         step_dag = goal.steps

@@ -15,7 +15,7 @@ _TOPIC_MAX_WORDS = 10
 
 
 def enforce_topic_word_limit(text: str, *, max_words: int = _TOPIC_MAX_WORDS) -> str:
-    """Trim topic text to at most ``max_words`` words."""
+    """Trim topic text to at most `max_words` words."""
     words = " ".join(text.split()).split()
     if not words:
         return ""
@@ -30,11 +30,11 @@ def derive_resume_topic(
     """Build resume-picker topic from intake reasoning or original user goal.
 
     Args:
-        intake_reasoning: ``reasoning`` field from the first goal's intake result.
+        intake_reasoning: `reasoning` field from the first goal's intake result.
         goal_text: Verbatim user submission when intake reasoning is empty.
 
     Returns:
-        Abbreviated topic label (<=10 words), or ``None`` when both sources are empty.
+        Abbreviated topic label (<=10 words), or `None` when both sources are empty.
     """
     source = (intake_reasoning or "").strip() or (goal_text or "").strip()
     if not source:

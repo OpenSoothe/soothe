@@ -1,18 +1,4 @@
-"""Centralized graph prompt wrapper for synthesis and step-completion injection.
-
-Single assembly point for the ``[SystemMessage, projected_ledger,
-HumanMessage]`` pattern used by StrangeLoop LLM nodes that go through this
-wrapper: goal-completion synthesis and step-completion reporting.
-
-The wrapper centralizes:
-
-1. **Ledger projection** — synthesis delegates to
-   ``project_loop_messages_for_synthesis`` so capping and slicing stay shared.
-2. **System message assembly** — synthesis and step_completion use their
-   fragment helpers / ``render_synthesis_system_prompt``.
-3. **Human / task envelope** — synthesis closes with the shared TASK human
-   message; step_completion uses the step input/output pair.
-"""
+"""Centralized graph prompt wrapper for synthesis and step-completion injection."""
 
 from __future__ import annotations
 
@@ -37,10 +23,10 @@ class ProjectionResult:
 
     Attributes:
         messages: Projected ledger messages to inject between system and human.
-        mode: Resolved projection mode when applicable; ``None`` for synthesis /
+        mode: Resolved projection mode when applicable; `None` for synthesis /
             step_completion.
         completion_in_ledger: True when the projected ledger contains a
-            ``goal_completion`` AI turn.
+            `goal_completion` AI turn.
     """
 
     messages: list[BaseMessage] = field(default_factory=list)
@@ -51,7 +37,7 @@ class ProjectionResult:
 class GraphPromptWrapper:
     """Prompt injection and message projection for synthesis / step_completion.
 
-    Assembles ``[SystemMessage, projected_ledger, HumanMessage]`` (or the
+    Assembles `[SystemMessage, projected_ledger, HumanMessage]` (or the
     step-completion triple) so nodes share projection and wiring.
 
     Usage::
@@ -68,7 +54,7 @@ class GraphPromptWrapper:
 
         Args:
             config: Optional Soothe configuration for ledger caps.
-                ``None`` disables all limits.
+                `None` disables all limits.
         """
         self.config = config
 
@@ -88,8 +74,8 @@ class GraphPromptWrapper:
 
         Args:
             kind: Call kind discriminator.
-            state: Loop state whose ``loop_messages`` are projected.
-            ledger_cfg: Optional caps; ``None`` inherits from config.
+            state: Loop state whose `loop_messages` are projected.
+            ledger_cfg: Optional caps; `None` inherits from config.
             soothe_config: Unused for synthesis/step_completion; retained for
                 call-site compatibility.
 

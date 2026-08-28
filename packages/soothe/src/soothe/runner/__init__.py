@@ -1,9 +1,4 @@
-"""SootheRunner: protocol-orchestrated agent runner.
-
-Wraps `create_soothe_agent()` with protocol pre/post-processing and yields the
-canonical ``(namespace, mode, data)`` stream extended with ``soothe.*`` custom
-events for protocol observability.
-"""
+"""SootheRunner: protocol-orchestrated agent runner."""
 
 from __future__ import annotations
 
@@ -50,12 +45,12 @@ class SootheRunner(
 ):
     """Protocol-orchestrated agent runner.
 
-    Wraps ``create_soothe_agent()`` with pre/post protocol steps and
-    provides ``astream()`` that yields the canonical stream
-    format extended with ``soothe.*`` protocol custom events.
+    Wraps `create_soothe_agent()` with pre/post protocol steps and
+    provides `astream()` that yields the canonical stream
+    format extended with `soothe.*` protocol custom events.
 
     Args:
-        config: Soothe configuration. If ``None``, uses defaults.
+        config: Soothe configuration. If `None`, uses defaults.
     """
 
     def __init__(
@@ -67,7 +62,7 @@ class SootheRunner(
         """Initialize the runner with optional config.
 
         Args:
-            config: Soothe configuration. If ``None``, uses defaults.
+            config: Soothe configuration. If `None`, uses defaults.
             identity_runtime: Optional identity bundle. When enabled,
                 IdentityMiddleware is prepended to the agent middleware stack.
         """
@@ -203,10 +198,10 @@ class SootheRunner(
     async def _materialize_core_agent(
         self, interaction_mode: str | None = None
     ) -> CoreAgentProtocol:
-        """Ensure the CoreAgent graph for ``interaction_mode`` is compiled.
+        """Ensure the CoreAgent graph for `interaction_mode` is compiled.
 
-        ``"ask"`` selects the read-only graph; anything else (including
-        ``None``) selects the default graph. The checkpointer is attached
+        `"ask"` selects the read-only graph; anything else (including
+        `None`) selects the default graph. The checkpointer is attached
         before an ask graph is compiled so both graphs share one checkpointer.
         """
         from soothe.coreagent.lazy import LazyCoreAgent
@@ -221,7 +216,7 @@ class SootheRunner(
         return self._core_agent
 
     async def _materialize_ask_core_agent(self) -> CoreAgentProtocol:
-        """Compile (once) and return the read-only ``interaction_mode="ask"`` agent."""
+        """Compile (once) and return the read-only `interaction_mode="ask"` agent."""
         if self._ask_core_agent is None:
             # The checkpointer may be created lazily from a pool; ensure it
             # exists before compiling so the ask graph shares it with the
@@ -243,7 +238,7 @@ class SootheRunner(
         return self._ask_core_agent
 
     async def _materialize_plan_core_agent(self) -> CoreAgentProtocol:
-        """Compile (once) and return the read-only ``interaction_mode="plan"`` agent."""
+        """Compile (once) and return the read-only `interaction_mode="plan"` agent."""
         if self._plan_core_agent is None:
             await self._ensure_checkpointer_initialized()
             import time
@@ -283,36 +278,36 @@ class SootheRunner(
 
     @property
     def current_thread_id(self) -> str | None:
-        """Thread ID for the active session, or ``None``."""
+        """Thread ID for the active session, or `None`."""
         return self._current_thread_id
 
     @property
     def current_plan(self) -> Plan | None:
-        """The current plan, or ``None``."""
+        """The current plan, or `None`."""
         return self._current_plan
 
     def set_current_thread_id(self, thread_id: str | None) -> None:
         """Set the active thread ID used by future runs.
 
         Args:
-            thread_id: Thread ID to reuse, or ``None`` to clear.
+            thread_id: Thread ID to reuse, or `None` to clear.
         """
         self._current_thread_id = thread_id
 
     def _clear_query_scoped_runner_state(self) -> None:
         """Clear per-query mirrors on this singleton runner.
 
-        Per-call state is held in local variables of ``astream``; this resets
+        Per-call state is held in local variables of `astream`; this resets
         CLI/debug pointers so cancelled or completed runs do not leak into
-        the next ``astream`` invocation.
+        the next `astream` invocation.
         """
         self._current_plan = None
 
     def thread_context_manager(self) -> Any:
-        """Return ``ThreadContextManager`` for durability/thread operations.
+        """Return `ThreadContextManager` for durability/thread operations.
 
         Callers outside core (e.g. daemon) should use this instead of reading
-        ``runner._durability`` directly.
+        `runner._durability` directly.
         """
         from ._thread_manager import ThreadContextManager
 
@@ -389,10 +384,10 @@ class SootheRunner(
         await self.thread_context_manager().delete_thread(thread_id)
 
     async def delete_checkpoint_thread(self, thread_id: str) -> None:
-        """Delete LangGraph checkpoint rows for ``thread_id``.
+        """Delete LangGraph checkpoint rows for `thread_id`.
 
-        Delegates to the LangGraph saver's ``adelete_thread`` to remove
-        rows from the ``checkpoints`` / ``writes`` / ``checkpoint_blobs``
+        Delegates to the LangGraph saver's `adelete_thread` to remove
+        rows from the `checkpoints` / `writes` / `checkpoint_blobs`
         tables. When the checkpointer is not materialized (lazy init), opens
         a temporary connection to the checkpointer pool to run the deletes
         directly — the daemon's utility runner may never materialize the
@@ -445,12 +440,12 @@ class SootheRunner(
             logger.debug("Failed to delete checkpoint thread %s via pool", thread_id, exc_info=True)
 
     async def list_checkpoint_thread_ids(self, prefix: str) -> list[str]:
-        """Return distinct LangGraph checkpoint thread ids matching ``prefix``.
+        """Return distinct LangGraph checkpoint thread ids matching `prefix`.
 
-        Queries the ``checkpoints`` table directly (bypasses the durability
+        Queries the `checkpoints` table directly (bypasses the durability
         index, which does not register fork threads). Used by GC to find
         execute-step / synth / intake threads that share the
-        ``{loop_id}__`` prefix. Opens a temporary connection to the
+        `{loop_id}__` prefix. Opens a temporary connection to the
         checkpointer pool when the checkpointer is not materialized.
         """
         # Try the materialized checkpointer first.
@@ -530,7 +525,7 @@ class SootheRunner(
         return await self.thread_context_manager().get_thread_artifacts(thread_id)
 
     async def touch_thread_activity_timestamp(self, thread_id: str) -> None:
-        """Refresh ``updated_at`` on thread metadata (activity ping).
+        """Refresh `updated_at` on thread metadata (activity ping).
 
         When durability record is missing (e.g., after daemon restart with existing loop),
         attempts recovery via ThreadContextManager._recover_missing_thread_metadata to
@@ -593,7 +588,7 @@ class SootheRunner(
         return [t.model_dump() for t in threads]
 
     async def list_durability_threads(self, thread_filter: Any | None = None) -> list[Any]:
-        """List threads with optional ``ThreadFilter`` (daemon / tooling)."""
+        """List threads with optional `ThreadFilter` (daemon / tooling)."""
         return await self._durability.list_threads(thread_filter)
 
     async def cleanup(self) -> None:
@@ -602,7 +597,7 @@ class SootheRunner(
         Stops background indexer tasks and closes connection pools.
         Closes shared StrangeLoop PostgreSQL pool at daemon shutdown.
 
-        For SQLite checkpointers, closes the underlying ``aiosqlite`` connection.
+        For SQLite checkpointers, closes the underlying `aiosqlite` connection.
         That library runs a non-daemon worker thread; leaving it open prevents the
         process from exiting after standalone examples / one-shot runners finish.
         """
@@ -670,8 +665,8 @@ class SootheRunner(
         Args:
             thread_id: Thread identifier to update.
             values: Partial state values to write.
-            as_node: Node to attribute the write to. Defaults to ``"model"``,
-                the soothe_deepagents/langchain agent node that owns the ``messages``
+            as_node: Node to attribute the write to. Defaults to `"model"`,
+                the soothe_deepagents/langchain agent node that owns the `messages`
                 channel. LangGraph requires this when multiple nodes have
                 written at the current checkpoint version.
         """
@@ -684,7 +679,7 @@ class SootheRunner(
         await self._materialized_core_agent().graph.aupdate_state(config, values, as_node=as_node)
 
     async def _close_sqlite_checkpointer(self) -> None:
-        """Close the runner-owned AsyncSqliteSaver ``aiosqlite`` connection."""
+        """Close the runner-owned AsyncSqliteSaver `aiosqlite` connection."""
         checkpointer = getattr(self, "_checkpointer", None)
         if checkpointer is None:
             return
@@ -735,15 +730,15 @@ class SootheRunner(
     def set_clarification_mode(self, mode: str) -> bool:
         """Hot-swap the clarification mode on the running goal.
 
-        Forwards to the live ``StrangeLoop`` instance, which rebuilds the
-        ``ClarificationPolicy`` and swaps it on the active ``LoopRuntimeContext``.
-        The next ``await_clarification`` node entry uses the new mode.
+        Forwards to the live `StrangeLoop` instance, which rebuilds the
+        `ClarificationPolicy` and swaps it on the active `LoopRuntimeContext`.
+        The next `await_clarification` node entry uses the new mode.
 
         Args:
-            mode: ``"auto"`` or ``"manual"``.
+            mode: `"auto"` or `"manual"`.
 
         Returns:
-            ``True`` when the swap landed on a live goal; ``False`` when no
+            `True` when the swap landed on a live goal; `False` when no
             goal is running (the caller may retry on the next turn).
         """
         agent = self._live_loop_agent
@@ -770,49 +765,49 @@ class SootheRunner(
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
-        Yields ``(namespace, mode, data)`` tuples in the canonical
-        format.  Protocol events are emitted as ``custom`` events with
-        ``soothe.*`` type prefix.
+        Yields `(namespace, mode, data)` tuples in the canonical
+        format.  Protocol events are emitted as `custom` events with
+        `soothe.*` type prefix.
 
         **Two execution modes** (selected in priority order):
-        - ``autopilot_job`` set: daemon-dispatched goal, runs
-          ``_run_autopilot_job`` which hydrates from the bundle and emits a
-          ``GoalCompletionChunk`` at the end. StrangeLoop never sees the DAG.
-          ``user_input`` is ignored.
+        - `autopilot_job` set: daemon-dispatched goal, runs
+          `_run_autopilot_job` which hydrates from the bundle and emits a
+          `GoalCompletionChunk` at the end. StrangeLoop never sees the DAG.
+          `user_input` is ignored.
         - Default: Agentic loop with Reason → Act iteration.
 
         Args:
             user_input: The user's query text.
             thread_id: Thread ID for persistence. Generated if not provided.
             workspace: Thread-specific workspace path. When omitted, resolved via
-                ``resolve_workspace_for_stream`` (daemon default, then cwd). The
+                `resolve_workspace_for_stream` (daemon default, then cwd). The
                 resolved path is always a non-empty absolute directory string for this call.
             preferred_subagent: Optional subagent hint merged into StrangeLoop.
             intake_scope: Optional client-forced intake scope
-                (``minimal``|``simple``|``complex``); skips the intake LLM when set.
+                (`minimal`|`simple`|`complex`); skips the intake LLM when set.
             client_loop_id: Daemon client loop scope for logging and stream correlation.
             autopilot_job: When set, signals an autopilot-dispatched job.
-                Worker hydrates StrangeLoop from ``autopilot_job.merged_context`` and runs
-                ``autopilot_job.goal_description``; ``user_input`` is ignored. Emits a
-                ``GoalCompletionChunk`` exactly once before the terminal chunk.
-                ``None`` (default) keeps today's behavior.
-            clarification_mode: per-request mode (``"auto"`` / ``"manual"``).
-                ``None`` falls back to ``config.agent.clarification.default_mode``.
-                Ignored when ``autopilot_job`` is set (autopilot forces ``"auto"``).
+                Worker hydrates StrangeLoop from `autopilot_job.merged_context` and runs
+                `autopilot_job.goal_description`; `user_input` is ignored. Emits a
+                `GoalCompletionChunk` exactly once before the terminal chunk.
+                `None` (default) keeps today's behavior.
+            clarification_mode: per-request mode (`"auto"` / `"manual"`).
+                `None` falls back to `config.agent.clarification.default_mode`.
+                Ignored when `autopilot_job` is set (autopilot forces `"auto"`).
             interaction_mode: per-request CoreAgent interaction mode
-                (``"agent"`` / ``"ask"``). ``"ask"`` selects the read-only graph
-                (tools restricted to read-only FS ops, writes denied). ``None``
-                uses the default ``"agent"`` graph.
-            clarification_answer: When True, hints that ``user_input`` is the
+                (`"agent"` / `"ask"`). `"ask"` selects the read-only graph
+                (tools restricted to read-only FS ops, writes denied). `None`
+                uses the default `"agent"` graph.
+            clarification_answer: When True, hints that `user_input` is the
                 answer to a pending clarification. The runner verifies via the
                 loop's persisted state and resumes the graph via
-                ``Command(resume=...)``; falls back to a normal turn when no
+                `Command(resume=...)`; falls back to a normal turn when no
                 clarification is actually pending.
             clarification_answers: Per-question answer list for multi-question
-                clarifications. When provided alongside ``clarification_answer``,
+                clarifications. When provided alongside `clarification_answer`,
                 resumes the graph with one answer per question instead of
-                broadcasting a single string. ``None`` falls back to treating
-                ``user_input`` as a single answer string (broadcast to all
+                broadcasting a single string. `None` falls back to treating
+                `user_input` as a single answer string (broadcast to all
                 questions if there are several).
         """
         # Update thread_id for logging if one is provided
@@ -884,15 +879,15 @@ class SootheRunner(
         max_iterations: int,
         intake_scope: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
-        """Run an autopilot-dispatched goal (overridden by ``AutopilotSootheRunner``).
+        """Run an autopilot-dispatched goal (overridden by `AutopilotSootheRunner`).
 
-        The base ``SootheRunner`` is autopilot-agnostic: it must never receive a
-        non-``None`` ``autopilot_job``. The daemon constructs
-        ``soothe_autopilot.AutopilotSootheRunner`` in autopilot worker loops; that
+        The base `SootheRunner` is autopilot-agnostic: it must never receive a
+        non-`None` `autopilot_job`. The daemon constructs
+        `soothe_autopilot.AutopilotSootheRunner` in autopilot worker loops; that
         subclass overrides this hook with the goal-dispatch implementation.
 
         Raises:
-            RuntimeError: If a bare ``SootheRunner`` receives an ``autopilot_job``.
+            RuntimeError: If a bare `SootheRunner` receives an `autopilot_job`.
         """
         raise RuntimeError(
             "autopilot_job reached a non-autopilot SootheRunner; construct "

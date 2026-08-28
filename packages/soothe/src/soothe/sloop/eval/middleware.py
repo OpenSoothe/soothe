@@ -1,12 +1,4 @@
-"""Coverage-audit policy for StrangeLoop Eval steps.
-
-Eval steps verify whether the original user goal was fully achieved. Goals that
-require execution to verify (run tests, lint, build, query services) need access
-to the full tool surface — a read-only Eval cannot catch the "CI passes?" class
-of regressions and defaults to "no failure found". Eval threads keep the
-coverage-audit system addendum and the ``decompose_task`` escape hatch; they
-no longer restrict the tool set.
-"""
+"""Coverage-audit policy for StrangeLoop Eval steps."""
 
 from __future__ import annotations
 
@@ -65,7 +57,7 @@ class EvalStepMiddleware(AgentMiddleware):
     """Coverage-audit policy for Eval steps.
 
     Keeps the full tool surface so the auditor can execute verification commands
-    (tests, lint, build) and, when work remains, emit ``decompose_task`` proposals.
+    (tests, lint, build) and, when work remains, emit `decompose_task` proposals.
     The coverage-audit system addendum is still injected to anchor the thread's
     role: verify, then delegate remaining implementation via decomposition rather
     than performing it inline.

@@ -20,12 +20,12 @@ class SootheNanoAgent(nano_core_agent.SootheNanoAgent):
     """Soothe-hosted nano agent with intake-only specialist registry."""
 
     def bind_intake_only_subagents(self, specs: list[SubAgent | CompiledSubAgent] | None) -> None:
-        """Attach specialists withheld from the open ``task`` catalog (host wiring)."""
+        """Attach specialists withheld from the open `task` catalog (host wiring)."""
         self._intake_only_subagents = list(specs) if specs else []
 
     @property
     def intake_only_subagents(self) -> list[SubAgent | CompiledSubAgent]:
-        """Intake-only specialists (not on the open ``task`` catalog)."""
+        """Intake-only specialists (not on the open `task` catalog)."""
         return list(getattr(self, "_intake_only_subagents", []))
 
     def lookup_intake_only_subagent(self, name: str) -> SubAgent | CompiledSubAgent | None:

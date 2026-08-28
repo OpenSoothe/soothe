@@ -1,8 +1,4 @@
-"""Logging package: nano helpers + host GlobalInputHistory + ThreadLogger.
-
-Wraps nano ``setup_logging`` so the host ``soothe.*`` logger tree shares the
-same handlers without nano hardcoding this package name.
-"""
+"""Logging package: nano helpers + host GlobalInputHistory + ThreadLogger."""
 
 from __future__ import annotations
 
@@ -36,8 +32,8 @@ def setup_logging(
 ) -> None:
     """Configure soothe + nano package loggers with shared file/console handlers.
 
-    Always attaches handlers to ``soothe.*`` in addition to nano defaults.
-    Further host/plugin trees may be passed via ``extra_logger_names``.
+    Always attaches handlers to `soothe.*` in addition to nano defaults.
+    Further host/plugin trees may be passed via `extra_logger_names`.
     """
     extras: list[str] = [HOST_LOGGER_NAME]
     if extra_logger_names is not None:

@@ -1,18 +1,4 @@
-"""Act-wave finalize resolution.
-
-This module handles the computation of visible assistant text for Execute waves.
-After each Execute wave, auto goal completion and headless replay read the
-latest non-planning assistant message from the orchestration ledger via
-:func:`~soothe.sloop.utils.messages.last_ledger_ai_content`.
-That string may come from:
-
-- **root_assistant_stream** — aggregated root-graph ``AIMessage`` / chunk text
-- **task_tool_aggregate** — ordered ``task`` ``ToolMessage`` bodies (delegate finals)
-- **none** — no usable text (empty wave)
-
-The provenance tracking enables replay systems to correctly identify when
-delegate finals should be used vs root assistant stream text.
-"""
+"""Act-wave finalize resolution."""
 
 from __future__ import annotations
 
@@ -40,10 +26,10 @@ def _first_arg_head_for_tool_call(call: dict[str, Any]) -> str:
     """Return a compact head string for a single AIMessage tool-call.
 
     Picks the first non-empty argument value (in declaration order), stringifies
-    it on one line, strips, and caps at 120 chars. Returns ``""`` when no usable
-    arg exists. Used by ``_update_prior_progress`` to give ``<PRIOR_PROGRESS>``
+    it on one line, strips, and caps at 120 chars. Returns `""` when no usable
+    arg exists. Used by `_update_prior_progress` to give `<PRIOR_PROGRESS>`
     a concrete handle on what the LLM asked the tool to do (e.g. the command
-    string for ``run_command``, the path for ``read_file``).
+    string for `run_command`, the path for `read_file`).
     """
     args = call.get("args") or {}
     if not isinstance(args, dict):
@@ -66,17 +52,17 @@ def _aggregate_tool_calls_from_step_messages(
 ) -> list[dict[str, Any]]:
     """Aggregate tool calls across streamed AI message chunks.
 
-    The executor's stream collector appends raw ``AIMessageChunk`` deltas to
-    ``step_messages`` — each chunk's own ``tool_calls`` is partial: the first
-    chunk for a call carries ``name`` with empty ``args``, subsequent chunks
-    only carry JSON ``args`` deltas under ``tool_call_chunks``. Reading any
-    single chunk's ``.tool_calls`` therefore yields ``name="tool"`` placeholders
-    with empty ``args``.
+    The executor's stream collector appends raw `AIMessageChunk` deltas to
+    `step_messages` — each chunk's own `tool_calls` is partial: the first
+    chunk for a call carries `name` with empty `args`, subsequent chunks
+    only carry JSON `args` deltas under `tool_call_chunks`. Reading any
+    single chunk's `.tool_calls` therefore yields `name="tool"` placeholders
+    with empty `args`.
 
     This aggregator walks the full message list, groups deltas by tool-call id
-    (falling back to chunk ``index`` when id is missing), concatenates the
-    JSON args string, and resolves to a list of ``{name, args}`` dicts in
-    arrival order. Complete ``tool_calls`` on a fully-formed ``AIMessage``
+    (falling back to chunk `index` when id is missing), concatenates the
+    JSON args string, and resolves to a list of `{name, args}` dicts in
+    arrival order. Complete `tool_calls` on a fully-formed `AIMessage`
     (non-chunk) are honored verbatim and take precedence when present.
     """
     by_key: dict[str, dict[str, Any]] = {}
@@ -153,9 +139,9 @@ def _aggregate_tool_calls_from_step_messages(
 
 
 def _last_tool_result_block(messages: list[BaseMessage]) -> str:
-    """Return a ``<LAST_TOOL_RESULT>`` evidence block, or ``""`` when none.
+    """Return a `<LAST_TOOL_RESULT>` evidence block, or `""` when none.
 
-    Walks ``messages`` in reverse for the most recent ``ToolMessage`` with
+    Walks `messages` in reverse for the most recent `ToolMessage` with
     non-empty text content and emits a CDATA-wrapped head so plan-assess sees
     the actual tool output (counts, listings, paths) in the ledger.
     """
@@ -200,11 +186,11 @@ def _full_tool_output_text(messages: list[BaseMessage]) -> str:
 
 
 def _outcome_summary_text(outcome: dict[str, Any] | None) -> str:
-    """Normalize ``outcome['output_summary']`` into plain text.
+    """Normalize `outcome['output_summary']` into plain text.
 
-    ``create_output_summary`` returns ``{"first": "...", "last": "..."}``.
+    `create_output_summary` returns `{"first": "...", "last": "..."}`.
     We should surface non-empty parts, but avoid stringifying empty dict payloads
-    into evidence like ``"{'first': '', 'last': ''}"``.
+    into evidence like `"{'first': '', 'last': ''}"`.
     """
     if not isinstance(outcome, dict):
         return ""
@@ -242,12 +228,12 @@ def compute_act_wave_finalize(
     Args:
         parallel_multi_step: Whether this wave ran multiple parallel steps.
         root_assistant_text: Pre-aggregated root-graph assistant text (ignored when
-            ``parallel_multi_step`` is True except conceptually empty).
-        delegate_final_text: Joined ``task`` tool return bodies for this wave, if any.
+            `parallel_multi_step` is True except conceptually empty).
+        delegate_final_text: Joined `task` tool return bodies for this wave, if any.
         wave_text_cap: Maximum stored length for delegate (and enforced consistently upstream).
 
     Returns:
-        Snapshot with trimmed ``visible_text`` and ``provenance``.
+        Snapshot with trimmed `visible_text` and `provenance`.
     """
     delegate = (delegate_final_text or "").strip()
     if parallel_multi_step:
@@ -267,7 +253,7 @@ def compute_act_wave_finalize(
 
 
 def provenance_is_task_delegate(snapshot: ActWaveFinalizeSnapshot) -> bool:
-    """True when visible text came from ``task`` tool returns (delegate finals)."""
+    """True when visible text came from `task` tool returns (delegate finals)."""
     return snapshot.provenance == "task_tool_aggregate"
 
 

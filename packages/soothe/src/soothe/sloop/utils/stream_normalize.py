@@ -1,12 +1,4 @@
-"""Normalize LangGraph ``astream`` chunks for StrangeLoop Act and finalize paths.
-
-``CompiledStateGraph.astream`` can emit 3-tuples ``(namespace, mode, data)``,
-2-tuples ``(mode, data)``, dict updates with ``{"model": {"messages": [...]}}``,
-or list-shaped ``data`` ``[message, metadata]``.
-
-This module provides a single place to extract :class:`~langchain_core.messages.BaseMessage`
-instances and plain text from message ``content`` fields.
-"""
+"""Normalize LangGraph `astream` chunks for StrangeLoop Act and finalize paths."""
 
 from __future__ import annotations
 
@@ -26,7 +18,7 @@ def join_text_fragments(parts: list[str]) -> str:
 
 
 def extract_text_from_message_content(content: Any) -> str:
-    """Flatten LangChain message ``content`` (str or block list) to plain text."""
+    """Flatten LangChain message `content` (str or block list) to plain text."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -41,9 +33,9 @@ def extract_text_from_message_content(content: Any) -> str:
 
 
 def parse_tuple_stream_chunk(chunk: Any) -> tuple[Any, str, Any] | None:
-    """Parse stream tuple into ``(namespace, mode, data)`` if applicable.
+    """Parse stream tuple into `(namespace, mode, data)` if applicable.
 
-    Supports both 3-tuples (namespaced) and 2-tuples ``(mode, data)`` with empty
+    Supports both 3-tuples (namespaced) and 2-tuples `(mode, data)` with empty
     namespace.
     """
     if not isinstance(chunk, tuple):
@@ -56,7 +48,7 @@ def parse_tuple_stream_chunk(chunk: Any) -> tuple[Any, str, Any] | None:
 
 
 def _iter_messages_from_messages_data(data: Any) -> Iterator[BaseMessage]:
-    """Yield ``BaseMessage`` instances from ``messages`` mode payload."""
+    """Yield `BaseMessage` instances from `messages` mode payload."""
     if isinstance(data, tuple) and len(data) >= _MSG_TUPLE_LEN:
         head = data[0]
         if isinstance(head, BaseMessage):
@@ -68,7 +60,7 @@ def _iter_messages_from_messages_data(data: Any) -> Iterator[BaseMessage]:
 
 
 def _walk_stream_messages_payload_for_base_messages(obj: Any) -> Iterator[BaseMessage]:
-    """DFS over LangGraph ``messages`` payloads that may nest lists/tuples/dicts."""
+    """DFS over LangGraph `messages` payloads that may nest lists/tuples/dicts."""
     if isinstance(obj, BaseMessage):
         yield obj
         return
@@ -82,14 +74,14 @@ def _walk_stream_messages_payload_for_base_messages(obj: Any) -> Iterator[BaseMe
 
 
 def iter_namespaced_tool_messages(chunk: Any) -> Iterator[tuple[tuple[str, ...], ToolMessage]]:
-    """Yield ``(namespace, ToolMessage)`` from subgraph ``messages`` stream chunks.
+    """Yield `(namespace, ToolMessage)` from subgraph `messages` stream chunks.
 
     Root graph chunks (empty namespace) are ignored; use
     :func:`iter_messages_for_act_aggregation` for those. Used for audit logging and
     tool totals that include subagent / compiled-subgraph tool results.
 
     Args:
-        chunk: Raw ``astream`` chunk from ``CoreAgent.astream`` / ``CompiledStateGraph.astream``.
+        chunk: Raw `astream` chunk from `CoreAgent.astream` / `CompiledStateGraph.astream`.
 
     Yields:
         Pairs of normalized namespace tuple and :class:`~langchain_core.messages.ToolMessage`.
@@ -107,17 +99,17 @@ def iter_namespaced_tool_messages(chunk: Any) -> Iterator[tuple[tuple[str, ...],
 
 
 def iter_messages_for_delegate_task_scan(chunk: Any) -> Iterator[ToolMessage]:
-    """Yield ``task`` tool messages from **namespaced** ``messages`` stream chunks only.
+    """Yield `task` tool messages from **namespaced** `messages` stream chunks only.
 
     Root-graph chunks are handled by :func:`iter_messages_for_act_aggregation`. Compiled
-    subgraphs (e.g. Deep Research) may emit the parent delegation's ``ToolMessage`` only under a
+    subgraphs (e.g. Deep Research) may emit the parent delegation's `ToolMessage` only under a
     non-empty LangGraph namespace; those must still contribute delegate-final text.
 
     Args:
-        chunk: Raw ``astream`` chunk.
+        chunk: Raw `astream` chunk.
 
     Yields:
-        :class:`~langchain_core.messages.ToolMessage` instances whose ``name`` is ``task``.
+        :class:`~langchain_core.messages.ToolMessage` instances whose `name` is `task`.
     """
     parsed = parse_tuple_stream_chunk(chunk)
     if parsed is None:
@@ -131,18 +123,18 @@ def iter_messages_for_delegate_task_scan(chunk: Any) -> Iterator[ToolMessage]:
 
 
 def iter_messages_for_act_aggregation(chunk: Any) -> Iterator[BaseMessage]:
-    """Yield messages from one ``astream`` chunk for Act-phase aggregation.
+    """Yield messages from one `astream` chunk for Act-phase aggregation.
 
-    Matches ``Executor._stream_and_collect`` stream selection:
-    - Tuple path: only ``mode == \"messages\"`` with **empty** namespace (root graph).
-    - Dict path: ``chunk[\"model\"][\"messages\"]`` when present.
+    Matches `Executor._stream_and_collect` stream selection:
+    - Tuple path: only `mode == \"messages\"` with **empty** namespace (root graph).
+    - Dict path: `chunk[\"model\"][\"messages\"]` when present.
 
     Subgraph AIMessages are excluded on purpose: orchestration context stays compact.
-    Delegate **final** user-visible text for completion is taken from ``task`` ``ToolMessage``
+    Delegate **final** user-visible text for completion is taken from `task` `ToolMessage`
     payloads collected separately, not by merging namespaced assistant streams here.
 
     Args:
-        chunk: Raw chunk from ``CoreAgent.astream`` / ``CompiledStateGraph.astream``.
+        chunk: Raw chunk from `CoreAgent.astream` / `CompiledStateGraph.astream`.
 
     Yields:
         :class:`~langchain_core.messages.BaseMessage` instances to process for tool/AI text

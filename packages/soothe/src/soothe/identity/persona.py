@@ -1,14 +1,4 @@
-"""Configurable assistant persona identity for prompt blocks.
-
-Renders the ``<ASSISTANT_IDENTITY>`` block from ``AgentConfig.assistant_identity``
-(creator, role_description, vendor_denylist) instead of the hardcoded nano
-fragment, and patches the nano module-level fragment so the runtime
-``SystemPromptMiddleware`` hot path picks up the configured persona.
-
-When all fields are defaults, :func:`build_assistant_identity_block` reproduces
-the original nano block byte-for-byte and :func:`apply_identity_fragment_override`
-is a no-op — zero behavior change for existing deployments.
-"""
+"""Configurable assistant persona identity for prompt blocks."""
 
 from __future__ import annotations
 
@@ -95,11 +85,11 @@ def build_assistant_identity_block(
     *,
     identity: AssistantIdentity | None = None,
 ) -> str:
-    """Build the ``<ASSISTANT_IDENTITY>`` XML block from configured persona.
+    """Build the `<ASSISTANT_IDENTITY>` XML block from configured persona.
 
     Args:
-        assistant_name: Configured assistant display name (e.g. ``Soothe``).
-        identity: Optional configured persona. ``None`` reproduces the
+        assistant_name: Configured assistant display name (e.g. `Soothe`).
+        identity: Optional configured persona. `None` reproduces the
             original nano block byte-for-byte.
 
     Returns:
@@ -119,7 +109,7 @@ def build_intake_identity_line(
 
     Args:
         assistant_name: Configured assistant display name.
-        identity: Optional configured persona. ``None`` reproduces the
+        identity: Optional configured persona. `None` reproduces the
             original hardcoded intake line.
 
     Returns:
@@ -130,7 +120,7 @@ def build_intake_identity_line(
 
 
 def _is_default_identity(identity: AssistantIdentity | None) -> bool:
-    """True when ``identity`` is None or all fields match defaults."""
+    """True when `identity` is None or all fields match defaults."""
     if identity is None:
         return True
     if identity.creator.strip() != "Dr. Xiaming Chen":
@@ -146,16 +136,16 @@ def apply_identity_fragment_override(config: SootheConfig | None) -> None:
     """Patch nano's identity fragment when persona config is non-default.
 
     The CoreAgent runtime rebuilds the system prompt every turn via nano's
-    ``SystemPromptMiddleware``, which reads ``ASSISTANT_IDENTITY_FRAGMENT``
+    `SystemPromptMiddleware`, which reads `ASSISTANT_IDENTITY_FRAGMENT`
     from the nano module at call time. When the configured persona differs
     from defaults, this function patches that module-level constant so the
     hot path renders the configured creator/role/denylist.
 
-    No-op when ``config`` is None, the identity block is default, or the
+    No-op when `config` is None, the identity block is default, or the
     nano module cannot be reached (graceful degradation).
 
     Args:
-        config: Soothe configuration with optional ``agent.assistant_identity``.
+        config: Soothe configuration with optional `agent.assistant_identity`.
     """
     if config is None:
         return

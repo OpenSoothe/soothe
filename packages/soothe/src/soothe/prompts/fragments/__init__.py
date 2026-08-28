@@ -1,19 +1,4 @@
-"""Prefetched static host prompt fragments.
-
-All fragments are read once at import time to maximize prompt cache hit rate.
-Cache Strategy:
-- Static fragments loaded at module init (0 file I/O per request)
-- Module constants reused across all StrangeLoop invocations
-
-Asset layout: ``intake/``, ``system/``, ``classifiers/``, ``instructions/``,
-``decompose/``.
-
-CoreAgent identity/system-body fragments are re-exported from
-``soothe.prompts`` (canonical: ``soothe_nano.prompts.fragments``).
-
-Jinja2 templates (e.g. ``synthesis_report_system.xml``) are loaded on demand via
-``soothe.prompts.loader.load_prompt_fragment``.
-"""
+"""Prefetched static host prompt fragments."""
 
 from __future__ import annotations
 

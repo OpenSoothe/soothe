@@ -1,14 +1,4 @@
-"""Compact recorded plan-phase ledger turns before they re-enter the next prompt.
-
-The ledger records plan-generate turns as (LoopHumanMessage, LoopAIMessage)
-pairs so later turns can see prior reasoning. Plan-assess pairs are no longer
-recorded ; assess continuity uses CE ``GoalNode.last_assessment``.
-
-The recorded human may carry ``GOAL:``. The duplicated goal anchors recency away
-from the latest evidence (ablation D1). ``compact_planning_human_content`` rewrites
-``GOAL:`` to a non-anchoring recap at record time so the live LLM call still sees
-the full rendered message — only the stored copy is compacted.
-"""
+"""Compact recorded plan-phase ledger turns before they re-enter the next prompt."""
 
 from __future__ import annotations
 
@@ -23,13 +13,13 @@ _GOAL_RECAP_PREFIX = "GOAL RECAP:"
 def compact_planning_human_content(content: str) -> str:
     """Return ledger-ready content for a recorded plan-phase HumanMessage.
 
-    Applies D1 (rewrite ``GOAL:`` to non-anchoring recap) when present.
+    Applies D1 (rewrite `GOAL:` to non-anchoring recap) when present.
 
     Args:
-        content: Rendered envelope text from ``UserMessageBuilder``.
+        content: Rendered envelope text from `UserMessageBuilder`.
 
     Returns:
-        Compacted content suitable for ``state.loop_messages``.
+        Compacted content suitable for `state.loop_messages`.
     """
     if not isinstance(content, str) or not content:
         return content

@@ -1,12 +1,4 @@
-"""StrangeLoop State Manager.
-
-Manages checkpoint lifecycle: initialize, save, load, recovery.
- : Multi-thread spanning with loop_id as primary key.
- : Unified global SQLite persistence backend (databases/checkpoints.db).
-PostgreSQL backend support using soothe_checkpoints database.
-Phase 2: Connection pooling to eliminate database lock contention.
-Shared pool for high-concurrency (200+ threads) support.
-"""
+"""StrangeLoop State Manager."""
 
 from __future__ import annotations
 
@@ -568,8 +560,8 @@ class StrangeLoopStateManager:
                 included). Use on goal-start boundaries; default index-only is
                 insufficient for reload merge.
             durable: When True, flush the write synchronously before returning so
-                subsequent ``load()`` calls from any manager can read it. Use for
-                initial checkpoint creation (``initialize``) and other writes
+                subsequent `load()` calls from any manager can read it. Use for
+                initial checkpoint creation (`initialize`) and other writes
                 that must be immediately visible across manager instances.
         """
         checkpoint.updated_at = datetime.now(UTC)
@@ -1057,20 +1049,20 @@ class StrangeLoopStateManager:
     ) -> None:
         """Persist a resumable interruption cursor on the in-flight goal.
 
-        Sets the active goal's status to ``interrupted`` (NOT terminal ``cancelled``)
-        and records the current iteration cursor in ``execution_checkpoint`` so a
-        subsequent ``retry`` / ``resume`` turn restores the same iteration counter
+        Sets the active goal's status to `interrupted` (NOT terminal `cancelled`)
+        and records the current iteration cursor in `execution_checkpoint` so a
+        subsequent `retry` / `resume` turn restores the same iteration counter
         instead of restarting from zero. Called when the loop is cancelled
         mid-Execute (user cancel / infra event) before the goal reaches
-        ``goal_completion``.
+        `goal_completion`.
 
         Args:
-            goal_record: Goal index entry to mark interrupted. ``None`` → no-op
+            goal_record: Goal index entry to mark interrupted. `None` → no-op
                 (caller had no in-flight goal).
             iteration: Current iteration counter at the interrupt point. This is
-                persisted as-is (not ``+1``) because the in-progress iteration did
-                not complete its ``record_iteration`` flush.
-            reason: Short discriminator for logs (e.g. ``user_cancelled``).
+                persisted as-is (not `+1`) because the in-progress iteration did
+                not complete its `record_iteration` flush.
+            reason: Short discriminator for logs (e.g. `user_cancelled`).
         """
         if self._checkpoint is None:
             logger.warning("mark_goal_interrupted: no checkpoint to update")

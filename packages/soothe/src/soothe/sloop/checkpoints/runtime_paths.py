@@ -1,6 +1,6 @@
-"""Resolved paths for unified runtime SQLite stores under ``SOOTHE_DATA_DIR/databases``.
+"""Resolved paths for unified runtime SQLite stores under `SOOTHE_DATA_DIR/databases`.
 
-Hard cut: purpose files live only under ``databases/``.
+Hard cut: purpose files live only under `databases/`.
 """
 
 from __future__ import annotations

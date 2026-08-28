@@ -1,10 +1,4 @@
-"""PostgreSQL backend for StrangeLoop persistence.
-
-Backend-agnostic implementation supporting full StrangeLoop persistence operations.
-Uses shared soothe_checkpoints database with goal_records.
-
-Supports shared pool for high-concurrency (200+ threads) support.
-"""
+"""PostgreSQL backend for StrangeLoop persistence."""
 
 from __future__ import annotations
 
@@ -205,7 +199,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
 
         Args:
             checkpoint: StrangeLoopCheckpoint to save.
-            write_mode: ``index_only`` updates hot index only; ``full`` writes complete row.
+            write_mode: `index_only` updates hot index only; `full` writes complete row.
             hot_cold_enabled: When True, also upsert cold blob table on full writes.
         """
         checkpoint_data = checkpoint.model_dump(mode="json")
@@ -543,10 +537,10 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
     ) -> None:
         """Partially update loop metadata fields with retry.
 
-         : ``status`` is owned by ``StrangeLoop`` once the loop has any
-        ``goal_history``. Status writes from the daemon path (pre-query
+         : `status` is owned by `StrangeLoop` once the loop has any
+        `goal_history`. Status writes from the daemon path (pre-query
         bookkeeping) are silently dropped for established loops to avoid
-        clobbering ``finalize_goal``'s ``"idle"`` back to ``"running"``,
+        clobbering `finalize_goal`'s `"idle"` back to `"running"`,
         which would cause StrangeLoop to take the invalid-index re-init path
         and lose prior goal context. Status writes are honored only when
         the loop has no goals yet (initial registration / bind).
@@ -555,7 +549,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             loop_id: Loop identifier.
             force_status: When True, bypass the goal-count guard so
                 the stale-loop reconciler can demote a confirmed-dead zombie
-                loop to ``idle`` even when it already has goals.
+                loop to `idle` even when it already has goals.
             **fields: Column names and values to update.
         """
         _allowed = {
@@ -638,11 +632,11 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         await self._run_with_retry("update_loop_metadata", _do_update)
 
     async def mark_running_goals_failed(self, loop_id: str) -> int:
-        """Mark a loop's still-``running`` goal_records as ``failed``.
+        """Mark a loop's still-`running` goal_records as `failed`.
 
         Called by the stale-loop reconciler alongside a force-demote of the
-        loop row to ``idle``. A crashed loop may leave goals stuck in the
-        ``running`` state with no ``completed_at``; this closes them so the
+        loop row to `idle`. A crashed loop may leave goals stuck in the
+        `running` state with no `completed_at`; this closes them so the
         goal DAG reflects reality instead of lingering forever.
 
         Returns the count of goal rows updated.
@@ -775,7 +769,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         await self.update_loop_metadata(loop_id, last_message_at=now)
 
     async def heartbeat_loop(self, loop_id: str) -> None:
-        """Bump ``updated_at`` so periodic status reconciliation can trust freshness."""
+        """Bump `updated_at` so periodic status reconciliation can trust freshness."""
 
         async def _do_heartbeat(pool: AsyncConnectionPool) -> None:
             async with pool.connection() as conn:
@@ -793,7 +787,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         human: int = 0,
         ai: int = 0,
     ) -> None:
-        """Atomically increment counters inside ``checkpoint_data`` JSONB with retry.
+        """Atomically increment counters inside `checkpoint_data` JSONB with retry.
 
         Counters live in the JSONB blob for parity with other per-loop scalars
         (`is_ephemeral`, `last_message_at`, `total_goals_completed`). Single
@@ -830,11 +824,11 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         idle_before: datetime,
         limit: int = 50,
     ) -> list[dict]:
-        """Return ephemeral loops idle since ``idle_before``.
+        """Return ephemeral loops idle since `idle_before`.
 
-        Includes rows still marked ``status="running"``: the GC purge gate
-        performs a live-runner check (``_loop_has_active_runner``), so a
-        stale ``running`` status (zombie) is reclaimable.
+        Includes rows still marked `status="running"`: the GC purge gate
+        performs a live-runner check (`_loop_has_active_runner`), so a
+        stale `running` status (zombie) is reclaimable.
         """
         idle_iso = idle_before.isoformat()
         pool = await self._ensure_pool()
@@ -888,11 +882,11 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         idle_before: datetime,
         limit: int = 50,
     ) -> list[dict]:
-        """Return loops with zero human/AI messages idle since ``idle_before``.
+        """Return loops with zero human/AI messages idle since `idle_before`.
 
-        Includes rows still marked ``status="running"``: the GC purge gate
-        performs a live-runner check (``_loop_has_active_runner``), so a
-        stale ``running`` status (zombie) is reclaimable.
+        Includes rows still marked `status="running"`: the GC purge gate
+        performs a live-runner check (`_loop_has_active_runner`), so a
+        stale `running` status (zombie) is reclaimable.
         """
         idle_iso = idle_before.isoformat()
         pool = await self._ensure_pool()

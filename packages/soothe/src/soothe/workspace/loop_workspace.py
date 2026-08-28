@@ -1,4 +1,4 @@
-"""Loop-scoped workspace resolution for daemon runs and ``LoopRunRequest``."""
+"""Loop-scoped workspace resolution for daemon runs and `LoopRunRequest`."""
 
 from __future__ import annotations
 
@@ -35,11 +35,11 @@ def resolve_persisted_loop_workspace(
     soothe_home: Path | None = None,
     create: bool = True,
 ) -> Path:
-    """Resolve ``$SOOTHE_HOME/data/workspaces/<user>/ws_<hash>`` when no client path.
+    """Resolve `$SOOTHE_HOME/data/workspaces/<user>/ws_<hash>` when no client path.
 
     Args:
-        loop_id: Loop identifier (hash scope when ``client_workspace_id`` unset).
-        user_id: Optional user id (empty → ``anonymous`` dir + empty hash prefix).
+        loop_id: Loop identifier (hash scope when `client_workspace_id` unset).
+        user_id: Optional user id (empty → `anonymous` dir + empty hash prefix).
         client_workspace_id: Optional stable workspace scope for the user.
         soothe_home: Override for tests.
         create: Create directory when missing.
@@ -73,7 +73,7 @@ def resolve_persisted_loop_workspace(
 
 
 def _workspace_mount_from_config() -> tuple[str | None, str | None]:
-    """Return configured ``workspace_mount`` host/container roots when set."""
+    """Return configured `workspace_mount` host/container roots when set."""
     try:
         from soothe.config import DEFAULT_NANO_CONFIG_PATH, SootheConfig
 
@@ -114,7 +114,7 @@ def resolve_client_workspace_on_host(
 ) -> Path | None:
     """Resolve a client workspace hint to a usable path on this host/container.
 
-    Returns the path when it exists locally or maps under ``workspace_mount``.
+    Returns the path when it exists locally or maps under `workspace_mount`.
     """
     path = validate_client_workspace(client_workspace)
 
@@ -155,12 +155,12 @@ def resolve_loop_workspace(
     """Resolve the workspace directory for a loop run.
 
     Precedence:
-        1. ``client_workspace`` — use the validated client path directly, or map it
-           via ``workspace_mount`` when the host path is absent on this machine.
-        2. Persisted layout — ``$SOOTHE_HOME/data/workspaces/<normalized_user>/ws_<hash>``
-           where hash is ``sha256(user_id, client_workspace_id)`` or
-           ``sha256(user_id, loop_id)`` when ``client_workspace_id`` is unset.
-           ``user_id`` empty uses ``anonymous`` as the directory segment and ``""``
+        1. `client_workspace` — use the validated client path directly, or map it
+           via `workspace_mount` when the host path is absent on this machine.
+        2. Persisted layout — `$SOOTHE_HOME/data/workspaces/<normalized_user>/ws_<hash>`
+           where hash is `sha256(user_id, client_workspace_id)` or
+           `sha256(user_id, loop_id)` when `client_workspace_id` is unset.
+           `user_id` empty uses `anonymous` as the directory segment and `""`
            in the hash key.
     """
     client_ws = str(client_workspace).strip() if client_workspace else None

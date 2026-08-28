@@ -1,10 +1,4 @@
-"""Loop graph node that resolves a pending clarification.
-
-Invoked when a prior node set ``pending_clarification`` (execute ask_user,
-plan-mode review, etc.). Dispatches to ``ClarificationPolicy``; on
-success writes ``pending_clarification_answer``. On defer, parks via CE when
-wired and sets ``last_outcome="deferred"`` while keeping graph pending.
-"""
+"""Loop graph node that resolves a pending clarification."""
 
 from __future__ import annotations
 

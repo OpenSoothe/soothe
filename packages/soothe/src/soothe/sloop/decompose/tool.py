@@ -1,4 +1,4 @@
-"""Executor-bound ``decompose_task`` tool."""
+"""Executor-bound `decompose_task` tool."""
 
 from __future__ import annotations
 
@@ -123,7 +123,7 @@ def _run_decompose_task(task: str, subtasks: list[Any]) -> str:
 
     Cannot call the async LLM critic, so it skips the grounding check (the
     zero-evidence gate still applies). In practice the CoreAgent uses the
-    async path (``_arun_decompose_task``); this sync variant exists for
+    async path (`_arun_decompose_task`); this sync variant exists for
     StructuredTool compatibility and test scaffolding.
     """
     step_id = current_step_id()
@@ -173,7 +173,7 @@ def _run_decompose_task(task: str, subtasks: list[Any]) -> str:
 
 
 def build_decompose_task_tool() -> StructuredTool:
-    """Build the loop-scoped ``decompose_task`` tool (not nano middleware)."""
+    """Build the loop-scoped `decompose_task` tool (not nano middleware)."""
     return StructuredTool.from_function(
         name="decompose_task",
         description=DECOMPOSE_TASK_TOOL_DESCRIPTION,

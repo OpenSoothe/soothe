@@ -17,7 +17,7 @@ def _normalize_message_id(value: Any) -> str | None:
 
 
 def message_reference_id(msg: BaseMessage) -> str | None:
-    """Return the stable id used for dedup (``core_agent_message_id`` or ``id``)."""
+    """Return the stable id used for dedup (`core_agent_message_id` or `id`)."""
     ref = _normalize_message_id(getattr(msg, "core_agent_message_id", None))
     if ref is not None:
         return ref
@@ -25,7 +25,7 @@ def message_reference_id(msg: BaseMessage) -> str | None:
 
 
 def collect_core_agent_message_ids(messages: list[BaseMessage]) -> frozenset[str]:
-    """Collect message ids present in a CoreAgent checkpoint ``messages`` channel."""
+    """Collect message ids present in a CoreAgent checkpoint `messages` channel."""
     ids: set[str] = set()
     for msg in messages:
         ref = message_reference_id(msg)
@@ -59,15 +59,15 @@ def extract_execute_turn_core_agent_message_ids(
     stream_ai_messages: list[BaseMessage] | None,
     envelope_human_id: str | None = None,
 ) -> tuple[str | None, str | None]:
-    """Resolve human/AI ``core_agent_message_id`` values for ledger recording.
+    """Resolve human/AI `core_agent_message_id` values for ledger recording.
 
     Args:
-        graph_messages: Full CoreAgent graph ``messages`` after the step stream.
+        graph_messages: Full CoreAgent graph `messages` after the step stream.
         stream_ai_messages: AI messages collected from the act stream.
         envelope_human_id: Id assigned to the current-step envelope before streaming.
 
     Returns:
-        ``(human_core_agent_message_id, ai_core_agent_message_id)``.
+        `(human_core_agent_message_id, ai_core_agent_message_id)`.
     """
     human_id = _normalize_message_id(envelope_human_id)
     ai_id: str | None = None

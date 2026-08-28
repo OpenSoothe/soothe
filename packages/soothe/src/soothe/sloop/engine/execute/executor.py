@@ -1,20 +1,4 @@
-"""Execute phase logic for StrangeLoop.
-
-Act-wave visible answer resolution is integrated here.
-
-After each Execute wave, auto goal completion and headless replay read the
-latest non-planning assistant message from the orchestration ledger via
-``last_ledger_ai_content``. That string may come from:
-
-- **root_assistant_stream** — aggregated root-graph ``AIMessage`` / chunk text (same path as act
-  aggregation for the main graph).
-- **task_tool_aggregate** — ordered ``task`` ``ToolMessage`` bodies (delegate finals), including
-  parallel waves merged with ``\\n\\n---\\n\\n``.
-- **none** — no usable text (empty wave).
-
-``last_wave_answer_from_delegate_final`` on ``LoopState`` remains the boolean hook for runner
-replay ; it is True iff provenance is ``task_tool_aggregate``.
-"""
+"""Execute phase logic for StrangeLoop."""
 
 from __future__ import annotations
 
@@ -175,7 +159,7 @@ def _log_dependency_execution_residual(
     """Emit a warning when dependency execution stopped with steps never started.
 
     Typical causes: unsatisfied or mistyped dependency ids, cycles, or steps blocked behind
-    failures (failed step ids are not in ``local_done`` but are excluded from ``never_started``).
+    failures (failed step ids are not in `local_done` but are excluded from `never_started`).
     """
     never_started = [
         s for s in decision.steps if s.id not in local_done and s.id not in failed_sticky
@@ -218,9 +202,9 @@ def _merge_int_metrics(
 
 
 def _extract_interrupts_from_graph_interrupt(exc: GraphInterrupt) -> tuple[Interrupt, ...]:
-    """Extract ``Interrupt`` objects from a ``GraphInterrupt`` exception.
+    """Extract `Interrupt` objects from a `GraphInterrupt` exception.
 
-    ``GraphInterrupt.args[0]`` is a tuple of ``Interrupt`` — the interrupt
+    `GraphInterrupt.args[0]` is a tuple of `Interrupt` — the interrupt
     is NOT reliably in graph state afterward (the exception path consumes it).
     """
     if not exc.args:
@@ -242,7 +226,7 @@ def _capture_interrupts(
 ) -> bool:
     """Capture ask_user / tool_approval interrupts into the relay.
 
-    Returns ``True`` if at least one interrupt was captured.
+    Returns `True` if at least one interrupt was captured.
     """
     captured = False
     for interrupt_obj in interrupts:
@@ -271,7 +255,7 @@ class Executor:
 
     This component handles step execution with two modes:
     - parallel: Execute ready steps with isolated per-step CoreAgent runs (chunked by
-      ``max_parallel_steps``)
+      `max_parallel_steps`)
     - dependency: Execute steps respecting dependency DAG (chunked parallel waves)
 
     Events from CoreAgent are propagated through for upstream consumption.
@@ -301,22 +285,22 @@ class Executor:
         Args:
             core_agent: Layer 1 CoreAgent for step execution
             checkpointer: LangGraph checkpointer for thread fork inheritance.
-            max_parallel_steps: Max steps to run **concurrently** in one batch. ``execute`` repeats
-                batches until all ready steps finish (e.g. 4 ready steps and ``2`` → two batches of 2).
-                ``0`` means unlimited.
+            max_parallel_steps: Max steps to run **concurrently** in one batch. `execute` repeats
+                batches until all ready steps finish (e.g. 4 ready steps and `2` → two batches of 2).
+                `0` means unlimited.
             config: Optional Soothe config for Act wave caps.
             loop_id: Optional loop identifier for Langfuse trace correlation.
-            clarification_detector: When set with ``clarification_capture`` and
-                ``clarification_loop_state_view``, enables clarification
+            clarification_detector: When set with `clarification_capture` and
+                `clarification_loop_state_view`, enables clarification
                 relay during the CoreAgent stream.
             clarification_capture: Side-channel that receives the first detected
-                ``ask_user`` request. The caller reads ``capture.pending_request``
-                after ``execute()`` completes.
+                `ask_user` request. The caller reads `capture.pending_request`
+                after `execute()` completes.
             clarification_loop_state_view: Read-only loop state snapshot threaded
                 to the policy.
             clarification_resume_answer_payload: Optional LangGraph resume payload
-                (built from ``state.pending_clarification_answer``) injected as
-                the first ``Command(resume=...)`` to resume after a prior
+                (built from `state.pending_clarification_answer`) injected as
+                the first `Command(resume=...)` to resume after a prior
                 clarification was answered.
             context_engine: Optional ContextEngine instance for dual-write
                 ledger recording.
@@ -428,7 +412,7 @@ class Executor:
         return collect_core_agent_message_ids(list(values.get("messages") or []))
 
     def _max_subagent_tasks_per_wave(self) -> int:
-        """Configured cap on root-level ``task`` tool completions (0 = unlimited)."""
+        """Configured cap on root-level `task` tool completions (0 = unlimited)."""
         if self._config is None:
             return 0
         return max(0, int(self._config.agent.loop.max_subagent_tasks_per_wave))
@@ -563,7 +547,7 @@ class Executor:
         """Expand vague dependent-step briefs using predecessor evidence (P2).
 
         When Slice B will project predecessor execute Human/AI pairs, skip
-        embedding that evidence into ``full_description`` (avoids duplicating
+        embedding that evidence into `full_description` (avoids duplicating
         the same findings in EXECUTION TASK and the ledger replay).
         """
         if not self._step_brief_hydration_enabled():
@@ -688,9 +672,9 @@ class Executor:
         step_id: str | None = None,
         step_description: str | None = None,
     ) -> _PendingInterruptFetch:
-        """Read pending LangGraph interrupts from ``aget_state`` after a stream ends.
+        """Read pending LangGraph interrupts from `aget_state` after a stream ends.
 
-        Avoid ``stream_mode`` ``updates`` during execute streaming — each update
+        Avoid `stream_mode` `updates` during execute streaming — each update
         carries a full graph state snapshot (~400 MiB during subgraph tool streaming).
 
         Returns:
@@ -782,19 +766,19 @@ class Executor:
         step_id: str | None = None,  # for heartbeat correlation + capture
         step_description: str | None = None,  # captured for resume identity
     ) -> AsyncGenerator[Any, None]:
-        """Run ``CoreAgent.astream`` with interrupt handling.
+        """Run `CoreAgent.astream` with interrupt handling.
 
         Behavior:
 
-        - ``ask_user`` and ``action_requests`` (tool-approval) interrupts,
-          when ``detector``/``capture`` are provided, are written to
-          ``capture`` and the stream returns early so the StrangeLoop can route
-          to ``await_clarification``. The originating step's id and
-          description (``step_id`` / ``step_description``) are recorded on
-          ``capture`` alongside the thread_id so the resume path can re-emit
-          ``step_started`` with the same step identity the TUI already shows.
-        - When ``resume_answer_payload`` is set, the first CoreAgent call
-          uses it as the initial ``Command(resume=...)`` (re-entry after the
+        - `ask_user` and `action_requests` (tool-approval) interrupts,
+          when `detector`/`capture` are provided, are written to
+          `capture` and the stream returns early so the StrangeLoop can route
+          to `await_clarification`. The originating step's id and
+          description (`step_id` / `step_description`) are recorded on
+          `capture` alongside the thread_id so the resume path can re-emit
+          `step_started` with the same step identity the TUI already shows.
+        - When `resume_answer_payload` is set, the first CoreAgent call
+          uses it as the initial `Command(resume=...)` (re-entry after the
           policy answered a prior clarification).
         - Heartbeat sentinels are yielded during long waits to keep
           the stream alive and prevent client disconnects during slow tool
@@ -993,13 +977,13 @@ class Executor:
 
     @staticmethod
     def _seed_skill_activation(loop_state: LoopState) -> dict[str, Any] | None:
-        """Rehydrate ``skill_activation`` from LoopState for graph input.
+        """Rehydrate `skill_activation` from LoopState for graph input.
 
-        Also registers slash-invoked skills (``/skill:`` expansion) via
-        ``mark_invoked`` so the progressive loading registry tracks them.
+        Also registers slash-invoked skills (`/skill:` expansion) via
+        `mark_invoked` so the progressive loading registry tracks them.
 
-        Returns ``None`` when no skill-activation data exists on the LoopState,
-        so the middleware's ``abefore_agent`` will lazy-init a fresh dict.
+        Returns `None` when no skill-activation data exists on the LoopState,
+        so the middleware's `abefore_agent` will lazy-init a fresh dict.
         """
         has_prior = loop_state.activated_skill_names or loop_state.invoked_skill_names
         has_slash = loop_state.slash_invoked_skill_name and loop_state.slash_invoked_skill_body
@@ -1032,12 +1016,12 @@ class Executor:
         graph_output: dict[str, Any] | None,
         loop_state: LoopState,
     ) -> None:
-        """Copy ``skill_activation`` from graph output back into LoopState.
+        """Copy `skill_activation` from graph output back into LoopState.
 
         Also clears slash invocation signal fields — they are consumed once by
-        ``_seed_skill_activation`` and should not persist across iterations.
+        `_seed_skill_activation` and should not persist across iterations.
 
-        Best-effort: missing or malformed ``skill_activation`` is silently skipped.
+        Best-effort: missing or malformed `skill_activation` is silently skipped.
         """
         if not graph_output:
             return
@@ -1056,7 +1040,7 @@ class Executor:
     def _seed_mcp_state(loop_state: LoopState) -> dict[str, Any] | None:
         """Rehydrate MCP progressive disclosure state from LoopState for graph input.
 
-        Returns ``None`` when no MCP state exists, so middleware ``abefore_agent``
+        Returns `None` when no MCP state exists, so middleware `abefore_agent`
         will lazy-init fresh fields.
         """
         has_data = (
@@ -1134,10 +1118,10 @@ class Executor:
         """Extract assistant-visible text from CoreAgent stream message list.
 
         Matches the selection rules used for StrangeLoop final-report streaming: prefer
-        concatenated ``AIMessageChunk`` text over a trailing non-chunk ``AIMessage``.
+        concatenated `AIMessageChunk` text over a trailing non-chunk `AIMessage`.
 
         Args:
-            messages: Messages collected from ``_stream_and_collect`` (AI entries only).
+            messages: Messages collected from `_stream_and_collect` (AI entries only).
 
         Returns:
             Stripped assistant text, or empty string if none.
@@ -1177,7 +1161,7 @@ class Executor:
         """Return AI messages/chunks belonging to the final CoreAgent hop only.
 
         Multi-hop tool loops append one assistant turn per hop. Ledger and
-        ``ledger_direct`` goal completion must surface the last turn, not a
+        `ledger_direct` goal completion must surface the last turn, not a
         concatenation of every hop's narration.
         """
         ai_message_indices = [
@@ -1328,9 +1312,9 @@ class Executor:
         return self._config.agent.loop.concurrency.max_parallel_tools
 
     def _wave_size(self, remaining: int) -> int:
-        """Concurrent step count for the next execute batch (``0`` = unlimited).
+        """Concurrent step count for the next execute batch (`0` = unlimited).
 
-        One batch does not exhaust ``execute``; callers loop until all ready steps are scheduled.
+        One batch does not exhaust `execute`; callers loop until all ready steps are scheduled.
         """
         if remaining <= 0:
             return 0
@@ -1361,7 +1345,7 @@ class Executor:
         StreamEvent | StepExecutionRecord | StepWaveQueued | StepWaveStart | StepCompletionReport,
         None,
     ]:
-        """Run parallel mode in waves bounded by ``max_parallel_steps``."""
+        """Run parallel mode in waves bounded by `max_parallel_steps`."""
         idx = 0
         n = len(ready_steps)
         queued_emitted: set[str] = set()
@@ -1389,10 +1373,10 @@ class Executor:
         synthesis projections can see prior step evidence.
 
         Args:
-            state: Loop state whose ``loop_messages`` list is extended in wave order.
-            steps: Ready steps for this wave (same order as ``gather_results``).
+            state: Loop state whose `loop_messages` list is extended in wave order.
+            steps: Ready steps for this wave (same order as `gather_results`).
             gather_results: Per-step payloads from parallel execute — each entry is
-                ``None``, a :class:`BaseException`, or :class:`_ExecuteStepResult`.
+                `None`, a :class:`BaseException`, or :class:`_ExecuteStepResult`.
         """
         from langchain_core.messages import AIMessage
 
@@ -1607,25 +1591,25 @@ class Executor:
         steps: list[StepAction],
         gather_results: list[Any],
     ) -> None:
-        """Refresh ``state.prior_progress`` from the wave just appended to the ledger.
+        """Refresh `state.prior_progress` from the wave just appended to the ledger.
 
         Pure-function over wave outputs; no I/O. Always overwrites
-        ``state.prior_progress`` so the digest reflects the most recent wave.
+        `state.prior_progress` so the digest reflects the most recent wave.
         Wave index increments within the same iteration; resets to 0 on a new
         iteration. See.3 for the derivation rules.
 
         Sourcing notes (production-accurate):
-        - Tool names come from ``AIMessage.tool_calls`` on assistant turns in
-          ``step_messages``. The executor's stream collector does not append
-          ``ToolMessage`` instances to that list (it routes them into
-          ``outcomes``/``budget`` accounting), so a ``ToolMessage`` walk would
+        - Tool names come from `AIMessage.tool_calls` on assistant turns in
+          `step_messages`. The executor's stream collector does not append
+          `ToolMessage` instances to that list (it routes them into
+          `outcomes`/`budget` accounting), so a `ToolMessage` walk would
           miss every call.
-        - The tool ``head`` carries the first textual arg of the LLM tool call
-          (e.g. ``run_command(command="find . -name '*.py' | wc -l")``). It
+        - The tool `head` carries the first textual arg of the LLM tool call
+          (e.g. `run_command(command="find . -name '*.py' | wc -l")`). It
           gives the plan-assess prompt a concrete handle on what was run
-          without depending on tool-result text being in ``step_messages``.
+          without depending on tool-result text being in `step_messages`.
         - Evidence excerpts extract assistant prose and tool-result data
-          separately. Tool evidence (from ``_last_tool_result_block``) is
+          separately. Tool evidence (from `_last_tool_result_block`) is
           included only when the assistant produced no prose text, so
           plan-assess still sees concrete output for tool-driven steps.
         """
@@ -1768,14 +1752,14 @@ class Executor:
 
         Stream events are merged onto a shared queue and yielded as they arrive so
         daemon/TUI clients see tool and subagent activity during the wave, not only
-        after ``asyncio.gather`` completes.
+        after `asyncio.gather` completes.
 
         Args:
             steps: Steps to execute
             state: Loop state
 
         Yields:
-            StreamEvent chunks in arrival order, then each ``StepExecutionRecord`` when its step
+            StreamEvent chunks in arrival order, then each `StepExecutionRecord` when its step
             finishes (completion order, not necessarily step list order).
         """
         # Branched LangGraph thread_id for parallel checkpoint isolation; StepExecutionRecord keeps logical thread_id.
@@ -2020,13 +2004,13 @@ class Executor:
     ) -> _ExecuteStepResult:
         """Execute single step, collecting events for the parallel merge queue.
 
-        When ``live_event_queue`` is set (parallel execute), each stream chunk is pushed
+        When `live_event_queue` is set (parallel execute), each stream chunk is pushed
         immediately for upstream TUI/WebSocket display and is not duplicated on the
-        returned ``_ExecuteStepResult.events`` list.
+        returned `_ExecuteStepResult.events` list.
 
          : Collects outcome metadata instead of full output string.
-        Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
-        Thread isolation via random ``{main}__{hex5}`` thread ids; predecessor context via ledger
+        Fourth tuple element is joined `task` tool delegate-final text for finalize.
+        Thread isolation via random `{main}__{hex5}` thread ids; predecessor context via ledger
         projection into graph input (no checkpoint fork).
 
         Args:
@@ -2637,18 +2621,18 @@ class Executor:
 
          : Also extracts tool_call_id and generates outcome metadata.
         Collects AIMessage objects for token usage extraction.
-        Collects ``task`` tool return text (delegate finals) for goal completion when
+        Collects `task` tool return text (delegate finals) for goal completion when
         subgraph AIMessages are not folded into root-graph act aggregation.
-        Rewrites root-graph AI and ``ToolMessage`` ``tool_call_id`` values to unified
-        ``{step_id}:s:{tool_fragment}`` so streamed tool rows and tool results share stable ids.
+        Rewrites root-graph AI and `ToolMessage` `tool_call_id` values to unified
+        `{step_id}:s:{tool_fragment}` so streamed tool rows and tool results share stable ids.
         Tracks ToolMessage.status="error" and Error: tool bodies for outcome metadata.
 
         Args:
             stream: Async iterator from agent.astream()
-            budget: Optional Act wave budget (subagent ``task`` cap).
+            budget: Optional Act wave budget (subagent `task` cap).
             step_id: When set, rewrite root-graph tool_call_ids to unified format
-                ``{step_id}:s:{tool_fragment}`` for consistent TUI rendering.
-            step_description: Execute-step brief copied onto ``task`` kwargs when the
+                `{step_id}:s:{tool_fragment}` for consistent TUI rendering.
+            step_description: Execute-step brief copied onto `task` kwargs when the
                 model streams empty delegation args (parallel execute).
 
         Yields:

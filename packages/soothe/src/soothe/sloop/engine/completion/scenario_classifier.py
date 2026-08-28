@@ -1,10 +1,4 @@
-"""Scenario classifier for synthesis generation.
-
-Determines synthesis style from goal + intent + execution pattern using a fast
-model with structured output. Outline ``sections`` are suggestions (or empty
-for heuristic fast-paths); Phase 2 owns the final report outline and Markdown
-structure.
-"""
+"""Scenario classifier for synthesis generation."""
 
 from __future__ import annotations
 
@@ -113,8 +107,8 @@ class ScenarioClassification(BaseModel):
     Produced by ScenarioClassifier from goal + intent + execution pattern.
     Guides Phase 2 synthesis with style + optional outline suggestions + focus.
 
-    Empty ``sections`` means Phase 2 invents the outline (heuristic fast-path).
-    Non-empty ``sections`` are soft suggestions, not required headings.
+    Empty `sections` means Phase 2 invents the outline (heuristic fast-path).
+    Non-empty `sections` are soft suggestions, not required headings.
     """
 
     scenario: str = Field(description="Built-in scenario name or 'custom' for novel cases")
@@ -279,7 +273,7 @@ def _heuristic_classify(
 ) -> ScenarioClassification | None:
     """Config-driven fast-path that skips the classify LLM call.
 
-    Sets scenario style + focus/emphasis only. Leaves ``sections`` empty so
+    Sets scenario style + focus/emphasis only. Leaves `sections` empty so
     Phase 2 invents the report outline (builtins are not outline authority).
     """
     rules = scenario_rules or _DEFAULT_SCENARIO_RULES
@@ -346,7 +340,7 @@ async def classify_synthesis_scenario(
     """Classify synthesis scenario from goal + intent + execution pattern.
 
     Uses a heuristic fast-path for obvious cases, then falls back to the LLM
-    for ambiguous ones.  The LLM call uses the supplied ``llm_client`` which
+    for ambiguous ones.  The LLM call uses the supplied `llm_client` which
     should be a *fast* model (not a reasoning/think model).
 
     Args:
@@ -357,7 +351,7 @@ async def classify_synthesis_scenario(
 
     Returns:
         ScenarioClassification with scenario style, optional outline suggestions,
-        focus, and evidence emphasis. Empty ``sections`` means Phase 2 invents
+        focus, and evidence emphasis. Empty `sections` means Phase 2 invents
         the outline.
 
     Raises:

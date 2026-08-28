@@ -16,7 +16,7 @@ class StrangeLoopPersistenceBackend(ABC):
     """Abstract backend for StrangeLoop persistence operations.
 
     Defines contract for backend-agnostic operations supporting both PostgreSQL and SQLite.
-    Mirrors ``StrangeLoopCheckpointPersistenceManager`` persistence operations.
+    Mirrors `StrangeLoopCheckpointPersistenceManager` persistence operations.
     """
 
     # Core loop operations
@@ -59,7 +59,7 @@ class StrangeLoopPersistenceBackend(ABC):
             loop_id: Loop identifier.
             force_status: When True, bypass the goal-count guard so
                 an authoritative caller (stale-loop reconciler) can demote a
-                confirmed-dead zombie loop's ``status`` even when it has goals.
+                confirmed-dead zombie loop's `status` even when it has goals.
             **fields: Column names and values to update. Supported keys:
                 status, current_thread_id, client_workspace,
                 detached_at, total_goals_completed, total_thread_switches,
@@ -69,7 +69,7 @@ class StrangeLoopPersistenceBackend(ABC):
 
     @abstractmethod
     async def mark_running_goals_failed(self, loop_id: str) -> int:
-        """Mark a loop's still-``running`` goal_records as ``failed``.
+        """Mark a loop's still-`running` goal_records as `failed`.
 
         Returns the count of goal rows updated. Used by the stale-loop
         reconciler to close goals orphaned by a crashed runner.

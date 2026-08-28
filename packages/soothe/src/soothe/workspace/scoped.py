@@ -25,7 +25,7 @@ def user_id_for_hash(user_id: str | None) -> str:
 
 
 def compute_scoped_workspace_dir_name(user_id: str | None, scope_key: str) -> str:
-    """Build ``ws_<hash>`` from ``user_id`` and a workspace scope key."""
+    """Build `ws_<hash>` from `user_id` and a workspace scope key."""
     uid = user_id_for_hash(user_id)
     key = f"{uid}:{scope_key}"
     hash_hex = hashlib.sha256(key.encode()).hexdigest()[:16]

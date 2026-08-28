@@ -1,6 +1,6 @@
 """Ownership validation for split config files.
 
-This module enforces which key paths belong in ``nano.yml`` vs ``soothe.yml``.
+This module enforces which key paths belong in `nano.yml` vs `soothe.yml`.
 """
 
 from __future__ import annotations
@@ -113,7 +113,7 @@ def validate_nano_file_ownership(
     *,
     source_file: str = "nano.yml",
 ) -> None:
-    """Validate that ``nano.yml`` does not contain host-owned key paths."""
+    """Validate that `nano.yml` does not contain host-owned key paths."""
     violations = _collect_violations(data, source_file=source_file, rules=_NANO_DISALLOWED_RULES)
     if violations:
         raise OwnershipViolationError(violations)
@@ -124,7 +124,7 @@ def validate_host_file_ownership(
     *,
     source_file: str = "soothe.yml",
 ) -> None:
-    """Validate that ``soothe.yml`` does not contain nano-owned key paths."""
+    """Validate that `soothe.yml` does not contain nano-owned key paths."""
     violations = _collect_violations(data, source_file=source_file, rules=_HOST_DISALLOWED_RULES)
     if violations:
         raise OwnershipViolationError(violations)

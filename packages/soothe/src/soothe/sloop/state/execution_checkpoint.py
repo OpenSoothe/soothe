@@ -1,8 +1,4 @@
-"""GoalIndexEntry for checkpoint goal index.
-
-Goal/step/ledger state is recovered from CE persistence on restart.
-The checkpoint stores only a lightweight goal index (GoalIndexEntry).
-"""
+"""GoalIndexEntry for checkpoint goal index."""
 
 from __future__ import annotations
 

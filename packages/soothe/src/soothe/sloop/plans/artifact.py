@@ -23,10 +23,10 @@ _NONE_SECTION_RE = re.compile(
 
 
 def strip_empty_plan_sections(markdown: str) -> str:
-    """Remove plan sections whose body is a bare ``None`` / ``N/A`` placeholder.
+    """Remove plan sections whose body is a bare `None` / `N/A` placeholder.
 
     The plan templates instruct the LLM to OMIT inapplicable optional sections
-    entirely, but models sometimes emit a literal ``None`` or ``N/A`` as the
+    entirely, but models sometimes emit a literal `None` or `N/A` as the
     section body. This post-processor strips those dead sections so the
     rendered plan stays compact and relevant.
 
@@ -94,7 +94,7 @@ def write_plan_artifact(
     loop_id: str = "",
     status: str = "draft",
 ) -> Path:
-    """Write a new plan markdown file under ``.soothe/plans/``.
+    """Write a new plan markdown file under `.soothe/plans/`.
 
     Args:
         workspace: Loop workspace root.
@@ -102,7 +102,7 @@ def write_plan_artifact(
         title: Used for the filename slug.
         goal_id: Optional goal id for frontmatter.
         loop_id: Optional loop/thread id for frontmatter.
-        status: ``draft`` | ``approved`` | ``rejected``.
+        status: `draft` | `approved` | `rejected`.
 
     Returns:
         Absolute path to the written file.
@@ -137,7 +137,7 @@ def strip_plan_frontmatter(markdown: str) -> str:
 
 
 def update_plan_artifact_status(path: str | Path, status: str) -> None:
-    """Update ``status`` in YAML frontmatter when present; otherwise no-op prepend."""
+    """Update `status` in YAML frontmatter when present; otherwise no-op prepend."""
     p = Path(path)
     if not p.is_file():
         return
@@ -162,9 +162,9 @@ def update_plan_artifact_status(path: str | Path, status: str) -> None:
 def parse_plan_review_answers(
     answers: tuple[str, ...] | list[str],
 ) -> tuple[str, str]:
-    """Parse plan-review answers into ``(action, text)``.
+    """Parse plan-review answers into `(action, text)`.
 
-    Actions: ``approve`` | ``reject`` | ``refine``.
+    Actions: `approve` | `reject` | `refine`.
 
     Expects the plan-review widget (or equivalent) to send the action label
     in answers[0] and optional refinement text in answers[1]. Free-text

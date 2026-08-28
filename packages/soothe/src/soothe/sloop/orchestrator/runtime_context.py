@@ -1,9 +1,4 @@
-"""Mutable runtime bundle for LangGraph Strange Loop nodes.
-
-Per-iteration planner scratch lives on ``LoopRuntimeContext`` (not graph
-channels) because payloads reference rich non-primitive models that are not
-serialized in LangGraph checkpoints today.
-"""
+"""Mutable runtime bundle for LangGraph Strange Loop nodes."""
 
 from __future__ import annotations
 
@@ -87,7 +82,7 @@ class LoopRuntimeContext:
 
     @property
     def core_agent(self) -> CoreAgentProtocol:
-        """CoreAgent graph (checkpoint key = ``thread_id``, not loop_id)."""
+        """CoreAgent graph (checkpoint key = `thread_id`, not loop_id)."""
         return self.strange_loop.core_agent
 
     async def park_for_clarification(
@@ -98,9 +93,9 @@ class LoopRuntimeContext:
     ) -> None:
         """Persist a hard-defer park so the goal stays resumable.
 
-        When a Context Engine handle is wired (``ce`` + ``ce_goal_id``), calls
-        ``mark_awaiting_clarification`` so Autopilot skips redispatch
-        (``BLOCKED_STATES``). Solo / no-CE runs log only.
+        When a Context Engine handle is wired (`ce` + `ce_goal_id`), calls
+        `mark_awaiting_clarification` so Autopilot skips redispatch
+        (`BLOCKED_STATES`). Solo / no-CE runs log only.
         """
         logger.info(
             "[ClarificationRelay] goal status -> awaiting_clarification (reason=%s)",
@@ -125,8 +120,8 @@ class LoopRuntimeContext:
         """Unblock a CE-parked goal after clarification answers arrive.
 
         Returns:
-            True when the goal was in ``awaiting_clarification`` and was
-            transitioned (caller should emit ``goal_unblocked``). False when
+            True when the goal was in `awaiting_clarification` and was
+            transitioned (caller should emit `goal_unblocked`). False when
             there is no CE park to resolve (interactive first-shot path).
         """
         ce = self.ce

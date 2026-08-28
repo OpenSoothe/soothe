@@ -1,27 +1,4 @@
-"""Event type constants, models, and registry for soothe.* events.
-
-This module is the single source of truth for host event type strings and
-Pydantic event models, plus registry registration and emission helpers.
-
-Client-facing: ``soothe.<domain>.<component>.<action>``.
-Internal (daemon/worker only, never WebSocket broadcast):
-``soothe.internal.<component>.<action>``.
-
-Base event classes are defined in soothe_sdk.core.events.
-Module-specific events (subagents, tools) are defined in their respective
-modules and imported here for registry.
-
-**Usage:**
-
-For type-safe event emission (recommended):
-    from soothe.events import GoalCreatedEvent
-    yield custom_event(GoalCreatedEvent(goal_id=gid).to_dict())
-
-For event type string constants:
-    from soothe.events import GOAL_CREATED, PLAN_CREATED
-    if event_type == GOAL_CREATED:
-        ...
-"""
+"""Event type constants, models, and registry for soothe.* events."""
 
 from __future__ import annotations
 
@@ -404,9 +381,9 @@ class StrangeLoopStepQueuedEvent(LifecycleEvent):
 class StrangeLoopStepCompletedEvent(LifecycleEvent):
     """Level 3: Step result in three-level tree.
 
-    For ``ask_user`` steps resolved by veritas / interactive relay, the optional
-    ``clarification`` field carries the questions, the answers, the answer
-    source (``veritas`` / ``human`` / ``fallback``) and (when known) the
+    For `ask_user` steps resolved by veritas / interactive relay, the optional
+    `clarification` field carries the questions, the answers, the answer
+    source (`veritas` / `human` / `fallback`) and (when known) the
     veritas confidence so live UIs can render the Q&A on the step card.
     """
 

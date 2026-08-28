@@ -39,7 +39,7 @@ def load_prompt_fragment(relative_path: str) -> Template:
     """Load and return a Jinja2 template from fragments directory.
 
     Args:
-        relative_path: Path relative to fragments directory (e.g. ``instructions/synthesis_report_system.xml``).
+        relative_path: Path relative to fragments directory (e.g. `instructions/synthesis_report_system.xml`).
 
     Returns:
         Jinja2 Template object ready for rendering.

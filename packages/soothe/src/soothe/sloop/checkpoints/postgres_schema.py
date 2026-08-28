@@ -1,12 +1,4 @@
-"""PostgreSQL schema initialization for StrangeLoop persistence.
-
-Schema is defined in ``soothe/persistence/sql/``
-(``init.sql`` plus optional versioned ``NNN_name.sql`` scripts) and applied
-idempotently on pool open via :func:`initialize_database`.
-
-PR-3: the host owns the StrangeLoop/CE schema; ``sql_root`` is pinned to
-the host sql dir so the schema no longer lives in ``soothe_nano``.
-"""
+"""PostgreSQL schema initialization for StrangeLoop persistence."""
 
 from __future__ import annotations
 
@@ -33,7 +25,7 @@ async def initialize_agentloop_postgres_schema(pool: AsyncConnectionPool) -> Non
     process restart, or first backend use).
 
     Args:
-        pool: Open ``AsyncConnectionPool`` for the soothe_checkpoints database.
+        pool: Open `AsyncConnectionPool` for the soothe_checkpoints database.
     """
     result = await initialize_database(pool, AGENTLOOP_POSTGRES_DATABASE, sql_root=_HOST_SQL_ROOT)
     if result.init_applied or result.migrations_applied:

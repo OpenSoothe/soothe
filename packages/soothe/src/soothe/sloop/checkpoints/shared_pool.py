@@ -1,18 +1,4 @@
-"""Shared PostgreSQL connection pool for StrangeLoop persistence.
-
-Provides a singleton pool at daemon level for high-concurrency scenarios
-(200+ threads). Each StrangeLoopStateManager reuses this shared pool instead
-of creating its own, preventing connection exhaustion.
-
-SQLite mode uses a ref-counted singleton ``SQLitePersistenceBackend`` so each
-loop shares the process ``SqliteStoreRuntime`` for
-``databases/checkpoints.db``.
-
-Architecture:
-    Daemon → SootheRunner → SharedPostgreSQLPool
-                      ↓
-    StrangeLoopStateManager (receives pool reference)
-"""
+"""Shared PostgreSQL connection pool for StrangeLoop persistence."""
 
 from __future__ import annotations
 
@@ -62,7 +48,7 @@ class SharedPostgreSQLPool:
     """Shared PostgreSQL connection pool for StrangeLoop state persistence.
 
     High-concurrency architecture with 200+ thread support.
-    Pool size is config-driven (``persistence.postgres.checkpoints_pool_size``); default suits
+    Pool size is config-driven (`persistence.postgres.checkpoints_pool_size`); default suits
     one active run per process (e.g. pool workers) without multiplying connections by 30×N workers.
 
     Usage:
@@ -88,7 +74,7 @@ class SharedPostgreSQLPool:
 
         Args:
             dsn: PostgreSQL DSN for soothe_checkpoints database.
-            pool_size: Shared pool ``max_size`` (default matches ``PersistenceConfig``).
+            pool_size: Shared pool `max_size` (default matches `PersistenceConfig`).
             pool_timing: Optional psycopg pool options (timeout, max_idle, max_lifetime).
         """
         self.dsn = dsn
@@ -114,13 +100,13 @@ class SharedPostgreSQLPool:
             return await self._open_locked()
 
     async def _open_locked(self) -> AsyncConnectionPool:
-        """Build, open, and schema-init the pool. Caller MUST hold ``_init_lock``.
+        """Build, open, and schema-init the pool. Caller MUST hold `_init_lock`.
 
-         : extracted from ``open`` so ``reset_pool`` can reopen without
-        re-entering ``open`` (``asyncio.Lock`` is not reentrant — the prior
-        ``await self.open()`` while holding ``_init_lock`` deadlocked the
-        recovery path, leaving ``_pool=None`` and every subsequent
-        ``for_shared_checkpoint_pool`` caller raising "Shared checkpoint pool
+         : extracted from `open` so `reset_pool` can reopen without
+        re-entering `open` (`asyncio.Lock` is not reentrant — the prior
+        `await self.open()` while holding `_init_lock` deadlocked the
+        recovery path, leaving `_pool=None` and every subsequent
+        `for_shared_checkpoint_pool` caller raising "Shared checkpoint pool
         not initialized" (loop 0041).
         """
         pool_kwargs: dict[str, Any] = {
@@ -152,7 +138,7 @@ class SharedPostgreSQLPool:
         await initialize_agentloop_postgres_schema(pool)
 
     async def release_idle_connections(self) -> None:
-        """Return idle connections to PgBouncer (``Pool.check``)."""
+        """Return idle connections to PgBouncer (`Pool.check`)."""
         await release_idle_pool_connections(self._pool, label="StrangeLoop")
 
     async def close(self) -> None:
@@ -207,23 +193,23 @@ class SharedPostgreSQLPool:
 
         Note:
             Snapshot only. Callers that need a non-None pool (e.g. checkpoint
-            persistence) must use ``await_pool`` to avoid observing a
-            transiently-None pool during ``reset_pool`` reopen.
+            persistence) must use `await_pool` to avoid observing a
+            transiently-None pool during `reset_pool` reopen.
         """
         return self._pool
 
     async def await_pool(self) -> AsyncConnectionPool | None:
         """Return the underlying pool, waiting for any in-flight reset to finish.
 
-        ``reset_pool`` nulls ``_pool`` before reopening (close + ``open`` +
-        schema setup), so a concurrent ``get_pool`` snapshot can observe
-        ``None`` mid-recovery. This accessor acquires ``_init_lock`` — the same
-        lock ``open``/``reset_pool`` hold while mutating the pool — so a caller
+        `reset_pool` nulls `_pool` before reopening (close + `open` +
+        schema setup), so a concurrent `get_pool` snapshot can observe
+        `None` mid-recovery. This accessor acquires `_init_lock` — the same
+        lock `open`/`reset_pool` hold while mutating the pool — so a caller
         arriving during the reopen window blocks until the new pool is ready
-        (or ``reset_pool`` has cleared it for shutdown).
+        (or `reset_pool` has cleared it for shutdown).
 
         Returns:
-            ``AsyncConnectionPool`` when initialized, or ``None`` when the
+            `AsyncConnectionPool` when initialized, or `None` when the
             singleton is closed (registry-backed close / shutdown).
         """
         async with self._init_lock:
@@ -328,8 +314,8 @@ class SharedPostgreSQLPool:
 def acquire_shared_sqlite_backend_sync() -> SQLitePersistenceBackend:
     """Return the process-wide SQLite backend; increment ref count (sync).
 
-    Safe in ``__init__`` because ``SQLitePersistenceBackend`` opens connections lazily.
-    Recreates the singleton if a prior ``SqliteRuntimeRegistry.close_all`` left a
+    Safe in `__init__` because `SQLitePersistenceBackend` opens connections lazily.
+    Recreates the singleton if a prior `SqliteRuntimeRegistry.close_all` left a
     closed Runtime attached to a stale backend.
     """
     global _shared_sqlite_backend, _shared_sqlite_refcount

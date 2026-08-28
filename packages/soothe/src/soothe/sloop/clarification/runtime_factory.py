@@ -1,10 +1,4 @@
-"""Bridge from ``SootheConfig`` + runtime mode to a ``ClarificationPolicy``.
-
-The selector in :mod:`soothe.sloop.clarification.selector` is config-agnostic.
-This module knits together the config's ``ClarificationConfig`` /
-``VeritasConfig`` blocks with the veritas implementation so runners do not have
-to repeat the wiring.
-"""
+"""Bridge from `SootheConfig` + runtime mode to a `ClarificationPolicy`."""
 
 from __future__ import annotations
 
@@ -35,11 +29,11 @@ def resolve_clarification_mode(
 
     Args:
         requested: Per-request mode (typically from the wire payload).
-            ``None`` or unrecognized values fall back to the config default.
-        config: Active ``SootheConfig`` with ``agent.clarification.default_mode``.
+            `None` or unrecognized values fall back to the config default.
+        config: Active `SootheConfig` with `agent.clarification.default_mode`.
 
     Returns:
-        ``"auto"`` or ``"manual"``.
+        `"auto"` or `"manual"`.
     """
     cleaned = (requested or "").strip().lower()
     if cleaned in ("auto", "manual"):
@@ -56,32 +50,32 @@ def build_clarification_policy_for_runner(
     thread_id: str | None = None,
     loop_id: str | None = None,
 ) -> ClarificationPolicy:
-    """Build the policy a runner injects into ``LoopRuntimeContext``.
+    """Build the policy a runner injects into `LoopRuntimeContext`.
 
     Args:
         config: Soothe configuration providing the clarification and veritas
             sub-blocks plus the chat-model factory.
-        mode: Optional per-request mode (``"auto"`` / ``"manual"``). When
-            unset, falls back to ``config.agent.clarification.default_mode``.
+        mode: Optional per-request mode (`"auto"` / `"manual"`). When
+            unset, falls back to `config.agent.clarification.default_mode`.
         emit: Optional emit function for early UI notification. The durable
-            pause path uses LangGraph ``interrupt(...)`` regardless.
-        human_attached: When ``True`` and ``mode`` resolves to ``"auto"``,
+            pause path uses LangGraph `interrupt(...)` regardless.
+        human_attached: When `True` and `mode` resolves to `"auto"`,
             wire an :class:`InteractiveClarificationPolicy` as the
-            ``interactive_fallback``. Veritas structured-output
+            `interactive_fallback`. Veritas structured-output
             failures then degrade to a TUI prompt instead of terminating the
-            loop. Headless callers (autopilot) pass ``False`` and keep the
+            loop. Headless callers (autopilot) pass `False` and keep the
             hard-defer path on veritas failure.
-        thread_id: Loop thread id used as the Langfuse ``session_id`` for the
+        thread_id: Loop thread id used as the Langfuse `session_id` for the
             veritas LLM call so the span correlates with the parent loop trace.
         loop_id: Loop id forwarded to Langfuse for trace correlation.
 
     Returns:
-        A ``ClarificationPolicy`` ready to attach to a goal run. The veritas
-        chat model is only instantiated when ``mode`` resolves to ``"auto"``
+        A `ClarificationPolicy` ready to attach to a goal run. The veritas
+        chat model is only instantiated when `mode` resolves to `"auto"`
         — manual mode skips the model construction entirely. In manual mode
         the tool-approval pipeline (when enabled) still pre-filters
-        ``tool_approval`` requests: deny/safety stages auto-reject, allow
-        rules auto-approve only under ``manual_scope: ambiguous_only``.
+        `tool_approval` requests: deny/safety stages auto-reject, allow
+        rules auto-approve only under `manual_scope: ambiguous_only`.
     """
     resolved_mode = resolve_clarification_mode(mode, config)
     clar_cfg = config.agent.clarification
@@ -159,12 +153,12 @@ def bind_clarification_emit(
     policy: ClarificationPolicy | None,
     emit: EmitFn,
 ) -> None:
-    """Wire runtime ``emit`` into interactive clarification legs.
+    """Wire runtime `emit` into interactive clarification legs.
 
-    Runners build the policy before the graph ``emit`` closure exists. Call
-    this once ``emit`` is available so auto→manual upgrades
-    (``answer_as_manual_fallback``) can re-notify the TUI before
-    ``interrupt(...)`` pauses the graph.
+    Runners build the policy before the graph `emit` closure exists. Call
+    this once `emit` is available so auto→manual upgrades
+    (`answer_as_manual_fallback`) can re-notify the TUI before
+    `interrupt(...)` pauses the graph.
     """
     if policy is None:
         return

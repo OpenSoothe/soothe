@@ -77,13 +77,13 @@ def _append_goal_completion_ledger_pair(
 ) -> None:
     """Append Human–AI pair for the goal completion report.
 
-    Every completion strategy (``synthesize``, ``ledger_direct``) writes
-    an independent ``goal_completion`` unit so the ledger has one canonical terminal
+    Every completion strategy (`synthesize`, `ledger_direct`) writes
+    an independent `goal_completion` unit so the ledger has one canonical terminal
     report per goal regardless of how the text was produced.
 
     Args:
-        state: Loop state whose ``loop_messages`` list is extended.
-        iteration_completed: Iteration index that just finished (before ``state.iteration`` bump).
+        state: Loop state whose `loop_messages` list is extended.
+        iteration_completed: Iteration index that just finished (before `state.iteration` bump).
         action: Completion strategy used for this goal (logged at record sites only).
         final_output: Final user-visible text (may be empty).
         context_engine: ContextEngine instance for direct LedgerManager writes.
@@ -122,7 +122,7 @@ async def _goal_completion_tail_persistence(
     goal_record: Any,
     loop_id: str,
 ) -> list[str]:
-    """Persist CE + checkpoint tail state after the ``completed`` wire event."""
+    """Persist CE + checkpoint tail state after the `completed` wire event."""
     failures: list[str] = []
     unified_pg = getattr(state_manager, "_backend_type", None) == "postgresql"
 
@@ -200,7 +200,7 @@ def _start_goal_completion_tail_persistence(
     *,
     goal_record: Any,
 ) -> None:
-    """Start tail persistence without blocking the ``completed`` wire event."""
+    """Start tail persistence without blocking the `completed` wire event."""
     loop_id = str(getattr(ctx.state_manager, "loop_id", "unknown"))
 
     async def _run_tail() -> None:
@@ -254,7 +254,7 @@ async def await_goal_completion_tail_persistence(
     *,
     timeout_seconds: float = _GOAL_COMPLETION_TAIL_PERSIST_TIMEOUT_SECONDS,
 ) -> None:
-    """Drain tail persistence before ``StrangeLoopStateManager.close()``."""
+    """Drain tail persistence before `StrangeLoopStateManager.close()`."""
     if ctx is None:
         return
     task = ctx.tail_persistence_task
@@ -291,16 +291,16 @@ async def _finalize_plan_mode_approve(
 
     The plan-mode goal's sole purpose was to produce a plan; the plan body is
     already the terminal ledger entry (recorded by
-    ``_record_plan_completion_ledger`` at plan-draft time in ``node_plan_review``).
-    So this path skips goal-completion synthesis, the ``goal_completion``
-    Human/AI ledger pair, and any ``full_output`` — the user must NOT see a
+    `_record_plan_completion_ledger` at plan-draft time in `node_plan_review`).
+    So this path skips goal-completion synthesis, the `goal_completion`
+    Human/AI ledger pair, and any `full_output` — the user must NOT see a
     summary here. Only the follow-on exec goal (enqueued by the daemon from
-    the ``follow_on_exec`` signal carried on the ``completed`` event) should
+    the `follow_on_exec` signal carried on the `completed` event) should
     produce a user-facing summary.
 
-    Keeps the bookkeeping the rest of ``node_goal_completion`` does: iteration
+    Keeps the bookkeeping the rest of `node_goal_completion` does: iteration
     checkpoint, state clear, CE goal finalization, tail persistence, and the
-    ``completed`` wire event (carrying ``follow_on_exec``).
+    `completed` wire event (carrying `follow_on_exec`).
     """
     state = ctx.loop_state
     state_manager = ctx.state_manager
@@ -388,7 +388,7 @@ async def _finalize_plan_mode_reject(
     """Terminal path for a rejected plan: end the goal with no report.
 
     The operator discarded the plan, so there is nothing to summarize: no
-    completion synthesis, no ``goal_completion`` ledger pair, and no
+    completion synthesis, no `goal_completion` ledger pair, and no
     user-facing output. Only the bookkeeping that returns the loop to idle
     runs — CE goal termination, the terminal wire event, and tail persistence.
     """
@@ -438,7 +438,7 @@ async def _finalize_plan_mode_reject(
 async def node_goal_completion(
     ctx: LoopRuntimeContext, graph_state: dict[str, Any]
 ) -> dict[str, Any]:
-    """Finalize goal when goal execution reports ``done`` (record iteration, synthesis, emit completed).
+    """Finalize goal when goal execution reports `done` (record iteration, synthesis, emit completed).
 
     Clear all pending execution state to prevent task leakage into next query.
     When goal completion happens, any pending decision, step_results, or working memory

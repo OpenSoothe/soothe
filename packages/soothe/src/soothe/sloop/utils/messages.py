@@ -15,14 +15,14 @@ if TYPE_CHECKING:
 
 
 def _char_split_for_trim(text: str, chunk_size: int = 400) -> list[str]:
-    """Split long single-line execute output for ``trim_messages`` partial strategy."""
+    """Split long single-line execute output for `trim_messages` partial strategy."""
     if not text:
         return [""]
     return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 
 def compact_execute_ai_message(msg: Any, max_tokens: int) -> Any:
-    """Bound execute-step AI ledger text using langchain ``trim_messages``."""
+    """Bound execute-step AI ledger text using langchain `trim_messages`."""
     if max_tokens <= 0:
         return msg
     from langchain_core.messages import BaseMessage, trim_messages
@@ -58,8 +58,8 @@ def _record_ledger_message(
 ) -> None:
     """Record a message to the CE LedgerManager.
 
-    When ``context_engine`` is provided, writes to the CE ledger.
-    The ``loop_messages`` property on LoopState automatically reflects CE
+    When `context_engine` is provided, writes to the CE ledger.
+    The `loop_messages` property on LoopState automatically reflects CE
     state when bound — no explicit sync call is needed.
 
     Args:
@@ -67,8 +67,8 @@ def _record_ledger_message(
             Must be provided in production code. Tests without CE must
             use a sqlite :memory: ContextEngine instance.
         msg: Message to record (should be a BaseMessage subclass).
-        phase: Phase tag (e.g., ``execute_step``, ``goal_completion``; legacy
-            plan-spine tags such as ``plan_assess`` may appear in old ledgers).
+        phase: Phase tag (e.g., `execute_step`, `goal_completion`; legacy
+            plan-spine tags such as `plan_assess` may appear in old ledgers).
 
     Raises:
         ValueError: If context_engine is None (production code must provide CE).
@@ -91,15 +91,15 @@ def _record_ledger_message(
 
 
 def last_ledger_ai_content(state: LoopState) -> str:
-    """Return content of the last non-planning ``LoopAIMessage`` in ledger.
+    """Return content of the last non-planning `LoopAIMessage` in ledger.
 
-    Used by goal completion when ``require_goal_completion=False`` to provide
+    Used by goal completion when `require_goal_completion=False` to provide
     the user with the most recent non-planning assistant response from the
     ledger. Historical plan-spine ledger turns (and intake/preamble) must not
-    be surfaced as final user output in ``ledger_direct`` completion mode.
+    be surfaced as final user output in `ledger_direct` completion mode.
 
     Args:
-        state: LoopState with populated ``loop_messages``.
+        state: LoopState with populated `loop_messages`.
 
     Returns:
         Content of the last non-planning AI message, or empty string if none found.
@@ -119,7 +119,7 @@ def last_ledger_ai_content(state: LoopState) -> str:
 
 
 def loop_message_assistant_output_phase(msg: Any) -> str | None:
-    """Return ``phase`` when ``msg`` is a loop-tagged assistant-output message."""
+    """Return `phase` when `msg` is a loop-tagged assistant-output message."""
     if msg is None:
         return None
     phase = getattr(msg, "phase", None)
@@ -139,7 +139,7 @@ class LoopHumanMessage(HumanMessage):
     - Thread tracking (thread_id)
     - Iteration tracking (iteration)
     - Goal context (goal_summary)
-    - Execution phase (``execute_step``, ``goal_completion``, plus legacy
+    - Execution phase (`execute_step`, `goal_completion`, plus legacy
       plan-spine tags still present in old ledgers)
     - Wave tracking (wave_id for execute_wave phase)
     - CoreAgent dedup (core_agent_message_id for reference-based dedup)
@@ -202,7 +202,7 @@ class LoopAIMessage(AIMessage):
     """StrangeLoop AIMessage with iteration metadata.
 
     Extends AIMessage to preserve:
-    - response_metadata for token extraction (``extract_token_usage_from_messages``)
+    - response_metadata for token extraction (`extract_token_usage_from_messages`)
     - usage_metadata for standardized token counts
     - tool_calls for tool tracking
     - StrangeLoop-specific metadata (iteration, phase)
@@ -243,7 +243,7 @@ class LoopAIMessage(AIMessage):
 
 
 class LoopAIMessageChunk(AIMessageChunk):
-    """Streaming AI chunk with StrangeLoop ``phase`` metadata."""
+    """Streaming AI chunk with StrangeLoop `phase` metadata."""
 
     thread_id: str | None = None
     iteration: int | None = None
@@ -260,7 +260,7 @@ def loop_assistant_messages_chunk(
     thread_id: str,
     iteration: int | None = None,
 ) -> tuple[tuple[str, ...], str, tuple[LoopAIMessage, dict[str, Any]]]:
-    """Build a root ``messages``-mode stream chunk for piggybacked assistant text."""
+    """Build a root `messages`-mode stream chunk for piggybacked assistant text."""
     if phase not in ASSISTANT_OUTPUT_PHASES:
         raise ValueError(f"Invalid assistant output phase: {phase}")
     msg = LoopAIMessage(content=content, thread_id=thread_id, iteration=iteration, phase=phase)
@@ -274,7 +274,7 @@ def tag_messages_stream_chunk_for_assistant_phase(
     thread_id: str,
     iteration: int | None = None,
 ) -> Any:
-    """Tag AI payloads in a LangGraph ``messages`` chunk with a loop assistant ``phase``."""
+    """Tag AI payloads in a LangGraph `messages` chunk with a loop assistant `phase`."""
     if phase not in ASSISTANT_OUTPUT_PHASES:
         raise ValueError(f"Invalid assistant output phase: {phase}")
     from langchain_core.messages import AIMessage as LCAIMessage
@@ -323,7 +323,7 @@ def tag_messages_stream_chunk_for_goal_completion(
     thread_id: str,
     iteration: int,
 ) -> Any:
-    """Tag AI payloads in a LangGraph ``messages`` chunk with ``phase=goal_completion``."""
+    """Tag AI payloads in a LangGraph `messages` chunk with `phase=goal_completion`."""
     return tag_messages_stream_chunk_for_assistant_phase(
         chunk,
         phase="goal_completion",

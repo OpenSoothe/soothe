@@ -1,19 +1,4 @@
-"""Internal event types for StrangeLoop, ContextEngine, and AutopilotService coordination.
-
-This module defines event classes for the `soothe.internal.*` namespace.
-These events are used for internal coordination between:
-- StrangeLoop (Layer 2) - emits goal completion/failure events
-- ContextEngine - owns goal state, dispatches state changes
-- AutopilotService (Layer 3) - manages loop pool, scheduling
-
-Key Principle: Internal events never leak to external clients (WebSocket, TUI).
-
-Event Namespaces:
-- soothe.internal.goal.* - AL ↔ GE goal coordination
-- soothe.internal.loop.* - Loop lifecycle and lineage
-- soothe.internal.file.* - File lock conflict resolution
-- soothe.internal.autopilot.* - AP lifecycle, worker pool
-"""
+"""Internal event types for StrangeLoop, ContextEngine, and AutopilotService coordination."""
 
 from __future__ import annotations
 
@@ -467,7 +452,7 @@ def internal_to_client_event(internal_event: SootheEvent) -> SootheEvent | None:
     """Convert internal event to client-visible event.
 
     Used by daemon to bridge internal events for sessions with
-    ``autopilot_subscribed=True``.
+    `autopilot_subscribed=True`.
 
     Args:
         internal_event: Internal event to convert.

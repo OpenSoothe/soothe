@@ -21,11 +21,11 @@ _INLINE_SUCCESS_BODY_CAP = 800
 class LoopWorkingMemory:
     """Accumulate agentic-loop facts for Reason prompts.
 
-    Spills large outputs under ``SOOTHE_HOME/data/threads/{thread_id}/working_memory/``.
+    Spills large outputs under `SOOTHE_HOME/data/threads/{thread_id}/working_memory/`.
 
     Args:
-        thread_id: Canonical thread identifier; spill path is ``data/threads/{thread_id}/working_memory/``.
-        max_inline_chars: Cap for ``render_for_reason`` aggregate text.
+        thread_id: Canonical thread identifier; spill path is `data/threads/{thread_id}/working_memory/`.
+        max_inline_chars: Cap for `render_for_reason` aggregate text.
         max_entry_chars_before_spill: Spill raw step output when longer than this.
     """
 
@@ -46,7 +46,7 @@ class LoopWorkingMemory:
         return n
 
     def _write_spill(self, step_id: str, body: str) -> str:
-        """Write spill file under ``SOOTHE_HOME/data/threads/{thread_id}/working_memory/``; return relative path (posix)."""
+        """Write spill file under `SOOTHE_HOME/data/threads/{thread_id}/working_memory/`; return relative path (posix)."""
         seq = self._next_spill_seq(step_id)
         safe_step = re.sub(r"[^a-zA-Z0-9._-]+", "_", step_id)[:64] or "step"
         # Use new isolated directory structure (RFC-215)
@@ -105,7 +105,7 @@ class LoopWorkingMemory:
         self._lines.append(line)
 
     def render_for_reason(self, *, max_chars: int | None = None) -> str:
-        """Build prompt section text; respect ``max_inline_chars`` or override."""
+        """Build prompt section text; respect `max_inline_chars` or override."""
         cap = max_chars if max_chars is not None else self.max_inline_chars
         if not self._lines:
             return ""

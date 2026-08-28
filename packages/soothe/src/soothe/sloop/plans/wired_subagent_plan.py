@@ -1,11 +1,4 @@
-"""Single-step plan builder for the wired-subagent delegate path.
-
-Used by the wired-subagent (intake-only specialist) branch for plan
-bookkeeping: produces a 1-step ``PlanResult`` carrying the wire-subagent
-hint so the direct-invoke specialist can record an execute-step ledger pair
-and route to ``goal_completion`` via ``terminal_after_execute`` without a
-second assess wave.
-"""
+"""Single-step plan builder for the wired-subagent delegate path."""
 
 from __future__ import annotations
 
@@ -37,8 +30,8 @@ def build_wired_subagent_plan(
         requires_tool_use: Execute deliverable-gate signal for the step.
 
     Returns:
-        A ``PlanResult`` with a single execute step whose action is the goal
-        itself and a soft direct-answer ``expected_output`` contract.
+        A `PlanResult` with a single execute step whose action is the goal
+        itself and a soft direct-answer `expected_output` contract.
     """
     resolved_wire = resolve_wire_subagent(wire_subagent=wire_subagent)
     step = StepAction(

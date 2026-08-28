@@ -1,8 +1,4 @@
-"""LangGraph Loop orchestrator.
-
-Avoid importing the compiled graph builder from this package root to prevent import cycles
-during ``soothe.config`` initialization.
-"""
+"""LangGraph Loop orchestrator."""
 
 from __future__ import annotations
 

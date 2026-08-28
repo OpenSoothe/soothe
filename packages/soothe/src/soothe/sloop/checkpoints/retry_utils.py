@@ -1,10 +1,4 @@
-"""Host aliases for shared persistence retry helpers.
-
-Extends the nano-level PostgreSQL retry utilities with a SQLite-specific
-``is_recoverable_sqlite_error`` so the host checkpointer init can retry
-transient SQLite failures (WAL contention, file-lock races, directory
-creation races in worker subprocesses).
-"""
+"""Host aliases for shared persistence retry helpers."""
 
 import sqlite3
 
@@ -26,7 +20,7 @@ _RECOVERABLE_SQLITE_MESSAGES = (
 def is_recoverable_sqlite_error(exc: Exception) -> bool:
     """Return True for transient SQLite failures worth retrying.
 
-    Detects ``OperationalError`` / ``DatabaseError`` whose message matches
+    Detects `OperationalError` / `DatabaseError` whose message matches
     known transient patterns (file-lock contention, WAL races, I/O hiccup).
 
     Args:

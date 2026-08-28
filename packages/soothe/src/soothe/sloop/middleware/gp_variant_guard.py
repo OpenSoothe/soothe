@@ -1,20 +1,4 @@
-"""Redirect ``task`` calls to the read-only GP variant on plan/ask steps.
-
-When per-step GP variants are registered (``general_purpose_subagent="per_step"``),
-the CoreAgent graph holds two GP subagents:
-
-- ``general-purpose`` — full access (inherits parent filesystem tools/permissions)
-- ``general-purpose-readonly`` — read-only (ls, read_file, file_info, glob, grep
-  + write-deny permissions)
-
-The model only knows ``general-purpose``; it never emits the readonly name.
-This middleware transparently redirects the ``subagent_type`` argument to
-``general-purpose-readonly`` when the owning step's interaction mode is
-``plan`` or ``ask``. Agent-mode steps (including Eval) keep the full variant.
-
-The step interaction mode is read from the parent graph's ``configurable`` via
-``SOOTHE_INTERACTION_MODE_KEY`` (set per step by the executor).
-"""
+"""Redirect `task` calls to the read-only GP variant on plan/ask steps."""
 
 from __future__ import annotations
 
@@ -38,7 +22,7 @@ _READONLY_MODES = frozenset({"plan", "ask"})
 
 
 def _subagent_type(request: ToolCallRequest) -> str | None:
-    """Extract the ``subagent_type`` arg from a ``task`` tool call."""
+    """Extract the `subagent_type` arg from a `task` tool call."""
     tool_call = getattr(request, "tool_call", None)
     if not isinstance(tool_call, dict):
         return None
@@ -67,11 +51,11 @@ def _step_mode(request: ToolCallRequest) -> str | None:
 
 
 class GeneralPurposeVariantGuardMiddleware(AgentMiddleware):
-    """Redirect ``task`` to the read-only GP variant on plan/ask steps.
+    """Redirect `task` to the read-only GP variant on plan/ask steps.
 
     No-op when the step is in agent mode (the common case, including Eval):
-    the call proceeds as ``general-purpose`` (full). On plan/ask steps the
-    ``subagent_type`` is rewritten to ``general-purpose-readonly`` before the
+    the call proceeds as `general-purpose` (full). On plan/ask steps the
+    `subagent_type` is rewritten to `general-purpose-readonly` before the
     task tool resolves the subagent, so the read-only variant runs instead.
 
     If the read-only variant is not registered (per-step GP disabled), the

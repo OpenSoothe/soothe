@@ -1,16 +1,4 @@
-"""Interactive (TUI relay) clarification policy.
-
-The policy pauses the loop graph at a LangGraph ``interrupt(...)`` call. The
-checkpoint snapshot captures the pending question, so TUI close/reopen and
-daemon restart both restore the loop at the same point. When the TUI submits
-the answer via ``Command(resume=...)``, ``interrupt(...)`` returns the payload
-and the policy unwraps it into a :class:`ClarificationAnswer`.
-
-``await_clarification`` owns the primary ``clarification_requested`` emit
-(with the correct mode). This policy only re-announces when used as an
-auto→manual upgrade, via
-:meth:`answer_as_manual_fallback`.
-"""
+"""Interactive (TUI relay) clarification policy."""
 
 from __future__ import annotations
 
@@ -41,11 +29,11 @@ logger = logging.getLogger(__name__)
 class InteractiveClarificationPolicy:
     """Relay clarifications to a human via the TUI; loop-level durable pause.
 
-    When a ``ToolApprovalPipeline`` is attached (manual clarification mode,
-    ), it pre-filters ``tool_approval`` requests: deny/safety
+    When a `ToolApprovalPipeline` is attached (manual clarification mode,
+    ), it pre-filters `tool_approval` requests: deny/safety
     stages always auto-reject dangerous actions without asking the human,
-    and allow rules auto-approve when ``manual_allow_rules`` is set
-    (``tool_approval.manual_scope: ambiguous_only``). Only rule-unresolved
+    and allow rules auto-approve when `manual_allow_rules` is set
+    (`tool_approval.manual_scope: ambiguous_only`). Only rule-unresolved
     actions reach the human. The pre-filter does not run on the
     auto→manual upgrade path — the auto policy already evaluated the
     pipeline before deferring to this policy as fallback.
@@ -67,10 +55,10 @@ class InteractiveClarificationPolicy:
         self._emit = emit
 
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
-        """Pause for a human answer without re-emitting ``clarification_requested``.
+        """Pause for a human answer without re-emitting `clarification_requested`.
 
-        ``await_clarification`` already emitted the request (including
-        ``force_manual_origins`` with ``mode=manual``). Re-emitting here would
+        `await_clarification` already emitted the request (including
+        `force_manual_origins` with `mode=manual`). Re-emitting here would
         duplicate events for every interactive pause.
         """
         static = self._evaluate_tool_approval_pipeline(request)
@@ -79,10 +67,10 @@ class InteractiveClarificationPolicy:
         return await self._answer(request, announce=False)
 
     async def answer_as_manual_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
-        """Re-announce as ``mode=manual`` then pause (auto→manual upgrade).
+        """Re-announce as `mode=manual` then pause (auto→manual upgrade).
 
                 Used when veritas structured output fails and a human is attached
-        The earlier ``await_clarification`` emit used ``mode=auto``.
+        The earlier `await_clarification` emit used `mode=auto`.
         """
         return await self._answer(request, announce=True)
 
@@ -128,7 +116,7 @@ class InteractiveClarificationPolicy:
         """Run the tool-approval pipeline pre-filter for manual mode (§9b).
 
         Returns a static answer when the pipeline resolves the batch, or
-        ``None`` to fall through to the human interrupt.
+        `None` to fall through to the human interrupt.
         """
         if request.origin_node != ORIGIN_TOOL_APPROVAL or self._tool_approval_pipeline is None:
             return None
@@ -191,7 +179,7 @@ class InteractiveClarificationPolicy:
     def _normalize_payload(payload: Any) -> list[str] | None:
         """Extract a raw answer list from an interrupt payload.
 
-        Returns stripped strings, or ``None`` when the payload is empty or
+        Returns stripped strings, or `None` when the payload is empty or
         has an unrecognizable shape.
         """
         if payload is None:

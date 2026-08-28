@@ -22,12 +22,12 @@ async def diagnose(
     """Run host-owned diagnose categories and return dict-contract results.
 
     Args:
-        config: Host ``SootheConfig`` (optional).
+        config: Host `SootheConfig` (optional).
         deep: Reserved for future deep host categories.
         categories: Explicit category filter (subset of host categories).
 
     Returns:
-        List of category dicts matching ``CategoryResult.to_dict()``.
+        List of category dicts matching `CategoryResult.to_dict()`.
     """
     from soothe.diagnose.host import check_host
 

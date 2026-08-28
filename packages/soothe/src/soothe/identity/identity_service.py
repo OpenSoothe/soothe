@@ -1,8 +1,4 @@
-"""IdentityProtocol implementation..
-
-Provides AKSK-based authentication and JWT token management for soothe-daemon.
-Uses existing PersistenceProtocol backend for storage (tables added to same DB).
-"""
+"""IdentityProtocol implementation.."""
 
 from __future__ import annotations
 
@@ -56,8 +52,8 @@ class IdentityService(IdentityProtocol):
 
     Interface implementation.
 
-    Backend follows ``persistence.default_backend`` (unified persistence rule):
-    SQLite file or PostgreSQL ``soothe_metadata`` identity_* tables.
+    Backend follows `persistence.default_backend` (unified persistence rule):
+    SQLite file or PostgreSQL `soothe_metadata` identity_* tables.
     """
 
     def __init__(
@@ -75,7 +71,7 @@ class IdentityService(IdentityProtocol):
         """Initialize IdentityService.
 
         Args:
-            db_path: SQLite path (required unless ``postgres_dsn`` is set).
+            db_path: SQLite path (required unless `postgres_dsn` is set).
             jwt_key: JWT signing key (256-bit recommended).
             access_expiry_hours: Access token expiry hours (1-24).
             refresh_expiry_days: Refresh token expiry days (1-365).
@@ -182,8 +178,8 @@ class IdentityService(IdentityProtocol):
     def close_sync(self) -> None:
         """Release the SQLite Runtime / close the PostgreSQL writer.
 
-        Matches ``acquire`` in ``_init_writer_sync``: every store that pulls a
-        ``SqliteStoreRuntime`` from the process registry must release it, or the
+        Matches `acquire` in `_init_writer_sync`: every store that pulls a
+        `SqliteStoreRuntime` from the process registry must release it, or the
         registry (and its 1 + reader-pool open connections) leaks for the
         process lifetime. Idempotent and safe when never initialized.
         """
@@ -1230,9 +1226,9 @@ def _apply_identity_schema(conn: sqlite3.Connection) -> None:
 
 
 def initialize_identity_tables_sync(db_path: Path) -> None:
-    """Initialize identity tables via process-scoped ``SqliteStoreRuntime``.
+    """Initialize identity tables via process-scoped `SqliteStoreRuntime`.
 
-    Schema. Hard cut: ``databases/identity.db`` layout.
+    Schema. Hard cut: `databases/identity.db` layout.
 
     Args:
         db_path: Path to SQLite database file.

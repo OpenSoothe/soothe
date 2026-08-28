@@ -80,7 +80,7 @@ def compose_host_agent_config(
     nano_source_file: str = "nano.yml",
     soothe_source_file: str = "soothe.yml",
 ) -> dict[str, Any]:
-    """Compose effective host config from ``nano.yml`` base and ``soothe.yml`` overlay."""
+    """Compose effective host config from `nano.yml` base and `soothe.yml` overlay."""
     validate_nano_file_ownership(nano_data, source_file=nano_source_file)
     validate_host_file_ownership(soothe_data, source_file=soothe_source_file)
 

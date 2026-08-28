@@ -38,7 +38,7 @@ def _try_auto_to_manual_fallback(
     fatal. This gives the human a chance to approve/reject the tool calls
     that veritas auto-answered incorrectly.
 
-    Returns a ``NodeResult`` to route to dispatch, or ``None`` when the
+    Returns a `NodeResult` to route to dispatch, or `None` when the
     fallback is not applicable (manual mode, no human, or no failed steps).
     """
     policy = getattr(ctx, "clarification_policy", None)

@@ -1,14 +1,4 @@
-"""Status vocabulary bridge across CE, checkpoint goal index, and loop checkpoint.
-
-Three parallel status namespaces coexist in production:
-
-- **ContextEngine** ``GoalStatus``: ``pending``, ``active``, ``completed``, …
-- **Goal index** (``GoalIndexEntry.status``): ``running``, ``completed``, ``failed``, ``cancelled``
-- **Loop checkpoint** (``StrangeLoopCheckpoint.status``): ``idle``, ``running``
-
-Callers MUST translate at persistence/recovery boundaries instead of comparing raw
-strings across layers.
-"""
+"""Status vocabulary bridge across CE, checkpoint goal index, and loop checkpoint."""
 
 from __future__ import annotations
 
@@ -22,7 +12,7 @@ _GOAL_INDEX_IN_FLIGHT: frozenset[str] = frozenset({"running", "interrupted"})
 def is_goal_index_in_flight(status: str) -> bool:
     """Return True when a checkpoint goal index entry is still in flight.
 
-    ``running`` is actively executing; ``interrupted`` is paused mid-flight by a
+    `running` is actively executing; `interrupted` is paused mid-flight by a
     user cancel or infra event and is still resumable. Both count as in-flight.
     """
     return status in _GOAL_INDEX_IN_FLIGHT
@@ -35,9 +25,9 @@ def suggest_loop_checkpoint_status(
 ) -> LoopCheckpointStatus:
     """Suggest loop-level status from goal-index rows (recovery helper).
 
-    When the loop checkpoint says ``idle`` but goal-index rows are still
-    ``running`` (or ``interrupted``), callers should repair toward ``running``.
-    A goal row explicitly ``interrupted`` also maps to ``running`` at the
+    When the loop checkpoint says `idle` but goal-index rows are still
+    `running` (or `interrupted`), callers should repair toward `running`.
+    A goal row explicitly `interrupted` also maps to `running` at the
     loop checkpoint level so the next turn re-enters the goal instead of
     treating it as terminal.
     """

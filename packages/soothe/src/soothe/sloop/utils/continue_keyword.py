@@ -14,7 +14,7 @@ _INTERRUPT_RESUME_KEYWORDS = frozenset({"continue", "resume", "proceed", "retry"
 def is_continue_keyword(text: str | None) -> bool:
     """Return True when *text* is a lone continuation keyword (case-insensitive).
 
-    Only exact single-word submissions match — ``"continue cleaning"`` does not.
+    Only exact single-word submissions match — `"continue cleaning"` does not.
     Used for idle-loop new-goal bootstrap. Prefer
     :func:`is_interrupt_resume_keyword` when recovering a running interrupted goal.
     """
@@ -24,9 +24,9 @@ def is_continue_keyword(text: str | None) -> bool:
 def is_interrupt_resume_keyword(text: str | None) -> bool:
     """Return True when *text* is a lone interrupt-resume keyword.
 
-    Matches ``continue`` / ``resume`` / ``proceed`` / ``retry``. Used when a
+    Matches `continue` / `resume` / `proceed` / `retry`. Used when a
     checkpoint still has an incomplete goal so the turn reuses the CE goal and
-    step DAG instead of creating a blank plan titled ``retry``.
+    step DAG instead of creating a blank plan titled `retry`.
     """
     return _is_single_keyword(text, _INTERRUPT_RESUME_KEYWORDS)
 

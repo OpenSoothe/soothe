@@ -797,8 +797,8 @@ def get_config_watcher() -> ConfigWatcher | None:
 def _load_agent_config(path: Path) -> Any:
     """Load agent config from YAML with env expansion.
 
-    When ``path`` is the default nano file and ``soothe.yml`` is present beside
-    it, compose via ``from_split_yaml_files``. Otherwise load the single file.
+    When `path` is the default nano file and `soothe.yml` is present beside
+    it, compose via `from_split_yaml_files`. Otherwise load the single file.
     """
     from soothe.config.settings import SootheConfig
 

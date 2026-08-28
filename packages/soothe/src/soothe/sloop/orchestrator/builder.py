@@ -1,14 +1,4 @@
-"""Compile the Strange Loop LangGraph.
-
-Live graph: INTAKE → ENTER_LOOP → DISPATCH ⇄ EXECUTE → RECORD_PROGRESS →
-RECONCILE → ROOT_EVAL → FINALIZE (+ AWAIT_USER / DELEGATE). Legacy plan-spine
-stations are deleted; clarification origins from old checkpoints resume at
-DISPATCH.
-
-The graph checkpoint key uses ``{loop_id}__strange_loop`` via
-``configurable.thread_id`` (see ``checkpoint``) when a checkpointer is
-attached. Persistence for goals remains ``StrangeLoopStateManager``.
-"""
+"""Compile the Strange Loop LangGraph."""
 
 from __future__ import annotations
 
@@ -62,9 +52,9 @@ logger = logging.getLogger(__name__)
 
 
 def _is_real_checkpointer(obj: Any) -> bool:
-    """``LangGraph.compile`` only accepts ``BaseCheckpointSaver`` instances or
+    """`LangGraph.compile` only accepts `BaseCheckpointSaver` instances or
     the bool/None sentinels — defensively reject mocks / duck-typed values so
-    unit tests that hand CoreAgent an ``AsyncMock`` keep working.
+    unit tests that hand CoreAgent an `AsyncMock` keep working.
     """
     if obj is None:
         return False
@@ -79,9 +69,9 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     """Build and compile the Loop orchestrator graph.
 
     The compiled graph is given the same checkpointer the CoreAgent uses.
-    Without a checkpointer LangGraph's ``interrupt(...)`` cannot persist
-    across ``ainvoke`` calls, so a clarification suspended in
-    ``await_user`` could never be resumed via ``Command(resume=...)``
+    Without a checkpointer LangGraph's `interrupt(...)` cannot persist
+    across `ainvoke` calls, so a clarification suspended in
+    `await_user` could never be resumed via `Command(resume=...)`
     on the next user input — the user's text would be classified as a new
     goal and the prior interrupt would dangle.
     """

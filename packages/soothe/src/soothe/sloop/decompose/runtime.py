@@ -1,4 +1,4 @@
-"""Runtime context for executor-bound ``decompose_task``."""
+"""Runtime context for executor-bound `decompose_task`."""
 
 from __future__ import annotations
 
@@ -50,10 +50,10 @@ _evidence_corpus: ContextVar[list[str] | None] = ContextVar(
 def _evidence_counter() -> list[int]:
     """Return the bound evidence counter list, binding a fresh one if absent.
 
-    The default ``None`` token means "not yet bound for this step"; the first
+    The default `None` token means "not yet bound for this step"; the first
     access (from either the middleware recorder or the gate reader) lazily
     binds a shared list so the same object reference is seen across
-    ``copy_context()`` snapshots regardless of which side touches it first.
+    `copy_context()` snapshots regardless of which side touches it first.
     """
     lst = _evidence_calls.get()
     if lst is None:
@@ -135,8 +135,8 @@ def _evidence_corpus_list() -> list[str]:
     """Return the bound evidence-corpus list, binding a fresh one if absent.
 
     Lazy-binds a shared list (same copy_context-safe pattern as
-    ``_evidence_counter``) so appends made inside a Pregel ``copy_context()``
-    snapshot are visible to the snapshot that runs ``decompose_task``.
+    `_evidence_counter`) so appends made inside a Pregel `copy_context()`
+    snapshot are visible to the snapshot that runs `decompose_task`.
     """
     lst = _evidence_corpus.get()
     if lst is None:
@@ -148,7 +148,7 @@ def _evidence_corpus_list() -> list[str]:
 def record_evidence_output(text: str) -> None:
     """Append a truncated excerpt of a grounding-tool output to the corpus.
 
-    Called by ``DecomposeTaskMiddleware`` after each grounding tool runs.
+    Called by `DecomposeTaskMiddleware` after each grounding tool runs.
     Per-entry cap bounds memory; the critic prompt also caps the total.
     """
     excerpt = (text or "").strip()
@@ -165,11 +165,11 @@ def current_evidence_corpus() -> list[str]:
 
 
 def langgraph_configurable() -> dict[str, Any]:
-    """Return the LangGraph ``configurable`` dict for the current task context.
+    """Return the LangGraph `configurable` dict for the current task context.
 
     Shared by the decompose middleware and tool handler to read workspace /
-    step-binding keys without duplicating the ``get_config`` boilerplate.
-    Returns ``{}`` when no LangGraph runtime context is active.
+    step-binding keys without duplicating the `get_config` boilerplate.
+    Returns `{}` when no LangGraph runtime context is active.
     """
     try:
         from langgraph.config import get_config

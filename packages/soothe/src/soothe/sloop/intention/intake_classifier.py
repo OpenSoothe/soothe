@@ -1,10 +1,4 @@
-"""Intake classifier: social vs task, with task complexity and short description.
-
-Single entry point:
-- ``classify`` — classification with optional ledger-projected history. Runs
-  in the graph INTAKE node so the CE ledger (prior-goal completion + preamble)
-  reaches the classify LLM.
-"""
+"""Intake classifier: social vs task, with task complexity and short description."""
 
 from __future__ import annotations
 
@@ -59,7 +53,7 @@ def build_intake_task_fallback(
 ) -> IntakeLLMResult:
     """Fail-safe intake verdict: treat the input as a task.
 
-    ``reasoning`` is user-facing prose because it reaches the TUI cognition card.
+    `reasoning` is user-facing prose because it reaches the TUI cognition card.
     The underlying error stays in the logs.
 
     Args:
@@ -137,7 +131,7 @@ class IntakeClassifier:
         """Classify query as social or task (with ledger context when provided).
 
         Social replies use a dedicated reply-only LLM call when the first
-        structured call omits ``social_response`` before falling back to task routing.
+        structured call omits `social_response` before falling back to task routing.
 
         Args:
             query: User input text.

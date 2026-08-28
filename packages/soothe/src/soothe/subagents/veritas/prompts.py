@@ -174,8 +174,8 @@ Action: edit_file (file_path=/etc/nginx/nginx.conf)
 def build_veritas_system_prompt_for_origin(origin: str | None) -> str:
     """Return the veritas system prompt appropriate for a clarification origin.
 
-    ``tool_approval`` origins get the security-approver prompt; all other
-    origins (``execute``, ``plan_mode_review``, etc.) get the default
+    `tool_approval` origins get the security-approver prompt; all other
+    origins (`execute`, `plan_mode_review`, etc.) get the default
     intent-answerer prompt.
     """
     if origin == "tool_approval":
@@ -191,23 +191,23 @@ def build_veritas_user_prompt(
 ) -> str:
     """Render the per-request context for veritas.
 
-    For ``tool_approval`` origin, a slim prompt is used: only
+    For `tool_approval` origin, a slim prompt is used: only
     tool name, args, user request, and goal description. No AGENTS.md, no
     prior clarifications, no recent step outputs. This keeps the LLM cost
     minimal for the ambiguous-case tail that reaches Stage 4.
 
     For all other origins, the full context prompt is used: the workspace's
-    project instructions (``AGENTS.md`` preferred, then ``CLAUDE.md``) are
+    project instructions (`AGENTS.md` preferred, then `CLAUDE.md`) are
     loaded via the shared loader and inlined as an
-    ``=== Project instructions ===`` section so veritas's answers respect the
-    target repo's guidance. ``LoopStateView.workspace_summary``
+    `=== Project instructions ===` section so veritas's answers respect the
+    target repo's guidance. `LoopStateView.workspace_summary`
     carries the thread workspace path at all three origins (execute,
     delegate, rail pause), which the loader resolves relative to.
 
-    ``agent_instructions_max_chars`` defaults to the loader's own cap
-    (25,000) so a typical ``AGENTS.md`` / ``CLAUDE.md`` inlines verbatim —
+    `agent_instructions_max_chars` defaults to the loader's own cap
+    (25,000) so a typical `AGENTS.md` / `CLAUDE.md` inlines verbatim —
     the full project rules reach veritas, not a truncated headline. Only
-    unusually large files degrade to a partial headline + ``read_file`` hint.
+    unusually large files degrade to a partial headline + `read_file` hint.
     """
     # RFC-622 §9b: slim prompt for tool-approval fallback.
     if request.origin_node == "tool_approval":
@@ -282,7 +282,7 @@ def _build_tool_approval_user_prompt(request: ClarificationRequest) -> str:
     """Slim prompt for tool-approval fallback.
 
     Only includes what's needed for a safety judgment:
-    - Tool name + full args (from ``metadata.action_requests``)
+    - Tool name + full args (from `metadata.action_requests`)
     - User request (context for intent alignment)
     - Goal description (context for intent alignment)
 

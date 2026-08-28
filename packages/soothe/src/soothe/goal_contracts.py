@@ -1,11 +1,4 @@
-"""Goal wire/contract types shared between the host and soothe-autopilot.
-
-Neutral home for the goal-dispatch and evidence/backoff vocabulary that flows
-across the host ↔ autopilot boundary. Both the host (``soothe.sloop.state.schemas``,
-``soothe.protocols.runner``) and the autopilot package import these types from
-here, so neither side owns the other's wire contracts: ``soothe-autopilot``
-imports ``soothe.goal_contracts``, but the host never imports ``soothe_autopilot``.
-"""
+"""Goal wire/contract types shared between the host and soothe-autopilot."""
 
 from __future__ import annotations
 
@@ -102,8 +95,8 @@ class PriorStepSummary(BaseModel):
 class GoalEffect(BaseModel):
     """One claimed side-effect of a completed goal — domain-agnostic.
 
-    Opaque to the host: ``ref`` may be a path, URL, ticket id, channel, or
-    ``answer`` for narrative-only work. Never inferred from prose or the
+    Opaque to the host: `ref` may be a path, URL, ticket id, channel, or
+    `answer` for narrative-only work. Never inferred from prose or the
     filesystem; StrangeLoop emits these via structured assess output.
     """
 
@@ -163,8 +156,8 @@ class GoalReportUserTurn(BaseModel):
     """The 'user' half of a projected ancestor pair — the ancestor's directive.
 
     -Report-Pair Projection. Carried on
-    ``GoalDispatchContextBundle.preamble_messages`` and seeded into the
-    StrangeLoop CE ledger as a ``LoopHumanMessage(phase="preamble")`` before
+    `GoalDispatchContextBundle.preamble_messages` and seeded into the
+    StrangeLoop CE ledger as a `LoopHumanMessage(phase="preamble")` before
     the current goal's user turn.
     """
 
@@ -178,10 +171,10 @@ class GoalReportUserTurn(BaseModel):
 class GoalReportAITurn(BaseModel):
     """The 'ai' half of a projected ancestor pair — the ancestor's goal report.
 
-       Built by ``ContextProjector`` via the existing ``build_goal_report`` path
+       Built by `ContextProjector` via the existing `build_goal_report` path
     from the ancestor's stored
-       ``GoalDispatchContextContribution``. Seeded into the CE ledger as a
-       ``LoopAIMessage(phase="preamble")``.
+       `GoalDispatchContextContribution`. Seeded into the CE ledger as a
+       `LoopAIMessage(phase="preamble")`.
     """
 
     goal_id_origin: str

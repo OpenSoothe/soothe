@@ -1,14 +1,4 @@
-"""Internal EventBus for StrangeLoop, ContextEngine, and AutopilotService coordination.
-
-This module provides an in-memory async event dispatch system for
-internal coordination between StrangeLoop, ContextEngine, and AutopilotService.
-Internal events use the `soothe.internal.*` namespace and never leak
-to external clients (WebSocket, TUI).
-
-Architecture:
-- InternalEventBus: Async pub/sub dispatcher
-- Internal events: soothe.internal.goal.*, soothe.internal.loop.*, etc.
-"""
+"""Internal EventBus for StrangeLoop, ContextEngine, and AutopilotService coordination."""
 
 from __future__ import annotations
 
@@ -82,7 +72,7 @@ class InternalEventBus:
         The internal lock is held ONLY long enough to snapshot the handler
         list — it is released before any handler runs. This is critical:
         handlers commonly emit further events (e.g. AutopilotService's
-        ``_handle_goal_state_changed`` calls ``_mark_loop_idle`` which
+        `_handle_goal_state_changed` calls `_mark_loop_idle` which
         emits more events), and holding the lock across handler execution
         would deadlock the bus.
 

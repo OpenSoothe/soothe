@@ -18,14 +18,14 @@ _DEFAULT_ORPHAN_TASK_CANCEL_TIMEOUT_SECONDS = 30.0
 
 
 def spawn_safe_config(config: SootheConfig | None) -> SootheConfig:
-    """Return a copy of ``config`` safe for ``multiprocessing`` spawn pickling.
+    """Return a copy of `config` safe for `multiprocessing` spawn pickling.
 
     The daemon may have populated runtime caches (chat models, embeddings,
     vector stores) that hold unpickleable synchronization primitives. The
     subprocess only needs declarative settings and rebuilds caches locally.
 
     Args:
-        config: Loaded daemon config, or ``None`` (tests / callers without config)
+        config: Loaded daemon config, or `None` (tests / callers without config)
             to use declarative defaults only.
     """
     from soothe.config.settings import SootheConfig
@@ -42,8 +42,8 @@ def cancel_orphan_loop_tasks(
     """Cancel asyncio tasks left behind after a worker request completes.
 
     Leaked background tasks (for example async checkpoint flush workers when
-    ``StrangeLoopStateManager.close()`` did not run) can corrupt the worker
-    event loop on the next ``run_until_complete`` call.
+    `StrangeLoopStateManager.close()` did not run) can corrupt the worker
+    event loop on the next `run_until_complete` call.
 
     Args:
         loop: Dedicated worker event loop.

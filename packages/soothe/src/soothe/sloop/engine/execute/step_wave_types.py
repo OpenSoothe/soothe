@@ -1,9 +1,4 @@
-"""Dataclasses and types for execute wave management.
-
-This module provides the data structures used during parallel and dependency
-execute step processing: result containers, budget tracking, wave markers,
-and stream event types.
-"""
+"""Dataclasses and types for execute wave management."""
 
 from __future__ import annotations
 
@@ -69,11 +64,11 @@ class _ActStreamBudget:
 
 @dataclass(frozen=True, slots=True)
 class _StreamCollectChunk:
-    """One yield from ``Executor._stream_and_collect`` (extension).
+    """One yield from `Executor._stream_and_collect` (extension).
 
     Two modes:
-    - Wire event: ``event`` set, other summary fields at defaults.
-    - Final summary: ``output`` set with accumulated act-stream results.
+    - Wire event: `event` set, other summary fields at defaults.
+    - Final summary: `output` set with accumulated act-stream results.
     """
 
     output: str | None = None
@@ -130,7 +125,7 @@ class _PendingInterruptFetch:
 
 @dataclass(frozen=True, slots=True)
 class StepWaveQueued:
-    """Ready steps waiting for a later execute batch (``max_parallel_steps`` cap)."""
+    """Ready steps waiting for a later execute batch (`max_parallel_steps` cap)."""
 
     steps: tuple[StepAction, ...]
 
@@ -146,10 +141,10 @@ class StepCompletionReport:
 
 @dataclass(frozen=True, slots=True)
 class StepWaveStart:
-    """Marks the start of a bounded execute batch (``max_parallel_steps`` cap).
+    """Marks the start of a bounded execute batch (`max_parallel_steps` cap).
 
     Emitted before a wave runs so UIs can show only actively executing steps as
-    ``running``; overflow ready steps are announced via :class:`StepWaveQueued`.
+    `running`; overflow ready steps are announced via :class:`StepWaveQueued`.
     """
 
     steps: tuple[StepAction, ...]
@@ -192,8 +187,8 @@ def _append_parallel_stream_event(
 ) -> None:
     """Fan out a stream chunk to the live TUI queue or retain it on the step result.
 
-    Production parallel execute always sets ``live_event_queue``; the returned
-    ``_ExecuteStepResult.events`` list is not re-yielded in that path. Retain
+    Production parallel execute always sets `live_event_queue`; the returned
+    `_ExecuteStepResult.events` list is not re-yielded in that path. Retain
     events only when no live queue is configured (unit tests, direct callers).
     """
     if live_event_queue is not None:
@@ -203,7 +198,7 @@ def _append_parallel_stream_event(
 
 
 def wave_gather_slot(gather_results: list[Any], index: int) -> Any:
-    """Return one parallel-wave result slot, or ``None`` when missing."""
+    """Return one parallel-wave result slot, or `None` when missing."""
     if index >= len(gather_results):
         return None
     return gather_results[index]

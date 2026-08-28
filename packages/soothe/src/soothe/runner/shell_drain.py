@@ -1,18 +1,4 @@
-"""Goal-runtime shell drain — kill a goal's spawned shell process groups.
-
-Host-owned utility shared by the StrangeLoop runner, the daemon query engine,
-and the autopilot worker. On goal completion/cancel, the runner terminates the
-``run_command`` / ``run_background`` processes a goal spawned, scoped to that
-goal's workspace.
-
-``soothe_nano`` tracks spawned shells via marker files:
-
-- ``run_background`` → ``{workspace}/.soothe/background/bg-{pid}.log``
-- in-flight ``run_command`` → ``{workspace}/.soothe/foreground/fg-{pid}.session``
-
-Both use ``start_new_session=True`` (own process group). ``drain_goal_runtime``
-enumerates those markers and terminates each group: SIGTERM → grace → SIGKILL.
-"""
+"""Goal-runtime shell drain — kill a goal's spawned shell process groups."""
 
 from __future__ import annotations
 
@@ -33,7 +19,7 @@ _FG_SESSION_PID_RE = re.compile(r"fg-(\d+)\.session$")
 
 
 def _kill_pgid(pgid: int, *, sig: int) -> bool:
-    """Send ``sig`` to a process group. True if delivered, False if gone."""
+    """Send `sig` to a process group. True if delivered, False if gone."""
     try:
         os.killpg(pgid, sig)
     except ProcessLookupError:
@@ -48,7 +34,7 @@ def _kill_pgid(pgid: int, *, sig: int) -> bool:
 
 
 def _pid_alive(pid: int) -> bool:
-    """True if ``pid`` exists."""
+    """True if `pid` exists."""
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -66,7 +52,7 @@ def _reap_tracked_shell_pids(
     pid_re: re.Pattern[str],
     grace_seconds: float,
 ) -> int:
-    """SIGTERM→SIGKILL process groups named by marker files under ``marker_dir``."""
+    """SIGTERM→SIGKILL process groups named by marker files under `marker_dir`."""
     if not marker_dir.is_dir():
         return 0
     reaped = 0
@@ -101,10 +87,10 @@ def _reap_tracked_shell_pids(
 
 
 def drain_goal_runtime(workspace: str, *, grace_seconds: float = _DRAIN_GRACE_SECONDS) -> int:
-    """Kill shell processes this goal spawned (``run_command`` + ``run_background``).
+    """Kill shell processes this goal spawned (`run_command` + `run_background`).
 
     Workspace-scoped: only touches PIDs whose markers live under THIS workspace.
-    Not a global ``ps`` scan. Safe at goal completion and on cancel.
+    Not a global `ps` scan. Safe at goal completion and on cancel.
 
     Args:
         workspace: Workspace path that owns the spawned shell markers.

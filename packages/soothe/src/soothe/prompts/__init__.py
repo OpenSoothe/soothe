@@ -1,13 +1,4 @@
-"""Host prompt construction.
-
-Nano-owned CoreAgent templates, identity, context XML, and project-instruction
-helpers are re-exported here, along with do-or-decompose THREAD copy from
-``fragments/decompose/``. Other StrangeLoop envelopes, ledger projection, and
-graph wrappers live as submodules.
-
-Canonical nano implementations live in ``soothe_nano.prompts``. Do not
-duplicate or modify the re-exported symbols here; fix them in nano.
-"""
+"""Host prompt construction."""
 
 from soothe_nano.prompts.context_xml import (
     build_context_sections_for_complexity,

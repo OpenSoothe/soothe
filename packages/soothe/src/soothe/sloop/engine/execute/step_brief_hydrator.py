@@ -43,7 +43,7 @@ class StepBriefHydrator:
         predecessor_evidence: str,
         goal: str,
     ) -> str:
-        """Return a hydrated ``full_description`` for ``step``."""
+        """Return a hydrated `full_description` for `step`."""
         fallback = template_hydrate_step_brief(
             step,
             predecessor_evidence,

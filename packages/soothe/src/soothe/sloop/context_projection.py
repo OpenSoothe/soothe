@@ -1,14 +1,4 @@
-"""Unified loop-context projection: CE ledger → phase-adapted message list.
-
-The Context Engine owns the raw phase-tagged message ledger (Source of Truth);
-this module is the single projection layer that composes the history slice for
-each StrangeLoop LLM call. Every phase produces the same shape:
-
-    [preamble (ancestor pairs)] + [prior-goal terminal units] + [current-goal step history]
-
-The phase envelope (system prompt + human message) is NOT the projector's job —
-the caller appends it around the projected messages.
-"""
+"""Unified loop-context projection: CE ledger → phase-adapted message list."""
 
 from __future__ import annotations
 
@@ -29,9 +19,9 @@ ProjectionPhase = Literal["intake", "execute", "synthesis"]
 class ProjectionSpec:
     """Inputs describing one LLM call's projection.
 
-    ``loop_messages`` is passed separately to :meth:`LoopContextProjector.project`
-    so callers can materialize the CE-backed ledger async (``await
-    state.get_loop_messages()``) before projecting.
+    `loop_messages` is passed separately to :meth:`LoopContextProjector.project`
+    so callers can materialize the CE-backed ledger async (`await
+    state.get_loop_messages()`) before projecting.
     """
 
     phase: ProjectionPhase
@@ -60,9 +50,9 @@ def project_preamble_messages(
 ) -> list[BaseMessage]:
     """Return ancestor (user/ai) preamble pairs projected from the ledger.
 
-    Preamble pairs are recorded with ``phase="preamble"`` by the daemon/autopilot
+    Preamble pairs are recorded with `phase="preamble"` by the daemon/autopilot
     before the graph runs; they are the cross-loop ancestor transcript. Bounded
-    to the last ``max_turns`` turns (2 messages per turn).
+    to the last `max_turns` turns (2 messages per turn).
     """
     if max_turns <= 0 or not loop_messages:
         return []
@@ -89,11 +79,11 @@ class LoopContextProjector:
         """Project the ledger history slice for one phase.
 
         Args:
-            loop_messages: Materialized CE-backed ledger (``state.loop_messages``
-                or ``await state.get_loop_messages()``).
+            loop_messages: Materialized CE-backed ledger (`state.loop_messages`
+                or `await state.get_loop_messages()`).
             spec: Phase + execute-specific context.
-            plan_cfg: Optional ``PlanPromptLedgerConfig`` override; defaults to the
-                one derived from ``self.config``.
+            plan_cfg: Optional `PlanPromptLedgerConfig` override; defaults to the
+                one derived from `self.config`.
 
         Returns:
             :class:`ProjectedContext` with ordered history messages and flags.

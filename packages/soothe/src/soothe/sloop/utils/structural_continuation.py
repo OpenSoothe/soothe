@@ -1,9 +1,4 @@
-"""Structural loop-continuation controls.
-
-Continuation is derived from *this loop's* checkpoint plus an explicit control
-phrase, not from social classification alone. A control phrase without goal
-records on this loop keeps the intake social result.
-"""
+"""Structural loop-continuation controls."""
 
 from __future__ import annotations
 
@@ -60,10 +55,10 @@ def has_active_running_goal(checkpoint: Any | None) -> bool:
 def has_resumable_interrupted_goal(checkpoint: Any | None) -> bool:
     """Return True when the checkpoint holds an incomplete goal worth resuming.
 
-    Covers ``status=running`` mid-flight recovery and the post-cancel case where
-    loop metadata was marked ``idle`` while the StrangeLoop goal index entry is
-    still ``running`` (interrupt touch). Also covers the ``interrupted`` goal
-    index status written by ``mark_goal_interrupted`` on a user cancel, so that
+    Covers `status=running` mid-flight recovery and the post-cancel case where
+    loop metadata was marked `idle` while the StrangeLoop goal index entry is
+    still `running` (interrupt touch). Also covers the `interrupted` goal
+    index status written by `mark_goal_interrupted` on a user cancel, so that
     a retry/continue/resume re-activates that goal in place rather than
     starting a fresh goal.
     """
@@ -79,7 +74,7 @@ def has_resumable_interrupted_goal(checkpoint: Any | None) -> bool:
 def has_intra_loop_checkpoint_to_continue(checkpoint: Any | None) -> bool:
     """Return True when *this* loop's checkpoint holds work to resume or continue.
 
-    Resume recovery is loop-scoped: an empty or missing ``goal_history`` (for
+    Resume recovery is loop-scoped: an empty or missing `goal_history` (for
     example after a social-only first turn) is not a continuation target.
     Any prior goal record on this loop — incomplete or completed — is.
     """
@@ -109,12 +104,12 @@ def chitchat_may_finalize_checkpoint(checkpoint: Any | None) -> bool:
 
     Chitchat on a running loop must not mark goals completed — *except* when the
     active goal is the chitchat goal itself. The chitchat fast-path skips the
-    FINALIZE station, so a fresh chitchat goal is left ``running`` on the
-    checkpoint with ``duration_ms == 0`` (no EXECUTE/RECORD_PROGRESS ran). Such
+    FINALIZE station, so a fresh chitchat goal is left `running` on the
+    checkpoint with `duration_ms == 0` (no EXECUTE/RECORD_PROGRESS ran). Such
     a goal is safe to finalize here.
 
     An in-flight *task* goal — one that already executed at least one wave — has
-    ``duration_ms > 0`` (incremented only by ``record_iteration``, post-EXECUTE,
+    `duration_ms > 0` (incremented only by `record_iteration`, post-EXECUTE,
     a station the chitchat fast-path never reaches) and must NOT be finalized by
     chitchat; the normal graph FINALIZE owns its completion.
     """

@@ -1,15 +1,4 @@
-"""Process-scoped SQLite checkpoint coalesce flush.
-
-Mirrors ``LoopPersistenceWriter`` for SQLite: managers enqueue; one worker
-drains onto the shared checkpoints ``SqliteStoreRuntime``.
-
-Threading model: asyncio primitives (``Event``, worker task) are bound
-to the daemon main loop via ``bind_main_loop``. Worker threads running on their
-own event loops call ``submit_*`` methods, which marshal work onto the bound
-loop via ``asyncio.run_coroutine_threadsafe``. This prevents the
-``RuntimeError: ... is bound to a different event loop`` that occurred when a
-per-worker loop awaited a singleton ``asyncio.Event`` created on another loop.
-"""
+"""Process-scoped SQLite checkpoint coalesce flush."""
 
 from __future__ import annotations
 
@@ -33,10 +22,10 @@ SaveSyncFn = Callable[[sqlite3.Connection, "StrangeLoopCheckpoint"], None]
 
 
 def _loop_is_running(loop: asyncio.AbstractEventLoop) -> bool:
-    """Return True if ``loop`` is still accepting work.
+    """Return True if `loop` is still accepting work.
 
-    ``loop.is_closed()`` covers the common teardown case (e.g. a test loop that
-    has been closed but still referenced by the class-level ``_bound_loop``).
+    `loop.is_closed()` covers the common teardown case (e.g. a test loop that
+    has been closed but still referenced by the class-level `_bound_loop`).
     """
     try:
         return not loop.is_closed()
@@ -82,7 +71,7 @@ class SqliteLoopFlushCoordinator:
 
     @classmethod
     def bind_main_loop(cls, loop: asyncio.AbstractEventLoop) -> None:
-        """Pin asyncio primitives to ``loop`` (daemon main loop)."""
+        """Pin asyncio primitives to `loop` (daemon main loop)."""
         cls._bound_loop = loop
         logger.debug("SqliteLoopFlushCoordinator bound to event loop %s", loop)
 
@@ -99,13 +88,13 @@ class SqliteLoopFlushCoordinator:
         close_timeout_seconds: float | None = None,
         durable_flush_timeout: float | None = None,
     ) -> SqliteLoopFlushCoordinator | None:
-        """Return process singleton for SQLite coalesce flush, or ``None`` if
+        """Return process singleton for SQLite coalesce flush, or `None` if
         the process is not configured for SQLite.
 
-        Mirrors ``LoopPersistenceWriter.get_shared_instance``, which self-gates
-        on ``default_backend`` so a stray caller on a Postgres-configured
+        Mirrors `LoopPersistenceWriter.get_shared_instance`, which self-gates
+        on `default_backend` so a stray caller on a Postgres-configured
         process cannot construct a useless SQLite singleton (AGENTS.md §10:
-        never mix backends in the same process). Callers must handle ``None``
+        never mix backends in the same process). Callers must handle `None`
         by falling back to a direct checkpoint write.
         """
         global _coordinator_singleton
@@ -166,11 +155,11 @@ class SqliteLoopFlushCoordinator:
         self,
         coro_factory: Callable[[], Coroutine[Any, Any, T]],
     ) -> T:
-        """Run ``coro_factory`` on the bound loop; await from any caller loop.
+        """Run `coro_factory` on the bound loop; await from any caller loop.
 
-        Mirrors ``LoopPersistenceWriter._run_on_main``: callers running on a
+        Mirrors `LoopPersistenceWriter._run_on_main`: callers running on a
         per-worker event loop are marshalled onto the bound (daemon main) loop
-        via ``asyncio.run_coroutine_threadsafe``, so that asyncio primitives
+        via `asyncio.run_coroutine_threadsafe`, so that asyncio primitives
         shared by the singleton are never touched from a foreign loop.
 
         If the previously bound loop has been closed (e.g. between tests in the
@@ -232,8 +221,8 @@ class SqliteLoopFlushCoordinator:
     async def _ensure_worker(self) -> None:
         """Create the durable Event on the bound loop and start the worker task.
 
-        The ``asyncio.Event`` is constructed here (on the bound loop) rather
-        than in ``__init__`` so it is never bound to a transient caller loop.
+        The `asyncio.Event` is constructed here (on the bound loop) rather
+        than in `__init__` so it is never bound to a transient caller loop.
         """
         if self._worker_task is not None and not self._worker_task.done():
             return
@@ -261,7 +250,7 @@ class SqliteLoopFlushCoordinator:
     ) -> None:
         """Enqueue or coalesce a checkpoint write (bound loop only).
 
-        Callers on a different event loop must use ``submit_enqueue`` instead.
+        Callers on a different event loop must use `submit_enqueue` instead.
         """
         if loop_id in self._released_loops and not durable:
             return

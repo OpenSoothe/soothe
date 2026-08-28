@@ -1,29 +1,4 @@
-"""Event system package - centralized event infrastructure.
-
-This package provides:
-- Event type string constants (single source of truth)
-- Event model classes (Pydantic models)
-- Event registry for O(1) lookup and dispatch
-- Helper functions for event emission
-
-Architecture:
-- catalog.py: Event type strings, models, registry, registration logic
-- visibility.py / internal_bus.py / internal_events.py: delivery helpers
-
-Usage:
-    # For event type constants
-    from soothe.events import GOAL_CREATED, BRANCH_CREATED
-
-    # For type-safe event emission (recommended)
-    from soothe.events import GoalCreatedEvent, custom_event
-    yield custom_event(GoalCreatedEvent(goal_id=gid).to_dict())
-
-    # For event registration
-    from soothe.events import register_event, EventPriority
-    register_event(MyCustomEvent, priority=EventPriority.HIGH)
-
- : 4-segment naming convention: soothe.<domain>.<component>.<action>
-"""
+"""Event system package - centralized event infrastructure."""
 
 from __future__ import annotations
 

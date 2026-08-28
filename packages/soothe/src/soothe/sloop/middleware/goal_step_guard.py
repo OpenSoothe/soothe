@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class GoalStepGuardMiddleware(AgentMiddleware):
-    """Host policy from LangGraph ``configurable`` for goal synthesis."""
+    """Host policy from LangGraph `configurable` for goal synthesis."""
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         conf = _decompose_runtime.langgraph_configurable()

@@ -1,11 +1,4 @@
-"""Invoke the compiled Strange Loop graph.
-
-Langfuse: outer ``ainvoke`` receives the LangChain callback handler so the
-Loop Graph run nests planner / CoreAgent spans under one trace; ``langfuse_session_id`` is the
-conversation ``thread_id``; Runnable ``configurable.thread_id`` is
-``{loop_id}__strange_loop`` for checkpoint isolation from CoreAgent. Metadata adds
-``soothe_component`` tags.
-"""
+"""Invoke the compiled Strange Loop graph."""
 
 from __future__ import annotations
 
@@ -55,17 +48,17 @@ def _langfuse_goal_output_text(ctx: LoopRuntimeContext) -> str:
 
 
 def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
-    """Build RunnableConfig for ``CompiledGraph.ainvoke`` with Langfuse + loop metadata.
+    """Build RunnableConfig for `CompiledGraph.ainvoke` with Langfuse + loop metadata.
 
-    Configurable ``thread_id`` is ``{loop_id}__strange_loop`` so CoreAgent /
-    intake-only graphs (``thread_id=loop_id``) cannot orphan ``await_user``
-    interrupts. Langfuse session correlation uses ``loop_state.thread_id``.
+    Configurable `thread_id` is `{loop_id}__strange_loop` so CoreAgent /
+    intake-only graphs (`thread_id=loop_id`) cannot orphan `await_user`
+    interrupts. Langfuse session correlation uses `loop_state.thread_id`.
 
     Args:
         ctx: Runtime context for the current goal run.
 
     Returns:
-        RunnableConfig dict safe to pass to ``ainvoke``.
+        RunnableConfig dict safe to pass to `ainvoke`.
     """
     loop_id = ctx.state_manager.loop_id
     extra: dict[str, Any] = {}
@@ -106,10 +99,10 @@ def _clarification_resume_command(
     resume_answers: list[str],
     loop_id: str,
 ) -> Any | None:
-    """Build ``Command(resume=…)`` or orphaned-interrupt ``goto`` recovery.
+    """Build `Command(resume=…)` or orphaned-interrupt `goto` recovery.
 
     Returns:
-        A LangGraph ``Command``, or ``None`` when the orphaned origin cannot be
+        A LangGraph `Command`, or `None` when the orphaned origin cannot be
         mapped to a safe resume station (caller falls back to normal invoke).
     """
     from langgraph.types import Command
@@ -159,11 +152,11 @@ def _clarification_resume_command(
 async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
     """Run the compiled graph once until END.
 
-    Progress is emitted through ``ctx.emit``, which ``StrangeLoop.run_with_progress`` wires
+    Progress is emitted through `ctx.emit`, which `StrangeLoop.run_with_progress` wires
     to an asyncio queue consumer.
 
     Args:
-        ctx: Fully initialized runtime context including ``emit``.
+        ctx: Fully initialized runtime context including `emit`.
     """
     from langgraph.types import Command
 

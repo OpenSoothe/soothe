@@ -1,12 +1,4 @@
-"""Project StrangeLoop state into user-safe synthesis context.
-
-Goal-synthesis injects current-goal ``execute_step`` ledger turns as native
-messages (like plan-assess) for prompt-cache alignment. Prior-goal execute rows
-are excluded; at most one compacted prior terminal unit may appear as brief
-status reference. Plan-phase ledger rows stay out of the message list.
-Scenario, focus, emphasis, and the verbatim user request live in the system
-prompt; the closing human message is a short TASK trigger only.
-"""
+"""Project StrangeLoop state into user-safe synthesis context."""
 
 from __future__ import annotations
 
@@ -39,8 +31,8 @@ def normalize_user_query(goal: str | None) -> str:
 def flatten_execute_human_content(content: str) -> str:
     """Extract task-focused text from an execute-step human envelope.
 
-    Delegates to ``flatten_user_message_content`` for scenario-based
-    ``EXECUTION TASK:`` / ``GOAL:`` sections.
+    Delegates to `flatten_user_message_content` for scenario-based
+    `EXECUTION TASK:` / `GOAL:` sections.
     """
     return flatten_user_message_content(content)
 

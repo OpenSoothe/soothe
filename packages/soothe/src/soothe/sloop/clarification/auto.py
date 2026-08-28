@@ -55,18 +55,18 @@ class AutoClarificationPolicy:
 
     1. Every defer carries a :data:`DeferKind` so operators can distinguish
        legitimate "I don't know" defers from forced ones (LLM glitches).
-    2. When ``defer_kind == "structured_output_failed"`` and an
-       ``interactive_fallback`` policy is wired, the policy delegates to it
-       (durable LangGraph ``interrupt(...)``) instead of terminating the loop.
-       The fallback is only present in interactive runs (``emit`` wired);
+    2. When `defer_kind == "structured_output_failed"` and an
+       `interactive_fallback` policy is wired, the policy delegates to it
+       (durable LangGraph `interrupt(...)`) instead of terminating the loop.
+       The fallback is only present in interactive runs (`emit` wired);
        autopilot has no human at the other end and keeps the hard-defer path.
 
-    When ``degrade_low_confidence`` is True and a human is attached, the same
-    auto→manual upgrade applies to ``low_confidence`` defers — veritas wasn't
+    When `degrade_low_confidence` is True and a human is attached, the same
+    auto→manual upgrade applies to `low_confidence` defers — veritas wasn't
     confident, so surface the questions to the human instead of parking the
     loop silently. Ignored for autopilot (headless) runs.
 
-    Origins listed in ``force_manual_origins`` skip veritas entirely and use
+    Origins listed in `force_manual_origins` skip veritas entirely and use
     the interactive relay (or defer when no human is attached).
     """
 
@@ -156,8 +156,8 @@ class AutoClarificationPolicy:
     async def _answer_force_manual(self, request: ClarificationRequest) -> ClarificationAnswer:
         """Force-manual origins skip veritas entirely.
 
-        ``await_clarification`` already emitted with ``mode=manual``, so we
-        call ``answer()`` directly (no re-announce).
+        `await_clarification` already emitted with `mode=manual`, so we
+        call `answer()` directly (no re-announce).
         """
         if self._interactive_fallback is not None:
             logger.info(
@@ -220,10 +220,10 @@ class AutoClarificationPolicy:
     async def _delegate_to_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
         """Route to the interactive relay with auto→manual re-announce.
 
-        Uses ``answer_as_manual_fallback`` when available so the TUI
-        re-announces with ``mode=manual`` before pausing (the earlier
-        ``await_clarification`` emit used ``mode=auto``). Falls back to
-        ``answer()`` for bare policies without the upgrade method.
+        Uses `answer_as_manual_fallback` when available so the TUI
+        re-announces with `mode=manual` before pausing (the earlier
+        `await_clarification` emit used `mode=auto`). Falls back to
+        `answer()` for bare policies without the upgrade method.
         """
         fallback = self._interactive_fallback
         upgrade = getattr(fallback, "answer_as_manual_fallback", None)
@@ -232,7 +232,7 @@ class AutoClarificationPolicy:
         return await fallback.answer(request)
 
     def _classify(self, result: VeritasAnswerSchema) -> DeferKind | None:
-        """Resolve a veritas result to a :data:`DeferKind`, or ``None`` to accept."""
+        """Resolve a veritas result to a :data:`DeferKind`, or `None` to accept."""
         if result.defer:
             if result.rationale.startswith(_RATIONALE_PREFIX_STRUCTURED):
                 return "structured_output_failed"

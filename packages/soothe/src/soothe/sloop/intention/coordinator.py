@@ -1,8 +1,4 @@
-"""Intake coordinator: orchestrates social-vs-task and full classification.
-
-Tasks keep the intake LLM's ``task_complexity``; ``intake_label`` is derived
-from it for the TUI and routing. DISPATCH owns decomposition.
-"""
+"""Intake coordinator: orchestrates social-vs-task and full classification."""
 
 from __future__ import annotations
 

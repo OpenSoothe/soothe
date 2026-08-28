@@ -1,10 +1,4 @@
-"""StrangeLoop Checkpoint Models.
-
-Defines step-level semantic traces for agentic goal execution.
- extends to multi-thread spanning with infinite lifecycle.
- introduces unified message ledger replacing fragmented traces.
-: ExecutionCheckpoint pattern with execution-only fields.
-"""
+"""StrangeLoop Checkpoint Models."""
 
 from __future__ import annotations
 
@@ -145,22 +139,22 @@ class StrangeLoopCheckpoint(BaseModel):
     ) -> bool:
         """Force a running checkpoint into a terminal state (fatal_error handler).
 
-        When ``pump_graph`` crashes or a graph node sets
-        ``last_outcome="fatal"``, the runner now emits a wire-visible
-        ``fatal_error`` event, but the checkpoint may still be left
-        ``status="running"`` if the crash bypassed ``finalize_goal``.
+        When `pump_graph` crashes or a graph node sets
+        `last_outcome="fatal"`, the runner now emits a wire-visible
+        `fatal_error` event, but the checkpoint may still be left
+        `status="running"` if the crash bypassed `finalize_goal`.
         This method transitions the loop to a terminal status and marks
         the active goal as cancelled/failed so recovery and
         reconciliation can proceed.
 
         Args:
-            terminal_status: Terminal loop status. Defaults to ``idle`` so the
-                daemon can accept the next goal. Use ``cancelled`` for hard
+            terminal_status: Terminal loop status. Defaults to `idle` so the
+                daemon can accept the next goal. Use `cancelled` for hard
                 kills (user disconnect, unrecoverable crash).
             goal_status: Status to set on the in-flight goal. Defaults to
-                ``cancelled`` for infrastructure failures.
-            goal_index: Index into ``goal_history``. When ``None``, uses
-                ``current_goal_index``.
+                `cancelled` for infrastructure failures.
+            goal_index: Index into `goal_history`. When `None`, uses
+                `current_goal_index`.
 
         Returns:
             True if a transition was applied, False if already terminal.
@@ -204,7 +198,7 @@ _GOAL_INDEX_FIELDS = frozenset(
 
 
 def _strip_enriched_goal_index_fields(item: Any) -> Any:
-    """Drop pre- goal content from ``goal_history`` rows on load."""
+    """Drop pre- goal content from `goal_history` rows on load."""
     if not isinstance(item, dict):
         return item
     return {k: v for k, v in item.items() if k in _GOAL_INDEX_FIELDS}
@@ -217,9 +211,9 @@ def normalize_checkpoint_data(
 ) -> dict[str, Any]:
     """Fill defaults for partial checkpoint blobs stored by daemon registration.
 
-    PostgreSQL ``register_loop`` / ``update_loop_metadata`` persist a minimal JSONB
-    document for daemon bookkeeping. ``StrangeLoopStateManager.load()`` expects a full
-    ``StrangeLoopCheckpoint`` schema.
+    PostgreSQL `register_loop` / `update_loop_metadata` persist a minimal JSONB
+    document for daemon bookkeeping. `StrangeLoopStateManager.load()` expects a full
+    `StrangeLoopCheckpoint` schema.
 
     : Supports schema 5.0 execution_checkpoint field.
     Lazy migration: fills defaults for missing execution_checkpoint.
@@ -295,16 +289,16 @@ def normalize_checkpoint_data(
 
 
 def _repair_orphaned_running_loop(out: dict[str, Any]) -> None:
-    """Repair an orphaned ``status="running"`` checkpoint on load.
+    """Repair an orphaned `status="running"` checkpoint on load.
 
-    When ``pump_graph`` crashes before the graph can transition the
-    checkpoint to ``idle``, the checkpoint is flushed to disk with
-    ``status="running"`` and the active goal stays ``status="running"``
-    forever. This function marks the active goal as ``cancelled`` and sets
-    the loop status to ``idle``.
+    When `pump_graph` crashes before the graph can transition the
+    checkpoint to `idle`, the checkpoint is flushed to disk with
+    `status="running"` and the active goal stays `status="running"`
+    forever. This function marks the active goal as `cancelled` and sets
+    the loop status to `idle`.
 
     The repair is conservative: it only touches the goal at
-    ``current_goal_index`` and only if that goal is still ``running``.
+    `current_goal_index` and only if that goal is still `running`.
     """
     from soothe.sloop.state.status_vocabulary import is_goal_index_in_flight
 

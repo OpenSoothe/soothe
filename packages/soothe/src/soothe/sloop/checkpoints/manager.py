@@ -1,8 +1,4 @@
-"""StrangeLoop checkpoint persistence manager.
-
- : StrangeLoop Persistence Backend Architecture
-Backend-agnostic delegation pattern supporting PostgreSQL and SQLite
-"""
+"""StrangeLoop checkpoint persistence manager."""
 
 from __future__ import annotations
 
@@ -40,7 +36,7 @@ class StrangeLoopCheckpointPersistenceManager:
         Args:
             config: SootheConfig for backend selection. If None, uses SQLite.
             display_loop_purger: Optional callable that purges a loop's display
-                card data (``delete_loop(loop_id)``). Injected by the daemon,
+                card data (`delete_loop(loop_id)`). Injected by the daemon,
                 which owns the display card store (PR-2). No-op when None
                 (keeps the host free of daemon imports).
         """
@@ -90,7 +86,7 @@ class StrangeLoopCheckpointPersistenceManager:
         """Build a manager backed by the process-wide checkpoint pool.
 
         Ephemeral callers (heartbeat ticks, deferred counters, resume topic)
-        must use this instead of constructing an owned ``AsyncConnectionPool``
+        must use this instead of constructing an owned `AsyncConnectionPool`
         per call.
         """
         if config.persistence.default_backend != "postgresql":
@@ -165,13 +161,13 @@ class StrangeLoopCheckpointPersistenceManager:
             loop_id: Loop identifier.
             force_status: When True, bypass the goal-count guard so
                 an authoritative caller (stale-loop reconciler) can demote a
-                confirmed-dead zombie loop's ``status`` even when it has goals.
+                confirmed-dead zombie loop's `status` even when it has goals.
             **fields: Column names and values to update.
         """
         await self._backend.update_loop_metadata(loop_id, force_status=force_status, **fields)
 
     async def mark_running_goals_failed(self, loop_id: str) -> int:
-        """Mark a loop's still-``running`` goal_records as ``failed``.
+        """Mark a loop's still-`running` goal_records as `failed`.
 
         Returns the count of goal rows updated. Used by the stale-loop
         reconciler to close goals orphaned by a crashed runner.
@@ -229,7 +225,7 @@ class StrangeLoopCheckpointPersistenceManager:
         await self._backend.touch_loop_last_message(loop_id)
 
     async def heartbeat_loop(self, loop_id: str) -> None:
-        """Bump ``updated_at`` for periodic status reconciliation."""
+        """Bump `updated_at` for periodic status reconciliation."""
         await self._backend.heartbeat_loop(loop_id)
 
     async def increment_loop_message_count(
@@ -246,9 +242,9 @@ class StrangeLoopCheckpointPersistenceManager:
         idle_before: datetime,
         limit: int = 50,
     ) -> list[dict]:
-        """Return ephemeral loops idle since ``idle_before``.
+        """Return ephemeral loops idle since `idle_before`.
 
-        Includes stale ``running`` rows; the GC purge gate performs a
+        Includes stale `running` rows; the GC purge gate performs a
         live-runner check to protect truly active loops.
         """
         return await self._backend.list_expired_ephemeral_loops(idle_before, limit)
@@ -258,9 +254,9 @@ class StrangeLoopCheckpointPersistenceManager:
         idle_before: datetime,
         limit: int = 50,
     ) -> list[dict]:
-        """Return loops with zero human/AI messages idle since ``idle_before``.
+        """Return loops with zero human/AI messages idle since `idle_before`.
 
-        Includes stale ``running`` rows; the GC purge gate performs a
+        Includes stale `running` rows; the GC purge gate performs a
         live-runner check to protect truly active loops.
         """
         return await self._backend.list_empty_loops(idle_before, limit)

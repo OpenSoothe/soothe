@@ -1,10 +1,4 @@
-"""Loop Graph entry node: LLM intake classification.
-
-This node is the sole intake classification call site. It projects the CE
-ledger (prior-goal completion + preamble) into the classify LLM. When
-``loop_state.intent`` is already set (client-forced ``intake_scope`` or
-clarification resume), the classify call is skipped.
-"""
+"""Loop Graph entry node: LLM intake classification."""
 
 from __future__ import annotations
 
@@ -51,8 +45,8 @@ def is_displayable_intake_reasoning(text: str) -> bool:
 def intake_reasoning_event(reasoning: str) -> tuple[str, dict[str, Any]] | None:
     """Build a TUI cognition-reason payload for displayable intake reasoning.
 
-    The runner maps ``intent_classified_reasoning`` → ``IntentClassifiedEvent`` →
-    ``CognitionReasonMessage``.
+    The runner maps `intent_classified_reasoning` → `IntentClassifiedEvent` →
+    `CognitionReasonMessage`.
     """
     text = (reasoning or "").strip()
     if not is_displayable_intake_reasoning(text):

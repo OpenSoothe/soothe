@@ -1,40 +1,4 @@
-"""Plan-mode review host module: approve / reject / refine for plan mode.
-
-When ``interaction_mode == "plan"`` and a plan draft is ready, this module
-builds a clarification request (origin ``ORIGIN_PLAN_MODE_REVIEW``) that
-pauses execution for user input on critical design points.
-
-On fresh plan review:
-    - Collect the plan draft from the step's final AI message.
-    - Write the plan to ``.soothe/plans/`` via ``save_plan_draft``.
-    - Record a ``goal_completion`` ledger pair: Human = goal text,
-      AI = plan body (the synthesized plan, not intermediate step messages).
-    - Emit the approve/reject/refine clarification.
-
-On approve:
-    - Stash a follow-on exec signal on ``ctx.scratch.follow_on_exec`` (goal
-      prompt + approved plan path) so the finalize node attaches it to the
-      ``completed`` event; the daemon enqueues a fresh exec goal carrying the
-      approved plan, which DISPATCH grounds onto its own fresh root.
-    - Set ``plan_approved_follow_on`` so routers finalize the plan-mode goal
-      (its root already completed during exploration).
-    - Record the user's action as a new ``goal_completion`` AI message:
-      "Plan approved by operator." (so subsequent goals see the approval in
-      the ledger).
-
-On reject:
-    - Mark the plan artifact rejected and terminate the current goal without
-      creating a follow-on execution goal.
-    - Set ``ctx.scratch.plan_rejected`` so finalize skips completion synthesis,
-      the ``goal_completion`` ledger pair, and any user-facing report. A
-      discarded plan has nothing to summarize.
-
-On refine:
-    - Store the user's comments as ``plan_review_comments`` feedback.
-    - Record the refinement request as a ``goal_completion`` AI message.
-    - Re-emit the plan review clarification so the goal stays in plan mode
-      (``AWAIT_USER``) and the user can provide further refinement.
-"""
+"""Plan-mode review host module: approve / reject / refine for plan mode."""
 
 from __future__ import annotations
 
@@ -105,14 +69,14 @@ def _extract_plan_from_step_result(ctx: LoopRuntimeContext) -> str:
     """Extract a plan document from the step's final AI message.
 
     The plan-mode addendum instructs the planning agent to output ONLY the
-    final plan document (``## Plan: <title>``) as its last message. When the
+    final plan document (`## Plan: <title>`) as its last message. When the
     agent followed that instruction, the step's last non-planning ledger AI
     message already contains a complete, well-structured plan — no LLM
     synthesis call is needed.
 
-    This returns the plan body (stripped) when the ``## Plan:`` marker is
+    This returns the plan body (stripped) when the `## Plan:` marker is
     present, otherwise an empty string so the caller falls back to
-    ``synthesize_plan``.
+    `synthesize_plan`.
     """
     try:
         content = last_ledger_ai_content(ctx.loop_state)
@@ -136,7 +100,7 @@ def _extract_plan_from_step_result(ctx: LoopRuntimeContext) -> str:
 
 
 def save_plan_draft(ctx: LoopRuntimeContext, report: str) -> str | None:
-    """Write the plan draft to ``.soothe/plans/`` and store on scratch."""
+    """Write the plan draft to `.soothe/plans/` and store on scratch."""
     workspace = getattr(ctx.loop_state, "workspace", None) or ""
     if not str(workspace).strip():
         logger.warning("[PlanModeReview] No workspace; skipping plan artifact write")
@@ -163,7 +127,7 @@ def save_plan_draft(ctx: LoopRuntimeContext, report: str) -> str | None:
 def build_plan_mode_review_pending(ctx: LoopRuntimeContext) -> dict[str, Any]:
     """Build the pending clarification payload for plan-mode review.
 
-    Persist ``plan_path`` / ``plan_markdown`` / ``plan_review_comments`` on the
+    Persist `plan_path` / `plan_markdown` / `plan_review_comments` on the
     pending channel so a clarification-resume turn (fresh scratch) can still
     hydrate the plan body and any pending refinement comments after a worker
     crash/restart.
@@ -223,11 +187,11 @@ def _record_plan_completion_ledger(
     ctx: LoopRuntimeContext,
     plan_body: str,
 ) -> None:
-    """Record the plan as a ``goal_completion`` Human–AI pair in the ledger.
+    """Record the plan as a `goal_completion` Human–AI pair in the ledger.
 
     The Human message carries the goal text; the AI message carries the full
     plan body (not just the path). This replaces the intermediate
-    ``execute_step`` messages as the canonical terminal report so subsequent
+    `execute_step` messages as the canonical terminal report so subsequent
     goals see a clean plan-completion entry in the ledger projection.
     """
     if ctx.ce is None:
@@ -271,7 +235,7 @@ def _record_plan_action_ledger(
     ctx: LoopRuntimeContext,
     action_text: str,
 ) -> None:
-    """Record the user's plan review action as a new ``goal_completion`` AI message.
+    """Record the user's plan review action as a new `goal_completion` AI message.
 
     Called on approve / reject / refine so the ledger has a record
     of the user's decision. Subsequent goals (e.g. the implementation goal
@@ -304,19 +268,19 @@ def handle_plan_mode_review_answer(
 ) -> dict[str, Any]:
     """Handle approve / reject / refine after plan-mode review.
 
-    On approve: stash a follow-on exec signal on ``ctx.scratch.follow_on_exec``
-    and set ``plan_approved_follow_on`` so routers finalize the plan-mode goal
+    On approve: stash a follow-on exec signal on `ctx.scratch.follow_on_exec`
+    and set `plan_approved_follow_on` so routers finalize the plan-mode goal
     (its root already completed during exploration). The daemon enqueues a
     fresh exec goal carrying the approved plan path. Record the action in the
     ledger.
 
     On reject: terminate the current goal outright — no follow-on goal, no plan
-    result, no ledger action entry, and no completion report. ``plan_rejected``
+    result, no ledger action entry, and no completion report. `plan_rejected`
     on scratch tells the finalize node to skip completion work entirely.
 
-    On refine: store the user's comments as ``plan_review_comments`` feedback
+    On refine: store the user's comments as `plan_review_comments` feedback
     and re-emit the plan review clarification so the goal stays in plan mode
-    (``AWAIT_USER``) for further refinement.
+    (`AWAIT_USER`) for further refinement.
     """
     from soothe.sloop.clarification.protocol import answer_from_state
 
@@ -433,10 +397,10 @@ def handle_plan_mode_review_answer(
 async def _refine_plan(ctx: LoopRuntimeContext) -> str:
     """Run a refinement re-synthesis using the operator's comments.
 
-    Reads ``ctx.scratch.plan_review_comments`` and the current draft, calls
-    ``synthesize_plan`` with both so the LLM revises the plan to address the
+    Reads `ctx.scratch.plan_review_comments` and the current draft, calls
+    `synthesize_plan` with both so the LLM revises the plan to address the
     feedback. Returns the revised plan text (empty on failure). Does NOT
-    clear ``plan_review_comments`` — the caller owns lifecycle so the
+    clear `plan_review_comments` — the caller owns lifecycle so the
     comments survive a synthesis failure for the next attempt.
     """
     comments = (getattr(ctx.scratch, "plan_review_comments", None) or "").strip()
@@ -460,28 +424,28 @@ async def _refine_plan(ctx: LoopRuntimeContext) -> str:
 async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> dict[str, Any]:
     """Plan review graph node: collect plan, write artifact, record completion, emit clarification.
 
-    When ``interaction_mode == "plan"``, ``route_after_root_eval`` routes here
-    instead of ``FINALIZE``. This node:
+    When `interaction_mode == "plan"`, `route_after_root_eval` routes here
+    instead of `FINALIZE`. This node:
 
     1. Extracts the plan document from the step's final AI message (the
-       plan-mode addendum instructs the agent to output ``## Plan: <title>``
+       plan-mode addendum instructs the agent to output `## Plan: <title>`
        as its last message). When the agent followed that instruction, no LLM
        call is needed — the step result already IS the plan. This mirrors the
-       ``LEDGER_DIRECT`` completion strategy and avoids a synthesis call.
-    2. Falls back to LLM synthesis (``synthesize_plan``) only when extraction
-       fails — e.g. the final message lacks the ``## Plan:`` marker (agent
+       `LEDGER_DIRECT` completion strategy and avoids a synthesis call.
+    2. Falls back to LLM synthesis (`synthesize_plan`) only when extraction
+       fails — e.g. the final message lacks the `## Plan:` marker (agent
        narrated instead of producing a plan, or an error truncated output).
-    3. Writes the plan to ``.soothe/plans/`` via ``save_plan_draft``.
-    4. Records a ``goal_completion`` Human–AI pair in the ledger with the full
+    3. Writes the plan to `.soothe/plans/` via `save_plan_draft`.
+    4. Records a `goal_completion` Human–AI pair in the ledger with the full
        plan body as the AI message (so subsequent goals see a clean terminal
-       report, not intermediate ``execute_step`` messages).
-    5. Returns a pending clarification (``ORIGIN_PLAN_MODE_REVIEW``) so the
-       graph routes to ``AWAIT_USER`` for the approve/reject/refine popup.
+       report, not intermediate `execute_step` messages).
+    5. Returns a pending clarification (`ORIGIN_PLAN_MODE_REVIEW`) so the
+       graph routes to `AWAIT_USER` for the approve/reject/refine popup.
 
-    On clarification resume (approve/reject/refine), ``route_after_clarification``
-    routes back here; ``handle_plan_mode_review_answer`` processes the answer and
+    On clarification resume (approve/reject/refine), `route_after_clarification`
+    routes back here; `handle_plan_mode_review_answer` processes the answer and
     records the user's action in the ledger. On Refine with comments,
-    the node runs an async refinement re-synthesis (``synthesize_plan`` with the
+    the node runs an async refinement re-synthesis (`synthesize_plan` with the
     comments + prior plan) so the user sees a *revised* plan, not the same draft.
     """
     # If this is a clarification-resume turn, handle the answer first.

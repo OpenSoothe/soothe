@@ -61,9 +61,9 @@ CREATE INDEX IF NOT EXISTS idx_identity_mappings_user ON identity_external_mappi
 
 
 class IdentityDbConnection:
-    """Connection wrapper so IdentityService SQL can use ``?`` placeholders on both backends.
+    """Connection wrapper so IdentityService SQL can use `?` placeholders on both backends.
 
-    For SQLite, commit is a no-op: ``SqliteStoreRuntime`` owns BEGIN IMMEDIATE / COMMIT.
+    For SQLite, commit is a no-op: `SqliteStoreRuntime` owns BEGIN IMMEDIATE / COMMIT.
     """
 
     def __init__(self, backend: IdentityBackend, conn: Any) -> None:
@@ -90,7 +90,7 @@ def open_identity_connection(
     backend: IdentityBackend,
     dsn: str | None = None,
 ) -> IdentityDbConnection:
-    """Open PostgreSQL identity storage (SQLite uses ``SqliteStoreRuntime`` via IdentityService)."""
+    """Open PostgreSQL identity storage (SQLite uses `SqliteStoreRuntime` via IdentityService)."""
     if backend != "postgresql":
         raise ValueError(
             "SQLite identity must use IdentityService Runtime path; "

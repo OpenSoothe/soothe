@@ -1,8 +1,4 @@
-"""SQLite backend for StrangeLoop checkpoint persistence.
-
- : StrangeLoop Persistence Backend Architecture
-Backend-agnostic implementation with connection pooling
-"""
+"""SQLite backend for StrangeLoop checkpoint persistence."""
 
 from __future__ import annotations
 
@@ -64,11 +60,11 @@ _SLIM_GOAL_RECORD_COLUMNS = frozenset(
 class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     """SQLite backend for StrangeLoop checkpoint persistence.
 
-    / : process-scoped ``SqliteStoreRuntime`` per database file.
+    / : process-scoped `SqliteStoreRuntime` per database file.
     """
 
     def __init__(self, db_path: Path, pool_size: int = 5) -> None:
-        """Initialize SQLite backend backed by ``SqliteRuntimeRegistry``.
+        """Initialize SQLite backend backed by `SqliteRuntimeRegistry`.
 
         Args:
             db_path: Path to SQLite database file.
@@ -92,11 +88,11 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         )
 
     async def _writer_to_thread(self, sync_fn: Callable[..., T], *args: Any) -> T:
-        """Run ``sync_fn(conn, *args)`` on the process Runtime writer."""
+        """Run `sync_fn(conn, *args)` on the process Runtime writer."""
         return await self._runtime.run_write(lambda conn: sync_fn(conn, *args))
 
     async def _reader_to_thread(self, sync_fn: Callable[..., T], *args: Any) -> T:
-        """Run ``sync_fn(conn, *args)`` on a leased Runtime reader."""
+        """Run `sync_fn(conn, *args)` on a leased Runtime reader."""
         return await self._runtime.run_read(lambda conn: sync_fn(conn, *args))
 
     # Implement abstract interface methods
@@ -205,7 +201,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             loop_id: Loop identifier.
             force_status: When True, bypass the goal-count guard so a
                 caller with authority (e.g. the stale-loop reconciler demoting a
-                confirmed-dead zombie) can write ``status`` even when the loop
+                confirmed-dead zombie) can write `status` even when the loop
                 already has goals. StrangeLoop remains the authoritative writer
                 for the normal path; this flag is reserved for recovery.
             **fields: Column names and values to update.
@@ -268,11 +264,11 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         )
 
     async def mark_running_goals_failed(self, loop_id: str) -> int:
-        """Mark a loop's still-``running`` goal_records as ``failed``.
+        """Mark a loop's still-`running` goal_records as `failed`.
 
         Called by the stale-loop reconciler alongside a force-demote of the
-        loop row to ``idle``. A crashed loop may leave goals stuck in the
-        ``running`` state with no ``completed_at``; this closes them so the
+        loop row to `idle`. A crashed loop may leave goals stuck in the
+        `running` state with no `completed_at`; this closes them so the
         goal DAG reflects reality instead of lingering forever.
 
         Returns the count of goal rows updated.
@@ -396,7 +392,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         await self.update_loop_metadata(loop_id, last_message_at=now, updated_at=now)
 
     async def heartbeat_loop(self, loop_id: str) -> None:
-        """Bump ``updated_at`` so periodic status reconciliation can trust freshness."""
+        """Bump `updated_at` so periodic status reconciliation can trust freshness."""
         now = datetime.now(UTC).isoformat()
         await self._writer_to_thread(self._heartbeat_loop_sync, loop_id, now)
 
@@ -452,7 +448,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         idle_before: datetime,
         limit: int = 50,
     ) -> list[dict]:
-        """Return loops with zero human/AI messages idle since ``idle_before``."""
+        """Return loops with zero human/AI messages idle since `idle_before`."""
         idle_iso = idle_before.isoformat()
         return await self._writer_to_thread(
             self._list_empty_loops_sync,
@@ -468,9 +464,9 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     ) -> list[dict]:
         """Sync list empty loops idle past threshold.
 
-        Includes rows still marked ``status="running"``: the GC purge gate
-        performs a live-runner check (``_loop_has_active_runner``), so a
-        stale ``running`` status (zombie) is reclaimable. Excluding them
+        Includes rows still marked `status="running"`: the GC purge gate
+        performs a live-runner check (`_loop_has_active_runner`), so a
+        stale `running` status (zombie) is reclaimable. Excluding them
         here would hide zombies from GC discovery entirely.
         """
         cursor = conn.execute(
@@ -511,7 +507,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         idle_before: datetime,
         limit: int = 50,
     ) -> list[dict]:
-        """Return ephemeral loops idle since ``idle_before`` (excludes running)."""
+        """Return ephemeral loops idle since `idle_before` (excludes running)."""
         idle_iso = idle_before.isoformat()
         return await self._writer_to_thread(
             self._list_expired_ephemeral_loops_sync,
@@ -527,9 +523,9 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     ) -> list[dict]:
         """Sync list expired ephemeral loops.
 
-        Includes rows still marked ``status="running"``: the GC purge gate
-        performs a live-runner check (``_loop_has_active_runner``), so a
-        stale ``running`` status (zombie) is reclaimable.
+        Includes rows still marked `status="running"`: the GC purge gate
+        performs a live-runner check (`_loop_has_active_runner`), so a
+        stale `running` status (zombie) is reclaimable.
         """
         cursor = conn.execute(
             """
@@ -683,7 +679,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
 
     @staticmethod
     def _ensure_loop_columns(db: sqlite3.Connection) -> None:
-        """Add ephemeral-loop columns to existing ``agentloop_loops`` tables."""
+        """Add ephemeral-loop columns to existing `agentloop_loops` tables."""
         cursor = db.execute("PRAGMA table_info(agentloop_loops)")
         existing = {row[1] for row in cursor.fetchall()}
         for col, typedef in _LOOP_COLUMN_MIGRATIONS.items():
@@ -740,7 +736,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
 
     @staticmethod
     def _ensure_goal_record_columns(db: sqlite3.Connection) -> None:
-        """Migrate ``goal_records`` to slim schema when legacy columns exist."""
+        """Migrate `goal_records` to slim schema when legacy columns exist."""
         SQLitePersistenceBackend._migrate_goal_records_slim(db)
 
     @staticmethod

@@ -1,25 +1,4 @@
-"""Interrupted-goal ledger marker.
-
-When a goal is terminated mid-Execute **without** reaching the
-``goal_completion`` success node — i.e. user cancel / new query superseding an
-in-flight goal, max-iterations exhausted, fatal execute error, or consecutive
-rate-limit circuit break — no ``phase="goal_completion"`` ledger pair is
-written. Downstream projection (``plan_ledger_projection``) keys segment
-boundaries off the ``goal_completion`` AI marker, so without a marker the
-interrupted goal's partial ``execute_step`` rows bleed into the next goal's
-"current segment" and the planner cannot tell where the interrupted goal ended
-and the new one began.
-
-This module writes a deterministic ``phase="goal_interrupted"`` Human+AI pair
-at every non-success terminal path. The AI body is a compact digest of what was
-done / what's left, sourced from ``LoopState.prior_progress`` plus a last-AI
-scan over the goal's ``execute_step`` rows — **no LLM call**, so the interrupt
-path stays fast and failure-proof. The marker is a *phase tag*, not a goal
-status; callers keep setting the existing ``cancelled`` / ``failed`` terminal
-statuses (the cause discriminator) and this writer only adds the ledger marker
-so projection can bound the segment and surface partial work to the next goal's
-planning pass.
-"""
+"""Interrupted-goal ledger marker."""
 
 from __future__ import annotations
 
@@ -72,12 +51,12 @@ def _format_step_summary_lines(prior_progress: Any) -> list[str]:
 async def _collect_execute_evidence_excerpts(state: LoopState) -> list[str]:
     """Return up to N short AI-text excerpts from the goal's execute_step rows.
 
-    Walks ``state.loop_messages`` backward collecting ``execute_step`` AI body
+    Walks `state.loop_messages` backward collecting `execute_step` AI body
     text (the user-facing synthesis of each wave), deduped by a 64-char prefix
     so repeated narration does not crowd the digest.
 
-    Uses ``await state.get_loop_messages()`` so the CE ledger rebuild runs off
-    the event loop via ``asyncio.to_thread`` — critical for large ledgers where
+    Uses `await state.get_loop_messages()` so the CE ledger rebuild runs off
+    the event loop via `asyncio.to_thread` — critical for large ledgers where
     a synchronous scan would block the loop.
     """
     from soothe.sloop.utils.stream_normalize import (
@@ -112,11 +91,11 @@ async def _build_interrupted_digest(
     reason: str,
     detail: str,
 ) -> str:
-    """Build the ``goal_interrupted`` AI body (what was done / what's left).
+    """Build the `goal_interrupted` AI body (what was done / what's left).
 
     Deterministic, no LLM. Returns empty string when the goal produced no
     usable execute evidence — callers treat that as "no marker" (matching the
-    ``goal_completion`` guard at ``goal_completion.py:102``).
+    `goal_completion` guard at `goal_completion.py:102`).
     """
     prior_progress = getattr(state, "prior_progress", None)
     step_lines = _format_step_summary_lines(prior_progress) if prior_progress else []
@@ -156,18 +135,18 @@ async def append_goal_interrupted_ledger_pair(
     reason: str,
     detail: str = "",
 ) -> None:
-    """Append a ``phase="goal_interrupted"`` Human+AI ledger pair for the goal.
+    """Append a `phase="goal_interrupted"` Human+AI ledger pair for the goal.
 
-    Mirrors ``goal_completion._append_goal_completion_ledger_pair``. Writes a
+    Mirrors `goal_completion._append_goal_completion_ledger_pair`. Writes a
     deterministic digest of the goal's partial execute work so the next goal's
     planning projection can bound the interrupted segment and surface what was
     done / what's left. Does **not** set goal status — the caller's terminal
-    path already sets ``cancelled`` / ``failed`` (the cause discriminator).
+    path already sets `cancelled` / `failed` (the cause discriminator).
 
     Args:
-        ctx: Loop runtime context (carries ``ce``, ``ce_goal_id``, ``loop_state``).
-        reason: Short interrupt-cause slug (``"user_cancelled"``,
-            ``"max_iterations"``, ``"fatal_error"``, ``"rate_limited"``).
+        ctx: Loop runtime context (carries `ce`, `ce_goal_id`, `loop_state`).
+        reason: Short interrupt-cause slug (`"user_cancelled"`,
+            `"max_iterations"`, `"fatal_error"`, `"rate_limited"`).
         detail: Optional extra context (e.g. the fatal error message).
     """
     state = ctx.loop_state

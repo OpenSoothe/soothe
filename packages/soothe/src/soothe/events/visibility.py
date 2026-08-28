@@ -1,51 +1,4 @@
-"""Single source of truth for daemon-to-client wire visibility.
-
-This module owns every "may this frame reach a WebSocket client?" decision.
-All daemon delivery stages funnel through the predicates below:
-
-- ``soothe_daemon.server.SootheDaemon._broadcast`` — broadcast-time gate.
-- ``soothe_daemon.session.manager`` sender — per-client tier filter.
-- ``soothe_daemon.query.stream_delivery.StreamDeliveryCoalescer`` — early
-  drop of invisible ``custom`` payloads.
-- ``soothe_daemon.event.reattachment`` — history-replay filter on reattach.
-
-## Why centralize
-
-Visibility rules silently drop frames. A bug here is invisible until users
-report "no output". The regression (loop ``…81ec`` postmortem) shipped
-because ``mode=messages`` envelopes were not enumerated as a wire shape;
-they fell through to "unknown event type → DEBUG tier → suppress" and every
-synthesized answer was dropped.
-
-To prevent that class of regression, this module classifies each wire frame
-into an explicit ``WireEnvelopeKind`` and dispatches on it. New wire shapes
-MUST extend the enum and the dispatch table — there is no implicit fallback.
-Unknown shapes fail loud (warning log + suppress) so that future schema
-changes are caught immediately rather than silently dropping user payloads.
-
-## Wire frame shapes (daemon → client)
-
-1. **Control frames** — ``msg["type"]`` ∈ ``_ALWAYS_CLIENT_WIRE_TOP_TYPES``
-   (``status``, ``error``, ``replay_complete``, ``loop_*_response`` …).
-   Always visible.
-
-2. **Catalog events** — ``{"type": "event", "mode": "custom",
-   "data": {"type": "soothe.<domain>.<component>.<action>", ...}}``. Visible
-   iff the catalog type is non-internal and its verbosity tier is at or
-   below ``_CLIENT_WIRE_VERBOSITY_CEILING``.
-
-3. **LangGraph message chunks** — ``{"type": "event", "mode": "messages",
-   "data": [message_dict, metadata_dict]}``. Always visible. These carry
-   the user-visible assistant text and tool I/O. Empty / redundant frames
-   are dropped earlier by the coalescer.
-
-4. **LangGraph updates** — ``{"type": "event", "mode": "updates", ...}``.
-   Dropped earlier in the coalescer (only interrupts survive). If one
-   reaches this layer it is treated as visible (delegated downstream).
-
-5. **Unknown** — anything that doesn't match the above. Logged at WARNING
-   on first observation per type and **suppressed**.
-"""
+"""Single source of truth for daemon-to-client wire visibility."""
 
 from __future__ import annotations
 
@@ -117,8 +70,8 @@ class WireEnvelopeKind(StrEnum):
     """Closed enumeration of wire frame shapes the daemon broadcasts.
 
     Adding a new wire shape REQUIRES extending this enum and updating
-    ``classify_wire_envelope`` plus ``_decide_visibility``. Missing dispatch
-    falls through to ``UNKNOWN`` which is logged and suppressed.
+    `classify_wire_envelope` plus `_decide_visibility`. Missing dispatch
+    falls through to `UNKNOWN` which is logged and suppressed.
     """
 
     NOT_A_DICT = "not_a_dict"
@@ -132,9 +85,9 @@ class WireEnvelopeKind(StrEnum):
 class WireVisibilityDecision(NamedTuple):
     """Result of a visibility check, with a short machine-readable reason.
 
-    The public ``is_client_wire_visible`` API returns just the boolean for
+    The public `is_client_wire_visible` API returns just the boolean for
     backwards compatibility; callers wanting diagnostics use
-    ``decide_client_wire_visibility`` instead.
+    `decide_client_wire_visibility` instead.
     """
 
     visible: bool
@@ -148,14 +101,14 @@ _UNKNOWN_WARNED: set[tuple[str, str]] = set()
 
 
 def classify_wire_envelope(msg: Any) -> WireEnvelopeKind:
-    """Classify a daemon wire message dict into a ``WireEnvelopeKind``.
+    """Classify a daemon wire message dict into a `WireEnvelopeKind`.
 
     Args:
-        msg: A wire frame from ``SootheDaemon._broadcast`` or the session sender.
+        msg: A wire frame from `SootheDaemon._broadcast` or the session sender.
 
     Returns:
-        The envelope kind. ``UNKNOWN`` for shapes the policy does not recognize;
-        such frames are suppressed by ``is_client_wire_visible`` and a warning is
+        The envelope kind. `UNKNOWN` for shapes the policy does not recognize;
+        such frames are suppressed by `is_client_wire_visible` and a warning is
         emitted (throttled per shape).
     """
     if not isinstance(msg, dict):
@@ -271,11 +224,11 @@ def decide_client_wire_visibility(
     msg: dict[str, Any],
     event_meta: EventMeta | None = None,
 ) -> WireVisibilityDecision:
-    """Public diagnostic variant of ``is_client_wire_visible``.
+    """Public diagnostic variant of `is_client_wire_visible`.
 
     Returns the visibility decision with envelope kind and a short reason
     string, useful for daemon broadcast logging and tests. The boolean-only
-    ``is_client_wire_visible`` remains for callers that don't need the reason.
+    `is_client_wire_visible` remains for callers that don't need the reason.
     """
     return _decide_visibility(msg, event_meta)
 
@@ -287,8 +240,8 @@ def is_client_wire_visible(
     """Return True if a daemon wire message may be delivered to WebSocket clients.
 
     Verbose catalog events (DETAILED/DEBUG/INTERNAL tiers) are never sent, even when
-    the client subscribed with ``verbosity=debug`` or the daemon runs at DEBUG log
-    level. ``messages``-mode envelopes (LangGraph AI/Tool payloads) are always
+    the client subscribed with `verbosity=debug` or the daemon runs at DEBUG log
+    level. `messages`-mode envelopes (LangGraph AI/Tool payloads) are always
     visible — the coalescer is responsible for dropping empty / redundant frames.
     Unknown envelope shapes are suppressed and a warning is logged (once per shape).
     """
@@ -296,7 +249,7 @@ def is_client_wire_visible(
 
 
 def is_custom_stream_payload_client_visible(data: Any) -> bool:
-    """Return True if a runner ``custom`` stream payload may leave the worker."""
+    """Return True if a runner `custom` stream payload may leave the worker."""
     if not isinstance(data, dict):
         return False
     event_type = data.get("type")
@@ -315,10 +268,10 @@ def is_custom_stream_payload_client_visible(data: Any) -> bool:
 def event_type_from_wire_message(msg: dict[str, Any]) -> str | None:
     """Extract catalog event type from a daemon wire message dict.
 
-    Only meaningful for ``EVENT_CATALOG``-kind envelopes; for ``EVENT_MESSAGES``
-    and other shapes the inner ``data`` carries no catalog type and the
-    function falls back to the outer ``msg["type"]`` (``"event"``). Callers
-    that need to distinguish should use ``classify_wire_envelope`` instead.
+    Only meaningful for `EVENT_CATALOG`-kind envelopes; for `EVENT_MESSAGES`
+    and other shapes the inner `data` carries no catalog type and the
+    function falls back to the outer `msg["type"]` (`"event"`). Callers
+    that need to distinguish should use `classify_wire_envelope` instead.
     """
     if not isinstance(msg, dict):
         return None
@@ -351,7 +304,7 @@ _PROGRESS_TOP_LEVEL_TYPES = frozenset(
 
 
 def is_progress_wire_event(msg: dict[str, Any]) -> bool:
-    """Return True if a wire message should be delivered at ``wire_tier=progress``."""
+    """Return True if a wire message should be delivered at `wire_tier=progress`."""
     top = msg.get("type")
     if isinstance(top, str) and top in _PROGRESS_TOP_LEVEL_TYPES:
         return True

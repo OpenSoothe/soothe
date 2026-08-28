@@ -1,13 +1,4 @@
-"""Unified tool call ID generation and stream rewriting.
-
-This module provides functions for generating unified tool_call_ids that combine
-step_id, task_idx, and tool name into a consistent format. These IDs enable
-proper tracking of tool calls across root-graph and subgraph execution.
-
-ID Format:
-- Step-level: `{step_id}:s:{tool}:{idx}` (root graph tools)
-- Task-level: `{step_id}:t{task_idx}:{tool}:{idx}` (subagent inner tools)
-"""
+"""Unified tool call ID generation and stream rewriting."""
 
 from __future__ import annotations
 
@@ -65,13 +56,13 @@ def _unified_tool_call_id_for_stream(
 
 @dataclass
 class _SubgraphNamespaceTaskBinder:
-    """Map LangGraph subgraph namespaces to main-graph ``task:N`` indices."""
+    """Map LangGraph subgraph namespaces to main-graph `task:N` indices."""
 
     _pending_indices: deque[int] = field(default_factory=deque)
     _ns_to_idx: dict[tuple[str, ...], int] = field(default_factory=dict)
 
     def note_main_graph_task_invocations(self, msg: BaseMessage, step_id: str) -> None:
-        """Queue ``task`` indices from step-level delegations before subgraphs start."""
+        """Queue `task` indices from step-level delegations before subgraphs start."""
         if not isinstance(msg, (AIMessage, AIMessageChunk)):
             return
         sid = str(step_id).strip()
@@ -97,7 +88,7 @@ class _SubgraphNamespaceTaskBinder:
                 self._pending_indices.append(idx)
 
     def task_idx_for_namespace(self, namespace: tuple[str, ...]) -> int:
-        """Return the ``task`` index bound to a subgraph namespace (FIFO by default)."""
+        """Return the `task` index bound to a subgraph namespace (FIFO by default)."""
         if not namespace:
             return 0
         bound = self._ns_to_idx.get(namespace)
@@ -116,8 +107,8 @@ def _rewrite_tool_call_ids_to_unified(
 ) -> BaseMessage:
     """Rewrite tool_call_ids in AI message/chunk to unified format.
 
-    Transforms provider tool_call_ids like ``functions.task:0`` to
-    ``{step_id}:s:{tool}`` (root) or ``{step_id}:t{idx}:{tool}`` (subgraph).
+    Transforms provider tool_call_ids like `functions.task:0` to
+    `{step_id}:s:{tool}` (root) or `{step_id}:t{idx}:{tool}` (subgraph).
 
     Returns the original message if no modifications needed, or a new
     message object with rewritten IDs.
@@ -224,15 +215,15 @@ def _rewrite_tool_message_tool_call_id(
     *,
     task_idx: int | None = None,
 ) -> BaseMessage:
-    """Align ``ToolMessage.tool_call_id`` with unified AIMessage ids.
+    """Align `ToolMessage.tool_call_id` with unified AIMessage ids.
 
     Args:
-        msg: Stream message (typically ``ToolMessage``).
+        msg: Stream message (typically `ToolMessage`).
         step_id: Current execute step id.
-        task_idx: When set, use task-level ``{step_id}:t{idx}:…`` ids (subgraph).
+        task_idx: When set, use task-level `{step_id}:t{idx}:…` ids (subgraph).
 
     Returns:
-        Original message when unchanged, or a shallow-copied ``ToolMessage``.
+        Original message when unchanged, or a shallow-copied `ToolMessage`.
     """
     if not isinstance(msg, ToolMessage):
         return msg

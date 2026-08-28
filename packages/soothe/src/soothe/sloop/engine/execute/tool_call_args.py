@@ -1,12 +1,4 @@
-"""Collect and wire tool-call kwargs during Act-phase streaming.
-
-Two sources are merged into one lookup table keyed by provider and unified ids:
-
-1. **Invocation registry** (middleware) — authoritative for main-graph Kimi-style runs
-   that stream ``ToolMessage`` without ``AIMessage`` tool metadata.
-2. **Stream AI messages** — ``tool_calls`` / ``tool_call_chunks`` when the model emits them
-   (subagents and providers that stream tool metadata).
-"""
+"""Collect and wire tool-call kwargs during Act-phase streaming."""
 
 from __future__ import annotations
 
@@ -31,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def _chunk_args_dict(chunk: dict[str, Any]) -> dict[str, Any]:
-    """Extract parsed args from one ``tool_call_chunk`` block."""
+    """Extract parsed args from one `tool_call_chunk` block."""
     cargs = chunk.get("args")
     if isinstance(cargs, dict) and cargs:
         return dict(cargs)
@@ -47,7 +39,7 @@ def _store(
     *,
     aliases: tuple[str, ...] = (),
 ) -> None:
-    """Store kwargs under ``tool_call_id`` and optional alias ids (later writes win)."""
+    """Store kwargs under `tool_call_id` and optional alias ids (later writes win)."""
     key = str(tool_call_id or "").strip()
     if not key or not args:
         return
@@ -67,7 +59,7 @@ def _predict_unified_id(
     chunk_index: Any = None,
     task_idx: int | None = None,
 ) -> str:
-    """Map provider ids or chunk index+name to unified wire ``tool_call_id``."""
+    """Map provider ids or chunk index+name to unified wire `tool_call_id`."""
     sid = str(step_id).strip()
     if not sid:
         return str(raw_tool_call_id or "").strip()
@@ -159,10 +151,10 @@ def filter_redundant_stream_tool_updates(
 ) -> list[dict[str, Any]]:
     """Drop stream tool updates when every entry already has complete invocation args.
 
-    Daemon ``tool_call_updates_batch`` carries the same kwargs; keep partial-arg updates
+    Daemon `tool_call_updates_batch` carries the same kwargs; keep partial-arg updates
     for providers that stream tool JSON incrementally.
 
-    Task delegations, ``write_todos``, and ``_subgraph_tool`` placeholders are never
+    Task delegations, `write_todos`, and `_subgraph_tool` placeholders are never
     treated as complete — the TUI needs those wire events for subagent labels and
     the step-card Todo section.
     """
@@ -181,7 +173,7 @@ def filter_redundant_stream_tool_updates(
 
 
 def wire_updates_from_ai_message(msg: BaseMessage) -> list[dict[str, Any]]:
-    """Build ``soothe.stream.tool_call.update`` payloads from a post-backfill AI message."""
+    """Build `soothe.stream.tool_call.update` payloads from a post-backfill AI message."""
     from soothe_sdk.ux.stream_tool_wire import (
         tool_call_update_event,
         unified_tool_update_allowed_without_args,
@@ -242,7 +234,7 @@ def format_args_for_log(args: dict[str, Any], *, max_chars: int = 500) -> str:
 
 
 def format_todos_for_log(todos: Any, *, max_chars: int = 2000) -> str:
-    """Format ``write_todos`` payload for debug logs."""
+    """Format `write_todos` payload for debug logs."""
     if not isinstance(todos, list):
         return log_preview(str(todos), chars=max_chars)
     if not todos:
@@ -267,7 +259,7 @@ class ToolCallArgsCollector:
     by_id: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def lookup(self, tool_call_id: str) -> dict[str, Any]:
-        """Return kwargs for a provider or unified ``tool_call_id``."""
+        """Return kwargs for a provider or unified `tool_call_id`."""
         key = str(tool_call_id or "").strip()
         if not key:
             return {}
@@ -300,7 +292,7 @@ class ToolCallArgsCollector:
         step_id: str,
         task_idx: int | None = None,
     ) -> tuple[ToolMessage, list[dict[str, Any]]]:
-        """Rewrite ``tool_call_id``, merge invocation args, return wire update events."""
+        """Rewrite `tool_call_id`, merge invocation args, return wire update events."""
         from soothe_sdk.ux.stream_tool_wire import tool_call_update_event
 
         raw_tcid = str(getattr(msg, "tool_call_id", "") or "").strip()
@@ -329,7 +321,7 @@ class ToolCallArgsCollector:
         tool_call_id: str,
         tool_name: str,
     ) -> dict[str, Any] | None:
-        """Subagent wire update: real args when known, else ``_subgraph_tool`` placeholder."""
+        """Subagent wire update: real args when known, else `_subgraph_tool` placeholder."""
         from soothe_sdk.ux.stream_tool_wire import tool_call_update_event
         from soothe_sdk.ux.task_namespace import is_unified_tool_call_id
 
@@ -349,8 +341,8 @@ def enrich_wire_updates_with_collector(
 ) -> list[dict[str, Any]]:
     """Merge collector kwargs into wire updates that were emitted without args.
 
-    Unified main-step rows may ship a placeholder ``args={}`` before streaming
-    finishes or before ``ToolMessage`` promotion; hydrate from the collector when
+    Unified main-step rows may ship a placeholder `args={}` before streaming
+    finishes or before `ToolMessage` promotion; hydrate from the collector when
     kwargs were recorded from AI chunks or the invocation registry.
     """
     from soothe_sdk.ux.stream_tool_wire import tool_call_update_event

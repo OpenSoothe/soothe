@@ -1,11 +1,4 @@
-"""Directory manager for isolated persistence directories.
-
-Ensures thread/loop isolation:
-- data/threads/ (CoreAgent Layer 1)
-- data/loops/ (StrangeLoop Layer 2)
-
- : StrangeLoop Persistence Backend Architecture
-"""
+"""Directory manager for isolated persistence directories."""
 
 from __future__ import annotations
 
@@ -93,7 +86,7 @@ class PersistenceDirectoryManager:
         """Get StrangeLoop global checkpoint database path (unified SQLite).
 
         Returns:
-            Path to shared ``databases/checkpoints.db`` (StrangeLoop + LangGraph).
+            Path to shared `databases/checkpoints.db` (StrangeLoop + LangGraph).
             Table: agentloop_checkpoints (separate from LangGraph checkpoint tables).
         """
         from soothe_sdk.paths import resolve_checkpoints_db_path

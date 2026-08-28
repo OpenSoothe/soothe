@@ -1,10 +1,4 @@
-"""Loop-continuation context for execute envelopes and plan prompts.
-
-When ``continue_loop`` is set, each prior goal's canonical ``goal_completion``
-ledger pair is the authoritative outcome document. Downstream prompts project those
-native Human/AI turns (execute Slice A, planner ``new_goal`` ledger) instead of
-replaying ``execute_step`` rows or pasting inline completion prose.
-"""
+"""Loop-continuation context for execute envelopes and plan prompts."""
 
 from __future__ import annotations
 
@@ -50,9 +44,9 @@ def build_continue_bootstrap_step_briefs(
 ) -> ContinueBootstrapStepBriefs:
     """Build description + full_description for loop-continuation bootstrap steps.
 
-    Mirrors plan-generate: ``description`` is a short TUI/logging label;
-    ``full_description`` is the standalone execution brief the executor sends as
-    ``EXECUTION TASK``.
+    Mirrors plan-generate: `description` is a short TUI/logging label;
+    `full_description` is the standalone execution brief the executor sends as
+    `EXECUTION TASK`.
     """
     goal = (user_goal or "").strip()
     if is_continue_keyword(goal):
@@ -80,7 +74,7 @@ def _message_phase(msg: Any) -> str | None:
 
 
 def ledger_goal_completion_text(loop_messages: list[Any]) -> str:
-    """Return the latest ``goal_completion`` AI body from the orchestration ledger."""
+    """Return the latest `goal_completion` AI body from the orchestration ledger."""
     content = ""
     for msg in loop_messages:
         if _message_phase(msg) != "goal_completion":
@@ -126,16 +120,16 @@ def build_prior_goal_summaries(
     """Compact summary of prior goals for continuation-assess and plan-generate.
 
     Reads goal metadata from the CE GoalStepDAG. Completion bodies come from
-    CE ``action_history`` when present; full reports live in the ledger.
+    CE `action_history` when present; full reports live in the ledger.
 
     Args:
-        ce: ContextEngine (or compatible) exposing ``get_all_goals()``.
+        ce: ContextEngine (or compatible) exposing `get_all_goals()`.
         checkpoint: StrangeLoop checkpoint with persisted goal completions.
         exclude_goal_id: Current goal id to omit from the summary list.
 
     Returns:
-        List of dicts with keys ``goal_id``, ``goal_text``, ``completion``,
-        ``step_count``.
+        List of dicts with keys `goal_id`, `goal_text`, `completion`,
+        `step_count`.
     """
     _ = checkpoint
     completions_by_text: dict[str, str] = {}

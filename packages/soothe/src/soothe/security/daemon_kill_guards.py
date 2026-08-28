@@ -1,9 +1,4 @@
-"""Host-injected kill_process guards for the live Soothe daemon.
-
-Nano's ``KillProcessTool`` only knows self/parent PID safety. Host daemon
-protection (pidfile + production WebSocket listener) is registered here via
-``soothe_nano.toolkits.execution.register_protected_kill_hook``.
-"""
+"""Host-injected kill_process guards for the live Soothe daemon."""
 
 from __future__ import annotations
 
@@ -21,7 +16,7 @@ _installed = False
 
 
 def _soothed_pid_from_pidfile() -> int | None:
-    """Return the host daemon PID from ``SOOTHE_HOME/soothed.pid`` when present."""
+    """Return the host daemon PID from `SOOTHE_HOME/soothed.pid` when present."""
     try:
         pf = Path(SOOTHE_HOME).expanduser() / "soothed.pid"
         if not pf.is_file():
@@ -32,7 +27,7 @@ def _soothed_pid_from_pidfile() -> int | None:
 
 
 def _pid_listening_on_port(port: int) -> int | None:
-    """Best-effort PID of the process listening on ``port`` (macOS/Linux ``lsof``)."""
+    """Best-effort PID of the process listening on `port` (macOS/Linux `lsof`)."""
     if port <= 0:
         return None
     try:

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class GoalLoopTrace:
     """Shared Langfuse trace for one agentic goal turn.
 
-    Stages use a fresh handler pinned to ``trace_id`` so LangChain invocations do not
+    Stages use a fresh handler pinned to `trace_id` so LangChain invocations do not
     open separate root traces. Pass through runner → classifier → graph invoke.
     """
 
@@ -105,9 +105,9 @@ class GoalLoopTrace:
         """RunnableConfig for a direct LLM call pinned to this goal-loop trace.
 
         Args:
-            purpose: ``soothe_call_purpose`` metadata.
-            component: ``soothe_call_component`` metadata.
-            phase: ``soothe_call_phase`` metadata.
+            purpose: `soothe_call_purpose` metadata.
+            component: `soothe_call_component` metadata.
+            phase: `soothe_call_phase` metadata.
             run_name: Langfuse observation display name.
             extra_metadata: Optional extra RunnableConfig metadata.
             inherit_callbacks_from: Optional parent RunnableConfig whose Langfuse
@@ -145,7 +145,7 @@ class GoalLoopTrace:
         extra_metadata: dict[str, Any] | None = None,
         inherit_callbacks_from: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """RunnableConfig for the in-graph ``intake`` classify LLM under this trace."""
+        """RunnableConfig for the in-graph `intake` classify LLM under this trace."""
         trace_name = (self.soothe_config.observability.langfuse.trace_name or "").strip()
         run_name = intake_phase_langfuse_run_display_name(trace_name or None, phase)
         return self.pinned_llm_invoke_config(
@@ -162,7 +162,7 @@ class GoalLoopTrace:
         *,
         configurable: dict[str, Any],
     ) -> dict[str, Any]:
-        """RunnableConfig for ``CompiledGraph.ainvoke`` under this trace."""
+        """RunnableConfig for `CompiledGraph.ainvoke` under this trace."""
         base: dict[str, Any] = {
             "configurable": dict(configurable),
             "metadata": dict(self.base_metadata()),

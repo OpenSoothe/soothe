@@ -13,12 +13,12 @@ _PARENT_COORDINATE_KEYS = ("checkpoint_ns", "checkpoint_id", "checkpoint_map")
 def strip_parent_checkpoint_coordinates(config: dict[str, Any]) -> dict[str, Any]:
     """Drop inherited parent-graph checkpoint coordinates from a config.
 
-    Merging the ambient parent config (``langgraph.config.get_config`` — e.g.
-    the StrangeLoop execute-node config, whose ``checkpoint_ns`` is
-    ``execute:{task_id}``) into a CoreAgent stream config makes the CoreAgent
+    Merging the ambient parent config (`langgraph.config.get_config` — e.g.
+    the StrangeLoop execute-node config, whose `checkpoint_ns` is
+    `execute:{task_id}`) into a CoreAgent stream config makes the CoreAgent
     run as a parent subgraph: its checkpoints — including interrupts — land
     under the parent's task namespace instead of the thread root, so
-    ``Command(resume=...)`` cannot reach them. Tracing callbacks and
+    `Command(resume=...)` cannot reach them. Tracing callbacks and
     the config-injected checkpointer are preserved; only the coordinate keys
     are removed.
     """

@@ -1,4 +1,4 @@
-"""Reject ``task`` invokes for intake-only specialists (host belt-and-suspenders)."""
+"""Reject `task` invokes for intake-only specialists (host belt-and-suspenders)."""
 
 from __future__ import annotations
 
@@ -65,10 +65,10 @@ def _task_subagent_type(request: ToolCallRequest) -> str | None:
 
 
 class IntakeOnlyTaskGuardMiddleware(AgentMiddleware):
-    """Block ``task`` calls to intake-only specialists; scrub preferred routing."""
+    """Block `task` calls to intake-only specialists; scrub preferred routing."""
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
-        """Clear intake-only ``preferred_subagent`` so tool narrowing stays open."""
+        """Clear intake-only `preferred_subagent` so tool narrowing stays open."""
         if not hasattr(request.state, "get"):
             return request
         classification = request.state.get("routing_classification")

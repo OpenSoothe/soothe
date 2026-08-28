@@ -1,13 +1,4 @@
-"""Wired-subagent intake branch.
-
-Intake-only wires (``browser_use``, ``deep_research``,
-``academic_research``): stream the specialist runnable from the intake-only
-registry (not on CoreAgent ``task``), forward curated wire customs for the
-orphan SubAgent card, record Human/AI execute-step ledger rows.
-
-The ``planner`` wire has been removed; plan mode is now handled by the
-``interaction_mode=plan`` profile and ``plan_mode_review.py`` host module.
-"""
+"""Wired-subagent intake branch."""
 
 from __future__ import annotations
 
@@ -34,10 +25,10 @@ _DESC_DISPLAY_MAX = 200
 
 
 def _extract_subagent_report(result: Any) -> str:
-    """Mirror SubAgentMiddleware return text, plus CompiledSubAgent ``answer``.
+    """Mirror SubAgentMiddleware return text, plus CompiledSubAgent `answer`.
 
-    Intake-only specialists write the user-facing report to state ``answer``
-    (and usually mirror it on an ``AIMessage`` in ``messages``).
+    Intake-only specialists write the user-facing report to state `answer`
+    (and usually mirror it on an `AIMessage` in `messages`).
     """
     if not isinstance(result, dict):
         return (str(result) if result is not None else "").strip()
@@ -76,7 +67,7 @@ def _record_wired_execute_ledger(
     wire: str,
     step_id: str,
 ) -> None:
-    """Write execute-step Human/AI so ``ledger_direct`` can surface the report."""
+    """Write execute-step Human/AI so `ledger_direct` can surface the report."""
     state = ctx.loop_state
     human = LoopHumanMessage(
         content=goal_text,
@@ -112,7 +103,7 @@ def _record_wired_execute_ledger(
 
 
 def _unpack_astream_item(item: Any) -> tuple[str | None, Any]:
-    """Normalize LangGraph ``astream`` items to ``(mode, data)``."""
+    """Normalize LangGraph `astream` items to `(mode, data)`."""
     if isinstance(item, tuple):
         if len(item) == 2:
             mode, data = item

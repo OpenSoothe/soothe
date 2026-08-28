@@ -23,7 +23,7 @@ class _LedgerEntry:
 class LedgerManager:
     """Manages the loop message ledger with phase tagging and compaction.
 
-    Replaces ``LoopWorkingMemory`` and the ``loop_messages`` list from
+    Replaces `LoopWorkingMemory` and the `loop_messages` list from
     StrangeLoop state. Messages are tagged with phase metadata for filtered
     retrieval (e.g., execute_step-only projection for CoreAgent).
     """

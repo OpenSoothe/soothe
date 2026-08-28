@@ -1,18 +1,4 @@
-"""StrangeLoop stem station IDs and Loop Graph channel schema.
-
-Canonical LangGraph node names for the flat Loop Graph. Legacy clarification
-origin → resume-station mapping lives in
-``clarification.origins.CLARIFICATION_ORIGIN_RESUME_NODE``. Ledger dual-read of
-older ``phase`` tags is handled by ``PLANNING_LEDGER_PHASES`` /
-``INTAKE_LEDGER_PHASES``.
-
-Wire deliverable phases (``goal_completion``, ``execute_step``) and soothe-sdk
-ledger filter strings must stay stable — writers must not rename those values.
-
-Channel fields that conceptually hold ``IntakeLabel`` / ``ClarificationOrigin``
-are typed as ``str`` so this module stays import-safe from
-``clarification.origins`` (no cycle through ``intention``).
-"""
+"""StrangeLoop stem station IDs and Loop Graph channel schema."""
 
 from __future__ import annotations
 

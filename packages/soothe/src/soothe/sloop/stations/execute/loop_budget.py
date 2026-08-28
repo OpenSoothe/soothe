@@ -1,9 +1,4 @@
-"""Loop budget / rate-limit gate helpers.
-
-DISPATCH calls :func:`enforce_loop_budget` before claiming work so the graph
-enforces iteration and consecutive-429 stops without a separate
-``check_limits`` station.
-"""
+"""Loop budget / rate-limit gate helpers."""
 
 from __future__ import annotations
 
@@ -83,7 +78,7 @@ async def emit_rate_limit_terminal(ctx: LoopRuntimeContext) -> None:
 async def enforce_loop_budget(ctx: LoopRuntimeContext) -> BudgetTerminal | None:
     """Return a terminal outcome when iteration or rate-limit budget is exhausted.
 
-    Resumed goals (``recovery_valid_resume``) get one grace iteration at the
+    Resumed goals (`recovery_valid_resume`) get one grace iteration at the
     budget boundary so cancel-then-retry at the final iteration can progress.
     """
     resumed = bool(getattr(ctx, "recovery_valid_resume", False))

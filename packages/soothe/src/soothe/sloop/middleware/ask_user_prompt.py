@@ -1,15 +1,4 @@
-"""Host middleware: inject ``ask_user`` gate directive into the system prompt.
-
-The ``ask_user`` host tool and the platonic-coding skill's ``<GATE-INSTRUCTION>``
-are necessary but not sufficient — the LLM may still write clarifying questions
-as plain prose (observed in loop 612e). This middleware appends a top-level
-system prompt directive telling the model to call the ``ask_user`` tool at every
-confirmation/clarification gate, which has higher adherence weight than a
-reference file read as a tool result.
-
-Runs in ``host_suffix`` position (after ``SystemPromptMiddleware``) so it sees
-the fully-built system prompt and can append to it.
-"""
+"""Host middleware: inject `ask_user` gate directive into the system prompt."""
 
 from __future__ import annotations
 
@@ -50,10 +39,10 @@ _DIRECTIVE_TAG = "<ASK_USER_GATE_DIRECTIVE>"
 
 
 class AskUserPromptMiddleware(AgentMiddleware):
-    """Append the ``ask_user`` gate directive to the system prompt."""
+    """Append the `ask_user` gate directive to the system prompt."""
 
     def _augment(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
-        """Return ``request`` with the directive appended to the system message.
+        """Return `request` with the directive appended to the system message.
 
         Idempotent — skips if the tag is already present (e.g. the system
         prompt was rebuilt on a later hop).
@@ -73,8 +62,8 @@ class AskUserPromptMiddleware(AgentMiddleware):
     ) -> ModelResponse[ContextT]:
         """Sync path — delegates to the async implementation.
 
-        soothe always runs the agent in an async context (``astream``), so the
-        async ``awrap_model_call`` below is the one that actually fires. This
+        soothe always runs the agent in an async context (`astream`), so the
+        async `awrap_model_call` below is the one that actually fires. This
         sync shim exists for API completeness and synchronous test paths.
         """
         return handler(self._augment(request))
@@ -86,7 +75,7 @@ class AskUserPromptMiddleware(AgentMiddleware):
     ) -> ModelResponse[ContextT]:
         """Append the directive to the system message before the model call.
 
-        This is the path that fires in production (``astream`` / ``ainvoke``).
+        This is the path that fires in production (`astream` / `ainvoke`).
         """
         return await handler(self._augment(request))
 

@@ -8,7 +8,7 @@ import ssl
 
 
 def collect_related_exceptions(exc: BaseException) -> list[BaseException]:
-    """Collect this exception plus chained ``__cause__`` / ``__context__`` (deduplicated)."""
+    """Collect this exception plus chained `__cause__` / `__context__` (deduplicated)."""
     out: list[BaseException] = []
     seen: set[int] = set()
 

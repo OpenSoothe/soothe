@@ -1,17 +1,4 @@
-"""LLM-driven plan synthesis from step execution evidence.
-
-Instead of extracting the plan from raw step output (which contains
-intermediate narration, tool results, and reasoning mixed together),
-this module makes a dedicated LLM call with:
-
-1. The step's execute_step ledger messages (tool calls + results + AI text)
-   projected via the standard ledger projection infrastructure.
-2. A plan synthesis system prompt (``plan_synthesis_system.xml``) that
-   instructs the LLM to produce a structured plan document from the evidence.
-
-This mirrors how ``node_goal_completion`` synthesizes a completion report
-from execution evidence, but with a plan-specific prompt.
-"""
+"""LLM-driven plan synthesis from step execution evidence."""
 
 from __future__ import annotations
 
@@ -51,20 +38,20 @@ async def synthesize_plan(
 ) -> str:
     """Generate a plan document from step execution evidence via LLM.
 
-    Projects the ``execute_step`` ledger messages (tool calls, results,
+    Projects the `execute_step` ledger messages (tool calls, results,
     AI text) and makes a single LLM call with the plan synthesis system
     prompt. Returns the generated plan text.
 
     Args:
-        ctx: Loop runtime context with ``loop_state`` containing the ledger.
+        ctx: Loop runtime context with `loop_state` containing the ledger.
         llm: Chat model for the synthesis call.
         config: Optional SootheConfig for ledger projection caps.
         refinement_comments: User-requested plan refinement. When
-            provided (with ``prior_plan``), the LLM is asked to *revise*
+            provided (with `prior_plan`), the LLM is asked to *revise*
             the prior plan per the comments rather than synthesize from
             scratch.
         prior_plan: The previous plan draft being refined. Required when
-            ``refinement_comments`` is set.
+            `refinement_comments` is set.
 
     Returns:
         Generated plan document text (may be empty on failure).

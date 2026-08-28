@@ -1,9 +1,4 @@
-"""Pydantic configuration models for Soothe.
-
-Shared (nano-owned) schema classes are re-exported from ``soothe_nano.config.models``.
-Host-only overlays (StrangeLoop, Autopilot, cron, skillify, clarification, veritas)
-live in this module. ``AgentConfig`` subclasses nano's slim CoreAgent config.
-"""
+"""Pydantic configuration models for Soothe."""
 
 from __future__ import annotations
 
@@ -91,7 +86,7 @@ ExecuteDeliverableAssessMode = Literal["auto", "always", "never"]
 
 
 def normalize_agentic_final_response_mode(value: Any) -> Any:
-    """Normalize ``final_response``; ``adaptive`` is a deprecated alias for ``auto``."""
+    """Normalize `final_response`; `adaptive` is a deprecated alias for `auto`."""
     if value == "adaptive":
         return "auto"
     return value
@@ -102,7 +97,7 @@ class AssistantIdentity(BaseModel):
 
     All fields default to the original hardcoded values so existing
     deployments see zero behavior change. Override via
-    ``agent.assistant_identity`` in ``soothe.yml``.
+    `agent.assistant_identity` in `soothe.yml`.
 
     Args:
         creator: Attribution line rendered as "invented by {creator}".
@@ -135,8 +130,8 @@ class AssistantIdentity(BaseModel):
 class NotifyTargetConfig(BaseModel):
     """One delivery destination for job lifecycle notify.
 
-    ``kind`` selects the sink address space (``email``, ``feishu_chat_id``,
-    ``feishu_open_id``, ``webhook_url``, …).
+    `kind` selects the sink address space (`email`, `feishu_chat_id`,
+    `feishu_open_id`, `webhook_url`, …).
     """
 
     kind: str = Field(description="Address space / sink target kind")
@@ -147,9 +142,9 @@ class NotifyEventsConfig(BaseModel):
     """Which job-root lifecycle intents to emit.
 
     All events are enabled by default. To suppress a specific event,
-    add its kind string (e.g. ``"sla.overdue"``) to the ``disabled``
+    add its kind string (e.g. `"sla.overdue"`) to the `disabled`
     denylist. This replaces the previous four-boolean flag pattern,
-    which was fully redundant — every flag defaulted to ``True``.
+    which was fully redundant — every flag defaulted to `True`.
     """
 
     disabled: set[str] = Field(
@@ -159,15 +154,15 @@ class NotifyEventsConfig(BaseModel):
     )
 
     def is_enabled(self, kind: str) -> bool:
-        """True when ``kind`` is not in the disabled denylist."""
+        """True when `kind` is not in the disabled denylist."""
         return kind not in self.disabled
 
 
 class EmailNotifySinkConfig(BaseModel):
-    """Outbound SMTP settings for ``EmailNotifySink`` (not IMAP chat).
+    """Outbound SMTP settings for `EmailNotifySink` (not IMAP chat).
 
-    Sensitive fields (``smtp_username``, ``smtp_password``) accept a plain string
-    or ``${ENV_VAR}`` (same dual rule as ``providers[].api_key``).
+    Sensitive fields (`smtp_username`, `smtp_password`) accept a plain string
+    or `${ENV_VAR}` (same dual rule as `providers[].api_key`).
     """
 
     enabled: bool = False
@@ -197,7 +192,7 @@ class EmailNotifySinkConfig(BaseModel):
 
 
 class WebhookNotifySinkConfig(BaseModel):
-    """HTTP POST URLs keyed by intent kind (``job_completed``, …)."""
+    """HTTP POST URLs keyed by intent kind (`job_completed`, …)."""
 
     enabled: bool = False
     urls: dict[str, str | None] = Field(default_factory=dict)
@@ -207,7 +202,7 @@ class WebhookNotifySinkConfig(BaseModel):
 class FeishuNotifySinkConfig(BaseModel):
     """Feishu/Lark IM notify sink (Phase 1 stub; live send follow-up).
 
-    ``app_id`` and ``app_secret`` accept a plain string or ``${ENV_VAR}``.
+    `app_id` and `app_secret` accept a plain string or `${ENV_VAR}`.
     """
 
     enabled: bool = False
@@ -234,11 +229,11 @@ class SlaConfig(BaseModel):
     """SLA monitoring thresholds for overdue gap items.
 
     When enabled, the AutopilotService watchdog tick scans active goals
-    for unresolved gap items (from ``last_gap_analysis``) that have
+    for unresolved gap items (from `last_gap_analysis`) that have
     persisted past these thresholds. Each threshold crossing emits an
-    ``sla.overdue`` notify intent at the corresponding severity tier.
+    `sla.overdue` notify intent at the corresponding severity tier.
 
-    Set a threshold to ``0`` to disable that tier.
+    Set a threshold to `0` to disable that tier.
     """
 
     enabled: bool = False
@@ -329,31 +324,31 @@ class AutopilotConfig(BaseModel):
         monitor_model_role: Router role for AutopilotMonitor LLM reasoners (backoff,
             DAG verification).
         consensus_model_role: Router role for report-commit judgment; daemon uses
-            ``create_chat_model`` with automatic fallback to ``default`` on
+            `create_chat_model` with automatic fallback to `default` on
             instantiation failure.
         judge_allow_structural_dag_ops: Allowlisted structural judge ops
-            (``spawn_goal`` / ``cancel_goal``). Empty = deny (LoopRail owns fan-out).
+            (`spawn_goal` / `cancel_goal`). Empty = deny (LoopRail owns fan-out).
         intake_scope: Forced StrangeLoop intake scope for dispatched goals
-            (``minimal``|``simple``|``complex``); ``None`` lets the loop run
+            (`minimal`|`simple`|`complex`); `None` lets the loop run
             intake classification.
         verify_periodic_enabled: Master switch for periodic DAG health verification.
-            When ``False`` (default), the monitor's background health tick is
+            When `False` (default), the monitor's background health tick is
             skipped entirely — no structural heuristics, no LLM. Event-driven
             verification (post-completion, backoff reasoning) still runs. The
             resource watchdog tick still runs on the same cadence.
         verify_interval: Background verification tick while non-terminal goals exist.
-            Only used while ``verify_periodic_enabled`` is ``True``.
-        verify_idle_interval: Tick when DAG empty/complete (``0`` reuses
-            ``verify_interval``); health LLM is skipped while idle.
+            Only used while `verify_periodic_enabled` is `True`.
+        verify_idle_interval: Tick when DAG empty/complete (`0` reuses
+            `verify_interval`); health LLM is skipped while idle.
         verify_llm_enabled: Kill-switch for periodic health LLM. Only consulted
-            while ``verify_periodic_enabled`` is ``True``.
+            while `verify_periodic_enabled` is `True`.
         verify_llm_min_nonterminal: Min non-terminal goals before health LLM runs.
         verify_llm_debounce: Skip health LLM when DAG fingerprint unchanged.
-        webhooks: Webhook URLs by event type (legacy; prefer ``notify.sinks.webhook``).
+        webhooks: Webhook URLs by event type (legacy; prefer `notify.sinks.webhook`).
         notify: Job lifecycle multi-channel notify.
 
     Note:
-        StrangeLoop iteration budget is shared via ``agent.loop.max_iterations`` —
+        StrangeLoop iteration budget is shared via `agent.loop.max_iterations` —
         Autopilot does not redefine it. Dynamic goal creation (decomposition,
         rails, directives) is always enabled.
     """
@@ -724,7 +719,7 @@ class LoopWorkingMemoryConfig(BaseModel):
     """Agentic loop working memory.
 
     In-memory scratchpad for the agentic loop; large entries spill under
-    ``SOOTHE_HOME/data/threads/{thread_id}/working_memory/``.
+    `SOOTHE_HOME/data/threads/{thread_id}/working_memory/`.
 
     Args:
         enabled: Enable working memory for Layer 2 Reason prompts.
@@ -832,7 +827,7 @@ class LoopCheckpointConfig(BaseModel):
         auto_resume_max_loops: Max loops to auto-resume concurrently at startup.
         auto_resume_max_age_hours: Skip incomplete loops older than this many hours.
         auto_resume_clarifications: How to treat clarification-parked loops
-            (``skip`` = leave parked for a human; ``reannounce`` = resume graph
+            (`skip` = leave parked for a human; `reannounce` = resume graph
             so clarification is re-emitted without auto-answering).
     """
 
@@ -878,9 +873,9 @@ class LoopCheckpointAsyncConfig(BaseModel):
 class LoopConcurrencyConfig(BaseModel):
     """Loop execution concurrency and scheduling controls.
 
-    Goal fan-out is owned by ``agent.autopilot.max_parallel_goals`` (Autopilot
+    Goal fan-out is owned by `agent.autopilot.max_parallel_goals` (Autopilot
     scheduler). Each StrangeLoop worker runs one goal; do not reintroduce a
-    loop-level ``max_parallel_goals`` here.
+    loop-level `max_parallel_goals` here.
 
     Args:
         max_parallel_steps: Maximum plan steps running concurrently per execute batch.
@@ -921,37 +916,37 @@ class OutputStreamingConfig(BaseModel):
 
     Three delivery modes:
 
-    - ``batch``: Buffer the entire goal_completion synthesis. Emit a single
-      ``AIMessageChunk`` with ``chunk_position="last"`` when the agent loop
+    - `batch`: Buffer the entire goal_completion synthesis. Emit a single
+      `AIMessageChunk` with `chunk_position="last"` when the agent loop
       completes. Pure single-shot delivery; the client sees nothing during the
       synthesis. Intended for headless automation that does not need real-time
       progress.
 
-    - ``adaptive`` (default, two-phase):
+    - `adaptive` (default, two-phase):
 
       1. *Streaming phase* — while cumulative goal_completion chars are below
-         ``adaptive_threshold_chars`` every incoming chunk is forwarded
+         `adaptive_threshold_chars` every incoming chunk is forwarded
          individually, giving the lowest possible first-token latency.
       2. *Chunked-streaming phase* — once the threshold is crossed the
          coalescer buffers incoming text and flushes intermediate
-         ``AIMessageChunk`` frames whenever the buffer reaches
-         ``adaptive_block_chars`` characters or ``adaptive_block_interval_ms``
+         `AIMessageChunk` frames whenever the buffer reaches
+         `adaptive_block_chars` characters or `adaptive_block_interval_ms`
          milliseconds have elapsed since the last block flush, whichever
-         happens first. The final block carries ``chunk_position="last"``.
+         happens first. The final block carries `chunk_position="last"`.
          This keeps the user informed of progress on long outputs while
          reducing wire frame count vs. raw passthrough.
 
-    - ``streaming``: Raw passthrough at the LLM's native generation speed.
+    - `streaming`: Raw passthrough at the LLM's native generation speed.
       Every goal_completion chunk is forwarded immediately with no buffering.
       Highest wire-frame count and lowest latency — intended for local /
       low-latency clients that want token-level fidelity.
 
-    If ``file_output_threshold_chars`` is set (> 0) goal_completion reverts to
+    If `file_output_threshold_chars` is set (> 0) goal_completion reverts to
     pure-batch buffering regardless of mode so the final file_output decision
     sees the complete text.
 
     Args:
-        mode: Delivery mode (``batch`` | ``adaptive`` | ``streaming``).
+        mode: Delivery mode (`batch` | `adaptive` | `streaming`).
         streaming_interval_ms: Daemon WebSocket batching interval (milliseconds).
         tui_flush_interval_ms: TUI rendering flush interval (milliseconds).
         tui_first_flush_interval_ms: TUI flush interval for the first tokens (milliseconds).
@@ -964,9 +959,9 @@ class OutputStreamingConfig(BaseModel):
         file_output_preview_chars: Preview chars in TUI when output saved to file.
         file_output_dir: Directory for output files (default: current workspace root/.soothe/output).
         message_coalesce_enabled: When true, coalesce plain assistant text chunks per namespace.
-        tool_batch_enabled: Debounce tool invocation wire into ``tool_call_updates_batch``.
+        tool_batch_enabled: Debounce tool invocation wire into `tool_call_updates_batch`.
         tool_batch_interval_ms: Max wait before flushing a debounced tool batch (milliseconds).
-        suppress_redundant_stream_tool_updates: Drop ``soothe.stream.tool_call.update`` when batched.
+        suppress_redundant_stream_tool_updates: Drop `soothe.stream.tool_call.update` when batched.
         skip_redundant_tool_message_wire: Drop empty tool-result wire frames (off by default).
     """
 
@@ -1082,11 +1077,11 @@ class ContextEngineConfig(BaseModel):
     and GoalContextManager as the internal state backend. The existing prompt
     pipeline, executor, and LangGraph topology remain unchanged.
 
-    The persistence backend follows ``persistence.default_backend`` — no
-    separate ``persistence_backend`` knob is needed. When the global backend
-    is ``postgresql``, CE uses PgsqlContextPersistence with the same DSN.
-    When ``sqlite``, CE uses SqliteContextPersistence (default). If
-    ``postgresql`` is configured but ``psycopg`` is unavailable, CE
+    The persistence backend follows `persistence.default_backend` — no
+    separate `persistence_backend` knob is needed. When the global backend
+    is `postgresql`, CE uses PgsqlContextPersistence with the same DSN.
+    When `sqlite`, CE uses SqliteContextPersistence (default). If
+    `postgresql` is configured but `psycopg` is unavailable, CE
     falls back to SQLite automatically.
     """
 
@@ -1182,17 +1177,17 @@ class StrangeLoopConfig(BaseModel):
     Args:
         enabled: Enable agent loop mode.
         max_iterations: Maximum StrangeLoop iterations per run (shared with Autopilot
-            workers; default ``DEFAULT_MAX_ITERATIONS`` / 99). Autopilot does not
+            workers; default `DEFAULT_MAX_ITERATIONS` / 99). Autopilot does not
             define a separate budget.
-        max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
-        general_purpose_subagent: GP subagent mode (off/full/readonly/per_step). ``off`` (default)
-            disables GP; ``per_step`` routes full GP on agent-mode steps (incl. Eval) and read-only
+        max_subagent_tasks_per_wave: Cap `task` tool completions per Act wave (0 = unlimited).
+        general_purpose_subagent: GP subagent mode (off/full/readonly/per_step). `off` (default)
+            disables GP; `per_step` routes full GP on agent-mode steps (incl. Eval) and read-only
             GP on plan/ask steps.
         max_tool_calls_per_step: Cap tool results consumed per execute step from the Act stream (0 = unlimited).
         dispatch_idle_seconds: Deadlock detector — max seconds of stream inactivity when no
             root-level tool is pending. Nested subgraph messages do not clear parent activity.
         dispatch_tool_timeout_seconds: Optional wall-clock cap for a root tool wave (dispatch
-            until all pending ToolMessages). 0 disables (use ``agent.middleware.tool_timeout``).
+            until all pending ToolMessages). 0 disables (use `agent.middleware.tool_timeout`).
         execute_action_retry_max: Extra Execute passes when the step deliverable gate fails (0 = disabled).
         execute_min_answer_chars: Minimum final assistant text length for deliverable satisfaction.
         execute_deliverable_assess: Fast LLM assess mode when structural deliverable checks are inconclusive.
@@ -1205,7 +1200,7 @@ class StrangeLoopConfig(BaseModel):
         execute_prompt_ledger: Caps for execute-step CoreAgent ledger projection.
         checkpoint: Progressive checkpoint persistence and startup resume.
         concurrency: Parallelism caps and step scheduling strategy.
-        goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default ``default``).
+        goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default `default`).
         rules: Declarative completion and scenario thresholds.
         decompose: Recursive step decomposition budgets; always on.
         eval: Coverage Eval thread limits; always on when required.
@@ -1274,7 +1269,7 @@ class StrangeLoopConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _reject_nano_middleware_and_legacy_keys(cls, data: Any) -> Any:
-        """Keep nano middleware knobs out of ``agent.loop``."""
+        """Keep nano middleware knobs out of `agent.loop`."""
         if not isinstance(data, dict):
             return data
         banned_middleware = (
@@ -1465,15 +1460,15 @@ class StrangeLoopConfig(BaseModel):
 class ToolApprovalRule(BaseModel):
     """One deny or allow rule for tool-action approval.
 
-    Pattern syntax (adapted from Claude Code's ``shellRuleMatching``):
+    Pattern syntax (adapted from Claude Code's `shellRuleMatching`):
 
-    - ``"exact"`` — exact string match (e.g. ``"git status"``)
-    - ``"prefix:*"`` — prefix match (e.g. ``"grep:*"`` matches ``"grep -r foo"``)
-    - ``"wildcard*"`` — wildcard match, ``*`` = any sequence (e.g. ``"pytest*"``)
+    - `"exact"` — exact string match (e.g. `"git status"`)
+    - `"prefix:*"` — prefix match (e.g. `"grep:*"` matches `"grep -r foo"`)
+    - `"wildcard*"` — wildcard match, `*` = any sequence (e.g. `"pytest*"`)
 
-    Path patterns support ``**`` recursive matching via ``pathspec``
-    (gitignore-style). The ``<workspace>`` token expands to the per-request
-    workspace root from ``LoopStateView.workspace_summary``.
+    Path patterns support `**` recursive matching via `pathspec`
+    (gitignore-style). The `<workspace>` token expands to the per-request
+    workspace root from `LoopStateView.workspace_summary`.
     """
 
     tool: Literal["edit_file", "write_file", "delete", "run_command"]
@@ -1486,7 +1481,7 @@ class VeritasFallbackConfig(BaseModel):
     Disabled by default: compound-command splitting and expanded allow rules
     resolve nearly all tool_approval interrupts deterministically. When no
     rule matches, the interrupt defers to the human relay (manual mode) or
-    raises ``ClarificationDeferredError`` (auto mode) instead of spending
+    raises `ClarificationDeferredError` (auto mode) instead of spending
     LLM latency on a veritus call.
     """
 
@@ -1569,7 +1564,7 @@ def _default_allow_rules() -> list[ToolApprovalRule]:
 
     In auto mode, any tool action that does NOT match a deny rule or
     safety check is auto-approved. Operators who need a stricter posture
-    can switch to manual mode (``clarification.default_mode: manual``)
+    can switch to manual mode (`clarification.default_mode: manual`)
     or add custom deny rules.
     """
     return []
@@ -1582,7 +1577,7 @@ class ToolApprovalConfig(BaseModel):
     action that does NOT match a deny rule or fail a safety check is
     auto-approved in auto mode. There is no allow-list stage — the
     absence of a deny is an implicit allow. This avoids the compound-
-    command problem where piped commands (``git diff ... | tail -5``)
+    command problem where piped commands (`git diff ... | tail -5`)
     could never match a single allow rule.
 
     In manual mode the pipeline still runs deny/safety stages (safety
@@ -1609,9 +1604,9 @@ class ToolApprovalConfig(BaseModel):
 class ClarificationConfig(BaseModel):
     """: configuration for the clarification relay.
 
-    Only structured ``ask_user`` LangGraph interrupts are detected. Plain-text
+    Only structured `ask_user` LangGraph interrupts are detected. Plain-text
     questions in assistant messages are NOT treated as clarifications —
-    callers that want a clarification must emit an ``ask_user`` interrupt.
+    callers that want a clarification must emit an `ask_user` interrupt.
     """
 
     auto_min_confidence: float = Field(default=0.4, ge=0.0, le=1.0)
@@ -1746,7 +1741,7 @@ class AgentConfig(NanoAgentConfig):
     """Host agent configuration: nano CoreAgent fields plus orchestration overlays.
 
     Adds StrangeLoop/Autopilot/clarification/veritas and goal-completion behavior
-    on top of nano ``AgentConfig`` (identity, protocols, runtime, middleware).
+    on top of nano `AgentConfig` (identity, protocols, runtime, middleware).
     """
 
     assistant_identity: AssistantIdentity = Field(

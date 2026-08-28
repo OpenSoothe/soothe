@@ -79,8 +79,8 @@ class InvalidGoalTransitionError(ValueError):
 def _validate_transition(goal_id: str, from_status: str, to_status: str) -> None:
     """Validate a goal lifecycle transition against the state machine.
 
-    Raises ``InvalidGoalTransitionError`` if ``to_status`` is not reachable
-    from ``from_status``.
+    Raises `InvalidGoalTransitionError` if `to_status` is not reachable
+    from `from_status`.
     """
     valid = VALID_GOAL_TRANSITIONS.get(from_status, frozenset())
     if to_status not in valid:
@@ -138,10 +138,10 @@ def _reconstruct_message(type_name: str, data: dict[str, Any]) -> BaseMessage | 
 def _normalize_ledger_entry(
     entry_data: dict[str, Any],
 ) -> tuple[str, dict[str, Any], str | None]:
-    """Normalize persisted ledger rows to the current ``_msg_type`` wire shape.
+    """Normalize persisted ledger rows to the current `_msg_type` wire shape.
 
-    Pre- rows stored ``type``, ``content``, and ``phase`` only. They are
-    upgraded on read so ``load()`` uses a single reconstruction path.
+    Pre- rows stored `type`, `content`, and `phase` only. They are
+    upgraded on read so `load()` uses a single reconstruction path.
     """
     entry = dict(entry_data)
     if "_msg_type" in entry:
@@ -204,9 +204,9 @@ class ContextEngine:
     def _rebind_planning_subengines(self) -> None:
         """Rebind planning sub-engines to the current DAG instance.
 
-        Called after ``load()`` replaces ``self._dag`` with a persisted instance.
+        Called after `load()` replaces `self._dag` with a persisted instance.
         The sub-engines hold a reference to the DAG at construction time;
-        replacing ``self._dag`` without rebinding leaves them pointing to an
+        replacing `self._dag` without rebinding leaves them pointing to an
         orphan DAG that doesn't contain newly created goals.
         """
         from soothe.context.planning_goal_planner import GoalPlanningSubengine
@@ -419,7 +419,7 @@ class ContextEngine:
         logger.info("Cancelled goal %s: %s", goal_id, reason)
 
     def collect_subtree_ids(self, root_id: str) -> list[str]:
-        """Return ``root_id`` and descendants (deepest-first). See GoalStepDAG."""
+        """Return `root_id` and descendants (deepest-first). See GoalStepDAG."""
         return self._dag.collect_subtree_ids(root_id)
 
     async def block_goal(self, goal_id: str) -> None:
@@ -441,7 +441,7 @@ class ContextEngine:
     async def finalize_goal(self, goal_id: str, *, status: str = "completed") -> None:
         """Finalize a goal: set terminal status and reset per-goal mutable state.
 
-        Unlike ``complete_goal`` which only sets status, finalize also
+        Unlike `complete_goal` which only sets status, finalize also
         accumulates duration/tokens from steps and clears per-goal
         execution state while preserving the step DAG for projection.
 
@@ -451,7 +451,7 @@ class ContextEngine:
 
         Args:
             goal_id: Goal to finalize.
-            status: Terminal status (``"completed"`` or ``"failed"``).
+            status: Terminal status (`"completed"` or `"failed"`).
         """
         goal = self._dag.get_goal(goal_id)
         if goal is None:
@@ -472,7 +472,7 @@ class ContextEngine:
     def increment_iteration(self, goal_id: str) -> int:
         """Increment the iteration count for a goal.
 
-        Called by ``record_iteration`` after each iteration checkpoint is persisted.
+        Called by `record_iteration` after each iteration checkpoint is persisted.
         Returns the new iteration value.
 
         Args:
@@ -613,18 +613,18 @@ class ContextEngine:
         goal_id: str,
         report: dict[str, Any],
     ) -> int:
-        """Upsert ``GoalNode.report`` and bump ``report_revision``.
+        """Upsert `GoalNode.report` and bump `report_revision`.
 
         Autopilot judgment MUST read from the committed report after this call.
         Idempotent content writes still bump the revision so each loop-end
-        yields a distinct ``(goal_id, report_revision)`` judgment key.
+        yields a distinct `(goal_id, report_revision)` judgment key.
 
         Args:
             goal_id: Goal receiving the StrangeLoop ledger report.
             report: Serializable report dict (outcome, summary, findings, …).
 
         Returns:
-            New ``report_revision`` after the commit.
+            New `report_revision` after the commit.
 
         Raises:
             KeyError: If goal not found.
@@ -647,8 +647,8 @@ class ContextEngine:
         """Return goal to pending after report-commit rejection.
 
         Increments send_back_count. When budget is exhausted, transitions to
-        ``failed`` so host recovery (LoopRail / monitor / engine health) can
-        act — never operator-wait ``suspended`` (; unifies).
+        `failed` so host recovery (LoopRail / monitor / engine health) can
+        act — never operator-wait `suspended` (; unifies).
 
         Args:
             goal_id: Goal to send back.
@@ -719,7 +719,7 @@ class ContextEngine:
     def _append_failure_guidance(self, goal: GoalNode, *, reason: str = "") -> None:
         """Record prior failure / recovery note as operator guidance (next dispatch).
 
-        Used by ``retry_failed_goal`` / ``recover_failed_goal`` so the worker
+        Used by `retry_failed_goal` / `recover_failed_goal` so the worker
         sees why the previous attempt failed.
         """
         parts: list[str] = []
@@ -740,9 +740,9 @@ class ContextEngine:
     async def retry_failed_goal(self, goal_id: str, *, reason: str = "") -> GoalNode:
         """Re-queue a failed goal when retry budget remains (P1-2).
 
-        Increments ``retry_count``. When budget is exhausted, leaves the goal
-        failed and raises ``ValueError``. Prior ``error`` (and optional
-        ``reason``) are appended to ``guidance_accumulated`` before clear so
+        Increments `retry_count`. When budget is exhausted, leaves the goal
+        failed and raises `ValueError`. Prior `error` (and optional
+        `reason`) are appended to `guidance_accumulated` before clear so
         the next dispatch receives them as operator guidance.
 
         Args:
@@ -750,7 +750,7 @@ class ContextEngine:
             reason: Backoff / operator reason for the retry.
 
         Returns:
-            The updated GoalNode in ``pending`` status.
+            The updated GoalNode in `pending` status.
 
         Raises:
             KeyError: If goal not found.
@@ -793,8 +793,8 @@ class ContextEngine:
 
         Used when backoff retry budget is exhausted or rail recovery did not
         fire, but the DAG is deadlocked (pending dependents blocked by this
-        failed worker). Increments ``engine_recovery_count`` and resets
-        ``send_back_count`` so a later report-commit can re-judge. Prior
+        failed worker). Increments `engine_recovery_count` and resets
+        `send_back_count` so a later report-commit can re-judge. Prior
         failure text is kept as operator guidance for the next dispatch.
 
         Args:
@@ -803,7 +803,7 @@ class ContextEngine:
             max_engine_recoveries: Cap from AutopilotConfig.
 
         Returns:
-            The updated GoalNode in ``pending`` status.
+            The updated GoalNode in `pending` status.
 
         Raises:
             KeyError: If goal not found.
@@ -872,10 +872,10 @@ class ContextEngine:
     async def resume_interrupted_goal(
         self, goal_id: str, *, loop_id: str | None = None
     ) -> GoalNode:
-        """Bring an interrupted CE goal back to ``active`` for in-place resume.
+        """Bring an interrupted CE goal back to `active` for in-place resume.
 
-        Handles ``active`` (no-op), ``pending``, ``suspended``, ``blocked``, and
-        ``cancelled`` (legacy interrupt path). Preserves the step DAG so planning
+        Handles `active` (no-op), `pending`, `suspended`, `blocked`, and
+        `cancelled` (legacy interrupt path). Preserves the step DAG so planning
         continues from completed checkpoints.
 
         Args:
@@ -1118,13 +1118,13 @@ class ContextEngine:
         """Absorb guidance from Autopilot cognition / job IPC.
 
         Accumulates guidance for the next worker dispatch (see Autopilot
-        ``GoalDispatchContextBundle.operator_guidance``). Does not create goals.
+        `GoalDispatchContextBundle.operator_guidance`). Does not create goals.
 
         Args:
             goal_id: Target goal ID.
             guidance_text: Guidance/instruction text.
             scope: "goal" for specific, "job" for root (full DAG).
-            source: Provenance tag (``user``, ``channel``, or ``system``).
+            source: Provenance tag (`user`, `channel`, or `system`).
 
         Returns:
             True if absorbed, False if goal not found.
@@ -1241,7 +1241,7 @@ class ContextEngine:
     # ── Persistence ──────────────────────────────────────────────
 
     def defer_save(self) -> None:
-        """Mark CE state dirty without writing to disk (coalesce until ``save``)."""
+        """Mark CE state dirty without writing to disk (coalesce until `save`)."""
         self._save_dirty = True
 
     async def save(self) -> None:
@@ -1303,7 +1303,7 @@ class ContextEngine:
     async def recover(self) -> list[str]:
         """Reset goals stuck in 'active' to 'pending' after crash.
 
-        Goals whose ``attempts_after_crash`` exceeds ``max_retries`` are
+        Goals whose `attempts_after_crash` exceeds `max_retries` are
         failed so host recovery can act.
         """
         recovered = self._dag.recover_active_goals()

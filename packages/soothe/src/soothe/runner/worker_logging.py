@@ -1,8 +1,4 @@
-"""File logging for isolated loop workers (multiprocessing subprocess or Ray actor).
-
- workers run outside the daemon process and need their own ``soothe.*``
-handlers so diagnostics land under each loop's persistence directory.
-"""
+"""File logging for isolated loop workers (multiprocessing subprocess or Ray actor)."""
 
 from __future__ import annotations
 
@@ -39,16 +35,16 @@ _active_loop_ids_lock = threading.Lock()
 def configure_loop_runner_worker_logging(config: SootheConfig, loop_id: str) -> Path | None:
     """Attach rotating file logging for this worker process.
 
-    Writes to ``SOOTHE_HOME/data/loops/{loop_id}/runner.log`` (same layout as
+    Writes to `SOOTHE_HOME/data/loops/{loop_id}/runner.log` (same layout as
     loop isolation persistence). Safe to call more than once for the same path:
     duplicate handlers are skipped.
 
     Args:
-        config: Worker configuration (rotation/size mirrors ``observability``).
+        config: Worker configuration (rotation/size mirrors `observability`).
         loop_id: Active StrangeLoop identifier.
 
     Returns:
-        Path to ``runner.log``, or ``None`` when ``loop_id`` is empty.
+        Path to `runner.log`, or `None` when `loop_id` is empty.
     """
     lid = (loop_id or "").strip()
     if not lid:
@@ -99,10 +95,10 @@ def configure_loop_runner_worker_logging(config: SootheConfig, loop_id: str) -> 
 
 
 def release_loop_runner_logging(loop_id: str) -> None:
-    """Release the in-flight marker for ``loop_id`` and close its ``runner.log`` handler.
+    """Release the in-flight marker for `loop_id` and close its `runner.log` handler.
 
-    Call from the worker request's ``finally`` block. After release, a later
-    ``configure_loop_runner_worker_logging`` call for a different loop may
+    Call from the worker request's `finally` block. After release, a later
+    `configure_loop_runner_worker_logging` call for a different loop may
     remove this loop's handler (it is no longer actively writing). Without
     this teardown, pooled workers accumulate one handler per loop across the
     process lifetime.
@@ -123,7 +119,7 @@ def release_loop_runner_logging(loop_id: str) -> None:
 
 
 def _remove_handler_at_path(root_logger: logging.Logger, target: Path) -> None:
-    """Remove and close the ``runner.log`` handler at ``target`` if present."""
+    """Remove and close the `runner.log` handler at `target` if present."""
     target_resolved = target.resolve()
     for handler in list(root_logger.handlers):
         if not isinstance(handler, RotatingFileHandler):
@@ -141,7 +137,7 @@ def _remove_handler_at_path(root_logger: logging.Logger, target: Path) -> None:
 
 
 def _remove_stale_loop_runner_handlers(root_logger: logging.Logger, *, keep_path: Path) -> None:
-    """Remove loop ``runner.log`` handlers for other loops (pooled workers reuse one process).
+    """Remove loop `runner.log` handlers for other loops (pooled workers reuse one process).
 
     Skips handlers whose loop still has an in-flight request — tearing those
     down mid-run silences the active loop's diagnostics (the d15f incident).

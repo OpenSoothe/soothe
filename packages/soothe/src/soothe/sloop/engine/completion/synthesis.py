@@ -1,19 +1,4 @@
-"""Synthesis execution logic for comprehensive final report generation.
-
-Consolidated execution module:
-- Scenario classification (Phase 1 via ScenarioClassifier)
-- Synthesis generation (Phase 2 via CoreAgent streaming)
-
-Separation of concerns:
-- ``context/planning_completion.py``: Decision logic ("should we synthesize?")
-- ``sloop/engine/scenario_classifier.py``: Classification ("what style/outline?")
-- ``sloop/engine/synthesis.py``: Execution ("how to synthesize?")
-
-Checkpoint isolation: synthesis uses a fresh LangGraph ``thread_id`` so the
-checkpointer does not replay the parent thread. The model receives current-goal
-execute-step ledger messages (plus optional compact prior status;), a TASK
-human envelope, and system report instructions.
-"""
+"""Synthesis execution logic for comprehensive final report generation."""
 
 from __future__ import annotations
 
@@ -73,7 +58,7 @@ class SynthesisGenerator:
             soothe_config: Optional daemon config for evidence budgeting.
             loop_id: Optional loop identifier for Langfuse trace correlation.
             fast_llm_client: Fast model for scenario classification (Phase 1).
-                Falls back to ``llm_client`` when not provided.
+                Falls back to `llm_client` when not provided.
         """
         self.llm = llm_client
         self._classify_llm = fast_llm_client or llm_client
@@ -123,7 +108,7 @@ class SynthesisGenerator:
             state: Loop state with thread context and execution ledger (`loop_messages`).
 
         Yields:
-            LangGraph ``messages``-mode stream tuples tagged with ``phase=goal_completion``.
+            LangGraph `messages`-mode stream tuples tagged with `phase=goal_completion`.
         """
 
         classify_start = time.perf_counter()

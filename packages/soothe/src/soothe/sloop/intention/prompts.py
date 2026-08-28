@@ -1,6 +1,6 @@
 """LLM prompts for intake classification.
 
-- ``INTAKE_CLASSIFY_SYSTEM_PROMPT``: social vs task + task complexity + short description.
+- `INTAKE_CLASSIFY_SYSTEM_PROMPT`: social vs task + task complexity + short description.
 """
 
 from __future__ import annotations
@@ -23,9 +23,9 @@ def _read_intake_fragment(name: str) -> str:
 def build_prompt_timestamp_block(
     ctx: dict[str, str] | None = None,
 ) -> str:
-    """Build the live ``<PROMPT_TIMESTAMP>`` block for LLM system prompts.
+    """Build the live `<PROMPT_TIMESTAMP>` block for LLM system prompts.
 
-    Pass a pre-fetched ``ctx`` (from :func:`prompt_datetime_context`) to
+    Pass a pre-fetched `ctx` (from :func:`prompt_datetime_context`) to
     avoid a timestamp race when the caller already captured the context.
     """
     from soothe.prompts.fragments import PROMPT_TIMESTAMP_FRAGMENT
@@ -60,7 +60,7 @@ INTAKE_SOCIAL_REPLY_HUMAN_TASK = "Write the social_response reply. JSON only."
 
 
 def _substitute_prompt_placeholders(template: str, values: dict[str, str]) -> str:
-    """Replace ``{key}`` placeholders without interpreting other braces (e.g. JSON)."""
+    """Replace `{key}` placeholders without interpreting other braces (e.g. JSON)."""
     result = template
     for key, value in values.items():
         result = result.replace(f"{{{key}}}", value)
@@ -76,14 +76,14 @@ def build_intake_system_prompt(
 ) -> str:
     """Assemble the intake system prompt with identity and live timestamp at the tail.
 
-    Pass a pre-fetched ``ctx`` (from :func:`prompt_datetime_context`) to
+    Pass a pre-fetched `ctx` (from :func:`prompt_datetime_context`) to
     avoid a timestamp race when the caller already captured the context.
 
     Args:
-        body: Intake fragment text (from ``_read_intake_fragment``).
+        body: Intake fragment text (from `_read_intake_fragment`).
         assistant_name: Configured assistant display name.
         ctx: Optional pre-fetched datetime context.
-        identity: Optional configured persona; ``None`` falls back to the
+        identity: Optional configured persona; `None` falls back to the
             built-in identity line.
     """
     from soothe.identity.persona import _format_vendor_denylist, build_assistant_identity_block

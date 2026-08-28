@@ -1,9 +1,4 @@
-"""Host PostgreSQL pool registry — extends nano with checkpoints bootstrap.
-
-Canonical pool lifecycle lives in
-:mod:`soothe_nano.persistence.postgres_pool_registry`. The host subclass opens
-the host-owned ``checkpoints`` database and applies its schema.
-"""
+"""Host PostgreSQL pool registry — extends nano with checkpoints bootstrap."""
 
 from __future__ import annotations
 
