@@ -1,11 +1,5 @@
 # Soothe Nano Configuration Template (nano.yml)
-# ------------------------------------------------------------
-# Nano-owned/shared configuration for both soothe-nano and soothe host.
-# Use with a host overlay file (soothe.yml) when running full soothe.
-#
-# Example split usage:
-#   soothe --config ~/.soothe/config/nano.yml
-#   # Host composition APIs can merge nano.yml + soothe.yml
+# Nano-owned/shared config. Compose with soothe.yml for full host.
 
 providers:
   - name: openai

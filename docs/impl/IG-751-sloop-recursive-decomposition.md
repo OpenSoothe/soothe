@@ -93,8 +93,7 @@ agent.loop.decompose:
   reconcile_model_role: fast  # verifier-tier lean
 ```
 
-Sync: `config/soothe.template.yml`, `config/develop/soothe.yml`, packaged
-daemon templates if present.
+Sync: `config/templates/soothe.yml`, `config/develop/soothe.yml`.
 
 ### 3.4 Tests
 

@@ -26,16 +26,16 @@ Defaults and validation bounds live in code; templates show the operator-facing 
 |-------|---------|------|
 | **Defaults + validators** | `packages/soothe/src/soothe/config/models.py` | Pydantic `Field(default=..., ge=..., le=...)` — the hard bounds you cannot exceed |
 | **Constants** | `packages/soothe/src/soothe/config/constants.py` | Char-cap registry, `DEFAULT_MAX_ITERATIONS` (99), `DEFAULT_MAX_TOOL_CALLS_PER_STEP` (100) |
-| **Host overlay template** | `config/soothe.template.yml` | Operator-facing host thresholds (autopilot budgets, SLA, notify, loop) |
-| **Nano/shared template** | `config/nano.template.yml` | Shared thresholds (context window, rate limit, output caps) |
-| **Daemon template** | `config/daemon.template.yml` | Process thresholds (heartbeat, concurrency, GC, query duration) |
-| **Packaged copies** | `packages/soothe-daemon/src/soothe_daemon/setup/templates/*.yml` | Synced by `soothed setup`; must mirror the templates above |
+| **Host overlay template** | `config/templates/soothe.yml` | Operator-facing host thresholds (autopilot budgets, SLA, notify, loop) |
+| **Nano/shared template** | `config/templates/nano.yml` | Shared thresholds (context window, rate limit, output caps) |
+| **Daemon template** | `config/templates/daemon.yml` | Process thresholds (heartbeat, concurrency, GC, query duration) |
+| **Packaged SoT** | `packages/soothe-daemon/src/soothe_daemon/setup/templates/*.yml` | Source of truth; `config/templates/` are symlinks to these |
 | **Develop overlay** | `config/develop/{nano,soothe}.yml` | Local-dev overrides |
 
-> **Config-sync rule (AGENTS.md §2).** When you edit any
-> `config/*.template.yml`, you MUST also update the matching
-> `config/develop/*.yml` and the packaged copies under
-> `packages/soothe-daemon/src/soothe_daemon/setup/templates/`.
+> **Config-sync rule (AGENTS.md §2).** The packaged templates under
+> `packages/soothe-daemon/src/soothe_daemon/setup/templates/` are the SoT;
+> `config/templates/` are symlinks. When you edit them, you MUST also update
+> `config/develop/*.yml` with matching structure.
 
 ## 2. Tuning Methodology
 
@@ -69,9 +69,9 @@ For each threshold change:
 1. **Identify the family** (see §3) and read its rationale.
 2. **Capture a baseline** with the relevant benchmark or a representative
    production trace.
-3. **Edit the template** (`config/<scope>.template.yml`) — set only the
+3. **Edit the template** (`config/templates/<scope>.yml`) — set only the
    field(s) in scope.
-4. **Sync** the develop overlay and packaged copies (AGENTS.md §2).
+4. **Sync** the develop overlay (AGENTS.md §2).
 5. **Verify locally** — `./scripts/verify_finally.sh` must pass (zero lint,
    all tests, vulture clean).
 6. **Canary** — roll to one loop / one autopilot worker before fleet-wide.
@@ -290,11 +290,11 @@ token cost and retrieval quality, not control flow.
 ### 3.11 Nano-Owned Middleware Thresholds (cross-reference)
 
 These families are **defined in the `soothe-nano` PyPI package**, not in
-this monorepo's `config/models.py`. They appear in `config/nano.template.yml`
+this monorepo's `config/models.py`. They appear in `config/templates/nano.yml`
 as operator-facing overlays, but defaults and validators live upstream. The
 packaged copy under
-`packages/soothe-daemon/src/soothe_daemon/setup/templates/nano.yml` is a
-mirror, not the source of truth — do not edit it here without re-releasing
+`packages/soothe-daemon/src/soothe_daemon/setup/templates/nano.yml` is the
+source of truth — do not edit it here without re-releasing
 `soothe-nano`.
 
 | Family | Key fields (nano.yml path) | Bounds |
@@ -325,10 +325,10 @@ If the change was config-only (no code), rollback is a revert + restart:
    ```bash
    git revert <commit-sha>
    # or, for an uncommitted change:
-   git checkout -- config/<scope>.template.yml
+   git checkout -- config/templates/<scope>.yml
    ```
-2. **Re-sync** the develop overlay and packaged copies if the revert did not
-   touch them (it should have, if you followed §2.2 step 4).
+2. **Re-sync** the develop overlay if the revert did not
+   touch it (it should have, if you followed §2.2 step 4).
 3. **Restart the daemon** to reload config:
    ```bash
    soothed restart

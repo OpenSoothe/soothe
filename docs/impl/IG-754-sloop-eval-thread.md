@@ -42,5 +42,5 @@ Implement Eval as an engine-injected `kind=eval` StepNode:
 - `packages/soothe/src/soothe/sloop/engine/execute/executor.py`
 - `packages/soothe/src/soothe/coreagent/builder.py`
 - `packages/soothe/src/soothe/config/models.py`
-- `config/soothe.template.yml` and packaged template copy
+- `config/templates/soothe.yml` (symlink to packaged SoT)
 - package-local unit tests

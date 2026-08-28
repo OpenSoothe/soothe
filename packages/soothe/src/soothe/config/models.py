@@ -1292,54 +1292,44 @@ class VeritasFallbackConfig(BaseModel):
 
 
 def _default_deny_rules() -> list[ToolApprovalRule]:
-    """Default deny rules — high-risk operations that are always blocked.
+    """Default deny rules — only genuinely high-risk operations.
 
     The pipeline is **deny-list-first**: anything not matched here is
     auto-approved (in auto mode) or sent to the human (in manual mode).
-    Only genuinely dangerous, irreversible, or system-level operations
-    belong here. Routine dev commands (git diff, cat, pytest, edit_file
-    inside workspace, etc.) are allowed by default.
+    Stage 2 safety checks (delegated to nano's
+    ``WorkspaceToolOperationSecurity``) catch a wide range of dangerous
+    patterns — ``rm -rf``, ``sudo``, ``chmod 777``, force-push, ``mkfs``,
+    ``dd``, curl-pipe-to-shell, etc. — so they need not be duplicated here.
+
+    Only operations that are (a) high-risk AND (b) NOT already caught by
+    safety checks belong here: privilege escalation beyond ``sudo``,
+    recursive permission changes, disk/partition tools, system shutdown,
+    system-level package installs, and system path file edits (the
+    bypass-immune dangerous-component check only covers dotfiles like
+    ``.git``/``.bashrc``, not ``/etc`` or ``/System``). Everything else runs.
     """
     return [
-        # --- Destructive filesystem ---
-        ToolApprovalRule(tool="run_command", pattern="rm -rf *"),
-        ToolApprovalRule(tool="run_command", pattern="rm -fr *"),
-        ToolApprovalRule(tool="run_command", pattern="rm -r *"),
-        ToolApprovalRule(tool="run_command", pattern="rmdir *"),
-        # --- Privilege escalation ---
-        ToolApprovalRule(tool="run_command", pattern="sudo *"),
+        # --- Privilege escalation (sudo is caught by safety; su/doas are not) ---
         ToolApprovalRule(tool="run_command", pattern="su *"),
         ToolApprovalRule(tool="run_command", pattern="doas *"),
-        # --- Permission changes ---
-        ToolApprovalRule(tool="run_command", pattern="chmod 777 *"),
+        # --- Recursive permission changes (chmod -R 777 / is safety-caught) ---
         ToolApprovalRule(tool="run_command", pattern="chmod -R *"),
-        ToolApprovalRule(tool="run_command", pattern="chown *"),
-        ToolApprovalRule(tool="run_command", pattern="chgrp *"),
-        # --- Remote git pushes (force/regular) ---
-        ToolApprovalRule(tool="run_command", pattern="git push --force*"),
-        ToolApprovalRule(tool="run_command", pattern="git push -f*"),
-        ToolApprovalRule(tool="run_command", pattern="git push --force-with-lease*"),
-        ToolApprovalRule(tool="run_command", pattern="git push origin *"),
-        ToolApprovalRule(tool="run_command", pattern="git push *"),
-        # --- Disk / partition / device operations ---
-        ToolApprovalRule(tool="run_command", pattern="dd if=*"),
-        ToolApprovalRule(tool="run_command", pattern="mkfs*"),
+        ToolApprovalRule(tool="run_command", pattern="chown -R *"),
+        ToolApprovalRule(tool="run_command", pattern="chgrp -R *"),
+        # --- Disk / partition / device operations (mkfs/dd are safety-caught) ---
         ToolApprovalRule(tool="run_command", pattern="fdisk*"),
         ToolApprovalRule(tool="run_command", pattern="diskutil*"),
-        # --- Network exfiltration / download-and-execute ---
-        ToolApprovalRule(tool="run_command", pattern="curl * | sh*"),
-        ToolApprovalRule(tool="run_command", pattern="curl * | bash*"),
-        ToolApprovalRule(tool="run_command", pattern="wget * | sh*"),
-        ToolApprovalRule(tool="run_command", pattern="wget * | bash*"),
-        ToolApprovalRule(tool="run_command", pattern="curl * | python*"),
-        ToolApprovalRule(tool="run_command", pattern="wget * | python*"),
-        # --- Process kill / shutdown ---
-        ToolApprovalRule(tool="run_command", pattern="kill -9 *"),
-        ToolApprovalRule(tool="run_command", pattern="killall *"),
+        # --- System shutdown / halt ---
         ToolApprovalRule(tool="run_command", pattern="shutdown *"),
         ToolApprovalRule(tool="run_command", pattern="reboot *"),
         ToolApprovalRule(tool="run_command", pattern="halt *"),
-        # --- System file modification ---
+        # --- System-level package installs ---
+        ToolApprovalRule(tool="run_command", pattern="apt *"),
+        ToolApprovalRule(tool="run_command", pattern="apt-get *"),
+        ToolApprovalRule(tool="run_command", pattern="brew *"),
+        ToolApprovalRule(tool="run_command", pattern="npm install -g*"),
+        # --- System file modification (safety only catches these when
+        #     security_config is wired; deny rule is a belt-and-suspenders) ---
         ToolApprovalRule(tool="edit_file", pattern="/etc/**"),
         ToolApprovalRule(tool="write_file", pattern="/etc/**"),
         ToolApprovalRule(tool="edit_file", pattern="/System/**"),
@@ -1350,13 +1340,6 @@ def _default_deny_rules() -> list[ToolApprovalRule]:
         ToolApprovalRule(tool="write_file", pattern="/bin/**"),
         ToolApprovalRule(tool="edit_file", pattern="/sbin/**"),
         ToolApprovalRule(tool="write_file", pattern="/sbin/**"),
-        # --- Package managers (system-level installs) ---
-        ToolApprovalRule(tool="run_command", pattern="apt *"),
-        ToolApprovalRule(tool="run_command", pattern="apt-get *"),
-        ToolApprovalRule(tool="run_command", pattern="brew *"),
-        ToolApprovalRule(tool="run_command", pattern="pip install *"),
-        ToolApprovalRule(tool="run_command", pattern="pip3 install *"),
-        ToolApprovalRule(tool="run_command", pattern="npm install -g*"),
     ]
 
 

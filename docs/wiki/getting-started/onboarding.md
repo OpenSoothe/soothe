@@ -175,10 +175,10 @@ work done):
 
 ### 2.5 Config-sync rule
 
-When editing `config/nano.template.yml`, you **must** also update
-`config/develop/nano.yml` with matching structure, and sync the packaged copies
-under `packages/soothe-daemon/src/soothe_daemon/setup/templates/` (used by
-`soothed setup`). Enforced by `scripts/check_config_sync.sh` (writes
+When editing `config/templates/nano.yml`, you **must** also update
+`config/develop/nano.yml` with matching structure. The packaged templates under
+`packages/soothe-daemon/src/soothe_daemon/setup/templates/` are the SoT;
+`config/templates/` are symlinks to them. Enforced by `scripts/check_config_sync.sh` (writes
 `config-sync-diff.txt`).
 
 ### 2.6 PR process

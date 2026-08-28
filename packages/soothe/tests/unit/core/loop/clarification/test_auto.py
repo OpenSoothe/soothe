@@ -481,7 +481,7 @@ async def test_force_manual_tool_approval_deny_rule_still_auto_rejects() -> None
         force_manual_origins=(ORIGIN_TOOL_APPROVAL,),
         tool_approval_pipeline=_pipeline(),
     )
-    ans = await policy.answer(_tool_approval_request("rm -rf /"))
+    ans = await policy.answer(_tool_approval_request("apt install foo"))
     assert ans.source == "static"
     assert ans.answers == ("reject",)
     assert ans.audit["stage"] == "deny_rule"

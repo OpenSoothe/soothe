@@ -76,7 +76,7 @@ embedding_profile:
 
 Top-level `router:` was removed — use `router_profiles` + `active_router_profile`. Env-only model changes: `SOOTHE_ROUTER_PROFILES` (JSON) or `SOOTHE_ACTIVE_ROUTER_PROFILE`; see [Environment Variables](environment-variables.md).
 
-Templates ship as `config/nano.template.yml` (nano-owned) and `config/soothe.template.yml` (host overlay) — copy them rather than writing from scratch.
+Templates ship as `config/templates/nano.yml` (nano-owned) and `config/templates/soothe.yml` (host overlay) — copy them rather than writing from scratch.
 
 ## Documentation Map
 

@@ -880,8 +880,8 @@ In manual clarification mode the pipeline pre-filters the human relay
 so only rule-unresolved actions reach the human. Default `manual_scope: all`
 asks the human for every non-rejected action.
 
-Per project rule, both `config/soothe.template.yml` and the packaged
-`soothe-daemon` setup template are updated in the same change.
+Per project rule, `config/templates/soothe.yml` (symlink to the packaged
+`soothe-daemon` setup template) is updated in the same change.
 
 ---
 

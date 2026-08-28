@@ -57,7 +57,7 @@ def load_soothe_example_config() -> SootheConfig:
         return apply_example_defaults(loaded)
     # Template overlay next to develop nano when soothe.yml is absent.
     nano = monorepo_root / "config" / "develop" / "nano.yml"
-    soothe_template = monorepo_root / "config" / "soothe.template.yml"
+    soothe_template = monorepo_root / "config" / "templates" / "soothe.yml"
     if nano.is_file() and soothe_template.is_file():
         return apply_example_defaults(
             SootheConfig.from_split_yaml_files(

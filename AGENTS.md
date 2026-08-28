@@ -18,9 +18,8 @@
 - **Minor changes**: No verbose IG — use commit/PR context, or minimal stub only
 
 ### 2. Config Sync
-When editing `config/nano.template.yml`, MUST also update `config/develop/nano.yml` with matching structure.
-When editing any `config/*.template.yml`, also sync the packaged copies under
-`packages/soothe-daemon/src/soothe_daemon/setup/templates/` (used by `soothed setup`).
+The packaged templates under `packages/soothe-daemon/src/soothe_daemon/setup/templates/` are the **source of truth**; `config/templates/` holds symlinks to them.
+When editing a packaged template, MUST also update `config/develop/nano.yml` (or `soothe.yml`) with matching structure.
 
 ### 3. Ecosystem First
 Check `langchain-core`, `langchain-community`, `deepagents` before implementing anything:
@@ -147,7 +146,7 @@ Spec↔code drift is tracked through **canonical documentation mechanisms only**
 - **No drift-refresh cron infrastructure** — do not re-introduce `DriftRefreshConfig`, `DriftTriggerHook`, `builtin:drift-refresh-*` cron jobs, or drift-dashboard data dictionaries. They duplicated the RFC/IG review process without adding value.
 - **Gap-tracking scripts** (`scripts/auto_gap_report.py`, `scripts/create_drift_backlog_issues.sh`) MUST write output into `docs/impl/` with an `IG-` prefix and be triaged through the standard IG lifecycle — never a separate dashboard or backlog.
 - **Drift findings are IGs, not dashboards** — file `IG-XXX-gap-*.md` in `docs/impl/`. Do not create standalone drift-tracking documents outside the numbered IG process.
-- **Config fields** — do not add `cron.drift_refresh` or equivalent drift-dashboard blocks to any `config/*.template.yml` or packaged copy. Drift governance is a documentation process, not a runtime config concern.
+- **Config fields** — do not add `cron.drift_refresh` or equivalent drift-dashboard blocks to any packaged template or `config/templates/` symlink. Drift governance is a documentation process, not a runtime config concern.
 - **Wiki/docs** — deployment guides and troubleshooting indexes MUST NOT link to drift runbooks or dashboards. Document drift content under the IG that addresses the specific gap.
 - **Incidental "drift" mentions** — the word "drift" describing unrelated concepts (timestamp drift, message-shape drift, pin drift) in comments/docstrings/errors is fine. This rule governs spec↔code drift infrastructure only.
 

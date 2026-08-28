@@ -730,7 +730,7 @@ agent:
       strict_overlap: true           # treat any prefix overlap as conflict
 ```
 
-> Full field list lives in `config/soothe.template.yml` under `agent.autopilot`.
+> Full field list lives in `config/templates/soothe.yml` under `agent.autopilot`.
 > Production readiness gaps: [IG-678](../archive/impl/IG-678-autopilot-ce-rails-production-readiness.md).
 
 ---

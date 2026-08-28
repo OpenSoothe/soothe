@@ -1,1 +1,1 @@
-"""Bundled YAML templates for `soothed setup` (synced from repo `config/*.template.yml`)."""
+"""Bundled YAML templates for `soothed setup` (source of truth for config/templates/ symlinks)."""

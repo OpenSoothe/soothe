@@ -32,11 +32,10 @@ def config_paths(config_dir: Path) -> dict[str, Path]:
 
 
 def monorepo_template_path(name: str) -> Path | None:
-    """Return monorepo `config/<stem>.template.yml` if present."""
+    """Return monorepo `config/templates/<name>` (symlink to packaged template) if present."""
     if name not in TEMPLATE_NAMES:
         return None
-    stem = name.removesuffix(".yml")
-    candidate = _monorepo_config_dir() / f"{stem}.template.yml"
+    candidate = _monorepo_config_dir() / "templates" / name
     return candidate if candidate.is_file() else None
 
 
@@ -54,7 +53,7 @@ def read_template_text(name: str) -> str:
     Lookup order:
     1. Package resources (`soothe_daemon.setup.templates`)
     2. On-disk package `templates/` directory
-    3. Monorepo `config/<stem>.template.yml`
+    3. Monorepo `config/templates/<name>` (symlink to packaged template)
 
     Raises:
     FileNotFoundError: If no template can be found.
@@ -77,7 +76,7 @@ def read_template_text(name: str) -> str:
         return repo.read_text(encoding="utf-8")
 
     raise FileNotFoundError(
-        f"setup template '{name}' not found in package resources or monorepo config/"
+        f"setup template '{name}' not found in package resources or config/templates/"
     )
 
 
@@ -86,6 +85,6 @@ def _monorepo_config_dir() -> Path:
     here = Path(__file__).resolve()
     for parent in here.parents:
         candidate = parent / "config"
-        if (candidate / "nano.template.yml").is_file():
+        if (candidate / "templates" / "nano.yml").is_file():
             return candidate
     return here.parents[5] / "config"

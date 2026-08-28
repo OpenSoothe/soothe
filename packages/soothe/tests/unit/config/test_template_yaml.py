@@ -15,11 +15,11 @@ def _repo_root() -> Path:
 
 
 def _nano_template_path() -> Path:
-    return _repo_root() / "config" / "nano.template.yml"
+    return _repo_root() / "config" / "templates" / "nano.yml"
 
 
 def _soothe_template_path() -> Path:
-    return _repo_root() / "config" / "soothe.template.yml"
+    return _repo_root() / "config" / "templates" / "soothe.yml"
 
 
 @pytest.mark.skipif(not _nano_template_path().is_file(), reason="nano template not in checkout")
@@ -47,7 +47,7 @@ def test_nano_template_loads_as_single_file(monkeypatch: pytest.MonkeyPatch) -> 
     reason="split templates not in checkout",
 )
 def test_split_templates_compose(monkeypatch: pytest.MonkeyPatch) -> None:
-    """nano.template.yml + soothe.template.yml compose into a full host config."""
+    """nano.yml + soothe.yml compose into a full host config."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)

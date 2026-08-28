@@ -280,7 +280,7 @@ async def test_pre_filter_deny_rule_auto_rejects_without_asking(
     never prompted to approve them."""
     captured = _stub_interrupt(monkeypatch, {"answers": ["approve"]})
     policy = InteractiveClarificationPolicy(tool_approval_pipeline=_pipeline())
-    ans = await policy.answer(_tool_approval_request("rm -rf /"))
+    ans = await policy.answer(_tool_approval_request("apt install foo"))
     assert ans.source == "static"
     assert ans.answers == ("reject",)
     assert ans.audit["stage"] == "deny_rule"

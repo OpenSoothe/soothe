@@ -1,4 +1,4 @@
-"""Packaged setup templates must stay in sync with repo config/*.template.yml."""
+"""Monorepo config/templates/ symlinks resolve to the packaged templates."""
 
 from __future__ import annotations
 
@@ -15,16 +15,17 @@ def _repo_root() -> Path:
 
 
 @pytest.mark.parametrize("name", TEMPLATE_NAMES)
-def test_packaged_template_matches_monorepo(name: str) -> None:
-    repo = monorepo_template_path(name)
-    if repo is None:
-        pytest.skip("monorepo config/ templates not available")
-    packaged = read_template_text(name)
-    assert packaged == repo.read_text(encoding="utf-8")
+def test_repo_template_symlinks_exist(name: str) -> None:
+    """config/templates/<name> is a symlink (or file) present in the checkout."""
+    path = _repo_root() / "config" / "templates" / name
+    assert path.is_file(), f"missing {path}"
 
 
 @pytest.mark.parametrize("name", TEMPLATE_NAMES)
-def test_repo_template_files_exist(name: str) -> None:
-    stem = name.removesuffix(".yml")
-    path = _repo_root() / "config" / f"{stem}.template.yml"
-    assert path.is_file(), f"missing {path}"
+def test_monorepo_template_matches_packaged(name: str) -> None:
+    """The config/templates/ symlink resolves to the same content as the packaged template."""
+    repo = monorepo_template_path(name)
+    if repo is None:
+        pytest.skip("config/templates/ not available")
+    packaged = read_template_text(name)
+    assert packaged == repo.read_text(encoding="utf-8")
