@@ -298,10 +298,10 @@ async def test_pre_filter_asks_human_for_allow_rule_match_by_default(
     assert captured, "human interrupt must fire for non-rejected actions"
 
 
-async def test_pre_filter_allow_rule_static_approves_when_enabled(
+async def test_pre_filter_default_approves_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """manual_scope=ambiguous_only: allow-rule matches auto-approve."""
+    """manual_scope=ambiguous_only: non-denied actions auto-approve."""
     captured = _stub_interrupt(monkeypatch, {"answers": ["approve"]})
     policy = InteractiveClarificationPolicy(
         tool_approval_pipeline=_pipeline(),
@@ -310,18 +310,18 @@ async def test_pre_filter_allow_rule_static_approves_when_enabled(
     ans = await policy.answer(_tool_approval_request("pytest -xvs"))
     assert ans.source == "static"
     assert ans.answers == ("approve",)
-    assert ans.audit["stage"] == "allow_rule"
+    assert ans.audit["stage"] == "default_approve"
     assert captured == []
 
 
-async def test_pre_filter_asks_human_for_ambiguous_actions(
+async def test_pre_filter_asks_human_when_allow_rules_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Rule-unresolved actions reach the human even with allow rules on."""
+    """When manual_allow_rules=False, non-denied actions reach the human."""
     captured = _stub_interrupt(monkeypatch, {"answers": ["approve"]})
     policy = InteractiveClarificationPolicy(
         tool_approval_pipeline=_pipeline(),
-        manual_allow_rules=True,
+        manual_allow_rules=False,
     )
     ans = await policy.answer(_tool_approval_request("curl https://example.com"))
     assert ans.source == "human"

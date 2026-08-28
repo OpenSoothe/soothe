@@ -1,4 +1,4 @@
-"""Auto-mode clarification policy backed by the veritas subagent (RFC-622, RFC-623)."""
+"""Auto-mode clarification policy backed by the veritas subagent."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ _RATIONALE_MARKER_QUESTION = "answer_was_question"
 class AutoClarificationPolicy:
     """Delegate clarifications to veritas; defer below confidence threshold.
 
-    RFC-623 adds two behaviors on top of the original RFC-622 policy:
+     adds two behaviors on top of the original policy:
 
     1. Every defer carries a :data:`DeferKind` so operators can distinguish
        legitimate "I don't know" defers from forced ones (LLM glitches).
@@ -82,12 +82,11 @@ class AutoClarificationPolicy:
         return origin_node in self._force_manual_origins
 
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
-        # RFC-622 §9b: tool-approval pipeline short-circuit. Deterministic
-        # deny → safety → allow stages resolve most tool_approval interrupts
-        # without an LLM. Veritas remains the final guard for ambiguous cases.
-        # Force-manual origins still run deny/safety stages (auto-reject is a
-        # safety property, never an approval) but skip allow rules, so every
-        # non-rejected action falls through to the human relay.
+        # Deny-list-first tool-approval pipeline. In auto mode the pipeline
+        # auto-approves any action that passes deny + safety checks (absence
+        # of deny = implicit allow). In manual mode (force-manual origins),
+        # the pipeline still runs deny/safety (safety property) but defers
+        # non-matching actions to the human relay.
         if request.origin_node == "tool_approval" and self._tool_approval_pipeline is not None:
             action_requests = request.metadata.get("action_requests", [])
             result = self._tool_approval_pipeline.evaluate(
@@ -111,7 +110,22 @@ class AutoClarificationPolicy:
                         "reason": result.reason,
                     },
                 )
-            # fall through to veritas (existing path)
+            # Pipeline returned None — manual mode with a human attached.
+            # Route to the interactive relay so the human can decide.
+            if self._interactive_fallback is not None:
+                logger.info(
+                    "[clarification] tool_approval no rule match; routing to interactive relay"
+                )
+                fallback = self._interactive_fallback
+                upgrade = getattr(fallback, "answer_as_manual_fallback", None)
+                if callable(upgrade):
+                    return await upgrade(request)
+                return await fallback.answer(request)
+            raise ClarificationDeferredError(
+                "tool_approval: no rule matched and veritas fallback disabled",
+                request,
+                kind="explicit",
+            )
 
         if self.requires_manual(request.origin_node):
             if self._interactive_fallback is not None:

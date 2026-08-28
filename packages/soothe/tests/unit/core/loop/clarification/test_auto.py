@@ -453,17 +453,17 @@ def test_degrade_low_confidence_property() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_approval_allow_rule_static_approve_without_force_manual() -> None:
-    """Plain auto mode: allow-rule matches resolve via the pipeline."""
+async def test_tool_approval_default_approve_without_force_manual() -> None:
+    """Plain auto mode: non-denied actions are default-approved via the pipeline."""
 
     async def _veritas(_req: ClarificationRequest) -> VeritasAnswerSchema:
-        raise AssertionError("veritas must not run for allow-rule matches")
+        raise AssertionError("veritas must not run for default-approved actions")
 
     policy = AutoClarificationPolicy(_veritas, tool_approval_pipeline=_pipeline())
     ans = await policy.answer(_tool_approval_request("pytest -xvs"))
     assert ans.source == "static"
     assert ans.answers == ("approve",)
-    assert ans.audit["stage"] == "allow_rule"
+    assert ans.audit["stage"] == "default_approve"
 
 
 @pytest.mark.asyncio
@@ -524,4 +524,4 @@ async def test_force_manual_tool_approval_defers_without_fallback() -> None:
     )
     with pytest.raises(ClarificationDeferredError) as exc_info:
         await policy.answer(_tool_approval_request("curl https://example.com"))
-    assert "manual confirmation" in exc_info.value.reason
+    assert "no rule matched" in exc_info.value.reason

@@ -1482,66 +1482,124 @@ class ToolApprovalRule(BaseModel):
 
 
 class VeritasFallbackConfig(BaseModel):
-    """Stage 4: veritas LLM fallback for ambiguous tool approvals (RFC-622 §9b)."""
+    """Stage 4: veritas LLM fallback for ambiguous tool approvals.
 
-    enabled: bool = True
+    Disabled by default: compound-command splitting and expanded allow rules
+    resolve nearly all tool_approval interrupts deterministically. When no
+    rule matches, the interrupt defers to the human relay (manual mode) or
+    raises ``ClarificationDeferredError`` (auto mode) instead of spending
+    LLM latency on a veritus call.
+    """
+
+    enabled: bool = False
     model_role: Literal["default", "fast", "think", "image", "ocr", "embedding"] = "fast"
     max_context_steps: int = Field(default=0, ge=0)
 
 
 class ToolApprovalAuditConfig(BaseModel):
-    """Audit logging for tool-approval pipeline decisions (RFC-622 §9b)."""
+    """Audit logging for tool-approval pipeline decisions."""
 
     log_decisions: bool = True
     log_level: Literal["debug", "info", "warning"] = "info"
 
 
 def _default_deny_rules() -> list[ToolApprovalRule]:
-    """Default deny rules for Stage 1 of the tool-approval pipeline."""
+    """Default deny rules — high-risk operations that are always blocked.
+
+    The pipeline is **deny-list-first**: anything not matched here is
+    auto-approved (in auto mode) or sent to the human (in manual mode).
+    Only genuinely dangerous, irreversible, or system-level operations
+    belong here. Routine dev commands (git diff, cat, pytest, edit_file
+    inside workspace, etc.) are allowed by default.
+    """
     return [
+        # --- Destructive filesystem ---
         ToolApprovalRule(tool="run_command", pattern="rm -rf *"),
+        ToolApprovalRule(tool="run_command", pattern="rm -fr *"),
+        ToolApprovalRule(tool="run_command", pattern="rm -r *"),
+        ToolApprovalRule(tool="run_command", pattern="rmdir *"),
+        # --- Privilege escalation ---
         ToolApprovalRule(tool="run_command", pattern="sudo *"),
+        ToolApprovalRule(tool="run_command", pattern="su *"),
+        ToolApprovalRule(tool="run_command", pattern="doas *"),
+        # --- Permission changes ---
         ToolApprovalRule(tool="run_command", pattern="chmod 777 *"),
+        ToolApprovalRule(tool="run_command", pattern="chmod -R *"),
+        ToolApprovalRule(tool="run_command", pattern="chown *"),
+        ToolApprovalRule(tool="run_command", pattern="chgrp *"),
+        # --- Remote git pushes (force/regular) ---
         ToolApprovalRule(tool="run_command", pattern="git push --force*"),
         ToolApprovalRule(tool="run_command", pattern="git push -f*"),
+        ToolApprovalRule(tool="run_command", pattern="git push --force-with-lease*"),
+        ToolApprovalRule(tool="run_command", pattern="git push origin *"),
+        ToolApprovalRule(tool="run_command", pattern="git push *"),
+        # --- Disk / partition / device operations ---
         ToolApprovalRule(tool="run_command", pattern="dd if=*"),
         ToolApprovalRule(tool="run_command", pattern="mkfs*"),
+        ToolApprovalRule(tool="run_command", pattern="fdisk*"),
+        ToolApprovalRule(tool="run_command", pattern="diskutil*"),
+        # --- Network exfiltration / download-and-execute ---
+        ToolApprovalRule(tool="run_command", pattern="curl * | sh*"),
+        ToolApprovalRule(tool="run_command", pattern="curl * | bash*"),
+        ToolApprovalRule(tool="run_command", pattern="wget * | sh*"),
+        ToolApprovalRule(tool="run_command", pattern="wget * | bash*"),
+        ToolApprovalRule(tool="run_command", pattern="curl * | python*"),
+        ToolApprovalRule(tool="run_command", pattern="wget * | python*"),
+        # --- Process kill / shutdown ---
+        ToolApprovalRule(tool="run_command", pattern="kill -9 *"),
+        ToolApprovalRule(tool="run_command", pattern="killall *"),
+        ToolApprovalRule(tool="run_command", pattern="shutdown *"),
+        ToolApprovalRule(tool="run_command", pattern="reboot *"),
+        ToolApprovalRule(tool="run_command", pattern="halt *"),
+        # --- System file modification ---
         ToolApprovalRule(tool="edit_file", pattern="/etc/**"),
         ToolApprovalRule(tool="write_file", pattern="/etc/**"),
+        ToolApprovalRule(tool="edit_file", pattern="/System/**"),
+        ToolApprovalRule(tool="write_file", pattern="/System/**"),
+        ToolApprovalRule(tool="edit_file", pattern="/usr/**"),
+        ToolApprovalRule(tool="write_file", pattern="/usr/**"),
+        ToolApprovalRule(tool="edit_file", pattern="/bin/**"),
+        ToolApprovalRule(tool="write_file", pattern="/bin/**"),
+        ToolApprovalRule(tool="edit_file", pattern="/sbin/**"),
+        ToolApprovalRule(tool="write_file", pattern="/sbin/**"),
+        # --- Package managers (system-level installs) ---
+        ToolApprovalRule(tool="run_command", pattern="apt *"),
+        ToolApprovalRule(tool="run_command", pattern="apt-get *"),
+        ToolApprovalRule(tool="run_command", pattern="brew *"),
+        ToolApprovalRule(tool="run_command", pattern="pip install *"),
+        ToolApprovalRule(tool="run_command", pattern="pip3 install *"),
+        ToolApprovalRule(tool="run_command", pattern="npm install -g*"),
     ]
 
 
 def _default_allow_rules() -> list[ToolApprovalRule]:
-    """Default allow rules for Stage 3 of the tool-approval pipeline."""
-    return [
-        ToolApprovalRule(tool="edit_file", pattern="<workspace>/**"),
-        ToolApprovalRule(tool="write_file", pattern="<workspace>/**"),
-        ToolApprovalRule(tool="run_command", pattern="ls *"),
-        ToolApprovalRule(tool="run_command", pattern="cat *"),
-        ToolApprovalRule(tool="run_command", pattern="grep *"),
-        ToolApprovalRule(tool="run_command", pattern="find *"),
-        ToolApprovalRule(tool="run_command", pattern="pytest*"),
-        ToolApprovalRule(tool="run_command", pattern="python -m pytest*"),
-        ToolApprovalRule(tool="run_command", pattern="ruff *"),
-        ToolApprovalRule(tool="run_command", pattern="mypy *"),
-        ToolApprovalRule(tool="run_command", pattern="git status"),
-        ToolApprovalRule(tool="run_command", pattern="git diff*"),
-        ToolApprovalRule(tool="run_command", pattern="git log*"),
-    ]
+    """Allow rules are empty by default — the pipeline is deny-list-first.
+
+    In auto mode, any tool action that does NOT match a deny rule or
+    safety check is auto-approved. Operators who need a stricter posture
+    can switch to manual mode (``clarification.default_mode: manual``)
+    or add custom deny rules.
+    """
+    return []
 
 
 class ToolApprovalConfig(BaseModel):
-    """Multi-stage tool-approval pipeline config (RFC-622 §9b).
+    """Deny-list-first tool-approval pipeline config.
 
-    When ``enabled``, deterministic deny → safety → allow stages resolve most
-    ``tool_approval`` interrupts without an LLM call. Veritas remains the
-    final guard for ambiguous cases (Stage 4). When ``disabled``, all
-    ``tool_approval`` interrupts go directly to veritas (pre-§9b behavior).
+    The pipeline runs two stages: deny rules → safety checks. Any tool
+    action that does NOT match a deny rule or fail a safety check is
+    auto-approved in auto mode. There is no allow-list stage — the
+    absence of a deny is an implicit allow. This avoids the compound-
+    command problem where piped commands (``git diff ... | tail -5``)
+    could never match a single allow rule.
 
-    In manual clarification mode the pipeline still runs as a pre-filter:
-    deny/safety stages always auto-reject dangerous actions (safety
-    property); ``manual_scope`` controls whether allow rules may also
-    auto-approve.
+    In manual mode the pipeline still runs deny/safety stages (safety
+    property: dangerous actions are always auto-rejected), but
+    non-matching actions are deferred to the human relay instead of
+    being auto-approved.
+
+    ``allow_rules`` is kept for backward compatibility but is empty by
+    default and has no effect on the pipeline decision.
     """
 
     enabled: bool = True
@@ -1561,7 +1619,7 @@ class ToolApprovalConfig(BaseModel):
 
 
 class ClarificationConfig(BaseModel):
-    """RFC-622: configuration for the clarification relay.
+    """: configuration for the clarification relay.
 
     Only structured ``ask_user`` LangGraph interrupts are detected. Plain-text
     questions in assistant messages are NOT treated as clarifications —
@@ -1577,12 +1635,14 @@ class ClarificationConfig(BaseModel):
     Mirrors the structured_output_failed fallback path. Ignored for autopilot
     (headless) runs which always hard-defer."""
 
-    default_mode: Literal["auto", "manual"] = "manual"
+    default_mode: Literal["auto", "manual"] = "auto"
     """Mode used when a request payload does not specify ``clarification_mode``.
 
-    ``manual`` routes clarifications through the TUI relay (interactive policy)
-    and is the default. ``auto`` routes them through the veritas auto-answerer.
-    Autopilot always forces ``auto`` regardless of this setting.
+    ``auto`` (default) routes tool-approval through the deny-list pipeline:
+    deny → safety → default-approve. Only actions matching a deny rule or
+    failing a safety check are blocked. ``manual`` routes all tool actions
+    through the TUI relay (interactive policy). Autopilot always forces
+    ``auto`` regardless of this setting.
     """
 
     force_manual_origins: list[
@@ -1607,14 +1667,14 @@ class ClarificationConfig(BaseModel):
     )
 
     tool_approval: ToolApprovalConfig = Field(default_factory=ToolApprovalConfig)
-    """RFC-622 §9b: multi-stage tool-approval pipeline. When enabled,
+    """multi-stage tool-approval pipeline. When enabled,
     deterministic deny → safety → allow stages resolve most tool_approval
     interrupts without an LLM. Veritas remains the final guard for ambiguous
     cases."""
 
 
 class VeritasConfig(BaseModel):
-    """RFC-622: configuration for the veritas auto-answerer subagent."""
+    """: configuration for the veritas auto-answerer subagent."""
 
     model_role: Literal["default", "fast", "think", "image", "ocr", "embedding"] = "think"
     """Which ``ModelRole`` to use for veritas calls; defaults to ``think``."""
@@ -1656,7 +1716,7 @@ class SkillifyConfig(BaseModel):
 
 
 class CronConfig(BaseModel):
-    """RFC-229: configuration for the cron service.
+    """: configuration for the cron service.
 
     Natural language scheduled job submission for Autopilot.
 

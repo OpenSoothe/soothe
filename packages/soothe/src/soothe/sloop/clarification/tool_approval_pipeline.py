@@ -1,17 +1,11 @@
-"""Multi-stage tool-approval pipeline evaluator (RFC-622 §9b).
+"""Deny-list-first tool-approval pipeline evaluator.
 
-Stages run cheapest-first; the first stage that returns a decision wins.
-Veritas LLM is the final stage for ambiguous cases — this pipeline returns
-``None`` to defer to the caller's next tier (veritas in auto mode, the
-human relay in manual mode).
+Two stages run cheapest-first: deny rules → safety checks. Any action
+that passes both is auto-approved (absence of deny = implicit allow).
+In manual mode, passing actions are deferred to the human relay.
 
-Safety property: deny rules and safety checks always run before allow
-rules. No allow rule can override a safety denial. This holds in manual
-mode too: the pipeline pre-filters ``InteractiveClarificationPolicy`` so
-dangerous actions are auto-rejected without asking the human.
-
-Safety property: deny rules and safety checks always run before allow rules.
-No allow rule can override a safety denial.
+Safety property: deny rules and safety checks always run before the
+default-approve. No configuration can override a safety denial.
 """
 
 from __future__ import annotations
@@ -34,7 +28,7 @@ logger = logging.getLogger(__name__)
 _STAGE_PREFIX = "tool_approval"
 
 ApprovalDecision = Literal["approve", "reject"]
-PipelineStage = Literal["deny_rule", "safety_check", "allow_rule"]
+PipelineStage = Literal["deny_rule", "safety_check", "allow_rule", "default_approve"]
 
 
 @dataclass(frozen=True)
@@ -47,16 +41,14 @@ class ApprovalResult:
 
 
 class ToolApprovalPipeline:
-    """Multi-stage tool-approval evaluator.
+    """Deny-list-first tool-approval evaluator.
 
-    Stages run cheapest-first; the first stage that returns a decision wins.
-    Veritas LLM is the final stage for ambiguous cases — this pipeline
-    returns ``None`` to defer to veritas.
+    Two stages run cheapest-first: deny rules → safety checks. The first
+    stage that returns a decision wins. Any action that passes both stages
+    is auto-approved in auto mode (absence of deny = implicit allow).
 
-    Safety property: deny rules and safety checks always run before allow
-    rules. No allow rule can override a safety denial. Fail-safe: any
-    exception in stages 1–3 returns ``None`` (defer to veritas), never
-    auto-approves on error.
+    Safety property: deny rules and safety checks always run before the
+    default-approve. No configuration can override a safety denial.
 
     Stage 2 delegates to nano's ``WorkspaceToolOperationSecurity`` — the same
     evaluator used by ``SoothePolicyMiddleware`` (Layer 1) and the tool
@@ -82,25 +74,25 @@ class ToolApprovalPipeline:
         workspace_root: str | None = None,
         include_allow_rules: bool = True,
     ) -> ApprovalResult | None:
-        """Run all stages. Returns ``None`` = defer to the next tier.
+        """Run deny → safety stages. Returns ``None`` = defer to the next tier.
 
-        Evaluates per action request. If any request is rejected, the whole
-        batch is rejected. If all are approved by allow rules, the batch is
-        approved. If any are ambiguous (no rule matched), defer.
+        The pipeline is **deny-list-first**: any action that does not match
+        a deny rule or fail a safety check is auto-approved (in auto mode).
+        There is no allow-list stage — the absence of a deny is an implicit
+        allow. This avoids the "piped command" problem where compound
+        commands like ``git diff ... | tail -5`` could never match a single
+        allow rule and were always deferred to the human.
 
         Args:
             action_requests: Batched HITL action requests.
             workspace_root: Per-request workspace root (``<workspace>`` token).
-            include_allow_rules: When ``False``, Stage 3 is skipped so
-                allow-rule matches count as ambiguous (defer). Deny/safety
-                stages always run — used for manual-mode / force-manual
-                origins where rules may reject but not approve.
+            include_allow_rules: Kept for API compatibility. When ``False``
+                (manual mode), actions that pass deny/safety are deferred to
+                the human instead of being auto-approved.
         """
         try:
             if not action_requests:
                 return None  # nothing to evaluate → defer to veritas
-
-            any_ambiguous = False
 
             for ar in action_requests:
                 name = str(ar.get("name") or "")
@@ -129,26 +121,19 @@ class ToolApprovalPipeline:
                     self._log_decision(result)
                     return result
 
-                # Stage 3: allow rules
-                if include_allow_rules and self._matches_any_rule(
-                    name, args, self._allow_rules, workspace_root
-                ):
-                    continue  # this action is approved, check next
+            # All action requests passed deny + safety checks.
+            # In auto mode (include_allow_rules=True), default-approve.
+            # In manual mode (include_allow_rules=False), defer to human.
+            if include_allow_rules:
+                result = ApprovalResult(
+                    "approve",
+                    "default_approve",
+                    "no deny rule or safety check matched",
+                )
+                self._log_decision(result)
+                return result
 
-                # No rule matched — ambiguous
-                any_ambiguous = True
-
-            if any_ambiguous:
-                return None  # defer to veritas
-
-            # All action requests matched allow rules
-            result = ApprovalResult(
-                "approve",
-                "allow_rule",
-                "all actions matched allow rules",
-            )
-            self._log_decision(result)
-            return result
+            return None  # manual mode → defer to human relay
 
         except Exception:
             logger.exception("[tool_approval] pipeline error; deferring to veritas")
